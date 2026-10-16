@@ -36,6 +36,9 @@ in the same commit.
 | [028](028-a-drawn-seed-made-three-tests-compare-nothing.md) | A drawn seed made three tests compare different things |
 | [029](029-a-dependency-moved-under-a-lock-that-pinned-a-missing-commit.md) | The dependency moved under a lock that named a commit nobody had |
 | [036](036-the-cli-readme-placed-releases-in-a-directory-that-does-not-exist.md) | The CLI README placed releases in a directory that does not exist |
+| [041](041-a-suite-whose-report-exceeds-the-output-cap-is-refused-as-a-baseline.md) | A suite whose per-test report exceeds the output cap is refused as a baseline |
+| [042](042-mutation-seeded-tasks-read-only-one-runner-so-other-languages-go-through-it.md) | Mutation-seeded tasks read only `python3 -m unittest`, so other languages go through it |
+| [043](043-most-refused-fault-candidates-are-unrunnable-or-near-duplicates.md) | Most fault candidates are refused, and the refusals are not the tests' fault |
 | [046](046-forward-transfer-has-no-base-cell-in-a-gate-report.md) | Forward transfer had no base cell to read in the gate reports |
 | [047](047-ten-gates-at-five-percent-release-a-null-candidate-four-times-in-ten.md) | Ten gates at five percent release a null candidate four times in ten |
 | [048](048-a-hidden-suite-that-fails-on-one-fault-passes-its-neighbours.md) | A hidden suite that fails on the seeded fault passes its neighbours |

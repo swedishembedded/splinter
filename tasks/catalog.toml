@@ -1,0 +1,130 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The repository task families: small original projects that `splinter
+# practice` learns from their own tests. Measured fields are written by
+# `python3 scripts/tasks/families.py catalog --write`; do not edit them.
+
+[[family]]
+id = "iniparse"
+kind = "repository"
+language = "python"
+domain = "configuration text"
+runner = "python3 -m unittest"
+summary = "An INI and TOML-subset parser, overlay, lookup, interpolation, writer and schema coercion."
+lines_of_code = 759
+functions = 80
+tests = 279
+test_files = 11
+digest = "sha256:d5823047d748ab1c74000a0964b3b5c0d2ba8ce525f7912c423829cc87568cc2"
+files_under_test = ["iniparse/arrays.py", "iniparse/diagnostics.py", "iniparse/interpolate.py", "iniparse/lookup.py", "iniparse/overlay.py", "iniparse/reader.py", "iniparse/scalars.py", "iniparse/scanner.py", "iniparse/schema.py", "iniparse/tables.py", "iniparse/writer.py"]
+generation_seed = "6640021429841191778"
+generation_flags = "--max-tasks 1000 --mutants-per-file 80 --budget 1s --no-release --exam-seed <seed>"
+admitted = 177
+funnel = { candidates = 828, broken_build = 281, equivalent_mutant = 64, near_duplicate = 207, output_truncated = 99 }
+
+[[family]]
+id = "ttlcache"
+kind = "repository"
+language = "python"
+domain = "caching"
+runner = "python3 -m unittest"
+summary = "Least-recently-used and time-to-live caches with an injected clock, weights, memoizer, partitions, snapshots and a write-back buffer."
+lines_of_code = 641
+functions = 112
+tests = 257
+test_files = 9
+digest = "sha256:e3e13ed4231bc6515fe1302054d05a4379989ce27e91c9857e2f010722c02e30"
+files_under_test = ["ttlcache/cache_stats.py", "ttlcache/lru_store.py", "ttlcache/memoizer.py", "ttlcache/partitions.py", "ttlcache/recency_list.py", "ttlcache/snapshot.py", "ttlcache/ttl_store.py", "ttlcache/weighted_store.py", "ttlcache/writeback.py"]
+generation_seed = "3027157304785842583"
+generation_flags = "--max-tasks 1000 --mutants-per-file 80 --budget 1s --no-release --exam-seed <seed>"
+admitted = 159
+funnel = { candidates = 701, broken_build = 187, equivalent_mutant = 96, near_duplicate = 252, output_truncated = 7 }
+
+[[family]]
+id = "exprcalc"
+kind = "repository"
+language = "python"
+domain = "arithmetic expressions"
+runner = "python3 -m unittest"
+summary = "Tokenizer, parser, evaluator, constant folding, printer, analysis and differentiation of arithmetic expressions."
+lines_of_code = 820
+functions = 93
+tests = 256
+test_files = 12
+digest = "sha256:96133ef37342f8c3d7663f1f8abe1eca70ab06b0dab6e238806c746463ecc0c3"
+files_under_test = ["exprcalc/analysis.py", "exprcalc/astnodes.py", "exprcalc/derivative.py", "exprcalc/errors.py", "exprcalc/evaluator.py", "exprcalc/exactnum.py", "exprcalc/folding.py", "exprcalc/functions.py", "exprcalc/operators.py", "exprcalc/parser.py", "exprcalc/printer.py", "exprcalc/tokenizer.py"]
+generation_seed = "5816860101842795554"
+generation_flags = "--max-tasks 1000 --mutants-per-file 80 --budget 1s --no-release --exam-seed <seed>"
+admitted = 186
+funnel = { candidates = 916, broken_build = 235, equivalent_mutant = 118, near_duplicate = 280, output_truncated = 96, weak_hidden_tests = 1 }
+
+[[family]]
+id = "linediff"
+kind = "repository"
+language = "python"
+domain = "text and table comparison"
+runner = "python3 -m unittest"
+summary = "Line diff, hunks, unified patches, patch application, three-way merge, CSV reading and writing and keyed row diff."
+lines_of_code = 658
+functions = 65
+tests = 278
+test_files = 9
+digest = "sha256:7e33b39f0855180f3c3b16968298c470aa56734076716a0be65e6157014936c5"
+files_under_test = ["linediff/csvdiff.py", "linediff/csvio.py", "linediff/editscript.py", "linediff/hunks.py", "linediff/merge3.py", "linediff/patchapply.py", "linediff/patchparse.py", "linediff/similarity.py", "linediff/unified.py"]
+
+[[family]]
+id = "mdrender"
+kind = "repository"
+language = "python"
+domain = "text layout and markup"
+runner = "python3 -m unittest"
+summary = "Word wrapping, alignment, a small markup block and inline parser, HTML and plain renderers, tables of contents and tables."
+lines_of_code = 937
+functions = 102
+tests = 270
+test_files = 9
+digest = "sha256:910e3a67a28dadac1f188d5579bde938641751f157615856e1fe8308fcaaf489"
+files_under_test = ["mdrender/alignment.py", "mdrender/blocks.py", "mdrender/escapes.py", "mdrender/html_render.py", "mdrender/inline.py", "mdrender/tables.py", "mdrender/text_render.py", "mdrender/toc.py", "mdrender/wrapping.py"]
+
+[[family]]
+id = "caldate"
+kind = "repository"
+language = "lua"
+domain = "calendar dates"
+runner = "python3 -m unittest"
+summary = "Civil calendar arithmetic: leap years, day numbers, shifting, spans, ISO weeks, text dates, business days and recurrences."
+lines_of_code = 599
+functions = 87
+tests = 250
+test_files = 8
+digest = "sha256:1948d970fb6cb861f0ca690dc6c46da80cbd9765060fc815ca63211f09e53463"
+files_under_test = ["src/bizdays.lua", "src/dateiso.lua", "src/dateshift.lua", "src/datespan.lua", "src/daynumber.lua", "src/isoweek.lua", "src/leapyear.lua", "src/recurrence.lua"]
+
+[[family]]
+id = "graphkit"
+kind = "repository"
+language = "lua"
+domain = "graph algorithms"
+runner = "python3 -m unittest"
+summary = "Adjacency storage, traversals, shortest paths, topological order, strong components, union-find, spanning trees, bipartite and reachability."
+lines_of_code = 1323
+functions = 142
+tests = 262
+test_files = 12
+digest = "sha256:7323ac81bf4efe8de86bd86f1c0b7636ff9833ff834128c5f2b0ded711fa6509"
+files_under_test = ["src/adjacency.lua", "src/bipartite.lua", "src/components.lua", "src/heap.lua", "src/hops.lua", "src/reach.lua", "src/shortest.lua", "src/spantree.lua", "src/strong.lua", "src/topo.lua", "src/traversal.lua", "src/unionfind.lua"]
+
+[[family]]
+id = "tokenbucket"
+kind = "repository"
+language = "lua"
+domain = "rate limiting"
+runner = "python3 -m unittest"
+summary = "Token bucket, leaky bucket, window limiters, per-key registry, wait estimation, backoff, circuit breaker, durations and quota reports."
+lines_of_code = 717
+functions = 105
+tests = 296
+test_files = 10
+digest = "sha256:090f54b434746e8e699aedc5eab6d758f65afa06e79b9c13a1348086543e137d"
+files_under_test = ["src/backoff.lua", "src/breaker.lua", "src/duration.lua", "src/fixedwindow.lua", "src/leakybucket.lua", "src/quotareport.lua", "src/registry.lua", "src/slidinglog.lua", "src/tokenbucket.lua", "src/waittime.lua"]

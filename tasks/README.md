@@ -55,3 +55,66 @@ and that is what the pipe buys.
 workspace is scanned for any rendering of the episode's hidden state, and an
 instance whose workspace contains its own answer fails before any model is
 involved.
+
+## Repository families
+
+Eight small original projects, each learned by `splinter practice` from its own
+tests. They are listed in `catalog.toml` (id, language, domain, size, test
+count, content digest, files tasks may change); `python3 scripts/tasks/families.py
+check` verifies baselines (five identical green runs), conventions, a report
+under the generator's output cap, and that no two families define the same
+top-level name. `make test/families` runs it with a fault pre-flight.
+
+| family | language | domain |
+|---|---|---|
+| iniparse | Python | INI and TOML-subset configuration text |
+| ttlcache | Python | LRU and TTL caches, injected clock |
+| exprcalc | Python | arithmetic expressions: parse, evaluate, fold, differentiate |
+| linediff | Python | line diff, patches, three-way merge, CSV |
+| mdrender | Python | text wrapping and a small markup renderer |
+| caldate | Lua 5.1 | civil calendar date arithmetic |
+| graphkit | Lua 5.1 | graph algorithms |
+| tokenbucket | Lua 5.1 | rate limiting, injected clock |
+
+The Lua families are driven from Python `unittest` files (one `lua` process per
+test), because fault seeding reads only `python3 -m unittest` per test.
+
+### Regenerating the admitted task set
+
+Fault generation is deterministic in the family tree and the flags; the seed
+only chooses which families an exam would reserve. No model is loaded:
+`--budget 1s` stops the run after the reserve stage.
+
+```
+cp -r tasks/<family> $WORK/<family> && cd $WORK/<family>
+git init && git add -A && git commit -m base
+splinter practice $WORK/<family> --state $STATE -v --budget 1s --max-tasks 1000 \
+  --mutants-per-file N --no-release --exam-seed SEED \
+  --file <each file under test from catalog.toml> --test-command python3 -m unittest
+```
+
+The `[tasks]` line of the output holds the admitted count and the refusals by
+reason. Funnel measured with the release binary of the main tree (a quiet host
+was not available; times are not comparable). `caught` is candidates minus
+faults that did not run (`broken_build`) minus faults no test noticed
+(`equivalent_mutant`); faults refused as `output_truncated` are inside it.
+
+| family | language | files | tests | mutants/file | candidates | not run (broken build) | not caught (equivalent) | caught | refused after catch | admitted |
+|---|---|---|---|---|---|---|---|---|---|---|
+| iniparse | python | 11 | 279 | 80 | 828 | 281 | 64 | 483 | near_duplicate 207, output_truncated 99 | 177 |
+| ttlcache | python | 9 | 257 | 80 | 701 | 187 | 96 | 418 | near_duplicate 252, output_truncated 7 | 159 |
+| exprcalc | python | 12 | 256 | 80 | 916 | 235 | 118 | 563 | near_duplicate 280, output_truncated 96, weak_hidden_tests 1 | 186 |
+| linediff | python | 9 | 278 | - | not measured | | | | | |
+| mdrender | python | 9 | 270 | - | not measured | | | | | |
+| caldate | lua | 8 | 250 | - | not measured | | | | | |
+| graphkit | lua | 12 | 262 | - | not measured | | | | | |
+| tokenbucket | lua | 10 | 296 | - | not measured | | | | | |
+
+Seeds drawn per family (exam seed, `mutants/file` as in the table):
+
+- iniparse: 6640021429841191778
+- ttlcache: 3027157304785842583
+- exprcalc: 5816860101842795554
+
+Families without a row of numbers were still running when this was written;
+their admitted counts are not measured.
