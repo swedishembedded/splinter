@@ -17,6 +17,7 @@
 # or an unplaced model was used, and it fails (exit 4) if no named card ever
 # held more than 256 MiB, which is how a run that never reached a GPU shows
 # whatever the backend prints. A device naming the CPU is refused (exit 2).
+# Stopping the guard (SIGTERM, SIGINT or SIGHUP) stops the run with it.
 #
 # Usage: gpu-only.sh <gpu0|gpu1|gpu0,gpu1|gpu> <log-file> -- <command> [args...]
 
@@ -50,7 +51,28 @@ fifo=$(mktemp -u)
 mkfifo "$fifo"
 peak=$(mktemp)
 echo 0 >"$peak"
-trap 'kill "$sampler" 2>/dev/null; wait "$sampler" 2>/dev/null; rm -f "$fifo" "$peak"' EXIT
+pid=
+# The run's whole session, asked to stop and killed if it is still there ten
+# seconds later: a guard that is stopped must not leave a run holding cards.
+stop_run() {
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 0
+    kill -TERM -- "-$pid" 2>/dev/null
+    for _ in $(seq 20); do
+        kill -0 "$pid" 2>/dev/null || return 0
+        sleep 0.5
+    done
+    kill -KILL -- "-$pid" 2>/dev/null
+}
+cleanup() {
+    stop_run
+    kill "$sampler" 2>/dev/null
+    wait "$sampler" 2>/dev/null
+    rm -f "$fifo" "$peak"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # The most memory any named card held while the run lived.
 (
