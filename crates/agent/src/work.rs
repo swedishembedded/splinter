@@ -508,8 +508,9 @@ pub struct WorkspaceSolution {
 /// After each reply that ends the worker's turn, the `visible` checks run in
 /// the tree. While one is red and `protocol.follow_ups` and the time and tool
 /// calls allow, the worker is sent one more user turn naming each failing
-/// check and the tail of its output; a reply that left the tree unchanged is
-/// sent one more user turn too, whatever the checks say, asking for the edit. That is all the worker learns from a
+/// check and the tail of its output; a reply that left the tree unchanged with
+/// no shown check red is sent one more user turn asking for the edit. That is
+/// all the worker learns from a
 /// check: the checks given here are the ones the task shows its solver, and
 /// nothing the tree does not hold can reach it. A run stopped by a bound
 /// (cancel, deadline, tool cap, repetition) is not resumed.
@@ -583,7 +584,10 @@ pub async fn solve_in_workspace(
         if (failures.is_empty() && !unchanged) || out_of_time || out_of_calls {
             break report;
         }
-        message = if unchanged {
+        // A red check says more than "change something", so it wins; an
+        // unchanged tree with every shown check green (or none shown) gets
+        // the request for the edit.
+        message = if failures.is_empty() {
             NO_CHANGE_FOLLOW_UP.to_string()
         } else {
             follow_up(&failures)
