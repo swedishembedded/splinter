@@ -94,6 +94,7 @@ fn families_of(ctx: &Context, tasks: &[Digest]) -> BTreeSet<String> {
 fn a_share_of_whole_families_is_picked_stably_and_the_halves_partition_the_union() {
     let (_scratch, ctx) = gate_context("task-pick-share", Brain::Honest);
     let [a, b] = two_sets(&ctx);
+    // seed: the split is a pure function of the seed, so the property under test (the same seed gives the same split in any set order) needs one fixed seed.
     let seed = Seed::new(7);
 
     let picked = pick(
@@ -164,6 +165,7 @@ fn a_cap_per_family_picks_that_many_of_every_family_and_leaves_the_rest() {
         &ctx,
         &[a.clone(), b.clone()],
         Quota::PerFamily(1),
+        // seed: the split is a pure function of the seed, so the property under test (the same seed gives the same split in any set order) needs one fixed seed.
         Seed::new(3),
     )
     .unwrap();
@@ -174,6 +176,7 @@ fn a_cap_per_family_picks_that_many_of_every_family_and_leaves_the_rest() {
     assert_eq!(rest.len(), FAMILIES * (PER_FAMILY - 1));
     assert!(chosen.iter().all(|t| !rest.contains(t)));
 
+    // seed: the split is a pure function of the seed, so the property under test (the same seed gives the same split in any set order) needs one fixed seed.
     let again = pick(&ctx, &[b, a], Quota::PerFamily(1), Seed::new(3)).unwrap();
     assert_eq!(sample.picked, again.picked);
 }
@@ -189,6 +192,7 @@ fn a_quota_that_means_nothing_is_refused() {
         Quota::PerFamily(0),
     ] {
         assert!(
+            // seed: a refused quota is refused whatever the seed; any fixed value serves.
             pick(&ctx, std::slice::from_ref(&a), quota, Seed::new(1)).is_err(),
             "{quota:?}"
         );

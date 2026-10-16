@@ -165,6 +165,7 @@ fn two_arms_are_paired_by_task_a_family_counts_once_and_exposed_or_unrun_attempt
         ],
     );
 
+    // seed: the interval seed only draws the bootstrap; the asserted counts, p-value and agreement do not depend on it, and a fixed one keeps the interval output reproducible.
     let seed = Seed::new(5);
     let cmp = compare(&ctx, &candidate, &baseline, seed).unwrap();
     // Five tasks; a2 (exposed) and b2 (never graded) have no verdict in
