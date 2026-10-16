@@ -36,10 +36,14 @@ synthetic-author persona --seed 7 --show 3
 
 ## What is measured (as it is built)
 
-A trained model, unprompted, against the author's own decisions on situations
-and tools it never saw; against the same base given the beliefs in a prompt;
-against the base with the corpus in its context; and against an author who
-holds the opposite beliefs.
+A trained model (`tuned`), unprompted, against the author's own decisions on
+situations and tools it never saw; against the same base alone (`base`), given
+the author's name (`named`), given the beliefs in a prompt (`principles`) and
+given the paragraphs of the corpus that share the most with the situation
+(`retrieval`); and, where an author who holds the opposite beliefs would
+decide otherwise, whose decision it took (`cross`). The opposite author is an
+oracle only: no model is trained on its corpus, and the base is not given the
+whole corpus in its context.
 
 ## Seeds and manifests
 

@@ -29,7 +29,8 @@ pub struct Outcome {
     pub correct: bool,
     /// Whether the item's topic is one the author wrote about.
     pub topic_seen: bool,
-    /// Whether the facts combine as some article has them.
+    /// Whether the way the facts and options combine was not withheld from the
+    /// corpus's planner (not that the corpus holds it: see `combo_trained`).
     pub combo_seen: bool,
     /// Whether some decision kept from the corpus has the item's facts and
     /// options; absent for the first version of the examination.

@@ -50,13 +50,13 @@ pub struct Item {
     pub schema: Schema,
     /// Whether the topic is one the author wrote about.
     pub topic_seen: bool,
-    /// Whether the facts combine as some article of the corpus has them.
+    /// Whether the way the facts and options combine was not withheld from the
+    /// corpus's planner. It says nothing of whether the corpus holds the
+    /// combination: see `combo_trained`.
     pub combo_seen: bool,
     /// Whether some decision kept from the corpus has this item's facts and
-    /// options. Unlike `combo_seen`, which says only that the combination was
-    /// not withheld from the corpus's planner, this is read off the corpus
-    /// itself. Absent in the first version of the examination, which did not
-    /// ask.
+    /// options, read off the corpus itself. Absent in the first version of the
+    /// examination, which did not ask.
     pub combo_trained: Option<bool>,
     /// Whether the tool is one the model was taught with.
     pub tool_seen: bool,
