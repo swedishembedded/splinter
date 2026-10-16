@@ -69,50 +69,96 @@ documentation pages, one run).}\label{tab:e1}
 
 \subsection{E2 and E3: a turn of the loop on invented facts}\label{sec:e2}
 
-The invented facts (24 per generation, seed recorded in \code{data/runs/e2/build.json})
-were not answered by the unadapted policy: \mETwoBaseGZero{} of 24 facts of generation~0,
-\mETwoBaseGOne{} of generation~1 and \mETwoBaseGTwo{} of generation~2 had at least three of
-four probes right, and \mETwoBaseAnchor{} of 40 anchor questions were right.\cl{M05}
-The first \code{learn} reached the training stage with a small dataset
-(\cref{tab:learn}): \mETwoGZeroTasks{} tasks were admitted from the 24-section
-handbook, none of the \mETwoGZeroAttempts{} closed-book attempts of the policy was
-verified correct, the teacher's answer was verified for \mETwoGZeroTeacherVerified{}
-tasks, and the dataset held \mETwoGZeroDatasetRecords{} records.\cl{M06}
-The second generation's \code{learn} ended with \mETwoGOneDatasetRecords{} records.\cl{M07}
-Both commands exited with status \mETwoExitLearnGZero{} before a candidate existed,
-with the message ``\mETwoGZeroRefusal''.\cl{M08} We have not diagnosed this refusal; it
-occurred with eight and with four training records, the smallest datasets this
-pipeline was given in any experiment here, and we do not know whether larger
-datasets avoid it.
+\paragraph{First wave.} The first wave taught 24 facts per generation from one file per
+generation, with the policy Qwen3-0.6B. The unadapted policy answered \mETwoBaseGZero{} of 24 facts
+of generation~0, \mETwoBaseGOne{} of generation~1 and \mETwoBaseGTwo{} of generation~2 (at least
+three of four probes right) and \mETwoBaseAnchor{} of 40 anchor questions.\cl{M05}
+The first \code{learn} reached training with \mETwoGZeroTasks{} tasks admitted, none of the
+\mETwoGZeroAttempts{} closed-book attempts verified correct, the teacher's answer verified for
+\mETwoGZeroTeacherVerified{} tasks, and \mETwoGZeroDatasetRecords{} records; the second ended with
+\mETwoGOneDatasetRecords{} records.\cl{M06,M07} Both exited with status \mETwoExitLearnGZero{} at the
+training stage with ``\mETwoGZeroRefusal''.\cl{M08} The live policy was unchanged, no release was made
+(\mETwoReleasesFinal{} listed) and the rollback was refused: ``\mETwoRollbackMessage''.\cl{M09,M10}
+The cause is the first defect of \cref{sec:defects}: the single fact sheet was one group of source
+text, which the holdout rule cannot divide. The rollback refusal was correct, since no release
+existed. This wave measured nothing about learning, retention or release.
+
+\paragraph{Second wave, registered run.} The facts are 30 per generation, one sheet file each,
+with the training flags fixed from two earlier pilots on other seeds (\code{prereg/protocol.md}).
+The unadapted policy answered \mETworBaseGZero{}, \mETworBaseGOne{} and \mETworBaseGTwo{} of the
+30 facts of the three generations and \mETworBaseAnchor{} of 40 anchor questions, the chance level for
+numeric answers being zero facts at three of four probes.\cl{M22}
+The first \code{learn} admitted \mETworGZeroTasks{} tasks, of which \mETworGZeroTaught{} were taught
+(the policy never solved them closed-book and the teacher's answer verified) and \mETworGZeroNever{}
+were not (the teacher's answer failed verification); it wrote \mETworGZeroVariants{} variants,
+\mETworGZeroRecords{} records, \mETworGZeroTrainRecords{} of them to train on after the held-out
+families were taken out, and trained \mETworGZeroSteps{} steps at rank \mETworGZeroRank.\cl{M23}
+Held-out whole families are facts the policy is never taught; that is the price of a
+measurement independent of training (\cref{sec:defects}).
+
+\Cref{tab:gate} gives the gate's four checks. The generation~0 candidate passed three: improvement
+(it won \mETworGZeroImpSignWins{} of \mETworGZeroImpSignDiscordant{} discordant families, sign test
+$p=\mETworGZeroImpSignP$, and \mETworGZeroImpVariantsRight{} of \mETworGZeroImpVariantsN{} paraphrase
+tasks right against none for the champion), retention (nothing earlier to hold) and serve
+(\mETworGZeroServeAgreed{} of \mETworGZeroServeSampled{} sampled answers of the served adapter
+agreed with the in-process ones). It was refused by the anchor check: the 40-question anchor suite
+fell by \mETworGZeroAnchorDrop{} against a bound of \mETworGZeroAnchorBound, which is one question
+lost.\cl{M24} The release was therefore not made. This is the registered outcome ``no release'', and the
+exact reason.
+
+Measured on the probes (\cref{tab:e2}), the refused candidate answered \mETworCandidateGZeroGZero{} of
+the 30 facts of generation~0 against none at base (\mETworBaseCandidateGZeroGZeroGained{} gained,
+\mETworBaseCandidateGZeroGZeroLost{} lost, exact McNemar $p=\mETworBaseCandidateGZeroGZeroP$), answered
+\mETworCandidateGZeroGOne{} of generation~1 and \mETworCandidateGZeroGTwo{} of the never-taught generation~2,
+and \mETworCandidateGZeroAnchor{} of 40 anchor questions.\cl{M25}
+The two lost anchor answers were a number written where a general fact was asked (``There are 17
+continents'') and a wrong ocean. Learning the invented facts moved the policy where nothing taught
+it to move, and the gate caught it; no other measurement here sees that.
+
+The second generation could not continue a champion, since none existed: its \code{learn} trained from the
+base on \mETworGOneTasks{} tasks (\mETworGOneTaught{} taught, \mETworGOneTrainRecords{} records trained on)
+and met the same pattern: improvement, retention and serve passed (\mETworGOneServeAgreed{} of
+\mETworGOneServeSampled{} served answers agreed), the anchor fell by \mETworGOneAnchorDrop{}, no release.\cl{M26}
+Its candidate answered \mETworCandidateGOneGOne{} of the generation~1 facts (\mETworBaseCandidateGOneGOneGained{}
+gained, \mETworBaseCandidateGOneGOneLost{} lost, $p=\mETworBaseCandidateGOneGOneP$) and \mETworCandidateGOneAnchor{}
+of 40 anchor questions.\cl{M27} Because no first release existed, retention across two releases and rollback
+to a first release are \emph{not measured}: the live policy stayed the base after each command
+(\mETworAfterGZeroGZero{} facts and \mETworAfterGOneAnchor{} anchor answers throughout, \mETworReleasesFinal{} releases
+listed) and the rollback was refused with status \mETworRollbackExit: ``\mETworRollbackMessage''.\cl{M28}
 
 \begin{table}[t]
 \centering
-\input{generated/learn_table}
-\caption{E2 and E3: stage counts of the two \code{learn} commands, read from the
-command output kept in \code{data/runs/e2/raw/commands.log}.}\label{tab:learn}
+\small
+\input{generated/gate_table}
+\caption{E2 and E3, second wave: the release gate's four checks on each candidate. A refused
+check is the reason the candidate was not released.}\label{tab:gate}
 \end{table}
-
-Consequently the gate was never reached, no release was made and no alias moved. The
-live policy answered the same probes as the base after each command
-(\cref{tab:e2}): \mETwoAfterGZeroGZero{} of the first generation's facts after the first
-command and \mETwoAfterGOneGOne{} of the second generation's after the second, and
-\mETwoAfterGOneAnchor{} anchor questions, all as at the start; the release list was
-empty (\mETwoReleasesFinal{} releases).\cl{M09} The rollback was refused with status
-\mETwoExitRollback{}: ``\mETwoRollbackMessage''.\cl{M10} We therefore have \emph{no}
-measurement of an improvement, of retention across generations, of a gate decision or of
-a served release in a full turn: those parts of E2 and E3 are not measured. Two
-qualified observations follow from what did run. The closed-book control worked as
-designed: facts the policy cannot know were not answered by it (\mETwoBaseGZero{} of 24).\cl{M05}
-The refusal to roll back an alias that points at no release is the specified behaviour
-of that command.\cl{X06}
 
 \begin{table}[t]
 \centering
-\input{generated/e2_table}
-\caption{E2 and E3: facts answered (at least three of four probes) with Wilson 95\%
-intervals, and anchor questions right, after each step. 24 facts per generation; the
-policy did not change.}\label{tab:e2}
+\small
+\input{generated/e2w2_table}
+\caption{E2 and E3, second wave: facts answered (at least three of four probes) with Wilson 95\%
+intervals, and anchor questions right, for the unadapted policy and for each candidate
+(measured whether or not the gate released it). 30 facts per generation.}\label{tab:e2}
 \end{table}
+
+\paragraph{E2b (post hoc).} Since the anchor check alone refused the candidate, we tried one other setting
+decided after seeing that result: rehearsal of the base's own answers at 0.5 of the draws and a lower
+rate, on generation~0 only. The candidate passed improvement (sign test $p=\mETwobGZeroImpSignP$), retention
+and serve (\mETwobGZeroServeAgreed{} of \mETwobGZeroServeSampled{} agreed) and was refused by the anchor check
+again, which fell by \mETwobGZeroAnchorDrop{}; it answered \mETwobCandidateGZeroGZero{} of the 30
+generation~0 facts (\mETwobBaseCandidateGZeroGZeroGained{} gained, none lost,
+$p=\mETwobBaseCandidateGZeroGZeroP$) and \mETwobCandidateGZeroAnchor{} of 40 anchor questions.\cl{M29}
+More rehearsal did not protect the anchor here.
+
+\paragraph{Re-grading.} After the runs the stated-reference verifier was repaired so that a number
+written with a thousands separator is the same number (\cref{sec:defects}). The candidates of the
+registered run and of E2b were measured again with the repaired verifier and gave the same counts
+(\mETworRegradeCandidateGZeroGZero{} and \mETworRegradeCandidateGOneGOne{} facts, and
+\mETwobRegradeCandidateGZeroGZero{}; anchor \mETworRegradeCandidateGZeroAnchor, \mETworRegradeCandidateGOneAnchor{} and
+\mETwobRegradeCandidateGZeroAnchor).\cl{M30} The verifier's effect was on training, not on these probes:
+it decided which facts the teacher's answers could teach.
 
 \subsection{E4: training the 27B model on one card}\label{sec:e4}
 

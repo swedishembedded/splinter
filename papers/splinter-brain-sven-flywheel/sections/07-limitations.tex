@@ -3,19 +3,39 @@
 
 \section{Limitations}\label{sec:limitations}
 
-The structure claims show that definitions, constants and messages exist at the pinned
-commits; they do not show that the code behaves accordingly. Behaviour is established only
-by the experiments, which are pilots: one run each, one generator, one corpus, 24 facts per
-generation. The experiments ran on a repaired build of Splinter that is newer than the
-pinned commit of the structure checks (\cref{sec:repro}), so structure and behaviour are
-not checked at one commit. The two-generation turn did not reach the release gate: the
-gate, the retention check, the serve check, the alias move and rollback to a prior release
-are described from the code (\cref{sec:gate}) and are not demonstrated end to end here.
-The training qualification of the 27B model used random weights for the long sequences and
-a handful of examples for the real checkpoint; it shows that steps fit and run, not that
-the adapter changes generation, and no sequence longer than 16384 tokens was run.
-Corpus expansion beyond the first pass (variants, retention queue, rehearsal, claims) is
-described from the code; only variants were exercised, as a stage count in the turn, and
-none of the mechanisms was evaluated for the value it adds.
+The structure claims show that definitions, constants, tests and messages exist at the pinned
+commits; they do not show that the code behaves accordingly. Behaviour is established only by
+the experiments, which are pilots: one run each per setting, one generator family, small
+corpora, 30 facts per generation, one policy size per run. The training settings of E2 were
+chosen on two earlier pilots with other seeds, not on the registered run's own measurement, but
+they were chosen by hand and no search over them was made.
+
+No run released a candidate. In every run the improvement, retention and serve checks passed or,
+in one run, the serve check could not start its server, and the anchor check refused; so the
+alias move, the serving manifest of a real release, a second generation that continues a
+champion with replay, the retention check against an earlier release and the rollback to a first
+release are described from the code (\cref{sec:gate}) and are not demonstrated end to end here.
+The serve check was measured on refused candidates only. The anchor bound allows a loss of less
+than one of 40 questions, so a single changed answer decides it; we did not test a larger anchor
+suite or other training settings that might keep it, beyond the two settings and two policy sizes
+reported. The facts are numbers, which may be why they leak into numeric answers elsewhere; a
+domain of non-numeric facts is not measured.
+
+The held-out families of a run are facts the policy is never taught, about a seventh to a quarter of
+the facts, and the teacher's answer was not verified for a further share of them
+(\cref{sec:defects}); the facts measured in the probes include both, so the counts of facts answered
+are lower bounds of what the trained records taught. Probes are graded by numbers appearing in the
+answer; a different grader was not compared. The experiments ran on binaries built from the commits
+of \cref{sec:repro}, which differ between the first and second wave and, for the repaired-verifier
+rerun, from the registered run's; each result names its wave. The training qualification of the 27B
+model used random weights for the long sequences and a handful of examples for the real checkpoint;
+it shows that steps fit and run, not that the adapter changes generation, and no sequence longer
+than 16384 tokens was run.
+
+The cause of the generator's missing subjects is localised, not resolved: the rule is not at fault
+beyond the markup case, the generator at two sizes names a subject its question omits, and a changed
+brief was not tested. Corpus expansion beyond the first pass (variants, retention queue,
+rehearsal, claims) is described from the code; variants and rehearsal were exercised as stage
+counts and as a post hoc setting, and none of the mechanisms was evaluated for the value it adds.
 
 \input{generated/limitations}
