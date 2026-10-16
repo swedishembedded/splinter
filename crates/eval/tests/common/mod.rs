@@ -7,6 +7,7 @@
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code)]
 
+pub mod conformance;
 pub mod workspace;
 
 use std::collections::BTreeMap;
