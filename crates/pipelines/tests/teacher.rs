@@ -30,7 +30,7 @@ mod common;
 use std::sync::{Arc, Mutex};
 
 use common::gate::{gate_context, Brain, FakeTrainer, ANCHOR};
-use common::manual::{BAUD_QUESTION, BAUD_QUOTE, MANUAL};
+use common::manual::{recall_proposals, write_sheets, BAUD_QUESTION};
 use common::Scripted;
 use serde_json::json;
 use splinter_agent::solve::{Model, MATERIAL_HEADING, SYSTEM_PROMPT};
@@ -59,21 +59,7 @@ const POWER_PASSAGE: &str = "40 mA when idle and 900 mA at full load";
 fn open_book_only_policy() -> Scripted {
     Scripted::new(|prompt| {
         if prompt.contains("You write training tasks") {
-            json!({ "tasks": [
-                {
-                    "instruction": BAUD_QUESTION,
-                    "subject": "Frobnicator",
-                    "reference": "115200 baud",
-                    "evidence": [{ "section": 1, "quote": BAUD_QUOTE }]
-                },
-                {
-                    "instruction": IDLE_QUESTION,
-                    "subject": "Frobnicator",
-                    "reference": "40 mA",
-                    "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
-                }
-            ]})
-            .to_string()
+            recall_proposals(prompt).to_string()
         } else if prompt.contains("You are reviewing an attempt") {
             "The answer is not what the manual says.".into()
         } else if prompt.contains(CONSOLE_PASSAGE) {
@@ -139,8 +125,8 @@ fn learn_teaches_a_fact_the_policy_never_answers_closed_book() {
         ModelRef::policy_default(),
         Model::new(Arc::new(policy.clone()), common::POLICY),
     );
-    let manual = scratch.0.join("manual.md");
-    std::fs::write(&manual, MANUAL).unwrap();
+    // Two independent source texts, so one can be held out whole.
+    let sheets = write_sheets(&scratch.0);
     let student = Student {
         learned: learned_model(),
         plans: Mutex::new(Vec::new()),
@@ -149,7 +135,7 @@ fn learn_teaches_a_fact_the_policy_never_answers_closed_book() {
     let Learned::Ran(run) = learn(
         &ctx,
         &LearnRequest {
-            sources: vec![manual.display().to_string()],
+            sources: sheets,
             ..LearnRequest::default()
         },
         &student,

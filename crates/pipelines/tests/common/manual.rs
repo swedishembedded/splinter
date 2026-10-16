@@ -24,6 +24,76 @@ The console UART of the Frobnicator runs at 115200 baud with eight data bits.
 The Frobnicator draws 40 mA when idle and 900 mA at full load.
 ";
 
+/// The manual as two independent sheets, one text each: a held-out
+/// measurement needs at least two source texts to hold one out whole.
+/// The facts and their section positions (1 for the console, 2 for the
+/// power) are the manual's, so the scripted tasks ground in either.
+pub const SHEETS: [(&str, &str); 2] = [
+    (
+        "console.md",
+        "# Frobnicator console sheet
+
+The Frobnicator is a bench power controller.
+
+## Console
+
+The console UART of the Frobnicator runs at 115200 baud with eight data bits.
+",
+    ),
+    (
+        "power.md",
+        "# Frobnicator power sheet
+
+The Frobnicator is a bench power controller.
+
+## Overview
+
+It is powered from a bench supply.
+
+## Power
+
+The Frobnicator draws 40 mA when idle and 900 mA at full load.
+",
+    ),
+];
+
+/// Writes [`SHEETS`] into `dir` and returns the path of each, as a `learn`
+/// request names its sources.
+pub fn write_sheets(dir: &std::path::Path) -> Vec<String> {
+    SHEETS
+        .iter()
+        .map(|(name, text)| {
+            let path = dir.join(name);
+            std::fs::write(&path, text).unwrap();
+            path.display().to_string()
+        })
+        .collect()
+}
+
+/// The two recall tasks the policy writes, as the generator's proposals:
+/// the ones whose quote is in the `shown` text (the whole manual shows
+/// both; each sheet shows its own).
+pub fn recall_proposals(shown: &str) -> serde_json::Value {
+    let tasks: Vec<_> = [
+        json!({
+            "instruction": BAUD_QUESTION,
+            "subject": "Frobnicator",
+            "reference": "115200 baud",
+            "evidence": [{ "section": 1, "quote": BAUD_QUOTE }]
+        }),
+        json!({
+            "instruction": IDLE_QUESTION,
+            "subject": "Frobnicator",
+            "reference": "40 mA",
+            "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
+        }),
+    ]
+    .into_iter()
+    .filter(|task| shown.contains(task["evidence"][0]["quote"].as_str().unwrap_or_default()))
+    .collect();
+    json!({ "tasks": tasks })
+}
+
 /// The quote the baud-rate task is grounded in.
 pub const BAUD_QUOTE: &str = "runs at 115200 baud";
 
@@ -81,21 +151,7 @@ pub fn manual_reply(prompt: &str) -> String {
         if let Some(variants) = variants_reply(prompt) {
             variants
         } else if prompt.contains("You write training tasks") {
-            json!({ "tasks": [
-                {
-                    "instruction": BAUD_QUESTION,
-                    "subject": "Frobnicator",
-                    "reference": "115200 baud",
-                    "evidence": [{ "section": 1, "quote": BAUD_QUOTE }]
-                },
-                {
-                    "instruction": IDLE_QUESTION,
-                    "subject": "Frobnicator",
-                    "reference": "40 mA",
-                    "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
-                }
-            ]})
-            .to_string()
+            recall_proposals(prompt).to_string()
         } else if prompt.contains("You are reviewing an attempt") {
             "The idle current is wrong: it is not what the power specification gives.".into()
         } else if prompt.contains("baud rate") {

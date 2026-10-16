@@ -31,7 +31,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use common::gate::{anchor_file, gate_context, put_base, released, Brain, FakeTrainer, ANCHOR};
-use common::manual::{manual_policy as policy, MANUAL};
+use common::manual::{manual_policy as policy, write_sheets, MANUAL};
 use common::{scratch_context, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
@@ -88,14 +88,14 @@ impl Trainer for RecordingTrainer {
 fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
     let (scratch, ctx) = scratch_context("learn", policy(), false);
     put_base(&ctx);
-    let manual = scratch.0.join("manual.md");
-    std::fs::write(&manual, MANUAL).unwrap();
+    // Two independent source texts, so one can be held out whole.
+    let sheets = write_sheets(&scratch.0);
     let trainer = RecordingTrainer::default();
 
     let learned = learn(
         &ctx,
         &LearnRequest {
-            sources: vec![manual.display().to_string()],
+            sources: sheets,
             goal: Some("know the Frobnicator's electrical limits".into()),
             // This spec is the pipeline's plumbing over a policy that
             // answers each task the same way every time: every task stays.
@@ -110,8 +110,8 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
     };
     let report = &run.report;
     assert_eq!(report.stopped, None, "{report:#?}");
-    assert_eq!(report.sources.len(), 1);
-    assert_eq!(report.sources[0].kind, "document");
+    assert_eq!(report.sources.len(), 2);
+    assert!(report.sources.iter().all(|s| s.kind == "document"));
     let tasks = report.tasks.as_ref().unwrap();
     assert_eq!(tasks.tasks, 2, "{tasks:#?}");
     let solved = report.solve.as_ref().unwrap();
