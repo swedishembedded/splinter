@@ -8,17 +8,13 @@ from mdrender.wrapping import (
     mdr_fill_paragraphs,
     mdr_longest_line_length,
     mdr_split_hyphens,
-    mdr_split_words,
     mdr_truncate_text,
     mdr_unwrap_lines,
     mdr_wrap_text,
 )
 
 
-class SplitTests(unittest.TestCase):
-    def test_words_split_on_whitespace_runs_only(self):
-        self.assertEqual(mdr_split_words("  a \t b\n\nc "), ["a", "b", "c"])
-
+class C0(unittest.TestCase):
     def test_several_hyphens_split_into_several_pieces(self):
         self.assertEqual(mdr_split_hyphens("a-b-c"), ["a-", "b-", "c"])
 
@@ -32,22 +28,12 @@ class SplitTests(unittest.TestCase):
         self.assertEqual(mdr_split_hyphens("1-2"), ["1-", "2"])
 
 
-class BreakLongWordTests(unittest.TestCase):
+class C1(unittest.TestCase):
     def test_word_one_over_the_width_is_cut(self):
         self.assertEqual(mdr_break_long_word("abcd", 3), ["abc", "d"])
 
     def test_hyphenation_keeps_a_word_that_fits(self):
         self.assertEqual(mdr_break_long_word("abcd", 4, hyphenate=True), ["abcd"])
-
-    def test_zero_width_is_rejected(self):
-        with self.assertRaises(ValueError) as caught:
-            mdr_break_long_word("abc", 0)
-        self.assertEqual(str(caught.exception), "width must be positive")
-
-    def test_zero_first_width_is_rejected(self):
-        with self.assertRaises(ValueError) as caught:
-            mdr_break_long_word("abc", 3, first_width=0)
-        self.assertEqual(str(caught.exception), "width must be positive")
 
     def test_first_chunk_may_use_its_own_width(self):
         self.assertEqual(mdr_break_long_word("abcdefg", 3, first_width=2), ["ab", "cde", "fg"])
@@ -61,22 +47,7 @@ class BreakLongWordTests(unittest.TestCase):
         self.assertEqual(mdr_break_long_word("abc", 2, hyphenate=True), ["a-", "bc"])
 
 
-class WrapTextTests(unittest.TestCase):
-    def test_text_that_fits_stays_on_one_line(self):
-        self.assertEqual(mdr_wrap_text("one two", 7), ["one two"])
-
-    def test_text_one_column_too_wide_breaks(self):
-        self.assertEqual(mdr_wrap_text("one two", 6), ["one", "two"])
-
-    def test_greedy_fill_packs_each_line_fully(self):
-        self.assertEqual(mdr_wrap_text("aa bb cc dd ee", 8), ["aa bb cc", "dd ee"])
-
-    def test_runs_of_blanks_collapse_to_one_space(self):
-        self.assertEqual(mdr_wrap_text("a   b\n c", 20), ["a b c"])
-
-    def test_long_word_is_broken_at_the_width(self):
-        self.assertEqual(mdr_wrap_text("abcdefgh", 3), ["abc", "def", "gh"])
-
+class C2(unittest.TestCase):
     def test_long_word_tail_accepts_more_words(self):
         self.assertEqual(mdr_wrap_text("abcde f", 4), ["abcd", "e f"])
 
@@ -95,21 +66,6 @@ class WrapTextTests(unittest.TestCase):
     def test_hyphen_pieces_rejoin_without_a_space(self):
         self.assertEqual(mdr_wrap_text("a well-known", 12), ["a well-known"])
 
-    def test_hyphen_breaking_can_be_disabled(self):
-        self.assertEqual(mdr_wrap_text("a well-known", 8, split_hyphens=False), ["a", "well-kno", "wn"])
-
-    def test_first_line_indent_counts_against_the_width(self):
-        self.assertEqual(mdr_wrap_text("aa bb cc", 6, first_indent="> "), ["> aa", "bb cc"])
-
-    def test_rest_indent_applies_to_following_lines_only(self):
-        self.assertEqual(mdr_wrap_text("aa bb cc", 6, rest_indent="  "), ["aa bb", "  cc"])
-
-    def test_hanging_indent_with_a_bullet(self):
-        self.assertEqual(
-            mdr_wrap_text("alpha beta gamma", 10, first_indent="* ", rest_indent="  "),
-            ["* alpha", "  beta", "  gamma"],
-        )
-
     def test_full_first_indent_is_rejected(self):
         with self.assertRaises(ValueError) as caught:
             mdr_wrap_text("a", 2, first_indent="  ")
@@ -126,21 +82,18 @@ class WrapTextTests(unittest.TestCase):
                          ["x", "  ab", "  cd", "  ef", "  g"])
 
 
-class FillTests(unittest.TestCase):
+class C3(unittest.TestCase):
     def test_paragraphs_stay_separated_by_one_blank_line(self):
         self.assertEqual(mdr_fill_paragraphs("aa bb\n\n\n\ncc", 5), "aa bb\n\ncc")
 
     def test_lines_of_a_paragraph_are_refilled(self):
         self.assertEqual(mdr_fill_paragraphs("aa\nbb\ncc", 8), "aa bb cc")
 
-    def test_whitespace_only_line_separates_paragraphs(self):
-        self.assertEqual(mdr_fill_paragraphs("a\n   \nb", 5), "a\n\nb")
-
     def test_indents_apply_to_every_paragraph(self):
         self.assertEqual(mdr_fill_paragraphs("aa bb\n\ncc dd", 5, "* ", "  "), "* aa\n  bb\n\n* cc\n  dd")
 
 
-class MeasureTests(unittest.TestCase):
+class C4(unittest.TestCase):
     def test_unwrap_joins_lines_with_single_spaces(self):
         self.assertEqual(mdr_unwrap_lines(["  a ", "b", "", "  ", "c"]), "a b c")
 

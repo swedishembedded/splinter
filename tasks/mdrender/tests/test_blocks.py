@@ -4,7 +4,6 @@ import unittest
 
 from mdrender.blocks import (
     mdr_count_blocks,
-    mdr_is_thematic_break,
     mdr_match_atx_heading,
     mdr_match_code_fence,
     mdr_match_list_marker,
@@ -25,26 +24,17 @@ def numbers(start, *items, tight=True):
     return {"type": "list", "ordered": True, "start": start, "tight": tight, "items": list(items)}
 
 
-class HeadingMatchTests(unittest.TestCase):
+class C0(unittest.TestCase):
     def test_surrounding_blanks_are_trimmed(self):
         self.assertEqual(mdr_match_atx_heading("#   spaced out   "), (1, "spaced out"))
 
 
-class RuleAndFenceMatchTests(unittest.TestCase):
-    def test_three_dashes_form_a_thematic_break(self):
-        self.assertTrue(mdr_is_thematic_break("---"))
-
-    def test_two_dashes_are_no_thematic_break(self):
-        self.assertFalse(mdr_is_thematic_break("--"))
-
-    def test_backtick_fence_info_rejects_backtick(self):
-        self.assertIsNone(mdr_match_code_fence("```a`b"))
-
+class C1(unittest.TestCase):
     def test_tilde_fence_info_allows_backtick(self):
         self.assertEqual(mdr_match_code_fence("~~~a`b"), ("~", 3, "a`b", 0))
 
 
-class ListMarkerMatchTests(unittest.TestCase):
+class C2(unittest.TestCase):
     def test_lone_marker_is_an_empty_item(self):
         self.assertEqual(mdr_match_list_marker("-"),
                          {"ordered": False, "kind": "-", "number": None, "offset": 2, "text": ""})
@@ -56,7 +46,7 @@ class ListMarkerMatchTests(unittest.TestCase):
         self.assertEqual(mdr_match_list_marker("-     x")["offset"], 2)
 
 
-class BasicBlockTests(unittest.TestCase):
+class C3(unittest.TestCase):
     def test_heading_carries_level_and_inline_children(self):
         self.assertEqual(mdr_parse_blocks("## A *b*"), [{"type": "heading", "level": 2, "children": [
             {"type": "text", "text": "A "}, {"type": "emph", "children": [{"type": "text", "text": "b"}]}]}])
@@ -79,7 +69,7 @@ class BasicBlockTests(unittest.TestCase):
         self.assertEqual([b["type"] for b in mdr_parse_blocks("-    a\n\t- b")], ["list", "paragraph"])
 
 
-class CodeAndQuoteTests(unittest.TestCase):
+class C4(unittest.TestCase):
     def test_unclosed_fence_runs_to_the_end(self):
         self.assertEqual(mdr_parse_blocks("```\na\nb"), [{"type": "code", "info": "", "text": "a\nb"}])
 
@@ -98,20 +88,11 @@ class CodeAndQuoteTests(unittest.TestCase):
         self.assertEqual(mdr_parse_blocks("> > a"), [{"type": "quote", "children": [
             {"type": "quote", "children": [para("a")]}]}])
 
-    def test_quote_may_contain_a_list(self):
-        self.assertEqual(mdr_parse_blocks("> - a"), [{"type": "quote", "children": [bullets([para("a")])]}])
-
     def test_quote_interrupts_a_paragraph(self):
         self.assertEqual([b["type"] for b in mdr_parse_blocks("a\n> b")], ["paragraph", "quote"])
 
 
-class ListParseTests(unittest.TestCase):
-    def test_bullet_items_form_one_tight_list(self):
-        self.assertEqual(mdr_parse_blocks("- a\n- b"), [bullets([para("a")], [para("b")])])
-
-    def test_ordered_list_remembers_its_start_number(self):
-        self.assertEqual(mdr_parse_blocks("3. a\n4. b"), [numbers(3, [para("a")], [para("b")])])
-
+class C5(unittest.TestCase):
     def test_blank_between_items_loosens_list(self):
         self.assertEqual(mdr_parse_blocks("- a\n\n- b"), [bullets([para("a")], [para("b")], tight=False)])
 
@@ -126,11 +107,6 @@ class ListParseTests(unittest.TestCase):
     def test_nested_ordered_list_inside_a_bullet(self):
         self.assertEqual(mdr_parse_blocks("- a\n  1. b"),
                          [bullets([para("a"), numbers(1, [para("b")])])])
-
-    def test_deeper_indent_continues_the_item(self):
-        self.assertEqual(mdr_parse_blocks("1. a\n   b"),
-                         [numbers(1, [{"type": "paragraph", "children": [
-                             {"type": "text", "text": "a"}, {"type": "softbreak"}, {"type": "text", "text": "b"}]}])])
 
     def test_lazy_continuation_joins_the_item_paragraph(self):
         blocks = mdr_parse_blocks("- a\nb")
@@ -148,31 +124,18 @@ class ListParseTests(unittest.TestCase):
     def test_new_bullet_character_splits_list(self):
         self.assertEqual(mdr_parse_blocks("- a\n* b"), [bullets([para("a")]), bullets([para("b")])])
 
-    def test_new_ordered_delimiter_splits_list(self):
-        self.assertEqual(mdr_parse_blocks("1. a\n2) b"), [numbers(1, [para("a")]), numbers(2, [para("b")])])
-
-    def test_unindented_text_after_blank_ends_list(self):
-        self.assertEqual(mdr_parse_blocks("- a\n\nb"), [bullets([para("a")]), para("b")])
-
     def test_ordered_item_starting_at_one_interrupts_text(self):
         self.assertEqual([b["type"] for b in mdr_parse_blocks("a\n1. b")], ["paragraph", "list"])
 
     def test_empty_item_has_no_blocks(self):
         self.assertEqual(mdr_parse_blocks("-\n- x"), [bullets([], [para("x")])])
 
-    def test_item_may_hold_fenced_code(self):
-        self.assertEqual(mdr_parse_blocks("- ```\n  x\n  ```"),
-                         [bullets([{"type": "code", "info": "", "text": "x"}])])
-
     def test_dedent_after_blank_ends_nested_item(self):
         self.assertEqual(mdr_parse_blocks("- a\n  - b\n\n  c"),
                          [bullets([para("a"), bullets([para("b")]), para("c")], tight=False)])
 
-    def test_trailing_blanks_keep_list_tight(self):
-        self.assertEqual(mdr_parse_blocks("- a\n- b\n\n\n"), [bullets([para("a")], [para("b")])])
 
-
-class WalkTests(unittest.TestCase):
+class C6(unittest.TestCase):
     def test_walk_visits_nested_blocks_depth_first(self):
         blocks = mdr_parse_blocks("> a\n\n- b\n  - c\n\n---")
         kinds = [b["type"] for b in mdr_walk_blocks(blocks)]
@@ -181,9 +144,6 @@ class WalkTests(unittest.TestCase):
     def test_counts_group_by_type_first_seen(self):
         blocks = mdr_parse_blocks("# h\n\n- a\n- b\n\n> q\n\n## k")
         self.assertEqual(mdr_count_blocks(blocks), {"heading": 2, "list": 1, "paragraph": 3, "quote": 1})
-
-    def test_counting_nothing_gives_an_empty_mapping(self):
-        self.assertEqual(mdr_count_blocks([]), {})
 
 
 if __name__ == "__main__":

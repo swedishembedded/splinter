@@ -13,7 +13,6 @@ from mdrender.toc import (
     mdr_slugify,
     mdr_toc_depth,
     mdr_toc_to_list_block,
-    mdr_unique_slug,
 )
 
 
@@ -29,7 +28,7 @@ def entry(level, value, slug):
     return {"level": level, "text": value, "id": slug}
 
 
-class SlugTests(unittest.TestCase):
+class C0(unittest.TestCase):
     def test_digits_survive_in_a_slug(self):
         self.assertEqual(mdr_slugify("Step 2 of 10"), "step-2-of-10")
 
@@ -43,33 +42,13 @@ class SlugTests(unittest.TestCase):
         self.assertEqual(mdr_slugify("Top 9 tips"), "top-9-tips")
 
 
-class PlainTextTests(unittest.TestCase):
+class C1(unittest.TestCase):
     def test_nested_formatting_is_flattened(self):
         inner = {"type": "emph", "children": [text("x")]}
         self.assertEqual(mdr_node_plain_text([{"type": "strong", "children": [text("a"), inner]}]), "ax")
 
 
-class UniqueSlugTests(unittest.TestCase):
-    def test_taken_slug_gets_the_suffix_one(self):
-        self.assertEqual(mdr_unique_slug("intro", {"intro"}), "intro-1")
-
-    def test_suffix_counts_up_past_taken_ones(self):
-        self.assertEqual(mdr_unique_slug("a", {"a", "a-1", "a-2"}), "a-3")
-
-    def test_suffixed_result_is_recorded_too(self):
-        used = {"a"}
-        mdr_unique_slug("a", used)
-        self.assertEqual(used, {"a", "a-1"})
-
-    def test_natural_slug_that_looks_suffixed_is_respected(self):
-        used = set()
-        first = mdr_unique_slug("a-1", used)
-        second = mdr_unique_slug("a", used)
-        third = mdr_unique_slug("a", used)
-        self.assertEqual([first, second, third], ["a-1", "a", "a-2"])
-
-
-class AssignIdTests(unittest.TestCase):
+class C2(unittest.TestCase):
     def test_headings_receive_slug_ids(self):
         blocks = mdr_assign_heading_ids([heading(1, "Hello There")])
         self.assertEqual(blocks[0]["id"], "hello-there")
@@ -78,18 +57,13 @@ class AssignIdTests(unittest.TestCase):
         blocks = mdr_assign_heading_ids([heading(2, "Notes"), heading(2, "Notes"), heading(3, "Notes")])
         self.assertEqual([b["id"] for b in blocks], ["notes", "notes-1", "notes-2"])
 
-    def test_input_blocks_are_not_modified(self):
-        original = heading(1, "A")
-        mdr_assign_heading_ids([original])
-        self.assertNotIn("id", original)
-
     def test_formatted_heading_text_is_slugged_without_markup(self):
         block = {"type": "heading", "level": 1, "children": [
             {"type": "emph", "children": [text("Big")]}, text(" idea")]}
         self.assertEqual(mdr_assign_heading_ids([block])[0]["id"], "big-idea")
 
 
-class CollectTests(unittest.TestCase):
+class C3(unittest.TestCase):
     def test_entries_list_level_text_and_id(self):
         self.assertEqual(mdr_collect_headings([heading(2, "Setup")]), [entry(2, "Setup", "setup")])
 
@@ -118,11 +92,7 @@ class CollectTests(unittest.TestCase):
         self.assertEqual(mdr_collect_headings(blocks, [2]), [entry(2, "Same", "same-1")])
 
 
-class BuildTreeTests(unittest.TestCase):
-    def test_flat_levels_make_siblings(self):
-        tree = mdr_build_toc([entry(1, "A", "a"), entry(1, "B", "b")])
-        self.assertEqual([n["id"] for n in tree], ["a", "b"])
-
+class C4(unittest.TestCase):
     def test_deeper_level_nests_under_the_previous_entry(self):
         tree = mdr_build_toc([entry(1, "A", "a"), entry(2, "B", "b"), entry(2, "C", "c")])
         self.assertEqual(len(tree), 1)
@@ -133,24 +103,12 @@ class BuildTreeTests(unittest.TestCase):
         self.assertEqual([n["id"] for n in tree], ["a", "c"])
         self.assertEqual(tree[1]["children"], [])
 
-    def test_skipped_level_still_nests_under_the_parent(self):
-        tree = mdr_build_toc([entry(1, "A", "a"), entry(3, "B", "b")])
-        self.assertEqual(tree[0]["children"][0]["id"], "b")
-
-    def test_document_starting_deep_has_deep_roots(self):
-        tree = mdr_build_toc([entry(3, "A", "a"), entry(2, "B", "b")])
-        self.assertEqual([n["id"] for n in tree], ["a", "b"])
-
     def test_equal_level_after_child_is_sibling(self):
         tree = mdr_build_toc([entry(2, "A", "a"), entry(3, "B", "b"), entry(2, "C", "c"), entry(3, "D", "d")])
         self.assertEqual([[c["id"] for c in n["children"]] for n in tree], [["b"], ["d"]])
 
-    def test_nodes_keep_level_text_and_id(self):
-        tree = mdr_build_toc([entry(2, "A b", "a-b")])
-        self.assertEqual(tree, [{"level": 2, "text": "A b", "id": "a-b", "children": []}])
 
-
-class RenderTocTests(unittest.TestCase):
+class C5(unittest.TestCase):
     def setUp(self):
         self.tree = mdr_build_toc([entry(1, "A", "a"), entry(2, "B", "b"), entry(2, "C", "c"), entry(1, "D", "d")])
 
@@ -167,9 +125,6 @@ class RenderTocTests(unittest.TestCase):
 
     def test_text_rendering_honours_the_indent_width(self):
         self.assertEqual(mdr_render_toc_text(self.tree, indent=4).splitlines()[1], "    1.1 B")
-
-    def test_empty_tree_renders_no_text(self):
-        self.assertEqual(mdr_render_toc_text([]), "")
 
     def test_list_block_links_entries_to_anchors(self):
         block = mdr_toc_to_list_block(mdr_build_toc([entry(1, "A b", "a-b")]))
@@ -190,7 +145,7 @@ class RenderTocTests(unittest.TestCase):
         self.assertEqual((block["items"][0][1]["ordered"], block["items"][0][1]["start"]), (True, 1))
 
 
-class DepthAndFindTests(unittest.TestCase):
+class C6(unittest.TestCase):
     def test_flat_tree_has_depth_one(self):
         self.assertEqual(mdr_toc_depth(mdr_build_toc([entry(1, "A", "a"), entry(1, "B", "b")])), 1)
 

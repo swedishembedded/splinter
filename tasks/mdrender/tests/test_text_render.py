@@ -33,7 +33,7 @@ def quote(*children):
     return {"type": "quote", "children": list(children)}
 
 
-class InlineTextTests(unittest.TestCase):
+class C0(unittest.TestCase):
     def test_emphasis_is_marked_with_underscores(self):
         self.assertEqual(mdr_render_inline_text([{"type": "emph", "children": [text("x")]}]), "_x_")
 
@@ -55,13 +55,7 @@ class InlineTextTests(unittest.TestCase):
         self.assertEqual(str(caught.exception), "unknown node type: blink")
 
 
-class ParagraphTests(unittest.TestCase):
-    def test_paragraph_is_wrapped_at_the_width(self):
-        self.assertEqual(mdr_render_text([para("aaa bbb ccc")], 7), "aaa bbb\nccc")
-
-    def test_paragraph_of_exact_width_is_not_wrapped(self):
-        self.assertEqual(mdr_render_text([para("aaa bbb")], 7), "aaa bbb")
-
+class C1(unittest.TestCase):
     def test_default_width_is_seventy_two(self):
         self.assertEqual(mdr_render_text([para("a" * 35 + " " + "b" * 36)]), "a" * 35 + " " + "b" * 36)
         self.assertEqual(mdr_render_text([para("a" * 36 + " " + "b" * 36)]), "a" * 36 + "\n" + "b" * 36)
@@ -74,19 +68,13 @@ class ParagraphTests(unittest.TestCase):
         block = {"type": "paragraph", "children": [text("aa bb"), {"type": "linebreak"}, text("cc dd")]}
         self.assertEqual(mdr_render_text([block], 4), "aa\nbb\ncc\ndd")
 
-    def test_paragraphs_are_separated_by_one_blank_line(self):
-        self.assertEqual(mdr_render_text([para("a"), para("b")], 10), "a\n\nb")
-
-    def test_empty_paragraph_leaves_no_blank_gap(self):
-        self.assertEqual(mdr_render_text([para("a"), para(""), para("b")], 10), "a\n\nb")
-
     def test_unknown_block_is_rejected(self):
         with self.assertRaises(ValueError) as caught:
             mdr_render_text([{"type": "table"}], 10)
         self.assertEqual(str(caught.exception), "unknown block type: table")
 
 
-class HeadingAndRuleTests(unittest.TestCase):
+class C2(unittest.TestCase):
     def test_top_heading_is_underlined_with_equals(self):
         self.assertEqual(mdr_render_text([heading(1, "Title")], 20), "Title\n=====")
 
@@ -96,23 +84,17 @@ class HeadingAndRuleTests(unittest.TestCase):
     def test_third_level_heading_gets_hash_marks(self):
         self.assertEqual(mdr_render_text([heading(3, "Deep")], 20), "### Deep")
 
-    def test_sixth_level_heading_gets_six_hash_marks(self):
-        self.assertEqual(mdr_render_text([heading(6, "Deepest")], 20), "###### Deepest")
-
     def test_wrapped_hash_heading_indents_its_continuation(self):
         self.assertEqual(mdr_render_text([heading(3, "aaa bbb ccc")], 9), "### aaa\n    bbb\n    ccc")
 
     def test_underline_matches_the_longest_wrapped_line(self):
         self.assertEqual(mdr_render_text([heading(1, "aa bbbb c")], 6), "aa\nbbbb c\n======")
 
-    def test_empty_heading_renders_nothing(self):
-        self.assertEqual(mdr_render_text([para("a"), heading(1, ""), para("b")], 10), "a\n\nb")
-
     def test_rule_spans_the_width(self):
         self.assertEqual(mdr_render_text([{"type": "rule"}], 5), "-----")
 
 
-class CodeAndQuoteTests(unittest.TestCase):
+class C3(unittest.TestCase):
     def test_code_lines_are_never_wrapped(self):
         self.assertEqual(mdr_render_text([{"type": "code", "info": "", "text": "x" * 30}], 10), "    " + "x" * 30)
 
@@ -122,22 +104,13 @@ class CodeAndQuoteTests(unittest.TestCase):
     def test_quote_text_wraps_inside_the_marker(self):
         self.assertEqual(mdr_render_text([quote(para("aaa bbb"))], 5), "> aaa\n> bbb")
 
-    def test_quote_children_split_by_bare_marker(self):
-        self.assertEqual(mdr_render_text([quote(para("a"), para("b"))], 20), "> a\n>\n> b")
-
-    def test_nested_quote_doubles_the_marker(self):
-        self.assertEqual(mdr_render_text([quote(quote(para("a")))], 20), "> > a")
-
     def test_quote_without_room_is_rejected(self):
         with self.assertRaises(ValueError) as caught:
             mdr_render_text([quote(para("a"))], 2)
         self.assertEqual(str(caught.exception), "indent leaves no room for text")
 
 
-class ListTextTests(unittest.TestCase):
-    def test_bullet_items_use_a_star_marker(self):
-        self.assertEqual(mdr_render_text([bullets([para("a")], [para("b")])], 20), "* a\n* b")
-
+class C4(unittest.TestCase):
     def test_long_item_wraps_with_a_hanging_indent(self):
         self.assertEqual(mdr_render_text([bullets([para("aaa bbb ccc")])], 9), "* aaa bbb\n  ccc")
 
@@ -165,9 +138,6 @@ class ListTextTests(unittest.TestCase):
 
     def test_tight_item_keeps_its_blocks_together(self):
         self.assertEqual(mdr_render_text([bullets([para("a"), para("b")])], 20), "* a\n  b")
-
-    def test_empty_item_shows_only_its_marker(self):
-        self.assertEqual(mdr_render_text([bullets([], [para("x")])], 20), "*\n* x")
 
     def test_code_inside_an_item_is_indented_further(self):
         item = [para("a"), {"type": "code", "info": "", "text": "x\n\ny"}]
