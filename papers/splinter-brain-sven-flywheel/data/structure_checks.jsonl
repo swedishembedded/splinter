@@ -221,11 +221,11 @@
 {"id": "B10.2", "repo": "brain", "path": "crates/model/tests/flash_gqa_train.rs", "kind": "regex", "pattern": "fn\\ mixer_flash_path_gradcheck_wide_and_narrow_heads", "min": 1}
 {"id": "B11.1", "repo": "brain", "path": "AGENTS.md", "kind": "regex", "pattern": "3:1\\ Gated\\ DeltaNet\\ :\\ GQA\\ mixer\\ split", "min": 1}
 {"id": "B11.2", "repo": "brain", "path": "AGENTS.md", "kind": "regex", "pattern": "Qwen3\\.8\\-27B\\ dense\\ model\\ /\\ import\\ /\\ LoRA\\ /\\ finetune", "min": 1}
-{"id": "D01.1", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "NoGroupToHoldOut", "min": 1}
-{"id": "D01.2", "repo": "splinter", "path": "crates/data/src/holdout/tests.rs", "kind": "regex", "pattern": "fn\\ a_dataset_that_is_one_source_text_is_refused_with_that_cause", "min": 1}
-{"id": "D02.1", "repo": "splinter", "path": "crates/knowledge/src/gates.rs", "kind": "regex", "pattern": "pub\\ fn\\ unmarked", "min": 1}
-{"id": "D02.2", "repo": "splinter", "path": "crates/agent/tests/model_tasks.rs", "kind": "regex", "pattern": "fn\\ markup_inside_a_subject_does_not_hide_it", "min": 1}
-{"id": "D03.1", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": ":splinter:candidate:latest", "min": 1}
-{"id": "D03.2", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": "fn\\ a_candidates_card_id_is_an_adapter_reference", "min": 1}
-{"id": "D04.1", "repo": "splinter", "path": "crates/pipelines/src/release/serve/server.rs", "kind": "regex", "pattern": "--adapter-targets", "min": 1}
-{"id": "D04.2", "repo": "splinter", "path": "crates/pipelines/tests/common/fake_brain.rs", "kind": "regex", "pattern": "adapter-targets", "min": 1}
+{"id": "FX01.1", "repo": "splinter", "path": "crates/data/src/lib.rs", "kind": "regex", "pattern": "NoGroupToHoldOut", "min": 1}
+{"id": "FX01.2", "repo": "splinter", "path": "crates/data/src/holdout/tests.rs", "kind": "regex", "pattern": "fn\\ a_dataset_that_is_one_source_text_is_refused_with_that_cause", "min": 1}
+{"id": "FX02.1", "repo": "splinter", "path": "crates/knowledge/src/gates.rs", "kind": "regex", "pattern": "pub\\ fn\\ unmarked", "min": 1}
+{"id": "FX02.2", "repo": "splinter", "path": "crates/agent/tests/model_tasks.rs", "kind": "regex", "pattern": "fn\\ markup_inside_a_subject_does_not_hide_it", "min": 1}
+{"id": "FX03.1", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": ":splinter:candidate:latest", "min": 1}
+{"id": "FX03.2", "repo": "splinter", "path": "crates/model/src/train.rs", "kind": "regex", "pattern": "fn\\ a_candidates_card_id_is_an_adapter_reference", "min": 1}
+{"id": "FX04.1", "repo": "splinter", "path": "crates/pipelines/src/release/serve/server.rs", "kind": "regex", "pattern": "--adapter-targets", "min": 1}
+{"id": "FX04.2", "repo": "splinter", "path": "crates/pipelines/tests/common/fake_brain.rs", "kind": "regex", "pattern": "adapter-targets", "min": 1}

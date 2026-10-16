@@ -129,6 +129,130 @@ def e1w2_table():
                       r"\bottomrule", r"\end{tabular}"])
 
 
+W2_E2 = [("e2r", "w2/e2", "registered run"), ("e2b", "w2/e2b", "E2b"), ("e2c", "w2/e2c", "repaired rerun")]
+CHECKS = ["improvement", "retention", "anchor", "serve"]
+
+
+def gate_of(report):
+    release = report.get("release") or {}
+    return release.get("gate")
+
+
+def e2w2_metrics():
+    """Per run: facts answered at each step, McNemar of each candidate against the base, the
+    release gate's four checks with their numbers, the stage counts and the exits."""
+    m = {}
+    for tag, rel, _ in W2_E2:
+        rows = load(f"{rel}/summary.json")
+        if not rows:
+            continue
+        steps_ = {r["step"]: r for r in rows}
+        for name, r in steps_.items():
+            key = name.replace("-", "_")
+            m[f"{tag}.{key}.anchor"] = r["anchor_correct"]
+            for g in range(3):
+                m[f"{tag}.{key}.g{g}"] = r[f"g{g}_answered"]
+        for cand, g in (("candidate-g0", 0), ("candidate-g1", 1)):
+            for h in range(3):
+                if "base" in steps_ and cand in steps_:
+                    gained, lost = discordant(steps_["base"], steps_[cand], h)
+                    pre = f"{tag}.base__{cand.replace('-', '_')}.g{h}"
+                    m[pre + ".gained"], m[pre + ".lost"] = gained, lost
+                    m[pre + ".p"] = f"{mcnemar_exact(gained, lost):.3g}"
+        regrade = load(f"{rel}/regrade/summary.json")
+        if regrade:
+            for r in regrade:
+                key = r["step"].replace("-", "_")
+                m[f"{tag}.regrade.{key}.anchor"] = r["anchor_correct"]
+                for g in range(3):
+                    m[f"{tag}.regrade.{key}.g{g}"] = r[f"g{g}_answered"]
+            rs = {r["step"]: r for r in regrade}
+            for cand in ("candidate-g0", "candidate-g1"):
+                for h in range(3):
+                    if "base" in rs and cand in rs:
+                        gained, lost = discordant(rs["base"], rs[cand], h)
+                        pre = f"{tag}.regrade.base__{cand.replace('-', '_')}.g{h}"
+                        m[pre + ".gained"], m[pre + ".lost"] = gained, lost
+                        m[pre + ".p"] = f"{mcnemar_exact(gained, lost):.3g}"
+        for g in (0, 1):
+            learn = load(f"{rel}/raw/learn-g{g}.json")
+            if not learn:
+                continue
+            r = learn["report"]
+            m[f"{tag}.g{g}.exit"] = learn["exit"]
+            m[f"{tag}.g{g}.tasks"] = r["tasks"]["tasks"]
+            dist = r["frontier"]["distribution"]
+            m[f"{tag}.g{g}.taught"], m[f"{tag}.g{g}.never"] = dist["taught"], dist["never"]
+            m[f"{tag}.g{g}.variants"] = r["variants"]["variants"]
+            m[f"{tag}.g{g}.records"] = r["dataset"]["records"]
+            tr = r["candidate"]["training_record"]
+            m[f"{tag}.g{g}.train_records"] = tr["train_records"]
+            m[f"{tag}.g{g}.steps"], m[f"{tag}.g{g}.rank"] = tr["steps"], tr["rank"]
+            gate = gate_of(r)
+            if gate:
+                m[f"{tag}.g{g}.released"] = "yes" if r["release"].get("release") else "no"
+                for c in CHECKS:
+                    m[f"{tag}.g{g}.gate.{c}"] = "passed" if gate[c]["passed"] else "refused"
+                imp = gate["improvement"]["measured"]
+                rec = imp["recall"]
+                m[f"{tag}.g{g}.imp.variants_n"] = rec["comparison"]["items"]
+                m[f"{tag}.g{g}.imp.variants_right"] = round(rec["comparison"]["candidate_accuracy"] * rec["comparison"]["items"])
+                m[f"{tag}.g{g}.imp.sign_wins"] = rec["sign_test"]["candidate_wins"]
+                m[f"{tag}.g{g}.imp.sign_discordant"] = rec["sign_test"]["discordant"]
+                m[f"{tag}.g{g}.imp.sign_p"] = f"{rec['sign_test']['p_value']:.2g}"
+                an = gate["anchor"]["measured"]
+                if an:
+                    m[f"{tag}.g{g}.anchor.drop"] = f"{an['drop']:.2f}"
+                    m[f"{tag}.g{g}.anchor.bound"] = f"{an['bound']:.2f}"
+                sv = gate["serve"]["measured"]
+                if sv:
+                    m[f"{tag}.g{g}.serve.agreed"], m[f"{tag}.g{g}.serve.sampled"] = sv["agreed"], sv["sampled"]
+        rollback = load(f"{rel}/raw/rollback.json")
+        if rollback:
+            m[f"{tag}.rollback.exit"] = rollback["exit"]
+            m[f"{tag}.rollback.message"] = rollback["report"].get("error", "")
+        releases = load(f"{rel}/raw/releases-final.json")
+        if releases is not None:
+            m[f"{tag}.releases_final"] = len(releases["report"]["releases"])
+    return m
+
+
+def e2w2_table():
+    lines = [r"\begin{tabular}{llrrrr}", r"\toprule",
+             r"Run and state & & Gen.~0 facts & Gen.~1 facts & Gen.~2 facts & Anchor \\", r"\midrule"]
+    any_row = False
+    for tag, rel, label in W2_E2:
+        rows = load(f"{rel}/summary.json")
+        if not rows:
+            continue
+        regrade = {r["step"]: r for r in (load(f"{rel}/regrade/summary.json") or [])}
+        for r in rows:
+            if r["step"] not in ("base", "candidate-g0", "candidate-g1"):
+                continue
+            use = regrade.get(r["step"], r)
+            cells = [ci(use[f"g{g}_answered"], use[f"g{g}_n"]) for g in range(3)]
+            lines.append(f"{esc(label)} & {esc(r['step'])} & {cells[0]} & {cells[1]} & {cells[2]} & "
+                         f"{use['anchor_correct']}/{use['anchor_n']} \\\\")
+            any_row = True
+    if not any_row:
+        return r"\textbf{NOT MEASURED}"
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines)
+
+
+def gate_table():
+    lines = [r"\begin{tabular}{llcccc}", r"\toprule",
+             r"Run & Learn & Improvement & Retention & Anchor & Serve \\", r"\midrule"]
+    m = e2w2_metrics()
+    for tag, _, label in W2_E2:
+        for g in (0, 1):
+            if f"{tag}.g{g}.gate.improvement" in m:
+                cells = [m[f"{tag}.g{g}.gate.{c}"] for c in CHECKS]
+                lines.append(f"{esc(label)} & generation {g} & " + " & ".join(cells) + r" \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines)
+
+
 def steps():
     rows = load("e2/summary.json")
     return {r["step"]: r for r in rows} if rows else {}
@@ -242,6 +366,7 @@ def metrics():
     m.update(qual_metrics())
     m.update(e1_metrics())
     m.update(e1w2_metrics())
+    m.update(e2w2_metrics())
     m.update(e2_metrics())
     m.update(learn_metrics())
     return m
@@ -332,6 +457,8 @@ def write_outputs(out):
     (out / "macros.tex").write_text(macros)
     (out / "e1_table.tex").write_text(e1_table() + "\n")
     (out / "e1w2_table.tex").write_text(e1w2_table() + "\n")
+    (out / "e2w2_table.tex").write_text(e2w2_table() + "\n")
+    (out / "gate_table.tex").write_text(gate_table() + "\n")
     (out / "e2_table.tex").write_text(e2_table() + "\n")
     (out / "e4_table.tex").write_text(e4_table() + "\n")
     (out / "learn_table.tex").write_text(learn_table() + "\n")

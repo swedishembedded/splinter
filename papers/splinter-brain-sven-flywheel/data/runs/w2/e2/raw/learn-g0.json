@@ -1,0 +1,951 @@
+{
+ "command": [
+  "HOME/project/shared/containers/worktrees/s-l3/target/release/splinter",
+  "--state",
+  "STATE_ROOT/state",
+  "--json",
+  "-v",
+  "--policy-context-tokens",
+  "8192",
+  "learn",
+  "STATE_ROOT/sheets0",
+  "--kinds",
+  "recall",
+  "--generator",
+  "local:HOME/.local/share/brain/models/Qwen/Qwen3-4B@8192",
+  "--teacher",
+  "local:HOME/.local/share/brain/models/Qwen/Qwen3-4B@8192",
+  "--goal",
+  "the invented places of the gazetteer",
+  "--eval-every",
+  "0",
+  "--steps",
+  "400",
+  "--rank",
+  "16",
+  "--records-per-step",
+  "2",
+  "--rehearsal",
+  "0.25"
+ ],
+ "exit": 1,
+ "elapsed_s": 2075.9,
+ "report": {
+  "run": "run-20261016T090853.438-fb9f",
+  "policy": {
+   "alias": "default",
+   "release": null
+  },
+  "roles": {
+   "policy": "brain/Qwen/Qwen3-0.6B",
+   "teacher": "brain/Qwen/Qwen3-4B",
+   "generator": "brain/Qwen/Qwen3-4B",
+   "judge": "brain/Qwen/Qwen3-0.6B",
+   "critic": "brain/Qwen/Qwen3-0.6B"
+  },
+  "sources": [
+   {
+    "id": "blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8",
+    "kind": "repository",
+    "origin": {
+     "kind": "repository",
+     "path": "STATE_ROOT/sheets0",
+     "revision": null,
+     "skipped": []
+    },
+    "parts": 30,
+    "bytes": 1712,
+    "captured_at": "2026-10-16T09:08:53.488Z"
+   }
+  ],
+  "plan": null,
+  "reserve": null,
+  "exam_set": null,
+  "dev_set": null,
+  "tasks": {
+   "task_set": "blake3:152efb9397282cf63fa27edd17fd588051bd4d15055e88c664345d008ddf2ec5",
+   "denoise_seed": null,
+   "tasks": 28,
+   "parts": 30,
+   "parts_total": 30,
+   "elapsed_secs": 981,
+   "full_coverage_secs": null,
+   "per_kind": {
+    "recall": {
+     "admitted": 28,
+     "rejected": 2
+    }
+   },
+   "rejected": {
+    "no_subject": 2
+   },
+   "rejections": [
+    {
+     "kind": "recall",
+     "reason": "no_subject",
+     "detail": "the instruction does not name its subject \"Velselix festival\" (proposed: \"What is the name of the festival that is held every 44 years?\")"
+    },
+    {
+     "kind": "recall",
+     "reason": "no_subject",
+     "detail": "the instruction does not name its subject \"Padrites festival\" (proposed: \"What is the name of the festival that is held every 26 years?\")"
+    }
+   ],
+   "calls": [
+    {
+     "kind": "recall",
+     "prompt": "blake3:18089d79e4da3d71ae5ce5482fa098069ac3fc18354858ba9688098bd2b6e001",
+     "prompt_bytes": 1694,
+     "elapsed_ms": 50714,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:7b5db13d0b941f647b2e7e0895b9a420ea8281330c66f36302969cfb85565817",
+     "prompt_bytes": 1703,
+     "elapsed_ms": 5796,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:05c319be10daeb8615ac15d1da7c592c139cd7fdbc19632acdccc30b30a720f9",
+     "prompt_bytes": 1708,
+     "elapsed_ms": 51882,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:aa1d0717d135bd34cad0a6ca176c8b501fabc12292a0b534cc74e98d5182729e",
+     "prompt_bytes": 1681,
+     "elapsed_ms": 49390,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:e1dd25a6a58c40b0d2ec249ac87cf8faad5294859b4b6891b3a30028b9c99c40",
+     "prompt_bytes": 1700,
+     "elapsed_ms": 48948,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:78a14ce12b944b07728765242746965b365e72ce2584b517d75e5b1a3adc2b95",
+     "prompt_bytes": 1695,
+     "elapsed_ms": 36235,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:6e4766c6f15a9c816562b981f38cfe2bbedd28806f88866ba755db60feff4ba7",
+     "prompt_bytes": 1673,
+     "elapsed_ms": 25885,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:ed368bff3de9a90ec3471adb9ffd90eaaec31c80ae026f3882eb5a3dfc56862a",
+     "prompt_bytes": 1711,
+     "elapsed_ms": 26910,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:aad61c9b53133901088a4268101670c281704a583e41c574045c97428b0c1437",
+     "prompt_bytes": 1681,
+     "elapsed_ms": 26324,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:5931d539d7a6d25361a5eaefc178373ff82977b7c0bf52f11e8714d2caf8ca74",
+     "prompt_bytes": 1717,
+     "elapsed_ms": 26752,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:314093ddba74b9250796c598e6391b2798ef0fdc24c2a58330ff58471641fe5a",
+     "prompt_bytes": 1705,
+     "elapsed_ms": 24702,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:88708a2a1cb8eee2b96082aeac195ed77093580d6eb9027b35822935d214b004",
+     "prompt_bytes": 1701,
+     "elapsed_ms": 23866,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:cb269766e45818a12ee28a08dccdcfeeb33417c99839f20488662dc9ddf903f3",
+     "prompt_bytes": 1683,
+     "elapsed_ms": 26290,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:220de2587205938b9b712fa6f484e5d9d655d74285c3eb742bc73da975f38124",
+     "prompt_bytes": 1685,
+     "elapsed_ms": 26240,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:c8b01eea62d65a9bfd5afa010812d781c63f29bd0abfde956285c51f26c5d1d4",
+     "prompt_bytes": 1701,
+     "elapsed_ms": 26765,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:22c9e8ffe9c3dc4b348373fc26a7c55f2968565fc39d999ea033524ada8f1dba",
+     "prompt_bytes": 1706,
+     "elapsed_ms": 34487,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:17431452409133602f1507e44463f2879dbd07fedcf28f11b73ee37a34415c39",
+     "prompt_bytes": 1705,
+     "elapsed_ms": 33879,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:636f8412441647791c1f5c357d78c9d80fd23ec327b30435f50633427eb5cec2",
+     "prompt_bytes": 1692,
+     "elapsed_ms": 27974,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:be63a442f130be62892a800254e2640abdf20b8831b0f025bf352644e29a62c9",
+     "prompt_bytes": 1705,
+     "elapsed_ms": 33099,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:3d0b65a9a3975f5766cdf8a4313fc631c54e50b4d4b5785fab0af9141e9f6623",
+     "prompt_bytes": 1712,
+     "elapsed_ms": 3873,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:7b1939c32856201fc7a12c4c9f0b9b698545e96490c4ed4fad7acb71f0d438c6",
+     "prompt_bytes": 1673,
+     "elapsed_ms": 33420,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:5ecd35561f2037b9649e50e6751d6154cb5af4d6e82c17bc3377b03bc2b4a0b4",
+     "prompt_bytes": 1704,
+     "elapsed_ms": 34313,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:079531b07ad3472fcdb3e5216ea143bfc5d5c62e5ebac47d28b2f186ea210f4b",
+     "prompt_bytes": 1693,
+     "elapsed_ms": 29783,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:2f3f918f430a5ae36fdbe82d6d054c7969fb891950e4f8f9906d15e21244babc",
+     "prompt_bytes": 1689,
+     "elapsed_ms": 39652,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:f1cc1d9b5aa5e23c4072e04da5d0220bb92418d653e70a629ef0857dd52f7ef4",
+     "prompt_bytes": 1702,
+     "elapsed_ms": 37935,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:78fc5045d2417535118051dfeecc8425d60a02cada39615e1c40b5867d84d096",
+     "prompt_bytes": 1696,
+     "elapsed_ms": 35384,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:59964ea17044a391bc7f6123a8370348092390b15acebc09aaac54e152d8297f",
+     "prompt_bytes": 1710,
+     "elapsed_ms": 39549,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:517eb3722f1a5846b96894934765c1421c8fda47218258fab28903c3bf356b86",
+     "prompt_bytes": 1695,
+     "elapsed_ms": 36913,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:beeed228b1915833b3dc621b2f303f18b8af3018d9768c28b876703a23bb577e",
+     "prompt_bytes": 1694,
+     "elapsed_ms": 42710,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:a400cd5e7f66c647f1fefa049759d9941d1c909f917b06fe2f875f94822faab0",
+     "prompt_bytes": 1700,
+     "elapsed_ms": 40530,
+     "candidates": 1,
+     "declined": null
+    }
+   ],
+   "sections": 0,
+   "stopped": null,
+   "dropped": {}
+  },
+  "solve": {
+   "experience_set": "blake3:a4b3f32b2490f2ec26c7371a04385bb0c4b8932bd05bf4a225c68601a4857ab9",
+   "solver": "brain/Qwen/Qwen3-0.6B",
+   "policy": {
+    "alias": "default",
+    "release": null
+   },
+   "attempts": 4,
+   "teacher": false,
+   "sampling": {
+    "max_new_tokens": 512,
+    "temperature": 0.8,
+    "top_k": 20,
+    "thinking": false,
+    "seed": null
+   },
+   "solved": 112,
+   "answered": 112,
+   "conclusions": {
+    "success": 112
+   },
+   "skipped": [],
+   "stopped": null
+  },
+  "verify": {
+   "experiences": 112,
+   "verdicts": {
+    "pass": 0,
+    "fail": 112,
+    "abstain": 0
+   },
+   "exposed": 0,
+   "exposed_by": {},
+   "passed": 0,
+   "failed": 112,
+   "undecided": 0,
+   "unverified": []
+  },
+  "teach": {
+   "task_set": "blake3:7750d8b45787838ec5fa073e6aa1113de7a704a1d6083652a16dcf433706453c",
+   "solve": {
+    "experience_set": "blake3:3df83f924f7a93dad7065f0d915b52b52e4d1679b809751b938c8c26fd15f336",
+    "solver": "brain/Qwen/Qwen3-4B",
+    "policy": null,
+    "attempts": 1,
+    "teacher": true,
+    "sampling": null,
+    "solved": 28,
+    "answered": 28,
+    "conclusions": {
+     "success": 28
+    },
+    "skipped": [],
+    "stopped": null
+   },
+   "verify": {
+    "experiences": 28,
+    "verdicts": {
+     "pass": 19,
+     "fail": 9,
+     "abstain": 0
+    },
+    "exposed": 0,
+    "exposed_by": {},
+    "passed": 19,
+    "failed": 9,
+    "undecided": 0,
+    "unverified": []
+   }
+  },
+  "authored": null,
+  "frontier": {
+   "measurement": "blake3:8d5bc2a9806ea0f87822a9ab11cef054fececb1c9724eb404900312145e7b264",
+   "solver": "brain/Qwen/Qwen3-0.6B",
+   "policy": {
+    "alias": "default",
+    "release": null
+   },
+   "k": 4,
+   "sampling": {
+    "max_new_tokens": 512,
+    "temperature": 0.8,
+    "top_k": 20,
+    "thinking": false,
+    "seed": null
+   },
+   "teacher": "brain/Qwen/Qwen3-4B",
+   "distribution": {
+    "always": 0,
+    "never": 9,
+    "frontier": 0,
+    "taught": 19,
+    "unmeasured": 0
+   },
+   "frontier_task_set": "blake3:6e7cc91ce9b2f4bb31c046c5179da1289ae2c4e3c0c5d99038d275799738ed20",
+   "frontier_experience_set": "blake3:c2c95932e32e7c4c9def860d2028cc8521984257b2719dc491fc9271d8edda3f"
+  },
+  "variants": {
+   "variant_set": "blake3:587b4a70648c2117fd8622908fa2b77ebcc7ce945ab0af167e6657191bfcf5a3",
+   "tasks": 19,
+   "variants": 47,
+   "ineligible": {},
+   "rejected": {
+    "duplicate": 7,
+    "no_subject": 3
+   },
+   "rejections": [
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "How many legs does the Talyar of Bycuncun have?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "How many legs does the Cunorul of Lenfrefre have?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the distance between Velith and Ithquil?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the distance between Itholm and Driyarpa?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the population of Cunfoxith?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "How many legs does the Ithulhap of Papavel have?"
+    },
+    {
+     "kind": "recall",
+     "reason": "no_subject",
+     "detail": "the variant no longer names the subject \"Monbra of Talkovlix\""
+    },
+    {
+     "kind": "recall",
+     "reason": "no_subject",
+     "detail": "the variant no longer names the subject \"Monbra of Talkovlix\""
+    },
+    {
+     "kind": "recall",
+     "reason": "no_subject",
+     "detail": "the variant no longer names the subject \"Monbra of Talkovlix\""
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the distance between Mondunolm and Lengarwen?"
+    }
+   ],
+   "stopped": null
+  },
+  "critique": {
+   "experience_set": "blake3:7b39568bd475c6eba6e7ab7db8ce0e5d30e0de85298bb667e0b0e6241697bbad",
+   "revisions": "blake3:0d07933a9f1aa28a5cb9647014e1da6b38d0adee637003aae08e7e504b0314c9",
+   "critiqued": 76,
+   "repaired": 0,
+   "not_failed": 19,
+   "stops": {
+    "retries_spent": 76
+   },
+   "unrepaired": [],
+   "stopped": null
+  },
+  "select": {
+   "experience_set": "blake3:43bfcf9aa052d4b7af5fa445c38804fe83595f8810c3ac68d0f670bd72505473",
+   "quotas": {
+    "max_concept_share": 0.25,
+    "max_kind_share": 0.5,
+    "max_strength_share": 0.75
+   },
+   "selection": {
+    "selected": [
+     "blake3:005b676ee75d5cf1024ebc297968561b916326a5fc429a7e315e65d76ca040a6",
+     "blake3:0a3b88893749135b85c50cd1e5e023ed81967647521e62f16355d41585bddfa8",
+     "blake3:0f3f3628ea7dc825d5c3e1ea0e66d69e673c0957fd3ea7e1851226bcb29b32a0",
+     "blake3:1bc84de358c1a4e514a5d7b3a6ee8b5b3c6183afe1cce944e1c8437632b1fa95",
+     "blake3:270285daf9fdaa521e1ebd00a867256cd7d72d95226e545ef243c619701b7957",
+     "blake3:2eb8b881fa7ab85ef92520446c2b329c2f7ec2135f5244aec68c48b524398a0b",
+     "blake3:3320d859c82566a00b98c9206268197adbf25255c342a3d24fc4c9745180659a",
+     "blake3:4cc066271f6971a25065571e635474e9aeb7a06520805790fcad4d08e5b979af",
+     "blake3:58f966c0f525a7ae4886006dcca16ff29d0aaddc34bd730b0cad0c1d002272b6",
+     "blake3:5d012a735d2d7384b571874ed5d94752b477071834a64ade8b62e0e318446733",
+     "blake3:66b0f2d1af52275d62d2566d54320ce9a04dd7b6df18a9278213259eb0e66f64",
+     "blake3:874bdc0b36470a7f12da4d74040abfa9d7691649929c0c12dcb9cb93d4f17586",
+     "blake3:a49b892abf0b41d53350c4859b27dda54643d8901c7e3b9d63d36d0cbd48bfbd",
+     "blake3:aad4d4c8f6f02f492821566a82e536e3a905713e3db8c49041dbc7b3b2d7cbd6",
+     "blake3:cd49f92d519ed74311530f7f0f7606d8c1f91456a00d41ae1d8c759e850f3845",
+     "blake3:d6e8d0c40a2eda90f31239e95e1006ad9f3392420e3c35a72812b4ac5cf4f113",
+     "blake3:d79fe21cdc6e4fcbf1fe1a1f7c270b5eac8cd143f08bb7e6110db1e080a2a8d2",
+     "blake3:e8ab4860888f24681275025c8f7309e539582e64a582b4ddfbe3fb695ab053c4",
+     "blake3:ff8f3f0e7f065f484ffe49a253a0db221c463715324984ea7a0da92fde436dc1"
+    ],
+    "candidates": 19,
+    "duplicates": 0,
+    "capped": {},
+    "caps": {
+     "concept": {
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f0.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f1.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f12.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f13.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f14.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f15.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f16.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f17.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f2.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f21.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f22.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f23.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f24.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f27.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f28.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f29.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f7.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f8.md#0": 5,
+      "section:blake3:3ef4ba0b436716135c71cc183a87d588347b6e149cfbeb57b2d5315557ee56e8/g0f9.md#0": 5
+     },
+     "kind": {
+      "recall": 19
+     },
+     "strength": {
+      "formal": 19
+     }
+    }
+   }
+  },
+  "dataset": {
+   "dataset": "blake3:b38740a559ae6f28c23dc815c8f7e237f6d9a643e77a6579c3d28b112cb2fae9",
+   "view": "sft-final",
+   "objective": "sft",
+   "format": "generic-messages-v2",
+   "records": 19,
+   "excluded": {},
+   "path": "STATE_ROOT/state/artifacts/e0/e0c3622fb94b772563e547fd8037ea313eb7f01a31b6e19d2cf31560af59cea9.jsonl",
+   "described": null
+  },
+  "voice": null,
+  "rehearsal": {
+   "seed": 1876954240209765022,
+   "base": "brain/Qwen/Qwen3-0.6B",
+   "anchor": [
+    1,
+    "blake3:51bca83bb3f00d382b5107d2ab73e659c3dadf0d36133dd526a9c45f0da12018"
+   ],
+   "task_set": "blake3:4c05e7241a39163b900a07869f928089eb653075bbcc54fc4cf394507a92f255",
+   "tasks": 7,
+   "form_tasks": 4,
+   "general_tasks": 3,
+   "excluded_as_anchor": 0,
+   "repeated": 0,
+   "failed_requests": 0,
+   "solved": {
+    "experience_set": "blake3:48668e9b63c11723e3970afcae28aa5b55b1d037fa2c39e4fca040b2ca37d141",
+    "solver": "brain/Qwen/Qwen3-0.6B",
+    "policy": null,
+    "attempts": 1,
+    "teacher": false,
+    "sampling": {
+     "max_new_tokens": 512,
+     "temperature": 0.0,
+     "top_k": 20,
+     "thinking": false,
+     "seed": null
+    },
+    "solved": 7,
+    "answered": 7,
+    "conclusions": {
+     "success": 7
+    },
+    "skipped": [],
+    "stopped": null
+   },
+   "verified": {
+    "experiences": 7,
+    "verdicts": {
+     "pass": 3,
+     "fail": 1,
+     "abstain": 0
+    },
+    "exposed": 0,
+    "exposed_by": {},
+    "passed": 3,
+    "failed": 1,
+    "undecided": 3,
+    "unverified": []
+   },
+   "dataset": {
+    "dataset": "blake3:8828a084f49d429f7d3caf2841550e7deb8d6052b710517a0d0cd1a02ab2a23e",
+    "view": "rehearsal",
+    "objective": "sft",
+    "format": "generic-messages-v2",
+    "records": 6,
+    "excluded": {
+     "failed": 1
+    },
+    "path": "STATE_ROOT/state/artifacts/ea/ea57c0c208087667e6aad980495d7c8fc7c7267d82c6ef818fbb2c2c2e326f3a.jsonl",
+    "described": null
+   },
+   "stopped": null
+  },
+  "candidate": {
+   "candidate": "candidate-20261016T093422.845-8947",
+   "from": "policy:default",
+   "regime": "sft",
+   "base": "HOME/.local/share/brain/models/Qwen/Qwen3-0.6B",
+   "parent": null,
+   "datasets": [
+    "blake3:b38740a559ae6f28c23dc815c8f7e237f6d9a643e77a6579c3d28b112cb2fae9"
+   ],
+   "replay": null,
+   "rehearsal": {
+    "dataset": "blake3:8828a084f49d429f7d3caf2841550e7deb8d6052b710517a0d0cd1a02ab2a23e",
+    "share": 0.25,
+    "trained": 6,
+    "monitored": 0,
+    "digest": "blake3:ea57c0c208087667e6aad980495d7c8fc7c7267d82c6ef818fbb2c2c2e326f3a"
+   },
+   "adapter": "STATE_ROOT/state/artifacts/28/28ef0d269d110d95e10c9b18e45819fe1a857714c5b1782b6596e99946a1a7b6.safetensors",
+   "adapter_artifact": "blake3:28ef0d269d110d95e10c9b18e45819fe1a857714c5b1782b6596e99946a1a7b6",
+   "adapter_digest": "sha256:6cd6627ab29de54830c32975f851cd21c2ab887165126dde918b0bebd86cc409",
+   "base_digest": "sha256:ebe382ab0489ac4b68a776155d8b5dd3c159f4e8d3c8db222d7ee67d40a33836",
+   "training_record": {
+    "adapter_digest": "sha256:6cd6627ab29de54830c32975f851cd21c2ab887165126dde918b0bebd86cc409",
+    "alpha": 32.0,
+    "base": "Qwen/Qwen3-0.6B",
+    "base_digest": "sha256:ebe382ab0489ac4b68a776155d8b5dd3c159f4e8d3c8db222d7ee67d40a33836",
+    "base_score": {
+     "loss": 0.7864070534706116,
+     "positions": 69,
+     "records": 4,
+     "skipped": 0,
+     "token_accuracy": 0.7971014492753623
+    },
+    "base_text_score": null,
+    "block": 141,
+    "curve": [],
+    "dataset": "sha256:a5ab1e739e285ac5dc41bb1cf62589ab9e855f86698e01fcb052fd1505aac4ba",
+    "eval_every": 0,
+    "final_loss": 6.608402327401564e-05,
+    "initial_loss": 0.6154634356498718,
+    "lr": 0.00019999999494757503,
+    "monitor_records": 0,
+    "patience": 0,
+    "rank": 16,
+    "replay_records": 6,
+    "resumed_at": null,
+    "seed": 1904196948169507479,
+    "selected_step": 400,
+    "selection": "last_step",
+    "steps": 400,
+    "steps_completed": 400,
+    "stopped_early": false,
+    "train_records": 15,
+    "trained_from": null,
+    "tuned_score": {
+     "loss": 1.8253964185714722,
+     "positions": 69,
+     "records": 4,
+     "skipped": 0,
+     "token_accuracy": 0.855072463768116
+    },
+    "tuned_text_score": null,
+    "weight_decay": 0.0
+   },
+   "seed": 1904196948169507479,
+   "steps": 400,
+   "rank": 16,
+   "base_score": {
+    "loss": 0.78640705,
+    "token_accuracy": 0.7971014492753623,
+    "positions": 69,
+    "records": 4,
+    "skipped": 0
+   },
+   "tuned_score": {
+    "loss": 1.8253964,
+    "token_accuracy": 0.855072463768116,
+    "positions": 69,
+    "records": 4,
+    "skipped": 0
+   },
+   "curve": {
+    "steps": 400,
+    "steps_completed": 400,
+    "eval_every": 0,
+    "patience": 0,
+    "monitor_records": 0,
+    "points": [],
+    "selected_step": 400,
+    "selection": "last_step",
+    "stopped_early": false
+   },
+   "records": 19
+  },
+  "checkpoint": null,
+  "published": null,
+  "release": {
+   "candidate": "candidate-20261016T093422.845-8947",
+   "alias": "default",
+   "champion": null,
+   "gate": {
+    "config": {
+     "alpha": 0.05,
+     "retention_bound": 0.05,
+     "anchor_bound": 0.02,
+     "serve_sample": 8,
+     "serve_startup_secs": 600,
+     "agentic": {
+      "attempts": 1,
+      "follow_ups": 2,
+      "max_tool_calls": 60,
+      "max_repeated_results": 3
+     },
+     "alpha_spending": false,
+     "target_effect": null
+    },
+    "improvement": {
+     "passed": true,
+     "measured": {
+      "suite": {
+       "name": "held-out",
+       "tasks": 40,
+       "excluded": {}
+      },
+      "variants": {
+       "name": "variants",
+       "tasks": 36,
+       "excluded": {}
+      },
+      "comparison": {
+       "items": 40,
+       "unpaired": 0,
+       "paired": 40,
+       "both_right": 0,
+       "both_wrong": 9,
+       "candidate_wins": 31,
+       "baseline_wins": 0,
+       "candidate_accuracy": 0.775,
+       "baseline_accuracy": 0.0
+      },
+      "sign_test": {
+       "discordant": 14,
+       "candidate_wins": 14,
+       "p_value": 6.103515625e-05
+      },
+      "alpha": 0.05,
+      "generalisation": {
+       "suite": {
+        "name": "held-out",
+        "tasks": 4,
+        "excluded": {}
+       },
+       "comparison": {
+        "items": 4,
+        "unpaired": 0,
+        "paired": 4,
+        "both_right": 0,
+        "both_wrong": 4,
+        "candidate_wins": 0,
+        "baseline_wins": 0,
+        "candidate_accuracy": 0.0,
+        "baseline_accuracy": 0.0
+       },
+       "sign_test": {
+        "discordant": 0,
+        "candidate_wins": 0,
+        "p_value": 1.0
+       },
+       "task_level": {
+        "p_value": 1.0,
+        "difference": 0.0,
+        "low": 0.0,
+        "high": 0.0
+       }
+      },
+      "recall": {
+       "suite": {
+        "name": "variants",
+        "tasks": 36,
+        "excluded": {}
+       },
+       "comparison": {
+        "items": 36,
+        "unpaired": 0,
+        "paired": 36,
+        "both_right": 0,
+        "both_wrong": 5,
+        "candidate_wins": 31,
+        "baseline_wins": 0,
+        "candidate_accuracy": 0.8611111111111112,
+        "baseline_accuracy": 0.0
+       },
+       "sign_test": {
+        "discordant": 14,
+        "candidate_wins": 14,
+        "p_value": 6.103515625e-05
+       },
+       "task_level": {
+        "p_value": 4.656612873077388e-10,
+        "difference": 0.8611111111111112,
+        "low": 0.75,
+        "high": 0.9487179487179487
+       }
+      },
+      "task_level": {
+       "p_value": 4.656612873077388e-10,
+       "difference": 0.775,
+       "low": 0.625,
+       "high": 0.8913043478260869
+      },
+      "power": {
+       "units": 18,
+       "nominal_alpha": 0.05,
+       "generation": null,
+       "target_effect": null,
+       "verdict": {
+        "verdict": "significant"
+       }
+      }
+     },
+     "reason": null
+    },
+    "retention": {
+     "passed": true,
+     "measured": {
+      "bound": 0.05,
+      "suites": []
+     },
+     "reason": null
+    },
+    "anchor": {
+     "passed": false,
+     "measured": {
+      "version": 1,
+      "digest": "blake3:51bca83bb3f00d382b5107d2ab73e659c3dadf0d36133dd526a9c45f0da12018",
+      "suite": {
+       "name": "anchor v1",
+       "tasks": 40,
+       "excluded": {}
+      },
+      "comparison": {
+       "items": 40,
+       "unpaired": 0,
+       "paired": 40,
+       "both_right": 37,
+       "both_wrong": 1,
+       "candidate_wins": 0,
+       "baseline_wins": 2,
+       "candidate_accuracy": 0.925,
+       "baseline_accuracy": 0.975
+      },
+      "drop": 0.04999999999999993,
+      "bound": 0.02,
+      "drop_interval": {
+       "level": 0.95,
+       "low": 0.0,
+       "high": 0.125
+      },
+      "items_to_see_two_points": 773
+     },
+     "reason": "the anchor suite (version 1) dropped 0.0500 > bound 0.02"
+    },
+    "serve": {
+     "passed": true,
+     "measured": {
+      "binary": "HOME/code/brain/target/release/brain",
+      "startup_line": "brain serve: local/Qwen3-0.6B:splinter:candidate:latest adapter=local/Qwen3-0.6B:splinter:candidate:latest digest=sha256:6cd6627ab29de54830c32975f851cd21c2ab887165126dde918b0bebd86cc409",
+      "served_digest": "sha256:6cd6627ab29de54830c32975f851cd21c2ab887165126dde918b0bebd86cc409",
+      "expected_digest": "sha256:6cd6627ab29de54830c32975f851cd21c2ab887165126dde918b0bebd86cc409",
+      "sampled": 8,
+      "agreed": 8,
+      "disagreed": [],
+      "agreement": "answers"
+     },
+     "reason": null
+    },
+    "passed": false,
+    "prompts": [
+     {
+      "suite": "held-out",
+      "candidate": "default",
+      "champion": "default"
+     },
+     {
+      "suite": "anchor v1",
+      "candidate": "default",
+      "champion": "default"
+     }
+    ],
+    "interval_seed": 13097847194337984937
+   },
+   "requeued": [],
+   "warnings": [],
+   "release": null,
+   "adapter": null
+  },
+  "exam": {
+   "not_run": "the exam failed: judge brain/Qwen/Qwen3-0.6B refuses to grade an experience its own model produced"
+  },
+  "powered": null,
+  "stopped": null
+ }
+}

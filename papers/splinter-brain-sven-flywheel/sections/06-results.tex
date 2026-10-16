@@ -160,12 +160,12 @@ rule's own output (``1 group(s) and 0 unit(s) appear in more than one of train, 
 and test''), after every rollout had been paid for. The rule now holds nothing out in that
 case and the split names the cause. The experiment design was also at fault: a held-out
 measurement needs independent units, so a generation's source is now a directory of one
-sheet file per fact.\cl{D01}
+sheet file per fact.\cl{FX01}
 
 \paragraph{Markup hid a subject.} The admission rule compared the subject and the instruction
 as literal text, so ``the \code{q} key'' did not contain the subject ``q key''. One function
 now ignores code quotes, quotation marks, emphasis and a call's empty parentheses for the
-instruction, the source and the variants alike.\cl{D02}
+instruction, the source and the variants alike.\cl{FX02}
 
 \paragraph{No release could pass the serve check.} The gate's serve check starts
 \code{brain serve --adapter}. Training recorded the adapter's card id as
@@ -174,7 +174,7 @@ refused it; after that was repaired it refused the adapter again because Splinte
 corrects every linear and Brain's adapter bank covers the attention linears unless told
 otherwise. The test double of the server had accepted any flags, which is why neither showed
 before a real server was started. The card id now ends in a tag and the check passes the
-bank option.\cl{D03,D04}
+bank option.\cl{FX03,FX04}
 
 \paragraph{A documentation defect.} Checking the release statements against the code
 (\cref{sec:gate}) found that the command-line README placed a release under a directory that
