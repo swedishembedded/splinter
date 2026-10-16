@@ -246,3 +246,22 @@ fn a_miss_on_a_small_exam_is_inconclusive_and_releases_nothing() {
     // A rejection stays a pass.
     assert!(judged(&outcomes(8, 0, 0), rule).passed);
 }
+
+#[test]
+fn a_decision_on_a_few_families_states_its_wilson_interval_and_is_labelled_a_pilot() {
+    let measured = judged(&outcomes(5, 1, 2), PLAIN).measured.unwrap();
+    let assessment = measured.power.unwrap();
+    let share = assessment.win_share.unwrap();
+    assert_eq!((share.successes, share.total), (5, 6));
+    assert!(
+        (share.low - 0.436).abs() < 1e-3 && (share.high - 0.970).abs() < 1e-3,
+        "{share:?}"
+    );
+    assert_eq!(assessment.training_runs, 1);
+    // Eight families and one training run are two reasons.
+    assert_eq!(assessment.pilot.len(), 2, "{:?}", assessment.pilot);
+
+    // Nothing discordant is no share, not a share of zero.
+    let tied = judged(&outcomes(0, 0, 3), PLAIN).measured.unwrap();
+    assert_eq!(tied.power.unwrap().win_share, None);
+}

@@ -20,13 +20,15 @@ missing: test strength, canaries, coverage, power.
     in `splinter-eval::power`; `exam-set power` prints the sign-test power and the smallest lead
     seen; the gate takes `alpha_spending` (opt-in) and `target_effect` and reports a miss on an
     underpowered exam as inconclusive (finding 047). Done: `--alpha-spending` and `--target-effect` on `release`, `learn` and
-    `practice` (one `GatePlan` carried by every request). Left: PILOT label under three seeds, Wilson
-    intervals below 100 families, making spending the
+    `practice` (one `GatePlan` carried by every request). PILOT label (fewer than 100 families or three training runs: the gate
+    always carries one seed, `exam-set power --training-runs N`) and the candidate's win share among
+    discordant families with a Wilson interval (`splinter-eval::pilot`; brain has no Wilson function, so
+    it is local). Left: making spending the
     default after a decision on the first-generation level, the 200-generation null simulation
     through the real gate.
   - `splinter exam power` prints, for the actual exam, the power table (families, observed
     discordance, win share), warns when the minimum detectable effect exceeds the effect the
-    run is expected to produce, and labels results PILOT with fewer than three training seeds.
+    run is expected to produce, and labels results PILOT with fewer than three training runs.
     Interval pieces use brain's Wilson/exact functions (RS-B1) at fewer than 100 families.
     The gate spends alpha across generations (pre-registered schedule).
   - Acceptance: golden table equals the research note's within 0.01; a null simulation over 200

@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::gate::{self, Check, Improvement, SuiteSummary};
 use crate::paired::{by_cluster, PairedOutcome};
+use crate::pilot::{pilot_reasons, Share};
 use crate::significance::{SignTest, Significance};
 
 /// The power an exam is asked to have: four chances in five.
@@ -249,7 +250,7 @@ pub struct Rule {
 }
 
 /// What the improvement check recorded of its level and power.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PowerAssessment {
     /// Independent units (families) the test rests on, ties included.
     pub units: usize,
@@ -261,6 +262,25 @@ pub struct PowerAssessment {
     pub target_effect: Option<f64>,
     /// What the test concluded.
     pub verdict: Verdict,
+    /// The candidate's wins among the discordant units with their Wilson
+    /// interval; `None` when no unit was discordant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub win_share: Option<Share>,
+    /// The training runs the decision rests on: the gate judges one
+    /// candidate, trained once.
+    #[serde(default = "gate_training_runs")]
+    pub training_runs: usize,
+    /// Why the result is a pilot, when it is ([`pilot_reasons`]); empty
+    /// when it is not one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pilot: Vec<String>,
+}
+
+/// The training runs a gate decision rests on.
+const GATE_TRAINING_RUNS: usize = 1;
+
+fn gate_training_runs() -> usize {
+    GATE_TRAINING_RUNS
 }
 
 /// [`gate::improvement`] held to `rule`: at the level this generation may
@@ -312,6 +332,12 @@ pub fn judged_improvement(
         generation: rule.generation,
         target_effect: rule.target_effect,
         verdict,
+        win_share: Share::wilson(
+            measured.sign_test.candidate_wins,
+            measured.sign_test.discordant,
+        ),
+        training_runs: GATE_TRAINING_RUNS,
+        pilot: pilot_reasons(units, GATE_TRAINING_RUNS),
     });
     check
 }

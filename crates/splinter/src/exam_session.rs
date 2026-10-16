@@ -16,6 +16,8 @@ use splinter_sdk::train::{adopt_checkpoint, load_candidate};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::{Context, Error};
 
+use splinter_sdk::measure::pilot::pilot_reasons;
+
 use crate::cli::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 use crate::output::emit;
 
@@ -163,6 +165,8 @@ pub struct PlannedExam {
     /// The exact sign test over families the release gate decides on: its
     /// power at the planned effect and the smallest lead it could see.
     pub sign_test: SignPlanned,
+    /// Why a result of this exam is a pilot; empty when it is not one.
+    pub pilot: Vec<String>,
 }
 
 /// Simulates the planned paired test.
@@ -206,6 +210,7 @@ pub fn power(args: &PowerArgs) -> Result<PlannedExam, Error> {
         plan,
         planned: simulate(&plan),
         sign_test: sign_planned(&plan),
+        pilot: pilot_reasons(args.families, args.training_runs),
     })
 }
 
@@ -328,4 +333,40 @@ pub fn set(ctx: &Context, json: bool, command: ExamSetCommand) -> Result<(), Err
         ExamSetCommand::Show { id } => emit(json, &ExamSet::load(ctx, &id)?),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+    use crate::cli::{Cli, Command};
+
+    fn planned(words: &[&str]) -> PlannedExam {
+        let argv = [
+            "splinter",
+            "exam-set",
+            "power",
+            "--replicates",
+            "5",
+            "--seed",
+            "1",
+        ]
+        .into_iter()
+        .chain(words.iter().copied());
+        match Cli::try_parse_from(argv).unwrap().command {
+            Some(Command::ExamSet(ExamSetCommand::Power(args))) => power(&args).unwrap(),
+            other => panic!("not an exam-set power: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_exam_of_few_families_or_one_training_seed_is_planned_as_a_pilot() {
+        // seed: fixed so the five simulated exams are the same every run; the
+        // pilot label does not depend on them.
+        assert_eq!(planned(&["--families", "8"]).pilot.len(), 2);
+        assert_eq!(planned(&["--families", "120"]).pilot.len(), 1);
+        let enough = planned(&["--families", "120", "--training-runs", "3"]);
+        assert!(enough.pilot.is_empty(), "{:?}", enough.pilot);
+    }
 }

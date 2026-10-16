@@ -265,6 +265,9 @@ impl Report for crate::exam_session::PlannedExam {
                 "  UNDERPOWERED: a miss on this exam is inconclusive, never a pass or a fail\n",
             );
         }
+        if !self.pilot.is_empty() {
+            let _ = writeln!(out, "  PILOT: {}", self.pilot.join("; "));
+        }
         out
     }
 }

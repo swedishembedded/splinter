@@ -183,6 +183,10 @@ pub struct PowerArgs {
     /// Simulated exams.
     #[arg(long, value_name = "N", default_value_t = 400)]
     pub replicates: usize,
+    /// The training runs the result will rest on: fewer than three, or fewer
+    /// than a hundred families, and it is labelled a pilot.
+    #[arg(long, value_name = "N", default_value_t = 1)]
+    pub training_runs: usize,
     /// Seeds the simulation (drawn and printed when not given; the same plan
     /// and seed give the same answer).
     #[arg(long, value_name = "N")]

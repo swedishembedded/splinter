@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 
 use splinter_sdk::eval::{EvalReport, Evaluated};
 use splinter_sdk::measure::gate::{AgenticProbe, Agreement, Check, GateReport};
+use splinter_sdk::measure::power::PowerAssessment;
 use splinter_sdk::release::{ReleaseList, Released, RolledBack};
 
 use crate::output::{tally, Report};
@@ -69,6 +70,16 @@ impl Report for GateReport {
                 m.sign_test.p_value,
                 m.alpha
             );
+        }
+        if let Some(power) = self
+            .improvement
+            .measured
+            .as_ref()
+            .and_then(|m| m.power.as_ref())
+        {
+            for line in power_lines(power) {
+                let _ = writeln!(out, "               {line}");
+            }
         }
         if let Some(probe) = self
             .improvement
@@ -411,5 +422,63 @@ impl Report for EvalReport {
             Self::Shown(shown) => shown.human(),
             Self::Ran(run) => run.human(),
         }
+    }
+}
+
+/// What the improvement check says of how little it rests on: the candidate's
+/// share of the discordant families with its Wilson interval, and the PILOT
+/// label with its reasons.
+fn power_lines(power: &PowerAssessment) -> Vec<String> {
+    let mut lines = Vec::new();
+    if let Some(share) = &power.win_share {
+        lines.push(format!(
+            "candidate won {} of {} discordant famil(ies): share {:.2}, 95% Wilson interval \
+             [{:.2}, {:.2}]",
+            share.successes, share.total, share.value, share.low, share.high
+        ));
+    }
+    if !power.pilot.is_empty() {
+        lines.push(format!("PILOT: {}", power.pilot.join("; ")));
+    }
+    lines
+}
+
+#[cfg(test)]
+mod tests {
+    use splinter_sdk::measure::pilot::{pilot_reasons, Share};
+    use splinter_sdk::measure::power::{PowerAssessment, Verdict};
+
+    use super::*;
+
+    fn assessment(units: usize, share: Option<Share>) -> PowerAssessment {
+        PowerAssessment {
+            units,
+            nominal_alpha: 0.05,
+            generation: None,
+            target_effect: None,
+            verdict: Verdict::Significant,
+            win_share: share,
+            training_runs: 1,
+            pilot: pilot_reasons(units, 1),
+        }
+    }
+
+    #[test]
+    fn a_small_exam_is_labelled_a_pilot_and_states_its_interval() {
+        let lines = power_lines(&assessment(8, Share::wilson(5, 6)));
+        assert!(
+            lines[0].contains("5 of 6") && lines[0].contains("Wilson"),
+            "{lines:?}"
+        );
+        assert!(
+            lines[1].starts_with("PILOT:") && lines[1].contains("8 independent"),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn no_discordant_family_states_no_share() {
+        let lines = power_lines(&assessment(150, None));
+        assert!(lines.iter().all(|l| !l.contains("Wilson")), "{lines:?}");
     }
 }
