@@ -22,18 +22,19 @@
 #      through it, and the served model id names the adapter digest.
 #
 # It asserts stages and artifacts, never quality. A missing artifact fails the
-# run and is named. The model runs on brain's default backend; set
-# BRAIN_DEVICE=cpu for the CPU backend (minutes to tens of minutes), or run
-# under the GPU lease wrapper for the short GPU variant.
+# run and is named. The model runs where <device> (brain's grammar: gpu, gpu0,
+# cpu, ...) says, given to splinter and brain serve as --device; without it
+# brain picks. `cpu` takes minutes to tens of minutes; for the short GPU variant
+# name a GPU and run under the GPU lease wrapper.
 #
 # Exit status: 0 passed; 1 failed (the missing artifact is named); 3 a
 # prerequisite is missing, so nothing was tested. A 3 is never a pass.
 #
-# Usage: scripts/e2e/turn.sh <splinter> <brain> <sven> <models-dir> <fixture-dir>
+# Usage: scripts/e2e/turn.sh <splinter> <brain> <sven> <models-dir> <fixture-dir> [<device>]
 set -uo pipefail
 
-if [ "$#" -ne 5 ]; then
-    echo "usage: $0 <splinter> <brain> <sven> <models-dir> <fixture-dir>" >&2
+if [ "$#" -ne 5 ] && [ "$#" -ne 6 ]; then
+    echo "usage: $0 <splinter> <brain> <sven> <models-dir> <fixture-dir> [<device>]" >&2
     exit 2
 fi
 splinter=$1
@@ -41,6 +42,8 @@ brain=$2
 sven=$3
 models=$4
 fixture=$5
+device=()
+[ -n "${6:-}" ] && device=(--device "$6")
 model=Qwen/Qwen3-0.6B
 here=$(cd "$(dirname "$0")" && pwd)
 check() { python3 "$here/turn_check.py" "$@"; }
@@ -74,7 +77,7 @@ cp -r "$fixture" "$repo" || fail "missing artifact: the fixture could not be cop
 state=$scratch/state
 export BRAIN_MODELS_DIR=$models
 export SPLINTER_BRAIN_BIN=$brain
-"$splinter" --json --state "$state" practice "$repo" --max-tasks 6 --steps 20 \
+"$splinter" --json --state "$state" "${device[@]}" practice "$repo" --max-tasks 6 --steps 20 \
     >"$scratch/practice.json" 2>"$scratch/practice.err" \
     || { tail -20 "$scratch/practice.err" >&2; fail "splinter practice did not complete"; }
 check practice "$scratch/practice.json" || exit 1
@@ -101,7 +104,7 @@ manifest=$scratch/adapter-manifest.json
 python3 -c 'import json,sys; json.dump({"adapter": sys.argv[1], "digest": sys.argv[2]}, open(sys.argv[3], "w"))' \
     "$adapter" "$digest" "$manifest" || fail "missing artifact: the adapter manifest could not be written"
 port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-"$brain" serve --openai "$port" --models-dir "$models" --adapter-manifest "$manifest" \
+"$brain" "${device[@]}" serve --openai "$port" --models-dir "$models" --adapter-manifest "$manifest" \
     --api-keys-out "$scratch/keys.json" --ready-file "$scratch/ready" >"$scratch/brain.log" 2>&1 &
 server=$!
 for _ in $(seq 1 240); do

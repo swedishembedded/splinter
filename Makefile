@@ -99,9 +99,9 @@ test/e2e:
 test/e2e/brain-sven:
 	bash scripts/e2e/brain-sven.sh $(BRAIN_BIN) $(SVEN_BIN) $(MODELS_DIR)
 
-## test/e2e/turn - one full turn on Qwen3-0.6B: practice on a tiny fixture, experiences with verdicts, a trained candidate, the release gate, the candidate served and driven by sven (SPLINTER_BIN, BRAIN_BIN, SVEN_BIN, MODELS_DIR; BRAIN_DEVICE=cpu for the CPU backend; for the short GPU variant run it under `make lease/gpu/run`; exit 3 means a prerequisite is missing and nothing was tested)
+## test/e2e/turn - one full turn on Qwen3-0.6B: practice on a tiny fixture, experiences with verdicts, a trained candidate, the release gate, the candidate served and driven by sven (SPLINTER_BIN, BRAIN_BIN, SVEN_BIN, MODELS_DIR; DEVICE in brain's grammar, e.g. DEVICE=cpu for the CPU backend; for the short GPU variant run it under `make lease/gpu/run`; exit 3 means a prerequisite is missing and nothing was tested)
 test/e2e/turn:
-	bash scripts/e2e/turn.sh $(SPLINTER_BIN) $(BRAIN_BIN) $(SVEN_BIN) $(MODELS_DIR) tasks/acceptance-tiny
+	bash scripts/e2e/turn.sh $(SPLINTER_BIN) $(BRAIN_BIN) $(SVEN_BIN) $(MODELS_DIR) tasks/acceptance-tiny $(DEVICE)
 
 ## test/e2e/turn/spec - the spec of test/e2e/turn against a fake splinter, brain and sven: each missing artifact fails the run with its name
 test/e2e/turn/spec:

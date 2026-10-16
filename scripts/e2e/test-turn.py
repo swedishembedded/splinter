@@ -27,6 +27,8 @@ DIGEST = "sha256:" + "ab12cd34ef56" * 5 + "abcd"
 FAKE_SPLINTER = r"""#!/usr/bin/env python3
 import json, os, sys
 omit = os.environ.get("FAKE_OMIT", "")
+if os.environ.get("FAKE_LOG"):
+    open(os.environ["FAKE_LOG"], "a").write(" ".join(sys.argv) + "\n")
 args = sys.argv[1:]
 if "practice" in args:
     report = {s: {"ok": True} for s in
@@ -51,6 +53,8 @@ elif "show" in args:
 FAKE_BRAIN = r"""#!/usr/bin/env python3
 import json, os, sys, threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+if os.environ.get("FAKE_LOG"):
+    open(os.environ["FAKE_LOG"], "a").write(" ".join(sys.argv) + "\n")
 args = sys.argv[1:]
 if args[:1] == ["doctor"]:
     sys.exit(1 if os.environ.get("FAKE_OMIT") == "doctor" else 0)
@@ -106,12 +110,13 @@ class TurnTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def turn(self, omit="", **override):
+    def turn(self, omit="", device=None, log="", **override):
         bins = {**self.bins, **{k: Path(v) for k, v in override.items()}}
         return subprocess.run(
             [HERE / "turn.sh", bins["splinter"], bins["brain"], bins["sven"],
-             self.models, self.fixture],
-            capture_output=True, text=True, env={**os.environ, "FAKE_OMIT": omit},
+             self.models, self.fixture] + ([device] if device else []),
+            capture_output=True, text=True,
+            env={**os.environ, "FAKE_OMIT": omit, "FAKE_LOG": log},
             timeout=120,
         )
 
@@ -141,6 +146,17 @@ class TurnTest(unittest.TestCase):
                 r = self.turn(omit)
                 self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
                 self.assertIn(named, r.stderr)
+
+    def test_a_named_device_reaches_the_trainer_and_the_server(self):
+        log = Path(self.tmp.name) / "calls.log"
+        r = self.turn(device="gpu1", log=str(log))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        calls = log.read_text().splitlines()
+        practice = [c for c in calls if " practice " in c]
+        serve = [c for c in calls if " serve " in c]
+        self.assertTrue(practice and serve, calls)
+        for call in practice + serve:
+            self.assertIn("--device gpu1", call)
 
     def test_a_missing_prerequisite_is_exit_3_never_a_pass(self):
         self.assertEqual(self.turn(sven=self.tmp.name + "/absent").returncode, 3)
