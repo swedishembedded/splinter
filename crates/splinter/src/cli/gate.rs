@@ -27,6 +27,11 @@ pub struct GateArgs {
     /// inconclusive, not as a failure.
     #[arg(long, value_name = "SHARE", value_parser = share)]
     pub target_effect: Option<f64>,
+    /// Decide the anchor check on the answers the candidate loses net of the
+    /// answers it gains, refusing above this count (6 for a 200-question
+    /// suite), instead of on the drop in accuracy.
+    #[arg(long, value_name = "COUNT")]
+    pub anchor_max_net_lost: Option<u32>,
 }
 
 impl GateArgs {
@@ -36,6 +41,7 @@ impl GateArgs {
         GatePlan {
             alpha_spending: self.alpha_spending,
             target_effect: self.target_effect,
+            anchor_max_net_lost: self.anchor_max_net_lost,
         }
     }
 }

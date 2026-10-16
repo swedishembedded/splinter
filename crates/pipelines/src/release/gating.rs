@@ -511,7 +511,7 @@ pub(super) fn run_gate(
                     frozen.digest.clone(),
                     suite.summary(),
                     &outcomes,
-                    config.anchor_bound,
+                    config.anchor_bound(),
                 );
                 if let Some(measured) = check.measured.as_mut() {
                     measured.drop_interval = drop_interval(&outcomes, interval_seed);

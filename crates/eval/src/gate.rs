@@ -25,8 +25,10 @@
 //!    ([`DEFAULT_RETENTION_BOUND`]) below the champion's. With no earlier
 //!    release there is nothing to retain, and the check passes over zero
 //!    suites.
-//! 3. **Anchor**: on the frozen anchor suite of general tasks, the same
-//!    kind of bound, `anchor_bound` ([`DEFAULT_ANCHOR_BOUND`]).
+//! 3. **Anchor**: on the frozen anchor suite of general tasks, a bound on
+//!    the drop in accuracy, `anchor_bound` ([`DEFAULT_ANCHOR_BOUND`]), or,
+//!    when `anchor_net_lost` is set, on the answers lost net of the answers
+//!    gained ([`AnchorBound`]).
 //! 4. **Serve**: plain `brain serve --adapter` loads the candidate, reports
 //!    its digest, and re-answers a sample of the held-out tasks with the
 //!    same answers as in-process (whitespace aside), graded the same. Both
@@ -97,6 +99,12 @@ pub const DEFAULT_RETENTION_BOUND: f64 = 0.05;
 /// How far, as a fraction of the suite, the candidate's accuracy on the
 /// anchor suite may fall below the champion's.
 pub const DEFAULT_ANCHOR_BOUND: f64 = 0.02;
+/// The net number of anchor answers a candidate may lose when the anchor
+/// check is decided on counts, for a suite of 200 questions (3%): a
+/// drift-free candidate whose answers flip independently at 2% or 3% each way
+/// is refused by chance 1.1% or 3.0% of the time, where 4 would refuse it
+/// 5.5% or 9.5% of the time.
+pub const ANCHOR_NET_LOST_FOR_200: u32 = 6;
 /// How many held-out tasks the served candidate re-answers.
 pub const DEFAULT_SERVE_SAMPLE: usize = 8;
 /// How long `brain serve` may take to load the candidate and report ready.
@@ -114,6 +122,11 @@ pub struct GateConfig {
     pub serve_sample: usize,
     /// Seconds `brain serve` may take to start.
     pub serve_startup_secs: u64,
+    /// The most answers the candidate may lose on the anchor suite net of the
+    /// answers it gains. `None` holds the anchor suite to `anchor_bound`, the
+    /// rate, as every report written before this existed was.
+    #[serde(default)]
+    pub anchor_net_lost: Option<u32>,
     /// How tasks that are changes to a repository are probed; unused by a
     /// gate over closed-book suites. A report written before it was kept
     /// reads the defaults.
@@ -142,11 +155,35 @@ impl Default for GateConfig {
             anchor_bound: DEFAULT_ANCHOR_BOUND,
             serve_sample: DEFAULT_SERVE_SAMPLE,
             serve_startup_secs: DEFAULT_SERVE_STARTUP_SECS,
+            anchor_net_lost: None,
             agentic: AgenticConfig::default(),
             alpha_spending: false,
             target_effect: None,
         }
     }
+}
+
+impl GateConfig {
+    /// The bound the anchor check is decided on.
+    #[must_use]
+    pub fn anchor_bound(&self) -> AnchorBound {
+        self.anchor_net_lost
+            .map_or(AnchorBound::Rate(self.anchor_bound), AnchorBound::NetLost)
+    }
+}
+
+/// How the anchor check decides.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnchorBound {
+    /// Refuse when the candidate's accuracy falls more than this fraction of
+    /// the paired items below the champion's.
+    Rate(f64),
+    /// Refuse when the answers the champion alone gave, minus the answers the
+    /// candidate alone gave, exceed this count. Counted from the paired items;
+    /// on a suite of fixed size it is a rate bound that does not move with
+    /// the number of items the run paired.
+    NetLost(u32),
 }
 
 /// One check: whether it passed, what it measured, and why it failed.
@@ -329,8 +366,14 @@ pub struct Anchor {
     pub comparison: Comparison,
     /// How far the candidate's accuracy falls below the champion's.
     pub drop: Option<f64>,
-    /// The largest drop allowed.
+    /// The largest drop allowed. It decided only when
+    /// [`Anchor::max_net_lost`] is `None`; otherwise it is the default rate,
+    /// kept for readers of older reports.
     pub bound: f64,
+    /// The most answers the candidate could lose net of its gains, when the
+    /// check was decided on that count and not on the rate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_net_lost: Option<u32>,
     /// The drop's bootstrap interval over the paired items: what a drop on a
     /// suite this size is to be read by. `None` when too few items were
     /// paired to resample, or in a report written before it was kept.
@@ -658,7 +701,7 @@ pub fn anchor(
     digest: Digest,
     suite: SuiteSummary,
     outcomes: &[PairedOutcome],
-    bound: f64,
+    bound: AnchorBound,
 ) -> Check<Anchor> {
     let comparison = compare(outcomes);
     let Some(drop) = comparison.drop() else {
@@ -666,8 +709,30 @@ pub fn anchor(
             "no task of anchor suite version {version} was graded for both models"
         ));
     };
-    let failure = (drop > bound)
-        .then(|| format!("the anchor suite (version {version}) dropped {drop:.4} > bound {bound}"));
+    let (rate, max_net_lost, failure) = match bound {
+        AnchorBound::Rate(rate) => (
+            rate,
+            None,
+            (drop > rate).then(|| {
+                format!("the anchor suite (version {version}) dropped {drop:.4} > bound {rate}")
+            }),
+        ),
+        AnchorBound::NetLost(max) => {
+            let net = i64::try_from(comparison.baseline_wins).unwrap_or(i64::MAX)
+                - i64::try_from(comparison.candidate_wins).unwrap_or(i64::MAX);
+            (
+                DEFAULT_ANCHOR_BOUND,
+                Some(max),
+                (net > i64::from(max)).then(|| {
+                    format!(
+                        "the anchor suite (version {version}) net lost {net} > {max} answers \
+                         ({} lost, {} gained)",
+                        comparison.baseline_wins, comparison.candidate_wins
+                    )
+                }),
+            )
+        }
+    };
     Check::decided(
         Anchor {
             version,
@@ -675,7 +740,8 @@ pub fn anchor(
             suite,
             comparison,
             drop: Some(drop),
-            bound,
+            bound: rate,
+            max_net_lost,
             drop_interval: None,
             items_to_see_two_points: None,
             workspace_tasks: None,
@@ -721,49 +787,7 @@ pub fn serve(measured: Serve) -> Check<Serve> {
 }
 
 #[cfg(test)]
-mod serve_tests {
-    use super::*;
+mod tests;
 
-    fn measured(sampled: usize, agreed: usize) -> Serve {
-        Serve {
-            binary: "brain".into(),
-            startup_line: String::new(),
-            served_digest: "sha256:a".into(),
-            expected_digest: "sha256:a".into(),
-            sampled,
-            agreed,
-            disagreed: Vec::new(),
-            agreement: Agreement::default(),
-        }
-    }
-
-    #[test]
-    fn a_rare_disagreement_passes_and_a_majority_of_them_does_not() {
-        assert!(serve(measured(8, 7)).passed);
-        assert!(serve(measured(8, 6)).passed, "exactly three quarters");
-        assert!(!serve(measured(8, 5)).passed);
-        assert!(!serve(measured(6, 0)).passed);
-    }
-
-    #[test]
-    fn a_served_agent_is_held_to_its_verdicts_and_the_report_says_so() {
-        let by_verdict = Serve {
-            agreement: Agreement::Verdicts,
-            ..measured(8, 5)
-        };
-        let check = serve(by_verdict);
-        assert!(!check.passed);
-        let why = check.reason.unwrap();
-        assert!(
-            why.contains("graded differently") && why.contains("3 of 8"),
-            "{why}"
-        );
-        assert!(
-            serve(Serve {
-                agreement: Agreement::Verdicts,
-                ..measured(8, 6)
-            })
-            .passed
-        );
-    }
-}
+#[cfg(test)]
+mod serve_tests;

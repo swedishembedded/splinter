@@ -16,9 +16,12 @@ fn the_release_gate_takes_its_statistical_settings_and_canaries() {
         "--alpha-spending",
         "--target-effect",
         "0.2",
+        "--anchor-max-net-lost",
+        "6",
     ]) else {
         panic!("release with a gate plan");
     };
+    assert_eq!(planned.gate.anchor_max_net_lost, Some(6));
     assert!(planned.gate.alpha_spending);
     assert_eq!(planned.gate.target_effect, Some(0.2));
     let Command::Release(canaried) = command(&["release", "c", "--canaries", "ab12"]) else {

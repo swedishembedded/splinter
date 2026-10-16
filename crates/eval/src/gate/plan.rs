@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::GateConfig;
 
-/// The improvement check's two optional statistical settings.
+/// The optional statistical settings of the improvement and anchor checks.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct GatePlan {
     /// Spend the significance level across the releases of a lineage by the
@@ -24,6 +24,10 @@ pub struct GatePlan {
     /// The lead, in the share of independent units won, the exam is asked to
     /// be able to see ([`GateConfig::target_effect`]); `None` asks for none.
     pub target_effect: Option<f64>,
+    /// Decide the anchor check on the answers lost net of those gained
+    /// ([`GateConfig::anchor_net_lost`]); `None` keeps the rate bound.
+    #[serde(default)]
+    pub anchor_max_net_lost: Option<u32>,
 }
 
 impl GatePlan {
@@ -33,6 +37,7 @@ impl GatePlan {
         GateConfig {
             alpha_spending: self.alpha_spending,
             target_effect: self.target_effect,
+            anchor_net_lost: self.anchor_max_net_lost,
             ..config
         }
     }
@@ -57,14 +62,17 @@ mod tests {
         let planned = GatePlan {
             alpha_spending: true,
             target_effect: Some(0.25),
+            anchor_max_net_lost: Some(6),
         }
         .applied_to(config);
         assert!(planned.alpha_spending);
         assert_eq!(planned.target_effect, Some(0.25));
+        assert_eq!(planned.anchor_net_lost, Some(6));
         assert_eq!(
             GateConfig {
                 alpha_spending: false,
                 target_effect: None,
+                anchor_net_lost: None,
                 ..planned
             },
             config
