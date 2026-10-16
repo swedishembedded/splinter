@@ -199,8 +199,8 @@ pub fn capture_tree(
             "a revision may not be empty or start with '-'".into(),
         ));
     }
-    let commit = resolve(&repository, &format!("{revision}^{{commit}}")).map_err(&unusable)?;
-    let tree_id = resolve(&repository, &format!("{commit}^{{tree}}")).map_err(&unusable)?;
+    let commit = resolve(&repository, &format!("{revision}^{{commit}}")).map_err(unusable)?;
+    let tree_id = resolve(&repository, &format!("{commit}^{{tree}}")).map_err(unusable)?;
     let dirty = is_dirty(&repository, &commit)?;
     if dirty && request.dirty == DirtyPolicy::Refuse {
         return Err(TreeError::Dirty { repository, commit });
