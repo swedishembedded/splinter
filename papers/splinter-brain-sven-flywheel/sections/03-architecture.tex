@@ -154,6 +154,24 @@ deduplication by the same near-duplicate rule as admission,\cl{D07,C03,C04} whic
 split of whole families (at least three, default share 0.1) supports early
 stopping.\cl{D08}
 
+% DRAFT: written with the packed sft-step view; no claim ids yet.
+\paragraph{Packing and weighting.} The step view can write a trajectory as one record
+instead of one record per action. The packed record supervises every admitted action
+of the trajectory as an assistant message and keeps every other turn as context, so it
+supervises the same targets as the per-action records together while the conversation is
+rendered once and not once per action; a step labelled bad stays context in it. The two
+forms train the same targets, and in both a step's gradient is the mean over every
+supervised token of the records it accumulates, so each token weighs the same whichever
+record holds it. What differs is the unit a step counts: a step of eight records
+averages eight single actions in the per-action form and eight whole trajectories in the
+packed form, so the same record count per step moves the adapter on far more tokens, and
+an epoch of $n$ trajectories takes $n$ record draws instead of one per action.
+Packing also shows a later action the earlier ones in the form they were trained in,
+which can differ in the template's reasoning markers from the form a model asked at that
+turn is shown. Both differences are fixed by the choice of form and the same for the
+trained arm and its controls; they are reported, not tuned, and packing is used for the
+confirmatory run because the per-action form does not fit a lease.
+
 \paragraph{Expansion beyond the first pass.} The corpus grows by five mechanisms, each
 with its own gate. (i)~\emph{Variants}: a model-written task may be given up to three
 differently worded questions that keep its reference, evidence and verifiers; a variant
