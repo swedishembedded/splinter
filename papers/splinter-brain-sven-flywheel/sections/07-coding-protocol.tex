@@ -3,8 +3,8 @@
 
 \section{The coding-task experiment: protocol}\label{sec:protocol}
 
-The loop of \cref{sec:architecture,sec:admission,sec:verify,sec:dataset} is exercised on
-invented facts in \cref{sec:results}. The question that matters to a team is different:
+The question that matters to a team, once the loop of
+\cref{sec:architecture,sec:admission,sec:verify,sec:dataset} exists, is:
 \emph{given a git repository, can a local agentic model be tuned to work competently in
 it, repeatedly and with further repositories, and does it get better at what it has met
 rather than only at the newest?} This section states the protocol that asks it. It was
@@ -118,7 +118,8 @@ round are solved again by the round-$k$ adapter and by its predecessor. Retentio
 the one-sided 95\% lower bound of the change in resolve rate (family-cluster bootstrap) exceeds
 $-0.05$ absolute; a failed check refuses the candidate.\cl{PR05} The gate of
 \cref{sec:gate} already holds each earlier release to the exam of its own run for repository
-runs;\cl{G07} the open defects of \cref{sec:open} are why the registered check is stricter
+runs;\cl{G07} the gate's suite does not yet test acquired capabilities in every domain
+(\cref{sec:requirements}), which is why the registered check is stricter
 than the gate's.
 
 \paragraph{Controls and stop rules.} A gain must survive three controls, each a separate

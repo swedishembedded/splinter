@@ -114,8 +114,6 @@
 {"id": "X06.1", "repo": "splinter", "path": "crates/pipelines/src/release/listing.rs", "kind": "regex", "pattern": "there\\ is\\ no\\ previous\\ release\\ to\\ roll", "min": 1}
 {"id": "X07.1", "repo": "splinter", "path": "crates/pipelines/src/lineage/mod.rs", "kind": "regex", "pattern": "derived\\ on\\ every\\ call", "min": 1}
 {"id": "X07.2", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "pub\\ struct\\ LineageArgs", "min": 1}
-{"id": "X08.1", "repo": "splinter", "path": "crates/splinter/README.md", "kind": "absent", "pattern": "A\\ release\\ is\\ written\\ once\\ under\\ `<state>/releases/<hex>/`"}
-{"id": "X08.2", "repo": "splinter", "path": "crates/orchestrator/src/releases.rs", "kind": "regex", "pattern": "nothing\\ is\\ copied", "min": 1}
 {"id": "I01.1", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "pub\\ enum\\ Origin", "min": 1}
 {"id": "I01.2", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "pub\\ struct\\ SourceId\\(pub\\ Digest\\)", "min": 1}
 {"id": "I01.3", "repo": "splinter", "path": "crates/core/src/source.rs", "kind": "regex", "pattern": "\"repository\"", "min": 1}

@@ -1,0 +1,35 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Limitations}\label{sec:limitations}
+
+The structure claims show that definitions, constants, tests and messages exist at the pinned
+commits; they do not show that the code behaves accordingly. Behaviour is established only by
+measurement, and the only measurements here are those of the training substrate
+(\cref{sec:substrate}): they show that steps fit and run, not that the adapter changes
+generation. The qualification of the 27B model used random weights for the long sequences and a
+handful of examples for the real checkpoint, and no sequence longer than 16384 tokens was run.
+
+The requirements of \cref{sec:requirements} that are marked planned are not implemented: the
+retention check does not test acquired facts, a workspace pass is an exit status, and the
+practice gate has no canaries. The mechanisms of corpus expansion beyond the first pass
+(variants, retention queue, rehearsal, claims) are described from the code and none was
+evaluated for the value it adds.
+
+\paragraph{The coding-task experiment.} It is not measured. Everything said about it in
+\cref{sec:protocol,sec:pending,sec:replicate} is a registered rule or a statement about code; the
+sign-test table is a design calculation. The registration fixes one model size for the first
+training result (Qwen3-8B, because training, saving and serving an adapter work end to end for
+it), one agent harness, and runs with process isolation \code{none} on the node, so the exposure
+audit detects but cannot prevent a solver reading hidden files (\cref{sec:audit}).\cl{AU09} Mutation-seeded
+tasks test whether a model can undo a synthetic fault, not whether it can debug a historical one;
+tasks from repository history are registered as a source, not yet built.\cl{PR10} A family is the file a
+fault was seeded in for the authored repositories, so clusters are files, not subsystems.\cl{PR02}
+An exam of one repository may hold too few non-tied families to decide, and the registration
+labels such a comparison a pilot instead of changing the rule. The base model may have seen
+public repositories in pretraining; the paired base arm bounds that effect, it does not remove it.
+Agent rollouts of realistic length make training cost unmeasured for the 8B model; the only
+training rate measured here is that of the 27B architecture (\cref{sec:throughput}), on one card,
+one revision and one sequence length.
+
+\input{generated/limitations}

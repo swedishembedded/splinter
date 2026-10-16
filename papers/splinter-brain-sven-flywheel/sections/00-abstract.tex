@@ -8,20 +8,17 @@ self-learning loop built from three cooperating projects, Splinter (what is lear
 (training and serving) and Sven (agents): a model proposes tasks that code admits or refuses
 for named reasons, an agent attempts them, typed verifiers keep what they confirm, verified
 experience becomes training data for a LoRA adapter, and the result is released only if four
-checks over unseen material pass, with immutable releases and rollback. Every statement about
-the system or a measurement carries an id in a claims ledger and is re-checked against the
-three repositories at pinned commits or against a raw run record. We report what the training
-substrate of one 95~GiB card holds for a 27B model (bf16 LoRA and NF4 QLoRA qualified; a
-probe step at \mThrNfFourEightOneNineTwoTokensPerS{} tokens/s, as measured). We report the first
-registered campaign, a two-generation turn on invented facts, which \emph{failed} its criterion:
-with a 0.6B policy every candidate learned facts and passed the improvement and retention
-checks, and the anchor check alone refused each of them, so no release was obtained; in a post
-hoc 1.7B run the first candidate was released, and the second kept only \mETwodCandidateGOneGZero{}
-of the \mETwodAfterGZeroGZero{} facts of the first, which the gate's retention check did not
-see. We list the defects this exposed, what is fixed with the commits that fix it,
-and what is open. Finally we register, before any run, the experiment the loop exists for:
-whether adapters trained on verified agent trajectories raise completion of unseen repository
-tasks, with retention and a replication on a second, independent repository. That experiment
-is \emph{not yet measured}; the paper contains its protocol, its replication recipe and its
-empty result tables, and no coding-task result.
+checks over unseen material pass, with immutable releases and rollback. We state the
+requirements that make such a loop work (independent held-out units, a retention check that
+tests what was acquired, an anchor bound that counts net lost answers on a large enough suite,
+a verifier that proves the tests ran, canaries in the gate), tie each to the code that
+implements it or mark it planned, and report what the training substrate of one 95~GiB card
+holds for a 27B model (bf16 LoRA and NF4 QLoRA qualified; a probe step at
+\mThrNfFourEightOneNineTwoTokensPerS{} tokens/s, as measured). Every statement about the system
+or a measurement carries an id in a claims ledger and is re-checked against the three
+repositories at pinned commits or against a raw run record. Finally we register, before any run,
+the experiment the loop exists for: whether adapters trained on verified agent trajectories
+raise completion of unseen repository tasks, with retention and a replication on a second,
+independent repository. That experiment is \emph{not yet measured}; this draft contains its
+protocol, its replication recipe and its empty result tables, and no coding-task result.
 \end{abstract}

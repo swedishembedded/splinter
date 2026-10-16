@@ -18,21 +18,22 @@ operational: \emph{can a team take its own git repository and tune a local agent
 that is measurably better at completing unseen tasks in it, repeatedly, without losing what it
 had?} The registered test is a paired comparison on repository tasks reserved before any
 rollout, with a retention check and a replication on a second repository
-(\cref{sec:protocol,sec:pending}). \textbf{That result has not been measured.} What this
-paper establishes is what is needed to measure it honestly: the architecture, a task and
-verification funnel, a training substrate that fits a 27B model on one card, a release gate,
-the lessons of a first registered campaign that failed, the corrections that followed, and a
-protocol and replication recipe fixed before the first coding run. The tables that will hold
-the result are in the paper and are empty.
+(\cref{sec:protocol,sec:pending}). \textbf{That result has not been measured}, so this is a
+draft: it may contain registered but not yet validated results, and a final version contains
+validated results only (\cref{sec:repro}). What the paper establishes is what is needed to
+measure it honestly: the architecture, a task and verification funnel, a training substrate
+that fits a 27B model on one card, a release gate, the requirements that make the loop work,
+and a protocol and replication recipe fixed before the first coding run. The tables that will
+hold the result are in the paper and are empty.
 
-\paragraph{Scope.} The paper asks two questions. \emph{Does each stage of the loop do what its
-specification says, and does a full turn, run twice, produce a policy that answers facts it
-was not given and keeps what it knew?} (answered for a controlled domain, negatively, in
-\cref{sec:results}.) \emph{Can the same loop be pointed at a repository and its effect on
-unseen tasks be decided by a registered test?} (protocol and recipe only,
-\cref{sec:protocol,sec:replicate}.) It claims no general improvement of any benchmark score and
-contains no plans beyond the registered experiments: a mechanism the code does not contain is
-absent, and a measurement that was not made is stated as not made.
+\paragraph{Scope.} The paper asks two questions. \emph{What must each stage of the loop do,
+and what does the code contain for it, so that a turn of the loop can add a capability without
+losing one?} (\cref{sec:architecture,sec:training,sec:substrate,sec:requirements}.)
+\emph{Can the same loop be pointed at a repository and its effect on unseen tasks be decided
+by a registered test?} (protocol and recipe only, \cref{sec:protocol,sec:replicate}.) It claims
+no general improvement of any benchmark score and contains no plans beyond the registered
+experiments: a mechanism the code does not contain is marked planned, and a measurement that
+was not made is stated as not made.
 
 \paragraph{How claims are verified.} Every statement about the system or a measurement
 carries the id of a row in a claims ledger (\code{data/claims.csv}, rendered as grey
@@ -54,9 +55,8 @@ with its rejection reasons (\cref{sec:intake,sec:admission,sec:verify,sec:datase
 (ii)~The training, release-gate, rollback and lineage machinery (\cref{sec:training,sec:gate}) and
 what the training substrate of one card holds and was measured to do for a 27B model
 (\cref{sec:substrate}).
-(iii)~A first registered campaign reported as it happened, including its failure
-(\cref{sec:design,sec:results}), and the defects it exposed with their fixes and open items
-(\cref{sec:corrections}).
+(iii)~The requirements that make the loop work, each tied to its implementation or marked
+planned (\cref{sec:requirements}).
 (iv)~A coding-task protocol with registered experiments, including a replication, fixed before
 any run (\cref{sec:protocol,sec:pending}), and a replication recipe whose steps are marked
 available or planned (\cref{sec:replicate}).

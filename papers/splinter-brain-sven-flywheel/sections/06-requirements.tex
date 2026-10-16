@@ -1,0 +1,88 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{What the loop needs in order to work}\label{sec:requirements}
+
+A turn of the loop adds a capability only if its stages cannot be satisfied by an artefact of
+the setup. This section states the requirements we found necessary, the mechanism that
+implements each, and which are not yet implemented. Each names its commit or file in the
+ledger, which checks that the commit is in the history of the pinned revision of its
+repository (\cref{sec:repro}).
+
+\paragraph{Held-out units must be independent.} Records carry the group of the source text they
+are grounded in, and a held-out measurement needs whole groups. A dataset that is one source
+text cannot be divided, so the split refuses it with a typed error naming the cause instead of
+dividing the group and failing the leakage check afterwards; a free record follows the fixed
+side of its group, monitoring with no whole group to set aside is skipped with the reason
+recorded, and a source that is one independent text is refused at intake before any rollout is
+paid for.\cl{FX01,FX05} A source of independent units is therefore one file per unit.
+
+\paragraph{Admission must see through markup.} The subject of a task is compared with the
+instruction, the source and the variants through one function that ignores code quotes,
+quotation marks, emphasis and a call's empty parentheses, so that ``the \code{q} key'' contains
+the subject ``q key''.\cl{FX02} A number written with a thousands separator is the same number
+in the stated-reference check.\cl{FX06}
+
+\paragraph{The serve check must start the real server.} The gate's serve check runs
+\code{brain serve --adapter}. A candidate's card id must follow Brain's adapter grammar
+(base, owner, name, tag), and the check must pass the bank option that covers every linear
+Splinter's LoRA corrects; the test double of the server refuses an adapter offered without it,
+because a double that accepts any flags hides both.\cl{FX03,FX04}
+
+\paragraph{The anchor bound must count net lost answers on a large enough suite.} A rate bound of
+0.02 on a 40-question anchor suite allows no lost answer, since one net loss is 0.025. The gate
+can decide the anchor on answers lost net of answers gained (an option; the default rate bound
+is unchanged), and a 200-question anchor suite built by code and a reviewed list
+exists.\cl{FX07}
+
+\paragraph{Retention must test acquired capabilities.} The retention suite of each earlier
+release is built from that release's held-out split, and the exams of workspace families are
+added to it.\cl{OP01} For a domain of facts the held-out split holds facts the release never
+taught, so a passed retention check is not evidence that taught facts were kept. A retention
+exam drawn from what each release demonstrably acquired is planned and not implemented; the
+registered coding-task retention check (\cref{sec:protocol}) uses the exam families of every
+earlier round for this reason.
+
+\paragraph{The verifier must prove that the tests ran.} The workspace verifier passes a patch
+only if every fail-to-pass and pass-to-pass command exits with status 0.\cl{OP02} That does not
+prove that the intended tests ran, so a suite that exits zero without running them would pass.
+A check that the named tests were executed and passed is planned; the coding-task experiments
+register conformance measurements for the verifier before they count (\cref{sec:protocol}).
+
+\paragraph{The gate must carry canaries.} A gate with an empty canary set skips that check. The
+release gate called from \code{practice} is built without canary tasks,\cl{OP03} so a release
+from \code{practice} does not yet carry that evidence; adding canaries is planned.
+
+\subsection{Trajectory and training requirements of repository tasks}\label{sec:audit}
+
+Training an agent on its own repository trajectories adds requirements to the stack. Each is
+located in source; the ledger names the file, commit or test.
+
+\begin{enumerate}
+\item \textbf{Loss masking of tool conversations} (Brain; implemented). Under the Qwen3 template
+an empty reasoning block is added to the last assistant turn only, so non-final assistant
+turns of a multi-step conversation failed the trainer's boundary check. Tool-calling
+conversations now train per assistant turn in both thinking modes.\cl{AU01}
+\item \textbf{Tool definitions lost between recording and training} (implemented). The agent
+records the tool definitions of the run, but the trajectory projections dropped them; an
+ATIF trajectory's tool definitions now become the chat sample's tools, and Splinter's
+dataset check covers tools.\cl{AU02}
+\item \textbf{Trajectory fidelity in the agent SDK} (Sven; implemented). The exported trajectory
+marked no context compaction and kept the uncompacted history, listed every registered tool
+rather than those offered, and turned unparseable tool-call arguments into an empty object.
+Compactions are now marked and the compacted history kept, the offered tools are exported,
+and the raw text of non-JSON arguments is kept.\cl{AU03}
+\item \textbf{Release probes were closed-book} (implemented). A coding agent is now gated on the
+exam its run reserved, with report types for workspace suites.\cl{AU04}
+\item \textbf{Contamination paths} (implemented). The semantic-memory tool is withheld from the
+worker, and a context tool that could open any readable path is jailed.\cl{AU05}
+\item \textbf{Silent waits} (Sven; implemented). A model server that goes quiet is bounded and
+the wait is reported, with a stalling mock provider to test it.\cl{AU06}
+\item \textbf{Tool-definition mismatches} (Sven; implemented). Definitions disagreed with the
+implementation and were tightened.\cl{AU07}
+\item \textbf{Serving several adapters} (Brain; implemented in the qwen3 server). An adapter bank
+lets one batch serve the base and many LoRA adapters.\cl{AU08}
+\item \textbf{Containment} (planned). A coding agent's shell is not a sandbox. Where no
+container is configured every environment record says \code{isolation: none}, and the
+exposure audit detects exposure but cannot prevent it.\cl{AU09}
+\end{enumerate}
