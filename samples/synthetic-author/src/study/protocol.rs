@@ -465,6 +465,12 @@ impl Protocol {
                 && self.training.records_per_step > 0,
             "the corpus, examination and training sizes must be positive"
         );
+        anyhow::ensure!(
+            self.exam.per_cell == self.exam.sizing.per_cell,
+            "the examination has {} items per kind and its recorded sizing derives {}",
+            self.exam.per_cell,
+            self.exam.sizing.per_cell
+        );
         self.validate_arms()?;
         let Multiplicity::HolmOverComparisons { alpha } = self.multiplicity;
         anyhow::ensure!(alpha > 0.0 && alpha < 1.0, "alpha {alpha} is not a level");

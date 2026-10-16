@@ -18,7 +18,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context as _;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::cache::{Cache, Kind, StoredArticle};
 use crate::episode::Episode;
@@ -34,7 +34,7 @@ pub const UNATTEMPTED: &str = "unattempted";
 pub const CONTENT: &str = "content";
 
 /// Decisions planned and decisions kept under one label.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tally {
     /// Decisions the plan tells.
     pub planned: usize,
@@ -43,7 +43,7 @@ pub struct Tally {
 }
 
 /// What a corpus lost.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Survivors {
     /// Articles planned.
     pub articles_planned: usize,

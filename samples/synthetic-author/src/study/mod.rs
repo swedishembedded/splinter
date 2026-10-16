@@ -16,6 +16,8 @@
 
 pub mod arm_key;
 pub mod cli;
+pub mod corpus;
+pub mod layout;
 pub mod power;
 pub mod protocol;
 pub mod stats;

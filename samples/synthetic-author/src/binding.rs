@@ -336,7 +336,7 @@ pub fn bind(dir: &Path, outcomes: &Path, record: &ArmRecord, adopt: bool) -> any
     Ok(bound)
 }
 
-fn write_whole(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
+pub(crate) fn write_whole(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
     let part = path.with_extension("part");
     std::fs::write(&part, bytes).with_context(|| format!("writing {}", part.display()))?;
     std::fs::rename(&part, path).with_context(|| format!("renaming to {}", path.display()))

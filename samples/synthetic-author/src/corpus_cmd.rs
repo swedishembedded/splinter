@@ -10,7 +10,7 @@
 //! The `corpus` command: draw or read back the author, record how the corpus
 //! is made, and write it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -26,7 +26,8 @@ use crate::manifest::{
 };
 use crate::models::{is_remote, Source, WRITER_DECODING};
 use crate::writer::{
-    write_corpus_read, Models, Options, DEFAULT_TRANSPORT_BACKOFF_SECS, DEFAULT_TRANSPORT_RETRIES,
+    write_corpus_read, Models, Options, Summary, DEFAULT_TRANSPORT_BACKOFF_SECS,
+    DEFAULT_TRANSPORT_RETRIES,
 };
 
 /// Write the author's corpus into a cache directory.
@@ -95,28 +96,170 @@ pub struct CorpusArgs {
     transport_backoff_secs: u64,
 }
 
+/// What a corpus is begun with, apart from the models that write and read.
+#[derive(Clone, Debug)]
+pub struct Plan {
+    /// The model that writes, as a model reference.
+    pub writer: String,
+    /// The model that reads each article, if one is named.
+    pub reader: Option<String>,
+    /// Whether the writer and the reader may be of one family.
+    pub allow_same_family: bool,
+    /// How many articles the corpus has.
+    pub articles: usize,
+    /// How many episodes each article tells.
+    pub episodes_per_article: usize,
+    /// The fewest words an article may have.
+    pub min_words: usize,
+    /// Attempts at an article before it is given up on.
+    pub attempts: usize,
+    /// The most requests this run may make.
+    pub max_calls: usize,
+    /// The most output tokens this run may write (estimated).
+    pub max_output_tokens: u64,
+    /// How many articles are written at a time.
+    pub workers: usize,
+    /// How many times a request lost in transit is repeated.
+    pub transport_retries: usize,
+    /// The pause before the first repeat; it doubles up to a minute.
+    pub transport_backoff: Duration,
+}
+
+/// The author and the run seed a corpus is written under, decided but not
+/// yet recorded.
+#[derive(Clone, Debug)]
+pub struct Prepared {
+    /// The author the corpus is written for.
+    pub author: Author,
+    /// The seed the per-request seeds derive from, when a model here runs.
+    pub run_seed: Option<u64>,
+}
+
+impl Plan {
+    /// Decides the author and the run seed of the corpus in `dir`: the ones it
+    /// records, else `seed` (or the author `opposite_of` opposes) and `run_seed`,
+    /// else fresh ones, printed. Writes nothing, so a model that then cannot
+    /// be had leaves no manifest behind.
+    ///
+    /// # Errors
+    /// The writer and the reader are of one family and that is not allowed, or
+    /// the seeds contradict what the directory records.
+    pub fn prepare(
+        &self,
+        dir: &Path,
+        seed: Option<u64>,
+        opposite_of: Option<u64>,
+        run_seed: Option<u64>,
+    ) -> anyhow::Result<Prepared> {
+        if !self.allow_same_family {
+            check_distinct(&Roles {
+                writer: &self.writer,
+                reader: self.reader.as_deref(),
+                miner: None,
+            })?;
+        }
+        let author = corpus_author(dir, seed, opposite_of)?;
+        let any_local = !is_remote(&self.writer)?
+            || self.reader.as_deref().map(is_remote).transpose()? == Some(false);
+        Ok(Prepared {
+            author,
+            run_seed: run_seed_of(dir, run_seed, any_local)?,
+        })
+    }
+
+    /// Records how the corpus in `dir` is made, or checks that it is being
+    /// continued the way it was begun, and returns the options to write with.
+    ///
+    /// # Errors
+    /// The recipe differs from the one recorded.
+    pub fn begin(&self, dir: &Path, prepared: &Prepared) -> anyhow::Result<Options> {
+        begin_or_continue(
+            dir,
+            CorpusManifest {
+                seed_source: prepared.author.seed_source,
+                recipe: Recipe {
+                    author_seed: prepared.author.seed,
+                    persona_source: prepared.author.persona_source,
+                    writer: self.writer.clone(),
+                    reader: self.reader.clone(),
+                    allow_same_family: self.allow_same_family,
+                    decoding: WRITER_DECODING.to_string(),
+                    run_seed: prepared.run_seed,
+                    articles: self.articles,
+                    episodes_per_article: self.episodes_per_article,
+                    min_words: self.min_words,
+                },
+                seed_derivation: SEED_DERIVATION.to_string(),
+                limits: Limits {
+                    attempts: self.attempts,
+                    max_calls: self.max_calls,
+                    max_output_tokens: self.max_output_tokens,
+                    workers: self.workers,
+                },
+                code_revision: code_revision().to_string(),
+            },
+        )?;
+        Ok(Options {
+            articles: self.articles,
+            episodes_per_article: self.episodes_per_article,
+            min_words: self.min_words,
+            attempts_per_article: self.attempts,
+            max_calls: self.max_calls,
+            max_output_tokens: self.max_output_tokens,
+            workers: self.workers,
+            transport_retries: self.transport_retries,
+            transport_backoff: self.transport_backoff,
+        })
+    }
+}
+
+impl CorpusArgs {
+    fn plan(&self) -> Plan {
+        Plan {
+            writer: self.writer.clone(),
+            reader: self.reader.clone(),
+            allow_same_family: self.allow_same_family,
+            articles: self.articles,
+            episodes_per_article: self.episodes_per_article,
+            min_words: self.min_words,
+            attempts: self.attempts,
+            max_calls: self.max_calls,
+            max_output_tokens: self.max_output_tokens,
+            workers: self.workers,
+            transport_retries: self.transport_retries,
+            transport_backoff: Duration::from_secs(self.transport_backoff_secs),
+        }
+    }
+}
+
+/// Prints what a corpus run did.
+pub fn print_summary(persona_name: &str, summary: &Summary) {
+    println!(
+        "{persona_name}: {} written, {} already kept, {} given up, {} unreachable, {} turned away; {} calls, about {} tokens in and {} out{}",
+        summary.written,
+        summary.skipped,
+        summary.abandoned,
+        summary.unavailable,
+        summary.rejected,
+        summary.calls,
+        summary.input_tokens,
+        summary.output_tokens,
+        summary
+            .stopped
+            .as_ref()
+            .map_or_else(String::new, |why| format!("; stopped: {why}")),
+    );
+}
+
 /// Runs `corpus`.
 ///
 /// # Errors
 /// The writer and the reader are of the same model family, the author seed or
 /// the recipe contradicts what the directory records, the runtime cannot start, or the corpus cannot be written.
 pub fn run(args: CorpusArgs) -> anyhow::Result<()> {
-    if !args.allow_same_family {
-        check_distinct(&Roles {
-            writer: &args.writer,
-            reader: args.reader.as_deref(),
-            miner: None,
-        })?;
-    }
-    let Author {
-        persona,
-        seed: author_seed,
-        persona_source,
-        seed_source,
-    } = corpus_author(&args.cache, args.seed, args.opposite_of)?;
-    let any_local = !is_remote(&args.writer)?
-        || args.reader.as_deref().map(is_remote).transpose()? == Some(false);
-    let run_seed = run_seed_of(&args.cache, args.run_seed, any_local)?;
+    let plan = args.plan();
+    let Prepared { author, run_seed } =
+        plan.prepare(&args.cache, args.seed, args.opposite_of, args.run_seed)?;
     let cache = Cache::open(args.cache.clone())?;
     let mut config = Config::from_env();
     config.state_root = StateRoot::new(cache.dir().join("state"));
@@ -132,63 +275,21 @@ pub fn run(args: CorpusArgs) -> anyhow::Result<()> {
         .as_deref()
         .map(|name| Source::open(&ctx, name, run_seed))
         .transpose()?;
-    begin_or_continue(
+    let options = plan.begin(
         cache.dir(),
-        CorpusManifest {
-            seed_source,
-            recipe: Recipe {
-                author_seed,
-                persona_source,
-                writer: args.writer.clone(),
-                reader: args.reader.clone(),
-                allow_same_family: args.allow_same_family,
-                decoding: WRITER_DECODING.to_string(),
-                run_seed,
-                articles: args.articles,
-                episodes_per_article: args.episodes_per_article,
-                min_words: args.min_words,
-            },
-            seed_derivation: SEED_DERIVATION.to_string(),
-            limits: Limits {
-                attempts: args.attempts,
-                max_calls: args.max_calls,
-                max_output_tokens: args.max_output_tokens,
-                workers: args.workers,
-            },
-            code_revision: code_revision().to_string(),
+        &Prepared {
+            author: author.clone(),
+            run_seed,
         },
     )?;
-    let options = Options {
-        articles: args.articles,
-        episodes_per_article: args.episodes_per_article,
-        min_words: args.min_words,
-        attempts_per_article: args.attempts,
-        max_calls: args.max_calls,
-        max_output_tokens: args.max_output_tokens,
-        workers: args.workers,
-        transport_retries: args.transport_retries,
-        transport_backoff: Duration::from_secs(args.transport_backoff_secs),
-    };
     let summary = write_corpus_read(
-        &persona,
-        author_seed,
+        &author.persona,
+        author.seed,
         &writer,
         reading.as_ref().map(|r| r as &dyn Models),
         &cache,
         &options,
     )?;
-    println!(
-        "{}: {} written, {} already kept, {} given up, {} unreachable, {} turned away; {} calls, about {} tokens in and {} out{}",
-        persona.name,
-        summary.written,
-        summary.skipped,
-        summary.abandoned,
-        summary.unavailable,
-        summary.rejected,
-        summary.calls,
-        summary.input_tokens,
-        summary.output_tokens,
-        summary.stopped.map_or_else(String::new, |why| format!("; stopped: {why}")),
-    );
+    print_summary(&author.persona.name, &summary);
     Ok(())
 }

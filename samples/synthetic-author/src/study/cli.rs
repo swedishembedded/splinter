@@ -10,8 +10,17 @@
 //! subcommands, each run from the protocol frozen in the study directory.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
+use anyhow::Context as _;
 use clap::{Args, Subcommand};
+use splinter_sdk::store::StateRoot;
+use splinter_sdk::{Config, Splinter};
+
+use super::corpus::{self, Pace, Staff};
+use super::layout::Study;
+use crate::models::{is_remote, Source};
+use crate::writer::{DEFAULT_TRANSPORT_BACKOFF_SECS, DEFAULT_TRANSPORT_RETRIES};
 
 use super::power::{derive, Observed};
 use super::protocol::{
@@ -36,6 +45,34 @@ pub enum Stage {
     /// examination, and record both, once. Repeating it with the same
     /// settings changes nothing; with others it is refused.
     Freeze(FreezeArgs),
+    /// Per author: write the corpus with the protocol's writer and gate
+    /// reader, read the decisions with its miner, make the training records
+    /// and freeze and hash the examination, all before anything is trained.
+    /// Resumes what exists; run it again after a stop.
+    Corpus(CorpusStageArgs),
+}
+
+/// Run the corpus stage.
+#[derive(Args)]
+pub struct CorpusStageArgs {
+    /// The study directory holding the frozen protocol.
+    #[arg(long)]
+    study: PathBuf,
+    /// The authors to run, by seed, comma separated; every author of the
+    /// protocol when absent.
+    #[arg(long = "authors", value_delimiter = ',')]
+    only: Vec<u64>,
+    /// Permit the models, which are reached over the network.
+    #[arg(long)]
+    allow_remote: bool,
+    /// How many times a request lost in transit is repeated before the model
+    /// counts as unreachable and the run stops.
+    #[arg(long, default_value_t = DEFAULT_TRANSPORT_RETRIES)]
+    transport_retries: usize,
+    /// Seconds to pause before the first repeat of a lost request; each repeat
+    /// waits twice as long, up to a minute.
+    #[arg(long, default_value_t = DEFAULT_TRANSPORT_BACKOFF_SECS)]
+    transport_backoff_secs: u64,
 }
 
 /// Freeze the study protocol.
@@ -148,7 +185,82 @@ impl FreezeArgs {
 pub fn run(args: &StudyArgs) -> anyhow::Result<()> {
     match &args.stage {
         Stage::Freeze(freeze_args) => freeze_stage(freeze_args),
+        Stage::Corpus(corpus_args) => corpus_stage(corpus_args),
     }
+}
+
+/// The authors a stage runs: the ones asked for, else all of the protocol's.
+fn chosen_authors(study: &Study, only: &[u64]) -> anyhow::Result<Vec<u64>> {
+    for &seed in only {
+        study.author_plan(seed)?;
+    }
+    Ok(if only.is_empty() {
+        study.protocol().authors.iter().map(|a| a.seed).collect()
+    } else {
+        only.to_vec()
+    })
+}
+
+/// Runs `stage` for each of `authors`, going on to the next when one fails,
+/// and fails at the end naming every author that did.
+fn for_each_author(
+    authors: &[u64],
+    mut stage: impl FnMut(u64) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let failed: Vec<String> = authors
+        .iter()
+        .filter_map(|&seed| stage(seed).err().map(|e| format!("author {seed}: {e:#}")))
+        .collect();
+    anyhow::ensure!(failed.is_empty(), "{}", failed.join("\n"));
+    Ok(())
+}
+
+fn corpus_stage(args: &CorpusStageArgs) -> anyhow::Result<()> {
+    let study = Study::open(&args.study)?;
+    let roles = study.protocol().models.clone();
+    for (role, reference) in [
+        ("writer", &roles.writer),
+        ("reader", &roles.reader),
+        ("miner", &roles.miner),
+    ] {
+        anyhow::ensure!(
+            is_remote(reference)?,
+            "the {role} {reference} runs here: the corpus stage asks hosted models, whose per-request seeds are their provider's"
+        );
+    }
+    let mut config = Config::from_env();
+    config.state_root = StateRoot::new(study.root().join("state"));
+    config.thinking = false;
+    config.allow_remote = args.allow_remote;
+    let splinter = Splinter::builder(config)
+        .build()
+        .context("starting the runtime")?;
+    let ctx = splinter.context();
+    let writer = Source::open(&ctx, &roles.writer, None)?;
+    let reader = Source::open(&ctx, &roles.reader, None)?;
+    let miner = Source::open(&ctx, &roles.miner, None)?;
+    let staff = Staff {
+        writer: &writer,
+        reader: &reader,
+        miner: &miner,
+    };
+    let pace = Pace {
+        transport_retries: args.transport_retries,
+        transport_backoff: Duration::from_secs(args.transport_backoff_secs),
+    };
+    for_each_author(&chosen_authors(&study, &args.only)?, |seed| {
+        let manifest = corpus::run(&study, seed, &staff, &pace)?;
+        println!(
+            "author {seed} ({}): {} of {} articles kept, {} decisions kept, examination of {} items frozen as {}",
+            manifest.author_name,
+            manifest.corpus.articles_kept,
+            manifest.corpus.articles_planned,
+            manifest.corpus.decisions_kept,
+            manifest.exam.items,
+            manifest.exam.digest,
+        );
+        Ok(())
+    })
 }
 
 fn freeze_stage(args: &FreezeArgs) -> anyhow::Result<()> {

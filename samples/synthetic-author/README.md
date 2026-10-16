@@ -303,3 +303,24 @@ protocol also holds:
   comparison tested across authors by a sign test of the per-author mean gain;
 * the decodings: greedy for every confirmatory result, a sampled decoding
   beside it.
+
+### The corpus stage
+
+```bash
+synthetic-author study corpus --study STUDY --allow-remote
+```
+
+For each author (all of them, or `--authors SEED,SEED`) the stage writes the
+corpus with the protocol's writer and gate reader, reads the decisions out of
+it with the miner, makes the records for every setting of the briefings the
+protocol trains on, and draws, hashes and writes the examination
+(`exam-items.jsonl`), recording its digest in the author's manifest
+`authors/SEED/study.json` before any adapter is trained. The models are the
+protocol's, so every one of them is reached over a network; the budgets are the
+protocol's too, per run. A run that stops (the budget, an unreachable model)
+writes no manifest and says so; running the command again resumes, and asks no
+model for work it already has. An author whose manifest exists is checked, not
+redone, and the stage refuses to continue under a protocol other than the one
+the manifest records, or when the examination the corpus makes now is not the
+one frozen. An author that fails does not stop the others; the command reports
+every failure at the end.

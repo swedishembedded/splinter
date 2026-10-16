@@ -247,8 +247,13 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   primary comparison, the family of comparisons, Holm over it as the
   multiplicity correction, greedy as the primary decoding and a sampled one
   beside it (PP-20); freezing again with the same settings reports the frozen
-  protocol and with others is refused. No stage beyond the freeze exists yet
-  and no author has been drawn into a run.
+  protocol and with others is refused. `study corpus` (`src/study/corpus.rs`)
+  runs an author's corpus, mining, record making and examination freeze with the
+  protocol's models, writes `study.json` with the protocol digest, the
+  survivors and the examination's digest, resumes, and refuses a changed
+  protocol or a corpus changed after the freeze; it is tested with scripted
+  models only. Not built yet: training, examining and the report. No corpus has
+  been written with the three families.
 - **Problem.** One training run per author and three authors (paper Sec. 7);
   all three runs used the same default seed (PF-04); no sign test across
   authors is possible with three.
