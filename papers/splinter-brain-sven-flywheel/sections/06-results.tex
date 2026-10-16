@@ -14,16 +14,51 @@ The generator (Qwen3-4B) was asked for four kinds of task from the three pages o
 Brain's documentation. The task report lists \mEOneTasks{} admitted tasks, covering
 \mEOneParts{} of the \mEOnePartsTotal{} text parts of the corpus,
 produced in \mEOneElapsedSecs{} seconds.\cl{M01} By kind,
-recall admitted \mEOneAdmittedRecall, explain \mEOneAdmittedExplain, classify
-\mEOneAdmittedClassify{} and the code-built denoise \mEOneAdmittedDenoise.\cl{M02}
+recall admitted \mEOneadmittedRecall, explain \mEOneadmittedExplain, classify
+\mEOneadmittedClassify{} and the code-built denoise \mEOneadmittedDenoise.\cl{M02}
 The generator's proposals were rejected \mEOneRejectedRecall, \mEOneRejectedExplain,
 \mEOneRejectedClassify{} and \mEOneRejectedDenoise{} times in the same order.\cl{M03}
 \Cref{tab:e1} gives the rejections by reason. Of \mEOneRejectedTotal{} rejections,
 \mEOneReasonNoSubject{} carry one reason, \code{no\_subject}: the generator did not
 name what the task is about, which the admission rule of \cref{sec:admission}
-requires. One was a duplicate and one was ungrounded.\cl{M04} We did not test why the generator omits the subject, nor whether a different brief
-would admit more of them; this is a measurement of one generator on one corpus, not
-a property of the admission rule.
+requires. One was a duplicate and one was ungrounded.\cl{M04}
+This is the first wave of E1 (a binary built before the repairs of \cref{sec:defects}).
+
+\paragraph{Why the subject is missing.} We read each of the 82 first-wave rejections, and
+those of the second-wave reruns below, against the rule of \cref{sec:admission}
+(\code{scripts/classify_rejections.py}). The rule asks that the subject the generator names
+be in the instruction and be named by the source or a cited section. Four classes result:
+the subject is absent from the instruction (for example subject \code{braintop}, question
+``What does the \code{--cli} option print?''); its words are in the instruction but not
+adjacent; it is in the instruction but neither the source nor the cited section carries it
+(an invented label such as ``metric line''); or it is in the instruction once code quotes
+are ignored. The last class (18 of the 82, subject ``q key'' against ``the \code{q} key'')
+was a defect of the rule, a literal comparison that markup defeats, and is repaired.
+
+\paragraph{Second wave.} We reran E1 once per corpus on the repaired binary
+(\cref{tab:e1w2}); wall times are not comparable between runs because the card was shared.
+On the same three Brain pages the generator made \mEOneaProposals{} proposals, \mEOneaAdmittedProposals{} were
+admitted and \mEOneaReasonNoSubject{} rejected as \code{no\_subject}
+(\mEOneaShareNoSubject), of which \mEOneaClassAbsent{} name a subject absent from the instruction
+and none is markup only.\cl{M18,M19} On three pages of the Sven user documentation it made
+\mEOnebProposals{} proposals, admitted \mEOnebAdmittedProposals{} and rejected \mEOnebReasonNoSubject{}
+as \code{no\_subject} (\mEOnebShareNoSubject), again with no markup-only case.\cl{M20}
+The repair therefore removed the one class that was the rule's fault and did not change how
+often the generator's subject is refused. With Qwen3-8B as the generator on the Brain pages the
+share was \mEOnecShareNoSubject{} (\mEOnecProposals{} proposals), the interval overlapping that of
+the 4B generator, and \mEOnecClassAbsent{} of the \mEOnecReasonNoSubject{} again named a subject
+absent from the instruction.\cl{M21} We conclude only that the dominant cause is the shape of
+the generator's output, a question that omits the subject it names, at both sizes; we did not
+test a changed brief, so the prompt is not excluded as a cause.
+
+\begin{table}[t]
+\centering
+\small
+\input{generated/e1w2_table}
+\caption{E1, second wave: proposals and their fate by run. The last column splits the
+\code{no\_subject} rejections into subject absent from the instruction, its words apart, not
+in the source, and markup only.}\label{tab:e1w2}
+\end{table}
 
 \begin{table}[t]
 \centering
