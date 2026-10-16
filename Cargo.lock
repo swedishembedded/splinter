@@ -250,7 +250,7 @@ dependencies = [
 [[package]]
 name = "atif"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "chrono",
  "libc",
@@ -421,7 +421,7 @@ checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
 [[package]]
 name = "brain"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-appopts",
  "brain-arch",
@@ -456,7 +456,7 @@ dependencies = [
 [[package]]
 name = "brain-apiserve"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -485,7 +485,7 @@ dependencies = [
 [[package]]
 name = "brain-appopts"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-gpu-core",
  "brain-seed",
@@ -494,7 +494,7 @@ dependencies = [
 [[package]]
 name = "brain-arcface"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-gpu-core",
@@ -513,12 +513,12 @@ dependencies = [
 [[package]]
 name = "brain-arch"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 
 [[package]]
 name = "brain-atif"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "chrono",
  "libc",
@@ -531,7 +531,7 @@ dependencies = [
 [[package]]
 name = "brain-audio"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-data",
@@ -544,7 +544,7 @@ dependencies = [
 [[package]]
 name = "brain-audit"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-data",
  "brain-promote",
@@ -558,12 +558,12 @@ dependencies = [
 [[package]]
 name = "brain-backend-api"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 
 [[package]]
 name = "brain-backend-cpu"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-api",
  "brain-wgsl-cpu",
@@ -573,7 +573,7 @@ dependencies = [
 [[package]]
 name = "brain-backend-cuda"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-api",
  "brain-wgsl-cuda",
@@ -585,7 +585,7 @@ dependencies = [
 [[package]]
 name = "brain-backend-vulkan"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -598,7 +598,7 @@ dependencies = [
 [[package]]
 name = "brain-backend-wgpu"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -613,7 +613,7 @@ dependencies = [
 [[package]]
 name = "brain-bench"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -635,7 +635,7 @@ dependencies = [
 [[package]]
 name = "brain-bisenet"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -652,7 +652,7 @@ dependencies = [
 [[package]]
 name = "brain-camera"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "serde_json",
 ]
@@ -660,7 +660,7 @@ dependencies = [
 [[package]]
 name = "brain-campplus"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -677,7 +677,7 @@ dependencies = [
 [[package]]
 name = "brain-capability"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-seed",
  "serde_json",
@@ -686,7 +686,7 @@ dependencies = [
 [[package]]
 name = "brain-captioner"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-data",
  "image",
@@ -695,7 +695,7 @@ dependencies = [
 [[package]]
 name = "brain-catalog"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-arcface",
  "brain-audio",
@@ -771,7 +771,7 @@ dependencies = [
 [[package]]
 name = "brain-checkpoint"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "bytemuck",
@@ -785,7 +785,7 @@ dependencies = [
 [[package]]
 name = "brain-chronos2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-forecast",
@@ -801,7 +801,7 @@ dependencies = [
 [[package]]
 name = "brain-clip"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -820,7 +820,7 @@ dependencies = [
 [[package]]
 name = "brain-codeformer"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -840,7 +840,7 @@ dependencies = [
 [[package]]
 name = "brain-controlnet"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -858,7 +858,7 @@ dependencies = [
 [[package]]
 name = "brain-cosyvoice"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -880,7 +880,7 @@ dependencies = [
 [[package]]
 name = "brain-data"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-seed",
@@ -900,7 +900,7 @@ dependencies = [
 [[package]]
 name = "brain-decide"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -916,7 +916,7 @@ dependencies = [
 [[package]]
 name = "brain-decisions"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -932,7 +932,7 @@ dependencies = [
 [[package]]
 name = "brain-deepseek2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -950,7 +950,7 @@ dependencies = [
 [[package]]
 name = "brain-deepseek2ocr"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -972,7 +972,7 @@ dependencies = [
 [[package]]
 name = "brain-deepseekocr2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -993,7 +993,7 @@ dependencies = [
 [[package]]
 name = "brain-deepseekvl"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1011,7 +1011,7 @@ dependencies = [
 [[package]]
 name = "brain-diffusion"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "serde_json",
 ]
@@ -1019,7 +1019,7 @@ dependencies = [
 [[package]]
 name = "brain-dit"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-model",
 ]
@@ -1027,7 +1027,7 @@ dependencies = [
 [[package]]
 name = "brain-ecapatdnn"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-checkpoint",
@@ -1043,7 +1043,7 @@ dependencies = [
 [[package]]
 name = "brain-eval"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-checkpoint",
@@ -1059,7 +1059,7 @@ dependencies = [
 [[package]]
 name = "brain-events"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-data",
  "brain-forecast",
@@ -1069,7 +1069,7 @@ dependencies = [
 [[package]]
 name = "brain-fastvlm"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-captioner",
@@ -1090,7 +1090,7 @@ dependencies = [
 [[package]]
 name = "brain-fcbench"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-forecast",
 ]
@@ -1098,7 +1098,7 @@ dependencies = [
 [[package]]
 name = "brain-fincast"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-forecast",
@@ -1114,7 +1114,7 @@ dependencies = [
 [[package]]
 name = "brain-florence2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1134,7 +1134,7 @@ dependencies = [
 [[package]]
 name = "brain-flux1"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1156,7 +1156,7 @@ dependencies = [
 [[package]]
 name = "brain-flux2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "brain-capability",
@@ -1180,7 +1180,7 @@ dependencies = [
 [[package]]
 name = "brain-forecast"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-seed",
  "serde_json",
@@ -1189,7 +1189,7 @@ dependencies = [
 [[package]]
 name = "brain-gemma4"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -1203,7 +1203,7 @@ dependencies = [
 [[package]]
 name = "brain-gguf"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-arch",
  "brain-backend-cpu",
@@ -1216,7 +1216,7 @@ dependencies = [
 [[package]]
 name = "brain-glmdsa"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1233,7 +1233,7 @@ dependencies = [
 [[package]]
 name = "brain-gpt2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -1251,7 +1251,7 @@ dependencies = [
 [[package]]
 name = "brain-gpu-core"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-api",
  "brain-backend-cpu",
@@ -1269,12 +1269,12 @@ dependencies = [
 [[package]]
 name = "brain-hfsm"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 
 [[package]]
 name = "brain-horizon"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1294,7 +1294,7 @@ dependencies = [
 [[package]]
 name = "brain-imaging"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1308,7 +1308,7 @@ dependencies = [
 [[package]]
 name = "brain-imgpipe"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1322,7 +1322,7 @@ dependencies = [
 [[package]]
 name = "brain-januspro"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1341,7 +1341,7 @@ dependencies = [
 [[package]]
 name = "brain-kernels"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-api",
 ]
@@ -1349,7 +1349,7 @@ dependencies = [
 [[package]]
 name = "brain-kernels-cuda"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-api",
 ]
@@ -1357,7 +1357,7 @@ dependencies = [
 [[package]]
 name = "brain-kronos"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "brain-capability",
@@ -1377,7 +1377,7 @@ dependencies = [
 [[package]]
 name = "brain-lfm2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1396,7 +1396,7 @@ dependencies = [
 [[package]]
 name = "brain-llava"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-captioner",
@@ -1418,7 +1418,7 @@ dependencies = [
 [[package]]
 name = "brain-loader"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-arch",
  "brain-capability",
@@ -1434,7 +1434,7 @@ dependencies = [
 [[package]]
 name = "brain-lpips"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1450,7 +1450,7 @@ dependencies = [
 [[package]]
 name = "brain-ltxv"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1476,12 +1476,12 @@ dependencies = [
 [[package]]
 name = "brain-memauth"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 
 [[package]]
 name = "brain-mimi"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1499,7 +1499,7 @@ dependencies = [
 [[package]]
 name = "brain-minimaxh3"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1518,7 +1518,7 @@ dependencies = [
 [[package]]
 name = "brain-minimaxmusic3"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1538,7 +1538,7 @@ dependencies = [
 [[package]]
 name = "brain-model"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1556,7 +1556,7 @@ dependencies = [
 [[package]]
 name = "brain-modelref"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "serde",
 ]
@@ -1564,7 +1564,7 @@ dependencies = [
 [[package]]
 name = "brain-modelstore"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-arch",
  "brain-capability",
@@ -1579,7 +1579,7 @@ dependencies = [
 [[package]]
 name = "brain-modernbert"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -1595,7 +1595,7 @@ dependencies = [
 [[package]]
 name = "brain-moondream3"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1614,7 +1614,7 @@ dependencies = [
 [[package]]
 name = "brain-mvs"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-camera",
  "brain-gpu-core",
@@ -1627,7 +1627,7 @@ dependencies = [
 [[package]]
 name = "brain-nemotronasr"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1643,7 +1643,7 @@ dependencies = [
 [[package]]
 name = "brain-npu"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-api",
  "brain-checkpoint",
@@ -1677,7 +1677,7 @@ dependencies = [
 [[package]]
 name = "brain-onnx"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "prost",
 ]
@@ -1685,7 +1685,7 @@ dependencies = [
 [[package]]
 name = "brain-optim"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "brain-gpu-core",
@@ -1699,7 +1699,7 @@ dependencies = [
 [[package]]
 name = "brain-paramstore"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-gpu-core",
@@ -1712,7 +1712,7 @@ dependencies = [
 [[package]]
 name = "brain-perf"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "axum",
  "brain-apiserve",
@@ -1734,7 +1734,7 @@ dependencies = [
 [[package]]
 name = "brain-promote"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-data",
  "serde",
@@ -1746,7 +1746,7 @@ dependencies = [
 [[package]]
 name = "brain-pulid"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-arcface",
  "brain-bisenet",
@@ -1767,7 +1767,7 @@ dependencies = [
 [[package]]
 name = "brain-qwen3"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-arch",
  "brain-capability",
@@ -1792,7 +1792,7 @@ dependencies = [
 [[package]]
 name = "brain-qwen35"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1818,7 +1818,7 @@ dependencies = [
 [[package]]
 name = "brain-qwen35moe"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1841,7 +1841,7 @@ dependencies = [
 [[package]]
 name = "brain-qwen3asr"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1858,7 +1858,7 @@ dependencies = [
 [[package]]
 name = "brain-qwen3omnimoe"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1884,7 +1884,7 @@ dependencies = [
 [[package]]
 name = "brain-qwen3tts"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1908,7 +1908,7 @@ dependencies = [
 [[package]]
 name = "brain-qwen3vl"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-captioner",
@@ -1927,7 +1927,7 @@ dependencies = [
 [[package]]
 name = "brain-recon"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "brain-camera",
@@ -1943,7 +1943,7 @@ dependencies = [
 [[package]]
 name = "brain-residency"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-memauth",
@@ -1953,7 +1953,7 @@ dependencies = [
 [[package]]
 name = "brain-rl"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-atif",
  "brain-audit",
@@ -1961,6 +1961,7 @@ dependencies = [
  "brain-checkpoint",
  "brain-data",
  "brain-model",
+ "brain-modelstore",
  "brain-promote",
  "libc",
  "minijinja",
@@ -1972,7 +1973,7 @@ dependencies = [
 [[package]]
 name = "brain-rlcd"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-data",
 ]
@@ -1980,7 +1981,7 @@ dependencies = [
 [[package]]
 name = "brain-rrdbnet"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1995,7 +1996,7 @@ dependencies = [
 [[package]]
 name = "brain-runtime"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2012,7 +2013,7 @@ dependencies = [
 [[package]]
 name = "brain-s3dit"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2033,7 +2034,7 @@ dependencies = [
 [[package]]
 name = "brain-s3tokenizer"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -2045,7 +2046,7 @@ dependencies = [
 [[package]]
 name = "brain-sam1"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -2060,7 +2061,7 @@ dependencies = [
 [[package]]
 name = "brain-sam2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2078,7 +2079,7 @@ dependencies = [
 [[package]]
 name = "brain-scrfd"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-gpu-core",
@@ -2095,7 +2096,7 @@ dependencies = [
 [[package]]
 name = "brain-sdxlunet"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2114,12 +2115,12 @@ dependencies = [
 [[package]]
 name = "brain-seed"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 
 [[package]]
 name = "brain-sfm"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "brain-camera",
@@ -2129,7 +2130,7 @@ dependencies = [
 [[package]]
 name = "brain-shutdown"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "libc",
  "tokio",
@@ -2138,7 +2139,7 @@ dependencies = [
 [[package]]
 name = "brain-splat"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "brain-camera",
@@ -2152,7 +2153,7 @@ dependencies = [
 [[package]]
 name = "brain-supir"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2170,12 +2171,12 @@ dependencies = [
 [[package]]
 name = "brain-survival"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 
 [[package]]
 name = "brain-t5encoder"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2191,7 +2192,7 @@ dependencies = [
 [[package]]
 name = "brain-testutil"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-modelref",
@@ -2202,7 +2203,7 @@ dependencies = [
 [[package]]
 name = "brain-timesfm3"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2220,7 +2221,7 @@ dependencies = [
 [[package]]
 name = "brain-toyautoencoder"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -2236,7 +2237,7 @@ dependencies = [
 [[package]]
 name = "brain-toymoe"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -2252,7 +2253,7 @@ dependencies = [
 [[package]]
 name = "brain-vae"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-checkpoint",
  "brain-gpu-core",
@@ -2264,7 +2265,7 @@ dependencies = [
 [[package]]
 name = "brain-vision"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-gpu-core",
  "brain-model",
@@ -2275,7 +2276,7 @@ dependencies = [
 [[package]]
 name = "brain-vqgan"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2292,7 +2293,7 @@ dependencies = [
 [[package]]
 name = "brain-vulkan"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -2305,7 +2306,7 @@ dependencies = [
 [[package]]
 name = "brain-wan"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "brain-capability",
@@ -2326,12 +2327,12 @@ dependencies = [
 [[package]]
 name = "brain-weightset"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 
 [[package]]
 name = "brain-wgsl-cpu"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -2344,7 +2345,7 @@ dependencies = [
 [[package]]
 name = "brain-wgsl-cuda"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "naga",
 ]
@@ -2352,7 +2353,7 @@ dependencies = [
 [[package]]
 name = "brain-wm-core"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-gpu-core",
  "brain-kernels",
@@ -2361,7 +2362,7 @@ dependencies = [
 [[package]]
 name = "brain-worldmirror2"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2379,7 +2380,7 @@ dependencies = [
 [[package]]
 name = "brain-yolov8"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2399,7 +2400,7 @@ dependencies = [
 [[package]]
 name = "brain-zipdepth"
 version = "2.0.0"
-source = "git+https://github.com/swedishembedded/brain#dc50b7ccdc0fe295e62ce4b5dd1ec4aef37bb6a3"
+source = "git+https://github.com/swedishembedded/brain#58938c8ac8ab5570fa29cf85f1954677b71b45ac"
 dependencies = [
  "brain-backend-cpu",
  "brain-capability",
@@ -6181,7 +6182,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sven-audio"
 version = "1.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "base64 0.22.1",
  "thiserror 1.0.69",
@@ -6190,11 +6191,12 @@ dependencies = [
 [[package]]
 name = "sven-bootstrap"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
  "async-trait",
+ "atif",
  "futures",
  "futures-util",
  "serde",
@@ -6210,6 +6212,7 @@ dependencies = [
  "sven-mcp-client",
  "sven-model",
  "sven-model-drivers",
+ "sven-session-store",
  "sven-tool-api",
  "sven-tool-registry",
  "sven-tools-agent",
@@ -6231,7 +6234,7 @@ dependencies = [
 [[package]]
 name = "sven-chain"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "chrono",
  "serde",
@@ -6244,7 +6247,7 @@ dependencies = [
 [[package]]
 name = "sven-chunks"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "hex",
@@ -6258,7 +6261,7 @@ dependencies = [
 [[package]]
 name = "sven-config"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -6271,7 +6274,7 @@ dependencies = [
 [[package]]
 name = "sven-decision"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "async-trait",
  "hex",
@@ -6289,7 +6292,7 @@ dependencies = [
 [[package]]
 name = "sven-executors"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6317,7 +6320,7 @@ dependencies = [
 [[package]]
 name = "sven-harness-runtime"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -6333,7 +6336,7 @@ dependencies = [
 [[package]]
 name = "sven-harness-spec"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "serde",
  "serde_json",
@@ -6345,7 +6348,7 @@ dependencies = [
 [[package]]
 name = "sven-harness-transform"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "jsonschema",
  "serde_json",
@@ -6355,7 +6358,7 @@ dependencies = [
 [[package]]
 name = "sven-hsm"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "serde",
  "serde_json",
@@ -6368,7 +6371,7 @@ dependencies = [
 [[package]]
 name = "sven-image"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -6380,7 +6383,7 @@ dependencies = [
 [[package]]
 name = "sven-kernel"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -6393,7 +6396,7 @@ dependencies = [
 [[package]]
 name = "sven-machines"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "chrono",
  "serde",
@@ -6406,7 +6409,7 @@ dependencies = [
 [[package]]
 name = "sven-mcp-client"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6430,7 +6433,7 @@ dependencies = [
 [[package]]
 name = "sven-model"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6444,7 +6447,7 @@ dependencies = [
 [[package]]
 name = "sven-model-catalog"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -6456,7 +6459,7 @@ dependencies = [
 [[package]]
 name = "sven-model-drivers"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6483,7 +6486,7 @@ dependencies = [
 [[package]]
 name = "sven-model-mock"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6500,7 +6503,7 @@ dependencies = [
 [[package]]
 name = "sven-sdk"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "atif",
@@ -6531,7 +6534,7 @@ dependencies = [
 [[package]]
 name = "sven-sdk-macros"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6541,7 +6544,7 @@ dependencies = [
 [[package]]
 name = "sven-session-model"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "serde",
  "serde_json",
@@ -6555,7 +6558,7 @@ dependencies = [
 [[package]]
 name = "sven-session-store"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "atif",
@@ -6566,6 +6569,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sven-chain",
+ "sven-hsm",
  "sven-model",
  "sven-session-model",
  "sven-vocab",
@@ -6577,7 +6582,7 @@ dependencies = [
 [[package]]
 name = "sven-tool-api"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "async-trait",
  "atif",
@@ -6591,7 +6596,7 @@ dependencies = [
 [[package]]
 name = "sven-tool-registry"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "async-trait",
  "regex",
@@ -6606,7 +6611,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-agent"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6627,7 +6632,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-android"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "async-trait",
  "hex",
@@ -6645,7 +6650,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-ctx"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6667,7 +6672,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-exec"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "async-trait",
  "libc",
@@ -6682,7 +6687,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-fs"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6708,7 +6713,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-gdb"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6728,7 +6733,7 @@ dependencies = [
 [[package]]
 name = "sven-tools-web"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6749,7 +6754,7 @@ dependencies = [
 [[package]]
 name = "sven-turn"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6772,7 +6777,7 @@ dependencies = [
 [[package]]
 name = "sven-vocab"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "clap",
  "hex",
@@ -6784,7 +6789,7 @@ dependencies = [
 [[package]]
 name = "sven-workspace"
 version = "3.0.0"
-source = "git+https://github.com/swedishembedded/sven#02adbda7974294561c109d9f51c0a0a07ed846bc"
+source = "git+https://github.com/swedishembedded/sven#47bbe7fd0f28f5da0ecfe7c8c7fc99597d8d99ed"
 dependencies = [
  "anyhow",
  "chrono",
