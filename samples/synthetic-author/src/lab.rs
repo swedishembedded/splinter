@@ -22,7 +22,7 @@ use crate::cache::{Cache, StoredArticle};
 use crate::dataset::records_for;
 use crate::exam::{draw, items, Item, Spec, Trained, Version};
 use crate::gates::same_ways;
-use crate::manifest::author_seed;
+use crate::manifest::author;
 use crate::mine::{mine, Verified};
 use crate::persona::Persona;
 use crate::prompts::SYSTEM;
@@ -359,11 +359,11 @@ pub fn exam_items_of(
 /// they are no longer the ones the arm was asked: a baseline scored on other
 /// items would say nothing about the arms.
 pub fn asked_items(cache: &Cache, record: &ArmRecord) -> anyhow::Result<Vec<Item>> {
-    let seed = author_seed(cache.dir(), None)?;
+    let author = author(cache.dir(), None)?;
     let items = exam_items_of(
         cache,
-        &Persona::generate(seed),
-        seed,
+        &author.persona,
+        author.seed,
         record.articles,
         record.per_cell,
         record.exam,

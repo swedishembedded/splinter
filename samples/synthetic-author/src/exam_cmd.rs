@@ -26,7 +26,7 @@ use crate::binding::{
 use crate::cache::Cache;
 use crate::exam::Version;
 use crate::lab::{asked_items, exam_items_of, run_arm, Arm, ExamRun};
-use crate::manifest::author_seed;
+use crate::manifest::{author, Author, PersonaSource};
 use crate::motives;
 use crate::persona::Persona;
 use crate::report;
@@ -104,7 +104,8 @@ pub struct ReportArgs {
 /// would have decided otherwise.
 #[derive(Args)]
 pub struct CrossArgs {
-    /// Directory holding one examination cache per author, `author-<seed>`.
+    /// Directory holding one examination cache per author, `author-<seed>`,
+    /// and for an opposite trained on its own corpus `opposite-of-<seed>`.
     #[arg(long)]
     exams: PathBuf,
     /// The seeds of the authors, comma separated.
@@ -142,8 +143,7 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
         (Arm::Tuned, Some(path)) => Some(path.as_path()),
         (_, _) => None,
     };
-    let seed = author_seed(&args.cache, args.seed)?;
-    let persona = Persona::generate(seed);
+    let Author { persona, seed, .. } = author(&args.cache, args.seed)?;
     let cache = Cache::open(args.cache.clone())?;
     let all = exam_items_of(
         &cache,
@@ -290,7 +290,7 @@ pub fn report(args: &ReportArgs) -> anyhow::Result<()> {
     ];
     let mut text = report::render(&view, &compare, &missing);
     if let Some(record) = records.first() {
-        let persona = Persona::generate(author_seed(cache.dir(), None)?);
+        let persona = author(cache.dir(), None)?.persona;
         let items = asked_items(&cache, record)?;
         let motives: Vec<(&str, _)> = loaded
             .iter()
@@ -363,42 +363,84 @@ pub fn cross(args: &CrossArgs) -> anyhow::Result<()> {
     );
     println!("|---|---|---|---|---|---|");
     for &seed in &args.seeds {
-        let dir = args.exams.join(format!("author-{seed}"));
-        author_seed(&dir, Some(seed))?;
-        let persona = Persona::generate(seed);
-        let exam_dir = dir.join("exam");
-        let path = outcomes_path_in(&exam_dir, Arm::Tuned);
-        let outcomes = read_outcomes(&path)?;
-        let record = recorded(&exam_dir, Arm::Tuned.name())?.ok_or_else(|| {
-            anyhow::anyhow!(
-                "{}: no manifest for arm tuned; outcomes written before manifests are taken over by `exam --adopt`",
-                path.display()
-            )
-        })?;
-        verify_outcomes(&record, &outcomes, &path)?;
-        let items = exam_items_of(
-            &Cache::open(dir.clone())?,
-            &persona,
+        let rivals = |trained: &Persona| {
+            let mut rivals: Vec<Persona> = args
+                .seeds
+                .iter()
+                .filter(|&&s| s != seed)
+                .map(|&s| Persona::generate(s))
+                .collect();
+            rivals.push(trained.opposite());
+            rivals
+        };
+        cross_rows(
+            args,
+            &args.exams.join(format!("author-{seed}")),
             seed,
-            args.articles,
-            args.per_cell,
-            record.exam,
+            PersonaSource::Drawn,
+            rivals,
         )?;
-        verify_items(&record, &items, &outcomes, &path)?;
-        let mut rivals: Vec<Persona> = args
-            .seeds
-            .iter()
-            .filter(|&&s| s != seed)
-            .map(|&s| Persona::generate(s))
-            .collect();
-        rivals.push(persona.opposite());
-        for rival in &rivals {
-            let d = report::divergence(&items, &outcomes, rival);
-            println!(
-                "| {} | {} | {} | {} | {} | {} |",
-                persona.name, rival.name, d.differing, d.own, d.rival, d.neither
-            );
+        // The opposite, where it was trained, is set beside the author it
+        // opposes: each should take its own author's decision more often.
+        let opposite_dir = args.exams.join(format!("opposite-of-{seed}"));
+        if opposite_dir.exists() {
+            cross_rows(
+                args,
+                &opposite_dir,
+                seed,
+                PersonaSource::OppositeOf { seed },
+                |_| vec![Persona::generate(seed)],
+            )?;
         }
+    }
+    Ok(())
+}
+
+/// Prints the rows of `cross` for the tuned arm examined in `dir`, which must
+/// have been written for the `source` kind of author of world `seed`, against
+/// the rivals `rivals` makes of the author it was trained on.
+fn cross_rows(
+    args: &CrossArgs,
+    dir: &std::path::Path,
+    seed: u64,
+    source: PersonaSource,
+    rivals: impl FnOnce(&Persona) -> Vec<Persona>,
+) -> anyhow::Result<()> {
+    let Author {
+        persona,
+        persona_source,
+        ..
+    } = author(dir, Some(seed))?;
+    anyhow::ensure!(
+        persona_source == source,
+        "{}: written for {persona_source}, not {source}",
+        dir.display()
+    );
+    let exam_dir = dir.join("exam");
+    let path = outcomes_path_in(&exam_dir, Arm::Tuned);
+    let outcomes = read_outcomes(&path)?;
+    let record = recorded(&exam_dir, Arm::Tuned.name())?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "{}: no manifest for arm tuned; outcomes written before manifests are taken over by `exam --adopt`",
+            path.display()
+        )
+    })?;
+    verify_outcomes(&record, &outcomes, &path)?;
+    let items = exam_items_of(
+        &Cache::open(dir.to_path_buf())?,
+        &persona,
+        seed,
+        args.articles,
+        args.per_cell,
+        record.exam,
+    )?;
+    verify_items(&record, &items, &outcomes, &path)?;
+    for rival in &rivals(&persona) {
+        let d = report::divergence(&items, &outcomes, rival);
+        println!(
+            "| {} | {} | {} | {} | {} | {} |",
+            persona.name, rival.name, d.differing, d.own, d.rival, d.neither
+        );
     }
     Ok(())
 }

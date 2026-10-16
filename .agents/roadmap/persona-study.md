@@ -263,6 +263,17 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-17 The opposite author, trained on its own corpus
 
+- **Status.** The corpus side is done for `synthetic-author`; no model has been
+  trained on an opposite corpus. `corpus --opposite-of SEED` writes the
+  opposite's corpus in the world of SEED; the manifest's `persona_source` says
+  so and names SEED, `Persona::opposite_of` applies the checkability rule and
+  refuses with the reason, and every command reads the opposite back from the
+  manifest. `cross` lists a trained opposite (`opposite-of-<seed>`) against the
+  author it opposes beside the existing rows. The paired test of the two
+  adapters on identical situations is not built: each adapter is examined on
+  the situations of its own author, so the pairing needs an examination drawn
+  for both.
+
 - **Problem.** The divergence count compares a trained adapter with the
   opposite author's oracle only; no model is trained on the opposite author.
 - **Evidence.** `samples/synthetic-author/src/persona.rs:292-301`

@@ -16,7 +16,9 @@
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
-use synthetic_author::manifest::{begin_or_continue, CorpusManifest, Limits, Recipe, SeedSource};
+use synthetic_author::manifest::{
+    begin_or_continue, CorpusManifest, Limits, PersonaSource, Recipe, SeedSource,
+};
 
 fn run(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_synthetic-author"))
@@ -50,6 +52,7 @@ fn corpus_of(author_seed: u64) -> PathBuf {
         seed_source: SeedSource::Drawn,
         recipe: Recipe {
             author_seed,
+            persona_source: PersonaSource::Drawn,
             writer: "writer".into(),
             reader: None,
             decoding: "greedy".into(),

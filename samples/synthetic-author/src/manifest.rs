@@ -21,6 +21,8 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::seed::{resolve, SeedError};
 
+use crate::persona::Persona;
+
 /// The file in a corpus directory that records how the corpus was made.
 pub const MANIFEST: &str = "manifest.json";
 /// The file that names the author a corpus is written for. Corpora written
@@ -45,12 +47,50 @@ pub enum SeedSource {
     Drawn,
 }
 
+/// Whose beliefs a corpus is written for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum PersonaSource {
+    /// The author the author seed draws.
+    #[default]
+    Drawn,
+    /// The author who holds every belief of the one `seed` draws the other
+    /// way, in the world of that seed.
+    OppositeOf {
+        /// The seed of the author this one is the opposite of; it is also the
+        /// corpus's author seed, which names the world.
+        seed: u64,
+    },
+}
+
+impl PersonaSource {
+    // By reference because serde's `skip_serializing_if` hands it one.
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn is_drawn(&self) -> bool {
+        *self == Self::Drawn
+    }
+}
+
+impl std::fmt::Display for PersonaSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Drawn => write!(f, "an author drawn from the seed"),
+            Self::OppositeOf { seed } => write!(f, "the opposite of the author of seed {seed}"),
+        }
+    }
+}
+
 /// The settings that decide what a corpus is. A corpus is only ever continued
 /// with the same ones.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Recipe {
-    /// The author's seed.
+    /// The seed that names the author's world: the situations, the
+    /// combinations withheld and the examination. For the opposite of an
+    /// author it is that author's seed.
     pub author_seed: u64,
+    /// Whose beliefs the corpus is written for.
+    #[serde(default, skip_serializing_if = "PersonaSource::is_drawn")]
+    pub persona_source: PersonaSource,
     /// The model that writes, as a model reference.
     pub writer: String,
     /// The model that reads each article, if there is one.
@@ -180,18 +220,118 @@ pub fn author_seed(dir: &Path, given: Option<u64>) -> anyhow::Result<u64> {
     }
 }
 
-/// The author seed for a command that shows an author: the one the corpus in
-/// `cache` records when there is a corpus (which `given` must equal when
-/// passed); otherwise `given`, and otherwise a fresh seed, printed so passing
-/// it back reproduces the author.
+/// An author and the world it is set in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Author {
+    /// The beliefs.
+    pub persona: Persona,
+    /// The seed that names the world: what the situations, the withheld
+    /// combinations and the examination are drawn from.
+    pub seed: u64,
+    /// Whose beliefs they are.
+    pub persona_source: PersonaSource,
+    /// Whether the seed was given or drawn.
+    pub seed_source: SeedSource,
+}
+
+/// The persona a world seed and a source name.
+fn persona_for(seed: u64, source: PersonaSource) -> anyhow::Result<Persona> {
+    match source {
+        PersonaSource::Drawn => Ok(Persona::generate(seed)),
+        PersonaSource::OppositeOf { seed: of } => {
+            anyhow::ensure!(
+                of == seed,
+                "the corpus is the opposite of the author of seed {of} but its author seed is {seed}"
+            );
+            Persona::opposite_of(of).with_context(|| {
+                format!("the opposite of the author of seed {of} cannot be checked against")
+            })
+        }
+    }
+}
+
+/// The author the corpus in `dir` was written for, read back from it: the one
+/// its manifest names, which `given` must agree with when passed. A corpus
+/// from before manifests is a drawn author.
 ///
 /// # Errors
-/// As [`author_seed`] when `cache` is given.
-pub fn author_seed_or_draw(cache: Option<&Path>, given: Option<u64>) -> anyhow::Result<u64> {
-    match cache {
-        Some(dir) => author_seed(dir, given),
-        None => Ok(resolve("seed", given)),
+/// As [`author_seed`], or the recorded author cannot be had.
+pub fn author(dir: &Path, given: Option<u64>) -> anyhow::Result<Author> {
+    let seed = author_seed(dir, given)?;
+    let (source, seed_source) = match read(dir)? {
+        Some(m) => (m.recipe.persona_source, m.seed_source),
+        None => (PersonaSource::Drawn, SeedSource::Given),
+    };
+    Ok(Author {
+        persona: persona_for(seed, source)?,
+        seed,
+        persona_source: source,
+        seed_source,
+    })
+}
+
+/// The author for a command that shows one: the corpus's when there is a
+/// corpus in `cache` (which `given` must agree with when passed); otherwise
+/// the one `given` draws, and otherwise one from a fresh seed, printed so
+/// passing it back reproduces the author.
+///
+/// # Errors
+/// As [`author`] when `cache` is given.
+pub fn author_or_draw(cache: Option<&Path>, given: Option<u64>) -> anyhow::Result<Author> {
+    if let Some(dir) = cache {
+        return author(dir, given);
     }
+    let seed = resolve("seed", given);
+    Ok(Author {
+        persona: Persona::generate(seed),
+        seed,
+        persona_source: PersonaSource::Drawn,
+        seed_source: if given.is_some() {
+            SeedSource::Given
+        } else {
+            SeedSource::Drawn
+        },
+    })
+}
+
+/// The author for beginning or continuing the corpus in `dir`, from the seed
+/// that draws it or the seed of the author it is the opposite of (not both).
+/// A corpus is continued as the kind of author it was begun for.
+///
+/// # Errors
+/// Both a seed and an author to oppose are named; they contradict what the
+/// directory records; or the opposite cannot be checked against (the reason is
+/// named).
+pub fn corpus_author(
+    dir: &Path,
+    seed: Option<u64>,
+    opposite_of: Option<u64>,
+) -> anyhow::Result<Author> {
+    anyhow::ensure!(
+        seed.is_none() || opposite_of.is_none(),
+        "--seed and --opposite-of both name the author: give one"
+    );
+    let wanted = opposite_of.map(|seed| PersonaSource::OppositeOf { seed });
+    let kept = match read(dir)? {
+        Some(m) => Some(m.recipe.persona_source),
+        None => recorded_author(dir)?.map(|_| PersonaSource::Drawn),
+    };
+    if let (Some(kept), Some(wanted)) = (kept, wanted) {
+        anyhow::ensure!(
+            kept == wanted,
+            "{}: the corpus was begun for {kept} and this run asks for {wanted} (persona source); \
+             a corpus is only continued with the settings it was begun with, use another cache directory",
+            dir.display(),
+        );
+    }
+    let (seed, seed_source) = corpus_author_seed(dir, seed.or(opposite_of))?;
+    let persona_source = wanted.or(kept).unwrap_or_default();
+    Ok(Author {
+        persona: persona_for(seed, persona_source)?,
+        seed,
+        persona_source,
+        seed_source,
+    })
 }
 
 /// The author seed for beginning or continuing the corpus in `dir`: as
@@ -266,6 +406,10 @@ impl Recipe {
             }
         };
         note(self.author_seed != other.author_seed, "author seed");
+        note(
+            self.persona_source != other.persona_source,
+            "persona source",
+        );
         note(self.writer != other.writer, "writer");
         note(self.reader != other.reader, "reader");
         note(self.decoding != other.decoding, "decoding");

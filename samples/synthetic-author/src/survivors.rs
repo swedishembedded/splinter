@@ -22,6 +22,7 @@ use serde::Serialize;
 
 use crate::cache::{Cache, Kind, StoredArticle};
 use crate::episode::Episode;
+use crate::manifest::Author;
 use crate::persona::Persona;
 use crate::scenario::Features;
 use crate::writer::plan;
@@ -176,7 +177,7 @@ pub fn survivors(
     Ok(out)
 }
 
-/// The report for the corpus in `cache`, planned for `persona` as `articles`
+/// The report for the corpus in `cache`, planned for `author` as `articles`
 /// articles of `per_article` episodes. A corpus that turned nothing away has
 /// no log of attempts, which reads as an empty one.
 ///
@@ -184,11 +185,12 @@ pub fn survivors(
 /// The articles or the log cannot be read, or the log is malformed.
 pub fn of_corpus(
     cache: &Cache,
-    persona: &Persona,
+    author: &Author,
     articles: usize,
     per_article: usize,
 ) -> anyhow::Result<Survivors> {
-    let planned = plan(persona, persona.seed, articles, per_article);
+    let persona = &author.persona;
+    let planned = plan(persona, author.seed, articles, per_article);
     let path = cache.dir().join("rejected.jsonl");
     let log = match std::fs::read_to_string(&path) {
         Ok(text) => text,

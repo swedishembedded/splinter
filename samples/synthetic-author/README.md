@@ -46,8 +46,10 @@ the author's name (`named`), given the beliefs in a prompt (`principles`) and
 given the paragraphs of the corpus that share the most with the situation
 (`retrieval`); and, where an author who holds the opposite beliefs would
 decide otherwise, whose decision it took (`cross`). The opposite author is an
-oracle only: no model is trained on its corpus, and the base is not given the
-whole corpus in its context.
+oracle for every author's `cross` rows, and `corpus --opposite-of SEED` writes
+a corpus for it that a model can be trained on (see below). The base is not
+given the whole corpus in its context: the retrieval arm hands it the
+paragraphs that share the most with the situation, and nothing longer exists.
 
 ## Seeds and manifests
 
@@ -179,3 +181,25 @@ accuracy table: how many name the fact the deciding belief turns on (a fixed
 list of word stems per fact, so a paraphrase can be missed), how many repeat a
 phrase of the brief, and how many different reasons there are. An arm that gave
 no reason is `not measured`.
+
+## The opposite author
+
+`corpus --opposite-of SEED` writes the corpus of the author who holds every
+belief of the author SEED draws the other way, in the same world (the same
+situations and the same withheld combinations). The manifest records
+`persona_source: opposite-of` and names SEED, which is also the corpus's author
+seed, so every later command given the directory (`recheck`, `mine`, `dataset`,
+`exam`, `items`, `audit`, `survivors`, and `persona`, `plan` and `show` with
+`--cache`) reads the opposite back as that author. The opposite must pass the
+rule any drawn author passes (every belief changes some decision, and the
+beliefs settle most situations); one that does not is refused with the belief
+or the share that fails, and nothing is written. A corpus is only continued as
+the kind of author it was begun for.
+
+`cross --exams DIR` reads `DIR/author-<seed>` for each author and, where it
+exists, `DIR/opposite-of-<seed>` for the opposite trained on its own corpus, and
+lists for each trained model whose decision it took on the situations where
+the two authors are determined and decide differently. The two adapters are
+examined on the situations of their own authors, so the rows set them side by
+side; a paired test between the two on identical situations needs an
+examination both are asked, which does not exist.

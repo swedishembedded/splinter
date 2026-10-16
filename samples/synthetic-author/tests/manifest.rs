@@ -36,8 +36,8 @@ use synthetic_author::lab::{
     Mined, MinedResult,
 };
 use synthetic_author::manifest::{
-    author_seed, begin_or_continue, corpus_author_seed, CorpusManifest, Limits, Recipe, SeedSource,
-    SEED_DERIVATION,
+    author_seed, begin_or_continue, corpus_author_seed, CorpusManifest, Limits, PersonaSource,
+    Recipe, SeedSource, SEED_DERIVATION,
 };
 use synthetic_author::persona::Persona;
 use synthetic_author::training::TrainArgs;
@@ -57,6 +57,7 @@ fn recipe(author_seed: u64, writer: &str) -> CorpusManifest {
         seed_source: SeedSource::Given,
         recipe: Recipe {
             author_seed,
+            persona_source: PersonaSource::Drawn,
             writer: writer.into(),
             reader: Some("reader-model".into()),
             decoding: "sampled".into(),

@@ -20,11 +20,10 @@ use splinter_sdk::{Config, Splinter};
 
 use crate::cache::Cache;
 use crate::manifest::{
-    begin_or_continue, code_revision, corpus_author_seed, run_seed as run_seed_of, CorpusManifest,
-    Limits, Recipe, SEED_DERIVATION,
+    begin_or_continue, code_revision, corpus_author, run_seed as run_seed_of, Author,
+    CorpusManifest, Limits, Recipe, SEED_DERIVATION,
 };
 use crate::models::{is_remote, Source, WRITER_DECODING};
-use crate::persona::Persona;
 use crate::writer::{
     write_corpus_read, Models, Options, DEFAULT_TRANSPORT_BACKOFF_SECS, DEFAULT_TRANSPORT_RETRIES,
 };
@@ -34,8 +33,13 @@ use crate::writer::{
 pub struct CorpusArgs {
     /// The seed the author is drawn from; a fresh one is drawn and printed
     /// when none is given and the directory records no author.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "opposite_of")]
     seed: Option<u64>,
+    /// Write the corpus of the author who holds every belief of the one this
+    /// seed draws the other way, set in the same world. Refused, with the
+    /// reason, when that author cannot be checked against.
+    #[arg(long)]
+    opposite_of: Option<u64>,
     /// The seed the writer's and reader's per-request seeds are derived from;
     /// drawn and printed when absent. Read back from the manifest when the
     /// corpus is continued.
@@ -91,11 +95,15 @@ pub struct CorpusArgs {
 /// The author seed or the recipe contradicts what the directory records, the
 /// runtime cannot start, or the corpus cannot be written.
 pub fn run(args: CorpusArgs) -> anyhow::Result<()> {
-    let (author_seed, seed_source) = corpus_author_seed(&args.cache, args.seed)?;
+    let Author {
+        persona,
+        seed: author_seed,
+        persona_source,
+        seed_source,
+    } = corpus_author(&args.cache, args.seed, args.opposite_of)?;
     let any_local = !is_remote(&args.writer)?
         || args.reader.as_deref().map(is_remote).transpose()? == Some(false);
     let run_seed = run_seed_of(&args.cache, args.run_seed, any_local)?;
-    let persona = Persona::generate(author_seed);
     let cache = Cache::open(args.cache.clone())?;
     let mut config = Config::from_env();
     config.state_root = StateRoot::new(cache.dir().join("state"));
@@ -117,6 +125,7 @@ pub fn run(args: CorpusArgs) -> anyhow::Result<()> {
             seed_source,
             recipe: Recipe {
                 author_seed,
+                persona_source,
                 writer: args.writer.clone(),
                 reader: args.reader.clone(),
                 decoding: WRITER_DECODING.to_string(),

@@ -27,6 +27,51 @@ const MAX_DRAWS: u64 = 256;
 /// What separates an author from the one holding the opposite beliefs.
 const OPPOSITE_SALT: u64 = 0xA5A5_5A5A_A5A5_5A5A;
 
+/// Why an author cannot be checked against.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Uncheckable {
+    /// The beliefs leave too many situations open.
+    Settles {
+        /// Situations the beliefs settle.
+        settled: usize,
+        /// Situations looked at.
+        of: usize,
+    },
+    /// A belief changes no decision, so no text could show it.
+    Idle {
+        /// The belief.
+        belief: Belief,
+    },
+}
+
+impl std::fmt::Display for Uncheckable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Settles { settled, of } => write!(
+                f,
+                "its beliefs settle {settled} of {of} reference situations and at least {MIN_DETERMINED_PERCENT} percent are needed"
+            ),
+            Self::Idle { belief } => write!(
+                f,
+                "the belief \"{}\" changes no decision, so no text could show it",
+                belief.statement()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for Uncheckable {}
+
+/// The situations an author is checked against: the reference ones that the
+/// corpus of the world `seed` can hold, since a belief that decides nothing
+/// there cannot be learned from the corpus.
+fn reference_pool(seed: u64) -> Vec<Scenario> {
+    scenario_pool(REFERENCE_SEED, REFERENCE_SITUATIONS)
+        .into_iter()
+        .filter(|s| !held_out_combo(seed, s))
+        .collect()
+}
+
 /// What a belief is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -263,12 +308,7 @@ impl Persona {
     /// changes some decision and the beliefs settle most situations.
     #[must_use]
     pub fn generate(seed: u64) -> Self {
-        // Only the combinations an author's corpus can hold count: a belief
-        // that decides nothing there cannot be learned from the corpus.
-        let pool: Vec<_> = scenario_pool(REFERENCE_SEED, REFERENCE_SITUATIONS)
-            .into_iter()
-            .filter(|s| !held_out_combo(seed, s))
-            .collect();
+        let pool = reference_pool(seed);
         let mut rng = SplitMix64::new(seed);
         let mut draw = Self::draw(seed, &mut rng);
         for _ in 1..MAX_DRAWS {
@@ -278,6 +318,18 @@ impl Persona {
             draw = Self::draw(seed, &mut rng);
         }
         draw
+    }
+
+    /// The author who holds every belief of the one `seed` draws the other
+    /// way, set in the same world, if it can be checked against as any author
+    /// can: the rule that makes a drawn author usable applies to it too.
+    ///
+    /// # Errors
+    /// The opposite fails the rule, with the reason.
+    pub fn opposite_of(seed: u64) -> Result<Self, Uncheckable> {
+        let opposite = Self::generate(seed).opposite();
+        opposite.checkability(&reference_pool(seed))?;
+        Ok(opposite)
     }
 
     fn draw(seed: u64, rng: &mut SplitMix64) -> Self {
@@ -301,18 +353,37 @@ impl Persona {
         }
     }
 
-    /// Whether every belief changes some decision and the beliefs settle
-    /// most of `pool`.
     fn is_checkable(&self, pool: &[Scenario]) -> bool {
+        self.checkability(pool).is_ok()
+    }
+
+    /// Whether every belief changes some decision and the beliefs settle
+    /// most of `pool`: an author for whom either fails cannot be checked
+    /// against, because a belief that decides nothing cannot be learned from
+    /// the texts and an author whose beliefs leave most situations open has no
+    /// decisions to grade.
+    ///
+    /// # Errors
+    /// The rule it fails, with the belief or the share that fails it.
+    pub fn checkability(&self, pool: &[Scenario]) -> Result<(), Uncheckable> {
         let settled = pool.iter().filter(|s| self.decide(s).determined).count();
-        settled * 100 >= pool.len() * MIN_DETERMINED_PERCENT
-            && (0..self.beliefs.len()).all(|i| {
-                let flipped = self.with_belief_flipped(i);
-                pool.iter().any(|s| {
-                    let (a, b) = (self.decide(s), flipped.decide(s));
-                    a.determined && b.determined && a.choice != b.choice
-                })
-            })
+        if settled * 100 < pool.len() * MIN_DETERMINED_PERCENT {
+            return Err(Uncheckable::Settles {
+                settled,
+                of: pool.len(),
+            });
+        }
+        for (i, belief) in self.beliefs.iter().enumerate() {
+            let flipped = self.with_belief_flipped(i);
+            let decides = pool.iter().any(|s| {
+                let (a, b) = (self.decide(s), flipped.decide(s));
+                a.determined && b.determined && a.choice != b.choice
+            });
+            if !decides {
+                return Err(Uncheckable::Idle { belief: *belief });
+            }
+        }
+        Ok(())
     }
 
     /// What this author decides in `scenario`.

@@ -22,9 +22,10 @@ use splinter_sdk::{Config, Splinter};
 use synthetic_author::cache::Cache;
 use synthetic_author::corpus_cmd::CorpusArgs;
 use synthetic_author::exam_cmd::{CrossArgs, ExamArgs, ReportArgs};
-use synthetic_author::manifest::{author_seed, author_seed_or_draw, begin_or_continue_mining};
+use synthetic_author::manifest::{
+    author, author_or_draw, begin_or_continue_mining, Author, PersonaSource,
+};
 use synthetic_author::models::{is_remote, Source};
-use synthetic_author::persona::Persona;
 use synthetic_author::scenario::{scenario_pool, TOPICS};
 use synthetic_author::training::TrainArgs;
 use synthetic_author::writer::plan;
@@ -202,9 +203,21 @@ enum Command {
 fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Persona { seed, cache, show } => {
-            let seed = author_seed_or_draw(cache.as_deref(), seed)?;
-            let persona = Persona::generate(seed);
-            println!("{} (seed {seed})", persona.name);
+            let Author {
+                persona,
+                seed,
+                persona_source,
+                ..
+            } = author_or_draw(cache.as_deref(), seed)?;
+            match persona_source {
+                PersonaSource::Drawn => println!("{} (seed {seed})", persona.name),
+                PersonaSource::OppositeOf { .. } => {
+                    println!(
+                        "{} (the opposite of the author of seed {seed})",
+                        persona.name
+                    );
+                }
+            }
             for (rank, belief) in persona.beliefs.iter().enumerate() {
                 println!("  {}. {}", rank + 1, belief.statement());
             }
@@ -231,8 +244,7 @@ fn main() -> anyhow::Result<()> {
             articles,
             episodes_per_article,
         } => {
-            let seed = author_seed_or_draw(cache.as_deref(), seed)?;
-            let persona = Persona::generate(seed);
+            let Author { persona, seed, .. } = author_or_draw(cache.as_deref(), seed)?;
             for (index, (topic, episodes)) in plan(&persona, seed, articles, episodes_per_article)
                 .iter()
                 .enumerate()
@@ -258,8 +270,7 @@ fn main() -> anyhow::Result<()> {
             episodes_per_article,
             min_words,
         } => {
-            let seed = author_seed(&cache, seed)?;
-            let persona = Persona::generate(seed);
+            let Author { persona, seed, .. } = author(&cache, seed)?;
             let planned = plan(&persona, seed, articles, episodes_per_article);
             let text = std::fs::read_to_string(cache.join("rejected.jsonl"))
                 .context("reading rejected.jsonl")?;
@@ -286,11 +297,11 @@ fn main() -> anyhow::Result<()> {
             articles,
             episodes_per_article,
         } => {
-            let persona = Persona::generate(author_seed(&cache, seed)?);
+            let author = author(&cache, seed)?;
             let cache = Cache::open(cache)?;
             let report = synthetic_author::survivors::of_corpus(
                 &cache,
-                &persona,
+                &author,
                 articles,
                 episodes_per_article,
             )?;
@@ -326,7 +337,7 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Dataset { seed, cache } => {
-            let seed = author_seed(&cache, seed)?;
+            let seed = author(&cache, seed)?.seed;
             let cache = Cache::open(cache)?;
             let out = cache.dir().join("dataset").join("train.jsonl");
             let summary = synthetic_author::lab::build_dataset(&cache, seed, &out)?;
@@ -343,8 +354,7 @@ fn main() -> anyhow::Result<()> {
             articles,
             min_words,
         } => {
-            let seed = author_seed_or_draw(cache.as_deref(), seed)?;
-            let persona = Persona::generate(seed);
+            let Author { persona, seed, .. } = author_or_draw(cache.as_deref(), seed)?;
             let planned = plan(&persona, seed, articles, 3);
             let (topic, episodes) = planned.get(article).with_context(|| {
                 format!("article {article} is not among the {articles} planned")
@@ -364,8 +374,7 @@ fn main() -> anyhow::Result<()> {
             cache,
             exam,
         } => {
-            let seed = author_seed_or_draw(cache.as_deref(), seed)?;
-            let persona = Persona::generate(seed);
+            let Author { persona, seed, .. } = author_or_draw(cache.as_deref(), seed)?;
             let cache = cache.map(Cache::open).transpose()?;
             let notes = cache
                 .as_ref()
@@ -399,8 +408,7 @@ fn main() -> anyhow::Result<()> {
             cache,
             articles,
         } => {
-            let seed = author_seed(&cache, seed)?;
-            let persona = Persona::generate(seed);
+            let Author { persona, seed, .. } = author(&cache, seed)?;
             let cache = Cache::open(cache)?;
             let mined = synthetic_author::lab::read_mined(&cache)?;
             let found = synthetic_author::lab::audit(&mined, &persona, seed, articles);
