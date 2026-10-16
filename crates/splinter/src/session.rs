@@ -37,6 +37,7 @@ use splinter_sdk::solving::solve_set;
 use splinter_sdk::sources::{self, SourceTarget};
 use splinter_sdk::state;
 use splinter_sdk::status::status;
+use splinter_sdk::tasks::pick::{pick, Quota};
 use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
 use splinter_sdk::train::{train_recorded, Rehearse, TrainRequest, Tuning};
 use splinter_sdk::variants;
@@ -396,6 +397,32 @@ impl Session {
                     canaries::make(ctx, &set, Some(count))
                 })?;
                 emit(json, &made);
+            }
+            Command::Tasks(TasksCommand::Pick {
+                task_sets,
+                family_share,
+                per_family,
+                seed,
+            }) => {
+                let sets = task_sets
+                    .iter()
+                    .map(|id| resolve_task_set(ctx, id))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let quota = match (family_share, per_family) {
+                    (Some(share), _) => Quota::FamilyShare(share),
+                    (None, Some(cap)) => Quota::PerFamily(cap),
+                    (None, None) => unreachable!("clap requires one of the two quotas"),
+                };
+                let arguments = json!({
+                    "task_sets": sets,
+                    "family_share": family_share,
+                    "per_family": per_family,
+                    "seed": seed,
+                });
+                let picked = record(ctx, "tasks pick", &arguments, |_| {
+                    pick(ctx, &sets, quota, seed)
+                })?;
+                emit(json, &picked);
             }
             Command::Tasks(TasksCommand::List) => emit(json, &tasks::list(ctx)?),
             Command::Tasks(TasksCommand::Show { id }) => emit(json, &tasks::show(ctx, &id)?),

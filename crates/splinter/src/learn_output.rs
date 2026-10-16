@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 
 use splinter_sdk::canaries::CanariesMade;
 use splinter_sdk::learn::{LearnPlan, LearnReport, Learned};
+use splinter_sdk::tasks::pick::Picked;
 use splinter_sdk::variants::VariantsGenerated;
 
 use crate::output::{source_line, tally, word, Report};
@@ -336,6 +337,20 @@ impl Report for CanariesMade {
             let _ = writeln!(out, "  left out: {}", tally(&self.skipped));
         }
         out
+    }
+}
+
+impl Report for Picked {
+    fn human(&self) -> String {
+        format!(
+            "picked  {}  {} task(s) in {} family(ies)\nrest    {}  {} task(s) in {} family(ies)\n",
+            self.picked,
+            self.picked_tasks,
+            self.picked_families,
+            self.rest,
+            self.rest_tasks,
+            self.rest_families,
+        )
     }
 }
 

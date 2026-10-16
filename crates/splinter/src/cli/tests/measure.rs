@@ -37,6 +37,44 @@ fn the_release_gate_takes_its_statistical_settings_and_canaries() {
         Command::Tasks(TasksCommand::Canaries { count: 20, .. })
     ));
     assert!(parse(&["tasks", "canaries", "ab12", "--count", "0"]).is_err());
+    assert!(matches!(
+        command(&["tasks", "pick", "ab", "cd", "--family-share", "0.25", "--seed", "7"]),
+        Command::Tasks(TasksCommand::Pick { ref task_sets, family_share: Some(f), per_family: None, .. })
+            if task_sets.len() == 2 && f == 0.25
+    ));
+    assert!(matches!(
+        command(&["tasks", "pick", "ab", "--per-family", "1", "--seed", "7"]),
+        Command::Tasks(TasksCommand::Pick {
+            per_family: Some(1),
+            family_share: None,
+            ..
+        })
+    ));
+    // Exactly one quota, in range, and the seed is not drawn for a split.
+    assert!(parse(&["tasks", "pick", "ab", "--seed", "7"]).is_err());
+    assert!(parse(&[
+        "tasks",
+        "pick",
+        "ab",
+        "--family-share",
+        "0.5",
+        "--per-family",
+        "1",
+        "--seed",
+        "7"
+    ])
+    .is_err());
+    assert!(parse(&[
+        "tasks",
+        "pick",
+        "ab",
+        "--family-share",
+        "1.5",
+        "--seed",
+        "7"
+    ])
+    .is_err());
+    assert!(parse(&["tasks", "pick", "ab", "--per-family", "1"]).is_err());
     assert!(parse(&["release", "c", "--target-effect", "0"]).is_err());
     assert!(parse(&["release", "c", "--target-effect", "1.5"]).is_err());
 }

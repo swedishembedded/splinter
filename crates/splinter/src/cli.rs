@@ -229,6 +229,16 @@ fn strength(text: &str) -> Result<Strength, String> {
     parse_strength(text).map_err(|e| e.to_string())
 }
 
+/// A fraction from 0 to 1, both included.
+fn fraction(text: &str) -> Result<f64, String> {
+    let share: f64 = text.parse().map_err(|e| format!("{text:?}: {e}"))?;
+    if (0.0..=1.0).contains(&share) {
+        Ok(share)
+    } else {
+        Err(format!("{text:?} is not between 0 and 1"))
+    }
+}
+
 fn voice_share(text: &str) -> Result<f64, String> {
     let share: f64 = text.parse().map_err(|e| format!("{text:?}: {e}"))?;
     if (0.0..1.0).contains(&share) {
@@ -384,6 +394,27 @@ pub enum TasksCommand {
         #[arg(long, value_name = "N", default_value_t = CANARY_COUNT,
             value_parser = positive_count)]
         count: usize,
+    },
+    /// Divide the union of task sets into a picked set and the rest, by a
+    /// stable hash of the seed and the task's family (the practice exam's
+    /// ranking): a development holdout, a sample of one task per family, or
+    /// one set out of several. Naming the sets in another order, or a task in
+    /// two of them, changes nothing. A task that declares no family is a
+    /// family of its own.
+    Pick {
+        /// The task sets, by id or unique prefix.
+        #[arg(required = true, value_name = "TASKSET-ID")]
+        task_sets: Vec<String>,
+        /// Pick this fraction (0 to 1) of the families, every task of each.
+        #[arg(long, value_name = "F", conflicts_with = "per_family",
+            required_unless_present = "per_family", value_parser = fraction)]
+        family_share: Option<f64>,
+        /// Pick at most this many tasks of every family.
+        #[arg(long, value_name = "N", value_parser = positive_count)]
+        per_family: Option<usize>,
+        /// The seed that decides what is picked.
+        #[arg(long, value_name = "N")]
+        seed: Seed,
     },
     /// List the stored task sets.
     List,

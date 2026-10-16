@@ -41,6 +41,7 @@ use splinter_core::rng::Seed;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use crate::canaries;
+use crate::family::{family_of_task, rank};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
 
@@ -99,14 +100,8 @@ pub(super) struct Divided {
 
 /// The family `entry`'s task declares; `None` for a task that declares none.
 fn family_of(ctx: &Context, entry: &TaskEntry) -> Result<Option<String>, OrchestratorError> {
-    Ok(ctx.tasks().get(&entry.task)?.concepts.into_iter().next())
-}
-
-/// How a family ranks for the exam: the hash of its name under the seed.
-fn rank(family: &str, seed: Seed) -> String {
-    let mut input = seed.value().to_le_bytes().to_vec();
-    input.extend_from_slice(family.as_bytes());
-    Digest::of(&input).to_string()
+    let task = ctx.tasks().get(&entry.task)?;
+    Ok(family_of_task(&task).map(str::to_string))
 }
 
 /// The seed the remembered exam families were chosen by; `None` when no run

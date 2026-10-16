@@ -139,6 +139,7 @@ pub struct Generation<'a> {
 }
 
 mod batch;
+pub mod pick;
 
 use batch::{Batch, Provenance};
 pub use batch::{
