@@ -530,6 +530,21 @@ pub enum ExperiencesCommand {
         /// An experience set's or an experience's id, or a unique prefix.
         id: String,
     },
+    /// Compare two experience sets of the same tasks: the candidate's against
+    /// the baseline's, paired by task, a family counted once. Exposed and
+    /// harness-failed attempts are left out and counted.
+    Compare {
+        /// The candidate's experience set, by id or unique prefix.
+        #[arg(value_name = "CANDIDATE-SET")]
+        candidate: String,
+        /// The baseline's experience set, by id or unique prefix.
+        #[arg(value_name = "BASELINE-SET")]
+        baseline: String,
+        /// The seed the intervals are resampled with (drawn and printed when
+        /// not given; the same sets and seed give the same intervals).
+        #[arg(long, value_name = "N")]
+        interval_seed: Option<Seed>,
+    },
 }
 
 /// `dataset ...`.

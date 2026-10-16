@@ -14,6 +14,7 @@ use serde_json::json;
 use splinter_sdk::agent::CancelToken;
 use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::canaries;
+use splinter_sdk::compare::compare;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{build, export, BuildRequest, VoiceBuild};
@@ -523,6 +524,28 @@ impl Session {
             }
             Command::Experiences(ExperiencesCommand::Replay { id }) => {
                 emit(json, &experiences::replay(ctx, &id)?);
+            }
+            Command::Experiences(ExperiencesCommand::Compare {
+                candidate,
+                baseline,
+                interval_seed,
+            }) => {
+                let (candidate, baseline) =
+                    (resolve_set(ctx, &candidate)?, resolve_set(ctx, &baseline)?);
+                let arguments = json!({
+                    "candidate": candidate,
+                    "baseline": baseline,
+                    "interval_seed": interval_seed,
+                });
+                let compared = record(ctx, "experiences compare", &arguments, |run| {
+                    compare(
+                        ctx,
+                        &candidate,
+                        &baseline,
+                        run.seed("interval-seed", interval_seed)?,
+                    )
+                })?;
+                emit(json, &compared);
             }
             Command::Dataset(DatasetCommand::Build {
                 sets,

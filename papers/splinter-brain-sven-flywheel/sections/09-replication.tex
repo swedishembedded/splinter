@@ -45,10 +45,13 @@ refused if changed on a later run.\cl{PS06}
 \item \textbf{Declare partitions and generations} (available for sealed families, planned for
 the qualification partition): \code{splinter experiment check} validates a plan whose sealed
 families are never trained on; a three-way split with a qualification partition queried once
-is the registration's requirement and awaits the benchmark verb.\cl{PS07,PL01}
-\item \textbf{Measure the untrained agent} (planned, CE1): the benchmark verb that runs the base
-over development and qualification partitions with attempts per task fixed from a throughput
-probe.\cl{PL01}
+is the registration's requirement and awaits \code{splinter tasks pick} (planned), which
+draws the development holdout and the qualification partition from the task sets by seed and
+family.\cl{PS07,PL01}
+\item \textbf{Measure the untrained agent} (planned, CE1): the base attempts the development and
+qualification partitions with attempts per task fixed from a throughput probe, and
+\code{splinter experiences compare CANDIDATE BASELINE} (planned) pairs any two such experience sets
+by task and reports the family-clustered sign test and per-family counts.\cl{PL01}
 \item \textbf{Train and gate} (available for one round): \code{splinter practice REPO} solves the
 non-exam tasks as an agent, keeps the attempts the hidden checks confirm, builds the
 action-level SFT dataset, trains a LoRA candidate from the champion with earlier releases

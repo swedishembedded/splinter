@@ -141,6 +141,14 @@ a development gain without a qualification gain as memorisation.\cl{PR08}
 single-repository round from a revision to a gated release.\cl{PS01} Eight authored repository
 families ship with the repository (\cref{tab:families}); a family's tests must pass five times
 identically and its faults be caught before it is catalogued.\cl{PS02} What does not exist
-yet is the benchmark verb that applies the partitions and the paired comparison of this section
-to the base and the served adapter in one command; the experiments of \cref{sec:pending} wait on
-it, and \cref{sec:replicate} marks each step as available now or planned.\cl{PL01}
+at the pinned revision is the tooling that applies the partitions and the paired comparison of
+this section to the base and the served adapter; it is two verbs, planned and not yet available.
+\code{splinter tasks pick SET\ldots{} --family-share F --seed S} divides the union of task sets
+into a picked set and the rest by a stable hash of the seed and the family, whole families at a
+time (\code{--per-family N} caps each family instead, for the one-task-per-family verdict
+sample). \code{splinter experiences compare CANDIDATE BASELINE} pairs the two arms' experiences
+by task, counts a family once, and reports the exact one-sided sign test the release gate uses,
+the per-family wins, losses and ties, quality, cost and autonomy with family-bootstrap
+intervals, and the share of tasks on which the arms' verdicts agree; exposed and harness-failed
+attempts are left out and counted. The experiments of \cref{sec:pending} wait on them, and
+\cref{sec:replicate} marks each step as available now or planned.\cl{PL01}

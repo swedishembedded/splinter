@@ -41,6 +41,8 @@
 //! * [`runs`] - every command's run record, and cancelling one.
 //! * [`doctor`] - whether a run can start here, before one does;
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions;
+//!   [`compare`] - two experience sets of the same tasks compared, a family
+//!   counted once;
 //!   [`answers`] - every answer `ask` gave, and what gave it.
 //! * [`lineage`] - from any artifact, where it came from and what came
 //!   from it.
@@ -57,6 +59,7 @@ pub mod canaries;
 pub mod checkpoints;
 pub mod claim_quality;
 pub mod claims;
+pub mod compare;
 pub mod critique;
 pub mod curriculum;
 pub mod dataset_ref;
