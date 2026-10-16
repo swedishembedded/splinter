@@ -1,0 +1,19 @@
+{
+ "command": [
+  "HOME/project/shared/containers/worktrees/s-l3/target/release/splinter",
+  "--state",
+  "HOME/project/shared/containers/l3work/pilot6/state",
+  "--json",
+  "-v",
+  "--policy-context-tokens",
+  "8192",
+  "rollback",
+  "default"
+ ],
+ "exit": 2,
+ "elapsed_s": 0.6,
+ "report": {
+  "error": "release blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f is the first default has had; there is no previous release to roll back to",
+  "refused": true
+ }
+}

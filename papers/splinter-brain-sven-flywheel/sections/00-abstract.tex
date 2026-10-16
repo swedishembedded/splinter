@@ -11,13 +11,17 @@ through an agent runtime, keeps what typed verifiers confirm, projects verified 
 into training data, trains a LoRA adapter or consolidates into the weights, and releases the
 result only if four checks over unseen material pass, with immutable releases and rollback.
 Every statement about the system carries an id in a claims ledger and is re-checked against
-the three repositories at pinned commits (116 structure claims, 223 checks); every number
-comes from a raw run record. Four small experiments exercise the loop. A task funnel on three
-documentation pages admitted 63 tasks and refused 84 proposals, 82 of them because the
-generator did not name the task's subject. A two-generation turn on invented facts stopped before
-the release gate in both generations, because training refused a split of 8 and of 4
-records, so no improvement, retention or rollback is measured; the unadapted policy answered
-none of the invented facts. Qualification runs of the 27B model on one 95~GiB card fit an
-NF4 base at 8192 tokens in about 36~GiB and a bf16 base at 16384 tokens in about 78~GiB.
+the three repositories at pinned commits (121 structure claims, 232 checks); every number
+comes from a raw run record. Four small experiments exercise the loop; all are pilots, and the first wave of two of them
+failed and exposed four defects, repaired here with regression tests. A task funnel on documentation
+pages refused 82 of 144 proposals in the first wave and 75 of 137 on the repaired binary because the
+generator did not name the task's subject, in 45 of the 75 cases by omitting it from the question;
+only the markup-only class (18 of 82) was a defect of the rule. The registered two-generation
+turn on invented facts with a 0.6B policy did \emph{not} reach its success criterion: its candidates
+learned 13 of 30 facts (none at base) and passed the improvement, retention and serve checks, and the
+gate refused each of them on the anchor check alone, which allows no lost answer of 40 questions, so no
+release, no retention across releases and no rollback to a first release was obtained. A post hoc run with
+a 1.7B policy was released by the gate and kept the anchor. Qualification runs of the 27B model on one 95~GiB
+card fit an NF4 base at 8192 tokens in about 36~GiB and a bf16 base at 16384 tokens in about 78~GiB.
 We list what was not measured.
 \end{abstract}

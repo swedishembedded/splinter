@@ -206,6 +206,11 @@ def e2w2_metrics():
                 if an:
                     m[f"{tag}.g{g}.anchor.drop"] = f"{an['drop']:.2f}"
                     m[f"{tag}.g{g}.anchor.bound"] = f"{an['bound']:.2f}"
+                ret = gate["retention"]["measured"]
+                if ret and ret["suites"]:
+                    m[f"{tag}.g{g}.retention.tasks"] = ret["suites"][0]["suite"]["tasks"]
+                    m[f"{tag}.g{g}.retention.right"] = round(ret["suites"][0]["comparison"]["candidate_accuracy"]
+                                                            * ret["suites"][0]["comparison"]["items"])
                 sv = gate["serve"]["measured"]
                 if sv:
                     m[f"{tag}.g{g}.serve.agreed"], m[f"{tag}.g{g}.serve.sampled"] = sv["agreed"], sv["sampled"]

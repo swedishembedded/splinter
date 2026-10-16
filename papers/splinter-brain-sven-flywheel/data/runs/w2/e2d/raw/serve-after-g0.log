@@ -1,6 +1,6 @@
-brain serve: no --seed given, using random seed 666449823605371552 (pass --seed 666449823605371552 to reproduce)
+brain serve: no --seed given, using random seed 7292710031536156133 (pass --seed 7292710031536156133 to reproduce)
 brain serve: auto-fetch off -- a request for a model that is not pulled errors (pass --autofetch or set BRAIN_AUTO_FETCH=1 to enable on-demand fetching)
-brain serve: compute gpu[0] + cpu[72 core(s)] | 1 GPU(s), 0 NPU(s) schedulable, 2 GB reserved/card, 756 GB RAM budget
+brain serve: compute gpu[0] + cpu[72 core(s)] | 1 GPU(s), 0 NPU(s) schedulable, 2 GB reserved/card, 733 GB RAM budget
 brain serve: scanning model dir HOME/.local/share/brain/models
 brain: z-image not served over the scheduler (set BRAIN_S3DIT_DIT/_VAE/_QWEN/_TOKENIZER, or place a checkpoint under the model dir)
 brain: yolo not served over the scheduler (set BRAIN_YOLOV8 to a checkpoint)
@@ -26,8 +26,8 @@ brain: brain/deepseekvl not served (deepseekvl: dir: no artifact classifies as d
 brain: brain/Qwen3-Omni-30B-A3B-Instruct-W8A16 not served over the scheduler (set BRAIN_QWEN3OMNIMOE_INT8_CHECKPOINT)
 brain serve: models: brain/qwen3, brain/splat, brain/decision, brain/demo, brain/imageops, brain/fastvlm, brain/llava, brain/imgpipe, Qwen/Qwen3-0.6B, Qwen/Qwen3-1.7B, Qwen/Qwen3-14B, Qwen/Qwen3-4B, Qwen/Qwen3-8B, Qwen/Qwen3-Embedding-0.6B, deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B, deepseek-ai/DeepSeek-R1-Distill-Qwen-7B, unsloth/Qwen3.8-27B-GGUF
 brain serve: local/Qwen3-1.7B:splinter:candidate:latest adapter=local/Qwen3-1.7B:splinter:candidate:latest digest=sha256:e753d1470cfc902a88fc2f70463fc057c547366b6a389e1c935db5e2b6ba588c
-brain serve: following release manifest STATE_ROOT/state/serving/default.json
-APIKEY openai sk-brain-9f99baf88a7e44c7af76a33f29e011fd
-brain apiserve: openai on http://127.0.0.1:18404
-brain serve: ready - all 1 surface(s) bound (openai last); touched STATE_ROOT/raw/serve-after-g0.ready
+brain serve: following release manifest HOME/project/shared/containers/l3work/pilot6/state/serving/default.json
+APIKEY openai sk-brain-7b0e693ebde50e6a882a8e2b4f305153
+brain apiserve: openai on http://127.0.0.1:18543
+brain serve: ready - all 1 surface(s) bound (openai last); touched HOME/project/shared/containers/l3work/pilot6/raw/serve-after-g0.ready
 brain: received SIGTERM, shutting down (send it again to force-exit)

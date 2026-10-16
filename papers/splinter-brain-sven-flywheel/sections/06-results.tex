@@ -103,8 +103,8 @@ tasks right against none for the champion), retention (nothing earlier to hold) 
 (\mETworGZeroServeAgreed{} of \mETworGZeroServeSampled{} sampled answers of the served adapter
 agreed with the in-process ones). It was refused by the anchor check: the 40-question anchor suite
 fell by \mETworGZeroAnchorDrop{} against a bound of \mETworGZeroAnchorBound, which is one question
-lost.\cl{M24} The release was therefore not made. This is the registered outcome ``no release'', and the
-exact reason.
+lost.\cl{M24} The release was therefore not made. The registered success criterion (a release and a McNemar $p<0.05$ against the base) was therefore
+\emph{not met}: the outcome is ``no release'', for the reason given.
 
 Measured on the probes (\cref{tab:e2}), the refused candidate answered \mETworCandidateGZeroGZero{} of
 the 30 facts of generation~0 against none at base (\mETworBaseCandidateGZeroGZeroGained{} gained,
@@ -168,6 +168,25 @@ questions; the generation~1 candidate, trained from the base because no champion
 \mETwocCandidateGOneGOne{} of the generation~1 facts and \mETwocCandidateGOneAnchor{} anchor questions, and was refused
 with an anchor drop of \mETwocGOneAnchorDrop. The rollback was refused for lack of a release (status
 \mETwocRollbackExit; \mETwocReleasesFinal{} releases listed).\cl{M32}
+
+\paragraph{E2d (post hoc): a 1.7B policy.} The anchor check alone had refused every 0.6B candidate, so after seeing that
+we asked, outside the registered design, whether a larger policy keeps the anchor while learning the same facts: Qwen3-1.7B,
+the registered flags, a new seed, one run. Its first \code{learn} admitted \mETwodGZeroTasks{} tasks, taught \mETwodGZeroTaught{}, trained
+on \mETwodGZeroTrainRecords{} records, and passed all four checks: improvement (\mETwodGZeroImpSignWins{} of \mETwodGZeroImpSignDiscordant{}
+discordant families won, $p=\mETwodGZeroImpSignP$; \mETwodGZeroImpVariantsRight{} of \mETwodGZeroImpVariantsN{} paraphrase tasks right),
+retention, anchor (a drop of \mETwodGZeroAnchorDrop{} against \mETwodGZeroAnchorBound) and serve (\mETwodGZeroServeAgreed{} of
+\mETwodGZeroServeSampled{} answers agreed); the candidate was released.\cl{M33} Asked through the alias, the released policy answered
+\mETwodAfterGZeroGZero{} of the 30 generation~0 facts against none at base (\mETwodBaseCandidateGZeroGZeroGained{} gained, none lost,
+$p=\mETwodBaseCandidateGZeroGZeroP$), none of the facts of generations 1 and 2, and \mETwodAfterGZeroAnchor{} of 40 anchor
+questions.\cl{M34} The second generation continued this champion with replay. Its candidate answered \mETwodCandidateGOneGOne{} of the
+generation~1 facts but only \mETwodCandidateGOneGZero{} of the 15 generation~0 facts the champion answered, and \mETwodCandidateGOneAnchor{} of
+40 anchor questions. The gate's retention check passed, on \mETwodGOneRetentionTasks{} tasks of which \mETwodGOneRetentionRight{} were right for
+either model, because it holds the candidate to the earlier release's \emph{held-out} tasks, which for a facts campaign are facts that release
+never taught; the anchor check refused the candidate (a drop of \mETwodGOneAnchorDrop), so the alias stayed on the first release
+(\mETwodAfterGOneGZero{} facts, \mETwodAfterGOneAnchor{} anchor answers).\cl{M35} The rollback was refused, as specified, because the first release has
+no predecessor.\cl{M36} Retention across two releases was therefore measured only as a refused candidate's forgetting, on independent probes,
+not as a release; the gate's own retention check did not see that forgetting. The first release's probes through \code{brain serve}
+beyond the gate's sample of eight were not measured: the server refused requests under load on the shared card.
 
 \paragraph{Re-grading.} After the runs the stated-reference verifier was repaired so that a number
 written with a thousands separator is the same number (\cref{sec:defects}). The candidates of the

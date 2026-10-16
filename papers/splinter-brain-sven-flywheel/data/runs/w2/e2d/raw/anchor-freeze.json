@@ -2,7 +2,7 @@
  "command": [
   "HOME/project/shared/containers/worktrees/s-l3/target/release/splinter",
   "--state",
-  "STATE_ROOT/state",
+  "HOME/project/shared/containers/l3work/pilot6/state",
   "--json",
   "-v",
   "--policy-context-tokens",
@@ -11,7 +11,7 @@
   "--suite",
   "anchor",
   "--freeze",
-  "STATE_ROOT/anchor.jsonl"
+  "HOME/project/shared/containers/l3work/pilot6/anchor.jsonl"
  ],
  "exit": 0,
  "elapsed_s": 0.3,

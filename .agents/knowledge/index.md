@@ -49,5 +49,6 @@ in the same commit.
 | [058](058-every-release-was-blocked-by-a-serve-check-the-adapter-card-id-could-not-pass.md) | Every release was blocked by a serve check its adapter's card id could not pass |
 | [059](059-brain-serve-banks-attention-linears-only-so-the-serve-check-refused-an-adapter-that-corrects-the-mlp.md) | `brain serve` banks the attention linears only, so the serve check refused an MLP-correcting adapter |
 | [060](060-a-correct-answer-with-a-thousands-separator-failed-the-stated-reference-check.md) | A correct answer with a thousands separator failed the stated-reference check |
+| [061](061-the-retention-check-held-the-champion-to-facts-it-was-never-taught.md) | The retention check held the champion to facts it was never taught |
 | [066](066-the-family-pre-flight-killed-the-test-runner-and-orphaned-its-lua-processes.md) | The family pre-flight killed the test runner and orphaned its Lua processes |
 | [067](067-a-looping-mutant-cost-the-sandbox-wall-limit-not-the-time-budget.md) | A looping mutant cost the sandbox's wall limit, not the generator's time budget |

@@ -2,7 +2,7 @@
  "command": [
   "HOME/project/shared/containers/worktrees/s-l3/target/release/splinter",
   "--state",
-  "STATE_ROOT/state",
+  "HOME/project/shared/containers/l3work/pilot6/state",
   "--json",
   "-v",
   "--policy-context-tokens",
@@ -10,7 +10,7 @@
   "eval",
   "policy:default",
   "--suite",
-  "STATE_ROOT/suite.jsonl"
+  "HOME/project/shared/containers/l3work/pilot6/suite.jsonl"
  ],
  "exit": 0,
  "elapsed_s": 296.7,
@@ -22,7 +22,7 @@
   "scores": [
    {
     "suite": {
-     "name": "STATE_ROOT/suite.jsonl",
+     "name": "HOME/project/shared/containers/l3work/pilot6/suite.jsonl",
      "tasks": 400,
      "excluded": {}
     },

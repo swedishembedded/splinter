@@ -1,0 +1,997 @@
+{
+ "command": [
+  "HOME/project/shared/containers/worktrees/s-l3/target/release/splinter",
+  "--state",
+  "HOME/project/shared/containers/l3work/pilot6g1/state",
+  "--json",
+  "-v",
+  "--policy-context-tokens",
+  "8192",
+  "learn",
+  "HOME/project/shared/containers/l3work/pilot6g1/sheets1",
+  "--kinds",
+  "recall",
+  "--generator",
+  "local:HOME/.local/share/brain/models/Qwen/Qwen3-4B@8192",
+  "--teacher",
+  "local:HOME/.local/share/brain/models/Qwen/Qwen3-4B@8192",
+  "--goal",
+  "the invented places of the gazetteer",
+  "--eval-every",
+  "0",
+  "--steps",
+  "400",
+  "--rank",
+  "16",
+  "--records-per-step",
+  "2",
+  "--rehearsal",
+  "0.25"
+ ],
+ "exit": 1,
+ "elapsed_s": 2317.9,
+ "report": {
+  "run": "run-20261016T125806.517-db8c",
+  "policy": {
+   "alias": "default",
+   "release": "blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f"
+  },
+  "roles": {
+   "policy": "brain/Qwen/Qwen3-1.7B+c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace",
+   "teacher": "brain/Qwen/Qwen3-4B",
+   "generator": "brain/Qwen/Qwen3-4B",
+   "judge": "brain/Qwen/Qwen3-1.7B+c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace",
+   "critic": "brain/Qwen/Qwen3-1.7B+c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace"
+  },
+  "sources": [
+   {
+    "id": "blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100",
+    "kind": "repository",
+    "origin": {
+     "kind": "repository",
+     "path": "/nobackup/proj/disk/ehpc-aif-2026fl01-1042/shared/containers/l3work/pilot6g1/sheets1",
+     "revision": null,
+     "skipped": []
+    },
+    "parts": 30,
+    "bytes": 1679,
+    "captured_at": "2026-10-16T12:58:06.570Z"
+   }
+  ],
+  "plan": null,
+  "reserve": null,
+  "exam_set": null,
+  "dev_set": null,
+  "tasks": {
+   "task_set": "blake3:9f5deeea1c5e898472b154f2b726e0b3ec03a137ef9d98ba11a09830194d6d64",
+   "denoise_seed": null,
+   "tasks": 27,
+   "parts": 30,
+   "parts_total": 30,
+   "elapsed_secs": 801,
+   "full_coverage_secs": null,
+   "per_kind": {
+    "recall": {
+     "admitted": 27,
+     "rejected": 3
+    }
+   },
+   "rejected": {
+    "no_subject": 3
+   },
+   "rejections": [
+    {
+     "kind": "recall",
+     "reason": "no_subject",
+     "detail": "the instruction does not name its subject \"Ithdridri festival\" (proposed: \"What is the name of the festival that is held every 95 years?\")"
+    },
+    {
+     "kind": "recall",
+     "reason": "no_subject",
+     "detail": "the instruction does not name its subject \"Berortes festival\" (proposed: \"What is the name of the festival that is held every 92 years?\")"
+    },
+    {
+     "kind": "recall",
+     "reason": "no_subject",
+     "detail": "the instruction does not name its subject \"Ithpa festival\" (proposed: \"What is the name of the festival held every 20 years?\")"
+    }
+   ],
+   "calls": [
+    {
+     "kind": "recall",
+     "prompt": "blake3:d23b2054adbc3565a82347325b7abb3776923b5364df132dbee3a132c501fd31",
+     "prompt_bytes": 1676,
+     "elapsed_ms": 38368,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:0f8dfc508f46325908d9daf1aca5f62e93e80346465149009c86ac6cac6b3fc1",
+     "prompt_bytes": 1700,
+     "elapsed_ms": 37311,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:f15852e8a11471b215c5bf4c74df749524ea918a2522246c9665996017f3475c",
+     "prompt_bytes": 1676,
+     "elapsed_ms": 4042,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:c94f5c557efd8a2a8a48c33e0ab13458e65538898de6c13764870f76d236c8c8",
+     "prompt_bytes": 1683,
+     "elapsed_ms": 33562,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:bc160acd57187c1f6d91647455eb9c2bd69d317b8d151c59dbf859972ab2e8b1",
+     "prompt_bytes": 1706,
+     "elapsed_ms": 38199,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:b88e0c95dee630e6f245700e0da2cbc389d6ce622e6a939e0c5e3f196616da35",
+     "prompt_bytes": 1705,
+     "elapsed_ms": 36675,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:ba46acfd64e7099aabe118e136d94d6d95bf6552e6eabc7a887b3edfb027d200",
+     "prompt_bytes": 1699,
+     "elapsed_ms": 27683,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:8e772e0c43d1d34bc077a6e4373fe9000b90798fc11f4d2d1ed817c35509d12e",
+     "prompt_bytes": 1713,
+     "elapsed_ms": 27995,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:20470c709b0d30baf64d124479cd923be210dfd863a35effc8ecffa2dcd229f5",
+     "prompt_bytes": 1692,
+     "elapsed_ms": 28399,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:f5e2fcc5776e552ebd2b1fc63dea94ae3ea92ec4e52d7ee861165df763e478a8",
+     "prompt_bytes": 1700,
+     "elapsed_ms": 28553,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:d1be24305d0d22cd74fed9051a0545eee769f73f58d59869eb4126758cdbfa71",
+     "prompt_bytes": 1692,
+     "elapsed_ms": 27861,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:dd62db8b9b78eb7c177a0988fa5baffb75e5000f5c4d77c9741ddb474a8d4fe7",
+     "prompt_bytes": 1687,
+     "elapsed_ms": 31174,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:5c68b2b57d7664dd116c25e26d786e026adfe073d9268cfba984eac99b57c2f8",
+     "prompt_bytes": 1688,
+     "elapsed_ms": 26342,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:d90c6dde44a4e397296f77848937d098bb8eb0aa7c2995110998caf2e189563b",
+     "prompt_bytes": 1679,
+     "elapsed_ms": 24696,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:faa20e01fbdb74af96bb1dca6cac39467bd98ff26ac1771d23eb39b3359f8ff0",
+     "prompt_bytes": 1694,
+     "elapsed_ms": 24070,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:1a8e002d17003476fcb38f8ef6bac85c9d8e9a3058366caee047a2015e74bd4d",
+     "prompt_bytes": 1695,
+     "elapsed_ms": 24212,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:d7841e888506dd125f079d1883215904e0a8bbdd0222cca03881c43f9601bebe",
+     "prompt_bytes": 1695,
+     "elapsed_ms": 23835,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:de06229b5f75ed64d05e936d9816d374731830f0bd79ba46047c3e2ce230f73b",
+     "prompt_bytes": 1701,
+     "elapsed_ms": 24165,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:080c3c17e93fa75e111af8a6e2e65cf81f1525ee734b75a820978147621a0de8",
+     "prompt_bytes": 1705,
+     "elapsed_ms": 24245,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:464c233cdaa8ba7e41da41816a1822d327e05c734a52d3de70c32d09165fcbfe",
+     "prompt_bytes": 1681,
+     "elapsed_ms": 24370,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:a6f53a6914e1a0602ca996f44d04d8e5446940a883b9115cfbdd14948d719611",
+     "prompt_bytes": 1702,
+     "elapsed_ms": 24399,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:cfb9ae5d092d69e289dbb9e592b6933f05eaaa5b032bb907ebfda9e7836a512f",
+     "prompt_bytes": 1696,
+     "elapsed_ms": 24079,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:4651eda29c95ed62b70c5d4ede85bc2f76d678dd206f874d19fd909d78f8aafa",
+     "prompt_bytes": 1713,
+     "elapsed_ms": 25114,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:0724d8a496a099f31c3ca2e6b9846e0e6191c84f27977696339b065b21f5bcc7",
+     "prompt_bytes": 1711,
+     "elapsed_ms": 24886,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:ee49c7b19e96dbaafe6a36fcc787605270b7b0fbd4c6c52404bd2a932e12e705",
+     "prompt_bytes": 1688,
+     "elapsed_ms": 24552,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:e72d6876944738df64ce7fbd8a91ac44ce4ba53ecaba9a196fca25a603aa58ee",
+     "prompt_bytes": 1701,
+     "elapsed_ms": 24678,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:3f8bc315daaecabde8f67faf0f1e1d08704ec78ba433f7a6fe3c1000a5631542",
+     "prompt_bytes": 1685,
+     "elapsed_ms": 24127,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:6e0c7e06426cf8a5de8e662222d2cbc2a51a489e5147061e0d18cd44eec1fef3",
+     "prompt_bytes": 1700,
+     "elapsed_ms": 24510,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:62d42bda37785b8f1c18dba1b5afe1a2b86a77ec2a1cc1471bcf151eb67635eb",
+     "prompt_bytes": 1690,
+     "elapsed_ms": 24468,
+     "candidates": 1,
+     "declined": null
+    },
+    {
+     "kind": "recall",
+     "prompt": "blake3:a251a9823f7e8b598514eb26cccbd14715ee3a70724a21c09df1d3b682f772ee",
+     "prompt_bytes": 1702,
+     "elapsed_ms": 24366,
+     "candidates": 1,
+     "declined": null
+    }
+   ],
+   "sections": 0,
+   "stopped": null,
+   "dropped": {}
+  },
+  "solve": {
+   "experience_set": "blake3:4304842b13a652eddd408b915d1a1cb9d445fbd218a1af8dbc6b6f2f465ccc7c",
+   "solver": "brain/Qwen/Qwen3-1.7B+c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace",
+   "policy": {
+    "alias": "default",
+    "release": "blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f"
+   },
+   "attempts": 4,
+   "teacher": false,
+   "sampling": {
+    "max_new_tokens": 512,
+    "temperature": 0.8,
+    "top_k": 20,
+    "thinking": false,
+    "seed": null
+   },
+   "solved": 108,
+   "answered": 108,
+   "conclusions": {
+    "success": 108
+   },
+   "skipped": [],
+   "stopped": null
+  },
+  "verify": {
+   "experiences": 108,
+   "verdicts": {
+    "pass": 0,
+    "fail": 108,
+    "abstain": 0
+   },
+   "exposed": 0,
+   "exposed_by": {},
+   "passed": 0,
+   "failed": 108,
+   "undecided": 0,
+   "unverified": []
+  },
+  "teach": {
+   "task_set": "blake3:df0a3043ebb673f99ba76d7729ccaa3e99488259a7819c6aafe2fbb0f5dfe504",
+   "solve": {
+    "experience_set": "blake3:2cadf0af0b0034322b9c49de244f4afd955ce62d8c0531277048d624e814d729",
+    "solver": "brain/Qwen/Qwen3-4B",
+    "policy": null,
+    "attempts": 1,
+    "teacher": true,
+    "sampling": null,
+    "solved": 27,
+    "answered": 27,
+    "conclusions": {
+     "success": 27
+    },
+    "skipped": [],
+    "stopped": null
+   },
+   "verify": {
+    "experiences": 27,
+    "verdicts": {
+     "pass": 22,
+     "fail": 5,
+     "abstain": 0
+    },
+    "exposed": 0,
+    "exposed_by": {},
+    "passed": 22,
+    "failed": 5,
+    "undecided": 0,
+    "unverified": []
+   }
+  },
+  "authored": null,
+  "frontier": {
+   "measurement": "blake3:f23654ad5e23eb6d12c3af8c10d529f0c26cff56b704f2fce756928fdf768ad0",
+   "solver": "brain/Qwen/Qwen3-1.7B+c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace",
+   "policy": {
+    "alias": "default",
+    "release": "blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f"
+   },
+   "k": 4,
+   "sampling": {
+    "max_new_tokens": 512,
+    "temperature": 0.8,
+    "top_k": 20,
+    "thinking": false,
+    "seed": null
+   },
+   "teacher": "brain/Qwen/Qwen3-4B",
+   "distribution": {
+    "always": 0,
+    "never": 5,
+    "frontier": 0,
+    "taught": 22,
+    "unmeasured": 0
+   },
+   "frontier_task_set": "blake3:0a22f650dab47fc03fe16f9d7a15e75ad10ff01ac3057c170476d7833887f46c",
+   "frontier_experience_set": "blake3:371236a1bec9918495eab07de1dd991fa928c2f9679db394f1c5a5fa3fc7d13f"
+  },
+  "variants": {
+   "variant_set": "blake3:20b2a28cb2afeba6a8b0a7d23433b567154093a8fece674804c25c7dfe66b74f",
+   "tasks": 22,
+   "variants": 58,
+   "ineligible": {},
+   "rejected": {
+    "duplicate": 8
+   },
+   "rejections": [
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the population of Tesith?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the population of Rowkov?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the distance between Teskov and Skyfreby?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the population of Monyarquil?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the distance between Ithdri and Olmby?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the distance from Monmon to Rowdun?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the distance from Orithdun to Pahapolm?"
+    },
+    {
+     "kind": "recall",
+     "reason": "duplicate",
+     "detail": "What is the population of Wenmarolm?"
+    }
+   ],
+   "stopped": null
+  },
+  "critique": {
+   "experience_set": "blake3:844c11450c0ed674c888d60c41f374f643dc10ea6c520b449c6e26660da027d3",
+   "revisions": "blake3:0fd677d6c5e920e4c5c3c97e95818ee57e6d2509a78fb06bf6a3bbef012e1f10",
+   "critiqued": 88,
+   "repaired": 0,
+   "not_failed": 22,
+   "stops": {
+    "retries_spent": 88
+   },
+   "unrepaired": [],
+   "stopped": null
+  },
+  "select": {
+   "experience_set": "blake3:256191a0feb047fab86559c72180657dccfa5b15d3055df183666c2918f26fb8",
+   "quotas": {
+    "max_concept_share": 0.25,
+    "max_kind_share": 0.5,
+    "max_strength_share": 0.75
+   },
+   "selection": {
+    "selected": [
+     "blake3:082afd206c3f9da00f425ca3ab4666b43b5adbb7ee86f70cc83ebbff3dc161d6",
+     "blake3:1287fb974b9f985ead55ba108b8d7c7aa8986f6802c573a75837c387d4a7137f",
+     "blake3:36df16c233c65586a0cc96eb25e27ff8987b6d82c314fdbc5a25d5627ac8aa47",
+     "blake3:41c168daba11cc1ce4784e757ca989021e703871a05bcf0db4f8521db16e6952",
+     "blake3:44ee9a1639730a8886cef68b6936aeb2933f86f861d3978276231819cb5a8f5f",
+     "blake3:4ba329bbc9b3656359af4b0ba1dd16c0d94ceada73817f128ca129bb0c92e55d",
+     "blake3:51c757cfa4c090d581c7622936d1dffd7b5e7c3862ea5fbd6b1252ba1d77759e",
+     "blake3:534dc715962f28d8139b65a0bee1ebb2a8257be2ceb667e9ac9a48aba0c80369",
+     "blake3:6583075d030cf6b108833528f5a8b7f9e6b5560e6f66052d19deb45a4f7cff66",
+     "blake3:7747a510beb9d9f2b9056ba756e4e0078633118bc55554c0b6ee7d1f1bdfcea7",
+     "blake3:7950ff704f9f1ee16ff29cb21856ed8f9f77d56a99293291972d6cb096e388f6",
+     "blake3:88185619fba9eed5868f0b7dd0b2e0c9a4719bb4948b40303a1c893c4a7dc9c1",
+     "blake3:9549e474b14cd7d271354603b8c52634e123a7804ba9c3ef3d18e4df619e0e0b",
+     "blake3:af3d4d42387429913756a46a9ad12d9d0281a9dec3e3a70facb53cc78b0b9168",
+     "blake3:ca023bbb40a337dde035594ccba412f75ad13865f89d64e7e74468b180fed333",
+     "blake3:cbd3ad35a0951e66cbe92ff59ed330d98ef8d1c1c5c321ba3f3186fb4b3a581f",
+     "blake3:cd18dc7482fdb75c3bc35577e35426e200244dcda58f8bbb27be5f1f523bd315",
+     "blake3:d54ab693962e3c594559781811ae75f9d56d60b4162f29a7db48b75c7329fef1",
+     "blake3:db5c50521e8a51f6a28a0d2fdd33036896cfce7780ba2e951e7aa45361a8479f",
+     "blake3:ece418481e8a088ecdef687428f445bbadd11375ad70b2f3d89416faa600ff37",
+     "blake3:efe6435a0b2a1790ad43463c979a53e8f7a2d72d54b485482ebf5092d91dc3e8",
+     "blake3:fe806e0b47b48dd2e602d4d7560d91887d2ad817a230d325947fd0c80a2e983a"
+    ],
+    "candidates": 22,
+    "duplicates": 0,
+    "capped": {},
+    "caps": {
+     "concept": {
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f0.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f1.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f10.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f11.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f12.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f13.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f14.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f15.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f17.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f18.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f19.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f20.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f21.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f24.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f25.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f26.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f27.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f28.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f3.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f5.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f6.md#0": 22,
+      "section:blake3:17fb1c1bc7fb20aacb3631d23053930363ee62d94072b4a244334cc9b31b1100/g1f7.md#0": 22
+     },
+     "kind": {
+      "recall": 22
+     },
+     "strength": {
+      "formal": 22
+     }
+    }
+   }
+  },
+  "dataset": {
+   "dataset": "blake3:dd94efeb2ad91c9106078132f3ce7f083d69f213be299d67ff3dde09284d100d",
+   "view": "sft-final",
+   "objective": "sft",
+   "format": "generic-messages-v2",
+   "records": 22,
+   "excluded": {},
+   "path": "HOME/project/shared/containers/l3work/pilot6g1/state/artifacts/f9/f9e049ed1768ae2faa6009a94fc5420c6ddcfbdefd4ca4e811c31999b14ec2f0.jsonl",
+   "described": null
+  },
+  "voice": null,
+  "rehearsal": {
+   "seed": 4274800256033581296,
+   "base": "brain/Qwen/Qwen3-1.7B",
+   "anchor": [
+    1,
+    "blake3:51bca83bb3f00d382b5107d2ab73e659c3dadf0d36133dd526a9c45f0da12018"
+   ],
+   "task_set": "blake3:f2ae95a2e865ae405060f0b063d1f6b3aa8450bd65a371f5a9746394bcee067f",
+   "tasks": 8,
+   "form_tasks": 4,
+   "general_tasks": 4,
+   "excluded_as_anchor": 0,
+   "repeated": 0,
+   "failed_requests": 0,
+   "solved": {
+    "experience_set": "blake3:99a2258d831ef0228f0f7be11c8672a4e901db55e2620516e5b579f4ab6db348",
+    "solver": "brain/Qwen/Qwen3-1.7B",
+    "policy": null,
+    "attempts": 1,
+    "teacher": false,
+    "sampling": {
+     "max_new_tokens": 512,
+     "temperature": 0.0,
+     "top_k": 20,
+     "thinking": false,
+     "seed": null
+    },
+    "solved": 8,
+    "answered": 8,
+    "conclusions": {
+     "success": 8
+    },
+    "skipped": [],
+    "stopped": null
+   },
+   "verified": {
+    "experiences": 8,
+    "verdicts": {
+     "pass": 4,
+     "fail": 0,
+     "abstain": 0
+    },
+    "exposed": 0,
+    "exposed_by": {},
+    "passed": 4,
+    "failed": 0,
+    "undecided": 4,
+    "unverified": []
+   },
+   "dataset": {
+    "dataset": "blake3:4b338452b2fbf6b9534bab50c864586bfe3a501148a69f7123cbbdbf6f7b8f9a",
+    "view": "rehearsal",
+    "objective": "sft",
+    "format": "generic-messages-v2",
+    "records": 8,
+    "excluded": {},
+    "path": "HOME/project/shared/containers/l3work/pilot6g1/state/artifacts/2d/2d87347e182ff16de60a71b5a4c85c19897ecf6d6d604532bc6559ad0537a350.jsonl",
+    "described": null
+   },
+   "stopped": null
+  },
+  "candidate": {
+   "candidate": "candidate-20261016T132058.270-c03f",
+   "from": "policy:default",
+   "regime": "sft",
+   "base": "HOME/.local/share/brain/models/Qwen/Qwen3-1.7B",
+   "parent": "blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f",
+   "datasets": [
+    "blake3:dd94efeb2ad91c9106078132f3ce7f083d69f213be299d67ff3dde09284d100d"
+   ],
+   "replay": {
+    "fraction": 0.25,
+    "seed": 8221282160499308861,
+    "sources": [
+     {
+      "release": "blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f",
+      "datasets": [
+       "blake3:017719abe61805e7b660ed685baf6d010d33cf3797b164d202222e1cbcdb8795"
+      ],
+      "available": 19,
+      "sampled": 5
+     }
+    ],
+    "records": 5,
+    "digest": "blake3:baab638a4c5700fc1f8d349bbb45093231a189dd8462379fd3fbfa3868b7d05e"
+   },
+   "rehearsal": {
+    "dataset": "blake3:4b338452b2fbf6b9534bab50c864586bfe3a501148a69f7123cbbdbf6f7b8f9a",
+    "share": 0.25,
+    "trained": 8,
+    "monitored": 0,
+    "digest": "blake3:2d87347e182ff16de60a71b5a4c85c19897ecf6d6d604532bc6559ad0537a350"
+   },
+   "adapter": "HOME/project/shared/containers/l3work/pilot6g1/state/artifacts/78/78481a451c161c410090928002d8ef1bc28b01d828812bf01681f07b8d8bcde2.safetensors",
+   "adapter_artifact": "blake3:78481a451c161c410090928002d8ef1bc28b01d828812bf01681f07b8d8bcde2",
+   "adapter_digest": "sha256:2499096f25d7c8fa95774ec5af17991cbf32201ab32bf1d4817da313fe54b9d6",
+   "base_digest": "sha256:a814c18575512a31b6ffa1cf423fa7ea088230eefe5cc6540cc9cdba6c8d579e",
+   "training_record": {
+    "adapter_digest": "sha256:2499096f25d7c8fa95774ec5af17991cbf32201ab32bf1d4817da313fe54b9d6",
+    "alpha": 32.0,
+    "base": "Qwen/Qwen3-1.7B",
+    "base_digest": "sha256:a814c18575512a31b6ffa1cf423fa7ea088230eefe5cc6540cc9cdba6c8d579e",
+    "base_score": {
+     "loss": 2.368091344833374,
+     "positions": 79,
+     "records": 5,
+     "skipped": 0,
+     "token_accuracy": 0.6329113924050633
+    },
+    "base_text_score": null,
+    "block": 389,
+    "curve": [],
+    "dataset": "sha256:c30cba56d2eebab9030e02db28c60c52ff8a9dbf892ce281a01e45b87cbebaee",
+    "eval_every": 0,
+    "final_loss": 4.138946678722277e-05,
+    "initial_loss": 0.45900601148605347,
+    "lr": 0.00019999999494757503,
+    "monitor_records": 0,
+    "patience": 0,
+    "rank": 16,
+    "replay_records": 13,
+    "resumed_at": null,
+    "seed": 8221282160499308861,
+    "selected_step": 400,
+    "selection": "last_step",
+    "steps": 400,
+    "steps_completed": 400,
+    "stopped_early": false,
+    "train_records": 17,
+    "trained_from": "sha256:e753d1470cfc902a88fc2f70463fc057c547366b6a389e1c935db5e2b6ba588c",
+    "tuned_score": {
+     "loss": 1.4184112548828125,
+     "positions": 79,
+     "records": 5,
+     "skipped": 0,
+     "token_accuracy": 0.810126582278481
+    },
+    "tuned_text_score": null,
+    "weight_decay": 0.0
+   },
+   "seed": 8221282160499308861,
+   "steps": 400,
+   "rank": 16,
+   "base_score": {
+    "loss": 2.3680913,
+    "token_accuracy": 0.6329113924050633,
+    "positions": 79,
+    "records": 5,
+    "skipped": 0
+   },
+   "tuned_score": {
+    "loss": 1.4184113,
+    "token_accuracy": 0.810126582278481,
+    "positions": 79,
+    "records": 5,
+    "skipped": 0
+   },
+   "curve": {
+    "steps": 400,
+    "steps_completed": 400,
+    "eval_every": 0,
+    "patience": 0,
+    "monitor_records": 0,
+    "points": [],
+    "selected_step": 400,
+    "selection": "last_step",
+    "stopped_early": false
+   },
+   "records": 22,
+   "terms": {
+    "name": "unstated + unstated",
+    "training": "unknown",
+    "commercial_use": "unknown",
+    "redistribution": "unknown"
+   }
+  },
+  "checkpoint": null,
+  "published": null,
+  "release": {
+   "candidate": "candidate-20261016T132058.270-c03f",
+   "alias": "default",
+   "champion": "blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f",
+   "gate": {
+    "config": {
+     "alpha": 0.05,
+     "retention_bound": 0.05,
+     "anchor_bound": 0.02,
+     "serve_sample": 8,
+     "serve_startup_secs": 600,
+     "agentic": {
+      "attempts": 1,
+      "follow_ups": 2,
+      "max_tool_calls": 60,
+      "max_repeated_results": 3
+     },
+     "alpha_spending": false,
+     "target_effect": null
+    },
+    "improvement": {
+     "passed": true,
+     "measured": {
+      "suite": {
+       "name": "held-out",
+       "tasks": 51,
+       "excluded": {}
+      },
+      "variants": {
+       "name": "variants",
+       "tasks": 46,
+       "excluded": {}
+      },
+      "comparison": {
+       "items": 51,
+       "unpaired": 0,
+       "paired": 51,
+       "both_right": 0,
+       "both_wrong": 9,
+       "candidate_wins": 42,
+       "baseline_wins": 0,
+       "candidate_accuracy": 0.8235294117647058,
+       "baseline_accuracy": 0.0
+      },
+      "sign_test": {
+       "discordant": 16,
+       "candidate_wins": 16,
+       "p_value": 1.52587890625e-05
+      },
+      "alpha": 0.05,
+      "generalisation": {
+       "suite": {
+        "name": "held-out",
+        "tasks": 5,
+        "excluded": {}
+       },
+       "comparison": {
+        "items": 5,
+        "unpaired": 0,
+        "paired": 5,
+        "both_right": 0,
+        "both_wrong": 5,
+        "candidate_wins": 0,
+        "baseline_wins": 0,
+        "candidate_accuracy": 0.0,
+        "baseline_accuracy": 0.0
+       },
+       "sign_test": {
+        "discordant": 0,
+        "candidate_wins": 0,
+        "p_value": 1.0
+       },
+       "task_level": {
+        "p_value": 1.0,
+        "difference": 0.0,
+        "low": 0.0,
+        "high": 0.0
+       }
+      },
+      "recall": {
+       "suite": {
+        "name": "variants",
+        "tasks": 46,
+        "excluded": {}
+       },
+       "comparison": {
+        "items": 46,
+        "unpaired": 0,
+        "paired": 46,
+        "both_right": 0,
+        "both_wrong": 4,
+        "candidate_wins": 42,
+        "baseline_wins": 0,
+        "candidate_accuracy": 0.9130434782608695,
+        "baseline_accuracy": 0.0
+       },
+       "sign_test": {
+        "discordant": 16,
+        "candidate_wins": 16,
+        "p_value": 1.52587890625e-05
+       },
+       "task_level": {
+        "p_value": 2.2737367544323203e-13,
+        "difference": 0.9130434782608695,
+        "low": 0.7659574468085106,
+        "high": 1.0
+       }
+      },
+      "task_level": {
+       "p_value": 2.2737367544323203e-13,
+       "difference": 0.8235294117647058,
+       "low": 0.66,
+       "high": 0.9444444444444444
+      },
+      "power": {
+       "units": 22,
+       "nominal_alpha": 0.05,
+       "generation": null,
+       "target_effect": null,
+       "verdict": {
+        "verdict": "significant"
+       }
+      }
+     },
+     "reason": null
+    },
+    "retention": {
+     "passed": true,
+     "measured": {
+      "bound": 0.05,
+      "suites": [
+       {
+        "release": "blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f",
+        "suite": {
+         "name": "retention blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f",
+         "tasks": 6,
+         "excluded": {}
+        },
+        "comparison": {
+         "items": 6,
+         "unpaired": 0,
+         "paired": 6,
+         "both_right": 0,
+         "both_wrong": 6,
+         "candidate_wins": 0,
+         "baseline_wins": 0,
+         "candidate_accuracy": 0.0,
+         "baseline_accuracy": 0.0
+        },
+        "drop": 0.0,
+        "passed": true
+       }
+      ]
+     },
+     "reason": null
+    },
+    "anchor": {
+     "passed": false,
+     "measured": {
+      "version": 1,
+      "digest": "blake3:51bca83bb3f00d382b5107d2ab73e659c3dadf0d36133dd526a9c45f0da12018",
+      "suite": {
+       "name": "anchor v1",
+       "tasks": 40,
+       "excluded": {}
+      },
+      "comparison": {
+       "items": 40,
+       "unpaired": 1,
+       "paired": 39,
+       "both_right": 37,
+       "both_wrong": 0,
+       "candidate_wins": 0,
+       "baseline_wins": 2,
+       "candidate_accuracy": 0.9487179487179487,
+       "baseline_accuracy": 1.0
+      },
+      "drop": 0.05128205128205132,
+      "bound": 0.02,
+      "drop_interval": {
+       "level": 0.95,
+       "low": 0.0,
+       "high": 0.1282051282051282
+      },
+      "items_to_see_two_points": 793
+     },
+     "reason": "the anchor suite (version 1) dropped 0.0513 > bound 0.02"
+    },
+    "serve": {
+     "passed": true,
+     "measured": {
+      "binary": "HOME/code/brain/target/release/brain",
+      "startup_line": "brain serve: local/Qwen3-1.7B:splinter:candidate:latest adapter=local/Qwen3-1.7B:splinter:candidate:latest digest=sha256:2499096f25d7c8fa95774ec5af17991cbf32201ab32bf1d4817da313fe54b9d6",
+      "served_digest": "sha256:2499096f25d7c8fa95774ec5af17991cbf32201ab32bf1d4817da313fe54b9d6",
+      "expected_digest": "sha256:2499096f25d7c8fa95774ec5af17991cbf32201ab32bf1d4817da313fe54b9d6",
+      "sampled": 8,
+      "agreed": 8,
+      "disagreed": [],
+      "agreement": "answers"
+     },
+     "reason": null
+    },
+    "passed": false,
+    "prompts": [
+     {
+      "suite": "held-out",
+      "candidate": "default",
+      "champion": "default"
+     },
+     {
+      "suite": "retention blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f",
+      "candidate": "default",
+      "champion": "default"
+     },
+     {
+      "suite": "anchor v1",
+      "candidate": "default",
+      "champion": "default"
+     }
+    ],
+    "interval_seed": 12911274778179685884
+   },
+   "requeued": [],
+   "warnings": [],
+   "release": null,
+   "adapter": null
+  },
+  "exam": {
+   "not_run": "the exam failed: judge brain/Qwen/Qwen3-1.7B+c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace refuses to grade an experience its own model produced"
+  },
+  "powered": null,
+  "stopped": null
+ }
+}

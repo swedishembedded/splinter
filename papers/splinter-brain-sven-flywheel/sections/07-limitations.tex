@@ -10,19 +10,22 @@ corpora, 30 facts per generation, one policy size per run. The training settings
 chosen on two earlier pilots with other seeds, not on the registered run's own measurement, but
 they were chosen by hand and no search over them was made.
 
-No run released a candidate. In every run the improvement, retention and serve checks passed or,
-in one run, the serve check could not start its server, and the anchor check refused; so the
-alias move, the serving manifest of a real release, a second generation that continues a
-champion with replay, the retention check against an earlier release and the rollback to a first
-release are described from the code (\cref{sec:gate}) and are not demonstrated end to end here.
-The serve check was measured on refused candidates only. The anchor bound allows a loss of less
-than one of 40 questions, so a single changed answer decides it; we did not test a larger anchor
-suite or other training settings that might keep it, beyond the two settings and two policy sizes
+The registered E2/E3 criterion (a release with a significant gain, then retention and rollback) was not
+met: every candidate of the 0.6B policy passed the improvement and retention checks and was refused by the
+anchor check, whose bound of 0.02 over 40 questions (0.025 per question) allows no lost answer. One
+post hoc run with a 1.7B policy released its first candidate; its second candidate was refused, so the
+alias move after a second release, retention against an earlier release as the gate measures it and the rollback
+to a first release are described from the code (\cref{sec:gate}) and are not demonstrated end to end here;
+the one rollback attempted was refused because the release had no predecessor. In one run the serve check
+could not start its server and is not measured. The gate's retention check held the champion to held-out tasks that,
+for a facts campaign, are facts it never taught, so it passed while the candidate forgot taught facts
+(\cref{sec:e2}); we measured that forgetting on independent probes. The 1.7B result is a single post hoc run.
+We did not test a larger anchor suite or other settings that might keep the anchor at 0.6B beyond the two
 reported. The facts are numbers, which may be why they leak into numeric answers elsewhere; a
 domain of non-numeric facts is not measured.
 
-The held-out families of a run are facts the policy is never taught, about a seventh to a quarter of
-the facts, and the teacher's answer was not verified for a further share of them
+The held-out families of a run are facts the policy is never taught, a few of the 30 facts of a
+generation, and the teacher's answer was not verified for a further share of them
 (\cref{sec:defects}); the facts measured in the probes include both, so the counts of facts answered
 are lower bounds of what the trained records taught. Probes are graded by numbers appearing in the
 answer; a different grader was not compared. The experiments ran on binaries built from the commits

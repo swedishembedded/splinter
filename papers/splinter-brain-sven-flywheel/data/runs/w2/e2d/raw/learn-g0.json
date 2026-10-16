@@ -2,13 +2,13 @@
  "command": [
   "HOME/project/shared/containers/worktrees/s-l3/target/release/splinter",
   "--state",
-  "STATE_ROOT/state",
+  "HOME/project/shared/containers/l3work/pilot6/state",
   "--json",
   "-v",
   "--policy-context-tokens",
   "8192",
   "learn",
-  "STATE_ROOT/sheets0",
+  "HOME/project/shared/containers/l3work/pilot6/sheets0",
   "--kinds",
   "recall",
   "--generator",
@@ -49,7 +49,7 @@
     "kind": "repository",
     "origin": {
      "kind": "repository",
-     "path": "STATE_ROOT/sheets0",
+     "path": "/nobackup/proj/disk/ehpc-aif-2026fl01-1042/shared/containers/l3work/pilot6/sheets0",
      "revision": null,
      "skipped": []
     },
@@ -586,7 +586,7 @@
    "format": "generic-messages-v2",
    "records": 25,
    "excluded": {},
-   "path": "STATE_ROOT/state/artifacts/3a/3ab40d376070c7499b44e212be01e3e0d2272319488a727fea8cf61ed554ae4a.jsonl",
+   "path": "HOME/project/shared/containers/l3work/pilot6/state/artifacts/3a/3ab40d376070c7499b44e212be01e3e0d2272319488a727fea8cf61ed554ae4a.jsonl",
    "described": null
   },
   "voice": null,
@@ -648,7 +648,7 @@
     "excluded": {
      "failed": 1
     },
-    "path": "STATE_ROOT/state/artifacts/13/13f3cf32b77fc05a9ec1d862bbf4846a5e30aba46938267077064b09be0f6cc3.jsonl",
+    "path": "HOME/project/shared/containers/l3work/pilot6/state/artifacts/13/13f3cf32b77fc05a9ec1d862bbf4846a5e30aba46938267077064b09be0f6cc3.jsonl",
     "described": null
    },
    "stopped": null
@@ -670,7 +670,7 @@
     "monitored": 0,
     "digest": "blake3:13f3cf32b77fc05a9ec1d862bbf4846a5e30aba46938267077064b09be0f6cc3"
    },
-   "adapter": "STATE_ROOT/state/artifacts/c5/c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace.safetensors",
+   "adapter": "HOME/project/shared/containers/l3work/pilot6/state/artifacts/c5/c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace.safetensors",
    "adapter_artifact": "blake3:c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace",
    "adapter_digest": "sha256:e753d1470cfc902a88fc2f70463fc057c547366b6a389e1c935db5e2b6ba588c",
    "base_digest": "sha256:a814c18575512a31b6ffa1cf423fa7ea088230eefe5cc6540cc9cdba6c8d579e",
@@ -946,7 +946,7 @@
    "requeued": [],
    "warnings": [],
    "release": "blake3:1c22d2c290ee8ace5a7c4029efede23706dc793be98f590a2a20de6d0f7bd64f",
-   "adapter": "STATE_ROOT/state/artifacts/c5/c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace.safetensors"
+   "adapter": "HOME/project/shared/containers/l3work/pilot6/state/artifacts/c5/c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace.safetensors"
   },
   "exam": {
    "not_run": "the exam failed: judge brain/Qwen/Qwen3-1.7B refuses to grade an experience its own model produced"

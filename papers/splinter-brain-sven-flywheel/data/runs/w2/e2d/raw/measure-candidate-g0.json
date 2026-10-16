@@ -2,7 +2,7 @@
  "command": [
   "HOME/project/shared/containers/worktrees/s-l3/target/release/splinter",
   "--state",
-  "STATE_ROOT/state",
+  "HOME/project/shared/containers/l3work/pilot6/state",
   "--json",
   "-v",
   "--policy-context-tokens",
@@ -10,19 +10,19 @@
   "eval",
   "candidate-20261016T122417.970-6382",
   "--suite",
-  "STATE_ROOT/suite.jsonl"
+  "HOME/project/shared/containers/l3work/pilot6/suite.jsonl"
  ],
  "exit": 0,
  "elapsed_s": 156.8,
  "report": {
   "run": "run-20261016T124557.942-33ec",
   "model": "candidate-20261016T122417.970-6382",
-  "reference": "local:HOME/.local/share/brain/models/Qwen/Qwen3-1.7B+STATE_ROOT/state/artifacts/c5/c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace.safetensors@8192",
+  "reference": "local:HOME/.local/share/brain/models/Qwen/Qwen3-1.7B+HOME/project/shared/containers/l3work/pilot6/state/artifacts/c5/c523af411c38c82df730ac4c5bfbefc0491cc7c042f70e2237e1346c2619aace.safetensors@8192",
   "anchor": null,
   "scores": [
    {
     "suite": {
-     "name": "STATE_ROOT/suite.jsonl",
+     "name": "HOME/project/shared/containers/l3work/pilot6/suite.jsonl",
      "tasks": 400,
      "excluded": {}
     },
