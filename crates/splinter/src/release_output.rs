@@ -29,6 +29,9 @@ fn share(value: Option<f64>) -> String {
 fn verdict<T>(check: &Check<T>) -> String {
     match (check.passed, &check.reason) {
         (true, _) => "passed".into(),
+        (false, Some(reason)) if check.inconclusive => {
+            format!("INCONCLUSIVE (not a failure): {reason}")
+        }
         (false, Some(reason)) => format!("FAILED: {reason}"),
         (false, None) => "FAILED".into(),
     }

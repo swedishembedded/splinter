@@ -6,7 +6,7 @@
 use serde_json::json;
 use splinter_sdk::checkpoints::{select as select_checkpoint, SelectRequest, Selected};
 use splinter_sdk::exam_set::{build, ExamBuilt, ExamSet, NewExam};
-use splinter_sdk::powered::plan::{simulate, Plan, Planned};
+use splinter_sdk::powered::plan::{sign_planned, simulate, Plan, Planned, SignPlanned};
 use splinter_sdk::powered::{audit, memorisation, reports};
 use splinter_sdk::powered::{run, ArmChoice, PoweredExam, PoweredRequest, DEFAULT_RESAMPLES};
 use splinter_sdk::runs::{record, Recorded};
@@ -160,6 +160,9 @@ pub struct PlannedExam {
     pub plan: Plan,
     /// What simulating the planned test gave.
     pub planned: Planned,
+    /// The exact sign test over families the release gate decides on: its
+    /// power at the planned effect and the smallest lead it could see.
+    pub sign_test: SignPlanned,
 }
 
 /// Simulates the planned paired test.
@@ -202,6 +205,7 @@ pub fn power(args: &PowerArgs) -> Result<PlannedExam, Error> {
     Ok(PlannedExam {
         plan,
         planned: simulate(&plan),
+        sign_test: sign_planned(&plan),
     })
 }
 

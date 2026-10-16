@@ -89,11 +89,7 @@ impl MetricGate {
 }
 
 fn check(measured: String, failure: Option<String>) -> Check<String> {
-    Check {
-        passed: failure.is_none(),
-        measured: Some(measured),
-        reason: failure,
-    }
+    Check::decided(measured, failure)
 }
 
 fn decide_one(r: &Requirement, e: &Evidence) -> Check<String> {

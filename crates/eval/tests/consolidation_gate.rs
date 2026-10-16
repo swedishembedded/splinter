@@ -37,6 +37,7 @@ fn served() -> Check<Serve> {
             agreement: Default::default(),
         }),
         reason: None,
+        inconclusive: false,
     }
 }
 

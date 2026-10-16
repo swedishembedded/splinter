@@ -36,3 +36,4 @@ in the same commit.
 | [028](028-a-drawn-seed-made-three-tests-compare-nothing.md) | A drawn seed made three tests compare different things |
 | [029](029-a-dependency-moved-under-a-lock-that-pinned-a-missing-commit.md) | The dependency moved under a lock that named a commit nobody had |
 | [046](046-forward-transfer-has-no-base-cell-in-a-gate-report.md) | Forward transfer had no base cell to read in the gate reports |
+| [047](047-ten-gates-at-five-percent-release-a-null-candidate-four-times-in-ten.md) | Ten gates at five percent release a null candidate four times in ten |

@@ -174,14 +174,13 @@ pub fn policy_check(terms: Option<&Terms>, distribution: Distribution) -> Check<
         Distribution::Restricted => terms.permits(Use::Training),
         Distribution::Unrestricted => terms.permits_unrestricted_release(),
     };
-    Check {
-        passed: verdict.is_ok(),
-        measured: Some(format!(
+    Check::decided(
+        format!(
             "{}: training {:?}, commercial use {:?}, redistribution {:?}; {distribution:?} release",
             terms.name, terms.training, terms.commercial_use, terms.redistribution
-        )),
-        reason: verdict.err(),
-    }
+        ),
+        verdict.err(),
+    )
 }
 
 /// The distinct units of one arm; refused when it has none or repeats one.

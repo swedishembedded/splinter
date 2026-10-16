@@ -65,6 +65,7 @@ pub mod gate;
 pub mod metric_gate;
 pub mod overlap;
 pub mod paired;
+pub mod power;
 pub mod predictive_gate;
 pub mod significance;
 pub mod speech_features;

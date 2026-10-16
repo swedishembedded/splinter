@@ -24,6 +24,9 @@ use serde::{Deserialize, Serialize};
 use splinter_core::rng::Seed;
 
 use super::analysis::interval_of;
+use splinter_eval::gate::DEFAULT_ALPHA;
+use splinter_eval::power::{self, SignPlan, DEFAULT_POWER};
+use splinter_model::stats::BrainSignificance;
 
 /// What is assumed of the exam and the arms.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -61,6 +64,61 @@ pub struct Planned {
     /// not there, which should be near 0.025 for a two-sided 95% interval
     /// read one way.
     pub false_positive_rate: f64,
+}
+
+/// What the exact one-sided sign test over families makes of a plan: the
+/// test the release gate decides on, which counts a family once.
+///
+/// A family is a candidate win with probability `(d + e) / 2` and a baseline
+/// win with `(d - e) / 2` for the plan's discordance `d` and effect `e`,
+/// read at the level of families: the plan's discordance is the share of
+/// families on which the arms differ, which understates it when a family's
+/// tasks differ independently, so the power here is conservative.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SignPlanned {
+    /// The level the test is held to.
+    pub alpha: f64,
+    /// The fewest candidate wins that are significant when the expected
+    /// number of families are discordant; `None` when not even all of them
+    /// are (four families cannot reach 0.05).
+    pub critical_wins: Option<usize>,
+    /// The exact chance the test rejects at the planned effect.
+    pub power: f64,
+    /// The smallest lead the plan sees with the wanted power; `None` when
+    /// even a lead as large as the discordance falls short.
+    pub minimum_detectable_effect: Option<f64>,
+    /// The power asked for.
+    pub wanted_power: f64,
+    /// Whether the plan reaches the wanted power at its effect. When it does
+    /// not, a miss on this exam is inconclusive and not a failure.
+    pub adequate: bool,
+}
+
+/// The sign test's side of `plan`.
+#[must_use]
+pub fn sign_planned(plan: &Plan) -> SignPlanned {
+    let sign = SignPlan {
+        units: plan.families,
+        discordance: plan.discordance,
+        effect: plan.effect,
+        alpha: DEFAULT_ALPHA,
+    };
+    let reached = power::power(&sign, &BrainSignificance);
+    let expected = (plan.families as f64 * plan.discordance).round() as usize;
+    SignPlanned {
+        alpha: DEFAULT_ALPHA,
+        critical_wins: power::critical_wins(expected, DEFAULT_ALPHA, &BrainSignificance),
+        power: reached,
+        minimum_detectable_effect: power::minimum_detectable_effect(
+            plan.families,
+            plan.discordance,
+            DEFAULT_ALPHA,
+            DEFAULT_POWER,
+            &BrainSignificance,
+        ),
+        wanted_power: DEFAULT_POWER,
+        adequate: reached >= DEFAULT_POWER,
+    }
 }
 
 struct Rng(splinter_core::rng::SplitMix64);
@@ -157,6 +215,32 @@ mod tests {
         assert!(large.false_positive_rate < 0.08, "{large:?}");
         assert_eq!(large.tasks, 400);
         assert!((large.design_effect - 1.7).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_sign_test_over_few_families_needs_near_unanimity() {
+        let sign = |families, discordance| {
+            sign_planned(&Plan {
+                families,
+                discordance,
+                ..plan(families, 0.5)
+            })
+        };
+        // All families discordant: five need unanimity (p = 1/32), six too
+        // (1/64), eight tolerate one negative (7 of 8 is 9/256).
+        assert_eq!(sign(5, 1.0).critical_wins, Some(5));
+        assert_eq!(sign(6, 1.0).critical_wins, Some(6));
+        assert_eq!(sign(8, 1.0).critical_wins, Some(7));
+        // Four cannot reach 0.05 at all, so no lead is detectable.
+        let four = sign(4, 1.0);
+        assert_eq!(
+            (four.critical_wins, four.minimum_detectable_effect),
+            (None, None)
+        );
+        assert!(!four.adequate && four.power == 0.0);
+        // Many families see a lead the few cannot.
+        assert!(sign(60, 0.5).adequate || sign(60, 0.5).minimum_detectable_effect.is_some());
+        assert!(!sign(6, 0.3).adequate);
     }
 
     #[test]

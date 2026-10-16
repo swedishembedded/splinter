@@ -145,6 +145,19 @@ pub struct GateConfig {
     /// reads the defaults.
     #[serde(default)]
     pub agentic: AgenticConfig,
+    /// Whether the improvement check spends `alpha` across the releases of a
+    /// lineage by the fixed schedule of [`crate::power::spent_alpha`], so that
+    /// a long sequence of candidates no better than their champions
+    /// releases one with probability below `alpha` and not near
+    /// `1 - (1 - alpha)^n`. A report written before it existed reads `false`.
+    #[serde(default)]
+    pub alpha_spending: bool,
+    /// The lead, in the share of independent units won, the improvement check
+    /// is asked to be able to see. With it, a miss on an exam too small to
+    /// see that lead is reported inconclusive and not as a failure. `None`
+    /// holds the exam to no power.
+    #[serde(default)]
+    pub target_effect: Option<f64>,
 }
 
 impl Default for GateConfig {
@@ -156,6 +169,8 @@ impl Default for GateConfig {
             serve_sample: DEFAULT_SERVE_SAMPLE,
             serve_startup_secs: DEFAULT_SERVE_STARTUP_SECS,
             agentic: AgenticConfig::default(),
+            alpha_spending: false,
+            target_effect: None,
         }
     }
 }
@@ -169,6 +184,11 @@ pub struct Check<T> {
     pub measured: Option<T>,
     /// Why it failed or could not be measured.
     pub reason: Option<String>,
+    /// Whether the check could not decide because the evidence was too small
+    /// to see the effect asked about: neither a pass nor a failure, though
+    /// nothing is released on it. See [`crate::power::Verdict`].
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub inconclusive: bool,
 }
 
 impl<T> Check<T> {
@@ -179,14 +199,16 @@ impl<T> Check<T> {
             passed: false,
             measured: None,
             reason: Some(format!("not measured: {}", reason.into())),
+            inconclusive: false,
         }
     }
 
-    fn decided(measured: T, failure: Option<String>) -> Self {
+    pub(crate) fn decided(measured: T, failure: Option<String>) -> Self {
         Self {
             passed: failure.is_none(),
             measured: Some(measured),
             reason: failure,
+            inconclusive: false,
         }
     }
 }
@@ -262,6 +284,10 @@ pub struct Improvement {
     /// when the suite holds none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agentic: Option<AgenticProbe>,
+    /// The power and the sequential level the decision was held to; `None`
+    /// when the gate ran without a planned effect or a generation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<crate::power::PowerAssessment>,
 }
 
 /// What the tasks themselves say, beside the family-level sign test the gate
@@ -596,6 +622,7 @@ pub fn improvement(
             recall: None,
             task_level: None,
             agentic: None,
+            power: None,
         },
         failure,
     )

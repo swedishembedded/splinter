@@ -221,8 +221,8 @@ pub fn powered_line(summary: &serde_json::Value) -> String {
 
 impl Report for crate::exam_session::PlannedExam {
     fn human(&self) -> String {
-        let (p, r) = (&self.plan, &self.planned);
-        format!(
+        let (p, r, s) = (&self.plan, &self.planned, &self.sign_test);
+        let mut out = format!(
             "{} families of {} tasks ({} tasks), the first arm {:.0} points ahead, {:.0}% of \
              tasks discordant, intraclass correlation {:.2} (design effect {:.2}): the planned test \
              finds it in {:.0}% of {} simulated exams; with no difference it finds one in {:.1}%\n",
@@ -236,7 +236,36 @@ impl Report for crate::exam_session::PlannedExam {
             r.power * 100.0,
             p.replicates,
             r.false_positive_rate * 100.0
-        )
+        );
+        let lead = s.minimum_detectable_effect.map_or_else(
+            || "none: the families cannot show a lead at this level".into(),
+            |e| format!("{:.0} points", e * 100.0),
+        );
+        let _ = writeln!(
+            out,
+            "release gate (exact one-sided sign test, a family counts once, alpha {}): power {:.0}% at \
+             the planned lead, smallest lead seen with {:.0}% power: {lead}",
+            s.alpha,
+            s.power * 100.0,
+            s.wanted_power * 100.0
+        );
+        match s.critical_wins {
+            Some(k) => {
+                let _ = writeln!(
+                    out,
+                    "  at the expected discordance, {k} wins among the discordant families are needed"
+                );
+            }
+            None => out.push_str(
+                "  not even unanimity among the expected discordant families is significant\n",
+            ),
+        }
+        if !s.adequate {
+            out.push_str(
+                "  UNDERPOWERED: a miss on this exam is inconclusive, never a pass or a fail\n",
+            );
+        }
+        out
     }
 }
 

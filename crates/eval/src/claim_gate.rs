@@ -234,11 +234,7 @@ impl ClaimGate {
 }
 
 fn decided<T>(measured: T, failure: Option<String>) -> Check<T> {
-    Check {
-        passed: failure.is_none(),
-        measured: Some(measured),
-        reason: failure,
-    }
+    Check::decided(measured, failure)
 }
 
 /// Decides the gate over `claims`, the anchor counts if a suite is frozen,

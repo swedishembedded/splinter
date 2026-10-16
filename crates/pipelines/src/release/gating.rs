@@ -19,6 +19,7 @@ use splinter_core::release::ReleaseId;
 use splinter_core::rng::Seed;
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuitePrompts, SuiteSummary};
 use splinter_eval::paired::PairedOutcome;
+use splinter_eval::power;
 use splinter_model::stats::BrainSignificance;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -358,6 +359,21 @@ pub(super) fn run_gate(
     cancel: &CancelToken,
 ) -> Result<GateReport, OrchestratorError> {
     let suites = Suites::build(ctx, candidate, champion, config)?;
+    // The candidate's place in the sequence of releases decides the level it
+    // may spend; a first release has no champion to descend from.
+    let generation = match (config.alpha_spending, champion) {
+        (false, _) => None,
+        (true, None) => Some(1),
+        (true, Some(champion)) => {
+            let behind = ctx.releases().lineage(&champion.id)?.len();
+            Some(u32::try_from(behind + 1).unwrap_or(u32::MAX))
+        }
+    };
+    let rule = power::Rule {
+        alpha: config.alpha,
+        generation,
+        target_effect: config.target_effect,
+    };
     let all = suites.all();
     let candidate_ref = arm(ctx.config(), Some(&candidate.adapter));
     let champion_adapter = champion.map(StoredRelease::adapter).transpose()?;
@@ -407,11 +423,11 @@ pub(super) fn run_gate(
             Err(why) => Check::unmeasured(why),
             Ok((c, b)) => {
                 let outcomes = clustered(ctx, suite, pair(suite, &c, &b))?;
-                let mut check = gate::improvement(
+                let mut check = power::judged_improvement(
                     suite.summary(),
                     suites.variants.clone(),
                     &outcomes,
-                    config.alpha,
+                    rule,
                     &BrainSignificance,
                 );
                 if let Some(measured) = check.measured.as_mut() {
