@@ -25,8 +25,8 @@ only for a finished run, and the status column below changes by itself when one 
 
 \begin{description}
 \item[CE1, the untrained agent.] The base agent's resolve rate on repository tasks, its failure
-profile, its cost per resolved task and the discordance between two seeds of the same arm per
-family, which sizes the qualification partition. No threshold; nothing is trained before it is
+profile, its cost per resolved task and the discordance between the base and the 27B teacher per
+family, which is the sizing input for the qualification partition (greedy decoding makes two seeds of one arm identical). No threshold; nothing is trained before it is
 reported.\cl{PR10}
 \item[CE4, the headline (as amended).] A LoRA adapter on Qwen3-8B trained only on verified
 trajectories, produced by the 27B teacher served as the base, from
@@ -68,6 +68,7 @@ condition do not.\cl{PR15} \emph{Second}, CE8 is registered as the 27B counterpa
 protocol.\cl{PR16} \emph{Third}, one harness profile is pinned for all experiments (episode
 bounds and a follow-up for an unchanged tree, \cref{sec:protocol}), and results measured
 before it are excluded from all analyses.\cl{PR14}
+A second amendment, also before any run, registers the run parameters: evaluation arms are greedy with one attempt per task, the exam seed and the 46 qualification and 34 development families, the serving flags, the LoRA recipe and the commit equivalence for the pinned fixes; it does not change the primary test or the success condition.\cl{PR17}
 
 \begin{table}[t]
 \centering\small

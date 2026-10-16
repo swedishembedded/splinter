@@ -80,8 +80,7 @@ removing it.
 fault was seeded in for the authored repositories and the subsystem for real
 ones.\cl{PR02} Tasks within a family are not independent, so no test treats them as such. The
 base arm is the unmodified checkpoint in a pinned harness profile; the adapter arm is the same
-checkpoint with the adapter attached; system prompt, tool schemas, budgets, seeds per
-(task, attempt) and environment image are identical.\cl{PR03} A family is won by the adapter
+checkpoint with the adapter attached; system prompt, tool schemas, budgets, decoding (greedy, one attempt per task, because served models cannot be seeded; \cref{sec:amend}) and environment image are identical.\cl{PR03,PR17} A family is won by the adapter
 when its resolved fraction is higher, lost when lower, and dropped when tied. The primary
 decision is a one-sided exact sign test over the non-tied qualification families at
 $\alpha=\alphalevel$, on the adapter served through Brain and driven by Sven; a result that is
@@ -100,8 +99,8 @@ needed and the power at assumed win probabilities: with fewer than five non-tied
 decision is possible, \mDesignNOneFiveWins{} wins are needed at fifteen non-tied families
 and \mDesignNTwoFiveWins{} at twenty-five, where the power at a win share of 0.8 is
 \mDesignNTwoFivePowerEightZero{}.\cl{CP01,CP02} The registration therefore asks for about
-twenty-five non-tied qualification families, fixed from the discordance of the baseline
-experiment before any training, and labels a smaller comparison a pilot without changing the
+twenty-five non-tied qualification families, registered as 46 families (28 Python, 18 Lua) before any run, with the base-versus-teacher
+discordance on development families reported as the sizing input, and labels a smaller comparison a pilot without changing the
 rule.\cl{PR04}
 
 \begin{figure}[t]

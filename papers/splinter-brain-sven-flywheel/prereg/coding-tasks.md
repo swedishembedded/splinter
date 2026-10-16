@@ -220,6 +220,122 @@ cancel it, and CE4 winning does not substitute for it.
 **A1.5 Experiment list.** The registered experiments are CE1, CE4 (amended), CE6, CE7 and CE8.
 CE7 repeats CE4 as amended on the independent repository; its selection rule is unchanged.
 
+### Amendment 2, 2026-10-16, 23:58 CEST: run parameters, sizing, evaluation decoding
+
+Written and committed before any run of CE1, CE4, CE6, CE7 or CE8 exists, and before any
+admission, reserve or rollout of the code that applies it. It registers values the text above
+left open and corrects three statements that the code cannot implement as written. It changes
+nothing else, and where it and the text above or Amendment 1 disagree, this amendment
+governs. Its sources are the runbook `runs/plan-2026-10-16/ce-runbook.md` on the project
+drive (sections 0 to 3) and splinter main d9a122d.
+
+**A2.1 Commit equivalence (corrects A1.3).** A1.3 requires that the pinned splinter revision
+contain commits 2019ea4 and afcef42. Neither is an ancestor of main; main carries rebased
+copies. `git patch-id --stable` gives the same patch id for each pair: 1fcb155a04bd for
+2019ea4 and e4ae3d6, and 698924fba3dd for afcef42 and add9481 (full ids
+1fcb155a04bdf9a2b24d0b8c40377e1c45674046 and 698924fba3ddaa75e85b18c885be38ab0ebab85b). The
+requirement of A1.3 is met by a revision that contains each of 2019ea4 or e4ae3d6, and
+afcef42 or add9481. The text of the follow-up and the episode bounds are unchanged.
+
+**A2.2 Evaluation decoding (corrects "the same seed per (task, attempt)").** Models served
+through `brain serve` cannot be seeded or resampled by the harness, so a shared seed per
+(task, attempt) cannot be implemented. Both evaluation arms of every comparison (the
+untrained model and the model with the adapter) are run with greedy decoding (temperature
+0) and one attempt per task (k = 1), in the A1.3 profile, against one server instance and
+one build, one arm at a time. Thinking mode is off for every model. The teacher is run twice
+for training data only: pass 1 at greedy, pass 2 at temperature 0.7, unseeded and recorded
+as such; the two passes are not arms of any test. The "attempts per task k from the
+throughput probe" of CE1 is therefore fixed at 1 for the evaluation arms.
+
+**A2.3 Sizing input (replaces the CE1 discordance of two seeds).** Under greedy decoding the
+discordance between two seeds of one arm is zero by construction and carries no information.
+The sizing input is instead, per development family, the base 8B and the 27B teacher
+outcomes in pass 1: the number of families on which their family outcomes differ, as an
+upper bound on the share of non-tied families for an adapter that reaches the teacher. It is
+reported with CE1. The qualification partition size is registered below and is not changed
+by it. The comparison is labelled PILOT when the qualification query yields fewer than 25
+non-tied families, by the rule of the text above, whatever that count is.
+
+**A2.4 Partition values (task generation, Q_f, SEED_EXAM).** Tasks are generated with
+`--mutants-per-file 40` per file under test. The exam seed is registered now: SEED_EXAM =
+20261017, used as `--exam-seed 20261017` for every repository, so the first run remembers it
+and later runs refuse another. The qualification partition is the set of families `practice`
+reserves: families are ranked by a stable hash of (seed, file path) before any rollout and
+the first Q_f of each repository, in rank order, are reserved (the rule of
+`crates/pipelines/src/practice/exam.rs`); the development partition is the remaining
+families. The numbers reserved per repository (`--exam-families`), Q_f, are: iniparse 6 of
+11 files, ttlcache 5 of 9, exprcalc 7 of 12, linediff 5 of 9, mdrender 5 of 9 (the Python
+families, 50 files), caldate 5 of 8, graphkit 7 of 12, tokenbucket 6 of 10 (the Lua
+families, 30 files). That gives 46 qualification families (28 Python, 18 Lua) and 34
+development families (22 Python, 12 Lua), about 56% and 44% of 80 files. Python and Lua
+families are both included. The reason: the Python families alone have 50 files, so at most
+25 qualification families, and the size rule asks for 25 non-tied families, which cannot be
+reached when any family is tied; including the Lua families gives 46 clusters, which reaches
+25 non-tied families if the adapter resolves at least about 8% of tasks (derived from about
+8 tasks per file, a base near 0, and independent families; a design calculation, not a
+measurement). The count of admitted tasks per family is a measured outcome and is reported;
+nothing is added or removed after the partition is made.
+
+**A2.5 Family outcome.** For a family, the outcome of an arm is its resolved fraction over
+the tasks graded in both arms (`paired::by_cluster` of `crates/eval/src/paired.rs`, applied
+to the experiences paired by task id). Attempts whose trajectory exposes hidden material and
+attempts with a harness failure are excluded from that pairing and counted, per arm and per
+reason, as the Exclusions rule already requires; a task excluded in either arm is dropped
+for both. The adapter wins a family when its fraction is higher, loses it when lower, and
+ties are dropped.
+
+**A2.6 Serving flags (registered values).** All brain servers are one build of brain, and
+the splinter binary is one build, for the whole of CE1 and CE4.
+- Qwen3-8B (CE1 base arm, both CE4 arms, controls): `--qwen-ctx 32768 --qwen-max-batch 32
+  --qwen-weights-fp32 --adapter-targets all --adapter-rank-cap 16`, with `--adapter <the
+  frozen adapter>` for the adapter arm on the same server. The 8B is served with fp32
+  weights because the adapter is trained on the fp32 base and the default int8 weights would
+  put a quantisation under the adapter that it was never trained against. Concurrency 32.
+- Qwen3.8-27B teacher (Q8_0 GGUF): `--qwen35-ctx 32768 --qwen35-kv int8 --qwen35-max-batch
+  16 --qwen35-prefix-slots 16 --admit-deadline-ms 900000`. Concurrency 16. The context
+  length the server advertises must read 32768.
+- The smoke of the runbook sets these. It may lower the 27B `--qwen35-max-batch` and
+  `--qwen35-prefix-slots` together, only when the server refuses the configuration for
+  memory; any such change is recorded in the run record and is the only change allowed. The
+  KV precision, context length and fp32 weights are not changed.
+
+**A2.7 LoRA recipe and step rule.** Rank 16, alpha twice the rank, learning rate 2e-4, two
+epochs, 8 records per step, monitoring share 0.2 held out by whole family, `--max-block
+16384`, training seed 1, and the best monitored evaluation is kept (`--keep-evaluations`).
+Steps = ceil(2 x R / 8), where R is the number of training records after the monitoring
+share is removed. All seven linear projections are adapted. Fewer than 40 verified
+trajectories after teacher pass 2 means no training is run and the shortfall is reported as
+the outcome. The dataset is the verified, exposure-clean, `executable`-strength `sft-step`
+view of A1.1 only; trajectories of compacted contexts are dropped by the view and counted.
+
+**A2.8 Packed or unpacked records.** The unpacked `sft-step` view writes one record per
+action, each carrying the whole conversation so far, so its size grows quadratically with
+trajectory length. If `dataset build --view sft-step --pack` lands before training with its
+equivalence test (the supervised spans of the packed record equal the union of the unpacked
+records' spans, and a step labelled bad stays unsupervised), the packed view is the registered
+training view; otherwise the unpacked view is used with the records capped evenly by
+`--limit`, the cap being recorded. The two weight the loss differently: unpacked, every action
+is a record and the loss is averaged per record, so a long trajectory counts once per action
+with its earlier context repeated; packed, the loss is averaged over supervised tokens of the
+record. This difference is stated and not corrected for.
+
+**A2.9 G8 sample.** The G8 serve-verdict agreement is judged on one task per qualification
+family (46 tasks), chosen by stable hash of (SEED_EXAM, task), solved in process with the
+adapter and compared with the verdicts of the served adapter on the same tasks, at the
+threshold of the serve check (at least 75%).
+
+**A2.10 CE1 and CE4 share the 8B base arm.** The CE1 run of the untrained Qwen3-8B on the
+qualification partition and the base arm of CE4 are one run, made once, at the confirmatory
+query, on the same server instance as the adapter arm and in the same profile (A2.2, A2.6).
+No qualification-partition result of the base exists before that query.
+
+**A2.11 CE7 repository.** python-markdown 3.11 does not meet the CE7 size rule: about 30
+module files under test would give at most about 15 qualification families, below the 25
+non-tied needed, and its wheel carries no tests. The repository is not chosen here. The
+candidates are docutils and sqlglot at a pinned tag; the selection rule of CE7 is
+unchanged and is applied by a later dated amendment, which names the repository, tag and
+licence, and is committed before the first CE4 qualification query.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
