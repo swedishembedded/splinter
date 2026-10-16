@@ -63,10 +63,24 @@ impl Rig {
 
     /// A rig that considers `mutants_per_file` mutants of each file.
     fn with_mutants(name: &str, extra: &[(&str, &str)], mutants_per_file: usize) -> Self {
-        let repo = Repo::new(name, extra);
+        Self::over(Repo::new(name, extra), mutants_per_file, &[])
+    }
+
+    /// A rig over the Rust crate [`RUST_CRATE`]; its sandbox reaches the
+    /// toolchain through the caller's `PATH`, `CARGO_HOME` and `RUSTUP_HOME`.
+    fn rust(name: &str) -> Self {
+        Self::over(
+            Repo::of_files(name, &RUST_CRATE),
+            6,
+            &["PATH", "CARGO_HOME", "RUSTUP_HOME"],
+        )
+    }
+
+    fn over(repo: Repo, mutants_per_file: usize, pass_through: &[&str]) -> Self {
         let calls = repo.scratch.0.join("calls");
         fs::create_dir_all(&calls).unwrap();
-        let sandbox = ProcessSandbox::new(&calls, BTreeMap::new(), &[], Limits::default());
+        let sandbox =
+            ProcessSandbox::new(&calls, std::env::vars(), pass_through, Limits::default());
         let generator = WorkspaceGenerator::new(
             Arc::new(sandbox),
             repo.host.clone(),
@@ -103,6 +117,40 @@ impl Rig {
             .unwrap()
     }
 }
+
+/// A crate with no dependencies whose tests are integration tests, so a
+/// fault in `src/lib.rs` is caught by tests that are not in the file.
+const RUST_CRATE: [(&str, &str); 5] = [
+    (
+        "Cargo.toml",
+        "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    ),
+    (
+        "Cargo.lock",
+        "version = 3\n\n[[package]]\nname = \"shop\"\nversion = \"0.1.0\"\n",
+    ),
+    (
+        "src/lib.rs",
+        "pub fn total(prices: &[u32]) -> u32 {\n    let mut sum = 0;\n    for price in prices {\n        sum += price;\n    }\n    sum\n}\n\npub fn discount(price: u32, percent: u32) -> Result<u32, String> {\n    if percent > 100 {\n        return Err(\"percent over 100\".to_string());\n    }\n    Ok(price - price * percent / 100)\n}\n",
+    ),
+    (
+        "tests/total.rs",
+        "use shop::total;\n\n#[test]\nfn empty_basket_costs_nothing() {\n    assert_eq!(total(&[]), 0);\n}\n\n#[test]\nfn prices_are_added_up() {\n    assert_eq!(total(&[2, 3]), 5);\n}\n",
+    ),
+    (
+        "tests/discount.rs",
+        "use shop::discount;\n\n#[test]\nfn ten_percent_off() {\n    assert_eq!(discount(200, 10), Ok(180));\n}\n\n#[test]\nfn over_hundred_percent_is_refused() {\n    assert!(discount(10, 101).is_err());\n}\n",
+    ),
+];
+
+/// The ids the runner reports for [`RUST_CRATE`]'s tests: the test binary's
+/// source file, then the test's name.
+const RUST_TESTS: [&str; 4] = [
+    "tests/discount.rs::over_hundred_percent_is_refused",
+    "tests/discount.rs::ten_percent_off",
+    "tests/total.rs::empty_basket_costs_nothing",
+    "tests/total.rs::prices_are_added_up",
+];
 
 fn check_of(task: &Task) -> WorkspaceCheck {
     let item = task
@@ -626,4 +674,44 @@ fn a_mutant_that_loops_is_stopped_at_the_time_budget_and_not_at_the_sandbox_limi
         "took {:?}",
         began.elapsed()
     );
+}
+
+#[test]
+fn a_cargo_crate_is_read_per_test_and_a_seeded_fault_is_caught_by_exactly_the_named_tests() {
+    let rig = Rig::rust("cargo-tasks");
+    let tree = rig.capture("HEAD");
+    let qualified = rig.qualified(&tree, &[]).unwrap();
+    assert_eq!(
+        qualified.profile.test_command,
+        ["cargo", "test", "--offline"]
+    );
+    assert_eq!(qualified.tests.iter().collect::<Vec<_>>(), RUST_TESTS);
+
+    let generation = rig.generate(&tree, &Held::none());
+    assert!(
+        !generation.admitted.is_empty(),
+        "refused {:?}",
+        generation.refused
+    );
+    for admitted in &generation.admitted {
+        let check = check_of(&admitted.task);
+        let call = &check.fail_to_pass[0];
+        let at = call.argv.iter().position(|a| a == "--exact").unwrap();
+        let named: Vec<&str> = call.argv[at + 1..].iter().map(String::as_str).collect();
+        assert!(!named.is_empty());
+        for name in &named {
+            // The runner is told the test's name alone; the symptom the
+            // request gives is that name in words.
+            assert!(RUST_TESTS
+                .iter()
+                .any(|id| id.ends_with(&format!("::{name}"))));
+            assert!(
+                admitted.task.instruction.contains(&name.replace('_', " ")),
+                "{name} in {}",
+                admitted.task.instruction
+            );
+        }
+        assert!(baseline_fails(&rig, admitted));
+        assert!(reverse_patch_passes(&rig, admitted));
+    }
 }

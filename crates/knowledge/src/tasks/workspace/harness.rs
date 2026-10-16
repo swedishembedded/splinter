@@ -12,8 +12,15 @@
 //! A task needs to say which tests must go from failing to passing and which
 //! must keep passing, so the generator reads the runner's per-test report.
 //! The runner is recognised from the profile's test command; only
-//! `python3 -m unittest` is read per test. A command of another runner can
-//! still qualify a baseline, by its exit status alone.
+//! `python3 -m unittest` and `cargo test` are read per test. A command of
+//! another runner can still qualify a baseline, by its exit status alone.
+//!
+//! A test's id is what the runner calls it. For cargo it is the source file
+//! of the test binary the test lives in, then `::`, then libtest's name for
+//! the test (`tests/total.rs::prices_are_added_up`; a unit test is reported
+//! under its crate root, `src/lib.rs::module::tests::name`). The file is
+//! what [`Harness::file_of`] finds; libtest selects by the name alone, so
+//! two binaries that hold a test of the same name are selected together.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -24,6 +31,9 @@ use splinter_sandbox::{CodeResult, CommandCall};
 pub enum Harness {
     /// `python3 -m unittest`, with or without `discover`.
     Unittest,
+    /// `cargo test`, read from libtest's line per test. Doc-tests are not
+    /// read: their names hold spaces and cannot be selected.
+    Cargo,
 }
 
 /// What one run of a suite reported, per test.
@@ -43,6 +53,18 @@ impl SuiteReport {
     pub fn ran(&self) -> impl Iterator<Item = &String> {
         self.passed.iter().chain(&self.failed)
     }
+
+    /// The tests of `expected` that the run did not report, neither as
+    /// passed nor as failed. A test that was asked for and did not run says
+    /// nothing, and is not a pass.
+    #[must_use]
+    pub fn missing<'a>(&self, expected: impl IntoIterator<Item = &'a String>) -> BTreeSet<String> {
+        expected
+            .into_iter()
+            .filter(|id| !self.passed.contains(*id) && !self.failed.contains(*id))
+            .cloned()
+            .collect()
+    }
 }
 
 /// Characters of a test id that the selection patterns would read as
@@ -54,17 +76,24 @@ impl Harness {
     #[must_use]
     pub fn of(argv: &[String]) -> Option<Self> {
         let program = argv.first()?.rsplit('/').next()?;
+        let word = |at: usize| argv.get(at).map(String::as_str);
         let python = program == "python" || program.starts_with("python3");
-        (python
-            && argv.get(1).map(String::as_str) == Some("-m")
-            && argv.get(2).map(String::as_str) == Some("unittest"))
-        .then_some(Self::Unittest)
+        if python && word(1) == Some("-m") && word(2) == Some("unittest") {
+            Some(Self::Unittest)
+        } else if program == "cargo" && word(1) == Some("test") {
+            Some(Self::Cargo)
+        } else {
+            None
+        }
     }
 
     /// Runs the whole suite, reporting each test.
     #[must_use]
     pub fn run_all(self, base: &[String]) -> CommandCall {
-        call(verbose(base))
+        match self {
+            Self::Unittest => call(verbose(base)),
+            Self::Cargo => call(no_fail_fast(base)),
+        }
     }
 
     /// Runs the tests `ids` and no others, reporting each.
@@ -74,24 +103,45 @@ impl Harness {
     /// [`Harness::selectable`]).
     #[must_use]
     pub fn select(self, base: &[String], ids: &BTreeSet<String>) -> CommandCall {
-        let mut argv = verbose(base);
-        for id in ids {
-            argv.push("-k".into());
-            argv.push(format!("*{id}"));
+        match self {
+            Self::Unittest => {
+                let mut argv = verbose(base);
+                for id in ids {
+                    argv.push("-k".into());
+                    argv.push(format!("*{id}"));
+                }
+                call(argv)
+            }
+            Self::Cargo => {
+                let mut argv = no_fail_fast(base);
+                argv.extend(["--".into(), "--exact".into()]);
+                argv.extend(ids.iter().map(|id| cargo_name(id).to_string()));
+                call(argv)
+            }
         }
-        call(argv)
     }
 
     /// Whether the test `id` can be named to [`Harness::select`] exactly.
     #[must_use]
     pub fn selectable(self, id: &str) -> bool {
-        !id.contains(PATTERN_CHARS)
+        match self {
+            Self::Unittest => !id.contains(PATTERN_CHARS),
+            // Names are matched whole, so nothing is a pattern; a name the
+            // command line would read as a flag or split cannot be given.
+            Self::Cargo => {
+                let name = cargo_name(id);
+                !name.is_empty() && !name.starts_with('-') && !name.contains(char::is_whitespace)
+            }
+        }
     }
 
     /// Reads what the runner printed.
     #[must_use]
     pub fn read(self, result: &CodeResult) -> SuiteReport {
-        read_unittest(&result.stderr)
+        match self {
+            Self::Unittest => read_unittest(&result.stderr),
+            Self::Cargo => read_cargo(&result.stdout, &result.stderr),
+        }
     }
 
     /// The file, relative to the tree, that holds the test `id`: the longest
@@ -99,6 +149,13 @@ impl Harness {
     /// root or from the start directory of a `discover` run.
     #[must_use]
     pub fn file_of(self, id: &str, files: &BTreeSet<String>, base: &[String]) -> Option<String> {
+        if self == Self::Cargo {
+            return id
+                .split_once("::")
+                .map(|(file, _)| file)
+                .filter(|file| files.contains(*file))
+                .map(String::from);
+        }
         let roots = discovery_roots(base);
         let parts: Vec<&str> = id.split('.').collect();
         (1..parts.len()).rev().find_map(|k| {
@@ -109,6 +166,21 @@ impl Harness {
                 .find(|path| files.contains(path))
         })
     }
+}
+
+/// `base` asking for every test to run though one fails.
+fn no_fail_fast(base: &[String]) -> Vec<String> {
+    let mut argv = base.to_vec();
+    if !argv.iter().any(|a| a == "--no-fail-fast") {
+        argv.push("--no-fail-fast".into());
+    }
+    argv
+}
+
+/// libtest's name of the test `id` of cargo's: what follows the binary's
+/// source file.
+fn cargo_name(id: &str) -> &str {
+    id.split_once("::").map_or(id, |(_, name)| name)
 }
 
 /// `base` asking for a line per test.
@@ -219,6 +291,62 @@ fn read_unittest(stderr: &str) -> SuiteReport {
     report
 }
 
+/// The source file of the test binary a `Running` line of cargo's names:
+/// `Running unittests src/lib.rs (target/...)` or `Running tests/x.rs (...)`.
+fn binary_source(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix("Running ")?;
+    let rest = rest.strip_prefix("unittests ").unwrap_or(rest);
+    rest.rsplit_once(" (").map(|(file, _)| file)
+}
+
+/// libtest's outcome of one test: `test name ... ok`. A should-panic test
+/// is printed `name - should panic`, which is not part of its name.
+fn libtest_line(line: &str) -> Option<(&str, &str)> {
+    let (name, status) = line.strip_prefix("test ")?.rsplit_once(" ... ")?;
+    Some((name.strip_suffix(" - should panic").unwrap_or(name), status))
+}
+
+/// Cargo prints each test binary's `Running` line on stderr and the binary's
+/// libtest report on stdout, so the two are paired by order: the nth block
+/// of tests (`running N tests`) is the nth binary. Blocks past the last
+/// binary are doc-tests.
+fn read_cargo(stdout: &str, stderr: &str) -> SuiteReport {
+    let binaries: Vec<&str> = stderr.lines().filter_map(binary_source).collect();
+    let mut report = SuiteReport::default();
+    let mut block: Option<usize> = None;
+    // Past `failures:` a block quotes the output of its failed tests, which
+    // may print anything, a line shaped like a result included.
+    let mut quoting = false;
+    for line in stdout.lines() {
+        if line.starts_with("running ") && (line.ends_with(" tests") || line.ends_with(" test")) {
+            block = Some(block.map_or(0, |b| b + 1));
+            quoting = false;
+            continue;
+        }
+        quoting |= line == "failures:";
+        if quoting {
+            continue;
+        }
+        let (Some(binary), Some((name, status))) =
+            (block.and_then(|b| binaries.get(b)), libtest_line(line))
+        else {
+            continue;
+        };
+        let id = format!("{binary}::{name}");
+        match status {
+            "ok" => {
+                report.passed.insert(id);
+            }
+            "FAILED" => {
+                report.failed.insert(id);
+            }
+            // Ignored tests did not run.
+            _ => {}
+        }
+    }
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn only_unittest_is_read_per_test() {
+    fn only_unittest_and_cargo_test_are_read_per_test() {
         assert_eq!(
             Harness::of(&cmd(&["python3", "-m", "unittest"])),
             Some(Harness::Unittest)
@@ -237,7 +365,11 @@ mod tests {
             Harness::of(&cmd(&["/usr/bin/python3.12", "-m", "unittest", "discover"])),
             Some(Harness::Unittest)
         );
-        assert_eq!(Harness::of(&cmd(&["cargo", "test", "--offline"])), None);
+        assert_eq!(
+            Harness::of(&cmd(&["cargo", "test", "--offline"])),
+            Some(Harness::Cargo)
+        );
+        assert_eq!(Harness::of(&cmd(&["cargo", "build"])), None);
         assert_eq!(Harness::of(&cmd(&["python3", "-m", "pytest"])), None);
     }
 
@@ -317,5 +449,104 @@ Ran 5 tests in 0.002s
             ["python3", "-m", "unittest", "-v", "-k", "*t.A.test_x"]
         );
         assert!(!Harness::Unittest.selectable("t.A.test_x[1]"));
+    }
+
+    #[test]
+    fn a_cargo_report_pairs_each_binary_with_its_tests_and_skips_doc_tests() {
+        let stderr = "\
+   Compiling shop v0.1.0
+     Running unittests src/lib.rs (target/debug/deps/shop-1)
+     Running tests/total.rs (target/debug/deps/total-2)
+   Doc-tests shop
+error: test failed, to rerun pass `--test total`
+";
+        let stdout = "\
+running 1 test
+test util::tests::inner ... ok
+
+test result: ok. 1 passed; 0 failed
+
+running 4 tests
+test adds ... ok
+test boom - should panic ... ok
+test skipped ... ignored
+test wrong ... FAILED
+
+failures:
+
+---- wrong stdout ----
+test fake ... FAILED
+
+running 1 test
+test src/lib.rs - total (line 3) ... ok
+";
+        let report = Harness::Cargo.read(&CodeResult {
+            stdout: stdout.into(),
+            stderr: stderr.into(),
+            exit_code: Some(101),
+            signal: None,
+            timed_out: false,
+            stdout_truncated: false,
+            stderr_truncated: false,
+        });
+        let ids = |set: &BTreeSet<String>| set.iter().cloned().collect::<Vec<_>>();
+        assert_eq!(
+            ids(&report.passed),
+            [
+                "src/lib.rs::util::tests::inner",
+                "tests/total.rs::adds",
+                "tests/total.rs::boom"
+            ]
+        );
+        assert_eq!(ids(&report.failed), ["tests/total.rs::wrong"]);
+    }
+
+    #[test]
+    fn cargo_selects_by_exact_name_and_finds_the_binary_file() {
+        let ids: BTreeSet<String> = ["tests/t.rs::a::b", "tests/t.rs::c"]
+            .map(String::from)
+            .into();
+        let base = cmd(&["cargo", "test", "--offline"]);
+        assert_eq!(
+            Harness::Cargo.select(&base, &ids).argv,
+            [
+                "cargo",
+                "test",
+                "--offline",
+                "--no-fail-fast",
+                "--",
+                "--exact",
+                "a::b",
+                "c"
+            ]
+        );
+        assert_eq!(
+            Harness::Cargo.run_all(&base).argv,
+            ["cargo", "test", "--offline", "--no-fail-fast"]
+        );
+        let files: BTreeSet<String> = ["tests/t.rs", "src/lib.rs"].map(String::from).into();
+        assert_eq!(
+            Harness::Cargo
+                .file_of("tests/t.rs::a::b", &files, &base)
+                .as_deref(),
+            Some("tests/t.rs")
+        );
+        assert_eq!(Harness::Cargo.file_of("gone.rs::a", &files, &base), None);
+        assert!(Harness::Cargo.selectable("tests/t.rs::a::b"));
+        assert!(!Harness::Cargo.selectable("tests/t.rs::a b"));
+    }
+
+    #[test]
+    fn a_test_that_was_asked_for_and_not_reported_is_missing() {
+        let report = SuiteReport {
+            passed: ["a".to_string()].into(),
+            failed: ["b".to_string()].into(),
+            docs: BTreeMap::new(),
+        };
+        let asked: BTreeSet<String> = ["a", "b", "c"].map(String::from).into();
+        assert_eq!(
+            report.missing(&asked).into_iter().collect::<Vec<_>>(),
+            ["c"]
+        );
     }
 }

@@ -108,9 +108,10 @@ Order matters; each line is one self-contained piece of work.
 - Faults derived from the repository's history (a fix and the test that came with it,
   reversed), with the same qualification as mutations.
 - Test-selection for large suites (impact analysis) so a task grades only relevant tests.
-- Mutation seeding only covers Python unittest suites. Rust (cargo, vendored and offline),
-  and other test runners: profile detection, baseline qualification, and the offline
-  dependency path.
+- Mutation seeding covers Python unittest suites and `cargo test --offline` (read per test
+  from libtest; doc-tests are not read). Missing: a pre-built `target` per snapshot (every
+  attempt rebuilds the crate), the offline dependency path for crates with dependencies, and
+  other test runners.
 - Model-written faults and issue text that states the symptom without the fix, validated
   composites of several faults, and an oracle-strength classification of each task.
 - Maintainer knowledge as tasks: conventions and "never do X here" from sessions, taken

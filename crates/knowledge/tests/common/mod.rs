@@ -143,8 +143,6 @@ pub fn write(path: &Path, text: &str) {
 
 /// A small Python project in a git repository.
 pub fn project(dir: &Path, extra: &[(&str, &str)]) {
-    fs::create_dir_all(dir).unwrap();
-    git(dir, &["init", "-q", "-b", "main"]);
     let files = [
         (
             "pyproject.toml",
@@ -157,7 +155,15 @@ pub fn project(dir: &Path, extra: &[(&str, &str)]) {
         ("tests/test_pricing.py", TEST_PRICING),
         ("tests/test_status.py", TEST_STATUS),
     ];
-    for (path, text) in files.iter().chain(extra) {
+    let all: Vec<(&str, &str)> = files.iter().chain(extra).copied().collect();
+    project_of(dir, &all);
+}
+
+/// A git repository holding exactly `files`, committed.
+pub fn project_of(dir: &Path, files: &[(&str, &str)]) {
+    fs::create_dir_all(dir).unwrap();
+    git(dir, &["init", "-q", "-b", "main"]);
+    for (path, text) in files {
         write(&dir.join(path), text);
     }
     git(dir, &["add", "-A", "-f"]);
@@ -175,9 +181,18 @@ pub struct Repo {
 
 impl Repo {
     pub fn new(name: &str, extra: &[(&str, &str)]) -> Self {
+        Self::laid(name, |repo| project(repo, extra))
+    }
+
+    /// A repository holding exactly `files`.
+    pub fn of_files(name: &str, files: &[(&str, &str)]) -> Self {
+        Self::laid(name, |repo| project_of(repo, files))
+    }
+
+    fn laid(name: &str, lay: impl FnOnce(&Path)) -> Self {
         let scratch = Scratch::new(name);
         let repo = scratch.0.join("repo");
-        project(&repo, extra);
+        lay(&repo);
         let root = StateRoot::new(scratch.0.join("state"));
         let store = ArtifactStore::new(&Workspace::at(&root), &root);
         let scratch_root = scratch.0.join("host");

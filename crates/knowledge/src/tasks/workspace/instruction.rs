@@ -66,7 +66,8 @@ fn symptom(id: &str, doc: Option<&str>) -> String {
             return doc.to_string();
         }
     }
-    let name = id.rsplit('.').next().unwrap_or(id);
+    let name = id.rsplit("::").next().unwrap_or(id);
+    let name = name.rsplit('.').next().unwrap_or(name);
     let stem = name
         .strip_prefix("test_")
         .or_else(|| name.strip_prefix("test"))
@@ -84,6 +85,10 @@ mod tests {
         assert_eq!(
             symptom("t.A.test_empty_list_sums_to_zero", None),
             "empty list sums to zero"
+        );
+        assert_eq!(
+            symptom("tests/total.rs::prices_are_added_up", None),
+            "prices are added up"
         );
         assert_eq!(symptom("t.A.test_x", Some("Adds one.")), "Adds one");
         // A docstring long enough to be a quotation of the test is not used.

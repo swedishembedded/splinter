@@ -382,10 +382,7 @@ impl WorkspaceGenerator {
             }
             let call = base.harness.select(base.command(), &failing);
             let report = self.suite(base, env, tree.path(), &call)?;
-            if !failing
-                .iter()
-                .all(|id| report.passed.contains(id) || report.failed.contains(id))
-            {
+            if !report.missing(&failing).is_empty() {
                 return Err(Stop::Refuse(Reason::BrokenBuild));
             }
             failing.retain(|id| report.failed.contains(id));
