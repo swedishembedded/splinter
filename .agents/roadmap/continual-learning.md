@@ -26,13 +26,19 @@ forgotten or rolled back. sven records and retrieves; brain computes.
 - Apparatus: `samples/generations` and `samples/absorb-story` with criteria and predictions
   declared before any run. This review found no recorded result of either; run them before
   claiming anything about consolidation.
-- Not present: Forgetting as the standard continual-learning literature defines it, true Forward Transfer against the
-  base, learning-gain curves, persistence-after-restart, poisoned-experience and rollback
+- Present since CL-P1 (partly): Forgetting, Forward Transfer against the base, learning-gain
+  curves in `splinter-eval::continual`. Not present: persistence-after-restart, poisoned-experience and rollback
   byte-equality tests, an outcome-linked memory policy.
 
 ## Left to do
 
 - [ ] CL-P1 (M) A `continual` module in the eval crate and `splinter eval matrix`.
+  - Done: `splinter-eval::continual` (matrix with absent cells, ACC, BWT, Forgetting, Forward
+    Transfer against the base, learning gain and its curve, unit-level intervals) and its
+    wiring into `status` / `status --json` from the gate reports of the policy's lineage, typed
+    "not measured" where there is nothing to read (finding 046). Left: `splinter eval matrix`,
+    the base arm in the gate so forward transfer exists beyond the first suite, the pin against
+    brain's backward-transfer on shared fixtures, the one-answer baseline and shortcut ceiling.
   - A matrix A[k][i] of pass rates with explicit unmeasured cells (n, ties, withheld,
     environment failures), pure functions for ACC, BWT, Forgetting (maximum taken from the
     step at which suite i was first learned), Forward Transfer against the untouched base

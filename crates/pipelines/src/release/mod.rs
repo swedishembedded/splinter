@@ -53,6 +53,7 @@
 
 pub(crate) mod agentic;
 pub mod anchor;
+pub mod continual;
 pub mod exams;
 mod gating;
 pub mod leakage;

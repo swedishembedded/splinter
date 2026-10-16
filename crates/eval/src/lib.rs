@@ -28,6 +28,9 @@
 //!   listener's pairwise choices and tested on choices it never saw.
 //! * [`speech_reward`] - the reward a spoken take earns (naturalness against
 //!   clarity) and how takes of one sentence are compared.
+//! * [`continual`] - continual-learning metrics over a results matrix with
+//!   unmeasured cells absent: average final performance, backward transfer,
+//!   forgetting, forward transfer against the untouched base, learning gain.
 //! * [`significance`] - the paired sign test the gate rests on, handed in by
 //!   the model backend.
 //! * [`paired`] - two models graded on the same items, compared only where
@@ -54,6 +57,7 @@
 #![warn(missing_docs)]
 
 pub mod claim_gate;
+pub mod continual;
 pub mod denoise;
 pub mod exposure;
 pub mod frontier;

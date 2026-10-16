@@ -13,6 +13,7 @@ use splinter_store::runs::list_runs;
 
 use crate::absorb::generation::Generation;
 use crate::curriculum::mastery::{weakest, MasteryReport, DEFAULT_WEAKEST};
+use crate::release::continual::{continual, ContinualStatus};
 use crate::train::candidate_count;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::release::ReleaseId;
@@ -78,6 +79,9 @@ pub struct Status {
     pub counts: Counts,
     /// The weakest concepts under the release the policy is now.
     pub concepts: MasteryReport,
+    /// What the releases `policy:default` descends from say of what was
+    /// kept and what was lost; not measured where there is nothing to read.
+    pub continual: ContinualStatus,
 }
 
 /// The status of the state root `ctx` works in.
@@ -122,5 +126,6 @@ pub fn status(ctx: &Context) -> Result<Status, OrchestratorError> {
             candidates: candidate_count(ctx)?,
         },
         concepts: weakest(ctx, DEFAULT_WEAKEST)?,
+        continual: continual(ctx, POLICY_DEFAULT)?,
     })
 }

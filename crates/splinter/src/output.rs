@@ -697,6 +697,7 @@ impl Report for Status {
             );
         }
         out.push_str(&self.concepts.human());
+        out.push_str(&crate::continual_output::human(&self.continual));
         out
     }
 }

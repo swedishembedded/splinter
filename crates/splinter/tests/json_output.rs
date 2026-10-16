@@ -89,6 +89,7 @@ fn status_and_source_list_print_their_documented_fields() {
         keys(&status),
         [
             "concepts",
+            "continual",
             "counts",
             "policy",
             "recent_runs",
@@ -96,6 +97,8 @@ fn status_and_source_list_print_their_documented_fields() {
             "state"
         ]
     );
+    // Nothing is released: continual learning is typed not measured, not zero.
+    assert_eq!(status["continual"]["status"], "not_measured");
     assert_eq!(
         keys(&status["roles"]),
         [
