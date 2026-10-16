@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 
 use common::gate::{gate_context, Brain, FakeTrainer, ANCHOR};
 use common::manual::{
-    manual_policy, BAUD_QUESTION, BAUD_VARIANTS, IDLE_QUESTION, IDLE_VARIANTS, MANUAL,
+    manual_policy, write_sheets, BAUD_QUESTION, BAUD_VARIANTS, IDLE_QUESTION, IDLE_VARIANTS, MANUAL,
 };
 use common::{scratch_context, Scratch, Scripted};
 use splinter_agent::solve::Model;
@@ -317,8 +317,9 @@ fn learn_measures_the_candidate_on_variants_of_what_it_trained_on() {
         ModelRef::policy_default(),
         Model::new(Arc::new(manual_policy()), common::POLICY),
     );
-    let manual = scratch.0.join("manual.md");
-    std::fs::write(&manual, MANUAL).unwrap();
+    // Two independent source texts, so one can be held out whole: the
+    // candidate trains on one sheet's task and is measured on the other's.
+    let sheets = write_sheets(&scratch.0);
     let student = Student {
         learned: Scripted::new(|prompt| {
             if prompt.contains("baud") {
@@ -335,7 +336,7 @@ fn learn_measures_the_candidate_on_variants_of_what_it_trained_on() {
     let Learned::Ran(run) = learn(
         &ctx,
         &LearnRequest {
-            sources: vec![manual.display().to_string()],
+            sources: sheets,
             no_frontier: true,
             ..LearnRequest::default()
         },
