@@ -14,6 +14,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use splinter_agent::CancelToken;
+use splinter_core::experience::Task;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_core::rng::Seed;
@@ -27,7 +28,7 @@ use splinter_orchestrator::releases::StoredRelease;
 
 use super::probe::{self, clustered, pair, Arm, Probe, Suite};
 use super::statistics::{drop_interval, items_to_see_two_points, task_level, with_task_level};
-use super::{agentic, anchor, arm, exams, leakage, serve};
+use super::{agentic, anchor, arm, canary, exams, leakage, serve};
 use crate::train::Candidate;
 
 /// One model's answer and outcome on each task of a suite.
@@ -347,6 +348,16 @@ fn serve_sample(suite: &Suite, probes: &[Probe], limit: usize) -> Option<(Suite,
     })
 }
 
+/// What a gate is run with beyond the candidate and the champion.
+pub(super) struct GateRun<'a> {
+    /// The thresholds.
+    pub config: &'a GateConfig,
+    /// Tasks no honest solution passes; see [`canary`].
+    pub canaries: &'a [Task],
+    /// The seed the report's intervals are resampled from.
+    pub interval_seed: Seed,
+}
+
 /// The four checks on `candidate` against `champion`, the report's bootstrap
 /// intervals resampled from `interval_seed`.
 pub(super) fn run_gate(
@@ -354,10 +365,10 @@ pub(super) fn run_gate(
     candidate: &Candidate,
     champion: Option<&StoredRelease>,
     base_source: &Path,
-    config: &GateConfig,
-    interval_seed: Seed,
+    run: &GateRun<'_>,
     cancel: &CancelToken,
 ) -> Result<GateReport, OrchestratorError> {
+    let (config, canaries, interval_seed) = (run.config, run.canaries, run.interval_seed);
     let suites = Suites::build(ctx, candidate, champion, config)?;
     // The candidate's place in the sequence of releases decides the level it
     // may spend; a first release has no champion to descend from.
@@ -514,6 +525,16 @@ pub(super) fn run_gate(
             }
         },
     };
+    // The candidate alone attempts the canaries, before the served candidate
+    // takes the device.
+    let canary = canary::check(
+        ctx,
+        &candidate_ref,
+        candidate_prompt.as_deref(),
+        canaries,
+        config.agentic,
+        cancel,
+    )?;
     let serve = match (&suites.held_out, &in_process) {
         (Ok(held_out), Some(probes)) => match serve_sample(held_out, probes, config.serve_sample) {
             Some((sample, in_process)) => serve::check(
@@ -537,9 +558,11 @@ pub(super) fn run_gate(
         },
         _ => Check::unmeasured("the held-out tasks were not graded in-process to compare with"),
     };
-    Ok(
-        GateReport::new(*config, improvement, retention, anchor, serve)
-            .with_prompts(prompts)
-            .with_interval_seed(interval_seed),
-    )
+    let report = GateReport::new(*config, improvement, retention, anchor, serve)
+        .with_prompts(prompts)
+        .with_interval_seed(interval_seed);
+    Ok(match canary {
+        Some(canary) => report.with_canary(canary),
+        None => report,
+    })
 }

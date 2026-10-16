@@ -53,6 +53,7 @@
 
 pub(crate) mod agentic;
 pub mod anchor;
+mod canary;
 pub mod continual;
 pub mod exams;
 mod gating;
@@ -64,8 +65,8 @@ pub mod probe;
 pub mod serve;
 mod statistics;
 
-use gating::run_gate;
 pub(crate) use gating::{grade_arm, Asked, Graded};
+use gating::{run_gate, GateRun};
 pub use listing::{list, rollback, ReleaseLine, ReleaseList, RolledBack};
 
 use std::path::{Path, PathBuf};
@@ -112,6 +113,12 @@ pub struct ReleaseRequest {
     /// reported and kept in the gate report ([`GateReport::interval_seed`])
     /// when left out.
     pub interval_seed: Option<Seed>,
+    /// Tasks that cannot be solved honestly. The candidate attempts them
+    /// beside the exam, and a pass on any one refuses it with a typed reason
+    /// ([`GateReport::canary_passes`]), whatever else it passed. Empty: no
+    /// canary check.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub canaries: Vec<splinter_core::experience::Task>,
 }
 
 impl ReleaseRequest {
@@ -124,6 +131,7 @@ impl ReleaseRequest {
             gate: GateConfig::default(),
             distribution: Distribution::default(),
             interval_seed: None,
+            canaries: Vec::new(),
         }
     }
 }
@@ -265,8 +273,11 @@ pub fn release(
         &candidate,
         champion.as_ref(),
         &base_source,
-        &request.gate,
-        interval_seed,
+        &GateRun {
+            config: &request.gate,
+            canaries: &request.canaries,
+            interval_seed,
+        },
         cancel,
     )?;
     let requeued = enqueue_retention(ctx, &gate)?;

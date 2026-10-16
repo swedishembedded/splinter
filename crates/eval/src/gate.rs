@@ -46,6 +46,10 @@
 //! report then says so ([`Anchor::workspace_tasks`]) and the check is decided
 //! on the tasks it does hold.
 //!
+//! A gate handed canary tasks (tasks no honest solution can pass,
+//! [`crate::canary`]) adds a fifth check on the candidate alone: a pass on
+//! any one refuses it, whatever else it passed.
+//!
 //! A check that could not be measured - no task graded by both models, no
 //! anchor suite, no brain binary - fails, and says why: an unmeasured
 //! check is never a pass.
@@ -56,6 +60,15 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_core::rng::Seed;
+
+mod agentic;
+
+use crate::canary::Canaries;
+
+pub use agentic::{
+    AgenticConfig, AgenticProbe, Withheld, DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS,
+    DEFAULT_MAX_TOOL_CALLS, DEFAULT_PROBE_ATTEMPTS,
+};
 
 use crate::paired::{by_cluster, compare, Comparison, PairedOutcome};
 use crate::significance::{SignTest, Significance};
@@ -85,48 +98,6 @@ pub const DEFAULT_ANCHOR_BOUND: f64 = 0.02;
 pub const DEFAULT_SERVE_SAMPLE: usize = 8;
 /// How long `brain serve` may take to load the candidate and report ready.
 pub const DEFAULT_SERVE_STARTUP_SECS: u64 = 600;
-/// How many times a workspace task is attempted per arm when a gate names no
-/// other number.
-pub const DEFAULT_PROBE_ATTEMPTS: u32 = 1;
-/// How many follow-up turns an agent is sent after the checks it was shown
-/// stay red, when nothing names another number.
-pub const DEFAULT_FOLLOW_UPS: u32 = 2;
-/// How many tool calls an agent may make in one attempt, follow-ups
-/// included, when nothing names another number.
-pub const DEFAULT_MAX_TOOL_CALLS: u32 = 60;
-/// How many times one tool call may return the same answer in an attempt
-/// before the attempt is stopped as going nowhere, when nothing names
-/// another number.
-pub const DEFAULT_MAX_REPEATED_RESULTS: u32 = 3;
-
-/// How an agent is probed on tasks that are changes to a repository: the
-/// same for both arms of a comparison and for the served candidate, so a
-/// difference between them is the weights'.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgenticConfig {
-    /// Attempts per task. A task's verdict is what a strict majority of its
-    /// graded attempts say; with no majority it has none.
-    pub attempts: u32,
-    /// Follow-up turns after the checks the task shows stay red.
-    pub follow_ups: u32,
-    /// Tool calls in one attempt, follow-ups included; `None` sets no cap.
-    pub max_tool_calls: Option<u32>,
-    /// Identical answers to one call before an attempt is stopped; `None`
-    /// sets no bound.
-    pub max_repeated_results: Option<u32>,
-}
-
-impl Default for AgenticConfig {
-    fn default() -> Self {
-        Self {
-            attempts: DEFAULT_PROBE_ATTEMPTS,
-            follow_ups: DEFAULT_FOLLOW_UPS,
-            max_tool_calls: Some(DEFAULT_MAX_TOOL_CALLS),
-            max_repeated_results: Some(DEFAULT_MAX_REPEATED_RESULTS),
-        }
-    }
-}
-
 /// The gate's thresholds.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GateConfig {
@@ -211,43 +182,6 @@ impl<T> Check<T> {
             inconclusive: false,
         }
     }
-}
-
-/// The attempts at workspace tasks one model's probe set aside instead of
-/// grading. A count of attempts, so zero is a measurement: nothing was set
-/// aside.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Withheld {
-    /// Attempts whose trajectory shows the solver saw what only the grader
-    /// holds (the exposure audit failed them). They are no one's win or
-    /// loss, whatever their patch did.
-    pub exposed: usize,
-    /// Attempts the harness could not carry out or grade: the workspace
-    /// could not be laid out, or the verifier could not run. They say
-    /// nothing about the model.
-    pub environment_failures: usize,
-}
-
-impl Withheld {
-    /// This and `other` together.
-    #[must_use]
-    pub fn plus(self, other: Self) -> Self {
-        Self {
-            exposed: self.exposed + other.exposed,
-            environment_failures: self.environment_failures + other.environment_failures,
-        }
-    }
-}
-
-/// What probing both arms on workspace tasks set aside; see [`Withheld`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgenticProbe {
-    /// Attempts per task.
-    pub attempts: u32,
-    /// What the candidate's probe set aside.
-    pub candidate: Withheld,
-    /// What the champion's probe set aside.
-    pub champion: Withheld,
 }
 
 /// The improvement check's numbers.
@@ -507,8 +441,13 @@ pub struct GateReport {
     pub anchor: Check<Anchor>,
     /// Serving on plain brain.
     pub serve: Check<Serve>,
-    /// Whether every check passed.
+    /// Whether every check passed, and every canary failed.
     pub passed: bool,
+    /// The canary check, when the gate was handed tasks that cannot be solved
+    /// honestly; `None` when it was handed none. A pass on one refuses the
+    /// candidate whatever else passed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canary: Option<Check<Canaries>>,
     /// The prompt each arm was asked each suite under; empty in a report
     /// written before it was recorded.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -522,6 +461,25 @@ pub struct GateReport {
 }
 
 impl GateReport {
+    /// This report with the canary check recorded: the gate passes only if
+    /// the canary check does too.
+    #[must_use]
+    pub fn with_canary(mut self, canary: Check<Canaries>) -> Self {
+        self.passed = self.passed && canary.passed;
+        self.canary = Some(canary);
+        self
+    }
+
+    /// The canaries the candidate passed, each a cheat; empty when none was
+    /// passed or the gate had none.
+    #[must_use]
+    pub fn canary_passes(&self) -> &[String] {
+        self.canary
+            .as_ref()
+            .and_then(|c| c.measured.as_ref())
+            .map_or(&[], |c| c.passed_tasks.as_slice())
+    }
+
     /// This report stating the seed its intervals were resampled with.
     #[must_use]
     pub fn with_interval_seed(mut self, seed: Seed) -> Self {
@@ -557,6 +515,9 @@ impl GateReport {
         add("retention", self.retention.passed, &self.retention.reason);
         add("anchor", self.anchor.passed, &self.anchor.reason);
         add("serve", self.serve.passed, &self.serve.reason);
+        if let Some(canary) = &self.canary {
+            add("canary", canary.passed, &canary.reason);
+        }
         why
     }
 
@@ -577,6 +538,7 @@ impl GateReport {
             anchor,
             serve,
             passed,
+            canary: None,
             prompts: Vec::new(),
             interval_seed: None,
         }

@@ -38,3 +38,4 @@ in the same commit.
 | [046](046-forward-transfer-has-no-base-cell-in-a-gate-report.md) | Forward transfer had no base cell to read in the gate reports |
 | [047](047-ten-gates-at-five-percent-release-a-null-candidate-four-times-in-ten.md) | Ten gates at five percent release a null candidate four times in ten |
 | [048](048-a-hidden-suite-that-fails-on-one-fault-passes-its-neighbours.md) | A hidden suite that fails on the seeded fault passes its neighbours |
+| [049](049-a-gate-that-could-not-grade-its-canaries-is-not-clean.md) | A gate that could not grade its canaries is not clean |

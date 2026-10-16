@@ -15,6 +15,8 @@
 //!
 //! * [`gate`] - the release gate's four checks, the numbers each records and
 //!   how each is decided.
+//! * [`canary`] - tasks that cannot be solved honestly: a pass on one refuses
+//!   the candidate.
 //! * [`claim_gate`] - the release gate for a model updated from facts a
 //!   person taught it: a declared rule on counts, no significance test.
 //! * [`metric_gate`] - the release decision over continuous metrics and
@@ -56,6 +58,7 @@
 
 #![warn(missing_docs)]
 
+pub mod canary;
 pub mod claim_gate;
 pub mod continual;
 pub mod denoise;

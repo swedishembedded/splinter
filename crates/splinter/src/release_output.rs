@@ -213,6 +213,18 @@ impl Report for GateReport {
                 "  intervals    resampled with seed {seed} (--interval-seed {seed} reproduces them)"
             );
         }
+        if let Some(canary) = &self.canary {
+            let _ = writeln!(out, "  canary       {}", verdict(canary));
+            if let Some(m) = &canary.measured {
+                let _ = writeln!(
+                    out,
+                    "               {} of {} canary task(s) graded, {} passed",
+                    m.graded,
+                    m.tasks,
+                    m.passed_tasks.len()
+                );
+            }
+        }
         let _ = writeln!(out, "  serve        {}", verdict(&self.serve));
         if let Some(m) = &self.serve.measured {
             let compared = match m.agreement {
