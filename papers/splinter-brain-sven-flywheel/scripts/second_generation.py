@@ -14,12 +14,12 @@ the candidate and the live alias measured on every probe and the anchor.
     second_generation.py OUT_DIR     (OUT_DIR holds sheets1/, the facts, the probes and a
                                       state/ copied from the run's state)
 """
-sys.path.insert(0, str(Path.home() / "project/shared/containers/worktrees/s-l3/papers/splinter-brain-sven-flywheel/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flywheel_cycle as f
 out = Path(sys.argv[1])
 home = Path.home()
 M = home / ".local/share/brain/models/Qwen"
-W = home / "project/shared/containers/worktrees/s-l3"
+W = Path(__file__).resolve().parents[3]
 args = types.SimpleNamespace(out=str(out), splinter=str(W / "target/release/splinter"),
     brain=str(home / "code/brain/target/release/brain"), policy_weights=str(M / "Qwen3-1.7B"),
     helper=str(M / "Qwen3-4B"), helper_context=8192, policy_context=8192,
