@@ -153,6 +153,11 @@ fn a_candidate_that_mends_the_exam_the_champion_fails_is_released_and_a_server_f
     assert_eq!(improvement.comparison.baseline_wins, 0);
     assert_eq!(improvement.sign_test.discordant, EXAM_FAMILIES);
     assert!((improvement.sign_test.p_value - 1.0 / 32.0).abs() < 1e-12);
+    // The report states what the exam's hidden suites are worth beside the
+    // pass rates; it does not weigh them.
+    let strength = improvement.hidden_strength.unwrap();
+    assert_eq!(strength.tasks, reserve.exam_tasks);
+    assert!(strength.measured <= strength.tasks);
     let probed = improvement.agentic.unwrap();
     assert_eq!(probed.attempts, 1);
     assert_eq!(

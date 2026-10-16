@@ -38,9 +38,67 @@ impl HiddenStrength {
     }
 }
 
+/// What the hidden suites of a set of workspace tasks are worth, as a gate
+/// report states it beside the pass rates they produced: a pass on a task
+/// whose suite catches few of the plausible wrong patches is weaker evidence
+/// than one on a task whose suite catches most. The gate reports this and
+/// does not weigh passes by it: the floor below which a suite is too weak
+/// has not been calibrated against wrong patches that were really tried, and
+/// a weight chosen without that would move the verdict by an arbitrary
+/// amount.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StrengthSummary {
+    /// Workspace tasks in the suite.
+    pub tasks: usize,
+    /// Of those, the ones whose hidden suite has a measured kill rate;
+    /// the rest were made without the measurement or had no demonstrably
+    /// wrong variant.
+    pub measured: usize,
+    /// The mean kill rate over the measured tasks; `None` when none was
+    /// measured, never `0`.
+    pub mean_kill_rate: Option<f64>,
+    /// The lowest kill rate among the measured tasks.
+    pub min_kill_rate: Option<f64>,
+}
+
+/// The summary of `strengths`, one entry per workspace task (`None` for a
+/// task made without the measurement); `None` when there is no task.
+#[must_use]
+pub fn summarise(strengths: &[Option<HiddenStrength>]) -> Option<StrengthSummary> {
+    if strengths.is_empty() {
+        return None;
+    }
+    let rates: Vec<f64> = strengths
+        .iter()
+        .filter_map(|s| s.as_ref().and_then(HiddenStrength::kill_rate))
+        .collect();
+    Some(StrengthSummary {
+        tasks: strengths.len(),
+        measured: rates.len(),
+        mean_kill_rate: (!rates.is_empty()).then(|| rates.iter().sum::<f64>() / rates.len() as f64),
+        min_kill_rate: rates.iter().copied().reduce(f64::min),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn strength(variants: usize, caught: usize) -> Option<HiddenStrength> {
+        Some(HiddenStrength { variants, caught })
+    }
+
+    #[test]
+    fn the_summary_counts_unmeasured_tasks_and_never_reads_them_as_zero() {
+        assert_eq!(summarise(&[]), None);
+        let none = summarise(&[None, strength(0, 0)]).unwrap();
+        assert_eq!((none.tasks, none.measured), (2, 0));
+        assert_eq!((none.mean_kill_rate, none.min_kill_rate), (None, None));
+        let mixed = summarise(&[strength(4, 4), strength(2, 1), None]).unwrap();
+        assert_eq!((mixed.tasks, mixed.measured), (3, 2));
+        assert_eq!(mixed.mean_kill_rate, Some(0.75));
+        assert_eq!(mixed.min_kill_rate, Some(0.5));
+    }
 
     #[test]
     fn no_demonstrably_wrong_variant_is_unmeasured_not_zero() {

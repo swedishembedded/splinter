@@ -47,8 +47,9 @@ missing: test strength, canaries, coverage, power.
   - Done: each mutation-seeded task's hidden-suite kill rate on the faults seeded within three
     lines of its own is measured at admission, kept on the task's check (`hidden_strength`) and a
     task below `MIN_HIDDEN_KILL_RATE` (0.5, with at least two measured variants) is refused as
-    `weak_hidden_tests` in the admission report (finding 048). Left: the release gate weighing a
-    pass by the recorded strength, the differential check of passing patches, the AUC acceptance
+    `weak_hidden_tests` in the admission report (finding 048). The gate reports the exam's hidden-suite
+    kill rates (`Improvement.hidden_strength`) and does not weigh passes by them: the floor is not
+    calibrated on real wrong patches, so a weight would be arbitrary. Left: the differential check of passing patches, the AUC acceptance
     on 50 tasks with seeded wrong patches, the floor calibrated on that data.
   - Record each admitted task's hidden-suite kill rate on mutants of the reference (the mutation
     operators exist) and refuse below a pre-registered floor; demote a pass whose behaviour

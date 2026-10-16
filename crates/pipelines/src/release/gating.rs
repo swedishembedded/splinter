@@ -444,6 +444,7 @@ pub(super) fn run_gate(
                 if let Some(measured) = check.measured.as_mut() {
                     measured.task_level = task_level(&outcomes, interval_seed);
                     measured.agentic = agentic::withheld(suite, &c, &b);
+                    measured.hidden_strength = agentic::hidden_strength(suite);
                 }
                 if let (Some(measured), Some(parts)) = (check.measured.as_mut(), &suites.parts) {
                     let (recall, generalisation): (Vec<PairedOutcome>, Vec<PairedOutcome>) =

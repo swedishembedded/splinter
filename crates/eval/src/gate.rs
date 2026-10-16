@@ -225,6 +225,12 @@ pub struct Improvement {
     /// when the gate ran without a planned effect or a generation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power: Option<crate::power::PowerAssessment>,
+    /// What the hidden suites of the workspace tasks in the suite are worth
+    /// (their measured kill rates); reported beside the pass rates and not
+    /// used to weigh them. `None` when the suite holds no workspace task or
+    /// the report was written before it was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden_strength: Option<crate::verifiers::hidden_strength::StrengthSummary>,
 }
 
 /// What the tasks themselves say, beside the family-level sign test the gate
@@ -588,6 +594,7 @@ pub fn improvement(
             task_level: None,
             agentic: None,
             power: None,
+            hidden_strength: None,
         },
         failure,
     )

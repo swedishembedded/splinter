@@ -78,6 +78,26 @@ impl Report for GateReport {
         {
             let _ = writeln!(out, "               {}", set_aside(probe));
         }
+        if let Some(h) = self
+            .improvement
+            .measured
+            .as_ref()
+            .and_then(|m| m.hidden_strength)
+        {
+            let _ = match (h.mean_kill_rate, h.min_kill_rate) {
+                (Some(mean), Some(min)) => writeln!(
+                    out,
+                    "               hidden tests of {} workspace task(s): kill rate measured on {} \
+                     (mean {mean:.2}, lowest {min:.2}); reported, not used to weigh a pass",
+                    h.tasks, h.measured
+                ),
+                _ => writeln!(
+                    out,
+                    "               hidden tests of {} workspace task(s): kill rate not measured",
+                    h.tasks
+                ),
+            };
+        }
         if let Some(t) = self
             .improvement
             .measured
