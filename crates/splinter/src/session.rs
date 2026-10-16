@@ -38,10 +38,8 @@ use splinter_sdk::solving::solve_set;
 use splinter_sdk::sources::{self, SourceTarget};
 use splinter_sdk::state;
 use splinter_sdk::status::status;
-use splinter_sdk::tasks::pick::{pick, Quota};
-use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
+use splinter_sdk::tasks::resolve_set as resolve_task_set;
 use splinter_sdk::train::{train_recorded, Rehearse, TrainRequest, Tuning};
-use splinter_sdk::variants;
 use splinter_sdk::verify::{verify_set, Grading, Judge, Judging};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::terms::Distribution;
@@ -51,13 +49,13 @@ use crate::absorb_session;
 use crate::cli::{
     Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand,
     Global, JudgeCommand, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
-    TasksCommand,
 };
 use crate::exam_session;
 use crate::learn_output;
 use crate::learn_request::learn_request;
 use crate::output::{self, emit, shell_words};
 use crate::practice_request::practice_request;
+use crate::tasks_session;
 
 /// How an invocation ended; see the crate documentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -329,104 +327,7 @@ impl Session {
             }
             Command::Session(command) => return absorb_session::session(ctx, json, command),
             Command::Claims(command) => return absorb_session::claims(ctx, json, command),
-            Command::Tasks(TasksCommand::Generate {
-                sources: ids,
-                kinds,
-                generator,
-                author,
-                denoise_seed,
-            }) => {
-                let kinds = check_kinds(&kinds)?;
-                let ids = ids
-                    .iter()
-                    .map(|id| sources::resolve(ctx, id))
-                    .collect::<Result<Vec<_>, _>>()?;
-                let arguments = json!({
-                    "sources": ids,
-                    "kinds": kinds,
-                    "generator": generator,
-                    "author": author,
-                    "denoise_seed": denoise_seed,
-                });
-                let generated = record(ctx, "tasks generate", &arguments, |run| {
-                    let denoise_seed = tasks::asks_for_denoise(&kinds)
-                        .then(|| run.seed("denoise-seed", denoise_seed))
-                        .transpose()?;
-                    tasks::generate(
-                        ctx,
-                        &tasks::Generation {
-                            sources: &ids,
-                            sections: &[],
-                            kinds: &kinds,
-                            generator: &generator,
-                            goal: None,
-                            author: author.as_deref(),
-                            denoise_seed,
-                            deadline: None,
-                            cancel: run.cancel_token(),
-                        },
-                    )
-                })?;
-                emit(json, &generated);
-            }
-            Command::Tasks(TasksCommand::Variants {
-                task_set,
-                generator,
-                per_task,
-            }) => {
-                let set = resolve_task_set(ctx, &task_set)?;
-                let arguments =
-                    json!({ "task_set": set, "generator": generator, "per_task": per_task });
-                let varied = record(ctx, "tasks variants", &arguments, |run| {
-                    variants::generate_variants(
-                        ctx,
-                        &variants::VariantsRequest {
-                            task_set: &set,
-                            generator: &generator,
-                            per_task,
-                            deadline: None,
-                            cancel: run.cancel_token(),
-                        },
-                    )
-                })?;
-                emit(json, &varied);
-            }
-            Command::Tasks(TasksCommand::Canaries { task_set, count }) => {
-                let set = resolve_task_set(ctx, &task_set)?;
-                let arguments = json!({ "task_set": set, "count": count });
-                let made = record(ctx, "tasks canaries", &arguments, |_| {
-                    canaries::make(ctx, &set, Some(count))
-                })?;
-                emit(json, &made);
-            }
-            Command::Tasks(TasksCommand::Pick {
-                task_sets,
-                family_share,
-                per_family,
-                seed,
-            }) => {
-                let sets = task_sets
-                    .iter()
-                    .map(|id| resolve_task_set(ctx, id))
-                    .collect::<Result<Vec<_>, _>>()?;
-                let quota = match (family_share, per_family) {
-                    (Some(share), _) => Quota::FamilyShare(share),
-                    (None, Some(cap)) => Quota::PerFamily(cap),
-                    (None, None) => unreachable!("clap requires one of the two quotas"),
-                };
-                let arguments = json!({
-                    "task_sets": sets,
-                    "family_share": family_share,
-                    "per_family": per_family,
-                    "seed": seed,
-                });
-                let picked = record(ctx, "tasks pick", &arguments, |_| {
-                    pick(ctx, &sets, quota, seed)
-                })?;
-                emit(json, &picked);
-            }
-            Command::Tasks(TasksCommand::List) => emit(json, &tasks::list(ctx)?),
-            Command::Tasks(TasksCommand::Show { id }) => emit(json, &tasks::show(ctx, &id)?),
+            Command::Tasks(command) => return tasks_session::tasks(ctx, json, command),
             Command::Solve(args) if args.frontier => {
                 let set = resolve_task_set(ctx, &args.task_set)?;
                 let pass_at_k = args.pass_at_k.pass_at_k();
