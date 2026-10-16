@@ -239,6 +239,16 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-16 Replication: training seeds and author worlds
 
+- **Status.** In progress for `synthetic-author`. Built: the protocol and
+  `study freeze` (`src/study/protocol.rs`): author seeds and each author's
+  training seeds drawn once, printed and recorded in `protocol.json`, the
+  digest of its canonical JSON, the three model references checked to be three
+  families, the arms with the PP-19 ablations, the training settings, the
+  primary comparison, the family of comparisons, Holm over it as the
+  multiplicity correction, greedy as the primary decoding and a sampled one
+  beside it (PP-20); freezing again with the same settings reports the frozen
+  protocol and with others is refused. No stage beyond the freeze exists yet
+  and no author has been drawn into a run.
 - **Problem.** One training run per author and three authors (paper Sec. 7);
   all three runs used the same default seed (PF-04); no sign test across
   authors is possible with three.
@@ -398,6 +408,15 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
 
 ## PP-22 Enough items to settle tuned against retrieval
 
+- **Status.** Done in the protocol; the settling examination is not run. `study
+  freeze` sizes `per_cell` by an exact computation (`src/study/power.rs`) from
+  the observed discordance and win share, records the derivation in the
+  protocol, and a test draws an examination of that size for a drawn author. For
+  37 of 160 items discordant and 23 of 37 for the adapter, 80% power at
+  one-sided 5% needs 120 items per kind, 480 per author (about 111 discordant
+  pairs): the estimate below by normal approximation is a little low because the
+  exact test is conservative at these counts and the size must hold at the next
+  three sizes too.
 - **Problem.** For author 101 the adapter and retrieval split 23 to 14 on the
   items they differ on (p = 0.094): the comparison is underpowered.
 - **Evidence.** `papers/persona-training/data/paired.csv`.

@@ -19,6 +19,15 @@ use splinter_sdk::vocabulary::digest::Digest;
 use crate::cache::Cache;
 use crate::dataset::Briefings;
 
+/// Optimizer steps when none are asked for.
+pub const DEFAULT_STEPS: u32 = 200;
+/// LoRA rank when none is asked for.
+pub const DEFAULT_RANK: u32 = 16;
+/// LoRA alpha when none is asked for.
+pub const DEFAULT_ALPHA: f32 = 32.0;
+/// Records averaged into one optimizer step when none is asked for.
+pub const DEFAULT_RECORDS_PER_STEP: u32 = 4;
+
 /// Train an adapter on the records.
 #[derive(Args)]
 pub struct TrainArgs {
@@ -29,19 +38,19 @@ pub struct TrainArgs {
     #[arg(long)]
     base: PathBuf,
     /// Optimizer steps.
-    #[arg(long, default_value_t = 200)]
+    #[arg(long, default_value_t = DEFAULT_STEPS)]
     steps: u32,
     /// LoRA rank.
-    #[arg(long, default_value_t = 16)]
+    #[arg(long, default_value_t = DEFAULT_RANK)]
     rank: u32,
     /// LoRA alpha.
-    #[arg(long, default_value_t = 32.0)]
+    #[arg(long, default_value_t = DEFAULT_ALPHA)]
     alpha: f32,
     /// Learning rate (brain's default if not given).
     #[arg(long)]
     lr: Option<f32>,
     /// Records averaged into one optimizer step.
-    #[arg(long, default_value_t = 4)]
+    #[arg(long, default_value_t = DEFAULT_RECORDS_PER_STEP)]
     records_per_step: u32,
     /// Hold the base at bf16.
     #[arg(long)]

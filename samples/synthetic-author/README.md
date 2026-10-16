@@ -256,3 +256,50 @@ is its own family.
   both read, how many agree on the decision, on the ways open and on the facts,
   with the cases that differ listed. A corpus without readings (judged by marker
   words, or written before they were kept) reports `not measured`.
+
+## The replication study
+
+One author and one training run cannot show that the method works in general,
+so the study draws many authors, trains each several times, and reports what
+holds across them. Everything it will do is fixed first, in a protocol file
+that is hashed; the stages are `study` subcommands that read the protocol,
+write one manifest per author and per training run, resume what exists, and
+refuse to continue under a protocol whose digest has changed.
+
+```bash
+synthetic-author study freeze --out STUDY \
+  --writer remote:openrouter/nvidia/nemotron-3.5-lightning \
+  --reader remote:openrouter/google/gemma-4-31b-it \
+  --miner remote:openrouter/meta-llama/llama-3.3-70b-instruct
+```
+
+`study freeze` draws the author seeds (eight authors) and, for each author, the
+training seeds (three), prints every one of them and writes them into
+`STUDY/protocol.json`, which every later stage reads back; a frozen protocol is
+never redrawn, and freezing again with the same settings only reports it. The
+protocol also holds:
+
+* the three models, which must be three different families (see "A reader
+  other than the writer"); they are parameters of the protocol, not of the
+  code;
+* the size of the corpus (articles per author) and the examination: version 2,
+  with `per_cell` sized so that tuned against retrieval has 80% power at a
+  one-sided 5% for the discordance and win share an earlier examination
+  observed (37 of 160 items discordant, 23 of them for the adapter). The size is
+  an exact computation: the discordant pairs are binomial in the items, the
+  adapter's wins binomial in those, and the test significant at the critical
+  count for that many pairs; the size must also reach the power at the next
+  three sizes, because the power is not monotone in discrete counts. The
+  derivation is recorded in the protocol;
+* the arms: base, named, principles (with and without the verdict rules),
+  retrieval at 2, 6 and 12 passages over whole articles and over the training
+  records, tuned, and the ablation adapters trained on the reader's briefings
+  alone and the fixed-wording briefings alone (at the first training seed only
+  by default);
+* how the adapters are trained (steps, rank, alpha, learning rate, records per
+  step);
+* the primary comparison (tuned against retrieval), the family of comparisons,
+  and the correction over them: Holm's step-down over the whole family, each
+  comparison tested across authors by a sign test of the per-author mean gain;
+* the decodings: greedy for every confirmatory result, a sampled decoding
+  beside it.

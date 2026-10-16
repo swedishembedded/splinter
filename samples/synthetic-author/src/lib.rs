@@ -43,6 +43,7 @@ pub mod retrieval;
 pub mod sampled;
 pub mod sampled_report;
 pub mod scenario;
+pub mod study;
 pub mod survivors;
 pub mod tools;
 pub mod training;

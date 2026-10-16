@@ -208,6 +208,9 @@ enum Command {
     },
     Cross(CrossArgs),
     Corpus(CorpusArgs),
+    /// The replication study: many authors and training seeds under one
+    /// frozen protocol.
+    Study(synthetic_author::study::cli::StudyArgs),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -452,5 +455,6 @@ fn main() -> anyhow::Result<()> {
         Command::Cross(args) => synthetic_author::exam_cmd::cross(&args),
         Command::Report(args) => synthetic_author::exam_cmd::report(&args),
         Command::Corpus(args) => synthetic_author::corpus_cmd::run(args),
+        Command::Study(args) => synthetic_author::study::cli::run(&args),
     }
 }
