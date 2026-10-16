@@ -26,7 +26,8 @@ line moving) and the reason starts with one of
     greedy:       a seed that reaches no random choice (greedy decoding)
     test-double:  a fake that must be deterministic
     bench-input:  a benchmark input that must be identical across runs
-    todo:         a site a later change draws instead; counted, never grows
+    todo:         a site a later change draws instead; counted, never grows,
+                  and refused outright under --no-todo
 
 The gate fails on a production hit with no entry, on an entry that matches no
 hit (a stale entry: delete it, the ratchet only tightens), and on a reason
@@ -622,10 +623,17 @@ def read_allow(allow_dir):
     return entries, problems
 
 
-def check(hits, entries):
+def check(hits, entries, no_todo=False):
     """Failures for production hits without an entry, entries without a hit
-    and test hits without a `seed:` reason."""
+    and test hits without a `seed:` reason; with `no_todo`, also an entry whose
+    reason is still `todo:`."""
     failures = []
+    if no_todo:
+        failures.extend(
+            f"{path}: {symbol} is still a todo ({reason}): draw the seed and delete the entry"
+            for (path, symbol), reason in sorted(entries.items())
+            if reason.startswith("todo:")
+        )
     for hit in hits:
         marker = "#" if hit.path.endswith(".py") else "//"
         if hit.test and not hit.marked:
@@ -673,12 +681,17 @@ def main():
         action="store_true",
         help="also report literals passed as a seed argument in test code",
     )
+    ap.add_argument(
+        "--no-todo",
+        action="store_true",
+        help="fail on any allowlist entry whose reason is still `todo:`",
+    )
     args = ap.parse_args()
     root = Path(args.root)
 
     hits = scan_tree(root, tracked_files(root), args.positional_tests)
     entries, problems = read_allow(args.allow_dir)
-    failures = problems + check(hits, entries)
+    failures = problems + check(hits, entries, args.no_todo)
 
     todo = sum(1 for r in entries.values() if r.startswith("todo:"))
     print(f"seed-literals: {len(entries)} allowlisted production sites, {todo} still todo")

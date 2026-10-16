@@ -446,6 +446,15 @@ class Ratchet(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(gate.check(self.hits(), entries), [])
 
+    def test_no_todo_mode_fails_on_a_todo_entry_and_names_the_site(self):
+        entries, _ = self.allow("crates/demo/src/lib.rs\tf::seed\ttodo: drawn once the stage records it\n")
+        out = "\n".join(gate.check(self.hits(), entries, no_todo=True))
+        self.assertIn("crates/demo/src/lib.rs: f::seed is still a todo", out)
+
+    def test_no_todo_mode_passes_when_every_reason_is_final(self):
+        entries, _ = self.allow("crates/demo/src/lib.rs\tf::seed\tworld: the demo world\n")
+        self.assertEqual(gate.check(self.hits(), entries, no_todo=True), [])
+
     def test_a_malformed_or_duplicate_entry_is_a_problem(self):
         _, problems = self.allow("only two\tfields\n")
         self.assertIn("expected path<TAB>symbol<TAB>reason", "\n".join(problems))

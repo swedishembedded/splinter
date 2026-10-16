@@ -258,7 +258,7 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
 
 ## PP-09 Seeds of the other persona samples, and the rest
 
-- **Status.** Done for every sample and script in the repository (the persona samples, the lifecourse and health programs, the Python tools and paper scripts). Frozen Jefferson and Adams exams did not move.
+- **Status.** What the seed commits changed. The persona samples (absorb, Jefferson, Adams, voice-loop, persona-chat) draw, print and record their seeds; a frozen artifact reads its seed back from `SEED.json` and a freeze made before manifests keeps the seed it was made with, so the Jefferson and Adams exams did not move. `FrozenSeed::decide` draws only for an artifact being made now. The lifecourse seed-spread table reads the seeds the runs record, ensemble members and `recipe subsample` draw theirs, and the health and paper scripts (`make_rating_set.py`, `fasting_transitions.py`) draw and print a seed when none is given. Documented commands show no pinned seed unless they reproduce a published result. `synthetic-author persona`, `plan`, `show` and `items` draw an author when none is named. The seed-literal gate also sees constructors, functions, positional arguments, loops, Python defaults, shell flags, Makefile recipes and documented commands; its default run refuses any `todo:` entry, and a test literal needs a `seed:` reason that does not say any value will do. Literals passed as a positional seed argument in test code are reported only by `--positional-tests` (mostly in the synthetic-author tests) and are not yet part of the default run.
 
 - **Problem.** The persona samples fix their own seeds by default; the
   remaining samples do too and belong to their own programs.

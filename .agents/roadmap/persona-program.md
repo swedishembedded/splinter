@@ -103,7 +103,7 @@ apart and untouched by any synthetic data.
 | PP-06 | Training seeds always explicit and recorded (done) | S | PP-05 |
 | PP-07 | Synthetic-author seeds and run manifests (done) | M | PP-05 |
 | PP-08 | Pipeline seeds of `learn`, `exam` and `practice` (done) | M | PP-05 |
-| PP-09 | Seeds of the other persona samples (done) | S | PP-05 |
+| PP-09 | Seeds of the other persona samples (done; positional test literals remain) | S | PP-05 |
 | PP-10 | Training records list the options the case offered (done; new corpora under PP-16) | M | - |
 | PP-11 | Every exam outcome bound to its item and its model (done) | S | PP-07 |
 | PP-12 | Failures accounted for, not mistaken for content (done) | M | - |
