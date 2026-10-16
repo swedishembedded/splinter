@@ -387,8 +387,8 @@ async fn run_agent(
     // the audit ledger records that a tool failed without recording why.
     let counter = tokio::spawn(async move {
         let mut activity = ToolActivity::default();
-        while let Ok(event) = events.recv().await {
-            match event {
+        while let Some(run_event) = events.recv().await {
+            match run_event.event {
                 SessionEvent::ToolCallStarted(_) => activity.calls += 1,
                 SessionEvent::ToolCallFinished {
                     tool_name,

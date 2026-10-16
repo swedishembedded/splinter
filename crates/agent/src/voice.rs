@@ -18,8 +18,9 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 
+use futures::FutureExt;
 use sven_sdk::model::ModelProvider;
-use sven_sdk::{Agent, ApprovalPolicy, CallError, Engine, SessionEvent, Toolset};
+use sven_sdk::{Agent, ApprovalPolicy, CallError, Engine, RunEvent, SessionEvent, Toolset};
 
 use crate::solve::SOLVER_MODE;
 use crate::system_prompt::{with_live_addendum, UnderSystemPrompt};
@@ -86,12 +87,12 @@ impl VoiceAgent {
             let outcome = loop {
                 tokio::select! {
                     outcome = &mut send => break outcome,
-                    event = events.recv() => forward(event, on_text),
+                    event = events.recv() => forward(event.as_ref(), on_text),
                 }
             };
             // Events still queued when the turn ended.
-            while let Ok(event) = events.try_recv() {
-                forward(Ok(event), on_text);
+            while let Some(Some(event)) = events.recv().now_or_never() {
+                forward(Some(&event), on_text);
             }
             outcome.map(|o| o.reply)
         })
@@ -109,14 +110,11 @@ fn compose(
     UnderSystemPrompt::wrap(with_live_addendum(model, taught), system)
 }
 
-/// Hand a text delta on; every other event, and a lagging or closed channel,
-/// is not words to speak.
-fn forward(
-    event: Result<SessionEvent, tokio::sync::broadcast::error::RecvError>,
-    on_text: &mut dyn FnMut(&str),
-) {
-    if let Ok(SessionEvent::TextDelta(piece)) = event {
-        on_text(&piece);
+/// Hand a text delta on; every other event, a gap marker and a closed stream
+/// are not words to speak.
+fn forward(event: Option<&RunEvent>, on_text: &mut dyn FnMut(&str)) {
+    if let Some(SessionEvent::TextDelta(piece)) = event.map(|e| &e.event) {
+        on_text(piece);
     }
 }
 

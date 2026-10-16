@@ -40,6 +40,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use futures::FutureExt;
 use splinter_core::experience::Task;
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
@@ -50,11 +51,10 @@ use sven_sdk::config::Config;
 use sven_sdk::model::ModelProvider;
 use sven_sdk::tool::Tool;
 use sven_sdk::{
-    Agent, AgentState, ApprovalPolicy, CallError, CancelToken, Engine, RunConclusion, RunOptions,
-    SessionEvent, Toolset, Usage,
+    Agent, AgentState, ApprovalPolicy, CallError, CancelToken, Engine, EventStream, RunConclusion,
+    RunOptions, SessionEvent, Toolset, Usage,
 };
-use tokio::sync::broadcast::error::TryRecvError;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::oneshot;
 
 use crate::solve::{is_empty_reply, Solution, SolveError, SolveOptions, SOLVER_MODE};
 use crate::system_prompt::UnderSystemPrompt;
@@ -310,7 +310,7 @@ impl Worker {
 /// run at the cap or when the caller cancels, and hands every event to the
 /// observer.
 struct Watch {
-    events: broadcast::Receiver<SessionEvent>,
+    events: EventStream,
     stop: CancelToken,
     external: Option<CancelToken>,
     cap: Option<u32>,
@@ -347,9 +347,8 @@ impl Watch {
         loop {
             tokio::select! {
                 received = self.events.recv() => match received {
-                    Ok(event) => self.see(&event),
-                    Err(broadcast::error::RecvError::Lagged(n)) => dropped += self.lost(n),
-                    Err(broadcast::error::RecvError::Closed) => return dropped,
+                    Some(event) => dropped += self.handle(&event.event),
+                    None => return dropped,
                 },
                 _ = tick.tick() => {
                     if self.external.as_ref().is_some_and(CancelToken::is_cancelled) {
@@ -359,13 +358,22 @@ impl Watch {
                 _ = &mut finished => break,
             }
         }
-        loop {
-            match self.events.try_recv() {
-                Ok(event) => self.see(&event),
-                Err(TryRecvError::Lagged(n)) => dropped += self.lost(n),
-                Err(TryRecvError::Empty | TryRecvError::Closed) => return dropped,
-            }
+        // What the finished send left buffered: `now_or_never` reads an
+        // event that is ready and stops at the first that is not.
+        while let Some(Some(event)) = self.events.recv().now_or_never() {
+            dropped += self.handle(&event.event);
         }
+        dropped
+    }
+
+    /// Takes one event of the stream; returns how many events it says were
+    /// lost (a gap marker stands in for them, it is not an event of the run).
+    fn handle(&self, event: &SessionEvent) -> u64 {
+        if let SessionEvent::EventsDropped { count } = event {
+            return self.lost(*count);
+        }
+        self.see(event);
+        0
     }
 
     fn see(&self, event: &SessionEvent) {
