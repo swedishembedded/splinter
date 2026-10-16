@@ -6,9 +6,7 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 # Registration of the coding-task experiments CE1, CE4, CE6 and CE7
 
 Written and committed on 2026-10-16, 18:04 CEST, before any run of these experiments
-exists. It is separate from `protocol.md`, which registered the first campaign (E1-E3
-there) and is not amended by this file. Experiment names are prefixed `CE` here because
-`protocol.md` already uses E1-E4 for the first campaign; the master plan's names are in
+exists. Experiment names are prefixed `CE`; the master plan's names are in
 parentheses (CE1 = plan E1, CE4 = plan E4, CE6 = plan E6). Anything in this file changed
 after the first run of the experiment concerned is a dated amendment below the line
 "Amendments", and a result computed under an amended rule is labelled post hoc. Thresholds
