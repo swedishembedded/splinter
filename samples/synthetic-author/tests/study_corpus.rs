@@ -46,7 +46,7 @@ fn the_stage_writes_reads_and_freezes_the_examination_before_anything_is_trained
         miner: &model,
     };
 
-    let manifest = run(&study, seed, &staff, &PACE).unwrap();
+    let manifest = run(&study, seed, &staff, &PACE, None).unwrap();
     assert!(requests.load(Ordering::SeqCst) > 0);
 
     assert_eq!(manifest.protocol_digest, study.digest().as_str());
@@ -104,9 +104,9 @@ fn a_repeat_changes_nothing_and_asks_no_model_again() {
         reader: &model,
         miner: &model,
     };
-    let first = run(&study, seed, &staff, &PACE).unwrap();
+    let first = run(&study, seed, &staff, &PACE, None).unwrap();
     let asked = requests.load(Ordering::SeqCst);
-    let second = run(&study, seed, &staff, &PACE).unwrap();
+    let second = run(&study, seed, &staff, &PACE, None).unwrap();
     assert_eq!(second, first);
     assert_eq!(
         requests.load(Ordering::SeqCst),
@@ -133,7 +133,7 @@ fn a_run_that_spends_its_budget_stops_without_freezing_and_the_next_resumes() {
     let manifest = loop {
         runs += 1;
         assert!(runs < 10, "the corpus never finished");
-        match run(&study, seed, &staff, &PACE) {
+        match run(&study, seed, &staff, &PACE, None) {
             Ok(manifest) => break manifest,
             Err(e) => {
                 let message = format!("{e:#}");
@@ -165,11 +165,11 @@ fn work_done_under_another_protocol_is_refused() {
         reader: &model,
         miner: &model,
     };
-    run(&study, seed, &staff, &PACE).unwrap();
+    run(&study, seed, &staff, &PACE, None).unwrap();
     let path = study.author_dir(seed).join(AUTHOR_MANIFEST);
     let text = std::fs::read_to_string(&path).unwrap();
     std::fs::write(&path, text.replace(study.digest().as_str(), "blake3:other")).unwrap();
-    let message = format!("{:#}", run(&study, seed, &staff, &PACE).unwrap_err());
+    let message = format!("{:#}", run(&study, seed, &staff, &PACE, None).unwrap_err());
     assert!(
         message.contains("another protocol") && message.contains("blake3:other"),
         "{message}"
@@ -186,7 +186,7 @@ fn a_corpus_changed_after_the_examination_was_frozen_is_refused() {
         reader: &model,
         miner: &model,
     };
-    let first = run(&study, seed, &staff, &PACE).unwrap();
+    let first = run(&study, seed, &staff, &PACE, None).unwrap();
     // The examination frozen for the author was another one than the corpus
     // now makes: as if the corpus had been mined again after the freeze.
     let path = study.author_dir(seed).join(AUTHOR_MANIFEST);
@@ -196,7 +196,7 @@ fn a_corpus_changed_after_the_examination_was_frozen_is_refused() {
         text.replace(&first.exam.digest, "blake3:frozen-before"),
     )
     .unwrap();
-    let message = format!("{:#}", run(&study, seed, &staff, &PACE).unwrap_err());
+    let message = format!("{:#}", run(&study, seed, &staff, &PACE, None).unwrap_err());
     assert!(
         message.contains("changed after the examination was frozen")
             && message.contains(&first.exam.digest)
@@ -206,10 +206,10 @@ fn a_corpus_changed_after_the_examination_was_frozen_is_refused() {
 }
 
 #[test]
-fn the_command_names_a_model_that_runs_here_instead_of_starting_a_run() {
+fn the_command_names_a_reader_that_runs_here_instead_of_starting_a_run() {
     let study = frozen(
-        "corpus-local",
-        small_protocol(|p| p.models.writer = "local:/models/aster-8b".into()),
+        "corpus-local-reader",
+        small_protocol(|p| p.models.reader = "local:/models/birch-8b".into()),
         1,
     );
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_synthetic-author"))
@@ -220,10 +220,61 @@ fn the_command_names_a_model_that_runs_here_instead_of_starting_a_run() {
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("writer") && stderr.contains("runs here"),
+        stderr.contains("reader") && stderr.contains("runs here"),
         "{stderr}"
     );
     assert!(!study.author_dir(study.protocol().authors[0].seed).exists());
+}
+
+#[test]
+fn a_writer_that_runs_here_is_loaded_not_refused() {
+    let study = frozen(
+        "corpus-local-writer",
+        small_protocol(|p| p.models.writer = "local:/models/aster-8b".into()),
+        1,
+    );
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_synthetic-author"))
+        .args(["--device", "gpu", "study", "corpus", "--study"])
+        .arg(study.root())
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!stderr.contains("runs here"), "{stderr}");
+}
+
+#[test]
+fn a_writer_that_runs_here_writes_under_a_run_seed_the_corpus_records() {
+    let study = frozen(
+        "corpus-run-seed",
+        small_protocol(|p| p.models.writer = "local:/models/aster-8b".into()),
+        1,
+    );
+    let seed = study.protocol().authors[0].seed;
+    let drawn = synthetic_author::study::corpus::run_seed(&study, seed)
+        .unwrap()
+        .expect("a writer that runs here is seeded");
+    let (model, _) = responding(seed, study.protocol());
+    let staff = Staff {
+        writer: &model,
+        reader: &model,
+        miner: &model,
+    };
+    run(&study, seed, &staff, &PACE, Some(drawn)).unwrap();
+    assert_eq!(
+        synthetic_author::study::corpus::run_seed(&study, seed).unwrap(),
+        Some(drawn),
+        "a resumed run continues under the seed the corpus recorded"
+    );
+}
+
+#[test]
+fn a_hosted_writer_has_no_run_seed() {
+    let study = frozen("corpus-no-run-seed", small_protocol(|_| {}), 1);
+    let seed = study.protocol().authors[0].seed;
+    assert_eq!(
+        synthetic_author::study::corpus::run_seed(&study, seed).unwrap(),
+        None
+    );
 }
 
 /// A writer whose every answer is no article.
@@ -257,7 +308,7 @@ fn a_corpus_stage_that_wrote_no_article_stops_with_the_cause_and_stays_resumable
         reader: &model,
         miner: &model,
     };
-    let message = format!("{:#}", run(&study, seed, &broken, &PACE).unwrap_err());
+    let message = format!("{:#}", run(&study, seed, &broken, &PACE, None).unwrap_err());
     assert!(
         message.contains("no article was written")
             && message.contains("given up")
@@ -277,6 +328,6 @@ fn a_corpus_stage_that_wrote_no_article_stops_with_the_cause_and_stays_resumable
         reader: &model,
         miner: &model,
     };
-    let manifest = run(&study, seed, &staff, &PACE).unwrap();
+    let manifest = run(&study, seed, &staff, &PACE, None).unwrap();
     assert!(manifest.corpus.articles_kept > 0);
 }

@@ -40,7 +40,20 @@ pub struct Staff<'a> {
     pub miner: &'a dyn Models,
 }
 
-/// Runs the corpus stage for the author with seed `author_seed`.
+/// The run seed the author's corpus is written under when the writer runs
+/// here: the one its manifest records, else a fresh one, printed. `None` when
+/// the writer is reached over a network, whose requests are not seeded.
+///
+/// # Errors
+/// The writer is not a model reference, or the corpus manifest cannot be read.
+pub fn run_seed(study: &Study, author_seed: u64) -> anyhow::Result<Option<u64>> {
+    let cache = study.cache(author_seed)?;
+    let writer_runs_here = !is_remote(&study.protocol().models.writer)?;
+    crate::manifest::run_seed(cache.dir(), None, writer_runs_here)
+}
+
+/// Runs the corpus stage for the author with seed `author_seed`, writing under
+/// `run_seed` (see [`run_seed`]).
 ///
 /// # Errors
 /// The author is not in the protocol; the corpus was begun under another
@@ -53,6 +66,7 @@ pub fn run(
     author_seed: u64,
     staff: &Staff<'_>,
     pace: &Transit,
+    run_seed: Option<u64>,
 ) -> anyhow::Result<AuthorManifest> {
     let protocol = study.protocol();
     let kept = study.author_manifest(author_seed)?;
@@ -71,7 +85,7 @@ pub fn run(
         transport_retries: pace.retries,
         transport_backoff: pace.backoff,
     };
-    let prepared = plan.prepare(cache.dir(), Some(author_seed), None, None)?;
+    let prepared = plan.prepare(cache.dir(), Some(author_seed), None, run_seed)?;
     let options = plan.begin(cache.dir(), &prepared)?;
     let author = prepared.author;
     let summary = crate::writer::write_corpus_read(

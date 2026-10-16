@@ -286,14 +286,10 @@ fn for_each_author(
 fn corpus_stage(args: &CorpusStageArgs) -> anyhow::Result<()> {
     let study = Study::open(&args.study)?;
     let roles = study.protocol().models.clone();
-    for (role, reference) in [
-        ("writer", &roles.writer),
-        ("reader", &roles.reader),
-        ("miner", &roles.miner),
-    ] {
+    for (role, reference) in [("reader", &roles.reader), ("miner", &roles.miner)] {
         anyhow::ensure!(
             is_remote(reference)?,
-            "the {role} {reference} runs here: the corpus stage asks hosted models, whose per-request seeds are their provider's"
+            "the {role} {reference} runs here: the gate reader and the miner are hosted models, whose per-request seeds are their provider's"
         );
     }
     let mut config = Config::from_env();
@@ -304,20 +300,21 @@ fn corpus_stage(args: &CorpusStageArgs) -> anyhow::Result<()> {
         .build()
         .context("starting the runtime")?;
     let ctx = splinter.context();
-    let writer = Source::open(&ctx, &roles.writer, None)?;
     let reader = Source::open(&ctx, &roles.reader, None)?;
     let miner = Source::open(&ctx, &roles.miner, None)?;
-    let staff = Staff {
-        writer: &writer,
-        reader: &reader,
-        miner: &miner,
-    };
     let pace = Transit::new(
         args.transport_retries,
         Duration::from_secs(args.transport_backoff_secs),
     );
     for_each_author(&chosen_authors(&study, &args.only)?, |seed| {
-        let manifest = corpus::run(&study, seed, &staff, &pace)?;
+        let run_seed = corpus::run_seed(&study, seed)?;
+        let writer = Source::open(&ctx, &roles.writer, run_seed)?;
+        let staff = Staff {
+            writer: &writer,
+            reader: &reader,
+            miner: &miner,
+        };
+        let manifest = corpus::run(&study, seed, &staff, &pace, run_seed)?;
         println!(
             "author {seed} ({}): {} of {} articles kept, {} decisions kept, examination of {} items frozen as {}",
             manifest.author_name,

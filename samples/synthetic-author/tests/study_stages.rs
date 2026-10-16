@@ -82,6 +82,7 @@ fn corpus_done(tag: &str) -> (Study, u64, PathBuf) {
             miner: &model,
         },
         &Transit::new(1, Duration::ZERO),
+        None,
     )
     .unwrap();
     let base = study.root().join("base.bin");

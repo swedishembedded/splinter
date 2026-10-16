@@ -436,6 +436,7 @@ fn run_study(tag: &str, authors: usize) -> synthetic_author::study::layout::Stud
                 miner: &model,
             },
             &pace(),
+            None,
         )
         .unwrap();
         train::run(&study, plan.seed, &base, &Scripted::default()).unwrap();
