@@ -39,6 +39,7 @@ in the same commit.
 | [041](041-a-suite-whose-report-exceeds-the-output-cap-is-refused-as-a-baseline.md) | A suite whose per-test report exceeds the output cap is refused as a baseline |
 | [042](042-mutation-seeded-tasks-read-only-one-runner-so-other-languages-go-through-it.md) | Mutation-seeded tasks read only `python3 -m unittest`, so other languages go through it |
 | [043](043-most-refused-fault-candidates-are-unrunnable-or-near-duplicates.md) | Most fault candidates are refused, and the refusals are not the tests' fault |
+| [044](044-mutated-lua-programs-outlived-their-test-runs-and-loaded-the-node-for-hours.md) | Mutated Lua programs outlived their test runs and loaded the node for hours |
 | [046](046-forward-transfer-has-no-base-cell-in-a-gate-report.md) | Forward transfer had no base cell to read in the gate reports |
 | [047](047-ten-gates-at-five-percent-release-a-null-candidate-four-times-in-ten.md) | Ten gates at five percent release a null candidate four times in ten |
 | [048](048-a-hidden-suite-that-fails-on-one-fault-passes-its-neighbours.md) | A hidden suite that fails on the seeded fault passes its neighbours |
