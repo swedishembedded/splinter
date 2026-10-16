@@ -458,14 +458,30 @@ impl FreshTree {
 /// behind. The workspace verifier sets it too.
 const NO_BYTECODE: &str = "PYTHONDONTWRITEBYTECODE=1";
 
+/// The exit status `timeout` reports when it stopped its command.
+pub(super) const TIMEOUT_EXIT: i32 = 124;
+
 /// Runs `call` in `tree` with bytecode writing off, and says how long it
-/// took.
+/// took. With `limit`, the command is stopped by `timeout` after that many
+/// seconds (rounded up) and ends with [`TIMEOUT_EXIT`]: the sandbox's own wall
+/// time is far longer than a budget set from the baseline, and a mutant that
+/// loops would otherwise cost the whole of it.
 pub(super) fn run_quiet(
     env: &WorkspaceEnvironment,
     tree: &Path,
     call: &CommandCall,
+    limit: Option<Duration>,
 ) -> Result<(CodeResult, Duration), WorkspaceError> {
-    let mut argv = vec!["env".to_string(), NO_BYTECODE.to_string()];
+    let mut argv = Vec::new();
+    if let Some(limit) = limit {
+        argv.extend(
+            ["timeout", "-k", "1"]
+                .map(String::from)
+                .into_iter()
+                .chain([limit.as_secs_f64().ceil().max(1.0).to_string()]),
+        );
+    }
+    argv.extend(["env".to_string(), NO_BYTECODE.to_string()]);
     argv.extend(call.argv.iter().cloned());
     let started = Instant::now();
     let result = env.run(

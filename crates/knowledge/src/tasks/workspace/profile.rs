@@ -138,7 +138,7 @@ impl RepositoryProfile {
         for _ in 0..BASELINE_RUNS {
             let tree = FreshTree::lay(env, archive, scratch)?;
             files = list_files(tree.path())?;
-            let (result, took) = run_quiet(env, tree.path(), &call)?;
+            let (result, took) = run_quiet(env, tree.path(), &call, None)?;
             if result.timed_out {
                 return Err(refused(
                     Reason::TimedOut,

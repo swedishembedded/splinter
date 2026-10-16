@@ -581,3 +581,49 @@ fn a_task_whose_hidden_tests_miss_the_faults_seeded_beside_it_is_refused_with_a_
         generation.refused
     );
 }
+
+const SPIN: &str = "def count(n):\n    i = 0\n    while i < n:\n        i += 1\n    return i\n";
+const TEST_SPIN: &str = "import unittest\n\nfrom shop.spin import count\n\n\nclass Spin(unittest.TestCase):\n    def test_count(self):\n        self.assertEqual(count(3), 3)\n";
+
+#[test]
+fn a_mutant_that_loops_is_stopped_at_the_time_budget_and_not_at_the_sandbox_limit() {
+    // The sandbox lets a command run two minutes; the budget is two seconds.
+    // The rest of the run (a few dozen mutants) takes about a minute, so a
+    // looping mutant that ran to the sandbox's limit would show.
+    let mut rig = Rig::with_mutants(
+        "spin",
+        &[("shop/spin.py", SPIN), ("tests/test_spin.py", TEST_SPIN)],
+        16,
+    );
+    let calls = rig.scratch.0.join("slow-calls");
+    fs::create_dir_all(&calls).unwrap();
+    let limits = Limits {
+        wall_time_ms: 120_000,
+        ..Limits::default()
+    };
+    rig.generator = WorkspaceGenerator::new(
+        Arc::new(ProcessSandbox::new(&calls, BTreeMap::new(), &[], limits)),
+        rig.host.clone(),
+        rig.store.clone(),
+        rig.scratch.0.join("slow-work"),
+    )
+    .with_plan(WorkspacePlan {
+        mutants_per_file: 16,
+        min_time_budget: std::time::Duration::from_secs(2),
+        ..WorkspacePlan::default()
+    })
+    .unwrap();
+    let tree = rig.capture("HEAD");
+    let began = std::time::Instant::now();
+    let generation = rig.generate(&tree, &Held::none());
+    assert!(
+        generation.count(Reason::OverTimeBudget) >= 1,
+        "refused {:?}",
+        generation.refused
+    );
+    assert!(
+        began.elapsed() < std::time::Duration::from_secs(110),
+        "took {:?}",
+        began.elapsed()
+    );
+}

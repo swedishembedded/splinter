@@ -368,7 +368,7 @@ impl WorkspaceGenerator {
                 lay_over(&overlay.path, tree.path())?;
             }
             for (call, _, outcomes) in &mut runs {
-                let (result, took) = run_quiet(env, tree.path(), call)?;
+                let (result, took) = run_quiet(env, tree.path(), call, None)?;
                 if result.timed_out || took > self.plan.min_time_budget {
                     return Err(Stop::Refuse(Reason::OverTimeBudget));
                 }

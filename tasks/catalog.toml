@@ -106,6 +106,10 @@ test_files = 8
 digest = "sha256:2fa96e924fa785a5265b548156203a337cb0bfeb7b503aaa583adcbf9d94476f"
 tree = "25669044c65fe72c4462466ced3c8900fafaca4b"
 files_under_test = ["src/bizdays.lua", "src/dateiso.lua", "src/dateshift.lua", "src/datespan.lua", "src/daynumber.lua", "src/isoweek.lua", "src/leapyear.lua", "src/recurrence.lua"]
+generation_seed = "10647562179294028461"
+generation_flags = "--max-tasks 1000 --mutants-per-file 80 --budget 1s --no-release --exam-seed <seed>"
+admitted = 132
+funnel = { candidates = 640, equivalent_mutant = 103, near_duplicate = 213, output_truncated = 190, over_time_budget = 2 }
 
 [[family]]
 id = "graphkit"

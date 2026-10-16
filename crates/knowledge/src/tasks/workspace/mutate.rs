@@ -51,7 +51,7 @@ use super::staging::Staged;
 use super::{
     instruction, run_quiet, FreshTree, HiddenStrength, Reason, WorkspaceError, WorkspaceGeneration,
     WorkspaceGenerator, WorkspaceTask, MIN_HIDDEN_KILL_RATE, MIN_VARIANTS_TO_REFUSE, REPRODUCTIONS,
-    VARIANTS_PER_TASK, VARIANT_WINDOW_LINES,
+    TIMEOUT_EXIT, VARIANTS_PER_TASK, VARIANT_WINDOW_LINES,
 };
 use crate::tasks::dedup::Seen;
 
@@ -413,8 +413,8 @@ impl WorkspaceGenerator {
         tree: &Path,
         call: &CommandCall,
     ) -> Result<SuiteReport, Stop> {
-        let (result, took) = run_quiet(env, tree, call)?;
-        if result.timed_out || took > base.budget {
+        let (result, took) = run_quiet(env, tree, call, Some(base.budget))?;
+        if result.timed_out || result.exit_code == Some(TIMEOUT_EXIT) || took > base.budget {
             return Err(Stop::Refuse(Reason::OverTimeBudget));
         }
         if result.stderr_truncated {
