@@ -137,9 +137,13 @@ enum Command {
         #[arg(long, default_value_t = 40)]
         per_cell: usize,
         /// A corpus directory: with it each item also shows the system turn
-        /// the retrieval arm is asked under.
+        /// the retrieval arm is asked under. The second examination needs it,
+        /// for the decisions read out of the corpus.
         #[arg(long)]
         cache: Option<PathBuf>,
+        /// Which examination, as for `exam`.
+        #[arg(long, value_enum, default_value_t = synthetic_author::exam::Version::default())]
+        exam: synthetic_author::exam::Version,
     },
     /// Compare the decisions read out of the essays with what the beliefs dictate.
     Audit {
@@ -295,19 +299,31 @@ fn main() -> anyhow::Result<()> {
             articles,
             per_cell,
             cache,
+            exam,
         } => {
             let seed = match &cache {
                 Some(dir) => author_seed(dir, seed)?,
                 None => seed.context("--seed is needed without --cache")?,
             };
             let persona = Persona::generate(seed);
-            let notes = match cache {
-                Some(dir) => Some(synthetic_author::retrieval::Notes::new(
-                    &Cache::open(dir)?.articles()?,
-                )),
-                None => None,
+            let cache = cache.map(Cache::open).transpose()?;
+            let notes = cache
+                .as_ref()
+                .map(|cache| cache.articles())
+                .transpose()?
+                .map(|articles| synthetic_author::retrieval::Notes::new(&articles));
+            let all = match &cache {
+                Some(cache) => synthetic_author::lab::exam_items_of(
+                    cache, &persona, seed, articles, per_cell, exam,
+                )?,
+                None if exam == synthetic_author::exam::Version::V1 => {
+                    synthetic_author::lab::exam_items(&persona, seed, articles, per_cell)
+                }
+                None => anyhow::bail!(
+                    "--cache is needed for the second examination, which says which items the corpus trained on; pass --exam v1 to show the first"
+                ),
             };
-            for item in synthetic_author::lab::exam_items(&persona, seed, articles, per_cell) {
+            for item in all {
                 let mut view = synthetic_author::lab::item_view(&item);
                 if let Some(notes) = &notes {
                     view["retrieval_system"] = notes

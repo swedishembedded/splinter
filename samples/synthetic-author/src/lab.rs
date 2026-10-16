@@ -21,8 +21,9 @@ use crate::arms::{run_items, run_items_with, Outcome};
 use crate::binding::{bind, items_digest, ArmRecord, ModelIdentity};
 use crate::cache::{Cache, StoredArticle};
 use crate::dataset::records_for;
-use crate::exam::{items, Item};
+use crate::exam::{draw, items, Item, Spec, Trained, Version};
 use crate::gates::same_ways;
+use crate::manifest::author_seed;
 use crate::mine::{mine, Verified};
 use crate::persona::Persona;
 use crate::prompts::SYSTEM;
@@ -288,15 +289,104 @@ impl Arm {
     }
 }
 
-/// The examination of `persona`: `per_cell` items of each kind, with no case
-/// the corpus tells.
-#[must_use]
-pub fn exam_items(persona: &Persona, seed: u64, articles: usize, per_cell: usize) -> Vec<Item> {
-    let told: BTreeSet<String> = plan(persona, seed, articles, 3)
+/// The names of the cases the first `articles` planned articles tell.
+fn told_cases(persona: &Persona, seed: u64, articles: usize) -> BTreeSet<String> {
+    plan(persona, seed, articles, 3)
         .into_iter()
         .flat_map(|(_, eps)| eps.into_iter().map(|e| e.case.name))
+        .collect()
+}
+
+/// The first examination of `persona`: `per_cell` items of each kind, with no
+/// case the corpus tells.
+#[must_use]
+pub fn exam_items(persona: &Persona, seed: u64, articles: usize, per_cell: usize) -> Vec<Item> {
+    items(
+        persona,
+        seed,
+        per_cell,
+        &told_cases(persona, seed, articles),
+    )
+}
+
+/// The examination of `persona` in `version`. The second version needs the
+/// decisions read out of the corpus, to say which items it trained on.
+///
+/// # Errors
+/// The second version is asked for and the corpus's decisions have not been
+/// read (`mine`), or cannot be.
+pub fn exam_items_of(
+    cache: &Cache,
+    persona: &Persona,
+    seed: u64,
+    articles: usize,
+    per_cell: usize,
+    version: Version,
+) -> anyhow::Result<Vec<Item>> {
+    let trained = match version {
+        Version::V1 => Trained::default(),
+        Version::V2 => trained_on(cache)?,
+    };
+    Ok(draw(
+        persona,
+        seed,
+        &Spec {
+            version,
+            per_cell,
+            corpus_cases: &told_cases(persona, seed, articles),
+            trained: &trained,
+        },
+    ))
+}
+
+/// The items the arm of `record` was asked, drawn again from what the record
+/// says they were made with.
+///
+/// # Errors
+/// The author cannot be read from the corpus, the items cannot be drawn, or
+/// they are no longer the ones the arm was asked: a baseline scored on other
+/// items would say nothing about the arms.
+pub fn asked_items(cache: &Cache, record: &ArmRecord) -> anyhow::Result<Vec<Item>> {
+    let seed = author_seed(cache.dir(), None)?;
+    let items = exam_items_of(
+        cache,
+        &Persona::generate(seed),
+        seed,
+        record.articles,
+        record.per_cell,
+        record.exam,
+    )?;
+    let now = items_digest(&items);
+    anyhow::ensure!(
+        record.items_digest == now.as_str(),
+        "the baselines are not scored: the items drawn again from {} are {now} and arm {} was asked {} (the corpus was changed after the examination, for instance mined again)",
+        cache.dir().display(),
+        record.arm,
+        record.items_digest,
+    );
+    Ok(items)
+}
+
+/// What the kept decisions of the corpus in `cache` cover.
+fn trained_on(cache: &Cache) -> anyhow::Result<Trained> {
+    let read = if decisions_path(cache).exists() {
+        read_mined(cache)?
+    } else {
+        Vec::new()
+    };
+    anyhow::ensure!(
+        !read.is_empty(),
+        "{} holds no decisions read out of the corpus: run `mine` before drawing the second examination, which says which items the corpus trained on",
+        cache.dir().display()
+    );
+    let kept: Vec<Verified> = read
+        .into_iter()
+        .filter_map(|m| match m.result {
+            MinedResult::Kept(decision) => Some(decision),
+            MinedResult::Refused(_) => None,
+        })
         .collect();
-    items(persona, seed, per_cell, &told)
+    Ok(Trained::from_decisions(&kept))
 }
 
 /// An exam item as the model is asked it, with the answer the beliefs dictate
@@ -310,8 +400,11 @@ pub fn item_view(item: &Item) -> serde_json::Value {
         .unwrap_or(0);
     serde_json::json!({
         "id": item.id,
+        "options": item.options,
+        "expected_position": position,
         "topic_seen": item.topic_seen,
         "combination_seen": item.combo_seen,
+        "combination_trained": item.combo_trained,
         "tool_seen": item.tool_seen,
         "tool": item.schema.name,
         "prompt": crate::prompts::render(&item.briefing, &item.options, &item.schema),
@@ -343,6 +436,8 @@ pub struct ExamRun {
     pub max_tokens: u32,
     /// The model that answers.
     pub model: ModelIdentity,
+    /// Which examination the items are of.
+    pub exam: Version,
     /// Take over outcomes that exist without a manifest.
     pub adopt: bool,
 }
@@ -366,6 +461,7 @@ pub fn arm_record(
     let context = serde_json::json!({"system": arm.system(persona), "corpus": told});
     Ok(ArmRecord {
         arm: arm.name().to_string(),
+        exam: run.exam,
         items_digest: items_digest(items).to_string(),
         articles: run.articles,
         per_cell: run.per_cell,

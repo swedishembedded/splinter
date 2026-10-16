@@ -30,8 +30,11 @@ use synthetic_author::binding::{
     file_digest, recorded, verify_items, verify_outcomes, ModelIdentity,
 };
 use synthetic_author::cache::Cache;
-use synthetic_author::exam::Item;
-use synthetic_author::lab::{arm_record, exam_items, outcomes_path, run_arm, Arm, ExamRun};
+use synthetic_author::exam::{draw, Item, Spec, Trained, Version};
+use synthetic_author::lab::{
+    arm_record, asked_items, exam_items, exam_items_of, outcomes_path, run_arm, Arm, ExamRun,
+    Mined, MinedResult,
+};
 use synthetic_author::manifest::{
     author_seed, begin_or_continue, corpus_author_seed, CorpusManifest, Limits, Recipe, SeedSource,
     SEED_DERIVATION,
@@ -219,6 +222,7 @@ impl Study {
             per_cell,
             max_tokens: 64,
             model: model(adapter),
+            exam: Version::V1,
             adopt,
         };
         run_arm(
@@ -254,6 +258,7 @@ fn an_exam_rerun_for_other_items_is_refused_naming_both_digests() {
         per_cell: PER_CELL,
         max_tokens: 64,
         model: model(Some("sha256:a")),
+        exam: Version::V1,
         adopt: false,
     };
     let other = arm_record(
@@ -275,6 +280,44 @@ fn an_exam_rerun_for_other_items_is_refused_naming_both_digests() {
         "{message}"
     );
     assert_eq!(s.manifest_digest(), kept, "the manifest is not rewritten");
+}
+
+#[test]
+fn the_second_exam_is_a_new_exam_and_the_first_one_s_outcomes_are_refused_under_it() {
+    let s = study("exam-v2");
+    s.exam(20, PER_CELL, Some("sha256:a"), false).unwrap();
+    let kept = s.manifest_digest();
+    let told = synthetic_author::writer::plan(&s.persona, SEED, 20, 3)
+        .into_iter()
+        .flat_map(|(_, eps)| eps.into_iter().map(|e| e.case.name))
+        .collect();
+    let second = draw(
+        &s.persona,
+        SEED,
+        &Spec {
+            version: Version::V2,
+            per_cell: PER_CELL,
+            corpus_cases: &told,
+            trained: &Trained::default(),
+        },
+    );
+    let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
+    let run = ExamRun {
+        articles: 20,
+        per_cell: PER_CELL,
+        max_tokens: 64,
+        model: model(Some("sha256:a")),
+        exam: Version::V2,
+        adopt: false,
+    };
+    let message = format!(
+        "{:#}",
+        run_arm(&s.cache, &s.persona, Arm::Tuned, &provider, &second, &run).unwrap_err()
+    );
+    assert!(
+        message.contains(&kept) && message.contains("exam") && message.contains("items"),
+        "{message}"
+    );
 }
 
 #[test]
@@ -409,4 +452,64 @@ fn a_training_run_records_the_seed_and_every_setting_that_made_the_adapter() {
     std::fs::write(&records, "{\"a\":2}\n").unwrap();
     let changed = cli.train.settings(1234, &records).unwrap();
     assert_ne!(changed.dataset_digest, settings.dataset_digest);
+}
+
+#[test]
+fn the_baselines_are_scored_only_on_the_items_the_arms_were_asked() {
+    let s = study("baselines");
+    s.cache.write_persona(&s.persona).unwrap();
+    let decisions = s.cache.dir().join("decisions.jsonl");
+    let line = |result| {
+        let read = Mined {
+            article: 0,
+            case: "Any".into(),
+            result,
+        };
+        format!("{}\n", serde_json::to_string(&read).unwrap())
+    };
+    // Read, and nothing kept: no item is trained on yet.
+    std::fs::write(&decisions, line(MinedResult::Refused("unclear".into()))).unwrap();
+    let items = exam_items_of(&s.cache, &s.persona, SEED, 20, PER_CELL, Version::V2).unwrap();
+    let run = ExamRun {
+        articles: 20,
+        per_cell: PER_CELL,
+        max_tokens: 64,
+        model: model(Some("sha256:a")),
+        exam: Version::V2,
+        adopt: false,
+    };
+    let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
+    run_arm(&s.cache, &s.persona, Arm::Tuned, &provider, &items, &run).unwrap();
+    let record = recorded(&s.cache.dir().join("exam"), "tuned")
+        .unwrap()
+        .unwrap();
+    assert_eq!(asked_items(&s.cache, &record).unwrap().len(), items.len());
+
+    // The corpus is read again and now holds a decision on the first item.
+    let target = &items[0];
+    let f = target.scenario.features;
+    let kept = synthetic_author::mine::Verified {
+        case: "Any".into(),
+        briefing: "x".into(),
+        offer_made: f.outsider_offers_help,
+        facts: synthetic_author::mine::MinedFacts {
+            exceeds_authority: Some(f.exceeds_authority),
+            urgent: Some(f.urgent),
+            binds_future: Some(f.binds_future),
+            irreversible: Some(f.irreversible),
+            members_harmed: Some(f.members_harmed),
+        },
+        chose: target.expected,
+        open: target.scenario.options.clone(),
+        reasons: vec![],
+        dropped: 0,
+    };
+    let mut text = std::fs::read_to_string(&decisions).unwrap();
+    text.push_str(&line(MinedResult::Kept(kept)));
+    std::fs::write(&decisions, text).unwrap();
+    let message = format!("{:#}", asked_items(&s.cache, &record).unwrap_err());
+    assert!(
+        message.contains("not scored") && message.contains(&record.items_digest),
+        "{message}"
+    );
 }

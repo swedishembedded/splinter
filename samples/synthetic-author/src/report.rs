@@ -5,13 +5,16 @@
 //! determine, how sure that is, and whether one arm beat another on the same
 //! items by more than chance allows.
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use splinter_sdk::model::stats::sign_test;
 
 use crate::arms::Outcome;
+use crate::binding::item_digest;
 use crate::exam::Item;
 use crate::persona::Persona;
+use crate::scenario::Archetype;
 
 /// A rate and the 95% Wilson interval around it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -81,9 +84,21 @@ fn cell(outcomes: &[Outcome], keep: impl Fn(&Outcome) -> bool) -> String {
 /// comparison with one of them says it was not measured instead of vanishing.
 #[must_use]
 pub fn render(arms: &[(&str, Vec<Outcome>)], compare: &[(&str, &str)], missing: &[&str]) -> String {
+    // Only the second examination says which items the corpus trained on.
+    let trained = arms
+        .iter()
+        .any(|(_, outcomes)| outcomes.iter().any(|o| o.combo_trained.is_some()));
     let mut text = String::from(
-        "| arm | all | topic seen | topic new | combination seen | combination new | tool seen | tool new |\n|---|---|---|---|---|---|---|---|\n",
+        "| arm | all | topic seen | topic new | combination seen | combination new | tool seen | tool new |",
     );
+    if trained {
+        text.push_str(" combination trained | combination not trained |");
+    }
+    text.push_str("\n|---|---|---|---|---|---|---|---|");
+    if trained {
+        text.push_str("---|---|");
+    }
+    text.push('\n');
     for (name, outcomes) in arms {
         let r = accuracy(outcomes);
         let all = if outcomes.is_empty() {
@@ -94,8 +109,7 @@ pub fn render(arms: &[(&str, Vec<Outcome>)], compare: &[(&str, &str)], missing: 
                 r.rate, r.low, r.high, r.right, r.n
             )
         };
-        let _ = writeln!(
-            text,
+        let mut row = format!(
             "| {name} | {all} | {} | {} | {} | {} | {} | {} |",
             cell(outcomes, |o| o.topic_seen),
             cell(outcomes, |o| !o.topic_seen),
@@ -104,6 +118,16 @@ pub fn render(arms: &[(&str, Vec<Outcome>)], compare: &[(&str, &str)], missing: 
             cell(outcomes, |o| o.tool_seen),
             cell(outcomes, |o| !o.tool_seen),
         );
+        if trained {
+            let _ = write!(
+                row,
+                " {} | {} |",
+                cell(outcomes, |o| o.combo_trained == Some(true)),
+                cell(outcomes, |o| o.combo_trained == Some(false)),
+            );
+        }
+        text.push_str(&row);
+        text.push('\n');
     }
     text.push('\n');
     for name in missing {
@@ -186,4 +210,59 @@ pub fn divergence(items: &[Item], outcomes: &[Outcome], rival: &Persona) -> Dive
         }
     }
     d
+}
+
+/// The name of the policy that always takes the option listed first.
+pub const FIRST_LISTED: &str = "first-listed";
+/// The name of the policy that always takes the option the beliefs determine
+/// most often on the items it is scored on.
+pub const MAJORITY: &str = "majority-option";
+
+/// The outcomes of a constant policy on `items`: `pick` names the option it
+/// takes for an item, if the item offers one.
+fn policy(items: &[Item], name: &str, pick: impl Fn(&Item) -> Option<Archetype>) -> Vec<Outcome> {
+    items
+        .iter()
+        .map(|item| Outcome {
+            id: item.id.clone(),
+            correct: pick(item) == Some(item.expected),
+            topic_seen: item.topic_seen,
+            combo_seen: item.combo_seen,
+            combo_trained: item.combo_trained,
+            tool_seen: item.tool_seen,
+            call: None,
+            item: item_digest(item).to_string(),
+            model: format!("policy:{name}"),
+        })
+        .collect()
+}
+
+/// The two policies a result is only worth anything above, scored on `items`:
+/// always the option listed first, and always the option the beliefs
+/// determine most often (the lowest in order among equals), each as outcomes
+/// that can be listed beside an arm's and compared with it.
+#[must_use]
+pub fn baselines(items: &[Item]) -> Vec<(&'static str, Vec<Outcome>)> {
+    let mut counts: BTreeMap<Archetype, usize> = BTreeMap::new();
+    for item in items {
+        *counts.entry(item.expected).or_default() += 1;
+    }
+    // `max_by_key` keeps the last of equals, so walk the options downwards.
+    let most_often = counts
+        .iter()
+        .rev()
+        .max_by_key(|(_, &n)| n)
+        .map(|(&option, _)| option);
+    vec![
+        (
+            FIRST_LISTED,
+            policy(items, FIRST_LISTED, |i| i.options.first().copied()),
+        ),
+        (
+            MAJORITY,
+            policy(items, MAJORITY, |i| {
+                most_often.filter(|o| i.options.contains(o))
+            }),
+        ),
+    ]
 }

@@ -31,6 +31,10 @@ pub struct Outcome {
     pub topic_seen: bool,
     /// Whether the facts combine as some article has them.
     pub combo_seen: bool,
+    /// Whether some decision kept from the corpus has the item's facts and
+    /// options; absent for the first version of the examination.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub combo_trained: Option<bool>,
     /// Whether the tool is one the model was taught with.
     pub tool_seen: bool,
     /// The tool called and its arguments, if a call was made.
@@ -137,6 +141,7 @@ pub fn run_items_with(
             correct: grade(item, call.as_ref().map(|(n, a)| (n.as_str(), a))),
             topic_seen: item.topic_seen,
             combo_seen: item.combo_seen,
+            combo_trained: item.combo_trained,
             tool_seen: item.tool_seen,
             call: call.map(|(name, args)| serde_json::json!({"name": name, "arguments": args})),
             item: item_digest(item).to_string(),

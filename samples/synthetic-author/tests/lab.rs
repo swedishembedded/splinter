@@ -316,6 +316,7 @@ fn outcome(
         correct,
         topic_seen,
         combo_seen,
+        combo_trained: None,
         tool_seen,
         call: None,
         item: String::new(),
@@ -623,4 +624,37 @@ fn an_empty_cell_is_not_measured_and_an_arm_without_outcomes_is_named() {
     assert!(text.contains("base: not measured"), "{text}");
     assert!(text.contains("tuned over base: not measured"), "{text}");
     assert!(text.contains("tuned over named: not measured"), "{text}");
+}
+
+#[test]
+fn constant_policies_are_listed_beside_the_arms_and_compared_with_the_tuned_one() {
+    use synthetic_author::exam::{draw, Spec, Trained, Version};
+    use synthetic_author::report::{baselines, render, FIRST_LISTED};
+    let persona = Persona::generate(6);
+    let told = Default::default();
+    let first = items(&persona, 6, 3, &told);
+    let second = draw(
+        &persona,
+        6,
+        &Spec {
+            version: Version::V2,
+            per_cell: 3,
+            corpus_cases: &told,
+            trained: &Trained::default(),
+        },
+    );
+    for (exam, trained_columns) in [(&first, false), (&second, true)] {
+        let mut arms = baselines(exam);
+        let tuned = arms[0].1.clone();
+        arms.insert(0, ("tuned", tuned));
+        let text = render(&arms, &[("tuned", FIRST_LISTED)], &[]);
+        assert!(text.contains(&format!("| {FIRST_LISTED} |")), "{text}");
+        assert!(text.contains("| majority-option |"), "{text}");
+        assert!(text.contains("tuned over first-listed: 0 of 0"), "{text}");
+        assert_eq!(
+            text.contains("combination trained"),
+            trained_columns,
+            "{text}"
+        );
+    }
 }

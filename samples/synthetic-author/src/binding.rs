@@ -27,14 +27,15 @@ use serde::{Deserialize, Serialize};
 use splinter_sdk::vocabulary::digest::{canonical_json, Digest};
 
 use crate::arms::Outcome;
-use crate::exam::Item;
+use crate::exam::{Item, Version};
 use crate::prompts::render;
 
 /// The file in the examination directory that holds the arm records.
 pub const MANIFEST: &str = "manifest.json";
 
 /// The digest of one item: its id, the prompt as the model reads it, the
-/// tool definition it is offered and the label that is right.
+/// tool definition it is offered, the label that is right and, when the
+/// examination says it, whether the corpus trained on its combination.
 #[must_use]
 pub fn item_digest(item: &Item) -> Digest {
     let position = item
@@ -42,12 +43,16 @@ pub fn item_digest(item: &Item) -> Digest {
         .iter()
         .position(|&o| o == item.expected)
         .unwrap_or(0);
-    let shown = serde_json::json!({
+    let mut shown = serde_json::json!({
         "id": item.id,
         "prompt": render(&item.briefing, &item.options, &item.schema),
         "tool": item.schema.definition(&item.options),
         "expected": item.schema.label(item.expected, position),
     });
+    // Only the second examination says it, so the first keeps its digests.
+    if let Some(trained) = item.combo_trained {
+        shown["combination_trained"] = trained.into();
+    }
     digest_of(&shown)
 }
 
@@ -137,6 +142,10 @@ impl ModelIdentity {
 pub struct ArmRecord {
     /// The arm.
     pub arm: String,
+    /// Which examination the items are of. Records of the first version do
+    /// not name it, which keeps their digests as they were.
+    #[serde(default = "first_exam", skip_serializing_if = "is_first")]
+    pub exam: Version,
     /// Digest of the items the arm is asked.
     pub items_digest: String,
     /// How many articles the corpus was planned with.
@@ -175,6 +184,7 @@ impl ArmRecord {
                 named.push(name);
             }
         };
+        note(self.exam != other.exam, "exam");
         note(self.items_digest != other.items_digest, "items");
         note(self.articles != other.articles, "articles");
         note(self.per_cell != other.per_cell, "per_cell");
@@ -192,6 +202,18 @@ impl ArmRecord {
         );
         named
     }
+}
+
+/// The examination a record that does not name one is of.
+fn first_exam() -> Version {
+    Version::V1
+}
+
+/// Whether `exam` is the examination as first reported.
+// By reference because serde's `skip_serializing_if` hands it one.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_first(exam: &Version) -> bool {
+    *exam == Version::V1
 }
 
 /// The records of every arm examined in one directory.

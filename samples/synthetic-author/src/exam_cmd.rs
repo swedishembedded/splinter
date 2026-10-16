@@ -23,7 +23,8 @@ use crate::binding::{
     ArmRecord, ModelIdentity,
 };
 use crate::cache::Cache;
-use crate::lab::{exam_items, run_arm, Arm, ExamRun};
+use crate::exam::Version;
+use crate::lab::{asked_items, exam_items_of, run_arm, Arm, ExamRun};
 use crate::manifest::author_seed;
 use crate::persona::Persona;
 use crate::report;
@@ -55,6 +56,12 @@ pub struct ExamArgs {
     /// The most tokens a reply may run to.
     #[arg(long, default_value_t = 256)]
     max_tokens: u32,
+    /// Which examination: `v1` as first reported (options in their canonical
+    /// order) or `v2` (options in an order drawn from the seed, balanced, and
+    /// each item says whether the corpus trained on it; needs `mine` first).
+    /// Outcomes of one are refused under the other.
+    #[arg(long, value_enum, default_value_t = Version::default())]
+    exam: Version,
     /// Take over outcomes that were written before manifests existed: record
     /// the flags given as their manifest, without checking them against it.
     #[arg(long)]
@@ -116,7 +123,14 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
     let seed = author_seed(&args.cache, args.seed)?;
     let persona = Persona::generate(seed);
     let cache = Cache::open(args.cache.clone())?;
-    let all = exam_items(&persona, seed, args.articles, args.per_cell);
+    let all = exam_items_of(
+        &cache,
+        &persona,
+        seed,
+        args.articles,
+        args.per_cell,
+        args.exam,
+    )?;
     let decoding = Decoding::Greedy;
     let run = ExamRun {
         articles: args.articles,
@@ -129,6 +143,7 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
             // Greedy decoding takes the likeliest token and draws nothing.
             decoding_seed: None,
         },
+        exam: args.exam,
         adopt: args.adopt,
     };
     let answerer = Answerer::load_with(&args.base, adapter, Some(16384), arm.name(), decoding)?;
@@ -172,10 +187,13 @@ pub fn report(args: &ReportArgs) -> anyhow::Result<()> {
         loaded.push((name.to_string(), outcomes));
     }
     verify_same_items(&records)?;
-    let view: Vec<(&str, Vec<_>)> = loaded
+    let mut view: Vec<(&str, Vec<_>)> = loaded
         .iter()
         .map(|(n, o)| (n.as_str(), o.clone()))
         .collect();
+    if let Some(record) = records.first() {
+        view.extend(report::baselines(&asked_items(&cache, record)?));
+    }
     let missing: Vec<&str> = missing.iter().map(String::as_str).collect();
     let compare = [
         ("tuned", "base"),
@@ -184,6 +202,8 @@ pub fn report(args: &ReportArgs) -> anyhow::Result<()> {
         ("tuned", "retrieval"),
         ("retrieval", "base"),
         ("principles", "base"),
+        ("tuned", report::FIRST_LISTED),
+        ("tuned", report::MAJORITY),
     ];
     let text = report::render(&view, &compare, &missing);
     std::fs::write(cache.dir().join("report.md"), &text)?;
@@ -205,7 +225,6 @@ pub fn cross(args: &CrossArgs) -> anyhow::Result<()> {
         let dir = args.exams.join(format!("author-{seed}"));
         author_seed(&dir, Some(seed))?;
         let persona = Persona::generate(seed);
-        let items = exam_items(&persona, seed, args.articles, args.per_cell);
         let exam_dir = dir.join("exam");
         let path = outcomes_path_in(&exam_dir, Arm::Tuned);
         let outcomes = read_outcomes(&path)?;
@@ -216,6 +235,14 @@ pub fn cross(args: &CrossArgs) -> anyhow::Result<()> {
             )
         })?;
         verify_outcomes(&record, &outcomes, &path)?;
+        let items = exam_items_of(
+            &Cache::open(dir.clone())?,
+            &persona,
+            seed,
+            args.articles,
+            args.per_cell,
+            record.exam,
+        )?;
         verify_items(&record, &items, &outcomes, &path)?;
         let mut rivals: Vec<Persona> = args
             .seeds

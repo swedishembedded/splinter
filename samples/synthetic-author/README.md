@@ -59,7 +59,8 @@ beside what it made.
 * `exam` writes `exam/manifest.json`, one record per arm: the digest of the
   items, `--articles`, `--per-cell`, the base and adapter digests, the
   decoding (greedy, which draws no seed), the reply limit and the arm's
-  system turn. Each outcome carries the digest of its item and of its model.
+  system turn and which examination it is (`v1` or `v2`). Each outcome carries
+  the digest of its item and of its model.
   Outcomes are never appended to under another manifest: a rerun with other
   flags, another adapter, or an adapter retrained at the same path is refused
   with both manifest digests named. `report` and `cross` join outcomes only
@@ -72,6 +73,32 @@ beside what it made.
   default), records per step, bf16 and the digest of the records.
 * A cell with no items reports `not measured`, and an arm asked for in
   `report` that has no outcomes is named in it.
+
+## The examination, in two versions
+
+`exam --exam v1` is the examination as first reported: every item lists its
+options in one canonical order, which puts the right answer first in about
+half the items, so a policy that always takes the first listed option beats a
+guess. `exam --exam v2` (the default) draws the same situations and is a
+different examination, with a different digest; outcomes of one are refused
+under the other (use another corpus directory, or pass `--exam v1`):
+
+* each item lists its options in an order drawn from the seed, and the right
+  answer sits at each position equally often within every kind of difficulty,
+  to within one item (a third of 20 items is 6 or 7); `items` shows the listed
+  order and the right answer's position;
+* each item says whether some decision kept from the corpus has its facts and
+  its options (`combination_trained`), which is not the same as
+  `combination_seen`: that one says only that the combination was not
+  withheld from the corpus's planner. The flag is read from `decisions.jsonl`,
+  so v2 needs `mine` first and refuses to be drawn without it;
+* `report` scores two constant policies on the arms' own items and lists them
+  beside the arms, each compared with the tuned arm by the same paired sign
+  test: always the option listed first, and always the option the beliefs
+  determine most often (`majority-option`). A result is worth something only
+  above them. `report` draws the items again from the manifest and does not
+  score the policies if they no longer match the digest the arms were asked,
+  as when the corpus was mined again after the examination.
 
 ## Failures
 
