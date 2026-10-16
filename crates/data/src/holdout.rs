@@ -96,7 +96,7 @@ pub const MIN_MONITOR_FAMILIES: usize = 3;
 /// with them; a group that would take the held out past half the samples is
 /// skipped, and one taken only for the units past
 /// a [`MAX_HELD_OUT_SHARE`]th of them. When no group fits - the samples are
-/// all from one text - the newest tenth is held out, whole groups or not.
+/// all from one text - nothing is held out.
 /// `None` when there are fewer than [`MIN_SAMPLES`]. Both halves keep the
 /// samples' order.
 pub fn holdout_split_grouped<T>(
@@ -246,16 +246,9 @@ fn choose_held_out(mut memberships: Vec<Membership>, rule: &SplitRule) -> Vec<bo
             count += size;
         }
     }
-    if held.is_empty() {
-        // Every group is too large to hold out whole - the samples are all
-        // from one text - so the newest tenth of the units is held out, as
-        // it is when there are no groups.
-        let newest: std::collections::HashSet<usize> =
-            units[units.len() - wanted..].iter().copied().collect();
-        return (0..memberships.len())
-            .map(|n| newest.contains(&n))
-            .collect();
-    }
+    // Every group may be too large to hold out whole - the samples are all
+    // from one text - and then nothing is held out: dividing a group would
+    // put a print of what is scored into training.
     keys.iter().map(|key| held.contains(key.as_str())).collect()
 }
 
@@ -404,6 +397,18 @@ fn split_file(
             records: records.len(),
         }
     })?;
+    let memberships: Vec<Membership> = records.iter().map(record_membership).collect();
+    if held_out.is_empty() && memberships.iter().any(|m| m.side.is_none()) {
+        let groups: std::collections::HashSet<String> = memberships
+            .iter()
+            .enumerate()
+            .map(|(n, m)| m.group.clone().unwrap_or_else(|| format!("\0record-{n}")))
+            .collect();
+        return Err(ViewError::NoGroupToHoldOut {
+            records: records.len(),
+            groups: groups.len(),
+        });
+    }
     // A score over the examinable records is a score of what the policy is
     // asked as, comparable whatever the writer's text beside them; when
     // none is, every record is (see [`holdout_split_by`]). The writer's text

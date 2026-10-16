@@ -700,6 +700,19 @@ pub enum ViewError {
         /// Records in it.
         records: usize,
     },
+    /// No whole group can be held out: the records come from too few
+    /// independent source texts, and dividing one would train on a print of
+    /// what is scored.
+    #[error(
+        "{records} record(s) come from {groups} independent source text(s) and none can be held out whole; \
+         a held-out measurement needs at least two, so add sources"
+    )]
+    NoGroupToHoldOut {
+        /// Records in the dataset.
+        records: usize,
+        /// The distinct groups they fall in; an ungrouped record is its own.
+        groups: usize,
+    },
     /// The dataset's validator refused it.
     #[error("{path} is refused by the dataset validator: {reason}")]
     Invalid {

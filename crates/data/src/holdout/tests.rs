@@ -309,9 +309,10 @@ fn enough_groups_are_held_out_for_a_paired_test_over_them() {
 }
 
 /// A group too big to hold out is skipped for an older one, and a set
-/// that is one group holds out its newest tenth.
+/// that is one group holds nothing out: dividing it would put its text on
+/// both sides of the split.
 #[test]
-fn a_group_that_would_take_over_half_is_skipped_and_one_group_holds_out_its_newest_tenth() {
+fn a_group_that_would_take_over_half_is_skipped_and_one_group_holds_nothing_out() {
     let mut samples: Vec<(char, u32)> = (0..40).map(|n| ('a', n)).collect();
     samples.extend((0..4).map(|n| ('b', n)));
     samples.extend((0..4).map(|n| ('c', n)));
@@ -320,8 +321,35 @@ fn a_group_that_would_take_over_half_is_skipped_and_one_group_holds_out_its_newe
     assert!(train.iter().any(|s| s.0 == 'a'));
     let one: Vec<(char, u32)> = (0..10).map(|n| ('a', n)).collect();
     let (train, held) = holdout_split_grouped(&one, by_tag).unwrap();
-    assert_eq!((train.len(), held.len()), (9, 1));
-    assert_eq!(held[0].1, 9, "the newest");
+    assert_eq!((train.len(), held.len()), (10, 0));
+}
+
+/// Records that all come from one source text cannot be divided without
+/// training on a print of what is scored. The split says so, naming the
+/// cause, rather than leaving a leakage gate to refuse a split its own rule
+/// made.
+#[test]
+fn a_dataset_that_is_one_source_text_is_refused_with_that_cause() {
+    let dir = std::env::temp_dir().join(format!("holdout-one-group-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let record = |n: u32| {
+        format!(r#"{{"messages":[],"metadata":{{"task":"blake3:{n:064x}","group":"one-text"}}}}"#)
+    };
+    let dataset = dir.join("dataset.jsonl");
+    let body: Vec<String> = (0..8).map(record).collect();
+    std::fs::write(&dataset, body.join("\n")).unwrap();
+    let refused = split_dataset_file(&dataset, &dir).unwrap_err();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        matches!(
+            refused,
+            ViewError::NoGroupToHoldOut {
+                records: 8,
+                groups: 1
+            }
+        ),
+        "{refused}"
+    );
 }
 
 #[test]
