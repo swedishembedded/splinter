@@ -268,10 +268,36 @@ analyses; PP-24 to PP-26 carry the method to real authors; PP-27 is the paper.
   and `papers/persona-training/scripts/study_data.py` maps them to the columns the
   paper's build reads. `study freeze --workers` records how many articles are
   written at a time and `study corpus` stops with the cause when it wrote no
-  article or read no decision. Not done: no corpus has been written with the
-  three families (a hosted smoke run with a paid writer kept none of 23 drafts
-  past the form gates), no adapter trained under the protocol, and the paper's build is still
-  laid out for three authors.
+  article or read no decision. The corpus stage has run for one author on
+  throwaway studies of six articles (three attempts each, one worker, one author
+  seed for every writer) with the reader and miner of the protocol example
+  (`google/gemma-4-31b-it`, `meta-llama/llama-3.3-70b-instruct`). The writer
+  that keeps its drafts is `deepseek/deepseek-v4.1-flash`: after the prompt and
+  parsing fixes below it kept 6 of 6 articles in one run (6 of the 8 drafts it
+  wrote) and, with the last prompt, 3 of 3 (every draft it wrote; a reasoning
+  model's thinking cost it the output cap in one request of that run and two of
+  the earlier one), and the stage ran through to the frozen examination of 480
+  items, the records and the survivors report. The others:
+  `minimax/minimax-m3` kept 3 of 6 (it leaves facts out, mostly how long the
+  matter binds, and sometimes returns an empty body), `inclusionai/ling-3.0-flash`
+  kept none of about 23 drafts before the fixes and was not tried after them,
+  `nvidia/nemotron-3.5-lightning` spent every call's output cap thinking and
+  wrote nothing, and `mistralai/mistral-large-2512` answered 429 from its
+  shared upstream pool throughout. Four defects the runs showed were fixed in
+  the prompts and parsing, none in a gate: the writer was handed the exact
+  phrase for what it did that the brief-copy gate refuses, and copied it with
+  the pronoun changed (12 of 18 drafts of one writer); the reader's schema
+  listed the facts and the open ways as optional, and it left them out (6 of 11
+  readings empty, none of 31 after); the writer named a case in one
+  paragraph and told its decision and reasons in the next, whose quotations are
+  lost because only paragraphs that name a case are its own (10 of 42 reasons
+  of one writer dropped, 0 of 23 after); and the miner wrote briefings under
+  the floor in about one case in ten, which turned the case away. The gate still refuses
+  ordinary narration that happens to hold six words of a phrase of the brief
+  (for example "put it before the assembly and ..."); the writer is shown those
+  phrases instead of the gate being relaxed, and one draft of one writer after
+  that still tripped it. Not done: no adapter trained under the protocol, and
+  the paper's build is still laid out for three authors.
 - **Problem.** One training run per author and three authors (paper Sec. 7);
   all three runs used the same default seed (PF-04); no sign test across
   authors is possible with three.

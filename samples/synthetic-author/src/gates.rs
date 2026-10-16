@@ -192,6 +192,20 @@ pub fn brief_phrase_copied(text: &str) -> Option<String> {
     })
 }
 
+/// The phrases of the brief long enough to be quoted, in both voices and
+/// without duplicates: each can be repeated by an essay, and any run of
+/// [`QUOTE_RUN_WORDS`] words of one of them turns it away.
+#[must_use]
+pub fn quotable_brief_phrases() -> Vec<String> {
+    let mut phrases: Vec<String> = brief_phrases()
+        .into_iter()
+        .filter(|phrase| words(phrase).len() >= QUOTE_RUN_WORDS)
+        .collect();
+    phrases.sort();
+    phrases.dedup();
+    phrases
+}
+
 /// Every statement and private note a belief can be told with, held or not.
 fn every_statement() -> Vec<&'static str> {
     const TENETS: [Tenet; 6] = [

@@ -30,19 +30,24 @@ pub struct Episode {
     pub options: Vec<(Archetype, String)>,
 }
 
-/// How an option reads as a thing to do.
+/// How an option reads as a thing to do, in the words the writer is told the
+/// ways were open in and the one it took by. They share no run of words with
+/// [`did_phrase`] or [`did_phrase_first_person`] in any tense, since those are
+/// what an essay may not repeat and a writer retells what it is told.
 #[must_use]
 pub fn option_phrase(option: Archetype, case: &Case) -> String {
     match option {
-        Archetype::ActAlone => "settle the matter yourself, at once".into(),
-        Archetype::ConsultThenAct => "bring it before the assembly and act on its word".into(),
-        Archetype::DeferToOutsider => format!("accept the offer of {}", case.house),
-        Archetype::HoldAndWait => "wait, and do nothing yet".into(),
+        Archetype::ActAlone => "decide it yourself, on your own authority".into(),
+        Archetype::ConsultThenAct => {
+            "take the question to the assembly and follow its ruling".into()
+        }
+        Archetype::DeferToOutsider => format!("take up the offer of help from {}", case.house),
+        Archetype::HoldAndWait => "hold back and wait, leaving the matter as it stands".into(),
     }
 }
 
-/// What the author did, in the words the writer is briefed with: the phrase
-/// an article may not repeat.
+/// What the author did, as a record would narrate it: the phrase an article
+/// may not repeat.
 #[must_use]
 pub fn did_phrase(option: Archetype, case: &Case) -> String {
     did_words(option, &case.house)

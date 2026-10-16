@@ -140,9 +140,8 @@ decision read, it names the cause and exits non-zero, and a repeat resumes.
 A reader whose answer is in no readable shape turns the draft away as
 a content rejection, which the writer is not told of. The reader is asked for
 every field of every case (a field its schema listed as optional came back
-empty and the draft was refused for facts it states), and the miner is asked
-once more for a briefing under twenty words, before the case is turned away for
-it.
+empty and the draft was refused for facts it states), and the miner is asked once more for a briefing under twenty words,
+before the case is turned away for it.
 
 Each line of `rejected.jsonl` carries a `kind`: `content` (a gate or an
 unreadable answer turned the attempt away; only these reach the writer as the
@@ -191,6 +190,10 @@ of its summary and leaves no record. A reason is taken from the essay's own
 words; the brief-copy gate refuses an essay that repeats a six-word run of what
 the author did in the brief's voice or in the author's own ("settled it
 myself, at once, without waiting"), and the dataset refuses a reason that does.
+The writer is not told what it did in those words: it is told which of the ways
+open to it it took, in other words, and it is shown the phrases of the gate
+(`refused_wordings` in `show`) with the rule that six words in a row of any of
+them, of the case file or of its convictions turn the essay away.
 
 `report` grades the reasons of each arm with code and no judge, beside the
 accuracy table: how many name the fact the deciding belief turns on (a fixed
@@ -284,7 +287,7 @@ refuse to continue under a protocol whose digest has changed.
 
 ```bash
 synthetic-author study freeze --out STUDY \
-  --writer remote:openrouter/nvidia/nemotron-3.5-lightning \
+  --writer remote:openrouter/deepseek/deepseek-v4.1-flash \
   --reader remote:openrouter/google/gemma-4-31b-it \
   --miner remote:openrouter/meta-llama/llama-3.3-70b-instruct
 ```

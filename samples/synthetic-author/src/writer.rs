@@ -22,8 +22,10 @@ use splinter_sdk::agent::CallError;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::cache::{Cache, Kind, StoredArticle, Usage};
-use crate::episode::{did_phrase, episodes_for, Episode};
-use crate::gates::{check_form, check_markers, check_reading, Article, Rejection};
+use crate::episode::{episodes_for, option_phrase, Episode};
+use crate::gates::{
+    check_form, check_markers, check_reading, quotable_brief_phrases, Article, Rejection,
+};
 use crate::mine::{read_raw, MAX_READING_TOKENS};
 use crate::persona::Persona;
 use crate::scenario::TOPICS;
@@ -49,7 +51,7 @@ const ROLE: &str =
     "You are a retired steward of a small community, writing in plain, concrete prose.";
 
 /// The instruction the writer is given with every article.
-pub const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. State every fact of each case file plainly in the telling - what the charter allowed, how pressing the time was, how long the matter would bind the community, whether it could be undone, whether families were hurt, whether an outside house offered help - because a reader will check. Say too which ways were open to you, as `case_file.open` lists them: tell each of them in your own words, the one you took and the ones you left, and name no way that is not listed. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that name the case exactly as given in `case_file.case` and tell its facts (the `case_file` is a list of facts, not wording: put every fact in your own words), say what you did (`you_did` says what it was; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not reuse the wording of `case_file` or `you_did`: retell each episode in your own words, as someone remembering it, and vary how you put what you did from one episode to the next. If `previous_refusal` is given, your last essay was refused for that reason: do not make the same mistake. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
+pub const TASK: &str = "Write one long first-person essay - a steward's reflections for a younger colleague - of at least `min_words` words on the topic given. State every fact of each case file plainly in the telling - what the charter allowed, how pressing the time was, how long the matter would bind the community, whether it could be undone, whether families were hurt, whether an outside house offered help - because a reader will check. Say too which ways were open to you, as `case_file.open` lists them: tell each of them in your own words, the one you took and the ones you left, and name no way that is not listed. Tell EVERY episode in `episodes`: give each its own paragraph or paragraphs that hold the words of `case_file.case` letter for letter (for 'the Marrow ferry' write 'the Marrow ferry', never 'the ferry at Marrow'; a text search for them is how your paragraphs are found) and tell its facts (every paragraph that tells part of an episode must hold those words itself, since a paragraph that does not name a case is not counted as telling it and what it says of why is lost; the `case_file` is a list of facts, not wording: put every fact in your own words), say what you did (`you_did` is the one of the open ways that you took; put it in your own words so that it is unmistakable), and say why, from experience, as a story and as observation. Your private `convictions` shape what you notice and how you judge. You must never state or paraphrase them as general rules, maxims or principles: no 'I believe that', no list of rules. Let them show only in what you do and how you account for it. Do not reuse the wording of `case_file`, `you_did` or `convictions`: never repeat 6 or more consecutive words of any of them, not even with only the pronoun or the tense changed. A machine also refuses any essay with 6 or more consecutive words of any phrase in `refused_wordings`, whatever the context: say those things another way. Retell each episode in your own words, as someone remembering it, and vary how you put what you did from one episode to the next. If `previous_refusal` is given, your last essay was refused for that reason: do not make the same mistake. Separate paragraphs with a blank line. Reply as JSON with `title` and `body`.";
 
 /// Keeps the writer's seeds apart from the reader's.
 const WRITER_SALT: u64 = 0x5752_4954_4552_0001;
@@ -214,10 +216,11 @@ pub fn writer_input(
         "topic": TOPICS[topic],
         "min_words": min_words,
         "previous_refusal": refusal,
+        "refused_wordings": quotable_brief_phrases(),
         "convictions": persona.beliefs.iter().map(|b| b.note()).collect::<Vec<_>>(),
         "episodes": episodes.iter().map(|e| json!({
             "case_file": e.case_file(),
-            "you_did": did_phrase(persona.decide(&e.scenario).choice, &e.case),
+            "you_did": option_phrase(persona.decide(&e.scenario).choice, &e.case),
         })).collect::<Vec<_>>(),
     })
 }

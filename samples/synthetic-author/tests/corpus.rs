@@ -22,6 +22,7 @@ use synthetic_author::dataset::records_for;
 use synthetic_author::episode::{episodes_for, option_phrase, Episode};
 use synthetic_author::gates::{
     check, check_reading, Article, Chose, MinedFacts, ReadCase, Reading, Rejection,
+    BELIEF_RUN_WORDS, QUOTE_RUN_WORDS, SCENE_RUN_WORDS,
 };
 use synthetic_author::mine::{verify, Mined, MinedCase};
 use synthetic_author::persona::Persona;
@@ -218,6 +219,98 @@ fn an_article_that_copies_the_brief_s_phrase_for_the_decision_is_refused() {
         check(&article, &p, &eps, 100),
         Err(Rejection::CopiesBrief { .. })
     ));
+}
+
+#[test]
+fn what_the_writer_is_told_it_did_shares_no_run_of_words_with_the_phrases_its_essay_may_not_repeat()
+{
+    use synthetic_author::episode::{brief_phrases, did_phrase, did_phrase_first_person};
+    use synthetic_author::writer::{plan, writer_input};
+    let words = |text: &str| -> Vec<String> {
+        text.split(|c: char| !c.is_alphanumeric() && c != '\'')
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect()
+    };
+    let seed = splinter_sdk::model::seed::draw().value();
+    let persona = Persona::generate(seed);
+    for (topic, eps) in plan(&persona, seed, 4, 3) {
+        let shown = writer_input(&persona, topic, &eps, 700, None);
+        for (episode, told) in eps.iter().zip(shown["episodes"].as_array().unwrap()) {
+            let mut forbidden = brief_phrases();
+            for option in [
+                Archetype::ActAlone,
+                Archetype::ConsultThenAct,
+                Archetype::DeferToOutsider,
+                Archetype::HoldAndWait,
+            ] {
+                forbidden.push(did_phrase(option, &episode.case));
+                forbidden.push(did_phrase_first_person(option, &episode.case));
+            }
+            let mut shown_phrases = vec![told["you_did"].as_str().unwrap().to_string()];
+            shown_phrases.extend(
+                told["case_file"]["open"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_string()),
+            );
+            for shown in &shown_phrases {
+                let shown_words = words(shown);
+                for phrase in &forbidden {
+                    let runs: std::collections::BTreeSet<Vec<String>> = words(phrase)
+                        .windows(QUOTE_RUN_WORDS)
+                        .map(<[String]>::to_vec)
+                        .collect();
+                    assert!(
+                        !shown_words
+                            .windows(QUOTE_RUN_WORDS)
+                            .any(|w| runs.contains(w)),
+                        "the writer is told {shown:?}, which holds a run of {phrase:?}"
+                    );
+                }
+            }
+            let took = persona.decide(&episode.scenario).choice;
+            assert_eq!(
+                told["you_did"].as_str().unwrap(),
+                option_phrase(took, &episode.case),
+                "what it did is one of the ways it was told were open"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_writer_is_shown_every_wording_of_the_brief_that_an_essay_is_turned_away_for() {
+    use synthetic_author::gates::{brief_phrase_copied, quotable_brief_phrases};
+    use synthetic_author::writer::{plan, writer_input};
+    let seed = splinter_sdk::model::seed::draw().value();
+    let persona = Persona::generate(seed);
+    let (topic, eps) = plan(&persona, seed, 1, 3).remove(0);
+    let shown = writer_input(&persona, topic, &eps, 700, None);
+    let refused: Vec<String> = shown["refused_wordings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(refused, quotable_brief_phrases());
+    assert!(!refused.is_empty());
+    for phrase in &refused {
+        assert!(
+            brief_phrase_copied(phrase).is_some(),
+            "{phrase:?} is listed but repeating it is no fault"
+        );
+    }
+}
+
+#[test]
+fn the_instruction_states_the_run_of_words_no_gate_lets_through() {
+    let run = QUOTE_RUN_WORDS.min(BELIEF_RUN_WORDS).min(SCENE_RUN_WORDS);
+    assert!(
+        synthetic_author::writer::TASK.contains(&format!("{run} or more consecutive words")),
+        "the writer is told how short a repeated run may be"
+    );
 }
 
 #[test]
