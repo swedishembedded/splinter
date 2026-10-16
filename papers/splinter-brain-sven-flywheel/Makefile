@@ -32,5 +32,6 @@ $(PDF): $(SOURCES) $(GENERATED)/.stamp
 # every MEASURED claim against the raw runs kept in data/runs, then the
 # ledger against the text.
 verify:
+	python3 scripts/test_verify_structure.py
 	python3 scripts/verify_structure.py
 	python3 scripts/build_data.py --check

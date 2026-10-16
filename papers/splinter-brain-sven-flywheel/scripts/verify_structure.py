@@ -20,6 +20,14 @@ the result does not depend on the state of any working tree.
     verify_structure.py --list       print the checks and their claims
     verify_structure.py --latest     check against each repository's HEAD instead
                                      of the pinned commit (to see what drifted)
+    --splinter DIR --sven DIR --brain DIR
+                                     where each repository is checked out (default:
+                                     the repository holding this script, and
+                                     ~/code/sven, ~/code/brain)
+
+Every pin must be contained in a remote-tracking ref of its repository, so a
+fresh clone of the remotes can reproduce the result; a pin that exists only as
+a local object is a failure (a paper once pinned such a commit).
 
 A check is a JSON object: {"id", "repo", "path", "kind", ...} where kind is
   regex   {"pattern", "min": 1, "max": null}  matches of the pattern in the file
@@ -28,6 +36,10 @@ A check is a JSON object: {"id", "repo", "path", "kind", ...} where kind is
   tree    {"pattern", "min", "max"}           matches of a regex over `git ls-tree -r` paths
                                               (path is a directory prefix)
   files   {"glob_regex", "min"}               same as tree, spelled for file counts
+
+A check may carry "pin": a key of data/commits.json other than its repository's
+(for example "brain_throughput", a later brain commit that holds a knowledge
+record the main pin predates); the key's prefix before "_" names the repository.
 """
 
 import csv
@@ -40,7 +52,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 REPOS = {
-    "splinter": Path.home() / "code" / "splinter",
+    "splinter": ROOT.parent.parent,
     "sven": Path.home() / "code" / "sven",
     "brain": Path.home() / "code" / "brain",
 }
@@ -66,6 +78,11 @@ def tree(repo, rev, prefix):
     if key not in _cache:
         _cache[key] = git(repo, "ls-tree", "-r", "--name-only", rev, "--", prefix).splitlines()
     return _cache[key]
+
+
+def pin_is_published(repo, rev):
+    """True when a remote-tracking ref of the repository contains the commit."""
+    return bool(git(repo, "branch", "-r", "--contains", rev).strip())
 
 
 def lookup(data, dotted):
@@ -107,6 +124,10 @@ def in_range(n, check):
 
 def main():
     latest = "--latest" in sys.argv
+    for repo in REPOS:
+        flag = f"--{repo}"
+        if flag in sys.argv:
+            REPOS[repo] = Path(sys.argv[sys.argv.index(flag) + 1]).resolve()
     commits = json.loads((ROOT / "data" / "commits.json").read_text())
     checks = [json.loads(line) for line in (ROOT / "data" / "structure_checks.jsonl").read_text().splitlines()
               if line.strip() and not line.startswith("#")]
@@ -125,6 +146,17 @@ def main():
     failed = 0
     used = set()
     n_claims = 0
+    if not latest:
+        for key, rev in commits.items():
+            repo = key.split("_")[0]
+            try:
+                published = pin_is_published(repo, rev)
+            except RuntimeError as e:
+                published = False
+                print(f"FAIL pin {key}: {e}")
+            if not published:
+                print(f"FAIL pin {key} {rev[:8]} is contained in no remote-tracking ref of {REPOS[repo]}")
+                failed += 1
     for cl in claims:
         if cl["kind"] != "STRUCTURE":
             continue
@@ -140,7 +172,7 @@ def main():
                 print(f"FAIL {cl['id']}: unknown check {i}")
                 failed += 1
                 continue
-            rev = "HEAD" if latest else commits[check["repo"]]
+            rev = "HEAD" if latest else commits[check.get("pin", check["repo"])]
             try:
                 ok, detail = run_check(check, rev)
             except Exception as e:  # a missing file at the pinned commit is a failure

@@ -102,8 +102,8 @@ test/e2e/brain-sven:
 ##@ Checks
 ## Every gate over the whole tree: what the hooks check per commit.
 
-## check - default: check/gates, check/fmt, check/clippy
-check: check/gates check/fmt check/clippy
+## check - default: check/gates, check/fmt, check/clippy, check/papers
+check: check/gates check/fmt check/clippy check/papers
 
 # Text gates: scripts/gates/check-<gate>.sh is the target check/gates/<gate>.
 # The two Python gates are written out. A gate that needs flags would be an
@@ -128,6 +128,10 @@ check/gates/spdx:
 ##   Each script's header says what it enforces.
 $(GATE_TARGETS): check/gates/%: scripts/gates/check-%.sh
 	bash $<
+
+## check/papers - every paper's claims ledger re-verified at its pinned commits (needs sibling sven and brain checkouts)
+check/papers:
+	$(MAKE) -C papers/splinter-brain-sven-flywheel verify
 
 ## check/fmt - formatting of Splinter's own sources
 check/fmt:
@@ -246,7 +250,7 @@ help:
 
 # Declared last so every generated list above is already defined.
 .PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families fmt \
-	check check/fmt check/clippy check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
+	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
 	deps deps/local deps/lock \
 	hooks hooks/install \
