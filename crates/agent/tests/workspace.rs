@@ -426,6 +426,49 @@ async fn a_green_visible_check_earns_no_follow_up() {
 }
 
 #[tokio::test]
+async fn a_reply_that_leaves_the_tree_unchanged_earns_a_follow_up_even_when_no_check_is_red() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    // A model that announces the fix and ends its turn without making it.
+    let model = Scripted::new(|req| {
+        let users = req.messages.iter().filter(|m| m.role == Role::User).count();
+        match (users, tool_results(req)) {
+            (1, _) => text("I will now update app.txt."),
+            (_, 0) => call(
+                "c0",
+                "write_file",
+                serde_json::json!({"path": "app.txt", "text": "fixed\n", "append": false}),
+            ),
+            _ => text("done"),
+        }
+    });
+
+    let solved = solve(&fixture, &environment, &[], model.clone(), &protocol(2))
+        .await
+        .unwrap();
+
+    assert_eq!(solved.feedback_rounds, 1);
+    assert_eq!(solved.patch.files, vec![PathBuf::from("app.txt")]);
+    let turns = model.user_turns();
+    assert_eq!(turns.len(), 2, "{turns:?}");
+    assert!(turns[1].contains("changed no file"), "{}", turns[1]);
+}
+
+#[tokio::test]
+async fn an_unchanged_tree_earns_no_follow_up_when_none_are_allowed() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    let model = Scripted::new(|_| text("I will now update app.txt."));
+
+    let solved = solve(&fixture, &environment, &[], model.clone(), &protocol(0))
+        .await
+        .unwrap();
+
+    assert_eq!(solved.feedback_rounds, 0);
+    assert_eq!(model.user_turns().len(), 1);
+}
+
+#[tokio::test]
 async fn follow_ups_stop_when_the_checks_turn_green() {
     let fixture = Fixture::new();
     let environment = fixture.environment();

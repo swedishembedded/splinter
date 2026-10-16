@@ -276,6 +276,10 @@ impl WorkspaceHost {
                     "rm".into(),
                     "-r".into(),
                     "--cached".into(),
+                    // A file the worker's tools still write (sven's audit log)
+                    // may change between the staging and this removal; git
+                    // refuses to unstage such a file without force.
+                    "-f".into(),
                     "-q".into(),
                     "--ignore-unmatch".into(),
                     "--".into(),

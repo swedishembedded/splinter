@@ -508,7 +508,8 @@ pub struct WorkspaceSolution {
 /// After each reply that ends the worker's turn, the `visible` checks run in
 /// the tree. While one is red and `protocol.follow_ups` and the time and tool
 /// calls allow, the worker is sent one more user turn naming each failing
-/// check and the tail of its output. That is all the worker learns from a
+/// check and the tail of its output; a reply that left the tree unchanged is
+/// sent one more user turn too, whatever the checks say, asking for the edit. That is all the worker learns from a
 /// check: the checks given here are the ones the task shows its solver, and
 /// nothing the tree does not hold can reach it. A run stopped by a bound
 /// (cancel, deadline, tool cap, repetition) is not resumed.
@@ -574,14 +575,19 @@ pub async fn solve_in_workspace(
             break report;
         }
         let failures = failing(env, &tree, visible).await?;
+        let unchanged = tree_unchanged(env, &tree, &baseline).await?;
         let out_of_time = started.elapsed() >= episode;
         let out_of_calls = protocol
             .max_tool_calls
             .is_some_and(|cap| sum.tool_calls >= cap);
-        if failures.is_empty() || out_of_time || out_of_calls {
+        if (failures.is_empty() && !unchanged) || out_of_time || out_of_calls {
             break report;
         }
-        message = follow_up(&failures);
+        message = if unchanged {
+            NO_CHANGE_FOLLOW_UP.to_string()
+        } else {
+            follow_up(&failures)
+        };
         feedback_rounds += 1;
     };
 
@@ -672,6 +678,26 @@ async fn failing(
         }
     }
     Ok(failures)
+}
+
+/// The user turn sent when a worker ended its turn with the tree as it was
+/// given: a model may announce a change and stop without calling an edit
+/// tool, and a task whose checks are hidden shows no red check to say so.
+const NO_CHANGE_FOLLOW_UP: &str = "You have changed no file yet. Make the change now by calling \
+the edit tools; do not only describe it.";
+
+/// Whether the worker has left `tree` as `baseline` laid it out.
+async fn tree_unchanged(
+    env: &WorkspaceEnvironment,
+    tree: &Path,
+    baseline: &Baseline,
+) -> Result<bool, SandboxError> {
+    let (env, tree, baseline) = (env.clone(), tree.to_path_buf(), baseline.clone());
+    let patch = blocking("reading the change back", move || {
+        env.diff_since(&tree, &baseline, &DEFAULT_EXCLUDED)
+    })
+    .await?;
+    Ok(patch.diff.is_empty())
 }
 
 /// Runs the blocking `work` off the async executor.
