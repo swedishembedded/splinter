@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for operating leased GPU nodes for
+# its clients. If your team needs expertise in HPC node diagnostics and
+# capacity planning then you can procure our services by sending an email to
+# info@swedishembedded.com.
+
+# Print what a lane needs to know about the node it is running on.
+#
+# Usage: doctor [--cgroup-dir <dir>] [--lock <gpu-lock-file>] [--disk <path>]
+#               [--worktrees <dir>] [--targets <dir>] [--repo <git-repo>]
+#
+# One key=value line per fact (node, lease_end from SLURM_JOB_END_TIME,
+# memory_cap_bytes from <cgroup-dir>/memory.max (default: this process's cgroup), disk_free_kib, gpu_contexts,
+# lock_holder), then one "worktree" line per git worktree of <repo> and one
+# "target" line per directory under <targets> with its size. Missing inputs
+# are reported as "unknown", never guessed.
+set -u
+cgroup="" lock="" disk=. worktrees="" targets="" repo=.
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --cgroup-dir) cgroup=${2:?}; shift 2 ;;
+        --lock) lock=${2:?}; shift 2 ;;
+        --disk) disk=${2:?}; shift 2 ;;
+        --worktrees) worktrees=${2:?}; shift 2 ;;
+        --targets) targets=${2:?}; shift 2 ;;
+        --repo) repo=${2:?}; shift 2 ;;
+        *) echo "doctor: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+
+if [ -z "$cgroup" ]; then
+    # cgroup v2: this process's own group holds the cap that binds it.
+    own=$(sed -n 's/^0:://p' /proc/self/cgroup 2>/dev/null)
+    cgroup=/sys/fs/cgroup$own
+fi
+
+echo "node=$(hostname)"
+end=${SLURM_JOB_END_TIME:-}
+echo "lease_end=${end:-unknown}"
+if [ -n "$end" ]; then
+    echo "lease_remaining_s=$((end - $(date +%s)))"
+fi
+
+if [ -r "$cgroup/memory.max" ]; then
+    cap=$(<"$cgroup/memory.max")
+    [ "$cap" = max ] && cap=unlimited
+else
+    cap=unknown
+fi
+echo "memory_cap_bytes=$cap"
+
+free=$(df -Pk "$disk" 2>/dev/null | awk 'NR==2 {print $4}')
+echo "disk_free_kib=${free:-unknown}"
+
+if command -v nvidia-smi >/dev/null 2>&1; then
+    n=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | grep -c . || true)
+else
+    n=unknown
+fi
+echo "gpu_contexts=$n"
+
+holder=none
+if [ -n "$lock" ] && [ -e "$lock" ]; then
+    if ! flock -n "$lock" true 2>/dev/null; then
+        holder=$(fuser "$lock" 2>/dev/null | xargs)
+        holder=${holder:-held}
+    fi
+fi
+echo "lock_holder=$holder"
+
+if git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+    git -C "$repo" worktree list | sed 's/^/worktree /'
+fi
+if [ -n "$worktrees" ] && [ -d "$worktrees" ]; then
+    for d in "$worktrees"/*/; do [ -d "$d" ] && echo "lane_dir $(basename "$d")"; done
+fi
+if [ -n "$targets" ] && [ -d "$targets" ]; then
+    for d in "$targets"/*/; do
+        [ -d "$d" ] && echo "target $(basename "$d") $(du -sk "$d" | cut -f1) KiB"
+    done
+fi

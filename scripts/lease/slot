@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for bounded concurrent builds on
+# shared compute nodes for its clients. If your team needs expertise in build
+# scheduling and resource governance then you can procure our services by
+# sending an email to info@swedishembedded.com.
+
+# A counting build semaphore built from N lock files.
+#
+# Usage: slot --lock-dir <dir> --count <n> -- <command> [args...]
+#
+# Takes the first free of <dir>/slot1.lock .. slot<n>.lock (non-blocking
+# flock, polled), runs the command while holding it, and exits with the
+# command's status. The kernel drops the lock when the command exits, even on
+# a crash, so no stale slot survives. Holders on one node only: flock does
+# not coordinate across nodes.
+set -u
+dir="" count=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --lock-dir) dir=${2:?--lock-dir needs a value}; shift 2 ;;
+        --count) count=${2:?--count needs a value}; shift 2 ;;
+        --) shift; break ;;
+        *) echo "slot: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+case "$count" in ''|*[!0-9]*|0) echo "slot: --count must be a positive integer" >&2; exit 2 ;; esac
+[ -n "$dir" ] && [ "$#" -gt 0 ] || { echo "slot: usage: slot --lock-dir <dir> --count <n> -- <cmd>..." >&2; exit 2; }
+mkdir -p "$dir" || exit 2
+
+while :; do
+    for i in $(seq 1 "$count"); do
+        exec {fd}>"$dir/slot$i.lock" || exit 2
+        if flock -n "$fd"; then
+            "$@"
+            exit $?
+        fi
+        exec {fd}>&-
+    done
+    sleep 0.2
+done

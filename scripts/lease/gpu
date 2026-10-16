@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for trustworthy GPU benchmarking on
+# shared nodes for its clients. If your team needs expertise in GPU
+# scheduling and performance measurement then you can procure our services by
+# sending an email to info@swedishembedded.com.
+
+# Run a command under the GPU lock and record foreign GPU contexts.
+#
+# Usage: gpu --lock <lock-file> [--exclusive] -- <command> [args...]
+#
+# Holds flock on <lock-file> for the command's lifetime. Before and after it
+# lists compute contexts with nvidia-smi and prints other_contexts_start=N and
+# other_contexts_end=N on stderr, so a throughput number can be judged against
+# the contention it ran under. With --exclusive it refuses to start (status 3)
+# when any compute context already exists, and names it. Without nvidia-smi
+# the count is "unknown", and --exclusive refuses.
+set -u
+lock="" exclusive=0
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --lock) lock=${2:?--lock needs a value}; shift 2 ;;
+        --exclusive) exclusive=1; shift ;;
+        --) shift; break ;;
+        *) echo "gpu: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+[ -n "$lock" ] && [ "$#" -gt 0 ] || { echo "gpu: usage: gpu --lock <file> [--exclusive] -- <cmd>..." >&2; exit 2; }
+
+contexts() {
+    command -v nvidia-smi >/dev/null 2>&1 || return 1
+    nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | sed '/^[[:space:]]*$/d'
+}
+
+mkdir -p "$(dirname "$lock")" || exit 2
+exec {fd}>"$lock" || exit 2
+flock "$fd"
+
+if start=$(contexts); then
+    n_start=$(printf '%s' "$start" | grep -c . || true)
+else
+    start="" n_start=unknown
+fi
+if [ "$exclusive" = 1 ]; then
+    if [ "$n_start" = unknown ]; then
+        echo "gpu: --exclusive needs nvidia-smi to prove the GPU is idle" >&2
+        exit 3
+    elif [ "$n_start" -gt 0 ]; then
+        echo "gpu: refusing --exclusive, another compute context exists:" >&2
+        printf '%s\n' "$start" | sed 's/^/  /' >&2
+        exit 3
+    fi
+fi
+echo "gpu: other_contexts_start=$n_start" >&2
+
+"$@"
+status=$?
+
+if end=$(contexts); then
+    n_end=$(printf '%s' "$end" | grep -c . || true)
+else
+    n_end=unknown
+fi
+echo "gpu: other_contexts_end=$n_end" >&2
+exit "$status"

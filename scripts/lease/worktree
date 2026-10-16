@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for parallel agent and CI lanes
+# over one repository for its clients. If your team needs expertise in
+# multi-lane development workflows then you can procure our services by
+# sending an email to info@swedishembedded.com.
+
+# Create, list and remove lane worktrees together with their cargo targets.
+#
+# Usage: worktree add <lane> --repo <repo> --worktrees <dir> --targets <dir>
+#                            [--base <ref>] [--date <YYYY-MM-DD>]
+#        worktree list   --repo <repo> --worktrees <dir> --targets <dir>
+#        worktree remove <lane> --repo <repo> --worktrees <dir> --targets <dir>
+#
+# add:    <dir>/<lane> on a new branch <lane>-<date> from <base> (default
+#         origin/main), plus an empty <targets>/<lane>. Refuses an existing lane.
+# remove: deletes the worktree and its target. The branch is kept so
+#         unmerged commits survive.
+set -u
+cmd=${1:-}; [ "$#" -gt 0 ] && shift
+lane=""
+case "$cmd" in add|remove) lane=${1:-}; [ "$#" -gt 0 ] && shift ;; list) ;; *)
+    echo "worktree: usage: worktree add|list|remove ..." >&2; exit 2 ;;
+esac
+repo="" worktrees="" targets="" base=origin/main date=$(date +%F)
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --repo) repo=${2:?}; shift 2 ;;
+        --worktrees) worktrees=${2:?}; shift 2 ;;
+        --targets) targets=${2:?}; shift 2 ;;
+        --base) base=${2:?}; shift 2 ;;
+        --date) date=${2:?}; shift 2 ;;
+        *) echo "worktree: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+[ -n "$repo" ] && [ -n "$worktrees" ] && [ -n "$targets" ] ||
+    { echo "worktree: --repo, --worktrees and --targets are required" >&2; exit 2; }
+if [ "$cmd" != list ]; then
+    case "$lane" in ''|*[!A-Za-z0-9._-]*|.*) echo "worktree: bad lane name" >&2; exit 2 ;; esac
+fi
+
+case "$cmd" in
+add)
+    if [ -e "$worktrees/$lane" ]; then
+        echo "worktree: $worktrees/$lane already exists" >&2; exit 1
+    fi
+    mkdir -p "$worktrees" "$targets/$lane" || exit 1
+    git -C "$repo" worktree add -b "$lane-$date" "$worktrees/$lane" "$base" || exit 1
+    echo "worktree=$worktrees/$lane"
+    echo "target=$targets/$lane"
+    ;;
+list)
+    git -C "$repo" worktree list
+    if [ -d "$targets" ]; then
+        for d in "$targets"/*/; do
+            [ -d "$d" ] && echo "target $(basename "$d") $(du -sk "$d" | cut -f1) KiB"
+        done
+    fi
+    ;;
+remove)
+    git -C "$repo" worktree remove --force "$worktrees/$lane" || exit 1
+    rm -rf -- "${targets:?}/$lane"
+    ;;
+esac

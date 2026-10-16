@@ -19,6 +19,13 @@ SVEN_BIN ?= $(SVEN_DIR)/target/release/sven
 MODELS_DIR ?= $(HOME)/.local/share/brain/models
 
 CARGO ?= cargo
+
+# Shared-node lease kit (scripts/lease). One root holds the lane worktrees, the
+# per-lane cargo targets and the lock files.
+LEASE_ROOT ?= $(HOME)/project/shared/containers
+LEASE_REPO ?= .
+LEASE_LANE ?=
+GPU_LOCK ?= $(LEASE_ROOT)/gpu.lock
 # Release everywhere, tests included: brain's kernels are unusably slow
 # unoptimised, and one profile means one set of compiled dependencies.
 PROFILE := --release
@@ -163,6 +170,49 @@ samples/tool-syntax/audit:
 	$(CARGO) run $(PROFILE) -p splinter-tool-syntax -- audit
 
 # ---------------------------------------------------------------------------
+##@ Lease kit
+## Wrappers for the shared leased node: build slots, the GPU lock, lane worktrees.
+
+## lease - run the kit's specification, then print the node report
+lease: lease/test lease/doctor
+
+## lease/test - the lease kit's specification (no GPU, no network)
+lease/test:
+	python3 -I scripts/lease/test-lease.py
+
+## lease/doctor - node, lease end, memory cap, disk, GPU contexts, lock holder, worktrees, target sizes
+lease/doctor:
+	bash scripts/lease/doctor --repo $(LEASE_REPO) --lock $(GPU_LOCK) --disk $(LEASE_ROOT) \
+		--worktrees $(LEASE_ROOT)/worktrees --targets $(LEASE_ROOT)/targets
+
+## lease/gpu - lists the GPU lock targets; does nothing
+lease/gpu:
+	@bash scripts/make-help.sh lease/gpu
+
+## lease/gpu/run - run CMD under the GPU lock and record foreign contexts (EXCLUSIVE=1 refuses a busy GPU)
+lease/gpu/run:
+	bash scripts/lease/gpu --lock $(GPU_LOCK) $(if $(EXCLUSIVE),--exclusive) -- $(CMD)
+
+## lease/worktree - lists the lane worktree targets; does nothing
+lease/worktree:
+	@bash scripts/make-help.sh lease/worktree
+
+## lease/worktree/add - create LEASE_LANE's worktree (branch <lane>-<date> from origin/main) and target
+lease/worktree/add:
+	bash scripts/lease/worktree add $(LEASE_LANE) --repo $(LEASE_REPO) \
+		--worktrees $(LEASE_ROOT)/worktrees --targets $(LEASE_ROOT)/targets
+
+## lease/worktree/list - lane worktrees of LEASE_REPO and the size of each lane target
+lease/worktree/list:
+	bash scripts/lease/worktree list --repo $(LEASE_REPO) \
+		--worktrees $(LEASE_ROOT)/worktrees --targets $(LEASE_ROOT)/targets
+
+## lease/worktree/remove - delete LEASE_LANE's worktree and target (the branch is kept)
+lease/worktree/remove:
+	bash scripts/lease/worktree remove $(LEASE_LANE) --repo $(LEASE_REPO) \
+		--worktrees $(LEASE_ROOT)/worktrees --targets $(LEASE_ROOT)/targets
+
+# ---------------------------------------------------------------------------
 ##@ Dependencies and tooling
 ## Local sven/brain checkouts, git hooks, formatting.
 
@@ -197,6 +247,7 @@ help:
 # Declared last so every generated list above is already defined.
 .PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families fmt \
 	check check/fmt check/clippy check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
+	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
 	deps deps/local deps/lock \
 	hooks hooks/install \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
