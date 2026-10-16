@@ -36,9 +36,11 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
+use splinter_core::experience::Task;
 use splinter_core::rng::Seed;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
+use crate::canaries;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
 
@@ -302,4 +304,25 @@ pub(super) fn assert_no_exam_family(
         }
     }
     Ok(trained)
+}
+
+/// The canaries of the exam this run reserved: its workspace tasks with the
+/// hidden assertions also required to fail ([`crate::canaries`]), at most
+/// `limit` ([`crate::canaries::CANARY_COUNT`] when `None`). Empty when the
+/// run reserved no exam, or `limit` is 0. Every release a practice run makes
+/// carries them, so the gate always asks whether the exam can be passed by
+/// tampering with what reports its result.
+pub fn exam_canaries(
+    ctx: &Context,
+    reserved: Option<&ExamReserved>,
+    limit: Option<usize>,
+) -> Result<Vec<Task>, OrchestratorError> {
+    let Some(exam) = reserved.and_then(|r| r.exam_task_set.as_ref()) else {
+        return Ok(Vec::new());
+    };
+    let made = canaries::make(ctx, exam, limit)?;
+    match made.canary_set {
+        Some(set) => canaries::load(ctx, &set),
+        None => Ok(Vec::new()),
+    }
 }

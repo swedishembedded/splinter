@@ -31,7 +31,9 @@ use splinter_sandbox::TreeSnapshot;
 use splinter_store::experiences::SetId;
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
-use super::exam::{assert_no_exam_family, remember_trained, remembered_seed, reserve};
+use super::exam::{
+    assert_no_exam_family, exam_canaries, remember_trained, remembered_seed, reserve,
+};
 use super::held::{held_tasks, keep_tasks};
 use super::report::{PracticeReport, Profiled, Snapshotted, TasksMade};
 use super::PracticeRequest;
@@ -531,6 +533,11 @@ fn release_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'
             agentic: st.practice.request.agentic(),
             ..GateConfig::default()
         }),
+        canaries: exam_canaries(
+            ctx,
+            st.report.reserve.as_ref(),
+            st.practice.request.canaries,
+        )?,
         ..ReleaseRequest::new(id)
     };
     match release_recorded(ctx, run, &asked) {

@@ -41,10 +41,13 @@ use splinter_agent::solve::Model;
 use splinter_core::clock::FixedClock;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
+use splinter_eval::verifiers::workspace::WorkspaceCheck;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
 use splinter_pipelines::experiment::ExperimentPlan;
-use splinter_pipelines::practice::{practice, PlanSlot, PracticeReport, PracticeRequest};
+use splinter_pipelines::practice::{
+    exam_canaries, practice, PlanSlot, PracticeReport, PracticeRequest,
+};
 use splinter_store::runs::{read_run, RunStatus};
 
 /// A context over a scratch state root whose `policy:default` is the
@@ -200,6 +203,42 @@ fn a_repository_is_practised_as_one_recorded_run_that_never_trains_on_its_exam()
         "{first}"
     );
     assert!(report.candidate.is_some());
+}
+
+#[test]
+fn the_release_gate_is_handed_a_canary_of_every_exam_task() {
+    let (scratch, ctx) = context("practice-canaries");
+    let repo = scratch.0.join("repo");
+    project(&repo, &[]);
+    let (_, report) = run(&ctx, &request(&repo));
+    let reserve = report.reserve.as_ref().unwrap();
+    let exam = ctx
+        .tasks()
+        .get_set(reserve.exam_task_set.as_ref().unwrap())
+        .unwrap()
+        .members;
+
+    let canaries = exam_canaries(&ctx, Some(reserve), None).unwrap();
+    assert_eq!(canaries.len(), exam.len());
+    for (canary, member) in canaries.iter().zip(&exam) {
+        let original = ctx.tasks().get(&member.task).unwrap();
+        assert_ne!(
+            canary.task.id, original.task.id,
+            "a canary is a task of its own"
+        );
+        let (_, made) = WorkspaceCheck::of_task(canary).unwrap().unwrap();
+        let (_, source) = WorkspaceCheck::of_task(&original).unwrap().unwrap();
+        assert_eq!(made, source.inverted());
+    }
+    // The request bounds how many, and none is a choice.
+    assert_eq!(
+        exam_canaries(&ctx, Some(reserve), Some(1)).unwrap().len(),
+        1
+    );
+    assert!(exam_canaries(&ctx, Some(reserve), Some(0))
+        .unwrap()
+        .is_empty());
+    assert!(exam_canaries(&ctx, None, None).unwrap().is_empty());
 }
 
 #[test]

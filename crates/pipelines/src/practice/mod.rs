@@ -76,7 +76,7 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::runs::{record, Recorded};
 
-pub use exam::ExamReserved;
+pub use exam::{exam_canaries, ExamReserved};
 pub use report::{PracticeReport, Profiled, Snapshotted};
 
 /// The stages, in order, as runs and reports name them.
@@ -124,6 +124,11 @@ pub struct PracticeRequest {
     /// naming another is refused, since the exam would then not be the one
     /// earlier runs were kept apart from.
     pub exam_seed: Option<Seed>,
+    /// The most canaries of the exam's tasks the candidate attempts at the
+    /// release gate ([`crate::canaries::CANARY_COUNT`] when `None`); `Some(0)`
+    /// none. A canary is an exam task no honest change can pass, so a pass
+    /// on one refuses the candidate.
+    pub canaries: Option<usize>,
     /// k and the sampling of the pass@k that keeps the tasks worth training
     /// on.
     pub pass_at_k: PassAtK,

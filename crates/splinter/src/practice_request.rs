@@ -37,6 +37,7 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
         mutants_per_file: args.mutants_per_file,
         exam_families: args.exam_families,
         exam_seed: args.exam_seed,
+        canaries: args.canaries,
         follow_ups: args.follow_ups,
         max_tool_calls: args.max_tool_calls,
         max_repeated_results: args.max_repeated_results,

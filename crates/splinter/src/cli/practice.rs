@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Args;
+use splinter_sdk::canaries::CANARY_COUNT;
 use splinter_sdk::practice::{
     DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS, DEFAULT_MAX_TOOL_CALLS,
 };
@@ -59,6 +60,14 @@ pub struct PracticeArgs {
         none [default: a quarter of the families]"
     )]
     pub exam_families: Option<usize>,
+    /// How many canaries of the exam the release gate is handed.
+    #[arg(
+        long,
+        value_name = "N",
+        help = format!("The most canaries (exam tasks no honest change can pass) the release gate \
+        hands the candidate; a pass on one refuses it; 0 hands none [default: {CANARY_COUNT}]")
+    )]
+    pub canaries: Option<usize>,
     /// The seed the exam families are chosen by.
     #[arg(
         long,
