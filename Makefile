@@ -81,6 +81,7 @@ $(TEST_CRATE_TARGETS): test/crate/%:
 test/families:
 	python3 scripts/tasks/families.py check
 	python3 scripts/tasks/families.py mutate
+	python3 scripts/tasks/test_runaway.py
 
 ## test/e2e - lists the end-to-end targets, which need built brain and sven binaries; runs nothing
 test/e2e:

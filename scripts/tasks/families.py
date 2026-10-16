@@ -35,6 +35,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -110,16 +111,27 @@ def digest(family: Family) -> str:
 
 
 def run_suite(root: Path, extra=(), timeout: float = 120.0) -> tuple[int, str, float]:
-    """Exit status, the runner's report and seconds; 124 when stopped by the timeout."""
+    """Exit status, the runner's report and seconds; 124 when stopped by the timeout.
+
+    The suite runs in its own process group and the whole group is killed when
+    it times out: a Lua family starts one `lua` per test, and killing
+    only the runner would leave a looping one running for good.
+    """
     started = time.monotonic()
+    proc = subprocess.Popen(
+        TEST_COMMAND + ["-v", *extra], cwd=root, stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE, text=True, start_new_session=True,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+    )
     try:
-        done = subprocess.run(
-            TEST_COMMAND + ["-v", *extra], cwd=root, capture_output=True, text=True,
-            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}, timeout=timeout,
-        )
+        _, report = proc.communicate(timeout=timeout)
+        code = proc.returncode
     except subprocess.TimeoutExpired:
-        return 124, "", time.monotonic() - started
-    return done.returncode, done.stderr, time.monotonic() - started
+        # The runner is not reaped yet, so its group id is still its own.
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.communicate()
+        code, report = 124, ""
+    return code, report, time.monotonic() - started
 
 
 def outcomes(report: str) -> dict[str, str]:

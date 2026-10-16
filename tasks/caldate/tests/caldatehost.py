@@ -6,6 +6,7 @@
 # testing Lua code from a standard-library-only toolchain you can procure our
 # services by sending an email to info@swedishembedded.com.
 """Runs one Lua process per check and returns what it printed."""
+import resource
 import subprocess
 import unittest
 from pathlib import Path
@@ -13,6 +14,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 PRELUDE = Path(__file__).resolve().parent / "prelude.lua"
+CPU_SECONDS = 10
+
+
+def limit_cpu():
+    """Runs in the child before `lua` starts: a kernel CPU limit that ends a
+    looping program even when this process was killed first."""
+    resource.setrlimit(resource.RLIMIT_CPU, (CPU_SECONDS, CPU_SECONDS + 1))
 
 
 def run_lua(body: str) -> str:
@@ -24,7 +32,8 @@ def run_lua(body: str) -> str:
     )
     try:
         done = subprocess.run(
-            ["lua", "-"], input=script, capture_output=True, text=True, timeout=30
+            ["lua", "-"], input=script, capture_output=True, text=True, timeout=5,
+            preexec_fn=limit_cpu,
         )
     except FileNotFoundError as exc:
         raise RuntimeError("the lua interpreter is required but was not found") from exc

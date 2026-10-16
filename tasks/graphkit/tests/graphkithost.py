@@ -4,12 +4,20 @@
 # Test host: runs one Lua 5.1 process per check and compares the canonical
 # text it prints with the expected text.
 import pathlib
+import resource
 import subprocess
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 PRELUDE = ROOT / "tests" / "prelude.lua"
+CPU_SECONDS = 10
+
+
+def limit_cpu():
+    """Runs in the child before `lua` starts: a kernel CPU limit that ends a
+    looping program even when this process was killed first."""
+    resource.setrlimit(resource.RLIMIT_CPU, (CPU_SECONDS, CPU_SECONDS + 1))
 
 
 class LuaCase(unittest.TestCase):
@@ -29,7 +37,8 @@ class LuaCase(unittest.TestCase):
             "-e", chunk,
         ]
         try:
-            done = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            done = subprocess.run(command, capture_output=True, text=True, timeout=5,
+                                  preexec_fn=limit_cpu)
         except FileNotFoundError:
             self.fail("the lua interpreter is not installed; these tests need Lua 5.1")
         if done.returncode != 0:

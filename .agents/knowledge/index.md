@@ -44,3 +44,4 @@ in the same commit.
 | [047](047-ten-gates-at-five-percent-release-a-null-candidate-four-times-in-ten.md) | Ten gates at five percent release a null candidate four times in ten |
 | [048](048-a-hidden-suite-that-fails-on-one-fault-passes-its-neighbours.md) | A hidden suite that fails on the seeded fault passes its neighbours |
 | [049](049-a-gate-that-could-not-grade-its-canaries-is-not-clean.md) | A gate that could not grade its canaries is not clean |
+| [066](066-the-family-pre-flight-killed-the-test-runner-and-orphaned-its-lua-processes.md) | The family pre-flight killed the test runner and orphaned its Lua processes |
