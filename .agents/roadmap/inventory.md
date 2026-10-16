@@ -358,11 +358,13 @@ Failure classes: (a) historical, (b) currently reproducible, (c) evaluation or a
 | `make -C papers/splinter-brain-sven-flywheel verify` at the pins (`verify_structure.py`, `build_data.py --check`) | 121 structure claims, 232 checks, 0 failures; 168 claims, 36 measured, 0 problems | passes only because the unreachable splinter pin is a local object (D3) |
 | the same at `--latest` (each repo's HEAD) | 121 claims, 232 checks, 0 failures | passes: no claim drifted at the heads |
 | `make test/families` | 8 families pass five identical runs, mutations caught, runaway test OK (exit 0) | none |
-| splinter `make test` | stopped at the first red binary: `learn.rs:173` fails, see D28; `--no-fail-fast` rerun below | (b) D28 |
-| sven `make test` | linker killed by signal 9 (out of memory) for 26 test binaries of `sven-sdk` at the default job count; no test ran for those | (env); rerun at `-j2` below |
-| brain `make test` | see below | |
+| splinter `make test` | stopped at the first red binary: `learn.rs:173` fails, see D28; a `--no-fail-fast` rerun was queued behind other lanes' build slots and cancelled unrun, so crates after `splinter-pipelines` were not run | (b) D28 |
+| sven `make test` | linker killed by signal 9 (out of memory) for 26 test binaries of `sven-sdk` at the default job count; no test ran for those | (env); a `-j2` rerun was queued and cancelled unrun |
+| brain `make test` | does not compile: `brain-zipdepth` test `p4_train` (D29); no brain test ran | (b) D29 |
 | `make test/e2e/brain-sven` | not run: no sven binary is built in the shared targets and the brain release binary there is from before the heads; building both under the build slots did not fit the lane | not run |
 
+
+Splinter's tests ran against the pinned sven and brain revisions of `Cargo.lock` (D24), not the heads. Nothing in this section states that the unrun suites pass.
 ## 6. Discrepancy report
 
 Each row was re-checked against the heads in section 0 (not copied from the master plan's
@@ -398,6 +400,7 @@ seed, whose line numbers had drifted). "Status" says what the heads show. Eviden
 | D25 | Splinter's compile closure holds 84 brain crates, including vision, diffusion, 3D, forecasting and speech models it never calls | (c) | present: the `brain` dependency selects `text, study, timeline, audio` features but the closure from `cargo tree` includes e.g. `brain-diffusion`, `brain-splat`, `brain-survival`; the build compiles them (the run log of section 5 shows `brain-supir`, `brain-qwen3vl`, `brain-deepseek2` compiling) | splinter `Cargo.toml:44-56`; section 1.2 S4 |
 | D26 | Crates with no consumer in the three repos: sven `cost`, brain `web`, `timeseries` (6 lines), `cuda-aot` | (c) | present (search S3 for each) | section 4 |
 | D28 | After the D1 fix, a learn from one source text holds nothing out, so the exam cannot run; `learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate` still expects the exam to reach the judge and is **red at the head** (probable cause, not bisected: the test learns from a single manual) | (b) | present: fails with "no held-out task to put to the models" | `crates/pipelines/tests/learn.rs:173`; `crates/pipelines/src/exam.rs:619`; commit `2df4237` |
+| D29 | Brain's `make test` does not compile at the head: `crates/zipdepth/tests/p4_train.rs:93` uses an undefined `seed` (introduced by the seed-drawing commit `4f2e4e5d`) | (b) | present; `make test` stops in its `--no-run` step, so no brain test ran at the head | brain `crates/zipdepth/tests/p4_train.rs:93` |
 | D27 | There is no test that goes from a recorded sven attempt through training to a deployed adapter | (c) | present (master plan 2.1; package P0-ACC adds it). Searched: `#[ignore]` tests, `test/e2e`, `first_run.rs`, `fake_brain` | `Makefile:98-100`; `crates/pipelines/tests/common/fake_brain.rs` |
 
 ### 6.1 Top ten by effect on the target pipeline
