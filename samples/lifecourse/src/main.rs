@@ -52,6 +52,7 @@ mod prevalence;
 mod recipe;
 mod recipe_run;
 mod report;
+mod seed_spread;
 mod temporal;
 
 use std::path::PathBuf;
@@ -324,7 +325,8 @@ enum Command {
         data: PathBuf,
     },
     /// Secondary analysis: the locked test scored by an ensemble of the arm's
-    /// models trained with seeds 1..=members on the same subjects as `final`.
+    /// models on the same subjects as `final`: the one `final` saved, and
+    /// members trained with seeds derived from `--seed`.
     Ensemble {
         /// The build's output directory.
         #[arg(long)]
@@ -335,6 +337,10 @@ enum Command {
         /// How many members.
         #[arg(long, default_value_t = 5)]
         members: u64,
+        /// Seed the other members' seeds are derived from (drawn and printed
+        /// when not given).
+        #[arg(long)]
+        seed: Option<u64>,
     },
     /// Secondary analysis of calendar shift: train on the non-locked subjects
     /// of the cycles before `split`, score those of `split` and later.
@@ -440,9 +446,10 @@ enum RecipeCommand {
         /// Fraction of each fold's training subjects.
         #[arg(long)]
         share: f64,
-        /// Seed of the subsample: the recipe's `train_seed`.
+        /// Seed of the subsample: the recipe's `train_seed` (drawn and
+        /// printed when not given; it names the output directory).
         #[arg(long)]
-        seed: u64,
+        seed: Option<u64>,
         /// Only these repeats (default: all).
         #[arg(long)]
         repeat: Vec<usize>,
@@ -519,7 +526,13 @@ fn recipe_command(command: RecipeCommand) -> Result<()> {
             seed,
             repeat,
             fold,
-        } => recipe_run::write_subsamples(&data, share, seed, &repeat, &fold),
+        } => recipe_run::write_subsamples(
+            &data,
+            share,
+            splinter_sdk::seed::resolve("seed", seed),
+            &repeat,
+            &fold,
+        ),
         RecipeCommand::Score {
             data,
             name,
@@ -654,7 +667,17 @@ fn main() -> Result<()> {
         }
         Command::Report { data, bootstrap } => report::report(&data, bootstrap.resolve()),
         Command::Amend { data } => commands::amend(&data),
-        Command::Ensemble { data, arm, members } => ensemble::ensemble(&data, arm, members),
+        Command::Ensemble {
+            data,
+            arm,
+            members,
+            seed,
+        } => ensemble::ensemble(
+            &data,
+            arm,
+            members,
+            splinter_sdk::seed::resolve("seed", seed),
+        ),
         Command::Temporal {
             data,
             arm,

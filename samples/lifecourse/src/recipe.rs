@@ -71,7 +71,7 @@ impl Recipe {
         let recipe = Recipe { overrides };
         // Resolve once: every key and value is checked before any training.
         recipe.arm()?;
-        recipe.spec(0)?;
+        recipe.configured()?;
         recipe.train_share()?;
         recipe.bootstrap()?;
         Ok(recipe)
@@ -178,6 +178,12 @@ impl Recipe {
     /// The spec this recipe trains under with `seed`; unset keys keep the
     /// arm's defaults ([`crate::experiment::fit`]).
     pub fn spec(&self, seed: u64) -> Result<TimelineSpec> {
+        Ok(self.configured()?.seed(seed))
+    }
+
+    /// The spec every key and value of the recipe describes, before a seed is
+    /// chosen for it; an error names the key that is wrong.
+    fn configured(&self) -> Result<TimelineSpec> {
         let known = [
             "arm",
             "d_model",
@@ -210,8 +216,7 @@ impl Recipe {
             .knots(self.knots()?)
             .max_tokens(self.get("max_tokens")?.unwrap_or(MAX_TOKENS))
             .batch(self.get("batch")?.unwrap_or(BATCH))
-            .steps(self.get("steps")?.unwrap_or(STEPS))
-            .seed(seed);
+            .steps(self.get("steps")?.unwrap_or(STEPS));
         if let Some(cfg) = self.shaped()? {
             spec = spec.shape(cfg);
         }

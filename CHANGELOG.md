@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (BREAKING, frozen seeds)
 - `splinter_sdk::seed::FrozenSeed::decide` and `frozen` take the name of the seed's flag instead of a precomputed `fresh` value, and draw (and print) only for an artifact being made now with no seed given; a read-back no longer needs a placeholder. `FrozenSeed::decide_with` takes the source of the fresh seed. `SEED.json` and `voice.json` are written and read exactly as before.
 
+### Changed (lifecourse seeds)
+- The report's seed-spread section reads the training seeds the runs record instead of seeds 1 to 3, so a run trained with a drawn seed is in it. `ensemble` keeps the model `final` saved as its first member and trains the others with seeds derived from `--seed` (drawn and printed when not given); its output records the seed and every member's seed, and an unseeded rerun no longer trains the same members. `recipe subsample --seed` is optional (drawn, printed, and part of the output directory's name).
+
 ### Changed (pipeline seeds)
 - The seeds of the learning pipelines are no longer constants. The exam's families (`learn --exam-seed`, `exam-set create --seed`, `practice --exam-seed`), the rehearsal's form tasks (`--rehearsal-seed` on `learn`, `absorb`, `consolidate`, `rehearse`), the denoise tasks (`--denoise-seed`), the `mix:F` strip (`dataset build --mix-seed`), the exam's bootstrap intervals (`--interval-seed`), `exam-set power --seed` and `exam-report labels-export --seed` are drawn when not given, printed, recorded in the run and kept in the artifact they decide (`Reservation.seed`, the exam manifest's `seed`, `Rehearsed.seed`, `TasksGenerated.denoise_seed`, `Examined.interval_seed`, `Powered.interval_seed`, the dataset manifest's strip). Reservations and exam families recorded before read as seed 0. Exams of different runs are comparable only when they share a recorded seed.
 

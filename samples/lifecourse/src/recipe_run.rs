@@ -344,6 +344,14 @@ pub fn score_files(
     Ok(())
 }
 
+/// Where the subsample of `share` drawn with `seed` is written: the seed is in
+/// the name, so a subsample drawn without `--seed` can be named again.
+fn subsample_dir(data: &Path, share: f64, seed: u64) -> PathBuf {
+    data.join(RECIPES)
+        .join("_subsamples")
+        .join(format!("p{}-s{seed}", (share * 100.0).round() as u32))
+}
+
 /// Write, for every fold asked for, the training subjects a recipe with
 /// `train_share=share`, `train_seed=seed` uses, as
 /// `<data>/recipe/_subsamples/p<percent>-s<seed>/r<repeat>-k<fold>.ids`
@@ -357,10 +365,7 @@ pub fn write_subsamples(
 ) -> Result<()> {
     let f = frozen(data)?;
     let (rs, ks) = folds_asked(&f, repeats, folds);
-    let dir = data
-        .join(RECIPES)
-        .join("_subsamples")
-        .join(format!("p{}-s{seed}", (share * 100.0).round() as u32));
+    let dir = subsample_dir(data, share, seed);
     std::fs::create_dir_all(&dir)?;
     for &repeat in &rs {
         for &fold in &ks {
@@ -450,5 +455,15 @@ mod tests {
         for bad in ["", "../x", "a/b", ".hidden", "a\\b"] {
             assert!(recipe_dir(data, bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn a_subsample_drawn_without_a_seed_is_named_by_the_seed_it_drew() {
+        let drawn = splinter_sdk::seed::resolve("seed", None);
+        let dir = subsample_dir(Path::new("/d"), 0.25, drawn);
+        assert_eq!(
+            dir.file_name().and_then(|n| n.to_str()),
+            Some(format!("p25-s{drawn}").as_str())
+        );
     }
 }

@@ -10,17 +10,22 @@
 //! test scored by an ensemble of one arm's models, trained with different
 //! seeds on the same subjects as `final`.
 //!
-//! The ensemble's probabilities are the members' means. How far the members
-//! disagree about a subject's ten-year risk is the part of its uncertainty
-//! that comes from training alone - the spread a single run hides.
+//! The ensemble's probabilities are the members' means. The first member is
+//! the model `final` saved, trained with the pre-registered seed; the others
+//! are trained with seeds derived from the ensemble's own seed, so a rerun
+//! with the same `--seed` repeats the ensemble and another seed makes another.
+//! How far the members disagree about a subject's ten-year risk is the part of
+//! its uncertainty that comes from training alone - the spread a single run
+//! hides.
 
 use std::path::Path;
 
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
 use splinter_sdk::model::timeline::{Prediction, Subject, TimelineModel};
+use splinter_sdk::vocabulary::rng::SplitMix64;
 
-use crate::commands::{frozen, locked_split, nhanes_terms, require_training};
+use crate::commands::{frozen, locked_split, nhanes_terms, require_training, PREREGISTERED_SEED};
 use crate::experiment::{fit, Arm, Training, STEPS};
 use crate::metrics::{evaluate, Metrics};
 
@@ -31,6 +36,10 @@ const SPREAD_HORIZON: f64 = 10.0;
 struct EnsembleRun {
     arm: Arm,
     members: u64,
+    /// The seed the members after the first were derived from.
+    seed: u64,
+    /// Every member's training seed, in order.
+    member_seeds: Vec<u64>,
     dataset: String,
     partition: String,
     n_test: usize,
@@ -40,9 +49,25 @@ struct EnsembleRun {
     spread_10: (f64, f64),
 }
 
-/// Score the locked test with `members` models of `arm` (seeds 1..=members).
-/// A member `final` already saved is loaded rather than trained again.
-pub fn ensemble(data: &Path, arm: Arm, members: u64) -> Result<()> {
+/// The training seeds of an ensemble of `members`: the pre-registered seed
+/// first, so the model `final` saved is a member, then seeds derived from the
+/// ensemble's `seed`, all distinct.
+pub fn member_seeds(seed: u64, members: u64) -> Vec<u64> {
+    let mut rng = SplitMix64::new(seed);
+    let mut seeds = vec![PREREGISTERED_SEED];
+    while (seeds.len() as u64) < members {
+        let next = rng.next_u64();
+        if !seeds.contains(&next) {
+            seeds.push(next);
+        }
+    }
+    seeds
+}
+
+/// Score the locked test with `members` models of `arm`: the one `final`
+/// saved and the rest trained with seeds derived from `seed`. A member whose
+/// model was already saved is loaded rather than trained again.
+pub fn ensemble(data: &Path, arm: Arm, members: u64, seed: u64) -> Result<()> {
     if members < 2 {
         bail!("an ensemble needs at least two members, not {members}");
     }
@@ -60,16 +85,25 @@ pub fn ensemble(data: &Path, arm: Arm, members: u64) -> Result<()> {
         .map(|id| arm.view(&f.subjects[*id]))
         .collect();
     let mut by_member: Vec<Vec<Prediction>> = Vec::new();
-    for seed in 1..=members {
+    let member_seeds = member_seeds(seed, members);
+    for member in &member_seeds {
         let saved = data
             .join("runs")
-            .join(format!("{}-s{seed}-locked-model", arm.name()));
+            .join(format!("{}-s{member}-locked-model", arm.name()));
         let model = if saved.join("manifest.json").is_file() {
-            println!("member {seed}: the model final saved");
+            println!("member seed {member}: the model final saved");
             TimelineModel::load(&saved)?
         } else {
-            println!("member {seed}: training");
-            fit(arm, &train, &Training { seed, steps: STEPS })?.0
+            println!("member seed {member}: training");
+            fit(
+                arm,
+                &train,
+                &Training {
+                    seed: *member,
+                    steps: STEPS,
+                },
+            )?
+            .0
         };
         by_member.push(model.predict(&test)?);
     }
@@ -96,6 +130,8 @@ pub fn ensemble(data: &Path, arm: Arm, members: u64) -> Result<()> {
     let run = EnsembleRun {
         arm,
         members,
+        seed,
+        member_seeds,
         dataset: f.digests.0.clone(),
         partition: f.digests.1.clone(),
         n_test: test.len(),
@@ -108,4 +144,39 @@ pub fn ensemble(data: &Path, arm: Arm, members: u64) -> Result<()> {
     std::fs::write(&path, serde_json::to_vec_pretty(&run)?)?;
     println!("{name}: {}", serde_json::to_string_pretty(&run.metrics)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Two different seeds, drawn.
+    fn two_seeds() -> (u64, u64) {
+        let a = splinter_sdk::seed::resolve("seed", None);
+        (a, a.wrapping_add(1))
+    }
+
+    #[test]
+    fn the_first_member_is_the_one_final_saved_and_the_rest_follow_the_ensemble_seed() {
+        let (a, b) = two_seeds();
+        let seeds = member_seeds(a, 5);
+        assert_eq!(seeds.len(), 5);
+        assert_eq!(seeds[0], PREREGISTERED_SEED);
+        let mut distinct = seeds.clone();
+        distinct.sort_unstable();
+        distinct.dedup();
+        assert_eq!(distinct.len(), 5, "no member is trained twice: {seeds:?}");
+        assert_eq!(member_seeds(a, 5), seeds, "the seed reproduces the members");
+        assert_ne!(
+            member_seeds(b, 5)[1..],
+            seeds[1..],
+            "another seed makes another ensemble"
+        );
+    }
+
+    #[test]
+    fn a_larger_ensemble_keeps_the_members_of_a_smaller_one() {
+        let (a, _) = two_seeds();
+        assert_eq!(member_seeds(a, 3), member_seeds(a, 6)[..3]);
+    }
 }

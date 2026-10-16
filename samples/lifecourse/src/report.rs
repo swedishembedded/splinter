@@ -29,12 +29,6 @@ use crate::commands::{cv_runs, designs, frozen, LockedDetail, Run, PREREGISTERED
 use crate::compare::{compared_metrics, Compared};
 use crate::experiment::Arm;
 
-/// One arm's runs by `(repeat, fold)`.
-type FoldRuns = BTreeMap<(usize, usize), Run>;
-
-/// Training seeds the seed-spread section looks for.
-const SEEDS_REPORTED: u64 = 3;
-
 /// Bootstrap replicates of every design-based interval.
 pub const BOOTSTRAP_REPS: usize = 2000;
 /// The bootstrap seed the pre-registered criteria name. A report draws its own
@@ -489,55 +483,7 @@ pub fn report(data: &Path, seed: u64) -> Result<()> {
         }
     }
 
-    // Seed spread: the same folds retrained with other seeds.
-    writeln!(out, "\n## Secondary: how much a result moves with the training seed\n\nCross-validated mean IBS 1-15 per seed on the folds every listed seed ran, and per fold the spread (largest minus smallest) across seeds, averaged over folds.\n\n| arm | seeds | folds | mean IBS per seed | mean per-fold spread |\n|---|---|---|---|---|")?;
-    for arm in [Arm::Horizon, Arm::Standard] {
-        let by_seed: Vec<(u64, FoldRuns)> = (1..=SEEDS_REPORTED)
-            .map(|seed| cv_runs(data, arm, seed).map(|r| (seed, r)))
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .filter(|(_, r)| !r.is_empty())
-            .collect();
-        if by_seed.len() < 2 {
-            continue;
-        }
-        let folds: Vec<(usize, usize)> = by_seed[0]
-            .1
-            .keys()
-            .filter(|k| by_seed.iter().all(|(_, r)| r.contains_key(k)))
-            .copied()
-            .collect();
-        let ibs = |r: &Run| r.metrics.ibs_0_15.as_ref().map(|m| m.value);
-        let means: Vec<String> = by_seed
-            .iter()
-            .map(|(seed, r)| {
-                let v: Vec<f64> = folds.iter().filter_map(|k| ibs(&r[k])).collect();
-                format!(
-                    "s{seed} {:.5}",
-                    v.iter().sum::<f64>() / v.len().max(1) as f64
-                )
-            })
-            .collect();
-        let spreads: Vec<f64> = folds
-            .iter()
-            .filter_map(|k| {
-                let v: Vec<f64> = by_seed.iter().filter_map(|(_, r)| ibs(&r[k])).collect();
-                (v.len() == by_seed.len()).then(|| {
-                    v.iter().copied().fold(f64::MIN, f64::max)
-                        - v.iter().copied().fold(f64::MAX, f64::min)
-                })
-            })
-            .collect();
-        writeln!(
-            out,
-            "| {} | {} | {} | {} | {:.5} |",
-            arm.name(),
-            by_seed.len(),
-            folds.len(),
-            means.join(", "),
-            spreads.iter().sum::<f64>() / spreads.len().max(1) as f64
-        )?;
-    }
+    out.push_str(&crate::seed_spread::section(data)?);
 
     let terms = crate::commands::nhanes_terms();
     writeln!(

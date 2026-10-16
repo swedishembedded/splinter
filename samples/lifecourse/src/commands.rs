@@ -620,9 +620,13 @@ fn save_model(data: &Path, run_name: &str, model: &TimelineModel, run: &Run) -> 
 /// seeds measure how much a result moves with the seed alone.
 pub const PREREGISTERED_SEED: u64 = 1;
 
-/// Every cross-validation run of `arm` with `seed` (not permuted), by fold.
-pub fn cv_runs(data: &Path, arm: Arm, seed: u64) -> Result<BTreeMap<(usize, usize), Run>> {
-    let mut out = BTreeMap::new();
+/// One arm's runs by `(repeat, fold)`.
+pub type FoldRuns = BTreeMap<(usize, usize), Run>;
+
+/// Every cross-validation run of `arm` (not permuted), by training seed and
+/// then by fold. The seeds are the ones the runs record, drawn or named.
+pub fn cv_by_seed(data: &Path, arm: Arm) -> Result<BTreeMap<u64, FoldRuns>> {
+    let mut out: BTreeMap<u64, FoldRuns> = BTreeMap::new();
     let Ok(dir) = std::fs::read_dir(data.join("runs")) else {
         return Ok(out);
     };
@@ -637,14 +641,19 @@ pub fn cv_runs(data: &Path, arm: Arm, seed: u64) -> Result<BTreeMap<(usize, usiz
         let run: Run = serde_json::from_slice(&std::fs::read(e.path())?)?;
         // The name prefix also matches longer arm names (horizon-state):
         // the run's own record decides.
-        if run.arm != arm || run.seed != seed {
+        if run.arm != arm {
             continue;
         }
         if let (Some(fold), false) = (run.fold, run.permuted) {
-            out.insert(fold, run);
+            out.entry(run.seed).or_default().insert(fold, run);
         }
     }
     Ok(out)
+}
+
+/// Every cross-validation run of `arm` with `seed` (not permuted), by fold.
+pub fn cv_runs(data: &Path, arm: Arm, seed: u64) -> Result<FoldRuns> {
+    Ok(cv_by_seed(data, arm)?.remove(&seed).unwrap_or_default())
 }
 
 /// The design records by subject id.

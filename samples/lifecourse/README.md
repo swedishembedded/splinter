@@ -194,17 +194,18 @@ from prediction files by the same function, so they sit on one footing and
 `compare`, which reads them as `recipe:<name>`, pairs them on identical folds.
 
 ```bash
-lifecourse recipe run     --data <data> --name d32 --set d_model=32 --set d_ff=64 --seed 1 --repeat 0
-lifecourse recipe blend   --data <data> --name d32-ens --member d32-s1 --member d32-s2
-lifecourse recipe subsample --data <data> --share 0.25 --seed 1   # ids for baselines/run.py --train-ids
+lifecourse recipe run     --data <data> --name d32 --set d_model=32 --set d_ff=64 --repeat 0
+lifecourse recipe blend   --data <data> --name d32-ens --member d32-s<seed> --member d32-s<other seed>
+lifecourse recipe subsample --data <data> --share 0.25   # ids for baselines/run.py --train-ids
 lifecourse recipe score   --data <data> --name cox-net-all-p25 --made-of "..."   # score files written elsewhere
-lifecourse recipe summary --data <data> --model additive --model recipe:d32-s1 --repeat 0
-lifecourse compare --data <data> --a recipe:d32-s1 --b additive --repeat 0
+lifecourse recipe summary --data <data> --model additive --model recipe:d32-s<seed> --repeat 0
+lifecourse compare --data <data> --a recipe:d32-s<seed> --b additive --repeat 0
 ```
 
 A member trained with seed `s` is kept as `<name>-s<s>` (a run given no
 `--seed` draws one and prints it); a recipe with `train_share` names its
-`train_seed` too; a blend may mix
+`train_seed` too, and `subsample` given no `--seed` draws one and writes it
+into the directory name (`p25-s<seed>`); a blend may mix
 recipes and `external:<baseline>` members. A subsample keeps a subject when
 a hash of the seed and its id falls below the share, so a smaller share is
 always inside a larger one.
@@ -242,8 +243,10 @@ later cycles are followed for less time, so five years is the longest
 horizon it scores.
 
 And `ensemble` scores the locked test by the mean of an arm's models trained
-with several seeds on the same subjects as `final` (reusing the model
-`final` saved), and reports how far the members disagree about each
+with several seeds on the same subjects as `final`. The first member is the
+one `final` saved (the pre-registered seed); the others are trained with
+seeds derived from the ensemble's `--seed`, which is drawn and printed when
+none is given, and the output records it with every member's seed. It reports how far the members disagree about each
 subject's ten-year risk: the uncertainty that comes from training alone.
 
 ## Commands
@@ -259,8 +262,8 @@ lifecourse labels|causes|flags|lifeexp|prevalence|screen ...    # secondary esti
 lifecourse final   --data <out> --arm horizon --seed 1   # once; --reason to score again
 lifecourse amend   --data <out>                                 # pin the post-freeze amendments
 lifecourse report  --data <out> --seed 20261005                  # the report states the bootstrap seed
-lifecourse temporal --data <out> --arm horizon --seed 1 --split 2009      # secondary: calendar shift
-lifecourse ensemble --data <out> --arm horizon --members 5       # secondary: seeded ensemble on the locked test
+lifecourse temporal --data <out> --arm horizon --split 2009                # secondary: calendar shift
+lifecourse ensemble --data <out> --arm horizon --members 5       # secondary: seeded ensemble on the locked test (--seed fixes its members)
 lifecourse recipe  run|blend|subsample|score|summary --data <out>   # secondary: named training variants
 lifecourse intake  --nhanes <dir> --mortality <dir> --out <dir>   # add --base-url/--api-key/--model to score a model
 ```

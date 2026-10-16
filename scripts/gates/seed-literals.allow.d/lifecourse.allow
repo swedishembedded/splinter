@@ -1,10 +1,6 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
 samples/lifecourse/src/commands.rs	PREREGISTERED_SEED	world: the training seed the pre-registration names; compare and report read the runs made with it
-samples/lifecourse/src/report.rs	SEEDS_REPORTED	todo: it enumerates the literal seeds 1 to 3, so a run trained with a drawn seed never reaches the seed spread; the section reads the seeds the runs record
-samples/lifecourse/src/report.rs	report::seed-range	todo: the seed spread reads the literal seeds 1 to 3; it reads the seeds the runs record
 samples/lifecourse/src/report.rs	PREREGISTERED_BOOTSTRAP_SEED	world: the bootstrap seed the preregistration names for its intervals; a report passes it to reproduce them and otherwise draws its own
-samples/lifecourse/src/ensemble.rs	ensemble::seed-range	todo: every ensemble trains the same members 1..N; members take seeds derived from a drawn ensemble seed
-samples/lifecourse/src/recipe.rs	Recipe::parse::spec#0	todo: parsing validates the recipe by building a spec under seed 0 and discarding it; validation needs no seed
 samples/lifecourse/README.md	doc:--seed 1	world: the pre-registered protocol trains on seed 1; the paragraph after the block says the published numbers reproduce with it
 samples/lifecourse/README.md	doc:--seed 20261005	world: the pre-registered protocol names bootstrap seed 20261005; the paragraph after the block says the published numbers reproduce with it
 samples/lifecourse/README.md	doc:--seed 20261006	todo: the baselines draw and print a seed when none is given, so the command is shown without one and the seed that reproduces the paper is named beside the results
