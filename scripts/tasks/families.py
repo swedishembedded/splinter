@@ -50,6 +50,9 @@ CATALOG = TASKS / "catalog.toml"
 RUNS = 5
 MAX_SUITE_SECONDS = 5.0
 FAULT_TIMEOUT_SECONDS = 15.0  # a fault that hangs the suite is caught
+# The generator keeps 64 KiB of a suite's report; a fault that fails tests adds
+# a traceback each, so the passing report has to leave most of it free.
+MAX_REPORT_BYTES = 32000
 MAX_FILE_LINES = 800
 MIN_FUNCTIONS = 12
 MIN_KILL_RATE = 0.85
@@ -244,11 +247,13 @@ def test_names(report: dict[str, str]) -> list[str]:
 def check_one(family: Family) -> list[str]:
     problems = layout(family) + hygiene(family) + stdlib_only(family)
     first: dict[str, str] | None = None
+    report_bytes = 0
     slowest = 0.0
     for run in range(RUNS):
         code, report, took = run_suite(family.path)
         slowest = max(slowest, took)
         got = outcomes(report)
+        report_bytes = len(report.encode())
         if code != 0:
             problems.append(f"run {run + 1}: the baseline suite fails (exit {code})")
             problems += [f"  {t}: {s}" for t, s in got.items() if s != "ok"][:10]
@@ -261,6 +266,11 @@ def check_one(family: Family) -> list[str]:
         bad = {t: s for t, s in first.items() if s != "ok"}
         problems += [f"{t}: {s}, a test must pass without skipping" for t, s in bad.items()]
         problems += test_names(first)
+        if report_bytes > MAX_REPORT_BYTES:
+            problems.append(
+                f"the verbose report is {report_bytes} bytes, over {MAX_REPORT_BYTES}: "
+                "fewer or more compact tests (the generator truncates at 64 KiB)"
+            )
         if slowest > MAX_SUITE_SECONDS:
             problems.append(f"slowest run {slowest:.1f}s, over {MAX_SUITE_SECONDS}s")
         print(f"{family.id}: {len(first)} tests, slowest of {RUNS} runs {slowest:.2f}s, "
