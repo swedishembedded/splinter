@@ -36,6 +36,8 @@ use synthetic_author::writer::plan;
     about = "A synthetic author with known beliefs, for validating learning against ground truth"
 )]
 struct Cli {
+    #[command(flatten)]
+    device: splinter_sdk::device::DeviceFlags,
     #[command(subcommand)]
     command: Command,
 }
@@ -214,7 +216,9 @@ enum Command {
 }
 
 fn main() -> anyhow::Result<()> {
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    cli.device.apply()?;
+    match cli.command {
         Command::Persona { seed, cache, show } => {
             let Author {
                 persona,

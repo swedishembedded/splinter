@@ -43,6 +43,8 @@ use splinter_sdk::{Context, Splinter};
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
+    #[command(flatten)]
+    device: splinter_sdk::device::DeviceFlags,
     #[command(subcommand)]
     command: Command,
 }
@@ -201,7 +203,9 @@ fn session(common: &Common) -> anyhow::Result<Chat> {
 
 fn main() -> anyhow::Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    cli.device.apply()?;
+    match cli.command {
         Command::Chat(common) => {
             let mut chat = session(&common)?;
             let log = common.trace.as_deref().map(trace::open).transpose()?;

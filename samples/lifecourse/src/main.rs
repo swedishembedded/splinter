@@ -66,6 +66,8 @@ use crate::experiment::Arm;
 #[derive(Parser)]
 #[command(about = "Long-horizon mortality prediction from one NHANES examination")]
 struct Cli {
+    #[command(flatten)]
+    device: splinter_sdk::device::DeviceFlags,
     #[command(subcommand)]
     command: Command,
 }
@@ -549,7 +551,9 @@ fn recipe_command(command: RecipeCommand) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    cli.device.apply()?;
+    match cli.command {
         Command::Build {
             nhanes,
             mortality,

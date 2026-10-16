@@ -34,6 +34,8 @@ use crate::workspace::Workspace;
     about = "A supervised coding-agent loop on one repository"
 )]
 pub struct Cli {
+    #[command(flatten)]
+    device: splinter_sdk::device::DeviceFlags,
     /// Home directory whose `.sven/` holds the loop's and Splinter's state
     /// (default: `$HOME`).
     #[arg(long, global = true)]
@@ -184,6 +186,7 @@ fn home_of(cli: &Cli) -> Result<PathBuf> {
 /// Parses the command line and runs it.
 pub fn main() -> Result<ExitCode> {
     let cli = Cli::parse();
+    cli.device.apply()?;
     let home = LoopHome::under(&home_of(&cli)?);
     match &cli.command {
         Command::Run(args) => {

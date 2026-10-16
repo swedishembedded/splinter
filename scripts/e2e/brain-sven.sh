@@ -48,7 +48,7 @@ trap cleanup EXIT
 
 port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 
-BRAIN_DEVICE=cpu "$brain" serve --openai "$port" --models-dir "$models" \
+"$brain" serve --device cpu --openai "$port" --models-dir "$models" \
     --api-keys-out "$scratch/keys.json" --ready-file "$scratch/ready" >"$scratch/brain.log" 2>&1 &
 server=$!
 

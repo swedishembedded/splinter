@@ -59,6 +59,9 @@ pub struct Cli {
 /// Flags every command takes, meaning the same everywhere.
 #[derive(Clone, Debug, Default, Args)]
 pub struct Global {
+    /// Which hardware models run on.
+    #[command(flatten)]
+    pub device: splinter_sdk::device::DeviceFlags,
     /// The state root (default: $SPLINTER_STATE, else ~/.splinter).
     #[arg(long, global = true, value_name = "DIR")]
     pub state: Option<PathBuf>,

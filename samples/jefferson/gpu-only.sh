@@ -10,15 +10,12 @@
 # Run a command pinned to GPUs and stop it the moment it reports that any part
 # of the run left them.
 #
-# `BRAIN_DEVICE` alone is not a guarantee: a value that does not resolve only
-# warns, and brain then schedules on whatever it finds, the CPU included. So
-# the run is also read as it goes. It is stopped (exit 3) on any line saying
-# the CPU backend, a software adapter, a fallback or an unplaced model was
-# used, and it fails (exit 4) if it never reported a discrete GPU adapter.
-#
-# `BRAIN_DEVICE` does not choose the card of an in-process run: without
-# `BRAIN_GPU_INDEX` it lands on gpu0 whatever it names. So a single card is
-# pinned through both.
+# The command is given `--device <device>`, which its program reads with
+# brain's grammar. A device the machine lacks is refused by the program, but
+# a run can still leave the GPUs, so it is also read as it goes. It is stopped
+# (exit 3) on any line saying the CPU backend, a software adapter, a fallback
+# or an unplaced model was used, and it fails (exit 4) if it never reported a
+# discrete GPU adapter.
 #
 # Usage: gpu-only.sh <gpu0|gpu1|gpu0,gpu1|gpu> <log-file> -- <command> [args...]
 
@@ -34,12 +31,6 @@ shift 3
 
 markers='brain-wgsl-cpu|\(Cpu,|falling back|no GPU has room|not JIT-compiled'
 
-export BRAIN_DEVICE="$device"
-if [[ "$device" =~ ^gpu([0-9]+)$ ]]; then
-    export BRAIN_GPU_INDEX="${BASH_REMATCH[1]}"
-else
-    unset BRAIN_GPU_INDEX
-fi
 : >"$log"
 
 fifo=$(mktemp -u)
@@ -47,7 +38,7 @@ mkfifo "$fifo"
 trap 'rm -f "$fifo"' EXIT
 
 # A session of its own, so stopping the run stops everything it started.
-setsid "$@" >"$fifo" 2>&1 &
+setsid "$1" --device "$device" "${@:2}" >"$fifo" 2>&1 &
 pid=$!
 
 saw_gpu=0

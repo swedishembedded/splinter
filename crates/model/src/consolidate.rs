@@ -90,6 +90,7 @@ pub fn full_fine_tune(request: &FullTune<'_>) -> Result<Checkpoint, PolicyError>
         validate_dataset(weighted)?;
     }
     let mut tune = brain::ChatFullFineTune::from_pretrained(weights.as_str())
+        .device(crate::device::selected().spec())
         .dataset(request.train)
         .out_dir(request.attempt_dir)
         .steps(request.steps)

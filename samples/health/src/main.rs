@@ -57,6 +57,8 @@ struct Cli {
     /// The run directory: source files, Splinter's state and the labels.
     #[arg(long, global = true, default_value = "health-run")]
     dir: PathBuf,
+    #[command(flatten)]
+    device: splinter_sdk::device::DeviceFlags,
     #[command(subcommand)]
     command: Command,
 }
@@ -367,6 +369,7 @@ fn emit(run: &Run, name: &str, value: &serde_json::Value) -> Result<()> {
 }
 
 fn run(cli: Cli) -> Result<ExitCode> {
+    cli.device.apply()?;
     let run = Run::new(&cli.dir);
     match cli.command {
         Command::Synth { n, seed, usage } => {

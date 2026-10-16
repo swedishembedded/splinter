@@ -59,6 +59,13 @@ fn main() -> ExitCode {
             )
             .exit();
     }
+    if let Err(e) = cli.global.device.apply() {
+        output::error(
+            cli.global.json,
+            &splinter_sdk::Error::Refused(e.to_string()),
+        );
+        return session::Exit::Failed.into();
+    }
     let mut config = Config::from_env();
     if let Some(state) = &cli.global.state {
         config.state_root = StateRoot::new(state);

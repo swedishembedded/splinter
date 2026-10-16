@@ -283,7 +283,7 @@ with a manifest of its data, partition and file digests: the directory
 
 `--nhanes` is a directory of `<cycle start year>/*.xpt` as CDC distributes
 them, `--mortality` the `NHANES_<y>_<y+1>_MORT_2019_PUBLIC.dat` files. Set
-`BRAIN_BACKEND`/`BRAIN_DEVICE` to choose brain's device.
+`--backend` and `--device` to choose brain's device.
 
 ## Intake
 

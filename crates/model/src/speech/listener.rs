@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use brain::{CancelToken, ChatPipeline, SpeechIngress, SpeechProjector};
+use brain::{CancelToken, ChatPipeline, SpeechIngress, SpeechProjector, TextGenerationPipeline};
 
 use super::{padded_to, BrainRecognizer, Clip, Listener};
 use crate::error::PolicyError;
@@ -53,10 +53,14 @@ impl BrainListener {
             .base
             .to_str()
             .ok_or_else(|| failed(format!("{} is not UTF-8", opts.base.display())))?;
-        let mut chat = ChatPipeline::from_pretrained(base).map_err(|e| PolicyError::Load {
-            path: opts.base.clone(),
-            reason: e.to_string(),
-        })?;
+        let mut chat = TextGenerationPipeline::builder(base)
+            .device(crate::device::selected().spec())
+            .load()
+            .map(ChatPipeline::from)
+            .map_err(|e| PolicyError::Load {
+                path: opts.base.clone(),
+                reason: e.to_string(),
+            })?;
         if let Some(adapter) = &opts.adapter {
             let path = adapter
                 .to_str()

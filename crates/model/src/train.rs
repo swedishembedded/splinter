@@ -371,6 +371,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         refuse_overlong(request, max_block).map_err(failed)?;
     }
     let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
+        .device(crate::device::selected().spec())
         .dataset(request.train)
         .held_out(request.held_out)
         .thinking(request.thinking)
@@ -608,6 +609,7 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
     let train = prepared(request.train, "pairs.think.jsonl")?;
     let held_out = prepared(request.held_out, "held_out_pairs.think.jsonl")?;
     let mut fine_tune = brain::PreferenceFineTune::from_pretrained(weights.as_str())
+        .device(crate::device::selected().spec())
         .dataset(&train)
         .held_out(&held_out)
         .keep_reasoning(reasoning)

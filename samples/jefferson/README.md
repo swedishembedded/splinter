@@ -180,8 +180,8 @@ table; pass `--bootstrap-seed N` to reproduce a report.
 Every GPU command is run through `gpu-only.sh`, which pins the card, reads the
 run's output as it goes, stops it on any line that says the CPU backend, a
 software adapter or a fallback was used, and fails it if it never reported a
-discrete GPU. `BRAIN_DEVICE` alone does not choose the card of an in-process
-run; the script also sets `BRAIN_GPU_INDEX`.
+discrete GPU. It passes the command `--device <device>`, which every program
+reads with brain's grammar.
 
 ## Retrieval
 

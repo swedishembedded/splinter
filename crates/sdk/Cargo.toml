@@ -21,6 +21,7 @@ splinter-pipelines = { workspace = true }
 splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 
+clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

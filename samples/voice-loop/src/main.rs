@@ -43,10 +43,8 @@ use voice_loop::{read_sentences, RoundTripReport, TurnReport};
 #[derive(Parser)]
 #[command(about = "Talk to a persona and have it talk back, measuring each stage")]
 struct Cli {
-    /// How the hardware is driven: wgpu, vulkan, cuda or cpu. Without it brain
-    /// picks, which on a CUDA host is not CUDA.
-    #[arg(long, global = true)]
-    backend: Option<String>,
+    #[command(flatten)]
+    device: splinter_sdk::device::DeviceFlags,
     #[command(subcommand)]
     command: Command,
 }
@@ -376,9 +374,7 @@ enum Command {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    if let Some(backend) = &cli.backend {
-        splinter_sdk::model::device::select_backend(backend)?;
-    }
+    cli.device.apply()?;
     match cli.command {
         Command::SpeechRl(args) => voice_loop::rl::run(&args),
         Command::Takes(args) => voice_loop::takes::run(&args),

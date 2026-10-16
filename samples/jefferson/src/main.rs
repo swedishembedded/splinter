@@ -41,7 +41,10 @@ mod writer;
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    splinter_sdk::device::DeviceFlags::take(&mut args)
+        .map_err(anyhow::Error::msg)?
+        .apply()?;
     match args.first().map(String::as_str) {
         Some("corpus") => corpus_command(&args[1..]),
         Some("materials") => materials_command(&args[1..]),

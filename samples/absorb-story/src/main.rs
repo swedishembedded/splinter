@@ -29,6 +29,8 @@ const PENDING: u8 = 10;
     about = "Scripted nights of `splinter absorb` over invented facts, and the evaluation that follows each"
 )]
 struct Cli {
+    #[command(flatten)]
+    device: splinter_sdk::device::DeviceFlags,
     #[command(subcommand)]
     command: Cmd,
 }
@@ -97,7 +99,9 @@ enum Cmd {
 }
 
 fn main() -> anyhow::Result<ExitCode> {
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    cli.device.apply()?;
+    match cli.command {
         Cmd::List => {
             for name in NAMES {
                 println!("{name}");

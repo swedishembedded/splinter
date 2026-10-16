@@ -24,8 +24,10 @@ pub struct BrainRecognizer {
 impl BrainRecognizer {
     /// The recognition model `model` names, in brain's model store.
     pub fn load(model: &str) -> Result<Self, PolicyError> {
-        let pipeline =
-            TranscribePipeline::from_pretrained(model).map_err(|e| PolicyError::Load {
+        let pipeline = TranscribePipeline::builder(model)
+            .device(crate::device::selected().spec())
+            .load()
+            .map_err(|e| PolicyError::Load {
                 path: model.into(),
                 reason: e.to_string(),
             })?;
@@ -39,6 +41,7 @@ impl BrainRecognizer {
     /// longer clip is reported as truncated). Other recognisers ignore it.
     pub fn load_windowed(model: &str, window_seconds: f32) -> Result<Self, PolicyError> {
         let pipeline = TranscribePipeline::builder(model)
+            .device(crate::device::selected().spec())
             .window_secs(window_seconds)
             .load()
             .map_err(|e| PolicyError::Load {
@@ -100,7 +103,9 @@ impl BrainSynthesizer {
             path: model.into(),
             reason: e.to_string(),
         };
-        let engine = TtsPipeline::from_pretrained(model)
+        let engine = TtsPipeline::builder(model)
+            .device(crate::device::selected().spec())
+            .load()
             .and_then(|pipeline| pipeline.resident())
             .map_err(load_error)?;
         Ok(Self {

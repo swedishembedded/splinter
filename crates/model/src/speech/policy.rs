@@ -87,10 +87,13 @@ impl SpeechPolicy {
     /// the speaker of the recording `voice`, when given, so seeds vary
     /// delivery and not who speaks.
     pub fn load(model: &str, voice: Option<&Path>) -> Result<Self, PolicyError> {
-        let pipeline = TtsPipeline::from_pretrained(model).map_err(|e| PolicyError::Load {
-            path: model.into(),
-            reason: e.to_string(),
-        })?;
+        let pipeline = TtsPipeline::builder(model)
+            .device(crate::device::selected().spec())
+            .load()
+            .map_err(|e| PolicyError::Load {
+                path: model.into(),
+                reason: e.to_string(),
+            })?;
         let inner = pipeline.policy(PolicyOptions::default()).map_err(failed)?;
         Ok(Self {
             inner,

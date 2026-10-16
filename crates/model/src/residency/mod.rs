@@ -113,8 +113,9 @@ pub struct BrainLoader;
 impl BaseLoader for BrainLoader {
     fn load(&self, checkpoint: &Path, context_tokens: u32) -> Result<Box<dyn Engine>, PolicyError> {
         let source = crate::local::load_source(checkpoint);
-        let mut builder =
-            TextGenerationPipeline::builder(utf8(&source)?).capacity(context_tokens.max(1));
+        let mut builder = TextGenerationPipeline::builder(utf8(&source)?)
+            .device(crate::device::selected().spec())
+            .capacity(context_tokens.max(1));
         // A brain-format checkpoint carries no tokenizer; the one beside it
         // is the one it was trained with. A GGUF embeds its own.
         if let Some(tokenizer) = checkpoint

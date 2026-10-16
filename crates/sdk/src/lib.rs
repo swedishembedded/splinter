@@ -56,6 +56,7 @@
 
 #![warn(missing_docs)]
 
+pub mod device;
 pub mod seed;
 mod splinter;
 

@@ -49,6 +49,14 @@ pub enum PolicyError {
         /// The path.
         path: PathBuf,
     },
+    /// A `--device` value that names no schedulable device.
+    #[error("--device {text:?}: {reason}")]
+    Device {
+        /// The value as given.
+        text: String,
+        /// Why brain's grammar or this machine refuses it.
+        reason: String,
+    },
     /// brain could not load the weights.
     #[error("loading {path}: {reason}")]
     Load {

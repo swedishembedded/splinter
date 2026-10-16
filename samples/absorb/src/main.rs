@@ -26,6 +26,8 @@ const PERSONA: &str = "Thomas Jefferson";
     about = "Prepare and run the absorb validation protocol"
 )]
 struct Cli {
+    #[command(flatten)]
+    device: splinter_sdk::device::DeviceFlags,
     #[command(subcommand)]
     command: Command,
 }
@@ -303,7 +305,9 @@ fn shard(text: &str) -> Result<(usize, usize), String> {
 }
 
 fn main() -> anyhow::Result<()> {
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    cli.device.apply()?;
+    match cli.command {
         Command::Facts(Facts::Select {
             common,
             materials,

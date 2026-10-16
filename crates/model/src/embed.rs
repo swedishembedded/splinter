@@ -38,6 +38,7 @@ impl Embeddings {
     /// (`Qwen/Qwen3-Embedding-0.6B`), or a brain-format `.safetensors` file.
     pub fn load(model: &str) -> Result<Self, PolicyError> {
         let pipeline = EmbeddingPipeline::builder(model)
+            .device(crate::device::selected().spec())
             .capacity(MAX_TOKENS + 64)
             .load()
             .map_err(|e| PolicyError::Load {

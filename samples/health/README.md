@@ -12,7 +12,7 @@ the same loop at a directory of `timeline-v1` files you hold.
 
 ## Run it
 
-Training runs on the device `BRAIN_BACKEND` names; wrap every command that
+Training runs on the device `--backend` and `--device` name; wrap every command that
 trains in the shared device lock if the device is shared.
 
 ```bash
