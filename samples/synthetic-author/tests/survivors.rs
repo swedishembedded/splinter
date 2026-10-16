@@ -22,10 +22,8 @@ const ARTICLES: usize = 6;
 const PER_ARTICLE: usize = 3;
 
 fn corpus(tag: &str) -> Cache {
-    let dir = std::env::temp_dir().join(format!(
-        "synthetic-author-survivors-{tag}-{}",
-        std::process::id()
-    ));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("synthetic-author-survivors-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     Cache::open(dir).unwrap()
 }

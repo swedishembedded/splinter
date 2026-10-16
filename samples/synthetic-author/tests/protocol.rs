@@ -24,10 +24,8 @@ use synthetic_author::manifest::{
 };
 
 fn scratch(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "synthetic-author-protocol-{tag}-{}",
-        std::process::id()
-    ));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("synthetic-author-protocol-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

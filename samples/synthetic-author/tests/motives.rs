@@ -234,7 +234,7 @@ impl ModelProvider for Terse {
 #[test]
 fn the_report_lists_what_each_arm_s_reasons_come_to() {
     let persona = Persona::generate(splinter_sdk::model::seed::draw().value());
-    let dir = std::env::temp_dir().join(format!("synthetic-author-motives-{}", std::process::id()));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthetic-author-motives");
     let _ = std::fs::remove_dir_all(&dir);
     let cache = Cache::open(dir).unwrap();
     cache.write_persona(&persona).unwrap();

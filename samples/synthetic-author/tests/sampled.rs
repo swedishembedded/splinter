@@ -84,10 +84,8 @@ struct Study {
 }
 
 fn study(tag: &str) -> Study {
-    let dir: PathBuf = std::env::temp_dir().join(format!(
-        "synthetic-author-sampled-{tag}-{}",
-        std::process::id()
-    ));
+    let dir: PathBuf = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("synthetic-author-sampled-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     let seed = splinter_sdk::model::seed::draw().value();
     let persona = Persona::generate(seed);

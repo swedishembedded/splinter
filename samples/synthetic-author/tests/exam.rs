@@ -289,7 +289,7 @@ fn an_item_is_trained_on_when_a_kept_decision_has_its_facts_and_its_options() {
 
 #[test]
 fn the_second_exam_cannot_be_drawn_before_the_corpus_s_decisions_are_read() {
-    let dir = std::env::temp_dir().join(format!("synthetic-author-exam-v2-{}", std::process::id()));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthetic-author-exam-v2");
     let _ = std::fs::remove_dir_all(&dir);
     let cache = synthetic_author::cache::Cache::open(dir).unwrap();
     let p = Persona::generate(6);

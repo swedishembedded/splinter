@@ -87,7 +87,7 @@ fn what_the_gate_reader_read_is_kept_with_the_attempt_and_whether_it_was_kept() 
     let seed = splinter_sdk::model::seed::draw().value();
     let persona = Persona::generate(seed);
     let planned = plan(&persona, seed, 2, 3);
-    let dir = std::env::temp_dir().join(format!("synthetic-author-readers-{}", std::process::id()));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthetic-author-readers");
     let _ = std::fs::remove_dir_all(&dir);
     let cache = Cache::open(dir).unwrap();
     assert!(cache.readings().unwrap().is_empty());

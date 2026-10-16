@@ -36,11 +36,14 @@ pub const ARTICLES: usize = 6;
 /// Episodes each article tells.
 pub const EPISODES: usize = 2;
 
+/// A fresh directory for one spec's study, under cargo's scratch space for
+/// integration tests and named by the test binary and the spec's tag, so a run
+/// replaces what the last run of the same spec left instead of piling up.
 pub fn scratch(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "synthetic-author-study-{tag}-{}",
-        std::process::id()
-    ));
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join("synthetic-author-study")
+        .join(env!("CARGO_CRATE_NAME"))
+        .join(tag);
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }

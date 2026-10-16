@@ -230,7 +230,7 @@ impl ModelProvider for FirstOption {
 fn an_examination_grades_every_item_and_picks_up_where_it_stopped() {
     let all = exam_items();
     let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
-    let dir = std::env::temp_dir().join(format!("synthetic-author-lab-{}", std::process::id()));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthetic-author-lab");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join("arm.jsonl");
@@ -254,7 +254,7 @@ fn an_examination_grades_every_item_and_picks_up_where_it_stopped() {
 fn an_item_written_twice_by_overlapping_runs_is_counted_once() {
     let all = exam_items();
     let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
-    let dir = std::env::temp_dir().join(format!("synthetic-author-dup-{}", std::process::id()));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthetic-author-dup");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join("arm.jsonl");
@@ -276,7 +276,7 @@ fn where_two_authors_would_decide_differently_a_model_is_counted_with_the_one_it
     let persona = Persona::generate(6);
     let all = items(&persona, 6, 3, &Default::default());
     let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
-    let dir = std::env::temp_dir().join(format!("synthetic-author-div-{}", std::process::id()));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthetic-author-div");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let outcomes = run_items(

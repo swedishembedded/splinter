@@ -28,10 +28,8 @@ use synthetic_author::study::protocol::{
 use synthetic_author::study::stats::{holm, sign_test_p, spread};
 
 fn scratch(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "synthetic-author-study-protocol-{tag}-{}",
-        std::process::id()
-    ));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("synthetic-author-study-protocol-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }

@@ -33,10 +33,8 @@ use synthetic_author::manifest::{
 use synthetic_author::persona::Persona;
 
 fn scratch(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "synthetic-author-opposite-{tag}-{}",
-        std::process::id()
-    ));
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("synthetic-author-opposite-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

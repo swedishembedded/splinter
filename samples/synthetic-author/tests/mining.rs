@@ -96,7 +96,8 @@ fn case_reading(case: &str) -> serde_json::Value {
 }
 
 fn cache(test: &str) -> Cache {
-    let dir = std::env::temp_dir().join(format!("synthetic-author-{test}-{}", std::process::id()));
+    let dir =
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("synthetic-author-{test}"));
     let _ = std::fs::remove_dir_all(&dir);
     Cache::open(dir).unwrap()
 }

@@ -42,11 +42,9 @@ fn announced_seed(out: &Output) -> u64 {
         .unwrap_or_else(|_| panic!("not a seed: {stderr}"))
 }
 
-fn corpus_of(author_seed: u64) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "synthetic-author-cli-{author_seed}-{}",
-        std::process::id()
-    ));
+fn corpus_of(tag: &str, author_seed: u64) -> PathBuf {
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("synthetic-author-cli-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     let manifest = CorpusManifest {
         seed_source: SeedSource::Drawn,
@@ -118,7 +116,7 @@ fn plan_show_and_items_draw_an_author_when_none_is_named() {
 #[test]
 fn a_corpus_names_the_author_and_a_different_seed_is_refused() {
     let seed = splinter_sdk::model::seed::draw().value();
-    let dir = corpus_of(seed);
+    let dir = corpus_of("names-the-author", seed);
     let cache = dir.to_str().unwrap();
     let recorded = run(&["persona", "--cache", cache, "--show", "1"]);
     assert!(recorded.status.success(), "{recorded:?}");
@@ -136,7 +134,7 @@ fn a_corpus_names_the_author_and_a_different_seed_is_refused() {
 #[test]
 fn survivors_reports_a_corpus_that_turned_nothing_away() {
     let seed = splinter_sdk::model::seed::draw().value();
-    let dir = corpus_of(seed);
+    let dir = corpus_of("survivors", seed);
     let out = run(&[
         "survivors",
         "--cache",
@@ -153,7 +151,7 @@ fn survivors_reports_a_corpus_that_turned_nothing_away() {
 #[test]
 fn greedy_decoding_refuses_the_flags_of_sampling() {
     let seed = splinter_sdk::model::seed::draw().value();
-    let dir = corpus_of(seed);
+    let dir = corpus_of("greedy", seed);
     let out = run(&[
         "exam",
         "--cache",
