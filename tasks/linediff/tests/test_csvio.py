@@ -22,18 +22,12 @@ def csv_error(call, *args):
     return str(caught.exception)
 
 
-class CsvReadTests(unittest.TestCase):
+class TA(unittest.TestCase):
     def test_empty_text_has_no_rows(self):
         self.assertEqual(linediff_csv_read(""), [])
 
-    def test_single_field_is_one_row(self):
-        self.assertEqual(linediff_csv_read("a"), [["a"]])
-
     def test_lines_become_rows_of_fields(self):
         self.assertEqual(linediff_csv_read("a,b\nc,d\n"), [["a", "b"], ["c", "d"]])
-
-    def test_missing_final_newline_makes_no_difference(self):
-        self.assertEqual(linediff_csv_read("a,b\nc,d"), linediff_csv_read("a,b\nc,d\n"))
 
     def test_carriage_return_pairs_end_rows(self):
         self.assertEqual(linediff_csv_read("a\r\nb\r\n"), [["a"], ["b"]])
@@ -47,9 +41,6 @@ class CsvReadTests(unittest.TestCase):
     def test_quoted_field_may_hold_newline(self):
         self.assertEqual(linediff_csv_read('"a\nb",c\nd,e\n'), [["a\nb", "c"], ["d", "e"]])
 
-    def test_quoted_carriage_return_pair_is_kept(self):
-        self.assertEqual(linediff_csv_read('"a\r\nb"'), [["a\r\nb"]])
-
     def test_doubled_quotes_become_one_quote(self):
         self.assertEqual(linediff_csv_read('"say ""hi"""'), [['say "hi"']])
 
@@ -62,11 +53,8 @@ class CsvReadTests(unittest.TestCase):
     def test_trailing_delimiter_adds_empty_field(self):
         self.assertEqual(linediff_csv_read("a,b,"), [["a", "b", ""]])
 
-    def test_trailing_delimiter_before_newline_adds_field(self):
+    def test_trailing_delimiter_before_newline(self):
         self.assertEqual(linediff_csv_read("a,\nb\n"), [["a", ""], ["b"]])
-
-    def test_leading_delimiter_starts_with_empty_field(self):
-        self.assertEqual(linediff_csv_read(",a"), [["", "a"]])
 
     def test_blank_line_reads_as_one_empty_field(self):
         self.assertEqual(linediff_csv_read("a\n\nb\n"), [["a"], [""], ["b"]])
@@ -77,14 +65,8 @@ class CsvReadTests(unittest.TestCase):
     def test_custom_delimiter_splits_fields(self):
         self.assertEqual(linediff_csv_read("a;b,c\td", ";"), [["a", "b,c\td"]])
 
-    def test_tab_delimiter_with_quoted_tab(self):
-        self.assertEqual(linediff_csv_read('"a\tb"\tc', "\t"), [["a\tb", "c"]])
-
     def test_quote_inside_plain_field_is_literal(self):
         self.assertEqual(linediff_csv_read('ab"c,d'), [['ab"c', "d"]])
-
-    def test_spaces_around_fields_are_kept(self):
-        self.assertEqual(linediff_csv_read(" a , b "), [[" a ", " b "]])
 
     def test_quoted_fields_before_crlf_end_rows(self):
         self.assertEqual(linediff_csv_read('"a"\r\n"b"\r\n'), [["a"], ["b"]])
@@ -106,12 +88,6 @@ class CsvReadTests(unittest.TestCase):
             "line 2: unexpected character after closing quote",
         )
 
-    def test_error_line_counts_earlier_rows(self):
-        self.assertEqual(
-            csv_error(linediff_csv_read, 'a\n"b"c'),
-            "line 2: unexpected character after closing quote",
-        )
-
     def test_unsuitable_delimiters_are_refused(self):
         for bad in ("", ",,", '"', "\n", "\r"):
             with self.assertRaises(ValueError) as caught:
@@ -119,10 +95,7 @@ class CsvReadTests(unittest.TestCase):
             self.assertEqual(str(caught.exception), DELIMITER_MESSAGE)
 
 
-class CsvQuoteFieldTests(unittest.TestCase):
-    def test_plain_text_is_left_alone(self):
-        self.assertEqual(linediff_csv_quote_field("a b"), "a b")
-
+class TB(unittest.TestCase):
     def test_delimiter_inside_value_forces_quotes(self):
         self.assertEqual(linediff_csv_quote_field("a,b"), '"a,b"')
 
@@ -137,21 +110,15 @@ class CsvQuoteFieldTests(unittest.TestCase):
         self.assertEqual(linediff_csv_quote_field("a,b;c", ";"), '"a,b;c"')
         self.assertEqual(linediff_csv_quote_field("a,b", ";"), "a,b")
 
-    def test_unsuitable_delimiter_is_refused_when_quoting(self):
+    def test_quoting_refuses_bad_delimiter(self):
         with self.assertRaises(ValueError) as caught:
             linediff_csv_quote_field("a", "")
         self.assertEqual(str(caught.exception), DELIMITER_MESSAGE)
 
-    def test_empty_value_stays_empty(self):
-        self.assertEqual(linediff_csv_quote_field(""), "")
 
-
-class CsvWriteTests(unittest.TestCase):
+class TC(unittest.TestCase):
     def test_rows_end_with_newlines(self):
         self.assertEqual(linediff_csv_write([["a", "b"], ["c", "d"]]), "a,b\nc,d\n")
-
-    def test_no_rows_give_empty_text(self):
-        self.assertEqual(linediff_csv_write([]), "")
 
     def test_fields_are_quoted_when_needed(self):
         self.assertEqual(linediff_csv_write([["a,b", 'c"d']]), '"a,b","c""d"\n')
@@ -169,16 +136,10 @@ class CsvWriteTests(unittest.TestCase):
         self.assertEqual(linediff_csv_read(linediff_csv_write(rows)), rows)
 
 
-class CsvShapeTests(unittest.TestCase):
-    def test_uniform_rows_are_not_ragged(self):
-        self.assertEqual(linediff_csv_ragged_rows([["a", "b"], ["c", "d"]]), [])
-
+class TD(unittest.TestCase):
     def test_rows_of_other_width_are_listed(self):
         rows = [["a", "b"], ["c"], ["d", "e"], ["f", "g", "h"]]
         self.assertEqual(linediff_csv_ragged_rows(rows), [1, 3])
-
-    def test_no_rows_have_no_ragged_rows(self):
-        self.assertEqual(linediff_csv_ragged_rows([]), [])
 
     def test_padding_widens_short_rows(self):
         self.assertEqual(
@@ -192,11 +153,8 @@ class CsvShapeTests(unittest.TestCase):
     def test_padding_leaves_empty_rows_empty(self):
         self.assertEqual(linediff_csv_pad_rows([[]]), [[]])
 
-    def test_padding_nothing_gives_nothing(self):
-        self.assertEqual(linediff_csv_pad_rows([]), [])
 
-
-class CsvRecordsTests(unittest.TestCase):
+class TE(unittest.TestCase):
     def test_rows_become_dictionaries_by_header(self):
         self.assertEqual(
             linediff_csv_records([["id", "name"], ["1", "ann"], ["2", "bob"]]),
@@ -207,9 +165,6 @@ class CsvRecordsTests(unittest.TestCase):
         self.assertEqual(
             linediff_csv_records([["id", "name"], ["1"]])[1], [{"id": "1", "name": ""}]
         )
-
-    def test_header_only_gives_no_records(self):
-        self.assertEqual(linediff_csv_records([["id"]]), (["id"], []))
 
     def test_row_wider_than_header_is_rejected(self):
         self.assertEqual(

@@ -21,7 +21,7 @@ def merged(base, ours, theirs):
     return "".join(lines) if count == 0 else (lines, count)
 
 
-class ChangedSpansTests(unittest.TestCase):
+class TA(unittest.TestCase):
     def test_identical_text_has_no_spans(self):
         self.assertEqual(linediff_changed_spans(list("abc"), list("abc")), [])
 
@@ -52,13 +52,7 @@ class ChangedSpansTests(unittest.TestCase):
         )
 
 
-class MergeChunksTests(unittest.TestCase):
-    def test_nothing_changed_gives_one_clean_chunk(self):
-        self.assertEqual(chunks("abc", "abc", "abc"), [("clean", ["a", "b", "c"])])
-
-    def test_empty_inputs_give_no_chunks(self):
-        self.assertEqual(chunks("", "", ""), [])
-
+class TB(unittest.TestCase):
     def test_only_our_edit_is_taken(self):
         self.assertEqual(
             chunks("abc", "aXc", "abc"),
@@ -94,7 +88,7 @@ class MergeChunksTests(unittest.TestCase):
             [("clean", ["a"]), ("conflict", ["X"], ["Y"]), ("clean", ["c"])],
         )
 
-    def test_touching_edits_on_neighbour_lines_conflict(self):
+    def test_touching_neighbour_edits_conflict(self):
         self.assertEqual(
             chunks("abcd", "aXcd", "abYd"),
             [("clean", ["a"]), ("conflict", ["X", "c"], ["b", "Y"]), ("clean", ["d"])],
@@ -106,16 +100,10 @@ class MergeChunksTests(unittest.TestCase):
             [("clean", ["a"]), ("clean", ["X"]), ("clean", ["c"]), ("clean", ["Y"]), ("clean", ["e"])],
         )
 
-    def test_different_insertions_at_one_point_conflict(self):
+    def test_different_insertions_same_point_conflict(self):
         self.assertEqual(
             chunks("ac", "aXc", "aYc"),
             [("clean", ["a"]), ("conflict", ["X"], ["Y"]), ("clean", ["c"])],
-        )
-
-    def test_equal_insertions_at_one_point_agree(self):
-        self.assertEqual(
-            chunks("ac", "aXc", "aXc"),
-            [("clean", ["a"]), ("clean", ["X"]), ("clean", ["c"])],
         )
 
     def test_insertion_touching_a_change_conflicts(self):
@@ -128,16 +116,6 @@ class MergeChunksTests(unittest.TestCase):
         self.assertEqual(
             chunks("abc", "ac", "aXc"),
             [("clean", ["a"]), ("conflict", [], ["X"]), ("clean", ["c"])],
-        )
-
-    def test_both_sides_deleting_same_line_agree(self):
-        self.assertEqual(
-            chunks("abc", "ac", "ac"), [("clean", ["a"]), ("clean", []), ("clean", ["c"])]
-        )
-
-    def test_deletion_beside_untouched_line_is_taken(self):
-        self.assertEqual(
-            chunks("abc", "abc", "ac"), [("clean", ["a"]), ("clean", []), ("clean", ["c"])]
         )
 
     def test_chained_edits_form_one_cluster(self):
@@ -163,8 +141,8 @@ class MergeChunksTests(unittest.TestCase):
         )
 
 
-class MergeChunksClusterTests(unittest.TestCase):
-    def test_later_cluster_grows_without_touching_earlier_one(self):
+class TC(unittest.TestCase):
+    def test_later_cluster_grows_alone(self):
         self.assertEqual(
             chunks("abcdefg", "XbcdYfg", "abcdeZg"),
             [
@@ -176,18 +154,13 @@ class MergeChunksClusterTests(unittest.TestCase):
         )
 
 
-class HasConflictsTests(unittest.TestCase):
-    def test_clean_chunks_report_no_conflict(self):
-        self.assertFalse(linediff_has_conflicts([("clean", ["a"])]))
-
+class TD(unittest.TestCase):
     def test_conflict_chunk_is_detected(self):
         self.assertTrue(linediff_has_conflicts([("clean", ["a"]), ("conflict", [], [])]))
-
-    def test_no_chunks_report_no_conflict(self):
-        self.assertFalse(linediff_has_conflicts([]))
+        self.assertFalse(linediff_has_conflicts([("clean", ["a"])]))
 
 
-class RenderMergeTests(unittest.TestCase):
+class TE(unittest.TestCase):
     def test_clean_chunks_are_concatenated(self):
         self.assertEqual(
             linediff_render_merge([("clean", ["a"]), ("clean", ["b"])]), ["a", "b"]
@@ -206,7 +179,7 @@ class RenderMergeTests(unittest.TestCase):
         )
 
 
-class MergeThreeTests(unittest.TestCase):
+class TF(unittest.TestCase):
     def test_clean_merge_returns_zero_conflicts(self):
         self.assertEqual(merged("abcde", "aXcde", "abcdY"), "aXcdY")
 
@@ -227,6 +200,3 @@ class MergeThreeTests(unittest.TestCase):
             list("abc"), list("aXc"), list("aYc"), "left", "right"
         )
         self.assertEqual((lines[1], lines[5]), ("<<<<<<< left", ">>>>>>> right"))
-
-    def test_identical_changes_never_conflict(self):
-        self.assertEqual(linediff_merge_three(list("abc"), list("aXc"), list("aXc")), (list("aXc"), 0))

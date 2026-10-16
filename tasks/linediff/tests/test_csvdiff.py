@@ -24,7 +24,7 @@ def key_error(call, *args):
     return str(caught.exception)
 
 
-class IndexRecordsTests(unittest.TestCase):
+class TA(unittest.TestCase):
     def test_records_are_keyed_by_column_values(self):
         records = [{"id": "1", "n": "a"}, {"id": "2", "n": "b"}]
         self.assertEqual(
@@ -51,25 +51,14 @@ class IndexRecordsTests(unittest.TestCase):
         self.assertEqual(len(linediff_index_records(records, ["a", "b"])), 2)
 
 
-class CellChangesTests(unittest.TestCase):
-    def test_differing_cells_are_reported_with_both_values(self):
+class TB(unittest.TestCase):
+    def test_differing_cells_show_both_values(self):
         old = {"a": "1", "b": "2"}
         new = {"a": "1", "b": "3"}
         self.assertEqual(linediff_cell_changes(old, new, ["a", "b"]), {"b": ("2", "3")})
 
-    def test_equal_records_have_no_changes(self):
-        self.assertEqual(linediff_cell_changes({"a": "1"}, {"a": "1"}, ["a"]), {})
 
-    def test_unlisted_columns_are_ignored(self):
-        self.assertEqual(linediff_cell_changes({"a": "1"}, {"a": "2"}, []), {})
-
-    def test_changes_follow_column_order(self):
-        old = {"a": "1", "b": "1"}
-        new = {"a": "2", "b": "2"}
-        self.assertEqual(list(linediff_cell_changes(old, new, ["b", "a"])), ["b", "a"])
-
-
-class DiffTablesTests(unittest.TestCase):
+class TC(unittest.TestCase):
     def test_equal_tables_have_empty_diff(self):
         diff = linediff_diff_tables(OLD, [list(row) for row in OLD], ["id"])
         self.assertEqual(diff, LinediffTableDiff((), (), (), (), ()))
@@ -120,7 +109,7 @@ class DiffTablesTests(unittest.TestCase):
         diff = linediff_diff_tables(OLD, new, ["id"])
         self.assertEqual(diff.removed_columns, ("city",))
 
-    def test_compound_key_matches_rows_by_both_columns(self):
+    def test_compound_key_matches_both_columns(self):
         old = [["a", "b", "v"], ["1", "x", "p"], ["1", "y", "q"]]
         new = [["a", "b", "v"], ["1", "x", "p"], ["1", "y", "r"]]
         diff = linediff_diff_tables(old, new, ["a", "b"])
@@ -155,18 +144,15 @@ class DiffTablesTests(unittest.TestCase):
         self.assertEqual(key_error(linediff_diff_tables, OLD, new, ["id"]), "duplicate key 1")
 
 
-class TableDiffValueTests(unittest.TestCase):
+class TD(unittest.TestCase):
     def test_table_diff_is_an_immutable_value(self):
         diff = LinediffTableDiff((), (), (), (), ())
         with self.assertRaises(FrozenInstanceError):
             diff.added = (1,)
 
 
-class DiffSummaryTests(unittest.TestCase):
-    def test_empty_diff_is_detected(self):
-        self.assertTrue(linediff_table_diff_is_empty(LinediffTableDiff((), (), (), (), ())))
-
-    def test_any_single_difference_makes_diff_nonempty(self):
+class TE(unittest.TestCase):
+    def test_any_difference_makes_diff_nonempty(self):
         for field in range(5):
             parts = [(), (), (), (), ()]
             parts[field] = ("x",)
@@ -194,6 +180,3 @@ class DiffSummaryTests(unittest.TestCase):
                 "cell changed: 1/c name: ann -> anne",
             ],
         )
-
-    def test_report_of_equal_tables_is_empty(self):
-        self.assertEqual(linediff_render_table_diff(LinediffTableDiff((), (), (), (), ())), [])

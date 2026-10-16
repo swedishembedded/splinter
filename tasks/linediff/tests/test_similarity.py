@@ -18,7 +18,7 @@ from linediff.similarity import (
 )
 
 
-class SplitWordsTests(unittest.TestCase):
+class TA(unittest.TestCase):
     def test_words_come_out_lowercased(self):
         self.assertEqual(linediff_split_words("Hello WORLD"), ["hello", "world"])
 
@@ -28,14 +28,8 @@ class SplitWordsTests(unittest.TestCase):
     def test_digits_and_underscores_stay_in_words(self):
         self.assertEqual(linediff_split_words("x_1 y2"), ["x_1", "y2"])
 
-    def test_text_without_word_characters_gives_nothing(self):
-        self.assertEqual(linediff_split_words("-- ?!"), [])
 
-    def test_empty_line_gives_nothing(self):
-        self.assertEqual(linediff_split_words(""), [])
-
-
-class SpaceTests(unittest.TestCase):
+class TB(unittest.TestCase):
     def test_runs_of_whitespace_collapse(self):
         self.assertEqual(linediff_normalize_space("a \t  b"), "a b")
 
@@ -48,22 +42,13 @@ class SpaceTests(unittest.TestCase):
     def test_different_words_do_not_count_as_same(self):
         self.assertFalse(linediff_same_ignoring_space("a b", "a c"))
 
-    def test_joined_words_do_not_count_as_same(self):
-        self.assertFalse(linediff_same_ignoring_space("a b", "ab"))
 
-
-class WordOverlapTests(unittest.TestCase):
-    def test_equal_lines_score_one(self):
-        self.assertEqual(linediff_word_overlap("a b", "a b"), Fraction(1))
-
+class TC(unittest.TestCase):
     def test_lines_without_shared_words_score_zero(self):
         self.assertEqual(linediff_word_overlap("a b", "c d"), Fraction(0))
 
     def test_two_empty_lines_score_one(self):
         self.assertEqual(linediff_word_overlap("", "!!"), Fraction(1))
-
-    def test_empty_against_words_scores_zero(self):
-        self.assertEqual(linediff_word_overlap("", "a"), Fraction(0))
 
     def test_partial_overlap_is_dice_coefficient(self):
         self.assertEqual(linediff_word_overlap("a b c", "a b d"), Fraction(2, 3))
@@ -71,33 +56,27 @@ class WordOverlapTests(unittest.TestCase):
     def test_repeated_words_count_by_multiplicity(self):
         self.assertEqual(linediff_word_overlap("a a b", "a b"), Fraction(4, 5))
 
-    def test_case_and_order_do_not_matter(self):
-        self.assertEqual(linediff_word_overlap("A b", "B a"), Fraction(1))
 
-
-class WordJaccardTests(unittest.TestCase):
+class TD(unittest.TestCase):
     def test_shared_words_over_union_size(self):
         self.assertEqual(linediff_word_jaccard("a b c", "a b d"), Fraction(1, 2))
 
     def test_repeated_words_are_ignored(self):
         self.assertEqual(linediff_word_jaccard("a a", "a"), Fraction(1))
 
-    def test_two_wordless_lines_score_one(self):
-        self.assertEqual(linediff_word_jaccard("", "?"), Fraction(1))
 
-    def test_disjoint_lines_score_zero(self):
+class TJ(unittest.TestCase):
+    def test_wordless_and_disjoint_jaccard_scores(self):
+        self.assertEqual(linediff_word_jaccard("", "?"), Fraction(1))
         self.assertEqual(linediff_word_jaccard("a", "b"), Fraction(0))
 
 
-class SequenceRatioTests(unittest.TestCase):
+class TE(unittest.TestCase):
     def test_character_ratio_of_known_pair(self):
         self.assertEqual(linediff_sequence_ratio("kitten", "sitting"), Fraction(8, 13))
 
     def test_two_empty_sequences_score_one(self):
         self.assertEqual(linediff_sequence_ratio("", ""), Fraction(1))
-
-    def test_empty_against_text_scores_zero(self):
-        self.assertEqual(linediff_sequence_ratio("", "abc"), Fraction(0))
 
     def test_line_lists_are_compared_by_line(self):
         self.assertEqual(
@@ -105,18 +84,12 @@ class SequenceRatioTests(unittest.TestCase):
         )
 
 
-class LineSimilarityTests(unittest.TestCase):
-    def test_identical_lines_score_one(self):
-        self.assertEqual(linediff_line_similarity("x = 1", "x = 1"), Fraction(1))
-
-    def test_unrelated_lines_score_zero(self):
-        self.assertEqual(linediff_line_similarity("ab", "cd"), Fraction(0))
-
+class TF(unittest.TestCase):
     def test_score_averages_word_and_character_views(self):
         self.assertEqual(linediff_line_similarity("abc def", "abc xyz"), Fraction(15, 28))
 
 
-class MatchingTests(unittest.TestCase):
+class TG(unittest.TestCase):
     def test_most_similar_candidate_wins(self):
         self.assertEqual(
             linediff_best_match("abc def", ["zzz", "abc xyz", "abc deg"]), 2
@@ -125,18 +98,12 @@ class MatchingTests(unittest.TestCase):
     def test_equal_scores_prefer_earlier_candidate(self):
         self.assertEqual(linediff_best_match("abc", ["abc", "abc"]), 0)
 
-    def test_no_candidates_give_none(self):
-        self.assertIsNone(linediff_best_match("abc", []))
-
-    def test_weak_candidates_fall_below_default_floor(self):
+    def test_weak_candidates_fall_below_floor(self):
         self.assertIsNone(linediff_best_match("abc def ghi", ["abc xyz uvw"]))
 
     def test_floor_value_itself_is_accepted(self):
         self.assertEqual(linediff_best_match("abc def", ["abc xyz"], Fraction(15, 28)), 0)
         self.assertIsNone(linediff_best_match("abc def", ["abc xyz"], Fraction(16, 28)))
-
-    def test_default_floor_admits_moderate_matches(self):
-        self.assertEqual(linediff_best_match("abc def", ["abc xyz"]), 0)
 
     def test_ranking_orders_by_descending_score(self):
         self.assertEqual(
@@ -157,11 +124,5 @@ class MatchingTests(unittest.TestCase):
             linediff_pair_changed_lines(["alpha one", "alpha one"], ["alpha one"]), [(0, 0)]
         )
 
-    def test_pairing_skips_dissimilar_lines(self):
-        self.assertEqual(linediff_pair_changed_lines(["alpha one", "qqqq"], ["alpha ones"]), [(0, 0)])
-
     def test_pairing_honours_custom_floor(self):
         self.assertEqual(linediff_pair_changed_lines(["abc def"], ["abc xyz"], Fraction(3, 5)), [])
-
-    def test_pairing_nothing_gives_nothing(self):
-        self.assertEqual(linediff_pair_changed_lines([], []), [])

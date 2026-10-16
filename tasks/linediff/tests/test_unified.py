@@ -20,7 +20,7 @@ INSERT = LinediffHunk(5, 0, 6, 2, (("+", "one"), ("+", "two")))
 REMOVE = LinediffHunk(0, 1, 0, 0, (("-", "gone"),))
 
 
-class FormatRangeTests(unittest.TestCase):
+class TA(unittest.TestCase):
     def test_empty_range_prints_zero_count(self):
         self.assertEqual(linediff_format_range(3, 0), "3,0")
 
@@ -37,7 +37,7 @@ class FormatRangeTests(unittest.TestCase):
         self.assertEqual(linediff_format_range(0, 5), "1,5")
 
 
-class FormatRangeEdgeTests(unittest.TestCase):
+class TB(unittest.TestCase):
     def test_first_line_single_range_is_one(self):
         self.assertEqual(linediff_format_range(0, 1), "1")
 
@@ -45,7 +45,7 @@ class FormatRangeEdgeTests(unittest.TestCase):
         self.assertEqual(linediff_format_range(99, 2), "100,2")
 
 
-class HunkHeaderTests(unittest.TestCase):
+class TC(unittest.TestCase):
     def test_header_shows_both_ranges(self):
         self.assertEqual(linediff_render_hunk_header(REPLACE), "@@ -3,3 +3,3 @@")
 
@@ -56,7 +56,7 @@ class HunkHeaderTests(unittest.TestCase):
         self.assertEqual(linediff_render_hunk_header(INSERT), "@@ -5,0 +7,2 @@")
 
 
-class RenderHunkTests(unittest.TestCase):
+class TD(unittest.TestCase):
     def test_body_lines_get_tag_prefixes(self):
         self.assertEqual(
             linediff_render_hunk(REPLACE),
@@ -71,7 +71,7 @@ class RenderHunkTests(unittest.TestCase):
         self.assertEqual(linediff_render_hunk(hunk)[1], "   indented")
 
 
-class RenderPatchTests(unittest.TestCase):
+class TE(unittest.TestCase):
     def test_no_hunks_render_as_empty_text(self):
         self.assertEqual(linediff_render_patch([], "a.txt", "b.txt"), "")
 
@@ -99,7 +99,7 @@ class RenderPatchTests(unittest.TestCase):
         self.assertTrue(text.startswith("--- my file.txt\n+++ my file.txt\n"))
 
 
-class StatLineTests(unittest.TestCase):
+class TF(unittest.TestCase):
     def test_plural_counts_use_plural_nouns(self):
         self.assertEqual(
             linediff_render_stat_line([INSERT, REPLACE]),
@@ -117,7 +117,7 @@ class StatLineTests(unittest.TestCase):
         )
 
 
-class NumberedHunkTests(unittest.TestCase):
+class TG(unittest.TestCase):
     def test_numbers_start_after_hunk_offsets(self):
         self.assertEqual(
             linediff_render_numbered_hunk(REPLACE),

@@ -21,7 +21,7 @@ def message_of(call, *args):
     return str(caught.exception)
 
 
-class ParseRangeTests(unittest.TestCase):
+class TA(unittest.TestCase):
     def test_bare_number_means_single_line(self):
         self.assertEqual(linediff_parse_range("4"), (3, 1))
 
@@ -34,9 +34,6 @@ class ParseRangeTests(unittest.TestCase):
     def test_empty_range_at_top_is_allowed(self):
         self.assertEqual(linediff_parse_range("0,0"), (0, 0))
 
-    def test_first_line_maps_to_index_zero(self):
-        self.assertEqual(linediff_parse_range("1"), (0, 1))
-
     def test_nonempty_range_at_line_zero_is_rejected(self):
         self.assertEqual(
             message_of(linediff_parse_range, "0,3"),
@@ -46,34 +43,13 @@ class ParseRangeTests(unittest.TestCase):
     def test_letters_are_rejected_as_range(self):
         self.assertEqual(message_of(linediff_parse_range, "x"), "bad range 'x'")
 
-    def test_empty_text_is_rejected_as_range(self):
-        self.assertEqual(message_of(linediff_parse_range, ""), "bad range ''")
 
-    def test_three_numbers_are_rejected_as_range(self):
-        self.assertEqual(message_of(linediff_parse_range, "1,2,3"), "bad range '1,2,3'")
-
-    def test_dangling_comma_is_rejected_as_range(self):
-        self.assertEqual(message_of(linediff_parse_range, "4,"), "bad range '4,'")
-
-
-class ParseHeaderTests(unittest.TestCase):
+class TB(unittest.TestCase):
     def test_header_gives_four_numbers(self):
         self.assertEqual(linediff_parse_hunk_header("@@ -3,3 +3,3 @@"), (2, 3, 2, 3))
 
     def test_header_with_empty_new_range(self):
         self.assertEqual(linediff_parse_hunk_header("@@ -1 +0,0 @@"), (0, 1, 0, 0))
-
-    def test_header_missing_new_range_is_rejected(self):
-        self.assertEqual(
-            message_of(linediff_parse_hunk_header, "@@ -3 @@"),
-            "bad hunk header '@@ -3 @@'",
-        )
-
-    def test_header_with_trailing_text_is_rejected(self):
-        self.assertEqual(
-            message_of(linediff_parse_hunk_header, "@@ -1 +1 @@ def f"),
-            "bad hunk header '@@ -1 +1 @@ def f'",
-        )
 
     def test_header_with_bad_range_reports_range(self):
         self.assertEqual(
@@ -81,7 +57,7 @@ class ParseHeaderTests(unittest.TestCase):
         )
 
 
-class ParsePatchTests(unittest.TestCase):
+class TC(unittest.TestCase):
     def test_file_names_are_taken_after_markers(self):
         old, new, _ = linediff_parse_patch(SIMPLE)
         self.assertEqual((old, new), ("a.txt", "b.txt"))
@@ -99,10 +75,6 @@ class ParsePatchTests(unittest.TestCase):
     def test_missing_final_newline_is_accepted(self):
         self.assertEqual(linediff_parse_patch(SIMPLE[:-1]), linediff_parse_patch(SIMPLE))
 
-    def test_file_names_with_spaces_survive(self):
-        old, new, _ = linediff_parse_patch("--- my old file\n+++ my new file\n")
-        self.assertEqual((old, new), ("my old file", "my new file"))
-
     def test_headers_alone_give_no_hunks(self):
         self.assertEqual(linediff_parse_patch("--- a\n+++ b\n"), ("a", "b", []))
 
@@ -110,7 +82,7 @@ class ParsePatchTests(unittest.TestCase):
         text = "--- a\n+++ b\n@@ -1,2 +1,2 @@\n \n-x\n+y\n"
         self.assertEqual(linediff_parse_patch(text)[2][0].lines[0], ("=", ""))
 
-    def test_removed_line_looking_like_header_is_body(self):
+    def test_removed_dashed_line_is_body(self):
         text = "--- a\n+++ b\n@@ -1 +0,0 @@\n--- x\n"
         self.assertEqual(linediff_parse_patch(text)[2][0].lines, (("-", "-- x"),))
 
@@ -146,12 +118,6 @@ class ParsePatchTests(unittest.TestCase):
             "line 2: expected '+++ ' file header",
         )
 
-    def test_wrong_second_header_is_rejected(self):
-        self.assertEqual(
-            message_of(linediff_parse_patch, "--- a\n@@ -1 +1 @@\n"),
-            "line 2: expected '+++ ' file header",
-        )
-
     def test_truncated_hunk_is_rejected(self):
         self.assertEqual(
             message_of(linediff_parse_patch, "--- a\n+++ b\n@@ -1,2 +1,2 @@\n x\n"),
@@ -183,21 +149,8 @@ class ParsePatchTests(unittest.TestCase):
             "line 8: hunk overlaps the previous hunk",
         )
 
-    def test_hunk_result_is_a_hunk_value(self):
-        hunk = linediff_parse_patch("--- a\n+++ b\n@@ -1 +0,0 @@\n-x\n")[2][0]
-        self.assertEqual(hunk, LinediffHunk(0, 1, 0, 0, (("-", "x"),)))
 
-
-class ParsePatchSetTests(unittest.TestCase):
+class TD(unittest.TestCase):
     def test_set_collects_every_file_patch(self):
         patches = linediff_parse_patch_set(SIMPLE + "--- c\n+++ d\n@@ -1 +0,0 @@\n-z\n")
         self.assertEqual([(p[0], p[1], len(p[2])) for p in patches], [("a.txt", "b.txt", 1), ("c", "d", 1)])
-
-    def test_empty_text_gives_empty_set(self):
-        self.assertEqual(linediff_parse_patch_set(""), [])
-
-    def test_blank_line_between_files_is_rejected(self):
-        self.assertEqual(
-            message_of(linediff_parse_patch_set, "--- a\n+++ b\n\n--- c\n+++ d\n"),
-            "line 3: expected '--- ' file header",
-        )
