@@ -371,7 +371,7 @@ impl Trainer for BrainTrainer {
             grad_accum: plan.tuning.records_per_step.unwrap_or(1),
             continue_from: plan.continue_from.as_deref(),
             cancel: Some(cancel),
-            bf16_base: plan.tuning.bf16_base,
+            base: splinter_model::train::BasePrecision::bf16_if(plan.tuning.bf16_base),
             learning_rate: plan.tuning.learning_rate,
             seed: plan.seed,
             // The records hold answers and no reasoning, so the model is

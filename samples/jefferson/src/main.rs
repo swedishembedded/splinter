@@ -279,7 +279,9 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         grad_accum: flag(args, "--records-per-step").map_or(Ok(1), |v| v.parse())?,
         continue_from: None,
         cancel: None,
-        bf16_base: args.iter().any(|a| a == "--bf16"),
+        base: splinter_sdk::model::train::BasePrecision::bf16_if(
+            args.iter().any(|a| a == "--bf16"),
+        ),
         learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
         weight_decay: 0.0,
         seed: train_seed(args)?,

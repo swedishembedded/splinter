@@ -138,7 +138,7 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         grad_accum: t.grad_accum,
         continue_from: t.continue_from.as_deref(),
         cancel: None,
-        bf16_base: t.bf16,
+        base: splinter_sdk::model::train::BasePrecision::bf16_if(t.bf16),
         learning_rate: t.learning_rate,
         weight_decay: 0.0,
         seed: t.seed,

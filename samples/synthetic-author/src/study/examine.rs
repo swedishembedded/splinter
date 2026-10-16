@@ -25,7 +25,7 @@ use splinter_sdk::model::answer::{Answerer, Decoding};
 use super::arm_key::{ArmKey, SHARED_SLOT};
 use super::layout::Study;
 use super::train::finished;
-use crate::binding::{base_digest, file_digest, items_digest, ModelIdentity};
+use crate::binding::{file_digest, items_digest, Base, ModelIdentity};
 use crate::exam_cmd::CONTEXT_TOKENS;
 use crate::lab::{exam_items_of, run_arm, ExamRun};
 use crate::sampled::{self, run_arm_sampled, Requested};
@@ -100,7 +100,7 @@ pub struct Examined {
 pub fn run(
     study: &Study,
     author_seed: u64,
-    base: &Path,
+    base: &Base,
     loader: &dyn Loader,
     sampled: bool,
 ) -> anyhow::Result<Examined> {
@@ -123,7 +123,7 @@ pub fn run(
         "author {author_seed}: the examination drawn from the corpus is {now} and the one frozen is {}",
         frozen.exam.digest
     );
-    let base_digest = base_digest(base).with_context(|| format!("hashing {}", base.display()))?;
+    let base_digest = base.digest().to_string();
     let secondary = match (sampled, protocol.decoding.secondary) {
         (true, Some(plan)) => Some(plan),
         (true, None) => anyhow::bail!("the protocol names no sampled decoding"),
@@ -155,7 +155,7 @@ pub fn run(
                 run.base_digest == base_digest,
                 "{} was trained on another base than {}",
                 key.name(),
-                base.display()
+                base.path().display()
             );
             adapters.push((key, seed, file, run.adapter_digest.clone()));
         }

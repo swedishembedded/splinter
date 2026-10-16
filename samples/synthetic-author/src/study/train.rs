@@ -21,7 +21,7 @@ use anyhow::Context as _;
 
 use super::arm_key::ArmKey;
 use super::layout::{RunManifest, Study};
-use crate::binding::{base_digest, file_digest, items_digest};
+use crate::binding::{file_digest, items_digest, Base};
 use crate::dataset::{path as dataset_path, Briefings};
 use crate::lab::exam_items_of;
 use crate::manifest::code_revision;
@@ -66,6 +66,7 @@ fn settings_for(study: &Study, seed: u64, dataset: &Path) -> anyhow::Result<Sett
         learning_rate: Some(t.learning_rate as f32),
         records_per_step: t.records_per_step,
         bf16: t.bf16,
+        int8: t.int8,
         dataset_digest: dataset_digest(dataset)
             .with_context(|| format!("hashing {}", dataset.display()))?,
         briefings: Briefings::Both,
@@ -85,7 +86,7 @@ fn settings_for(study: &Study, seed: u64, dataset: &Path) -> anyhow::Result<Sett
 pub fn run(
     study: &Study,
     author_seed: u64,
-    base: &Path,
+    base: &Base,
     trainer: &dyn Trainer,
 ) -> anyhow::Result<Trainings> {
     let protocol = study.protocol();
@@ -108,7 +109,7 @@ pub fn run(
          no adapter is trained on a corpus that is not the one its examination was frozen for",
         frozen.exam.digest
     );
-    let base_digest = base_digest(base).with_context(|| format!("hashing {}", base.display()))?;
+    let base_digest = base.digest().to_string();
     let mut done = Trainings::default();
     for key in protocol.arm_keys()?.into_iter().filter(|k| k.is_adapter()) {
         for training_seed in protocol.seeds_for(plan, key) {
@@ -152,7 +153,7 @@ pub fn run(
             );
             let attempt = study.run_dir(author_seed, key.briefings(), training_seed);
             let trained = trainer.train(&Job {
-                base,
+                base: base.path(),
                 dataset: &dataset,
                 attempt: &attempt,
                 settings: &settings,

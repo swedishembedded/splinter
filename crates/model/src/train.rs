@@ -43,6 +43,8 @@ use crate::local::{closed_think_pairs, opens_think_block};
 /// names none: brain's default.
 pub const DEFAULT_DPO_BETA: f32 = brain::DEFAULT_DPO_BETA;
 
+pub use crate::precision::BasePrecision;
+
 /// One fine-tune: what to train, on what, and where its files go.
 #[derive(Clone, Debug)]
 pub struct FineTune<'a> {
@@ -98,10 +100,9 @@ pub struct FineTune<'a> {
     /// Stops training at the next optimizer step once cancelled; a
     /// cancelled fine-tune exports no adapter and is reported as an error.
     pub cancel: Option<&'a sven_sdk::CancelToken>,
-    /// Hold the frozen base at bf16, half the bytes of fp32: what lets a 7B
-    /// base train on one 24 GiB card. Scoring before and after runs at the
-    /// same tier. brain's default, fp32, when `false`.
-    pub bf16_base: bool,
+    /// How the frozen base is held while the adapter trains. Scoring before
+    /// and after runs at the same tier.
+    pub base: BasePrecision,
     /// The peak learning rate; brain's default when `None`.
     pub learning_rate: Option<f32>,
     /// The AdamW weight decay on the adapter's matrices.
@@ -387,7 +388,8 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .alpha(request.alpha)
         .seed(request.seed)
         .weight_decay(request.weight_decay)
-        .bf16_base(request.bf16_base)
+        .bf16_base(request.base == BasePrecision::Bf16)
+        .int8_base(request.base == BasePrecision::Int8)
         .grad_accum(request.grad_accum)
         .eval_every(request.eval_every)
         .patience(request.patience)

@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Args;
 use serde::{Deserialize, Serialize};
+use splinter_sdk::model::train::BasePrecision;
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::cache::Cache;
@@ -53,8 +54,12 @@ pub struct TrainArgs {
     #[arg(long, default_value_t = DEFAULT_RECORDS_PER_STEP)]
     records_per_step: u32,
     /// Hold the base at bf16.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "int8")]
     bf16: bool,
+    /// Hold the base as int8 weights with a scale per 32, about a quarter of
+    /// fp32.
+    #[arg(long)]
+    int8: bool,
     /// Seed of the adapter's initialisation and batch order; drawn and
     /// printed when absent.
     #[arg(long)]
@@ -83,10 +88,26 @@ pub struct Settings {
     pub records_per_step: u32,
     /// Whether the base was held at bf16.
     pub bf16: bool,
+    /// Whether the base was held as int8 weights; absent from the records of
+    /// runs made before the setting existed, which held it at fp32 or bf16.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub int8: bool,
     /// Digest of the file of records.
     pub dataset_digest: String,
     /// Which briefings the records were made with.
     pub briefings: Briefings,
+}
+
+impl Settings {
+    /// How these settings hold the base while the adapter trains.
+    #[must_use]
+    pub fn base_precision(&self) -> BasePrecision {
+        match (self.int8, self.bf16) {
+            (true, _) => BasePrecision::Int8,
+            (false, true) => BasePrecision::Bf16,
+            (false, false) => BasePrecision::Fp32,
+        }
+    }
 }
 
 /// The digest `Settings` records for the file of records at `dataset`.
@@ -112,6 +133,7 @@ impl TrainArgs {
             learning_rate: self.lr,
             records_per_step: self.records_per_step,
             bf16: self.bf16,
+            int8: self.int8,
             dataset_digest: dataset_digest(dataset)?,
             briefings: self.briefings,
         })
@@ -197,7 +219,7 @@ pub fn fine_tune(job: &Job<'_>) -> anyhow::Result<Trained> {
         grad_accum: settings.records_per_step,
         continue_from: None,
         cancel: None,
-        bf16_base: settings.bf16,
+        base: settings.base_precision(),
         learning_rate: settings.learning_rate,
         weight_decay: 0.0,
         seed: settings.seed,

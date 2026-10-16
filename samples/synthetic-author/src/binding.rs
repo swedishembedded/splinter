@@ -117,6 +117,43 @@ pub fn base_digest(path: &Path) -> std::io::Result<String> {
     Ok(Digest::sha256_of(combined.as_bytes()).to_string())
 }
 
+/// A base checkpoint and its [`base_digest`], read once.
+///
+/// Hashing a base is a full read of its weights (tens of gigabytes for an 8B
+/// model in fp32), so a stage that trains or examines several authors opens
+/// it once and binds every adapter and outcome to the same digest.
+#[derive(Clone, Debug)]
+pub struct Base {
+    path: PathBuf,
+    digest: String,
+}
+
+impl Base {
+    /// Hash the checkpoint at `path`.
+    ///
+    /// # Errors
+    /// The checkpoint cannot be read.
+    pub fn open(path: &Path) -> anyhow::Result<Self> {
+        let digest = base_digest(path).with_context(|| format!("hashing {}", path.display()))?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            digest,
+        })
+    }
+
+    /// Where the checkpoint is.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Its digest, as brain records it in an adapter's card.
+    #[must_use]
+    pub fn digest(&self) -> &str {
+        &self.digest
+    }
+}
+
 /// What a model is, for the purpose of its answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelIdentity {

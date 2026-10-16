@@ -23,7 +23,8 @@ use std::time::Duration;
 
 use splinter_sdk::agent::sven::model::ModelProvider;
 use study_support::{frozen, responding, small_protocol, FirstOption, Scripted};
-use synthetic_author::binding::{file_digest, recorded};
+use synthetic_author::binding::{file_digest, recorded, Base};
+use synthetic_author::study::amend::{amend_base_hold, BaseHold};
 use synthetic_author::study::arm_key::SHARED_SLOT;
 use synthetic_author::study::corpus::{self, Staff};
 use synthetic_author::study::examine::{self, Examinee, Loader};
@@ -69,7 +70,7 @@ fn scripting() -> Scripting {
 
 /// A study of one author whose corpus stage has run, and a stand-in for the
 /// base checkpoint.
-fn corpus_done(tag: &str) -> (Study, u64, PathBuf) {
+fn corpus_done(tag: &str) -> (Study, u64, Base) {
     let study = frozen(tag, small_protocol(|_| {}), 1);
     let seed = study.protocol().authors[0].seed;
     let (model, _) = responding(seed, study.protocol());
@@ -87,7 +88,7 @@ fn corpus_done(tag: &str) -> (Study, u64, PathBuf) {
     .unwrap();
     let base = study.root().join("base.bin");
     std::fs::write(&base, "base weights").unwrap();
-    (study, seed, base)
+    (study, seed, Base::open(&base).unwrap())
 }
 
 #[test]
@@ -128,7 +129,7 @@ fn every_adapter_the_protocol_asks_is_trained_once_under_its_seed_with_a_manifes
         );
         assert_eq!(run.settings.seed, *training_seed);
         assert_eq!((run.settings.steps, run.settings.rank), (t.steps, t.rank));
-        assert_eq!(run.base_digest, file_digest(&base).unwrap());
+        assert_eq!(run.base_digest, file_digest(base.path()).unwrap());
         assert_eq!(
             run.adapter_digest,
             file_digest(&study.root().join(&run.adapter)).unwrap()
@@ -162,9 +163,11 @@ fn nothing_is_trained_before_the_corpus_stage_froze_the_examination() {
     let study = frozen("stages-early", small_protocol(|_| {}), 1);
     let author = study.protocol().authors[0].seed;
     let trainer = Scripted::default();
+    let base = study.root().join("base.bin");
+    std::fs::write(&base, "base weights").unwrap();
     let message = format!(
         "{:#}",
-        train::run(&study, author, Path::new("base.bin"), &trainer).unwrap_err()
+        train::run(&study, author, &Base::open(&base).unwrap(), &trainer).unwrap_err()
     );
     assert!(message.contains("study corpus"), "{message}");
     assert!(trainer.seeds.lock().unwrap().is_empty());
@@ -176,6 +179,7 @@ fn an_adapter_is_not_retrained_on_another_base_and_not_on_changed_records() {
     train::run(&study, author, &base, &Scripted::default()).unwrap();
     let other = study.root().join("other.bin");
     std::fs::write(&other, "other weights").unwrap();
+    let other = Base::open(&other).unwrap();
     let message = format!(
         "{:#}",
         train::run(&study, author, &other, &Scripted::default()).unwrap_err()
@@ -304,4 +308,52 @@ fn an_adapter_file_that_is_not_the_one_trained_is_not_examined() {
         "{message}"
     );
     assert!(loader.loads.lock().unwrap().is_empty());
+}
+
+#[test]
+fn an_amendment_before_training_keeps_the_corpus_and_is_refused_once_an_adapter_exists() {
+    let (study, author, base) = corpus_done("stages-amend");
+    let before = study.digest().to_string();
+    let held = study.protocol().training.clone();
+    let hold = if held.int8 {
+        BaseHold::Bf16
+    } else {
+        BaseHold::Int8
+    };
+
+    let refused = amend_base_hold(study.root(), hold, " ", false).unwrap_err();
+    assert!(refused.to_string().contains("reason"), "{refused}");
+    let amended =
+        amend_base_hold(study.root(), hold, "the base does not fit one card", false).unwrap();
+    assert_ne!(amended.digest.to_string(), before);
+    let recorded = &amended.protocol.amendments[0];
+    assert_eq!(recorded.replaces, before);
+    assert_eq!(recorded.reason, "the base does not fit one card");
+    assert_eq!(amended.protocol.training.int8, hold == BaseHold::Int8);
+
+    // The corpus written before the amendment is still the study's, and what
+    // is trained now records the amended protocol and its precision.
+    let study = Study::open(study.root()).unwrap();
+    let trainer = Scripted::default();
+    train::run(&study, author, &base, &trainer).unwrap();
+    let plan = study.author_plan(author).unwrap();
+    let run = study
+        .run_manifest(
+            author,
+            synthetic_author::dataset::Briefings::Both,
+            plan.training_seeds[0],
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(run.protocol_digest, amended.digest.to_string());
+    assert_eq!(run.settings.int8, hold == BaseHold::Int8);
+
+    let again = amend_base_hold(
+        study.root(),
+        BaseHold::Fp32,
+        "late",
+        study.any_trained().unwrap(),
+    )
+    .unwrap_err();
+    assert!(again.to_string().contains("trained"), "{again}");
 }

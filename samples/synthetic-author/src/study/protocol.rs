@@ -174,6 +174,11 @@ pub struct TrainingPlan {
     pub records_per_step: u32,
     /// Whether the base is held at bf16.
     pub bf16: bool,
+    /// Whether the base is held as int8 weights (a scale per 32), which
+    /// takes precedence over `bf16`. Written only when set, so a protocol
+    /// frozen before the setting existed keeps its digest.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub int8: bool,
 }
 
 /// The adapters trained to ask which part of the records accounts for the
@@ -289,6 +294,10 @@ pub struct Protocol {
     pub multiplicity: Multiplicity,
     /// The decodings.
     pub decoding: DecodingPlan,
+    /// The changes made to the protocol after it was frozen, in order. Written
+    /// only when there is one, so an unamended protocol keeps its digest.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub amendments: Vec<super::amend::Amendment>,
 }
 
 fn plain_arms() -> Vec<String> {
@@ -392,6 +401,7 @@ impl Protocol {
                 learning_rate: DEFAULT_LEARNING_RATE,
                 records_per_step: DEFAULT_RECORDS_PER_STEP,
                 bf16: false,
+                int8: true,
             },
             primary: Comparison::new("tuned", "retrieval"),
             comparisons: standard_family(),
@@ -406,7 +416,15 @@ impl Protocol {
                     draws: DEFAULT_DRAWS,
                 }),
             },
+            amendments: Vec::new(),
         }
+    }
+
+    /// The digests this protocol had before each of its amendments, oldest
+    /// first: the corpus stage's manifests written under one of them stay
+    /// valid.
+    pub fn earlier_digests(&self) -> impl Iterator<Item = &str> {
+        self.amendments.iter().map(|a| a.replaces.as_str())
     }
 
     /// The digest the protocol is known by: the address of its canonical JSON.

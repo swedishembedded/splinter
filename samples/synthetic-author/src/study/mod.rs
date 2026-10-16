@@ -14,6 +14,7 @@
 //! the frozen protocol, writes manifests that record its digest, resumes what
 //! exists and refuses to continue under a protocol that has changed.
 
+pub mod amend;
 pub mod analysis;
 pub mod arm_key;
 pub mod cli;

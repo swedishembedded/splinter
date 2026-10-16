@@ -9,7 +9,7 @@
 //! The `study` command family: the stages of the replication study as
 //! subcommands, each run from the protocol frozen in the study directory.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -17,11 +17,13 @@ use clap::{Args, Subcommand};
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::{Config, Splinter};
 
+use super::amend::{amend_base_hold, BaseHold};
 use super::corpus::{self, Staff};
 use super::examine::{self, BrainLoader};
 use super::layout::Study;
 use super::train;
 use super::{render, report};
+use crate::binding::Base;
 use crate::models::{is_remote, Source};
 use crate::transit::{Transit, DEFAULT_BACKOFF_SECS, DEFAULT_RETRIES};
 
@@ -54,6 +56,10 @@ pub enum Stage {
     /// and freeze and hash the examination, all before anything is trained.
     /// Resumes what exists; run it again after a stop.
     Corpus(CorpusStageArgs),
+    /// Change how the base is held while the adapters train, before any is:
+    /// the protocol records the change, its reason and the digest it replaces,
+    /// under which the corpora already written stay the study's.
+    Amend(AmendArgs),
     /// Per author and training seed: train the adapters the protocol asks for
     /// on the records of the corpus stage, with the protocol's settings. A GPU
     /// stage; resumes, and leaves a trained adapter alone.
@@ -251,6 +257,7 @@ pub fn run(args: &StudyArgs) -> anyhow::Result<()> {
     match &args.stage {
         Stage::Freeze(freeze_args) => freeze_stage(freeze_args),
         Stage::Corpus(corpus_args) => corpus_stage(corpus_args),
+        Stage::Amend(amend_args) => amend_stage(amend_args),
         Stage::Train(train_args) => train_stage(train_args),
         Stage::Exam(exam_args) => exam_stage(exam_args),
         Stage::Report(report_args) => report_stage(report_args),
@@ -391,10 +398,52 @@ fn origin(source: SeedSource) -> &'static str {
     }
 }
 
+/// The base checkpoint, hashed once for every author of the stage. Hashing
+/// reads all of its weights, minutes for a large checkpoint, so it is said
+/// before it starts.
+fn open_base(path: &Path) -> anyhow::Result<Base> {
+    eprintln!(
+        "hashing the base checkpoint {} (a full read of its weights, once for every author)",
+        path.display()
+    );
+    let base = Base::open(path)?;
+    eprintln!("base {}", base.digest());
+    Ok(base)
+}
+
+/// Arguments of `study amend`.
+#[derive(Args)]
+pub struct AmendArgs {
+    /// The study directory holding the frozen protocol.
+    #[arg(long)]
+    study: PathBuf,
+    /// How the base is to be held while the adapters train.
+    #[arg(long, value_enum)]
+    base_precision: BaseHold,
+    /// Why; recorded in the protocol and reported with the study.
+    #[arg(long)]
+    reason: String,
+}
+
+fn amend_stage(args: &AmendArgs) -> anyhow::Result<()> {
+    let study = Study::open(&args.study)?;
+    let trained = study.any_trained()?;
+    let amended = amend_base_hold(&args.study, args.base_precision, &args.reason, trained)?;
+    if let Some(last) = amended.protocol.amendments.last() {
+        println!(
+            "protocol amended ({}): {}; it was {} and is {}",
+            last.reason, last.change, last.replaces, amended.digest
+        );
+    }
+    Ok(())
+}
+
 fn train_stage(args: &TrainStageArgs) -> anyhow::Result<()> {
     let study = Study::open(&args.study)?;
-    for_each_author(&chosen_authors(&study, &args.only)?, |seed| {
-        let done = train::run(&study, seed, &args.base, &train::Brain)?;
+    let authors = chosen_authors(&study, &args.only)?;
+    let base = open_base(&args.base)?;
+    for_each_author(&authors, |seed| {
+        let done = train::run(&study, seed, &base, &train::Brain)?;
         println!(
             "author {seed}: {} adapters trained, {} already trained",
             done.trained, done.already
@@ -405,9 +454,11 @@ fn train_stage(args: &TrainStageArgs) -> anyhow::Result<()> {
 
 fn exam_stage(args: &ExamStageArgs) -> anyhow::Result<()> {
     let study = Study::open(&args.study)?;
-    let loader = BrainLoader { base: &args.base };
-    for_each_author(&chosen_authors(&study, &args.only)?, |seed| {
-        let examined = examine::run(&study, seed, &args.base, &loader, args.sampled)?;
+    let authors = chosen_authors(&study, &args.only)?;
+    let base = open_base(&args.base)?;
+    let loader = BrainLoader { base: base.path() };
+    for_each_author(&authors, |seed| {
+        let examined = examine::run(&study, seed, &base, &loader, args.sampled)?;
         for (slot, arm, items) in &examined.arms {
             println!("author {seed} {slot} {arm}: {items} items answered");
         }

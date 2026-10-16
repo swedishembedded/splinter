@@ -50,6 +50,7 @@ pub mod error;
 pub mod exam;
 pub mod local;
 pub mod manifest;
+pub mod precision;
 pub mod report;
 pub mod residency;
 pub mod rl;

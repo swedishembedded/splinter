@@ -265,9 +265,37 @@ impl Study {
         let path = self.author_dir(author).join(AUTHOR_MANIFEST);
         let manifest: Option<AuthorManifest> = self.read_manifest(&path)?;
         if let Some(m) = &manifest {
-            self.ensure_same_protocol(&path, &m.protocol_digest)?;
+            // The corpus stage comes before any training, so a corpus written
+            // under the protocol an amendment replaced is still this study's.
+            if !self
+                .protocol
+                .earlier_digests()
+                .any(|d| d == m.protocol_digest)
+            {
+                self.ensure_same_protocol(&path, &m.protocol_digest)?;
+            }
         }
         Ok(manifest)
+    }
+
+    /// Whether any adapter of the study has finished training.
+    ///
+    /// # Errors
+    /// A run manifest cannot be read.
+    pub fn any_trained(&self) -> anyhow::Result<bool> {
+        for author in &self.protocol.authors {
+            let runs = self.author_dir(author.seed).join("runs");
+            let Ok(entries) = std::fs::read_dir(&runs) else {
+                continue;
+            };
+            for entry in entries {
+                let entry = entry.with_context(|| format!("reading {}", runs.display()))?;
+                if entry.path().join(RUN_MANIFEST).exists() {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     /// The manifest of `author`, which the corpus stage must have written.

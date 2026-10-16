@@ -23,6 +23,7 @@ use std::time::Duration;
 use splinter_sdk::agent::sven::model::ModelProvider;
 use study_support::{frozen, responding, small_protocol, FirstOption, Oracle, Scripted};
 use synthetic_author::arms::Outcome;
+use synthetic_author::binding::Base;
 use synthetic_author::cache::Usage;
 use synthetic_author::exam::Item;
 use synthetic_author::lab::exam_items;
@@ -425,6 +426,7 @@ fn run_study(tag: &str, authors: usize) -> synthetic_author::study::layout::Stud
     );
     let base = study.root().join("base.bin");
     std::fs::write(&base, "base weights").unwrap();
+    let base = Base::open(&base).unwrap();
     for plan in &study.protocol().authors {
         let (model, _) = responding(plan.seed, study.protocol());
         corpus::run(
