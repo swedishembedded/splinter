@@ -878,19 +878,19 @@ any training (input P1.2 "final sizes from observed effect sizes").
 
 ## 8. Paper strategy (task F)
 
-- **`papers/splinter-brain-sven-flywheel` is the historical record.** Its unsuccessful results
-  stay as they are. Fixes only: P1 re-pin (`dcb03816` -> a reachable commit with the same
-  content, the pre-rebase twin `79a864f` or later), P3 `verify` in `make check`, P2 count/test
-  check kinds, P5 descriptive title, and a limitations paragraph stating that invented facts
-  were the objective and that retention was blind to taught facts (D4) and the anchor bound
-  refused any lost answer (D5). No new measurement goes into it except corrections.
-- **The new campaign goes into `papers/training-code-skills-with-splinter`**, whose registered
-  scope already is "whether a local agentic model can be tuned to a git repository from
-  executable tasks ... repeatedly and cumulatively", and which has a protocol and no measured
-  row (`data/results.csv` header only). Routing by scope (`papers/README.md`) forbids a third
-  paper for the same question. Because no measured run exists under its protocol, the v2
-  changes (partitions, history and authored tasks, Q/C/A, roles, ledger retention) are a dated
-  protocol revision before the first measured run, not a post hoc amendment.
+- **One paper: `papers/splinter-brain-sven-flywheel`** (decision D-PAPER, user, 2026-10-16;
+  replaces the earlier two-paper split, which applied the input plan's section 11 literally and
+  conflicted with the goal that the flywheel works end to end). The coding-task campaign is the
+  flywheel measured on real engineering tasks, so it belongs in the flywheel paper.
+  `papers/training-code-skills-with-splinter` (protocol and audit, no measured row) is folded in:
+  its protocol becomes the coding-task experiment section, its audit merges into limitations and
+  corrections, and the directory is removed with `papers/README.md` updated.
+- The first registered campaign (E2/E3) stays exactly as registered and reported, as negative
+  results, with the defects it exposed (D4 retention blind to taught facts, D5 anchor bound, exit
+  code verifier) and their fixes. The v2 experiments (E1, E4, E6) get a separate pre-registration
+  dated before their first run, so nothing reads as a post hoc amendment.
+- Fixes still due: P1 re-pin (`dcb03816` -> reachable `79a864f` or later), P3 `verify` in
+  `make check`, P2 count/test check kinds, P5 descriptive title.
 - **Hypothesis** (input): verified engineering-agent experience can produce a sustained
   improvement in previously unseen repository task completion, under controlled compute
   budgets, without unacceptable loss of earlier capabilities.
