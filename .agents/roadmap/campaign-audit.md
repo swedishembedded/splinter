@@ -187,7 +187,7 @@ exists at a commit. They do not show a count or a behaviour. Examples:
 - D01 "twelve views and six objectives": the check finds `pub enum Objective`.
 - A03 "twenty-one rejection reasons": the check finds `pub enum Rejection`.
 - V02 "a verifier never sees the trajectory": the check finds `pub trait Verifier`.
-- V08 "the decision rule ignores abstentions…": the check finds `pub fn decide`.
+- V08 "the decision rule ignores abstentions...": the check finds `pub fn decide`.
 - B10 "head dims 40, 128, 256": the check finds two function names.
 - B11 "3:1 split": the check reads brain's AGENTS.md, not code.
 
