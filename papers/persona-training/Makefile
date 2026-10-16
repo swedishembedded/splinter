@@ -16,8 +16,11 @@ export TEXINPUTS := $(GEN):
 
 SOURCES := $(PAPER).tex references.bib $(wildcard sections/*.tex)
 
-$(GEN)/.stamp: scripts/build_data.py $(wildcard data/*.csv)
+# data/study/ holds the replication study's report (the CSV files
+# `synthetic-author study report` writes); its tables are built when it is there.
+$(GEN)/.stamp: $(wildcard scripts/*.py) $(wildcard data/*.csv) $(wildcard data/study/*.csv)
 	python3 scripts/build_data.py $(GEN)
+	if [ -d data/study ]; then python3 scripts/study_tables.py data/study $(GEN); fi
 	touch $@
 
 $(PDF): $(SOURCES) $(GEN)/.stamp

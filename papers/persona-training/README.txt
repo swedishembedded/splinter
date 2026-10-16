@@ -64,11 +64,13 @@ references.bib, data/, scripts/.
 
 Replication study data:
 
-    python3 scripts/study_data.py REPORT_DIR OUT_DIR [--training-seed-index N]
-        turns the `report/` directory of `synthetic-author study report` into
-        arms.csv, cells.csv and paired.csv for the N-th training seed of each
-        author. build_data.py still reads the three authors of data/; the
-        tables made here are what it will read once the paper is laid out for
-        the study's authors. The other tables (authors, audit, corpora,
-        training, cost, spend, echo, confusion, cross) keep their producers
-        above.
+    data/study/   the CSV files of the `report/` directory that
+        `synthetic-author study report` writes, copied as they are. When the
+        directory is there, the build also runs
+            python3 scripts/study_tables.py data/study OUT_DIR
+        which writes study_macros.tex (the number of authors, training seeds
+        and items, the primary comparison's sign test across authors with its
+        Holm-adjusted p, each author's name and seed) and the tables
+        study_arms, study_authors, study_comparisons, study_spread and
+        study_corpora. The statistics are the report's own; the script lays
+        them out and stops when the files disagree with one another.

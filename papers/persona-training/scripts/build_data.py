@@ -30,6 +30,8 @@ from functools import cache
 from math import comb, sqrt
 from pathlib import Path
 
+from tex import GAP, fmt3, fmt_p, fmt_points, table, tex_name, thousands
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 DEFAULT_OUT = ROOT.parent.parent / "target" / "papers" / ".build" / "persona-training" / "gen"
@@ -55,7 +57,6 @@ POOLED_PAIRS = PAIRS[:4]
 EXAM_ITEMS = 160
 CELL_ITEMS = 80
 Z = 1.96
-GAP = "@@gap"  # marks a table row that is followed by extra vertical space
 
 # Values recorded when the examinations were run, at the precision they were
 # recorded, keyed by the seed of the author the examination was run for: the
@@ -152,31 +153,6 @@ def newcombe_difference(right1, n1, right2, n2):
     l2, u2 = wilson(right2, n2)
     d = p1 - p2
     return d, d - sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2), d + sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2)
-
-
-def fmt3(x):
-    return f"{x:.3f}"
-
-
-def fmt_p(p):
-    """A p-value to three significant digits; very small ones in scientific form."""
-    if p < 1e-3:
-        mantissa, exponent = f"{p:.1e}".split("e")
-        return rf"\ensuremath{{{mantissa}\times10^{{{int(exponent)}}}}}"
-    return f"{p:.3g}"
-
-
-def fmt_points(x):
-    """Percentage points with an explicit sign and a typeset minus."""
-    text = f"{100 * x:+.1f}"
-    if text in ("+0.0", "-0.0"):
-        return "0.0"
-    return text.replace("-", "$-$")
-
-
-def thousands(value):
-    """An integer with a thin space between groups of three digits."""
-    return f"{int(value):,}".replace(",", "\\,")
 
 
 CORPUS_KEYS = ("planned_articles", "essays", "given_up", "words", "min_words", "max_words",
@@ -516,17 +492,6 @@ def build_macros(arms, cells, paired):
 
 
 # ---------------------------------------------------------------- tables
-
-def table(spec, header, body):
-    out = [rf"\begin{{tabular}}{{{spec}}}", r"\toprule", header + r" \\", r"\midrule"]
-    out += [line.removesuffix(GAP) + r" \\" + (r" \addlinespace" if line.endswith(GAP) else "")
-            for line in body]
-    out += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(out) + "\n"
-
-
-def tex_name(name):
-    return name.replace("_", r"\_")
 
 
 def authors_table():

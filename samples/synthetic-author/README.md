@@ -404,8 +404,8 @@ examination; one answered in part, or not at all, has no row in any table, takes
 part in no test, and is listed in `unmeasured.csv` (an empty field in a CSV is a
 number that was not measured, never zero). Outcomes that contradict their
 manifest, the frozen items, or the adapter their training run recorded stop the
-report instead of being left out. `papers/persona-training/scripts/study_data.py`
-turns these tables into the columns the paper's build reads.
+report instead of being left out. The paper's build lays these tables out
+when they are copied into `papers/persona-training/data/study/`.
 
 ### Running the whole study
 
@@ -416,8 +416,11 @@ synthetic-author study train  --study STUDY --base CHECKPOINT   # GPU
 synthetic-author study exam   --study STUDY --base CHECKPOINT   # GPU
 synthetic-author study exam   --study STUDY --base CHECKPOINT --sampled   # GPU
 synthetic-author study report --study STUDY
+cp STUDY/report/*.csv papers/persona-training/data/study/   # the paper's tables
 ```
 
-The stages up to the freeze of the examination need only the hosted models; the
-two that follow need the device; the report needs neither. Every stage may be
+The corpus stage needs only its three models: the gate reader and the miner are
+hosted, and the writer is hosted too or a model a local `brain serve` serves
+(`remote:brain/<org>/<model>`), which holds the GPUs while the stage runs. The
+two stages that follow need the device; the report needs neither. Every stage may be
 repeated: it resumes what exists and refuses a changed protocol.

@@ -651,68 +651,69 @@ fn the_command_writes_the_report_and_prints_the_table_with_the_seed_it_drew() {
 }
 
 #[test]
-fn the_paper_script_turns_the_report_into_the_tables_the_build_reads() {
-    let study = run_study("report-paper", 2);
-    let report = report::run(&study, Some(5)).unwrap();
+fn the_paper_script_lays_out_the_report_of_eight_authors_and_refuses_one_that_disagrees() {
+    let study = run_study("report-paper", 8);
+    let report = report::run(&study, None).unwrap();
     render::write(study.root(), &report).unwrap();
     let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../papers/persona-training/scripts/study_data.py");
-    let run = |out: &std::path::Path, extra: &[&str]| {
+        .join("../../papers/persona-training/scripts/study_tables.py");
+    let run = |reports: &std::path::Path, out: &std::path::Path| {
         std::process::Command::new("python3")
             .arg(&script)
-            .arg(study.root().join("report"))
+            .arg(reports)
             .arg(out)
-            .args(extra)
             .output()
             .unwrap()
     };
     let out = study.root().join("paper");
-    let made = run(&out, &[]);
+    let made = run(&study.root().join("report"), &out);
     assert!(
         made.status.success(),
         "{}",
         String::from_utf8_lossy(&made.stderr)
     );
 
-    let read = |name: &str| -> Vec<Vec<String>> {
-        std::fs::read_to_string(out.join(name))
-            .unwrap()
-            .lines()
-            .map(|l| l.split(',').map(str::to_string).collect())
-            .collect()
-    };
-    let arms = read("arms.csv");
-    assert_eq!(arms[0], ["seed", "arm", "right", "n"]);
-    assert_eq!(arms.len() - 1, 2 * 5, "five arms for each of two authors");
-    let first = &report.authors[0];
-    let tuned = first
-        .accuracy
-        .iter()
-        .find(|r| {
-            r.arm == "tuned"
-                && r.training_seed == Some(study.protocol().authors[0].training_seeds[0])
-        })
-        .unwrap();
-    let row = arms
-        .iter()
-        .find(|r| r[0] == first.seed.to_string() && r[1] == "tuned")
-        .unwrap();
-    assert_eq!(row[2], tuned.right.to_string());
-    assert_eq!(read("paired.csv").len() - 1, 2 * 6);
-    assert!(read("cells.csv").len() > 1);
-
-    // The second training seed is the one asked for with the flag, and a seed
-    // that was not measured is an error, not a row.
-    let second = study.root().join("paper-second");
-    assert!(run(&second, &["--training-seed-index", "1"])
-        .status
-        .success());
-    let other = std::fs::read_to_string(second.join("arms.csv")).unwrap();
-    assert!(other.contains(&first.seed.to_string()));
-    let refused = run(
-        &study.root().join("paper-none"),
-        &["--training-seed-index", "9"],
+    let macros = std::fs::read_to_string(out.join("study_macros.tex")).unwrap();
+    assert!(
+        macros.contains("\\newcommand{\\StudyAuthors}{8}"),
+        "{macros}"
     );
+    let primary = report
+        .across
+        .iter()
+        .find(|c| c.primary)
+        .expect("the protocol names a primary comparison");
+    assert!(
+        macros.contains(&format!(
+            "\\newcommand{{\\StudyPrimaryImproved}}{{{}}}",
+            primary.authors_improved
+        )),
+        "{macros}"
+    );
+    let seed_h = study.protocol().authors[7].seed;
+    assert!(
+        macros.contains(&format!("\\newcommand{{\\StudyAuthorSeedH}}{{{seed_h}}}")),
+        "authors are lettered in the protocol's order: {macros}"
+    );
+    let authors = std::fs::read_to_string(out.join("study_authors.tex")).unwrap();
+    for letter in ["A &", "H &"] {
+        assert!(authors.lines().any(|l| l.starts_with(letter)), "{authors}");
+    }
+
+    // A report whose files disagree is refused, not laid out.
+    let broken = study.root().join("report-broken");
+    std::fs::create_dir_all(&broken).unwrap();
+    for entry in std::fs::read_dir(study.root().join("report")).unwrap() {
+        let path = entry.unwrap().path();
+        std::fs::copy(&path, broken.join(path.file_name().unwrap())).unwrap();
+    }
+    let across = std::fs::read_to_string(broken.join("across_authors.csv")).unwrap();
+    std::fs::write(
+        broken.join("across_authors.csv"),
+        across.replace(",true,true,", ",false,true,"),
+    )
+    .unwrap();
+    let refused = run(&broken, &study.root().join("paper-broken"));
     assert!(!refused.status.success());
-    assert!(String::from_utf8_lossy(&refused.stderr).contains("training seeds"));
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("primary"));
 }
