@@ -14,8 +14,9 @@
 # brain's grammar. A device the machine lacks is refused by the program, but
 # a run can still leave the GPUs, so it is also read as it goes. It is stopped
 # (exit 3) on any line saying the CPU backend, a software adapter, a fallback
-# or an unplaced model was used, and it fails (exit 4) if it never reported a
-# discrete GPU adapter.
+# or an unplaced model was used, and it fails (exit 4) if no named card ever
+# held more than 256 MiB, which is how a run that never reached a GPU shows
+# whatever the backend prints. A device naming the CPU is refused (exit 2).
 #
 # Usage: gpu-only.sh <gpu0|gpu1|gpu0,gpu1|gpu> <log-file> -- <command> [args...]
 
@@ -29,19 +30,42 @@ device=$1
 log=$2
 shift 3
 
+if [[ "$device" == *cpu* ]]; then
+    echo "gpu-only: $device names the CPU" >&2
+    exit 2
+fi
+
+# The cards the run may use, as nvidia-smi indexes them; every card for `gpu`.
+if [[ "$device" =~ gpu[0-9] ]]; then
+    cards=$(grep -o 'gpu[0-9]*' <<<"$device" | tr -d 'gpu' | paste -sd, -)
+else
+    cards=$(nvidia-smi --query-gpu=index --format=csv,noheader | paste -sd, -)
+fi
+
 markers='brain-wgsl-cpu|\(Cpu,|falling back|no GPU has room|not JIT-compiled'
 
 : >"$log"
 
 fifo=$(mktemp -u)
 mkfifo "$fifo"
-trap 'rm -f "$fifo"' EXIT
+peak=$(mktemp)
+echo 0 >"$peak"
+trap 'kill "$sampler" 2>/dev/null; wait "$sampler" 2>/dev/null; rm -f "$fifo" "$peak"' EXIT
+
+# The most memory any named card held while the run lived.
+(
+    while sleep 2; do
+        now=$(nvidia-smi -i "$cards" --query-gpu=memory.used --format=csv,noheader,nounits |
+            sort -n | tail -1)
+        if [ "${now:-0}" -gt "$(cat "$peak")" ]; then echo "$now" >"$peak"; fi
+    done
+) &
+sampler=$!
 
 # A session of its own, so stopping the run stops everything it started.
 setsid "$1" --device "$device" "${@:2}" >"$fifo" 2>&1 &
 pid=$!
 
-saw_gpu=0
 while IFS= read -r line; do
     printf '%s\n' "$line" >>"$log"
     if grep -Eq "$markers" <<<"$line"; then
@@ -50,15 +74,12 @@ while IFS= read -r line; do
         wait "$pid" 2>/dev/null
         exit 3
     fi
-    if [[ "$line" == adapter:*DiscreteGpu* ]]; then
-        saw_gpu=1
-    fi
 done <"$fifo"
 
 wait "$pid"
 status=$?
-if [ "$saw_gpu" -ne 1 ]; then
-    echo "gpu-only: the run never reported a discrete GPU adapter" >&2
+if [ "$(cat "$peak")" -lt 256 ]; then
+    echo "gpu-only: no card of $device ever held 256 MiB; the run did not use a GPU" >&2
     exit 4
 fi
 exit "$status"
