@@ -146,6 +146,9 @@ fn a_correct_answer_is_not_failed_for_how_the_fact_is_written() {
         ("42", "Fifteen plus twenty-seven is forty-two."),
         ("forty-two", "The sum is 42."),
         ("mouse", "Mouse."),
+        // Thousands separators are how a number is written, not another number.
+        ("9123", "The population of Ulfoxfre is 9,123."),
+        ("9,123", "Ulfoxfre has a population of 9123."),
     ] {
         assert_eq!(
             judged(Some(reference), Some(answer)).0,
@@ -153,6 +156,11 @@ fn a_correct_answer_is_not_failed_for_how_the_fact_is_written() {
             "{reference}: {answer}"
         );
     }
+    // A comma between digits that is not a thousands separator stays a list.
+    assert_eq!(
+        judged(Some("123"), Some("The values are 1,23 and 4.")).0,
+        Outcome::Fail
+    );
     // Other numbers stay other numbers.
     assert_eq!(
         judged(Some("eight"), Some("A spider has 18 legs.")).0,

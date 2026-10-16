@@ -157,9 +157,26 @@ fn plain_digit(c: char) -> Option<char> {
     char::from_digit(digit, 10)
 }
 
-/// `text` with sub- and superscript digits as plain digits.
+/// `text` with sub- and superscript digits as plain digits and the commas
+/// that separate thousands (`9,123`, a digit before and exactly three after)
+/// dropped, so a number is the same number however it is written.
 fn fold_digits(text: &str) -> String {
-    text.chars().map(|c| plain_digit(c).unwrap_or(c)).collect()
+    let chars: Vec<char> = text.chars().map(|c| plain_digit(c).unwrap_or(c)).collect();
+    let digit_at = |at: Option<usize>| {
+        at.and_then(|i| chars.get(i))
+            .is_some_and(char::is_ascii_digit)
+    };
+    let mut out = String::with_capacity(text.len());
+    for (i, &c) in chars.iter().enumerate() {
+        let separates_thousands = c == ','
+            && digit_at(i.checked_sub(1))
+            && (1..=3).all(|k| digit_at(Some(i + k)))
+            && !digit_at(Some(i + 4));
+        if !separates_thousands {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// The whole numbers a word names, below one hundred and a hundred itself.
