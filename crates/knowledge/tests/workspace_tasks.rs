@@ -40,6 +40,7 @@ use splinter_knowledge::tasks::workspace::{
     WorkspaceGenerator, WorkspacePlan, WorkspaceTask, MIN_HIDDEN_KILL_RATE,
 };
 use splinter_knowledge::tasks::{Catalogue, SolverEnvironment, VerifierKind};
+use splinter_sandbox::host::DEFAULT_SEARCH_PATH;
 use splinter_sandbox::{CommandCall, Limits, ProcessSandbox};
 
 /// A project and the generator that makes tasks from its snapshots.
@@ -63,24 +64,31 @@ impl Rig {
 
     /// A rig that considers `mutants_per_file` mutants of each file.
     fn with_mutants(name: &str, extra: &[(&str, &str)], mutants_per_file: usize) -> Self {
-        Self::over(Repo::new(name, extra), mutants_per_file, &[])
+        Self::over(Repo::new(name, extra), mutants_per_file, [])
     }
 
     /// A rig over the Rust crate [`RUST_CRATE`]; its sandbox reaches the
-    /// toolchain through the caller's `PATH`, `CARGO_HOME` and `RUSTUP_HOME`.
+    /// toolchain that built this test, whose `bin` directory cargo's
+    /// compile-time `CARGO` names, so no environment is read.
     fn rust(name: &str) -> Self {
+        let toolchain_bin = Path::new(env!("CARGO")).parent().unwrap();
+        let path = format!("{}:{}", toolchain_bin.display(), DEFAULT_SEARCH_PATH);
         Self::over(
             Repo::of_files(name, &RUST_CRATE),
             6,
-            &["PATH", "CARGO_HOME", "RUSTUP_HOME"],
+            [("PATH".to_string(), path)],
         )
     }
 
-    fn over(repo: Repo, mutants_per_file: usize, pass_through: &[&str]) -> Self {
+    /// A rig whose sandbox gets `caller_env` on top of its defaults.
+    fn over(
+        repo: Repo,
+        mutants_per_file: usize,
+        caller_env: impl IntoIterator<Item = (String, String)>,
+    ) -> Self {
         let calls = repo.scratch.0.join("calls");
         fs::create_dir_all(&calls).unwrap();
-        let sandbox =
-            ProcessSandbox::new(&calls, std::env::vars(), pass_through, Limits::default());
+        let sandbox = ProcessSandbox::new(&calls, caller_env, &["PATH"], Limits::default());
         let generator = WorkspaceGenerator::new(
             Arc::new(sandbox),
             repo.host.clone(),
