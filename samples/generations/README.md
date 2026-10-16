@@ -46,7 +46,9 @@ computed in code, capitals, symbols, definitions and code facts from a
 reviewed list), none naming an entity the invented fact families could. Freeze
 it with `splinter eval --suite anchor --freeze samples/generations/anchor-200.jsonl`
 and decide the anchor check on counts with `--anchor-max-net-lost 6` (3% of
-200); `scripts/anchor_power.py` computes the error rates of that bound.
+200); `scripts/anchor_power.py` computes the error rates of that bound. Frozen as version 1 its digest is
+`blake3:88b3abdb84dadc7fa16bdce36b1737799c7d70809c8b19872e624fa99b9c0035`; the base models' decided and
+undecided counts are in knowledge entry 068.
 
 `generations.py run --mode full|merge` drives the `splinter` binary on a state
 root of its own: `absorb --no-consolidate` for each update, then `consolidate
