@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from stats import mcnemar_exact, wilson  # noqa: E402
+from classify_rejections import classify  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "data" / "runs"
@@ -78,6 +79,54 @@ def e1_metrics():
         m[f"e1.reason.{reason}"] = n
     m["e1.rejected_total"] = sum(d["rejected"].values())
     return m
+
+
+W2_E1 = [("e1a", "Brain pages", "Qwen3-4B"), ("e1b", "Sven pages", "Qwen3-4B"),
+         ("e1c", "Brain pages", "Qwen3-8B")]
+CLASSES = ["absent", "apart", "unsourced", "markup"]
+
+
+def e1w2_metrics():
+    """The funnel of each second-wave E1 run: proposals, admissions, rejections by reason,
+    and the `no_subject` rejections read against the rule."""
+    m = {}
+    for tag, _, _ in W2_E1:
+        d = load(f"w2/{tag}/tasks.json")
+        if d is None:
+            continue
+        admitted = sum(v["admitted"] for k, v in d["per_kind"].items() if k != "denoise")
+        rejected = sum(d["rejected"].values())
+        m[f"{tag}.tasks"] = d["tasks"]
+        m[f"{tag}.proposals"] = admitted + rejected
+        m[f"{tag}.admitted_proposals"] = admitted
+        m[f"{tag}.elapsed_secs"] = d["elapsed_secs"]
+        for reason, n in d["rejected"].items():
+            m[f"{tag}.reason.{reason}"] = n
+        no_subject = d["rejected"].get("no_subject", 0)
+        m[f"{tag}.share.no_subject"] = ci(no_subject, admitted + rejected)
+        kinds = [classify(r["detail"]) for r in d["rejections"] if r["reason"] == "no_subject"]
+        for c in CLASSES:
+            m[f"{tag}.class.{c}"] = kinds.count(c)
+    return m
+
+
+def e1w2_table():
+    rows = []
+    for tag, corpus, generator in W2_E1:
+        d = load(f"w2/{tag}/tasks.json")
+        if d is None:
+            continue
+        m = e1w2_metrics()
+        other = sum(d["rejected"].values()) - d["rejected"].get("no_subject", 0)
+        rows.append(f"{corpus}, {generator} & {m[f'{tag}.proposals']} & {m[f'{tag}.admitted_proposals']} & "
+                    f"{m[f'{tag}.reason.no_subject']} & {other} & "
+                    + " / ".join(str(m[f"{tag}.class.{c}"]) for c in CLASSES) + r" \\")
+    if not rows:
+        return r"\textbf{NOT MEASURED}"
+    return "\n".join([r"\begin{tabular}{lrrrrr}", r"\toprule",
+                      r"Run & Proposals & Admitted & \code{no\_subject} & Other & "
+                      r"absent / apart / unsourced / markup \\", r"\midrule", *rows,
+                      r"\bottomrule", r"\end{tabular}"])
 
 
 def steps():
@@ -192,6 +241,7 @@ def metrics():
     m = {}
     m.update(qual_metrics())
     m.update(e1_metrics())
+    m.update(e1w2_metrics())
     m.update(e2_metrics())
     m.update(learn_metrics())
     return m
@@ -281,6 +331,7 @@ def write_outputs(out):
     macros += f"\\newcommand{{\\mExperimentsMeasured}}{{{len({k.split('.')[0] for k in m})}}}\n"
     (out / "macros.tex").write_text(macros)
     (out / "e1_table.tex").write_text(e1_table() + "\n")
+    (out / "e1w2_table.tex").write_text(e1w2_table() + "\n")
     (out / "e2_table.tex").write_text(e2_table() + "\n")
     (out / "e4_table.tex").write_text(e4_table() + "\n")
     (out / "learn_table.tex").write_text(learn_table() + "\n")

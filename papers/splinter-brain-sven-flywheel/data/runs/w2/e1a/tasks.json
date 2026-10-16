@@ -1,0 +1,595 @@
+{
+  "run": "run-20261016T075000.449-230c",
+  "task_set": "blake3:460df1c0f8870454c5a2af247cef4aaf7bf112b6b2ef89a64410a617a711bfd1",
+  "denoise_seed": 4383419344520989551,
+  "tasks": 58,
+  "parts": 3,
+  "parts_total": 3,
+  "elapsed_secs": 1585,
+  "full_coverage_secs": null,
+  "per_kind": {
+    "classify": {
+      "admitted": 19,
+      "rejected": 29
+    },
+    "denoise": {
+      "admitted": 3,
+      "rejected": 0
+    },
+    "explain": {
+      "admitted": 25,
+      "rejected": 23
+    },
+    "recall": {
+      "admitted": 11,
+      "rejected": 30
+    }
+  },
+  "rejected": {
+    "duplicate": 5,
+    "malformed": 1,
+    "no_subject": 75,
+    "ungrounded": 1
+  },
+  "rejections": [
+    {
+      "kind": "recall",
+      "reason": "duplicate",
+      "detail": "What is the default behavior of the brain regarding models it doesn't have locally? (proposed: \"What is the default behavior of the brain regarding models it doesn't have locally?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "duplicate",
+      "detail": "What is the default behavior of the brain regarding models it doesn't have locally? (proposed: \"What is the default behavior of the brain regarding models it doesn't have locally?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"HTTP route authentication\" (proposed: \"Why is it important to use a key for every HTTP route, including error responses?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Server binding\" (proposed: \"Why do servers default to binding to localhost?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Key generation\" (proposed: \"Why are keys generated fresh per server start?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Input validation\" (proposed: \"Why does malformed or oversized input get a clean rejection?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Model fetching\" (proposed: \"Why is fetching models opt-in by default?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Model fetching destination\" (proposed: \"What is the only destination that ever reaches when fetching models?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Brain model behavior\" (proposed: \"What is the default behavior of the brain when it doesn't have a model locally?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Automatic model fetching\" (proposed: \"How can you enable automatic fetching of models?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"security guidelines\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"Which of the following is a key requirement for every HTTP route according to the security guidelines?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"security section\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"What is the default binding address for servers as described in the security section?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"security guidelines\" is named neither by the source (docs, security.md, Security — before you expose this on a network) nor by a cited section (proposed: \"According to the security guidelines, what happens if a server loses its key?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"security section\" (proposed: \"What is the default behavior of the brain when making outbound connections?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"security section\" (proposed: \"Which destination is used for outbound connections when `--autofetch` is enabled?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"security section\" (proposed: \"What is the default behavior of the brain when it doesn't have a model locally?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"security section\" (proposed: \"What is the default behavior of the brain when it doesn't have a model locally and `--autofetch` is not enabled?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"security section\" (proposed: \"What is the default behavior of the brain when it doesn't have a model locally and `--autofetch` is enabled?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "malformed",
+      "detail": "trailing characters at line 1 column 1404 (after 2 attempt(s)); last reply: {\"tasks\": [{\"instruction\": \"What is the purpose of `braintop`?\", \"subject\": \"braintop\", \"reference\": \"a live, btop-like TUI for a running `brain serve` process\", \"evidence\": [{\"section\": 0}], \"material\": null}, {\"instruction\": \"What does `braintop` show about a running `brain serve` process?\", \"subject\": \"braintop\", \"reference\": \"resident models, accelerator memory, executor counters, and in-flight requests\", \"evidence\": [{\"section\": 0}], \"material\": null}, {\"instruction\": \"What is the function of the `--cli` option in `braintop`?\", \"subject\": \"braintop\", \"reference\": \"flat, shell-parseable snapshot, then exit\", \"evidence\": [{\"section\": 1}], \"material\": null}, {\"instruction\": \"What is the function of the `--system` option in `braintop`?\", \"subject\": \"braintop\", \"reference\": \"live dashboard (system bus)\", \"evidence\": [{\"section\": 1}], \"material\": null}, {\"instruction\": \"What does the `accelerator.gpu0.mem_used` value indicate in the snapshot?\", \"subject\": \"snapshot\", \"reference\": \"12149169422\", \"evidence\": [{\"section\": 2}], \"material\": null}, {\"instruction\": \"What does the `executor.jobs` value indicate in the snapshot?\", \"subject\": \"snapshot\", \"reference\": \"5\", \"evidence\": [{\"section\": 2}], \"material\": null}, {\"instruction\": \"What does the `executor.batches` value indicate in the snapshot?\", \"subject\": \"snapshot\", \"reference\": \"2\", \"evidence\": [{\"section\": 2}], \"material\": null}]}]}"
+    },
+    {
+      "kind": "explain",
+      "reason": "ungrounded",
+      "detail": "content words supported: Some(0.0) (at least 0.8 needed); numbers traceable: true (proposed: \"What does the `--cli` mode of `braintop` output?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What does the `--cli` mode of `braintop` output when run with `grep`? (proposed: \"What does the `--cli` mode of `braintop` output when run with `grep`?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What does the `--cli` mode of `braintop` output when run with `grep`? (proposed: \"What does the `--cli` mode of `braintop` output when run with `grep`?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What does the `--cli` mode of `braintop` output when run with `grep`? (proposed: \"What does the `--cli` mode of `braintop` output when run with `grep`?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"quit key\" (proposed: \"What key is used to quit the dashboard?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"move selection key\" (proposed: \"What key is used to move selection in the dashboard?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"cycle panels key\" (proposed: \"What key is used to cycle panels in the dashboard?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"drill into subview key\" (proposed: \"What key is used to drill into a subview in the dashboard?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"back key\" (proposed: \"What key is used to go back in the dashboard?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"`--cli` option\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is the purpose of the `--cli` option in `braintop`?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"example line from `braintop --cli`\" (proposed: \"What is an example line output from `braintop --cli`?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"metric line\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is an example of a metric line output by `braintop --cli`?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"q key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is the function of the 'q' key on the keyboard?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"Enter key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is the purpose of the 'Enter' key on the keyboard?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"Tab key\" is named neither by the source (docs, monitoring.md, Monitoring — `braintop`) nor by a cited section (proposed: \"What is the function of the 'Tab' key on the keyboard?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"accelerator.gpu0.mem_used\" (proposed: \"What is an example of a metric line output by `braintop --cli`?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"model.qwen.instances.gpu0.tier\" (proposed: \"What is an example of a metric line output by `braintop --cli`?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1\" (proposed: \"What is the name of the D-Bus interface used by the brain service?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1\" (proposed: \"What is the object path for the D-Bus service of the brain?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1.Manager\" (proposed: \"What is the purpose of the `Manifests()` method in the D-Bus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1.Manager\" (proposed: \"What is the purpose of the `ListModels()` method in the D-Bus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1.Manager\" (proposed: \"What is the purpose of the `Run()` method in the D-Bus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1.Manager\" (proposed: \"What is the purpose of the `Subscribe()` method in the D-Bus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1.Manager\" (proposed: \"What is the purpose of the `Cancel()` method in the D-Bus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1.Manager\" (proposed: \"What is the purpose of the `StreamTranscribe()` method in the D-Bus interface?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"brain service\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"How does the D-Bus interface of the brain service differ from the CLI and HTTP APIs?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"D-Bus interface\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the purpose of the D-Bus interface for the brain service?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain serve --dbus\" (proposed: \"What command is used to run the brain service over the D-Bus session bus?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1\" (proposed: \"What is the default name of the D-Bus service provided by the brain service?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"brain service\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the bus address and object path for the brain service?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1.Manager\" (proposed: \"What is the interface name for the brain service's D-Bus API?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"Manifests() method\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the purpose of the `Manifests()` method in the D-Bus interface?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"Subscribe() method\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the purpose of the `Subscribe()` method in the D-Bus interface?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"D-Bus interface\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the name of the D-Bus interface used by the Brain1 service?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"D-Bus bus\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the name of the D-Bus bus used by the Brain1 service?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"D-Bus object path\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the name of the D-Bus object path for the Brain1 service?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"Manifests() method\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the purpose of the `Manifests()` method in the Brain1 D-Bus interface?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"ListModels() method\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the purpose of the `ListModels()` method in the Brain1 D-Bus interface?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"Run() method\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the purpose of the `Run()` method in the Brain1 D-Bus interface?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"Subscribe() method\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the purpose of the `Subscribe()` method in the Brain1 D-Bus interface?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"Cancel() method\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the purpose of the `Cancel()` method in the Brain1 D-Bus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"error\" (proposed: \"What type of frame indicates that a job has been cancelled?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain over D-Bus\" (proposed: \"What is the name of the D-Bus interface for the brain API?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain over D-Bus\" (proposed: \"What is the title of the document containing the D-Bus API description?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"docs\" (proposed: \"What is the name of the repository containing the D-Bus API documentation?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"Run and Subscribe\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"What is the difference between `Run` and `Subscribe` in the D-Bus API?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"D-Bus API\" is named neither by the source (docs, dbus-api.md, brain over D-Bus (`com.swedishembedded.Brain1`)) nor by a cited section (proposed: \"How does the D-Bus API handle cancellation in long-running tasks?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain-py\" (proposed: \"What is the name of the Python client package for the BrainDBus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain_dbus.py\" (proposed: \"What is the name of the example script that demonstrates a streaming request in the BrainDBus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"busctl_smoke.sh\" (proposed: \"What is the name of the smoke test script that does not require Python for the BrainDBus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"samples/python/dbus/brain-dbus/\" (proposed: \"What is the name of the directory containing the BrainDBus interface's README file?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"samples/shell/dbus/busctl-smoke/\" (proposed: \"What is the name of the directory containing the BrainDBus interface's smoke test README file?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain-py\" (proposed: \"What is the name of the package that contains the BrainDBus interface's Python client?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain_dbus.py\" (proposed: \"What is the name of the script that demonstrates a one-shot image action in the BrainDBus interface?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain_dbus.py\" (proposed: \"What is the name of the script that demonstrates discovery in the BrainDBus interface?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain-py\" (proposed: \"What is the name of the Python client package for the BrainDBus interface?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"brain_dbus.py\" (proposed: \"What is the name of the example script that demonstrates a streaming request in the BrainDBus interface?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"busctl_smoke.sh\" (proposed: \"What is the name of the shell script that serves as a smoke test for the BrainDBus interface without requiring Python?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"samples/python/dbus/brain-dbus/\" (proposed: \"What is the name of the directory containing the README.md file for the BrainDBus interface examples?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"samples/shell/dbus/busctl-smoke/\" (proposed: \"What is the name of the directory containing the README.md file for the BrainDBus interface shell smoke tests?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1\" (proposed: \"What is the name of the D-Bus interface for the Brain1 system?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1\" (proposed: \"What is the name of the D-Bus interface for the Brain1 system?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"com.swedishembedded.Brain1\" (proposed: \"What is the name of the D-Bus interface for the Brain1 system?\")"
+    }
+  ],
+  "calls": [
+    {
+      "kind": "recall",
+      "prompt": "blake3:abdb0a061b70c64c4a1d0518e8aa617ef15ac4fbbcf297f067e4557f0d1927bc",
+      "prompt_bytes": 3616,
+      "elapsed_ms": 151684,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:7aff8e7cbc1fe4189ab4daf08744acdffd575067e1dd62c65fe5e4f15b3dfcb6",
+      "prompt_bytes": 3644,
+      "elapsed_ms": 44092,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:5b44e3853a1f965575160d8f98e5225d63bfbd9d3c64ce86b1f21c98b4d2bfb5",
+      "prompt_bytes": 3658,
+      "elapsed_ms": 60428,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:ff8db8abba4b8cade05afe3b6173eeb18444cebb0571fa7f206e8ee70706fe81",
+      "prompt_bytes": 4230,
+      "elapsed_ms": 92869,
+      "candidates": null,
+      "declined": "malformed"
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:d2380603fa0abf34cd4fda165c57251e859f251dfba823e330271dcf4eb62f5d",
+      "prompt_bytes": 4551,
+      "elapsed_ms": 57563,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:63edb6a7181a5032276c537906663311f7ba395f3deb7d1c779667d065332268",
+      "prompt_bytes": 4565,
+      "elapsed_ms": 181560,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:c683f5bf6ad2e58c678fa2a177c9e9574f289aca96dcc449e95a8ab805539461",
+      "prompt_bytes": 2878,
+      "elapsed_ms": 165196,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:60fc5eca49e6449151e09c7dd5d7754931e07149617726e838e00096a380716c",
+      "prompt_bytes": 3288,
+      "elapsed_ms": 52483,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:01094d11536738efdac128d25ccee6c706f3190e3335d96017bfb1bd3abc4e99",
+      "prompt_bytes": 3213,
+      "elapsed_ms": 48145,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:0aa2f5b069476141c8fee5ed64e9238d9301d2a357b284fdd45194d7d114d678",
+      "prompt_bytes": 4269,
+      "elapsed_ms": 191825,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:81d3f90a638a4dfa6a7b69d40cde5d8223436a6b8958934692c4ad30211280a9",
+      "prompt_bytes": 4386,
+      "elapsed_ms": 59488,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:c2089e44015af7781d9e7dfa66abc9abedd5111e02449c48d66fb6d40f895ce4",
+      "prompt_bytes": 4311,
+      "elapsed_ms": 185200,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:3285e501b27c92ee9dffd55728016333bd58f515d38f20598258a76cfed635a5",
+      "prompt_bytes": 3185,
+      "elapsed_ms": 41703,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:1527ff22a5cf4f302f7395ebd8300a263ec8bb42b7f6b71082e536298ab683c3",
+      "prompt_bytes": 3302,
+      "elapsed_ms": 63903,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:bf1d47492ae80f1da9d75cf71680728ce52a8c75e27f571b847ae8ea3ffaec37",
+      "prompt_bytes": 3227,
+      "elapsed_ms": 51371,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:c6469b83e982646ee23ba0a1a40d5a00944541c083c35098ebf944187fa90df5",
+      "prompt_bytes": 3290,
+      "elapsed_ms": 48437,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:fa169f3857d292a86196c92bf9c018ae81f12c551cda251dd2ccbcc906ec568a",
+      "prompt_bytes": 3407,
+      "elapsed_ms": 52781,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:a4f3fc39b79068b18ae38234ceb75abe4c467dfdee350bc3e026734dad1423f7",
+      "prompt_bytes": 3332,
+      "elapsed_ms": 35429,
+      "candidates": 8,
+      "declined": null
+    }
+  ],
+  "sections": 0,
+  "stopped": null,
+  "dropped": {}
+}

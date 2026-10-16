@@ -1,0 +1,927 @@
+{
+  "run": "run-20261016T081709.862-47fb",
+  "task_set": "blake3:b0864b99cb6e68f0aee18b95e5a353742c35270bd702879517efc2dd2ade351f",
+  "denoise_seed": 7217511473465877285,
+  "tasks": 104,
+  "parts": 3,
+  "parts_total": 3,
+  "elapsed_secs": 2307,
+  "full_coverage_secs": null,
+  "per_kind": {
+    "classify": {
+      "admitted": 27,
+      "rejected": 48
+    },
+    "denoise": {
+      "admitted": 3,
+      "rejected": 0
+    },
+    "explain": {
+      "admitted": 40,
+      "rejected": 40
+    },
+    "recall": {
+      "admitted": 34,
+      "rejected": 41
+    }
+  },
+  "rejected": {
+    "duplicate": 15,
+    "near_duplicate": 1,
+    "no_subject": 100,
+    "not_self_contained": 9,
+    "ungrounded": 4
+  },
+  "rejections": [
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven\" (proposed: \"What is the name of the tool used for the first interactive session?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven doctor provider\" (proposed: \"What is the command to check if sven can reach a model?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Qwen/Qwen3-0.6B\" (proposed: \"What is the name of the model that sven uses in the example?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"http://127.0.0.1:8788/v1\" (proposed: \"What is the endpoint URL for the model in the example?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven\" (proposed: \"What is the command to start the first interactive session?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"/quit\" (proposed: \"What is the command to exit the first interactive session?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven doctor provider command\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"What is the purpose of the 'sven doctor provider' command in the Quick Start guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven command\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"What does the 'sven' command do according to the Quick Start guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven doctor provider command\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"What is the main function of the 'sven doctor provider' command in the context of the Quick Start guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven command\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"What is the purpose of the 'sven' command in the Quick Start guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven doctor provider command\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"What is the main function of the 'sven doctor provider' command in the Quick Start guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven command\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"What does the 'sven' command do according to the Quick Start guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven doctor provider command\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"What is the purpose of the 'sven doctor provider' command in the context of the Quick Start guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven command\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"What is the main function of the 'sven' command in the Quick Start guide?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven doctor provider\" (proposed: \"What command is used to check if sven can reach a model?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Qwen/Qwen3-0.6B\" (proposed: \"What is the name of the model that sven is using in the example?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"http://127.0.0.1:8788/v1\" (proposed: \"What is the endpoint URL that sven is using to connect to the model?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven\" (proposed: \"What is the name of the first interactive session command that is run?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Explain what this project does and list its main entry points\" (proposed: \"What is the main purpose of the first interactive session?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"/quit\" (proposed: \"What is the command to exit the first interactive session?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Your first interactive session\" (proposed: \"What is the name of the section that explains the first interactive session?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Enter\" (proposed: \"What key is used to send a message in the input box?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Shift+Enter\" (proposed: \"What key is used to insert a newline in the input box for a multi-line message?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Ctrl+C\" (proposed: \"What key is used to interrupt a running agent turn in the input box?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Ctrl+U\" (proposed: \"What key is used to delete from the cursor to the start of the line in the input box?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "not_self_contained",
+      "detail": "the instruction quotes the dropped Passage item (proposed: \"Explain how focus switches between the chat pane and the input box in the TUI layout of the gpt-4o agent.\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"gpt-4o agent\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"Explain the purpose of the `Enter` key in the input box of the gpt-4o agent.\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"gpt-4o agent\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"Explain the purpose of the `Shift+Enter` key in the input box of the gpt-4o agent.\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"gpt-4o agent\" is named neither by the source (docs, 02-quickstart.md, Quick Start) nor by a cited section (proposed: \"Explain the purpose of the `Ctrl+C` key in the input box of the gpt-4o agent.\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"status bar\" (proposed: \"Which area of the TUI layout shows the active model, current mode, and context usage?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"chat pane\" (proposed: \"Which area of the TUI layout displays the conversation history and streaming agent output?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"input box\" (proposed: \"Which area of the TUI layout is where you type your messages?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"input box\" (proposed: \"What is the default focused area in the TUI layout?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Essential keyboard shortcuts\" (proposed: \"What is the name of the section that describes keyboard shortcuts?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Input box (focused by default)\" (proposed: \"What is the name of the section that describes the input box?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Send message\" (proposed: \"What is the action of pressing `Enter` in the input box?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Insert a newline (multi-line message)\" (proposed: \"What is the action of pressing `Shift+Enter` in the input box?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Sven\" (proposed: \"What command-line option changes the headless output format to compact?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What is the purpose of the `--headless` flag in Sven? (proposed: \"What is the purpose of the `--headless` flag in Sven?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What is the default output format for headless mode in Sven? (proposed: \"What is the default output format for headless mode in Sven?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What is the purpose of the `--file` flag in Sven? (proposed: \"What is the purpose of the `--file` flag in Sven?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "not_self_contained",
+      "detail": "the instruction quotes the dropped Passage item (proposed: \"What is the purpose of the `--headless` flag when invoking Sven directly from a terminal prompt without piping?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "duplicate",
+      "detail": "What is the default output format for headless mode in Sven? (proposed: \"What is the default output format for headless mode in Sven?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "ungrounded",
+      "detail": "content words supported: Some(0.75) (at least 0.8 needed); numbers traceable: true (proposed: \"What is the default behavior of Sven when processing a file with `## User` / `## Sven` sections?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "not_self_contained",
+      "detail": "the instruction quotes the dropped Passage item (proposed: \"What is the name of the document that provides full details on the TUI, modes, tools, and conversation management?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "not_self_contained",
+      "detail": "the instruction quotes the dropped Passage item (proposed: \"What is the name of the document that covers running sven in scripts and automated workflows, including workflow file format reference, output formats, timeouts, artifacts, and CI integration guides?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Configuration\" (proposed: \"What is the name of the document that allows changing the model, setting defaults, and tuning behaviour?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "not_self_contained",
+      "detail": "the instruction quotes the dropped Passage item (proposed: \"Which section provides full details on the TUI, modes, tools, and conversation management?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"CI and Pipelines\" (proposed: \"Which section covers running sven in scripts and automated workflows, including workflow file format reference and CI integration guides?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Configuration\" (proposed: \"Which section allows changing the model, setting defaults, and tuning behaviour?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Sven\" (proposed: \"What is the command to build the provider the way a session would?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"Provider check\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What does the `provider` check tell you?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"Endpoint check\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What does the `endpoint` check tell you?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"Model check\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What does the `model` check tell you?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"Tools check\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What does the `tools` check tell you?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"provider check\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What does the `provider` check in the troubleshooting guide indicate?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"endpoint check\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What does the `endpoint` check in the troubleshooting guide indicate?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"model check\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What does the `model` check in the troubleshooting guide indicate?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"tools check\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What does the `tools` check in the troubleshooting guide indicate?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven doctor provider command\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the purpose of the `sven doctor provider` command in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven -M brain/qwen3 doctor provider command\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the purpose of the `sven -M brain/qwen3 doctor provider` command in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"exit status of checks\" (proposed: \"What is the exit status of the checks in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"hosted provider vs local server\" (proposed: \"What is the difference between a hosted provider and a local server in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"API key issues\" (proposed: \"What is the title of the second section in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven doctor provider\" (proposed: \"What is the name of the command used to check if Sven can use the model?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven -M brain/qwen3 doctor provider\" (proposed: \"What is the name of the command used to check if Sven can use the model with the -M flag?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"endpoint\" (proposed: \"What is the name of the check that reports if a local server is answering and serving a model?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"tools\" (proposed: \"What is the name of the check that reports if the server advertises tool calling for the model?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"default approval mode\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the default approval mode for commands in the tool configuration?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"start a tool with manual approval\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What command can be used to start a tool with manual approval?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"removing a pattern from tools.auto_approve_patterns\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the effect of removing a pattern from `tools.auto_approve_patterns`?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"default behavior of a command matching a deny pattern\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the default behavior of a command matching a deny pattern?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "ungrounded",
+      "detail": "content words supported: Some(0.5) (at least 0.8 needed); numbers traceable: true (proposed: \"What is the purpose of the `deny_patterns` list?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"example of a command blocked by a deny pattern\" (proposed: \"What is an example of a command that is blocked by a deny pattern?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"action to allow a command blocked by a deny pattern\" (proposed: \"What action is needed to allow a command that is blocked by a deny pattern?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven tool\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"How does the default approval mode for commands work in the sven tool?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven tool\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the purpose of the `tools.auto_approve_patterns` in the sven tool?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven tool\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"How can a user change the approval mode for the sven tool?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven tool\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What happens when a command matches a deny pattern in the sven tool?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven tool\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"How can a user remove a deny pattern from the sven tool?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven tool\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the default behavior of the sven tool when a command is not read-only?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven tool\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the function of the `tools.deny_patterns` in the sven tool?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven tool\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"How can a user modify the auto-approve patterns in the sven tool?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "\"default approval mode\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the default approval mode for commands in the tool approval and execution section?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"non-read-only command\" (proposed: \"What is the default behavior of a command that is not read-only in the tool approval and execution section?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"read-only command\" (proposed: \"What is the default behavior of a command that is read-only in the tool approval and execution section?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "duplicate",
+      "detail": "What is the default behavior of a command that matches `tools.auto_approve_patterns` in the tool approval and execution section? (proposed: \"What is the default behavior of a command that matches `tools.auto_approve_patterns` in the tool approval and execution section?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "duplicate",
+      "detail": "What is the default behavior of a command that matches `tools.deny_patterns` in the tool approval and execution section? (proposed: \"What is the default behavior of a command that matches `tools.deny_patterns` in the tool approval and execution section?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "duplicate",
+      "detail": "What is the default value for `agent.max_run_timeout_secs` in Sven? (proposed: \"What is the default value for `agent.max_run_timeout_secs` in Sven?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "duplicate",
+      "detail": "What is the default value for `agent.max_run_timeout_secs` in Sven? (proposed: \"What is the default value for `agent.max_run_timeout_secs` in Sven?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "duplicate",
+      "detail": "What is the default value for `agent.max_run_timeout_secs` in Sven? (proposed: \"What is the default value for `agent.max_run_timeout_secs` in Sven?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "near_duplicate",
+      "detail": "What is the default value for agent.max_run_timeout_secs in Sven? (proposed: \"What is the default value for agent.max_run_timeout_secs in Sven?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What is the exit code when a timeout is exceeded in Sven? (proposed: \"What is the exit code when a timeout is exceeded in Sven?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Agent uses wrong paths or \\\"directory does not exist\\\"\" (proposed: \"Which section describes the issue where the agent uses wrong paths or shows \\\"directory does not exist\\\"?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "ungrounded",
+      "detail": "content words supported: Some(0.0) (at least 0.8 needed); numbers traceable: false (proposed: \"Which section describes the issue where the workflow hangs and never finishes?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "ungrounded",
+      "detail": "content words supported: Some(0.0) (at least 0.8 needed); numbers traceable: false (proposed: \"Which section describes the issue where the output is not valid conversation markdown?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "duplicate",
+      "detail": "What is the default value for `agent.max_run_timeout_secs` in Sven? (proposed: \"What is the default value for `agent.max_run_timeout_secs` in Sven?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Sven exits with code\" (proposed: \"What is the exit code when a timeout is exceeded in Sven?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "duplicate",
+      "detail": "What is the default output format for headless runs in Sven? (proposed: \"What is the default output format for headless runs in Sven?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "duplicate",
+      "detail": "What command can be used to list recent conversations in Sven? (proposed: \"What command can be used to list recent conversations in Sven?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven show-config\" (proposed: \"What command is used to view the resolved configuration?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven -v\" (proposed: \"What command is used to enable verbose logging?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven -vv\" (proposed: \"What command is used to enable trace output?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"standard error\" (proposed: \"Where do logs go when using verbose logging?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven -v\" (proposed: \"What is the purpose of the `-v` flag in the `sven` command?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven -vv\" (proposed: \"What is the purpose of the `-vv` flag in the `sven` command?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sven -vv --file plan.md 2>debug.log\" (proposed: \"What is the purpose of redirecting output to a file in the `sven` command?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "not_self_contained",
+      "detail": "the instruction refers to material outside itself (\"according to the document\") (proposed: \"Where does the output of the logging commands go according to the documentation?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sven show-config command\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the purpose of the `sven show-config` command as described in the documentation?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "not_self_contained",
+      "detail": "the instruction refers to material outside itself (\"according to the document\") (proposed: \"What does the `sven show-config` command help confirm according to the documentation?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"enable debug output\" is named neither by the source (docs, 07-troubleshooting.md, Troubleshooting) nor by a cited section (proposed: \"What is the name of the tool or command used to enable debug output in the documentation?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"View the resolved configuration\" (proposed: \"What is the purpose of redirecting output to a file in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"View the resolved configuration\" (proposed: \"What is the purpose of the `sven show-config` command in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Enable verbose logging\" (proposed: \"What is the difference between `-v` and `-vv` in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Enable verbose logging\" (proposed: \"What is the default output destination for logs in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Enable verbose logging\" (proposed: \"What is the purpose of the `2>debug.log` redirection in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"View the resolved configuration\" (proposed: \"What is the purpose of the `sven show-config` command in the troubleshooting guide?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What is the purpose of the interactive mode of sven? (proposed: \"What is the purpose of the interactive mode of sven?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "duplicate",
+      "detail": "What is the purpose of the headless mode of sven? (proposed: \"What is the purpose of the headless mode of sven?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "\"default mode\" is named neither by the source (docs, 00-introduction.md, Introduction) nor by a cited section (proposed: \"What is the default mode for a sven session?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sdlc\" (proposed: \"What is the full software-development lifecycle mode called in sven?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Hierarchical State Machine (HSM)\" (proposed: \"What is the name of the architecture that sven's agent runtime is built on?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "not_self_contained",
+      "detail": "the instruction quotes the dropped Passage item (proposed: \"What is the name of the document that provides the full technical reference for the hierarchical state machine kernel?\")"
+    },
+    {
+      "kind": "recall",
+      "reason": "not_self_contained",
+      "detail": "the instruction quotes the dropped Passage item (proposed: \"What is the name of the document that explains how each SDLC phase runs a scoped LLM↔tool loop and returns a decision that drives the machine?\")"
+    },
+    {
+      "kind": "explain",
+      "reason": "no_subject",
+      "detail": "\"sdlc mode\" is named neither by the source (docs, 00-introduction.md, Introduction) nor by a cited section (proposed: \"How does sven handle user approval in the sdlc mode?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"sdlc\" (proposed: \"Which mode in Sven allows for full software-development lifecycle with structured phases like Intake and Delivery?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"chat\" (proposed: \"What is the default mode in Sven that functions as a conversational coding assistant?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"research\" (proposed: \"Which mode in Sven allows reading files and running read-only commands without any writes?\")"
+    },
+    {
+      "kind": "classify",
+      "reason": "no_subject",
+      "detail": "the instruction does not name its subject \"Hierarchical State Machine (HSM)\" (proposed: \"What is the primary architecture of Sven's agent runtime?\")"
+    }
+  ],
+  "calls": [
+    {
+      "kind": "recall",
+      "prompt": "blake3:954fb3f479f681c70dda7bc9f8120cd20267e823a811473b5bbdc8b58d7249d4",
+      "prompt_bytes": 3031,
+      "elapsed_ms": 141371,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:412244dc54ef3ff67acb335e76b6609983610a0172ee4c8d8b6296bdd6084218",
+      "prompt_bytes": 3059,
+      "elapsed_ms": 64356,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:5b6bba205deeec4aab06621f217273c7ff58836b2f5c253b0fa91212468557eb",
+      "prompt_bytes": 3073,
+      "elapsed_ms": 48275,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:46d198fef8f34c704b578f3b22313975675a2eefd445c29c550e173c0be24c56",
+      "prompt_bytes": 3788,
+      "elapsed_ms": 47072,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:8e1dc3cb38658a07d7e8aeb7c3a345314a59d5a43e2ef7022976476d19644d4d",
+      "prompt_bytes": 3816,
+      "elapsed_ms": 55212,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:ec9a3f551dc348502cb6c1081dc9b7c3ee8dc5051c1fe267486126b2a58d1996",
+      "prompt_bytes": 3830,
+      "elapsed_ms": 45702,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:ac03dc224e773456295ec7795c3a91207ac762ac8e8bcf14313a38583b0d59d9",
+      "prompt_bytes": 5079,
+      "elapsed_ms": 55085,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:c8683984b51afb1a7d79d14b8399d2e3625a682afba8808576ee9400ea4371de",
+      "prompt_bytes": 5107,
+      "elapsed_ms": 62043,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:8539549ef7703e29d2948c6c0993bcd675f3420d2196abadd2b63383d143333a",
+      "prompt_bytes": 5121,
+      "elapsed_ms": 51768,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:7db2f43824d24428f09602f4c7c34a07b7d95383c9bd8b49ad8c23d25d8ba6d4",
+      "prompt_bytes": 2259,
+      "elapsed_ms": 74172,
+      "candidates": 3,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:2a098905beed945febd2c9ab3e486978fe4313cc29bfb190f9c0a8fdb752d021",
+      "prompt_bytes": 2376,
+      "elapsed_ms": 45927,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:de23a98d9467744efc21cbb86dbda64754882840d2ca1e1c88f238b34b670fa4",
+      "prompt_bytes": 2301,
+      "elapsed_ms": 16379,
+      "candidates": 3,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:3a02b3477c9a1ebe4a4c5d8d4af976f5fe721856d5da3fa6690011e7eeebe651",
+      "prompt_bytes": 2848,
+      "elapsed_ms": 123475,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:f034258ec8be82dceafab65eda794efc4f6d704445b6914589ee3bbd7185fd89",
+      "prompt_bytes": 2965,
+      "elapsed_ms": 57240,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:dfaa6c4e99600d588fa97612b497893f0d6befec3b9407dcca1cbfcd980cbb3c",
+      "prompt_bytes": 2890,
+      "elapsed_ms": 66051,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:9f2d263cef487cb9db1740b7a37e0059dc93580680d8937d66b6e333bf7de83b",
+      "prompt_bytes": 2820,
+      "elapsed_ms": 75746,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:49929505a088e0e4cd07d0786722eb1941fa1505fefc44ee6259901c417b883c",
+      "prompt_bytes": 2937,
+      "elapsed_ms": 83880,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:c7d0612cf3b941540526eef6c9b466c009c86eb1adfbc0b0ba86d993dfbba414",
+      "prompt_bytes": 2862,
+      "elapsed_ms": 77419,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:fb98522a26cd67cf2dabb151e4782e10ca9d20fb34fb6742bd4b5fcc668b6394",
+      "prompt_bytes": 3329,
+      "elapsed_ms": 202228,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:12725d8022007ac83fe1a9ea8b2a36d64f872bd48cabfb2b26764f18da4c870e",
+      "prompt_bytes": 3446,
+      "elapsed_ms": 55562,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:033a877df8adfebfbf309a809efd64c01763b961ec30059a78b07791c18c9662",
+      "prompt_bytes": 3460,
+      "elapsed_ms": 67667,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:625a18149a53869d4c22c30e1b9186122e535263e5b9f300d5eec5a612c79793",
+      "prompt_bytes": 2465,
+      "elapsed_ms": 51913,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:e0b25022885814c36b71b13032b6a9c0ddced56f06e706ea573fd13b0b15a0e4",
+      "prompt_bytes": 2493,
+      "elapsed_ms": 70550,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:148498bdebd8dd4f634e0198b9808ac86d3c9719eb4e15d00a948cf07cd93929",
+      "prompt_bytes": 2507,
+      "elapsed_ms": 62702,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:b748764f66e7d709805fe00410ae67bbfa87edfd2b12bac5c010893caf16ddd4",
+      "prompt_bytes": 3758,
+      "elapsed_ms": 231154,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:6256004b9c0d67c08973ecf34fe0437b9ca0b1a6db8eb957442111d24b1fc6e7",
+      "prompt_bytes": 3786,
+      "elapsed_ms": 74998,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:4bfcc7278b0da0645c33a6d2242cda0a5e2031e6a9bd6f0dae176fd34518fa51",
+      "prompt_bytes": 3800,
+      "elapsed_ms": 60198,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "recall",
+      "prompt": "blake3:4be70a3413e2e505041cd528d1720bcb25a1af50a13c29da45335c46383e00db",
+      "prompt_bytes": 7437,
+      "elapsed_ms": 78225,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "explain",
+      "prompt": "blake3:81c0d66698c11b7f0c51fcf4c27a89cbae1f14fa022f6f5b149c2dc829d67d3c",
+      "prompt_bytes": 7465,
+      "elapsed_ms": 88210,
+      "candidates": 8,
+      "declined": null
+    },
+    {
+      "kind": "classify",
+      "prompt": "blake3:d3878d785e4b9b3f695dd9291e539e38813608f3525810377edeb30201f592ee",
+      "prompt_bytes": 7479,
+      "elapsed_ms": 70036,
+      "candidates": 8,
+      "declined": null
+    }
+  ],
+  "sections": 0,
+  "stopped": null,
+  "dropped": {}
+}

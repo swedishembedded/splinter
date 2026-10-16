@@ -74,3 +74,43 @@ it). E1 is rerun on the repaired binary, once per corpus, nothing retried:
   rejections follow the generator model rather than the rule or the prompt. The only
   comparison is the share of proposals rejected as `no_subject` by the two generators,
   reported with Wilson intervals and without a test (one run each, the generator samples).
+
+# Second wave, E2/E3 (written 2026-10-16 11:15 CEST, while the run named below was in its first
+# `learn` and before any of its results existed)
+
+Changes to the design of the first wave, each forced by a failure or by the pilots:
+
+- A generation's source is a directory with one sheet file per fact (30 facts per generation).
+  The first wave gave one file with all facts: Splinter groups records by the source text they
+  are grounded in, so the file was a single group, the holdout rule cannot divide a group, and
+  training was refused. A held-out measurement needs independent units; here a fact is one.
+- Training flags fixed from two pilots (below) on other seeds: `--eval-every 0` (the monitoring
+  records are whole unseen families, which for invented facts measure facts the policy cannot
+  know; the default picks step 20 of 41 by that loss), `--steps 400 --rank 16
+  --records-per-step 2`, `--rehearsal 0.25` (the base's own answers to general tasks, to hold
+  the anchor suite). Default learning rate. Seeds are drawn and recorded by the tools.
+- The facts are probed in the live policy before and after every step, as in the first wave:
+  four probes per fact, answered when at least three are right; a general anchor of 40
+  questions. A probe is graded by the in-process verifier of the evaluation command; after
+  each release the same probes are also asked over `brain serve` started from the serving
+  manifest alone (greedy; the value must appear as a whole number in the reply).
+
+Pilots (not part of any claim): pilot 1, 24 facts in one file per generation's directory,
+default training, seed 2393185590908659544: 17 tasks trained, candidate selected at step 20,
+7 of 36 paraphrases right, gate refused; pilot 2, 30 facts, seed 5221283959204369301: default
+training (no monitoring) 0 of 30 facts answered; 240 steps 8 of 30; rank 16 and 400 steps
+13 of 30 with the anchor 39 -> 36 of 40. The registered run is pilot 3 (30 facts, seed
+2515273933014230377).
+
+Registered outcomes (E2). Primary: facts of generation 0 answered after the first learn
+against the base, exact McNemar test over the 30 facts, alpha 0.05 two-sided; success needs a
+release and p < 0.05. A refusal by the gate is reported with its exact reasons and counts as
+the outcome "no release", not as a failed run. Controls: generation-2 facts answered after
+the learn at most the base's count plus 2; the anchor within the gate's own bound after a
+release. If a release exists after the second learn: rollback must move the alias to the first
+release and the serving manifest must name the first release's adapter digest, and the
+generation-0 answered count after rollback must equal that after the first release.
+Retention (E3): generation-0 answered after the second release at most 1 below the count after
+the first; generation-1 answered after it must exceed the base's. No item is excluded. All
+results are pilots of n = 30 facts per generation; one run, nothing retried; if the run fails
+for an infrastructure reason the repaired run is reported beside it.
