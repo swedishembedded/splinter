@@ -121,6 +121,10 @@ pub struct FineTune<'a> {
     /// (see [`brain::ChatFineTune::thinking`]); a base that never reasons is
     /// unaffected.
     pub thinking: bool,
+    /// Train a record that supervises several turns as one sequence, not
+    /// one example per turn. Set for datasets built packed
+    /// (`dataset build --pack`); any other dataset keeps a turn per example.
+    pub pack_answers: bool,
     /// Told after every optimizer step, so a long run can be watched.
     pub on_step: Option<StepHook<'a>>,
     /// Where to keep the adapter of every evaluation, as
@@ -375,6 +379,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .dataset(request.train)
         .held_out(request.held_out)
         .thinking(request.thinking)
+        .pack_answers(request.pack_answers)
         .out_dir(request.attempt_dir)
         .adapter_id(candidate_adapter_id(&base_id))
         .steps(request.steps)

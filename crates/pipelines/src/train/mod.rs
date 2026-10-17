@@ -377,6 +377,9 @@ impl Trainer for BrainTrainer {
             // The records hold answers and no reasoning, so the model is
             // trained for no-think mode whatever it is later asked.
             thinking: false,
+            // Only datasets built packed are kept as one sequence per record; a
+            // dialogue dataset in the same run would otherwise change shape.
+            pack_answers: plan.datasets.iter().all(|d| d.manifest.packed),
             on_step: None,
             keep_evaluations: kept.as_deref(),
         })
