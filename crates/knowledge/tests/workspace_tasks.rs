@@ -65,7 +65,14 @@ impl Rig {
 
     /// A rig that considers `mutants_per_file` mutants of each file.
     fn with_mutants(name: &str, extra: &[(&str, &str)], mutants_per_file: usize) -> Self {
-        Self::over(Repo::new(name, extra), mutants_per_file, [])
+        Self::over(Repo::new(name, extra), mutants_per_file, [], false)
+    }
+
+    /// A rig whose commands may reach outside their tree: for a fixture whose
+    /// state must outlive one run (a flaky test's counter), which the
+    /// workspace confinement would otherwise deny.
+    fn unconfined(name: &str, extra: &[(&str, &str)]) -> Self {
+        Self::over(Repo::new(name, extra), 6, [], true)
     }
 
     /// A rig over the Rust crate [`RUST_CRATE`]; its sandbox reaches the
@@ -78,6 +85,7 @@ impl Rig {
             Repo::of_files(name, &RUST_CRATE),
             6,
             [("PATH".to_string(), path)],
+            false,
         )
     }
 
@@ -86,10 +94,12 @@ impl Rig {
         repo: Repo,
         mutants_per_file: usize,
         caller_env: impl IntoIterator<Item = (String, String)>,
+        unconfined: bool,
     ) -> Self {
         let calls = repo.scratch.0.join("calls");
         fs::create_dir_all(&calls).unwrap();
-        let sandbox = ProcessSandbox::new(&calls, caller_env, &["PATH"], Limits::default());
+        let sandbox = ProcessSandbox::new(&calls, caller_env, &["PATH"], Limits::default())
+            .allow_unconfined(unconfined);
         let generator = WorkspaceGenerator::new(
             Arc::new(sandbox),
             repo.host.clone(),
@@ -222,7 +232,8 @@ fn a_flaky_test_refuses_the_baseline_and_once_quarantined_is_never_a_target() {
     let scratch = Scratch::new("flaky-state");
     let counter = scratch.0.join("count");
     let text = flaky_test(&counter);
-    let rig = Rig::new("flaky", &[("tests/test_flaky.py", &text)]);
+    // The counter lives outside the tree on purpose, which confinement denies.
+    let rig = Rig::unconfined("flaky", &[("tests/test_flaky.py", &text)]);
     let tree = rig.capture("HEAD");
     match rig.qualified(&tree, &[]) {
         Err(WorkspaceError::BaselineRefused { reason, count, .. }) => {
