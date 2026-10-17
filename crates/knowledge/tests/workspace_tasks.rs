@@ -76,20 +76,15 @@ impl Rig {
     }
 
     /// A rig over the Rust crate [`RUST_CRATE`]; its sandbox reaches the
-    /// toolchain that built this test, whose `bin` directory cargo's
-    /// compile-time `CARGO` names, so no environment is read.
+    /// toolchain that built this test through [`toolchain()`]'s environment,
+    /// not the process environment.
     fn rust(name: &str) -> Self {
-        let toolchain_bin = Path::new(env!("CARGO")).parent().unwrap();
-        let path = format!("{}:{}", toolchain_bin.display(), DEFAULT_SEARCH_PATH);
-        Self::over(
-            Repo::of_files(name, &RUST_CRATE),
-            6,
-            [("PATH".to_string(), path)],
-            false,
-        )
+        Self::over(Repo::of_files(name, &RUST_CRATE), 6, toolchain(), false)
     }
 
-    /// A rig whose sandbox gets `caller_env` on top of its defaults.
+    /// A rig whose sandbox gets `caller_env` on top of its defaults; a
+    /// variable of `caller_env` reaches the calls only when it is named, so
+    /// the environment stays deliberate.
     fn over(
         repo: Repo,
         mutants_per_file: usize,
@@ -98,7 +93,9 @@ impl Rig {
     ) -> Self {
         let calls = repo.scratch.0.join("calls");
         fs::create_dir_all(&calls).unwrap();
-        let sandbox = ProcessSandbox::new(&calls, caller_env, &["PATH"], Limits::default())
+        let caller_env = caller_env.into_iter().collect::<Vec<_>>();
+        let names: Vec<&str> = caller_env.iter().map(|(name, _)| name.as_str()).collect();
+        let sandbox = ProcessSandbox::new(&calls, caller_env.iter().cloned(), &names, Limits::default())
             .allow_unconfined(unconfined);
         let generator = WorkspaceGenerator::new(
             Arc::new(sandbox),
@@ -796,4 +793,26 @@ fn a_test_report_past_the_output_cap_is_decided_from_its_summary_not_refused() {
     assert!(!report.unreadable(), "{report:?}");
     assert_eq!(report.verdict, Some(Verdict::Pass));
     assert!(report.failed.is_empty());
+}
+
+/// The environment that reaches the toolchain this test was built with: its
+/// cargo's directory ahead of the default search path, and the cargo and
+/// rustup homes of the build, so the suites the sandbox runs build offline
+/// against the same registry.
+fn toolchain() -> Vec<(String, String)> {
+    let cargo = Path::new(env!("CARGO"));
+    let cargo_dir = cargo.parent().unwrap_or(cargo).display().to_string();
+    let mut env = vec![(
+        "PATH".to_string(),
+        format!("{cargo_dir}:{DEFAULT_SEARCH_PATH}"),
+    )];
+    for (name, value) in [
+        ("CARGO_HOME", option_env!("CARGO_HOME")),
+        ("RUSTUP_HOME", option_env!("RUSTUP_HOME")),
+    ] {
+        if let Some(value) = value {
+            env.push((name.to_string(), value.to_string()));
+        }
+    }
+    env
 }
