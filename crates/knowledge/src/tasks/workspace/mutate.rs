@@ -166,7 +166,7 @@ impl WorkspaceGenerator {
                 });
                 match self.candidate(&base, path, text, &mutant, seen, clock) {
                     Ok(task) => {
-                        seen.admit(&task.task.instruction);
+                        remember(seen, &task.task.instruction);
                         generation.admitted.push(task);
                     }
                     Err(Stop::Refuse(reason)) => generation.refuse(reason),
@@ -528,9 +528,15 @@ fn hidden_text(tree: &Path, files: &BTreeSet<String>) -> Privileged {
     }
 }
 
+/// Records an admitted request for the near-duplicate rule: what it says is
+/// broken, not the sentence and test command every request shares.
+fn remember(seen: &mut Seen, request: &str) {
+    seen.admit(instruction::symptoms_of(request));
+}
+
 /// Whether the request `text` may be shown: it quotes no line that the
-/// mutation changed, nothing of the hidden tests, and is not a near
-/// duplicate of one admitted for the file.
+/// mutation changed, nothing of the hidden tests, and its symptoms are not a
+/// near duplicate of those of one admitted for the file.
 fn admissible(
     text: &str,
     original: &str,
@@ -548,7 +554,7 @@ fn admissible(
     if check_self_contained(text, &[hidden]).is_err() {
         return Err(Stop::Refuse(Reason::NotSelfContained));
     }
-    if seen.repeats(text).is_some() {
+    if seen.repeats(instruction::symptoms_of(text)).is_some() {
         return Err(Stop::Refuse(Reason::NearDuplicate));
     }
     Ok(())
@@ -571,4 +577,41 @@ fn write(path: &Path, text: &str) -> Result<(), WorkspaceError> {
         path: path.to_path_buf(),
         source,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
+
+    #[test]
+    fn a_second_fault_is_not_a_near_duplicate_of_the_first_because_of_a_long_test_command() {
+        let command: Vec<String> = ["python3", "-m", "unittest"]
+            .into_iter()
+            .map(String::from)
+            .chain((0..55).map(|n| format!("tests.test_module_{n}")))
+            .collect();
+        let request = |test: &str| {
+            let failing: BTreeSet<String> = [format!("t.A.{test}")].into();
+            instruction::compose(&command, &failing, &BTreeMap::new())
+        };
+        let (first, second) = (request("test_logarithm"), request("test_round_half_even"));
+        let hidden = Privileged {
+            kind: PrivilegedKind::Other(HIDDEN_TEST.into()),
+            content: String::new(),
+            span: None,
+        };
+        let mut seen = Seen::new(DEFAULT_SHINGLE_WORDS, DEFAULT_MAX_OVERLAP);
+        let check = |text: &str, seen: &Seen| admissible(text, "x = 1\n", "x = 2\n", &hidden, seen);
+        assert!(check(&first, &seen).is_ok());
+        remember(&mut seen, &first);
+        assert!(check(&second, &seen).is_ok(), "different symptoms");
+        assert!(
+            matches!(
+                check(&first, &seen),
+                Err(Stop::Refuse(Reason::NearDuplicate))
+            ),
+            "the same symptoms"
+        );
+    }
 }

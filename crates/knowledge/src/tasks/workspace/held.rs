@@ -15,6 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use splinter_core::digest::Digest;
 
+use super::instruction::symptoms_of;
 use super::WorkspaceTask;
 use crate::tasks::dedup::Seen;
 
@@ -70,7 +71,7 @@ impl Held {
     pub(super) fn seen(&self, family: &str, shingle_words: usize, max_overlap: f64) -> Seen {
         let mut seen = Seen::new(shingle_words, max_overlap);
         for request in self.requests.get(family).into_iter().flatten() {
-            seen.admit(request);
+            seen.admit(symptoms_of(request));
         }
         seen
     }

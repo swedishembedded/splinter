@@ -18,6 +18,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(test)]
+use crate::tasks::dedup::Seen;
 use splinter_core::selfcontained::MIN_QUOTED_WORDS;
 
 /// The most symptoms an instruction lists; the rest are counted.
@@ -57,6 +59,20 @@ pub(super) fn compose(
     )
 }
 
+/// The part of a request that says what is broken: its list of symptoms.
+/// The rest of every request is the same sentence and the project's test
+/// command, which can be hundreds of words, so two faults of one project
+/// would overlap almost completely when whole requests are compared. A text
+/// that is not a request is returned whole.
+pub(super) fn symptoms_of(request: &str) -> &str {
+    const OPENS: &str = "each names a symptom:\n\n";
+    const CLOSES: &str = "\n\nFind the cause";
+    let Some((_, after)) = request.split_once(OPENS) else {
+        return request;
+    };
+    after.split_once(CLOSES).map_or(after, |(list, _)| list)
+}
+
 /// What one failing test says, in words: its docstring when it has a short
 /// one, else its name.
 fn symptom(id: &str, doc: Option<&str>) -> String {
@@ -94,6 +110,37 @@ mod tests {
         // A docstring long enough to be a quotation of the test is not used.
         let long = "This docstring has more than enough words to be a quoted passage";
         assert_eq!(symptom("t.A.test_long_one", Some(long)), "long one");
+    }
+
+    #[test]
+    fn two_different_faults_are_not_near_duplicates_because_they_share_a_long_command() {
+        let command: Vec<String> = ["python3", "-m", "unittest"]
+            .into_iter()
+            .map(String::from)
+            .chain((0..55).map(|n| format!("tests.test_module_{n}")))
+            .collect();
+        let request = |test: &str| {
+            let failing: BTreeSet<String> = [format!("t.A.{test}")].into();
+            compose(&command, &failing, &BTreeMap::new())
+        };
+        let (first, second) = (request("test_logarithm"), request("test_round_half_even"));
+        assert_eq!(symptoms_of(&first), "- logarithm");
+
+        let mut seen = Seen::new(
+            crate::tasks::DEFAULT_SHINGLE_WORDS,
+            crate::tasks::DEFAULT_MAX_OVERLAP,
+        );
+        seen.admit(symptoms_of(&first));
+        assert!(seen.repeats(symptoms_of(&second)).is_none());
+        assert!(seen.repeats(symptoms_of(&first)).is_some());
+        // Compared whole, the shared sentence and command make them repeats.
+        let mut whole = Seen::new(
+            crate::tasks::DEFAULT_SHINGLE_WORDS,
+            crate::tasks::DEFAULT_MAX_OVERLAP,
+        );
+        whole.admit(&first);
+        assert!(whole.repeats(&second).is_some());
+        assert_eq!(symptoms_of("not a request"), "not a request");
     }
 
     #[test]
