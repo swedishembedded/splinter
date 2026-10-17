@@ -256,6 +256,8 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
     };
     let split = splinter_sdk::data::holdout::split_dataset_file(&dataset, &attempt)?;
     let request = splinter_sdk::model::train::FineTune {
+        // A sample's datasets are dialogues: one example per supervised turn.
+        pack_answers: false,
         max_block: None,
         model_dir: &base,
         train: &split.train,

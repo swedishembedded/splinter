@@ -176,6 +176,8 @@ pub fn fine_tune(job: &Job<'_>) -> anyhow::Result<Trained> {
     };
     let split = splinter_sdk::data::holdout::split_dataset_file(job.dataset, job.attempt)?;
     let request = splinter_sdk::model::train::FineTune {
+        // A sample's datasets are dialogues: one example per supervised turn.
+        pack_answers: false,
         max_block: None,
         model_dir: job.base,
         train: &split.train,

@@ -115,6 +115,7 @@ fn build_sft_step(ctx: &Context, set: SetId) -> Result<(), OrchestratorError> {
             limit: None,
             voice: VoiceBuild::default(),
             max_block: None,
+            pack: false,
         },
     )
     .map(|_| ())
