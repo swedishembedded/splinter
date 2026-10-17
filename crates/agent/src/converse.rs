@@ -153,8 +153,17 @@ fn add(total: Usage, more: &Usage) -> Usage {
         (None, None) => None,
         (a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)),
     };
-    Usage {
-        input_tokens: sum(total.input_tokens, more.input_tokens),
-        output_tokens: sum(total.output_tokens, more.output_tokens),
-    }
+    let mut summed = total;
+    summed.input_tokens = sum(total.input_tokens, more.input_tokens);
+    summed.output_tokens = sum(total.output_tokens, more.output_tokens);
+    summed.cached_tokens = sum(total.cached_tokens, more.cached_tokens);
+    summed.cost_usd = match (total.cost_usd, more.cost_usd) {
+        (None, None) => None,
+        (a, b) => Some(a.unwrap_or(0.0) + b.unwrap_or(0.0)),
+    };
+    summed.tool_calls += more.tool_calls;
+    summed.tool_errors += more.tool_errors;
+    summed.turns += more.turns;
+    summed.wall_time += more.wall_time;
+    summed
 }
