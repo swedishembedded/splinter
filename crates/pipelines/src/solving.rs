@@ -67,8 +67,7 @@ pub const ATTEMPT_PRODUCER: &str = "splinter-pipelines/attempt-report";
 /// The version of that producer.
 pub const ATTEMPT_VERSION: &str = "1";
 
-/// How long one task's solve may take.
-pub const DEFAULT_SOLVE_DEADLINE: Duration = Duration::from_secs(300);
+pub use splinter_orchestrator::config::DEFAULT_SOLVE_DEADLINE;
 
 /// A task left unsolved, and why.
 #[derive(Clone, Debug, Serialize)]
@@ -314,6 +313,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
             items.push((plan, attempt, seeded));
         }
     }
+    let task_wall = ctx.config().solve_deadline;
     let results = ctx.block_on(fan_out(
         items,
         ctx.concurrency_for(request.solver),
@@ -323,7 +323,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
                 (
                     plan,
                     attempt,
-                    attempt_once(&plans[plan], &model, request).await,
+                    attempt_once(&plans[plan], &model, request, task_wall).await,
                 )
             }
         },
@@ -457,6 +457,7 @@ async fn attempt_once(
     planned: &Planned<'_>,
     model: &Model,
     request: &SolveRequest<'_>,
+    task_wall: Duration,
 ) -> Attempted {
     if request.cancel.is_cancelled() {
         return Attempted::Cancelled;
@@ -465,7 +466,7 @@ async fn attempt_once(
         return Attempted::BudgetSpent;
     }
     let started = Instant::now();
-    let mut options = SolveOptions::new(remaining(request.deadline, DEFAULT_SOLVE_DEADLINE));
+    let mut options = SolveOptions::new(remaining(request.deadline, task_wall));
     options.cancel = Some(request.cancel.clone());
     let options = model.solving(options);
     let Planned {

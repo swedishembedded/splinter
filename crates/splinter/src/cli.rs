@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use clap::{ArgAction, ArgGroup, Args, Parser, Subcommand};
 use splinter_sdk::canaries::CANARY_COUNT;
-use splinter_sdk::config::DEFAULT_REMOTE_CONCURRENCY;
+use splinter_sdk::config::{DEFAULT_REMOTE_CONCURRENCY, DEFAULT_SOLVE_DEADLINE};
 use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{parse_strength, parse_strip, StripPolicy, ViewName};
@@ -88,6 +88,11 @@ pub struct Global {
         help = format!("How many requests to a model reached over an API may be in flight at \
                         once [default: {DEFAULT_REMOTE_CONCURRENCY}]"))]
     pub remote_concurrency: Option<u32>,
+    /// The wall-clock bound of one task's solve, a guard for a stuck episode.
+    #[arg(long, global = true, value_name = "SECONDS", value_parser = clap::value_parser!(u64).range(1..),
+        help = format!("How many seconds one task's solve may take on the wall clock \
+                        [default: {}]", DEFAULT_SOLVE_DEADLINE.as_secs()))]
+    pub solve_deadline: Option<u64>,
     /// The sampling temperature, 0 to 2, asked of a model reached through
     /// sven's providers (the provider's own default when not given). The
     /// same flag sets the pass@k sampling of a verb that measures it; when

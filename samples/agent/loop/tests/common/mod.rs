@@ -231,6 +231,7 @@ impl Fixture {
             bf16_base: false,
             default_budget: None,
             remote_concurrency: 1,
+            solve_deadline: splinter_sdk::config::DEFAULT_SOLVE_DEADLINE,
             min_calibration_controls: 1,
             workspace: Default::default(),
             thinking: false,

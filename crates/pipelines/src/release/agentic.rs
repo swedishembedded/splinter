@@ -53,7 +53,6 @@ use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
 
 use crate::release::probe::{Arm, Probe, Suite};
-use crate::solving::DEFAULT_SOLVE_DEADLINE;
 use crate::verify::{exposure_failure, verifiers_for};
 use crate::workspace_solve::{attempt_seed, solve_attempt, WorkspaceInputs};
 use splinter_orchestrator::context::Context;
@@ -158,7 +157,7 @@ fn attempt_at(
         return Ok(Attempt::failed());
     };
     let model = arm.attempt_model(ctx, &task.task.id, attempt)?;
-    let mut options = SolveOptions::new(DEFAULT_SOLVE_DEADLINE);
+    let mut options = SolveOptions::new(ctx.config().solve_deadline);
     options.cancel = Some(cancel.clone());
     let options = model.solving(options);
     let protocol = WorkProtocol {

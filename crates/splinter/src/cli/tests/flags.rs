@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 //! The grammar's specs for the flags that reach the models: the remote
-//! request width, the served temperature and the training row's bound.
+//! request width, the served temperature, the solve deadline and the training
+//! row's bound.
 
 use super::{command, parse, Command};
 
@@ -69,4 +70,18 @@ fn one_temperature_flag_serves_the_model_and_the_pass_at_k_sampling_the_one_afte
     assert_eq!(both(&after), (Some(1.0), Some(1.0)));
     let before: Vec<&str> = verb.into_iter().chain(["--temperature", "1.0"]).collect();
     assert_eq!(both(&before), (Some(1.0), Some(1.0)));
+}
+
+#[test]
+fn the_solve_deadline_is_a_global_flag_of_whole_seconds() {
+    for args in [
+        &["--solve-deadline", "1800", "status"][..],
+        &["status", "--solve-deadline", "1800"][..],
+    ] {
+        let cli = parse(args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+        assert_eq!(cli.global.solve_deadline, Some(1800));
+    }
+    assert_eq!(parse(&["status"]).unwrap().global.solve_deadline, None);
+    assert!(parse(&["--solve-deadline", "0", "status"]).is_err());
+    assert!(parse(&["--solve-deadline", "1.5", "status"]).is_err());
 }

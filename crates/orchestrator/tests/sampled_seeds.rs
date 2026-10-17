@@ -60,6 +60,7 @@ fn context(test: &str) -> (Context, Reported, ModelRef) {
         bf16_base: false,
         default_budget: None,
         remote_concurrency: 4,
+        solve_deadline: splinter_orchestrator::config::DEFAULT_SOLVE_DEADLINE,
         min_calibration_controls: 2,
         workspace: Default::default(),
         thinking: false,

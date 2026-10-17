@@ -62,7 +62,6 @@ use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
 
 use crate::release::agentic;
-use crate::solving::DEFAULT_SOLVE_DEADLINE;
 use crate::variants::stored_variants;
 use crate::verify::{verifiers_for, Judge, Use};
 use splinter_core::model_ref::ModelRef;
@@ -521,7 +520,7 @@ pub(crate) fn answer_prompted(
     if cancel.is_cancelled() {
         return Err(OrchestratorError::Cancelled);
     }
-    let mut options = SolveOptions::new(DEFAULT_SOLVE_DEADLINE);
+    let mut options = SolveOptions::new(ctx.config().solve_deadline);
     options.cancel = Some(cancel.clone());
     let options = model.solving(options);
     let environment = ResolvedEnvironment::ClosedBook;

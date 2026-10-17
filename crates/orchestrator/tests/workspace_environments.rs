@@ -67,6 +67,7 @@ fn runtime(scratch: &Scratch, workspace: WorkspaceSettings) -> Runtime {
         bf16_base: false,
         default_budget: None,
         remote_concurrency: 4,
+        solve_deadline: splinter_orchestrator::config::DEFAULT_SOLVE_DEADLINE,
         min_calibration_controls: 2,
         thinking: false,
         served_temperature: None,

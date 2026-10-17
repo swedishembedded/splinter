@@ -77,6 +77,9 @@ fn main() -> ExitCode {
         config.remote_concurrency = width as usize;
     }
     config.served_temperature = cli.global.temperature;
+    if let Some(seconds) = cli.global.solve_deadline {
+        config.solve_deadline = std::time::Duration::from_secs(seconds);
+    }
     config.build = build_info::current(config.build.gpu_contexts);
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,

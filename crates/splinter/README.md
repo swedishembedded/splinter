@@ -509,7 +509,7 @@ same way, so both settings work), and `SPLINTER_BF16_BASE` holds a large policy'
 trains on one card. `--remote-concurrency` is how many requests to a model
 reached over an API may be in flight at once (4 by default); a model on the local
 device is asked one at a time. `--temperature` is the sampling temperature (0 to 2)
-asked of such a model, the provider's own default when not given. Unless `--steps` is given a run's step budget
+asked of such a model, the provider's own default when not given. `--solve-deadline` is how many seconds one task's solve may take on the wall clock (300 by default); raise it when many tasks share one served model, so a task is not failed for waiting in the queue. Unless `--steps` is given a run's step budget
 is three passes over what it learned, within bounds, at one learning rate
 suited to a short LoRA run for `train` and `learn` alike (`--lr`, 2e-4),
 a LoRA alpha of twice the rank (`--alpha`, so the update's scale does not
