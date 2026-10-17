@@ -117,9 +117,16 @@ fn probe_task(
             Outcome::Failed => withheld.environment_failures += 1,
         }
     }
+    let passed = graded.iter().filter(|passed| **passed).count();
     Ok(Probe {
         answer,
         verdict: majority(&graded),
+        reason: Some(format!(
+            "{passed} of {} graded attempts passed; {} exposed, {} failed in the environment",
+            graded.len(),
+            withheld.exposed,
+            withheld.environment_failures
+        )),
         withheld,
     })
 }

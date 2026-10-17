@@ -15,3 +15,8 @@ thousands-separated, hedged) in `crates/eval/tests/short_answer_grading.rs`.
 
 How to avoid it: a run that will be re-graded must keep every answer (an eval report option),
 or be repeated with the new grading and its counts read from the fresh report.
+
+Fixed 2026-10-17: `eval` reports now keep every graded item (`items`: answer, verdict, grader's
+reason; an answer over 8 KiB is cut with an explicit marker and kept whole in the store), so a
+run can be re-graded without asking the model again. Reports written before this carry only
+`missed`.

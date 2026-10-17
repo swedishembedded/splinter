@@ -339,6 +339,8 @@ pub struct Probe {
     /// The verdict: `Some(true)` right, `Some(false)` wrong, `None` when
     /// no verifier decided.
     pub verdict: Option<bool>,
+    /// Why the grader decided so, when it said; `None` when it did not.
+    pub reason: Option<String>,
     /// The attempts at a task that works in a workspace which were set aside
     /// instead of graded; nothing for any other task.
     pub withheld: Withheld,
@@ -351,7 +353,17 @@ impl Probe {
         Self {
             answer,
             verdict,
+            reason: None,
             withheld: Withheld::default(),
+        }
+    }
+
+    /// This probe, the grader's reason for its verdict given.
+    #[must_use]
+    pub fn with_reason(self, reason: impl Into<String>) -> Self {
+        Self {
+            reason: Some(reason.into()),
+            ..self
         }
     }
 }
@@ -552,10 +564,14 @@ fn verdict_of(
 ) -> Result<Probe, OrchestratorError> {
     let verifiers: Strongest = verifiers_for(ctx, task, &[], judge)?;
     let verification = verifiers.run(task, &experience)?;
-    Ok(Probe::graded(
+    let probe = Probe::graded(
         experience.final_output,
         decide(&verification.annotations).map(|d| d.passed),
-    ))
+    );
+    Ok(match crate::graded::reason_of(&verification.annotations) {
+        Some(reason) => probe.with_reason(reason),
+        None => probe,
+    })
 }
 
 /// `candidate` and `baseline` outcomes on `suite`'s tasks, paired by task.

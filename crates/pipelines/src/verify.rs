@@ -19,6 +19,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
+use crate::graded::Verdict;
 use crate::judging::{controls, reference as reference_of, spaced};
 use serde::Serialize;
 use splinter_agent::judge::JudgeVerifier;
@@ -595,6 +596,23 @@ pub struct Verified {
     pub undecided: usize,
     /// What could not be graded, with why.
     pub unverified: Vec<Unverified>,
+    /// Every experience graded, whatever its verdict, with why. The answers
+    /// are the experiences' own, kept in the store.
+    pub items: Vec<VerifiedItem>,
+}
+
+/// One experience the verify stage graded.
+#[derive(Clone, Debug, Serialize)]
+pub struct VerifiedItem {
+    /// The experience (its answer is in the store).
+    pub experience: ExperienceId,
+    /// The task it is an attempt at.
+    pub task: Digest,
+    /// How it is decided now, over all its verdicts.
+    pub verdict: Verdict,
+    /// What the verifiers said, when they said.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// Who grades the kinds a judge grades when a set is verified.
@@ -636,6 +654,7 @@ pub fn verify_set(
         .collect::<Result<Vec<_>, _>>()?;
     let mut report = Verified::default();
     let mut verified = Vec::new();
+    let mut reasons = Vec::new();
     for (id, experience) in members.iter().zip(&experiences) {
         if cancel.is_cancelled() {
             return Err(OrchestratorError::Cancelled);
@@ -676,14 +695,25 @@ pub fn verify_set(
         }
         report.experiences += 1;
         verified.push(id.clone());
+        reasons.push((
+            experience.task.id.clone(),
+            crate::graded::reason_of(&verification.annotations),
+        ));
     }
     let decisions = store.decisions(&verified)?;
-    for id in &verified {
-        match decisions.get(id) {
-            Some(d) if d.passed => report.passed += 1,
-            Some(_) => report.failed += 1,
+    for (id, (task, reason)) in verified.iter().zip(reasons) {
+        let decided = decisions.get(id).map(|d| d.passed);
+        match decided {
+            Some(true) => report.passed += 1,
+            Some(false) => report.failed += 1,
             None => report.undecided += 1,
         }
+        report.items.push(VerifiedItem {
+            experience: id.clone(),
+            task,
+            verdict: Verdict::of(decided),
+            reason,
+        });
     }
     batch.commit()?;
     Ok(report)

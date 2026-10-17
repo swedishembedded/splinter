@@ -10,11 +10,11 @@
 //! reference verifier, with no model run.
 //!
 //! `cargo run -p splinter-eval --example regrade_anchor -- <anchor.jsonl>
-//! <run.json>...` prints one JSON object per run. A run report stores the
-//! answers of the tasks that were decided wrong (`missed`) and no answer of a
-//! task that passed or stayed undecided, so only the former can be re-graded:
-//! the counts of the others are carried over, and `undecided_regradable` says
-//! how many answers were not kept.
+//! <run.json>...` prints one JSON object per run. A run report keeps every
+//! graded item (`items`: the answer, the verdict and the grader's reason), so
+//! every item is re-graded. An answer the report cut (`truncated`) cannot be,
+//! and is counted under `unregradable`; it stays in the store under its
+//! `stored` address.
 
 use std::collections::BTreeMap;
 use std::process::ExitCode;
@@ -74,36 +74,50 @@ fn regrade(suite: &str, runs: &[String]) -> Result<Vec<Value>, String> {
         let run: Value = serde_json::from_str(&read(path)?).map_err(|e| format!("{path}: {e}"))?;
         let score = &run["scores"][0];
         let tasks = score["suite"]["tasks"].as_u64().unwrap_or(0);
-        let decided = score["graded"].as_u64().unwrap_or(0);
-        let missed = score["missed"].as_array().cloned().unwrap_or_default();
-        let wrong_before = missed.len() as u64;
-        let passed_before = decided.saturating_sub(wrong_before);
-        let (mut now_pass, mut now_fail, mut now_abstain) = (0u64, 0u64, 0u64);
-        for entry in &missed {
+        let items = score["items"].as_array().cloned().unwrap_or_default();
+        let count = |verdict: &str| {
+            items
+                .iter()
+                .filter(|item| item["verdict"].as_str() == Some(verdict))
+                .count() as u64
+        };
+        let (passed_before, wrong_before, undecided) =
+            (count("passed"), count("failed"), count("undecided"));
+        let decided = passed_before + wrong_before;
+        let (mut now_pass, mut now_fail, mut now_abstain, mut unregradable) =
+            (0u64, 0u64, 0u64, 0u64);
+        for entry in &items {
             let instruction = entry["instruction"].as_str().unwrap_or_default();
             let reference = references
                 .get(instruction)
                 .ok_or_else(|| format!("{path}: no reference for {instruction:?}"))?;
-            match grade(&verifier, instruction, reference, entry["answer"].as_str())? {
+            if entry["answer"]["truncated"].as_bool() == Some(true) {
+                unregradable += 1;
+                continue;
+            }
+            match grade(
+                &verifier,
+                instruction,
+                reference,
+                entry["answer"]["text"].as_str(),
+            )? {
                 Outcome::Pass => now_pass += 1,
                 Outcome::Fail => now_fail += 1,
                 Outcome::Abstain => now_abstain += 1,
             }
         }
-        let undecided = tasks.saturating_sub(decided);
         reports.push(json!({
             "run": path,
             "model": run["model"],
             "tasks": tasks,
             "before": { "decided": decided, "passed": passed_before, "wrong": wrong_before, "undecided": undecided },
             "after": {
-                "decided": decided - now_abstain,
-                "passed": passed_before + now_pass,
+                "decided": now_pass + now_fail,
+                "passed": now_pass,
                 "wrong": now_fail,
-                "undecided": undecided + now_abstain,
+                "undecided": now_abstain,
             },
-            "undecided_regradable": 0,
-            "note": "answers of undecided tasks are not stored in a run report; only the wrong answers were re-graded",
+            "unregradable": unregradable,
         }));
     }
     Ok(reports)

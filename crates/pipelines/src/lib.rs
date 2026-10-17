@@ -74,6 +74,7 @@ pub mod exam_set;
 pub mod experiences;
 pub mod experiment;
 pub mod family;
+pub mod graded;
 pub mod grouping;
 pub mod index;
 pub mod judge;

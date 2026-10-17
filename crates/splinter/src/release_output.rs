@@ -7,6 +7,7 @@
 use std::fmt::Write as _;
 
 use splinter_sdk::eval::{EvalReport, Evaluated};
+use splinter_sdk::graded::Verdict;
 use splinter_sdk::measure::gate::{AgenticProbe, Agreement, Check, GateReport};
 use splinter_sdk::measure::power::PowerAssessment;
 use splinter_sdk::release::{ReleaseList, Released, RolledBack};
@@ -399,7 +400,15 @@ impl Report for Evaluated {
                     String::new()
                 }
             );
-            for missed in &score.missed {
+            let undecided = score
+                .items
+                .iter()
+                .filter(|item| item.verdict == Verdict::Undecided)
+                .count();
+            if undecided > 0 {
+                let _ = writeln!(out, "    {undecided} undecided (kept in the report)");
+            }
+            for missed in score.items.iter().filter(|i| i.verdict == Verdict::Failed) {
                 let _ = writeln!(
                     out,
                     "    missed ({}): {} -> {}",
@@ -407,8 +416,8 @@ impl Report for Evaluated {
                     missed.instruction.replace('\n', " "),
                     missed
                         .answer
-                        .as_deref()
-                        .map_or_else(|| "(no answer)".to_string(), |a| a.replace('\n', " "))
+                        .as_ref()
+                        .map_or_else(|| "(no answer)".to_string(), |a| a.text.replace('\n', " "))
                 );
             }
         }

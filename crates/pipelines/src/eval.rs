@@ -33,6 +33,7 @@ use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_eval::paired::accuracy;
 
+use crate::graded::GradedItem;
 use crate::release::probe::{self, Suite};
 use crate::release::{anchor, arm_on};
 use crate::train::load_candidate;
@@ -111,21 +112,10 @@ pub struct SuiteScore {
     pub graded: usize,
     /// Of those, the fraction right; `None` when none was decided.
     pub accuracy: Option<f64>,
-    /// The tasks decided wrong, in suite order: what the model does not do.
-    pub missed: Vec<Missed>,
-}
-
-/// One task a model got wrong.
-#[derive(Clone, Debug, Serialize)]
-pub struct Missed {
-    /// The task's address.
-    pub task: Digest,
-    /// Its kind.
-    pub kind: String,
-    /// What was asked.
-    pub instruction: String,
-    /// What the model answered; `None` when its run ended without an answer.
-    pub answer: Option<String>,
+    /// Every task of the suite, in suite order, whatever its verdict: the
+    /// answer given, how it was decided and why, so that the run can be
+    /// regraded without asking the model again.
+    pub items: Vec<GradedItem>,
 }
 
 /// What `eval` reports.
@@ -258,24 +248,18 @@ pub fn eval(
         let probes = probe::grade(ctx, &model, suite, cancel)?;
         let outcomes: Vec<Option<bool>> = probes.iter().map(|probe| probe.verdict).collect();
         let (accuracy, graded) = accuracy(&outcomes);
-        let missed = suite
+        let items = suite
             .tasks
             .iter()
             .zip(&probes)
-            .filter(|(_, probe)| probe.verdict == Some(false))
-            .map(|(task, probe)| Missed {
-                task: task.task.id.clone(),
-                kind: task.task.kind.clone(),
-                instruction: task.instruction.clone(),
-                answer: probe.answer.clone(),
-            })
-            .collect();
+            .map(|(task, probe)| GradedItem::keep(ctx, task, probe))
+            .collect::<Result<Vec<_>, _>>()?;
         scores.push(SuiteScore {
             suite: suite.summary(),
             release: release.clone(),
             graded,
             accuracy,
-            missed,
+            items,
         });
     }
     Ok(Evaluated {

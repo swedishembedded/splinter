@@ -58,6 +58,7 @@ use splinter_orchestrator::releases::{ArtifactKind, ReleasedArtifact};
 use splinter_orchestrator::runs::record;
 use splinter_orchestrator::Context;
 use splinter_pipelines::eval::{eval, EvalRequest, SuiteChoice};
+use splinter_pipelines::graded::Verdict;
 use splinter_pipelines::release::{
     anchor, list, release, release_recorded, rollback, ReleaseRequest, Released,
 };
@@ -663,15 +664,20 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
     };
     let held_out = score(SuiteChoice::HeldOut);
     assert_eq!((held_out[0].graded, held_out[0].accuracy), (8, Some(1.0)));
-    assert!(held_out[0].missed.is_empty());
+    // Every graded item is kept, the ones passed as well as the ones missed.
+    assert_eq!(held_out[0].items.len(), 8);
+    assert!(held_out[0]
+        .items
+        .iter()
+        .all(|i| i.verdict == Verdict::Passed
+            && i.answer.as_ref().is_some_and(|a| !a.text.is_empty())));
     let anchor = score(SuiteChoice::Anchor);
     assert_eq!((anchor[0].graded, anchor[0].accuracy), (5, Some(0.0)));
     // What it got wrong is named, with the answer it gave.
-    assert_eq!(anchor[0].missed.len(), 5);
-    assert!(anchor[0]
-        .missed
-        .iter()
-        .all(|m| m.kind == "recall" && m.answer.as_deref() == Some("I do not know.")));
+    assert_eq!(anchor[0].items.len(), 5);
+    assert!(anchor[0].items.iter().all(|m| m.kind == "recall"
+        && m.verdict == Verdict::Failed
+        && m.answer.as_ref().map(|a| a.text.as_str()) == Some("I do not know.")));
     let refused = eval(
         &ctx,
         &EvalRequest {

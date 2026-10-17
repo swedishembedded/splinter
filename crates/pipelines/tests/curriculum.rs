@@ -59,6 +59,7 @@ use splinter_pipelines::curriculum::mastery::weakest;
 use splinter_pipelines::curriculum::queue::{enqueue_retention, pending};
 use splinter_pipelines::curriculum::quota::{select, Candidate, Quotas};
 use splinter_pipelines::curriculum::BASE_POLICY;
+use splinter_pipelines::graded::Verdict;
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::release::anchor;
 use splinter_pipelines::solving::solve_set;
@@ -511,13 +512,30 @@ fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     ctx.add_model(policy.clone(), knower(&[ANCHOR, "gamma"]));
     let set = facts(&ctx, &["alpha", "gamma"], 3);
     let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new()).unwrap();
-    verify_set(
+    let verified = verify_set(
         &ctx,
         &solved.experience_set,
         Grading::ActiveJudge,
         &CancelToken::new(),
     )
     .unwrap();
+    // The report keeps every graded experience, not only the failed ones.
+    let count = |verdict: Verdict| {
+        verified
+            .items
+            .iter()
+            .filter(|i| i.verdict == verdict)
+            .count()
+    };
+    assert_eq!(verified.items.len(), verified.experiences);
+    assert_eq!(
+        (
+            count(Verdict::Passed),
+            count(Verdict::Failed),
+            count(Verdict::Undecided)
+        ),
+        (verified.passed, verified.failed, verified.undecided)
+    );
 
     let base = weakest(&ctx, 5).unwrap();
     assert_eq!(base.policy.release, None);
