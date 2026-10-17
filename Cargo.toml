@@ -94,3 +94,54 @@ proptest = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "process", "signal"] }
 toml = "0.8"
 regex = "1"
+
+# The longitudinal store reads every episode of a cohort back through its
+# sealed, compressed, checksummed blocks; unoptimised, that read dominates the
+# timeline specs (about 6 of 7 minutes of one of them), and the timeline fit and
+# its scoring are numeric loops. These crates and their codecs are built
+# optimised in the dev and test profiles, which changes no behaviour and costs
+# only their own compile time.
+[profile.dev.package.splinter-expdb]
+opt-level = 3
+[profile.dev.package.splinter-store]
+opt-level = 3
+[profile.dev.package.zstd-sys]
+opt-level = 3
+[profile.dev.package.zstd-safe]
+opt-level = 3
+[profile.dev.package.zstd]
+opt-level = 3
+[profile.dev.package.crc32fast]
+opt-level = 3
+[profile.dev.package.blake3]
+opt-level = 3
+[profile.dev.package.serde_json]
+opt-level = 3
+[profile.dev.package.brain-horizon]
+opt-level = 3
+[profile.dev.package.brain-survival]
+opt-level = 3
+[profile.dev.package.brain-kernels]
+opt-level = 3
+[profile.dev.package.brain-model]
+opt-level = 3
+[profile.dev.package.brain-optim]
+opt-level = 3
+[profile.dev.package.brain-paramstore]
+opt-level = 3
+[profile.dev.package.brain-gpu-core]
+opt-level = 3
+[profile.dev.package.brain-data]
+opt-level = 3
+[profile.dev.package.brain-checkpoint]
+opt-level = 3
+[profile.dev.package.splinter-model]
+opt-level = 3
+[profile.dev.package.splinter-core]
+opt-level = 3
+[profile.dev.package.splinter-data]
+opt-level = 3
+[profile.dev.package.sha2]
+opt-level = 3
+[profile.dev.package.serde]
+opt-level = 3
