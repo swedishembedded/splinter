@@ -336,6 +336,63 @@ candidates are docutils and sqlglot at a pinned tag; the selection rule of CE7 i
 unchanged and is applied by a later dated amendment, which names the repository, tag and
 licence, and is committed before the first CE4 qualification query.
 
+### Amendment 3, 2026-10-17, 08:15 CEST: workspace confinement, operational bounds, CE7 named
+
+Made before any qualification-partition query and before any training run. No result of
+a registered arm exists; the only agentic run so far (the 27B teacher, pass 1, on the
+iniparse development set) is withdrawn by A3.1 and trains nothing.
+
+**A3.1 Confinement of the solver's workspace.** The 27B teacher run of 2026-10-17 ran its
+shell with no filesystem confinement. In 27 of 61 trajectories the model searched the host
+filesystem, read and diffed the original task sources and tests outside its working tree,
+read the repository's history and listed other attempts' trees; 7 of its 28 raw passes did
+so, and the exposure audit as registered did not flag it. That run is withdrawn. From this
+amendment every command a workspace runs (the solver's shell and every test run) is confined
+by the kernel's Landlock to its own tree, a private temporary directory and the system
+directories; where Landlock is unavailable the run is refused. The exposure audit gains the
+rule `outside_workspace`: a tool call that names a path outside the episode's tree (other than
+system directories) marks the experience exposed, and it is excluded like any exposed
+attempt. Both apply to every arm, the teacher and the controls.
+
+**A3.2 Leakage at dataset build.** A teacher trajectory may touch a qualification family's
+file even when confined, since the snapshot holds the whole repository. The training dataset
+is built with `dataset build --drop-leaking`: every experience that would cross the exam seal
+(an attempt at a reserved family, or a supervised action naming a reserved family's file) is
+left out and counted; the seal is then applied to what remains and refuses the build if
+anything still leaks. The count and the dropped ids are reported with the dataset.
+
+**A3.3 Operational bounds.** The wall-clock bound of one task's solve is 3600 s
+(`--solve-deadline 3600`) instead of 300 s: under one shared served model the 300 s bound
+measured the queue, not the solver (every task of the first development set timed out at
+concurrency 16). It guards against a stuck episode only; episodes stay bounded by the
+registered 60 tool calls, two follow-ups and the repetition stop. The 27B is served with the
+A2.6 flags; the concurrency of the 27B arm may be lowered from 16 to 8 when the server
+measurably serves fewer requests per minute at 16 (it did: about 4 against 15), the choice
+and its measurement being recorded. Greedy outputs do not depend on concurrency.
+
+**A3.4 Binaries.** Every registered run from this amendment on uses one splinter binary and
+one brain binary, named in the run record. Admission of the eight repositories was made with
+splinter builds that differ from that binary only in dependency pins, flags, the exam seal,
+packing and run reports, none of which changes admission; it stands.
+
+**A3.5 Correction to A2.8.** The training step averages its loss over every supervised token
+of the records it accumulates, in both the packed and the unpacked view. Packing changes what
+one record holds (a whole trajectory instead of one action with its context), so it changes
+how many records an epoch draws and how much repeated context is computed, not how a token is
+weighted within a step.
+
+**A3.6 CE7 repository: sqlglot.** Applying the CE7 selection rule to docutils, sqlglot and
+python-markdown: python-markdown fails the size rule (A2.11); docutils admitted no task in a
+three-file funnel; sqlglot v30.23.0 (commit ad8764a0436a7b5c500b783ebe50dbf20c1e477c, MIT
+licence, 174 module files, offline build and test, `python3 -m unittest` over 55 test
+modules, excluding the two that need numpy and pandas, in about 17 s) admitted 4, 10 and 5
+tasks on its three-file funnel at 40 mutants per file. CE7's repository is sqlglot at that
+commit, built as a fresh git repository of its tracked files (without the integration-test
+submodule). Its admission keeps a head and a tail of an over-long test report and decides the
+verdict from the runner's summary (`--test-output-cap`, 1 MiB per stream), and compares
+near-duplicate faults by their failing tests only; the eight CE4 repositories keep the
+admission they have.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on

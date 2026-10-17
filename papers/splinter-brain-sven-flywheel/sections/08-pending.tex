@@ -69,6 +69,7 @@ protocol.\cl{PR16} \emph{Third}, one harness profile is pinned for all experimen
 bounds and a follow-up for an unchanged tree, \cref{sec:protocol}), and results measured
 before it are excluded from all analyses.\cl{PR14}
 A second amendment, also before any run, registers the run parameters: evaluation arms are greedy with one attempt per task, the exam seed and the 46 qualification and 34 development families, the serving flags, the LoRA recipe and the commit equivalence for the pinned fixes; it does not change the primary test or the success condition.\cl{PR17}
+A third amendment, before any qualification query or training run, follows from the first teacher run: the solver's shell had no filesystem confinement, and in 27 of 61 episodes the 27B searched the host, read the original task sources outside its working tree and listed other attempts, which the exposure audit as registered did not flag. That run is withdrawn; every workspace command is now confined to its tree by the kernel, a tool call naming a path outside the tree marks the episode exposed, the training set leaves out and counts what would cross the exam seal, a solve is bounded at one hour of wall time, and the CE7 repository is named (sqlglot); the primary test and the success condition are unchanged.\cl{PR18}
 
 \begin{table}[t]
 \centering\small
