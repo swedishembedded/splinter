@@ -136,6 +136,10 @@ pub struct WorkspaceSettings {
     /// test run's report); past it the middle is elided and the head and
     /// tail are kept. The command line's `--test-output-cap`.
     pub output_cap_bytes: u64,
+    /// Run workspace commands with the caller's whole filesystem where the
+    /// kernel cannot confine them. Without it such a workspace is refused:
+    /// a solver that can read the whole disk can read the answer.
+    pub allow_unconfined: bool,
 }
 
 impl Default for WorkspaceSettings {
@@ -147,6 +151,7 @@ impl Default for WorkspaceSettings {
             scratch_root: None,
             cargo_home: None,
             output_cap_bytes: WORKSPACE_OUTPUT_CAP_BYTES,
+            allow_unconfined: false,
         }
     }
 }
@@ -261,6 +266,7 @@ impl Config {
                 scratch_root: var("SPLINTER_WORKSPACE_SCRATCH").map(PathBuf::from),
                 cargo_home: var("SPLINTER_CARGO_HOME").map(PathBuf::from),
                 output_cap_bytes: WORKSPACE_OUTPUT_CAP_BYTES,
+                allow_unconfined: false,
             },
             build: BuildInfo {
                 gpu_contexts: var("SPLINTER_GPU_CONTEXTS").and_then(|v| v.trim().parse().ok()),

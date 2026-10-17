@@ -34,6 +34,7 @@ use crate::backend::{
     io, Backend, CallDir, CodeCall, CodeResult, CommandCall, Isolation, Sandbox, SandboxError,
     SandboxSpec,
 };
+use crate::landlock::Confinement;
 use crate::limits::Limits;
 use crate::process::{environment_from, run, ProcessSpec};
 use crate::runtime::{resolve_on_host, ResolvedRuntime, RuntimeSpec};
@@ -49,6 +50,30 @@ pub const DEFAULT_LANG: &str = "C.UTF-8";
 /// cursor control, so output is plain text.
 pub const DEFAULT_TERM: &str = "dumb";
 
+/// What every command may read and run: the system's own directories.
+const SYSTEM_ROOTS: [&str; 9] = [
+    "/usr", "/lib", "/lib32", "/lib64", "/bin", "/sbin", "/etc", "/opt", "/proc",
+];
+
+/// Variables of the environment that name a toolchain's home directory.
+const TOOLCHAIN_HOMES: [&str; 2] = ["CARGO_HOME", "RUSTUP_HOME"];
+
+/// The directory a program directory belongs to: `/venv` for `/venv/bin`,
+/// the directory itself otherwise, and nothing for the filesystem root.
+fn toolchain_root(program_dir: &Path) -> Option<PathBuf> {
+    let dir = if program_dir.is_file() {
+        program_dir.parent()?
+    } else {
+        program_dir
+    };
+    let root = if dir.file_name().is_some_and(|n| n == "bin") {
+        dir.parent()?
+    } else {
+        dir
+    };
+    (root.parent().is_some()).then(|| root.to_path_buf())
+}
+
 /// Variables a call always gets set to its own directory.
 const PER_CALL_VARIABLES: [&str; 2] = ["HOME", "TMPDIR"];
 
@@ -59,6 +84,8 @@ pub struct ProcessSandbox {
     scratch_root: PathBuf,
     env: BTreeMap<String, String>,
     limits: Limits,
+    allow_unconfined: bool,
+    landlock: bool,
 }
 
 impl ProcessSandbox {
@@ -94,6 +121,58 @@ impl ProcessSandbox {
                 max_processes: None,
                 ..limits
             },
+            allow_unconfined: false,
+            landlock: crate::landlock::abi_version().is_some(),
+        }
+    }
+
+    /// Lets commands run with the caller's whole filesystem where the kernel
+    /// cannot confine them (and when `allow` is set, everywhere). Without
+    /// it a command is confined to its tree and a private directory, and is
+    /// refused ([`SandboxError::Unconfined`]) where that is impossible. The
+    /// environment record says so when it is set.
+    #[must_use]
+    pub fn allow_unconfined(mut self, allow: bool) -> Self {
+        self.allow_unconfined = allow;
+        self
+    }
+
+    /// Behaves as on a kernel without Landlock, for a test of the refusal.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn without_landlock(mut self) -> Self {
+        self.landlock = false;
+        self
+    }
+
+    /// What a command in `tree`, with `home` as its private directory, may
+    /// reach: the system, the directories its `PATH` and toolchain
+    /// variables name (read only), its tree, its private directory and the
+    /// device files (read and write). Nothing else: no home directory, no
+    /// other tree, no state root.
+    fn command_confinement(&self, tree: &Path, home: &Path) -> Confinement {
+        let mut read_only: Vec<PathBuf> = SYSTEM_ROOTS.iter().map(PathBuf::from).collect();
+        for entry in self.search_path().split(':').filter(|e| !e.is_empty()) {
+            read_only.extend(toolchain_root(Path::new(entry)));
+            read_only.extend(toolchain_root(
+                &Path::new(entry)
+                    .join("python3")
+                    .canonicalize()
+                    .unwrap_or_default(),
+            ));
+        }
+        let mut read_write = vec![
+            tree.to_path_buf(),
+            home.to_path_buf(),
+            PathBuf::from("/dev"),
+        ];
+        for name in TOOLCHAIN_HOMES {
+            // A toolchain's home is written to (cargo locks its registry).
+            read_write.extend(self.env.get(name).map(PathBuf::from));
+        }
+        Confinement {
+            read_only,
+            read_write,
         }
     }
 
@@ -130,6 +209,7 @@ impl ProcessSandbox {
             timeout: self.limits.wall_time(),
             output_cap: self.limits.output_cap(),
             resources: Some(self.limits.resources()),
+            confinement: None,
         }
     }
 
@@ -169,6 +249,7 @@ impl Sandbox for ProcessSandbox {
             isolation: Isolation::None,
             limits: self.limits,
             env: self.env.clone(),
+            unconfined_commands: self.allow_unconfined,
         }
     }
 
@@ -190,14 +271,19 @@ impl Sandbox for ProcessSandbox {
     /// removed afterwards, so what the command keeps in `dir` is only what
     /// it means to leave there.
     fn run_command(&self, dir: &Path, call: &CommandCall) -> Result<CodeResult, SandboxError> {
+        if !self.allow_unconfined && !self.landlock {
+            return Err(SandboxError::Unconfined);
+        }
         let home = CallDir::create(&self.scratch_root)?;
         let result = match home.path().to_str() {
-            Some(home_arg) => self.execute(&self.process_spec(
-                call.argv.clone(),
-                dir,
-                home_arg,
-                call.stdin.as_ref(),
-            )),
+            Some(home_arg) => {
+                let mut spec =
+                    self.process_spec(call.argv.clone(), dir, home_arg, call.stdin.as_ref());
+                if !self.allow_unconfined {
+                    spec.confinement = Some(self.command_confinement(dir, home.path()));
+                }
+                self.execute(&spec)
+            }
             None => Err(io(home.path())(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "the scratch root is not a UTF-8 path",

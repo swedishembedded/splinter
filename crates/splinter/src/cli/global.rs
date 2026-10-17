@@ -53,6 +53,12 @@ pub struct Global {
         help = format!("Bytes kept of each output stream of a test run [default: {}]",
             splinter_sdk::config::WORKSPACE_OUTPUT_CAP_BYTES))]
     pub test_output_cap: Option<u64>,
+    /// Let a project's commands (the solver's shell, the test runs) see the
+    /// whole filesystem where the kernel cannot confine them to their tree.
+    /// Without it such a run is refused; the environment record says when it
+    /// was allowed.
+    #[arg(long, global = true)]
+    pub allow_unconfined_workspace: bool,
     /// The sampling temperature, 0 to 2, asked of a model reached through
     /// sven's providers (the provider's own default when not given). The
     /// same flag sets the pass@k sampling of a verb that measures it; when

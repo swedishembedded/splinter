@@ -611,6 +611,7 @@ impl Sandbox for RecordingContainer {
             isolation: Isolation::Container,
             limits: Limits::default(),
             env: BTreeMap::new(),
+            unconfined_commands: false,
         }
     }
     fn resolve(&self, _: &RuntimeSpec) -> Result<ResolvedRuntime, SandboxError> {
@@ -671,22 +672,42 @@ async fn where_the_sandbox_is_a_container_the_shell_runs_in_it() {
     assert_eq!(shells, 1, "the sandbox shell replaces sven's, not joins it");
 }
 
+/// A file outside every tree, named the same on every call of this process.
+fn outside_file() -> PathBuf {
+    std::env::temp_dir().join(format!("splinter-outside-{}.py", std::process::id()))
+}
+
 #[tokio::test]
-async fn where_the_sandbox_is_not_a_container_sven_runs_the_shell_itself() {
+async fn where_the_sandbox_is_the_process_sandbox_the_worker_reaches_nothing_outside_its_tree() {
     let fixture = Fixture::new();
     let environment = fixture.environment();
+    let secret = outside_file();
+    std::fs::write(&secret, "ORIGINAL_SOURCE = 1\n").unwrap();
     let model = Scripted::new(|req| match tool_results(req) {
         0 => call(
             "c0",
+            "read_file",
+            serde_json::json!({"path": outside_file(), "start_line": 1, "end_line": 5}),
+        ),
+        1 => call(
+            "c1",
             "shell",
-            serde_json::json!({"description": "say hi", "shell_command": "echo from-sven-shell"}),
+            serde_json::json!({"description": "read it", "shell_command": format!("cat {}; echo from-shell", outside_file().display())}),
         ),
         _ => text("done"),
     });
 
-    solve(&fixture, &environment, &[], model.clone(), &protocol(0))
+    let solved = solve(&fixture, &environment, &[], model.clone(), &protocol(0))
         .await
         .unwrap();
 
-    assert!(model.tool_results().contains("from-sven-shell"));
+    let seen = model.tool_results();
+    assert!(seen.contains("from-shell"), "the shell ran: {seen}");
+    assert!(
+        !seen.contains("ORIGINAL_SOURCE"),
+        "neither the file tool nor the shell read outside the tree: {seen}"
+    );
+    std::fs::remove_file(&secret).unwrap();
+    let extra = solved.solution.trajectory.agent.extra.unwrap();
+    assert!(extra["workspace_tree"].as_str().unwrap().ends_with("/tree"));
 }

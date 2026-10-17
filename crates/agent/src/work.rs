@@ -45,7 +45,7 @@ use splinter_core::experience::Task;
 use splinter_core::outcome::AttemptReport;
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
-    Baseline, CodeResult, CommandCall, Isolation, Patch, ResolvedEnvironment, SandboxError,
+    Baseline, CodeResult, CommandCall, Patch, ResolvedEnvironment, SandboxError,
     WorkspaceEnvironment,
 };
 use sven_sdk::config::Config;
@@ -548,10 +548,10 @@ pub async fn solve_in_workspace(
         options.observer = Some(both(options.observer.take(), make(&tree, &baseline)));
     }
 
-    let confined: Vec<Arc<dyn Tool>> = match env.sandbox().isolation() {
-        Isolation::Container => vec![Arc::new(SandboxShell::new(env.clone(), tree.clone()))],
-        Isolation::None => Vec::new(),
-    };
+    // The model's commands always go through the sandbox: a container, or
+    // the process sandbox's filesystem confinement. sven's own shell would
+    // run them with the whole filesystem.
+    let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::new(env.clone(), tree.clone()))];
     let episode = options.solve.deadline;
     options.max_repeated_results = protocol.max_repeated_results;
     let mut worker = Worker::start_replacing(&tree, model, options, &confined)?;
@@ -603,6 +603,18 @@ pub async fn solve_in_workspace(
         .await?
     };
     let mut solution = last.solution;
+    // The exposure audit needs to know which tree was this episode's own.
+    if let serde_json::Value::Object(extra) = solution
+        .trajectory
+        .agent
+        .extra
+        .get_or_insert_with(|| serde_json::json!({}))
+    {
+        extra.insert(
+            splinter_eval::exposure::WORKSPACE_TREE_KEY.into(),
+            serde_json::json!(tree.display().to_string()),
+        );
+    }
     solution.final_output = Some(String::from_utf8_lossy(&patch.diff).into_owned());
     Ok(WorkspaceSolution {
         report: sum.into_report(solution.clone()),

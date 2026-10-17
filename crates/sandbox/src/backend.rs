@@ -127,6 +127,11 @@ pub struct SandboxSpec {
     /// The environment variables of every call, except `HOME` and
     /// `TMPDIR`, which name the call's own working directory.
     pub env: BTreeMap<String, String>,
+    /// Set only where commands were explicitly allowed to run with the
+    /// caller's whole filesystem; absent otherwise, so the record of a
+    /// confined sandbox is the one it always had.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unconfined_commands: bool,
 }
 
 /// Where code calls run.
@@ -189,6 +194,13 @@ pub enum SandboxError {
         /// What went wrong.
         detail: String,
     },
+    /// A command was refused because it cannot be confined to its tree: the
+    /// kernel has no Landlock, and running it unconfined was not allowed.
+    #[error(
+        "this kernel cannot confine a workspace command to its tree (Landlock is unavailable); \
+         refusing to run it unconfined without --allow-unconfined-workspace"
+    )]
+    Unconfined,
     /// The environment record cannot be serialized.
     #[error("cannot serialize the environment: {0}")]
     Serialize(#[from] serde_json::Error),

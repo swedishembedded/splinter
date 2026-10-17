@@ -12,6 +12,7 @@
 //! * [`process`] - one bounded run of a program: explicit environment,
 //!   process-group kill at a timeout, output caps, optional kernel resource
 //!   limits. Every process Splinter runs goes through it.
+//! * [`landlock`] - filesystem confinement of a child process by the kernel.
 //! * [`limits`] - what one code call may use, with its defaults.
 //! * [`runtime`] - the registry of runtimes (`python3`, `lua`, `node`,
 //!   `sh`) and what a runtime resolves to: version and executable digest.
@@ -40,6 +41,7 @@ pub mod backend;
 pub mod container;
 pub mod environment;
 pub mod host;
+pub mod landlock;
 pub mod limits;
 pub mod process;
 pub mod runtime;

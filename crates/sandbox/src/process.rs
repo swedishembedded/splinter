@@ -34,6 +34,8 @@ use std::process::{Child, Command, Stdio};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use crate::landlock::Confinement;
+
 /// How long a killed run's output may take to close before the run gives
 /// up on it.
 const KILL_GRACE: Duration = Duration::from_secs(2);
@@ -109,6 +111,9 @@ pub struct ProcessSpec {
     pub output_cap: usize,
     /// Kernel limits applied to the program, when set.
     pub resources: Option<ResourceLimits>,
+    /// The only paths the program may reach, when set; the run fails where
+    /// the kernel cannot confine it.
+    pub confinement: Option<Confinement>,
 }
 
 impl ProcessSpec {
@@ -130,6 +135,7 @@ impl ProcessSpec {
             timeout,
             output_cap,
             resources: None,
+            confinement: None,
         }
     }
 }
@@ -175,6 +181,14 @@ pub enum ProcessError {
     /// The program could not be started.
     #[error("cannot start {program:?}: {source}")]
     Spawn {
+        /// The program.
+        program: String,
+        /// The underlying error.
+        source: std::io::Error,
+    },
+    /// The program could not be confined to its paths.
+    #[error("cannot confine {program:?} to its paths: {source}")]
+    Confine {
         /// The program.
         program: String,
         /// The underlying error.
@@ -422,6 +436,30 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         // memory shared with the parent.
         unsafe {
             command.pre_exec(move || resources.apply());
+        }
+    }
+
+    // Built here, where it may allocate; the child only enforces it.
+    let ruleset = match &spec.confinement {
+        Some(confinement) => {
+            Some(
+                confinement
+                    .prepare()
+                    .map_err(|source| ProcessError::Confine {
+                        program: program.clone(),
+                        source,
+                    })?,
+            )
+        }
+        None => None,
+    };
+    if let Some(ruleset) = &ruleset {
+        let fd = ruleset.raw_fd();
+        // SAFETY: the closure makes only system calls (`prctl`,
+        // `landlock_restrict_self`) on a descriptor the parent keeps open
+        // until the child is spawned.
+        unsafe {
+            command.pre_exec(move || crate::landlock::enforce_fd(fd));
         }
     }
 

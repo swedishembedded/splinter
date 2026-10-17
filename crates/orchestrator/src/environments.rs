@@ -199,12 +199,15 @@ impl Environments {
                 ]
             })
             .collect();
-        Ok(Arc::new(ProcessSandbox::new(
-            &self.workspace_calls,
-            cargo,
-            &["CARGO_HOME", "CARGO_INCREMENTAL"],
-            workspace_limits(settings.output_cap_bytes),
-        )))
+        Ok(Arc::new(
+            ProcessSandbox::new(
+                &self.workspace_calls,
+                cargo,
+                &["CARGO_HOME", "CARGO_INCREMENTAL"],
+                workspace_limits(settings.output_cap_bytes),
+            )
+            .allow_unconfined(settings.allow_unconfined),
+        ))
     }
 
     /// The environment `recorded` names, resolved here. Whether it is

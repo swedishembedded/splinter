@@ -14,10 +14,9 @@
 //! command can read any path the process can, including material a task
 //! withholds from its solver. This tool has the same name and takes the
 //! same command, so the model sees one `shell`; sven lets a tool given to
-//! the engine replace the built-in of that name. It is used only where the
-//! sandbox is a container ([`splinter_sandbox::Isolation::Container`]);
-//! with the process sandbox nothing would be confined by it and sven's own
-//! shell is kept.
+//! the engine replace the built-in of that name. It is always used: a
+//! container confines the command, and the process sandbox confines it to
+//! its tree with the kernel's Landlock (or refuses to run it).
 
 use std::path::PathBuf;
 
@@ -57,8 +56,8 @@ impl Tool for SandboxShell {
         "Run a bash command in the project directory; returns stdout, stderr and how \
          the command ended.\n\
          'description' is one short line naming what the command does.\n\
-         Non-interactive only. The command runs in a sandbox with no network and only \
-         the project directory writable; it is stopped at a time limit. Narrow big \
+         Non-interactive only. The command runs confined to the project directory (the only place it can \
+         write); nothing else of the disk is visible to it; it is stopped at a time limit. Narrow big \
          output at the source (`tail -200`, `grep -E 'error:'`)."
     }
 

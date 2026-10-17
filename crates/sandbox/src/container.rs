@@ -438,6 +438,7 @@ impl Sandbox for ContainerSandbox {
             isolation: Isolation::Container,
             limits: self.limits,
             env: self.env.clone(),
+            unconfined_commands: false,
         }
     }
 
