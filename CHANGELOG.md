@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (BREAKING, workspace confinement)
+- A command a workspace runs on the process sandbox (the solver's shell and every test run) is confined by the kernel's Landlock to its tree, a private directory (`HOME` and `TMPDIR`), the system directories, the directories its `PATH` and `CARGO_HOME` name, and the device files: no home directory, no other tree, no state root. The solver's `shell` is always the sandbox's, never sven's own, which ran with the whole filesystem. Where Landlock is unavailable the command is refused unless `--allow-unconfined-workspace` is given, and then the environment record says `unconfined_commands`. A confined environment keeps the record it had.
+- The exposure audit fails a workspace experience whose tool calls name an absolute path outside the episode's tree and the system directories (`outside_workspace`); a trajectory now records its tree as `workspace_tree` in the agent's `extra`.
+
 ### Added (exam seal)
 - `dataset build --drop-leaking` leaves out every experience that would cross the exam seal (an attempt at a reserved family, or a supervised action naming a reserved family's file) instead of refusing the build. They are counted under `exam_leak` and listed with their reasons in the report's `dropped`; what remains is sealed as usual, so the build is still refused if anything leaks after filtering. Without the flag a leak still refuses the build.
 

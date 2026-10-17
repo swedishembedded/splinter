@@ -20,7 +20,9 @@
 //!   tokens that also occurs in hidden material and in no text the solver
 //!   is allowed to see ([`HiddenMaterial::public_contents`]);
 //! * a tool call or output holds one of the **forbidden strings**, such as
-//!   the path of the state root.
+//!   the path of the state root;
+//! * for a workspace task, a tool call names an **absolute path outside the
+//!   episode's tree** ([`crate::exposure_paths`]).
 //!
 //! A clean trajectory is an **abstention**, not a pass: not having seen the
 //! material does not make an answer right. The audit is a
@@ -38,6 +40,8 @@ use serde_json::json;
 use splinter_core::annotation::{Producer, Strength};
 use splinter_core::experience::{Experience, Task};
 
+use crate::exposure_paths::outside_workspace;
+pub use crate::exposure_paths::WORKSPACE_TREE_KEY;
 use crate::verifiers::{Finding, Verifier, VerifyError};
 
 /// The producer name an exposure audit's annotations carry.
@@ -66,6 +70,11 @@ pub struct HiddenMaterial {
     /// Strings that must not appear anywhere in a call or an output, such as
     /// the path of the state root.
     pub forbidden: Vec<String>,
+    /// Whether a tool call that names an absolute path outside the episode's
+    /// own tree and the system's directories is exposure
+    /// (`outside_workspace`): for a workspace task, whose solver is confined
+    /// to its tree and so has no business looking elsewhere.
+    pub confine_to_workspace: bool,
 }
 
 /// Where in the trajectory a match was found.
@@ -245,6 +254,21 @@ pub fn audit_exposure(task: &Task, exp: &Experience, hidden: &HiddenMaterial) ->
                     matches.push(finding(text, "content_shingle", item));
                 }
             }
+        }
+    }
+    if hidden.confine_to_workspace {
+        let recorded = exp
+            .trajectory
+            .agent
+            .extra
+            .as_ref()
+            .and_then(|extra| extra.get(WORKSPACE_TREE_KEY))
+            .and_then(|tree| tree.as_str());
+        for (step, count) in outside_workspace(&exp.trajectory.steps, recorded) {
+            matches.push(json!({
+                "step": step, "in": Place::ToolCall.label(),
+                "kind": "outside_workspace", "item": count,
+            }));
         }
     }
     if matches.is_empty() {

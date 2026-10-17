@@ -90,6 +90,7 @@ fn hidden_material(
     let mut material = HiddenMaterial {
         forbidden: vec![ctx.root().path().to_string_lossy().into_owned()],
         public_contents: texts_under(&tree),
+        confine_to_workspace: true,
         ..HiddenMaterial::default()
     };
     let Some(check) = check else {

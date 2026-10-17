@@ -64,6 +64,7 @@ pub mod competence;
 pub mod continual;
 pub mod denoise;
 pub mod exposure;
+mod exposure_paths;
 pub mod frontier;
 pub mod gate;
 pub mod metric_gate;
