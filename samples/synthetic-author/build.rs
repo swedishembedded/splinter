@@ -23,7 +23,18 @@ fn main() {
     };
     println!("cargo:rustc-env=SYNTHETIC_AUTHOR_REVISION={revision}");
     println!("cargo:rerun-if-changed=src");
-    if let Some(head) = git(&["rev-parse", "--git-path", "HEAD"]) {
-        println!("cargo:rerun-if-changed={head}");
+    // HEAD names the branch, which a commit does not change: the branch's
+    // ref (loose or packed) and the index are what move, so a commit or a
+    // staged edit names the new revision.
+    let mut watched = vec![
+        "HEAD".to_string(),
+        "packed-refs".to_string(),
+        "index".to_string(),
+    ];
+    watched.extend(git(&["symbolic-ref", "-q", "HEAD"]));
+    for path in watched {
+        if let Some(file) = git(&["rev-parse", "--git-path", &path]) {
+            println!("cargo:rerun-if-changed={file}");
+        }
     }
 }
