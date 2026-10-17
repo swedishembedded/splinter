@@ -38,6 +38,7 @@ use splinter_core::training::{
 use crate::capabilities::overlong_records;
 use crate::error::PolicyError;
 use crate::local::{closed_think_pairs, opens_think_block};
+use crate::progress::{poll, StepClock};
 
 /// The DPO temperature `beta` a preference fine-tune uses when its caller
 /// names none: brain's default.
@@ -425,10 +426,11 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         fine_tune = fine_tune.continue_from(adapter);
     }
     let brain_cancel = brain::CancelToken::armed();
+    let clock = StepClock::start();
     let outcome = fine_tune
         .run_with(
             &brain_cancel,
-            poll(request.cancel, &brain_cancel, request.on_step),
+            poll(request.cancel, &brain_cancel, request.on_step, Some(&clock)),
         )
         .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
     if brain_cancel.is_cancelled() {
@@ -442,7 +444,8 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     if outcome.status != brain::FineTuneStatus::Completed {
         return Err(failed("it did not complete".into()));
     }
-    let curve = curve_of(&outcome);
+    let mut curve = curve_of(&outcome);
+    curve.speed = clock.finish(request.grad_accum, outcome.block);
     let evaluations = request
         .keep_evaluations
         .map(|dir| {
@@ -509,6 +512,7 @@ fn curve_of(outcome: &brain::ChatFineTuneOutcome) -> TrainingCurve {
         },
         stopped_early: outcome.stopped_early,
         monitoring_skipped: None,
+        speed: None,
     }
 }
 
@@ -637,7 +641,10 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
     }
     let brain_cancel = brain::CancelToken::armed();
     let outcome = fine_tune
-        .run_with(&brain_cancel, poll(request.cancel, &brain_cancel, None))
+        .run_with(
+            &brain_cancel,
+            poll(request.cancel, &brain_cancel, None, None),
+        )
         .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
@@ -699,57 +706,9 @@ fn candidate_adapter_id(base_id: &str) -> String {
     format!("{base_id}:splinter:candidate:latest")
 }
 
-/// The progress callback that cancels `brain_cancel` once `cancel` fires:
-/// brain's token stops training at a step boundary, sven's is the one the
-/// caller cancels, so it is polled once per step.
-fn poll<'a>(
-    cancel: Option<&'a sven_sdk::CancelToken>,
-    brain_cancel: &'a brain::CancelToken,
-    on_step: Option<StepHook<'a>>,
-) -> impl FnMut(&brain::FineTuneProgress) + 'a {
-    move |progress| {
-        if let Some(StepHook(report)) = on_step {
-            report(&StepReport {
-                step: progress.step,
-                steps: progress.steps,
-                loss: progress.loss,
-            });
-        }
-        if cancel.is_some_and(sven_sdk::CancelToken::is_cancelled) {
-            brain_cancel.cancel();
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Every optimizer step is reported to the caller, and a cancelled
-    /// caller cancels brain's token at the next step.
-    #[test]
-    fn a_step_is_reported_and_a_cancel_is_forwarded() {
-        let seen = std::cell::RefCell::new(Vec::new());
-        let report = |r: &StepReport| seen.borrow_mut().push((r.step, r.steps, r.loss));
-        let brain_cancel = brain::CancelToken::armed();
-        let caller = sven_sdk::CancelToken::new();
-        let mut step = poll(Some(&caller), &brain_cancel, Some(StepHook(&report)));
-        let progress = |n| brain::FineTuneProgress {
-            step: n,
-            steps: 3,
-            loss: 1.5,
-            lr: 1e-4,
-        };
-        step(&progress(1));
-        assert!(!brain_cancel.is_cancelled());
-        caller.cancel();
-        step(&progress(2));
-        assert!(
-            brain_cancel.is_cancelled(),
-            "the caller's cancel reaches brain"
-        );
-        assert_eq!(*seen.borrow(), vec![(1, 3, 1.5), (2, 3, 1.5)]);
-    }
 
     /// A Hugging Face checkpoint trains from its directory, where its
     /// `config.json` is; a brain-format file trains as itself.

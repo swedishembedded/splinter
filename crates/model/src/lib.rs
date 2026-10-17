@@ -51,6 +51,7 @@ pub mod exam;
 pub mod local;
 pub mod manifest;
 pub mod precision;
+mod progress;
 pub mod report;
 pub mod residency;
 pub mod rl;

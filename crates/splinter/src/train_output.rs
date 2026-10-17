@@ -106,6 +106,19 @@ fn curve_lines(curve: &TrainingCurve) -> String {
         "  steps: {} of a budget of {}{stopped}; carries step {} ({why})",
         curve.steps_completed, curve.steps, curve.selected_step
     );
+    if let Some(speed) = &curve.speed {
+        let _ = writeln!(
+            out,
+            "  speed: {:.0} tokens/s ({} row tokens in {:.1} s over {} steps, from the first step report to the last); \
+             {:.1} s before the first step report (model load, base scoring, one step), {:.1} s after the last (scoring, export)",
+            speed.tokens_per_second,
+            speed.row_tokens,
+            speed.seconds,
+            speed.steps_timed,
+            speed.lead_seconds,
+            speed.tail_seconds
+        );
+    }
     if curve.eval_every == 0 {
         let _ = writeln!(out, "  monitoring: none");
         return out;
@@ -174,5 +187,36 @@ impl Report for Rehearsed {
             let _ = writeln!(out, "  stopped: {why}");
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use splinter_sdk::vocabulary::training::TrainingSpeed;
+
+    /// The report names the training speed, and what it leaves out.
+    #[test]
+    fn the_curve_text_reports_tokens_per_second_and_the_time_around_the_steps() {
+        let mut curve = TrainingCurve::unmonitored(10, 10);
+        curve.speed = TrainingSpeed::measured(9, 4, 1000, 18.0, 40.0, 7.0);
+        let text = curve_lines(&curve);
+        // perf-number: the fixture of a unit test, not a measurement
+        assert!(text.contains("speed: 2000 tokens/s"), "{text}");
+        assert!(
+            // perf-number: the fixture of a unit test, not a measurement
+            text.contains("36000 row tokens in 18.0 s over 9 steps"),
+            "{text}"
+        );
+        assert!(
+            // perf-number: the fixture of a unit test, not a measurement
+            text.contains("40.0 s before the first step report"),
+            "{text}"
+        );
+        curve.speed = None;
+        assert!(
+            !curve_lines(&curve).contains("speed:"),
+            "a run with no timed interval prints no speed"
+        );
     }
 }

@@ -198,6 +198,65 @@ pub struct TrainingCurve {
     /// here carries its last step, not a chosen one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub monitoring_skipped: Option<String>,
+    /// How fast the optimizer steps ran; `None` for a run of fewer than two
+    /// steps, which has no interval between step reports to time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<TrainingSpeed>,
+}
+
+/// How fast a fine-tune trained, timed between its step reports so that the
+/// model load, the first step and the scoring around the steps are left out
+/// and reported apart.
+///
+/// Tokens are the positions the trainer computes: rows of the training block
+/// (the longest record, padded to), not only the supervised answer tokens.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TrainingSpeed {
+    /// Optimizer steps inside the timed interval: the steps after the first
+    /// one reported.
+    pub steps_timed: u32,
+    /// Rows of the training block computed in those steps.
+    pub row_tokens: u64,
+    /// Wall-clock seconds from the first step report to the last.
+    pub seconds: f64,
+    /// `row_tokens` per second of `seconds`.
+    pub tokens_per_second: f64,
+    /// Seconds from the start of the fine-tune to its first step report: the
+    /// model load, the scoring of the base, and one step.
+    pub lead_seconds: f64,
+    /// Seconds from the last step report to the end of the fine-tune: the
+    /// final evaluations, the scoring of the tuned model and the export.
+    pub tail_seconds: f64,
+}
+
+impl TrainingSpeed {
+    /// The speed of `steps_timed` steps of `rows_per_step` rows of `block`
+    /// tokens over `seconds`. `None` when there is no interval to time: no
+    /// step, or no time elapsed.
+    #[must_use]
+    pub fn measured(
+        steps_timed: u32,
+        rows_per_step: u32,
+        block: u32,
+        seconds: f64,
+        lead_seconds: f64,
+        tail_seconds: f64,
+    ) -> Option<Self> {
+        if steps_timed == 0 || seconds <= 0.0 {
+            return None;
+        }
+        let row_tokens = u64::from(steps_timed) * u64::from(rows_per_step) * u64::from(block);
+        let tokens_per_second =
+            f64::from(steps_timed) * f64::from(rows_per_step) * f64::from(block) / seconds;
+        Some(Self {
+            steps_timed,
+            row_tokens,
+            seconds,
+            tokens_per_second,
+            lead_seconds,
+            tail_seconds,
+        })
+    }
 }
 
 /// The generalisation gap at the selected step, as a share of the
@@ -223,6 +282,7 @@ impl TrainingCurve {
             selection: Selection::LastStep,
             stopped_early: false,
             monitoring_skipped: None,
+            speed: None,
         }
     }
 
@@ -358,7 +418,27 @@ mod tests {
             selection: Selection::BestMonitorLoss,
             stopped_early,
             monitoring_skipped: None,
+            speed: None,
         }
+    }
+
+    /// The speed is timed between step reports, so the model load and the
+    /// scoring around the steps are not in it; fewer than two steps give none.
+    #[test]
+    fn training_speed_counts_the_rows_of_the_timed_steps_per_second_of_their_interval() {
+        // 9 steps after the first, 4 rows of a 1000-token block each, 18 s.
+        let speed = TrainingSpeed::measured(9, 4, 1000, 18.0, 40.0, 7.0).unwrap();
+        assert_eq!(speed.row_tokens, 36_000);
+        assert!((speed.tokens_per_second - 2000.0).abs() < 1e-9);
+        assert_eq!((speed.lead_seconds, speed.tail_seconds), (40.0, 7.0));
+        assert!(
+            TrainingSpeed::measured(0, 4, 1000, 0.0, 1.0, 1.0).is_none(),
+            "one step report has no interval"
+        );
+        assert!(
+            TrainingSpeed::measured(3, 4, 1000, 0.0, 1.0, 1.0).is_none(),
+            "no elapsed time has no rate"
+        );
     }
 
     /// The curve warns of what the selected adapter still shows, and only
