@@ -91,8 +91,10 @@ impl Snapshot {
         let Some(episode) = data.episodes.get(&id) else {
             return Ok(None);
         };
+        let parts = data.by_episode.get(&id);
         let mut streams = Vec::new();
-        for (stream_id, stream) in data.streams.iter().filter(|(_, s)| s.episode == id) {
+        for stream_id in parts.map_or(&[][..], |p| &p.streams) {
+            let stream = &data.streams[stream_id];
             let schema = data.schemas.get(&stream.modality).cloned().ok_or_else(|| {
                 Error::corrupt(
                     format!("stream {stream_id}"),
@@ -106,18 +108,16 @@ impl Snapshot {
                 chunks: data.chunks.get(stream_id).cloned().unwrap_or_default(),
             });
         }
-        let mut events: Vec<_> = data
-            .events
+        let mut events: Vec<_> = parts
+            .map_or(&[][..], |p| &p.events)
             .iter()
-            .filter(|e| e.episode == id)
-            .cloned()
+            .map(|at| data.events[*at].clone())
             .collect();
         events.sort_by_key(|e| e.id);
-        let mut actions: Vec<_> = data
-            .actions
+        let mut actions: Vec<_> = parts
+            .map_or(&[][..], |p| &p.actions)
             .iter()
-            .filter(|a| a.episode == id)
-            .cloned()
+            .map(|at| data.actions[*at].clone())
             .collect();
         actions.sort_by_key(|a| a.id);
         Ok(Some(EpisodeView {

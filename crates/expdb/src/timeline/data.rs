@@ -29,6 +29,20 @@ pub(crate) struct TimelineData {
     pub(crate) mappings: Vec<ClockMapping>,
     pub(crate) correspondences: Vec<CorrespondenceView>,
     pub(crate) schemas: HashMap<ContentId, ModalitySchema>,
+    /// Where each episode's streams, events and actions are, so that reading
+    /// one episode costs its own records and not the snapshot's: a cohort of
+    /// n episodes is read back in n steps, not n squared.
+    pub(crate) by_episode: HashMap<RecordId, EpisodeParts>,
+}
+
+/// The records of one episode: its streams, and the positions of its events
+/// and actions in [`TimelineData::events`] and [`TimelineData::actions`].
+#[derive(Default)]
+pub(crate) struct EpisodeParts {
+    /// Stream ids, ascending.
+    pub(crate) streams: Vec<RecordId>,
+    pub(crate) events: Vec<usize>,
+    pub(crate) actions: Vec<usize>,
 }
 
 impl Snapshot {
@@ -90,6 +104,27 @@ impl Snapshot {
                     _ => {}
                 }
             }
+        }
+        for (id, stream) in &data.streams {
+            data.by_episode
+                .entry(stream.episode)
+                .or_default()
+                .streams
+                .push(*id);
+        }
+        for (at, event) in data.events.iter().enumerate() {
+            data.by_episode
+                .entry(event.episode)
+                .or_default()
+                .events
+                .push(at);
+        }
+        for (at, action) in data.actions.iter().enumerate() {
+            data.by_episode
+                .entry(action.episode)
+                .or_default()
+                .actions
+                .push(at);
         }
         for chunks in data.chunks.values_mut() {
             chunks.sort_by_key(|c| (c.chunk.interval.start_ns, c.id));

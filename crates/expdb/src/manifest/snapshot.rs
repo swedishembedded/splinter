@@ -65,6 +65,17 @@ impl Database {
 }
 
 impl Snapshot {
+    /// This snapshot reading through the parsed indexes `earlier` already
+    /// holds, when both are the same set of files: a reader that refreshes
+    /// to see other writers' records, and finds there are none, must not
+    /// parse the whole snapshot again.
+    pub(crate) fn reusing_cache_of(mut self, earlier: &Snapshot) -> Self {
+        if self.id == earlier.id {
+            self.cache = std::sync::Arc::clone(&earlier.cache);
+        }
+        self
+    }
+
     fn of(db: &Database, heads: Vec<ContentId>) -> Result<Self> {
         let resolved = db.resolve(&heads)?;
         let id = match heads.as_slice() {

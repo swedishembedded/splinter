@@ -82,6 +82,28 @@ fn a_robot_episode_is_one_experience_with_every_stream_action_and_event_in_it() 
 }
 
 #[test]
+fn an_episode_view_holds_only_its_own_streams_events_and_actions() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut c = collector(&db);
+    let first = robot_episode(&mut c, "make breakfast", 1);
+    let second = robot_episode(&mut c, "make lunch", 2);
+    let snapshot = db.snapshot().unwrap();
+    for (mine, other) in [(&first, &second), (&second, &first)] {
+        let view = snapshot.episode(mine.episode).unwrap().unwrap();
+        assert_eq!(view.streams.len(), 4);
+        assert_eq!(view.actions.len(), 2);
+        assert!(view.events.iter().all(|e| e.episode == mine.episode));
+        assert!(view.actions.iter().all(|a| a.episode == mine.episode));
+        assert!(view
+            .streams
+            .iter()
+            .all(|s| s.stream.episode == mine.episode && s.stream.episode != other.episode));
+        assert!(view.events.windows(2).all(|w| w[0].id < w[1].id));
+    }
+}
+
+#[test]
 fn what_was_recorded_is_what_is_read_back() {
     let scratch = Scratch::new();
     let db = scratch.open();

@@ -165,7 +165,7 @@ impl Session {
     /// writers' records appear.
     pub fn refresh(&mut self) -> Result<()> {
         self.flush()?;
-        self.base = self.db.snapshot()?;
+        self.base = self.db.snapshot()?.reusing_cache_of(&self.base);
         self.base_size = self.base.entity_count()?;
         self.entities.clear();
         self.entity_log.clear();
