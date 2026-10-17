@@ -197,6 +197,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         limit,
         max_block,
         pack,
+        drop_leaking,
         writer,
         token_limit,
         max_family_share,
@@ -220,6 +221,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "--max-block",
         "4096",
         "--pack",
+        "--drop-leaking",
         "--writer",
         "The Writer",
         "--token-limit",
@@ -237,7 +239,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         (Some("The Writer"), Some(9000), Some(0.2))
     );
     assert!(describe_with.is_some());
-    assert!(pack);
+    assert!(pack && drop_leaking);
     assert_eq!(sets.len(), 2);
     assert_eq!(view, ViewName::Preference);
     assert!(matches!(strip, Some(StripPolicy::Mix { .. })));

@@ -17,7 +17,7 @@ use splinter_sdk::canaries;
 use splinter_sdk::compare::compare;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
-use splinter_sdk::datasets::{build, export, BuildRequest, VoiceBuild};
+use splinter_sdk::datasets::{build, build_dropping_leaks, export, BuildRequest, VoiceBuild};
 use splinter_sdk::describe::DescribeRequest;
 use splinter_sdk::doctor::doctor;
 use splinter_sdk::eval::{evaluate, EvalRequest};
@@ -459,6 +459,7 @@ impl Session {
                 limit,
                 max_block,
                 pack,
+                drop_leaking,
                 writer,
                 token_limit,
                 max_family_share,
@@ -497,13 +498,15 @@ impl Session {
                         let strip = strip
                             .map(|policy| policy.with_seed(|| run.seed("mix-seed", mix_seed)))
                             .transpose()?;
-                        build(
-                            ctx,
-                            &BuildRequest {
-                                strip,
-                                ..request.clone()
-                            },
-                        )
+                        let request = BuildRequest {
+                            strip,
+                            ..request.clone()
+                        };
+                        if drop_leaking {
+                            build_dropping_leaks(ctx, &request)
+                        } else {
+                            build(ctx, &request)
+                        }
                     })?,
                 );
             }

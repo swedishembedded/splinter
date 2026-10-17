@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (exam seal)
+- `dataset build --drop-leaking` leaves out every experience that would cross the exam seal (an attempt at a reserved family, or a supervised action naming a reserved family's file) instead of refusing the build. They are counted under `exam_leak` and listed with their reasons in the report's `dropped`; what remains is sealed as usual, so the build is still refused if anything leaks after filtering. Without the flag a leak still refuses the build.
+
 ### Changed (BREAKING, run reports)
 - `eval` reports every task it graded, not only the ones decided wrong: `missed` is replaced by `items`, one per task in suite order, each with the task, its kind and instruction, the model's answer, the verdict (`passed`, `failed` or `undecided`) and the grader's reason. An answer over 8 KiB is cut at a character boundary with `truncated: true` and its full size in `bytes`, and its full text is kept in the store under the address in `stored`; a reason over 2 KiB ends in `[truncated]`. The verify stage's report lists every experience it graded the same way (`items`; the answers are the experiences' own). `regrade_anchor` re-grades every item.
 

@@ -11,21 +11,19 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::{canonical_json, Digest};
-use splinter_core::experience::{ExperienceId, PrivilegedKind};
-use splinter_core::rng::Seed;
+use splinter_core::experience::ExperienceId;
 use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
 pub use splinter_data::Strip;
 use splinter_data::{
-    manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Fraction,
-    Objective, OutcomeView, Preference, Projection, RecordBody, Rehearsal, Retrieval, SftFinal,
-    SftStep, StoredDataset, VerifierView, View, Voice, DEFAULT_MAX_FAMILY_SHARE,
+    manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Objective,
+    OutcomeView, Preference, Projection, RecordBody, Rehearsal, Retrieval, SftFinal, SftStep,
+    StoredDataset, VerifierView, View, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
 use splinter_knowledge::sections::sections;
 use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
@@ -44,198 +42,9 @@ use splinter_orchestrator::error::{io, OrchestratorError};
 use splinter_orchestrator::ids;
 use splinter_orchestrator::runs::to_json;
 
-/// The weakest decision a view counts when a command names none:
-/// consistency admits critiques verified by their retry's outcome and
-/// agreement among answers, and leaves judged verdicts to be asked for.
-pub const DEFAULT_MIN_STRENGTH: Strength = Strength::Consistency;
-
-/// The views a dataset can be built through.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum ViewName {
-    /// A passed experience's instruction and final answer.
-    SftFinal,
-    /// Each action of a trajectory, in the context before it.
-    SftStep,
-    /// A task and candidate answer, and a verified critique of it.
-    Critic,
-    /// A chosen and a rejected answer to one task.
-    Preference,
-    /// A task and candidate answer, and `pass` or `fail`.
-    Verifier,
-    /// The passing action where a passing and a failed attempt part.
-    Decision,
-    /// An instruction and the source span it is grounded in.
-    Retrieval,
-    /// A whole trajectory and its derived reward.
-    Outcome,
-    /// A denoise task's corrupted passage and its original.
-    Denoise,
-    /// The raw text of source parts.
-    Cpt,
-    /// The writer's own text as the answer, in the shape the policy is
-    /// asked in.
-    Voice,
-    /// A model's own answers as given, unless a verifier decided one wrong:
-    /// what a run rehearses so the new data does not move it off them.
-    Rehearsal,
-}
-
-impl ViewName {
-    /// Every view, in the order `--help` lists them.
-    pub const ALL: [Self; 12] = [
-        Self::SftFinal,
-        Self::SftStep,
-        Self::Critic,
-        Self::Preference,
-        Self::Verifier,
-        Self::Decision,
-        Self::Retrieval,
-        Self::Outcome,
-        Self::Denoise,
-        Self::Cpt,
-        Self::Voice,
-        Self::Rehearsal,
-    ];
-
-    /// The name a command line uses.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::SftFinal => "sft-final",
-            Self::SftStep => "sft-step",
-            Self::Critic => "critic",
-            Self::Preference => "preference",
-            Self::Verifier => "verifier",
-            Self::Decision => "decision",
-            Self::Retrieval => "retrieval",
-            Self::Outcome => "outcome",
-            Self::Denoise => "denoise",
-            Self::Cpt => "cpt",
-            Self::Voice => "voice",
-            Self::Rehearsal => "rehearsal",
-        }
-    }
-
-    fn takes_strip(self) -> bool {
-        !matches!(self, Self::Cpt | Self::Voice)
-    }
-
-    fn takes_min_strength(self) -> bool {
-        !matches!(
-            self,
-            Self::Cpt | Self::Denoise | Self::Voice | Self::Rehearsal
-        )
-    }
-}
-
-impl FromStr for ViewName {
-    type Err = OrchestratorError;
-
-    fn from_str(text: &str) -> Result<Self, OrchestratorError> {
-        Self::ALL
-            .into_iter()
-            .find(|view| view.as_str() == text)
-            .ok_or_else(|| {
-                let names: Vec<&str> = Self::ALL.iter().map(|v| v.as_str()).collect();
-                OrchestratorError::Refused(format!(
-                    "unknown view {text:?}; the views are {}",
-                    names.join(", ")
-                ))
-            })
-    }
-}
-
-/// A `--strip` policy as written, before the seed `mix:F` needs is settled.
-///
-/// The text names a fraction of subjects that keep their privileged context;
-/// which subjects is decided by a seed the run states
-/// ([`StripPolicy::with_seed`]), so that the same dataset can be built again.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub enum StripPolicy {
-    /// `all` or `keep:K,..`: nothing is left to draw.
-    Fixed(Strip),
-    /// `mix:F`: the subjects that keep their context are drawn by a seed.
-    Mix {
-        /// The share of subjects that keep their privileged context.
-        keep_fraction: Fraction,
-    },
-}
-
-impl StripPolicy {
-    /// The strip to build with. A `mix:F` policy asks `seed` for the seed
-    /// that picks its subjects; the other policies never ask for one.
-    pub fn with_seed<E>(self, seed: impl FnOnce() -> Result<Seed, E>) -> Result<Strip, E> {
-        match self {
-            Self::Fixed(strip) => Ok(strip),
-            Self::Mix { keep_fraction } => Ok(Strip::Mix {
-                keep_fraction,
-                seed: seed()?.value(),
-            }),
-        }
-    }
-}
-
-/// A `--strip` policy: `all`, `keep:K,..` or `mix:F`.
-pub fn parse_strip(text: &str) -> Result<StripPolicy, OrchestratorError> {
-    if text == "all" {
-        return Ok(StripPolicy::Fixed(Strip::All));
-    }
-    if let Some(kinds) = text.strip_prefix("keep:") {
-        let kinds = kinds
-            .split(',')
-            .map(privileged_kind)
-            .collect::<Result<Vec<_>, _>>()?;
-        return Ok(StripPolicy::Fixed(Strip::Keep(kinds)));
-    }
-    if let Some(fraction) = text.strip_prefix("mix:") {
-        let value: f64 = fraction.parse().map_err(|_| {
-            OrchestratorError::Refused(format!("mix:{fraction} needs a fraction in [0, 1]"))
-        })?;
-        let keep_fraction = Fraction::new(value)
-            .map_err(|e| OrchestratorError::Refused(format!("mix:{fraction}: {e}")))?;
-        return Ok(StripPolicy::Mix { keep_fraction });
-    }
-    Err(OrchestratorError::Refused(format!(
-        "{text:?} is not a strip policy: all, keep:<kind>,.. or mix:<fraction>"
-    )))
-}
-
-/// A privileged kind as `keep:` names it: `passage`, `hint`, `critique`,
-/// `reference`, `oracle`, or `other:<name>`.
-fn privileged_kind(name: &str) -> Result<PrivilegedKind, OrchestratorError> {
-    Ok(match name {
-        "passage" => PrivilegedKind::Passage,
-        "hint" => PrivilegedKind::Hint,
-        "critique" => PrivilegedKind::Critique,
-        "reference" => PrivilegedKind::Reference,
-        "oracle" => PrivilegedKind::Oracle,
-        other => match other.strip_prefix("other:").filter(|n| !n.is_empty()) {
-            Some(name) => PrivilegedKind::Other(name.to_string()),
-            None => {
-                return Err(OrchestratorError::Refused(format!(
-                    "unknown privileged kind {name:?}: passage, hint, critique, reference, \
-                     oracle or other:<name>"
-                )))
-            }
-        },
-    })
-}
-
-/// A `--min-strength`: `executable`, `formal`, `consistency` or `judged`.
-pub fn parse_strength(text: &str) -> Result<Strength, OrchestratorError> {
-    Ok(match text {
-        "executable" => Strength::Executable,
-        "formal" => Strength::Formal,
-        "consistency" => Strength::Consistency,
-        "judged" => Strength::Judged,
-        _ => {
-            return Err(OrchestratorError::Refused(format!(
-                "{text:?} is not a strength: executable, formal, consistency or judged"
-            )))
-        }
-    })
-}
+pub use crate::dataset_views::{
+    parse_strength, parse_strip, StripPolicy, ViewName, DEFAULT_MIN_STRENGTH,
+};
 
 /// One `dataset build`.
 #[derive(Clone, Debug, Serialize)]
@@ -311,6 +120,10 @@ pub struct Built {
     pub path: PathBuf,
     /// How the passages of a described voice dataset were described.
     pub described: Option<Described>,
+    /// The experiences left out because they would have crossed the exam
+    /// seal, and why ([`build_dropping_leaks`]); empty otherwise.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dropped: Vec<exam_seal::Leak>,
 }
 
 impl From<StoredDataset> for Built {
@@ -324,6 +137,7 @@ impl From<StoredDataset> for Built {
             excluded: stored.manifest.counts.excluded,
             path: stored.path,
             described: None,
+            dropped: Vec::new(),
         }
     }
 }
@@ -367,6 +181,47 @@ pub fn project_with(
     request: &BuildRequest,
     passages: Option<&Passages<'_>>,
 ) -> Result<(Projection, Option<Described>), OrchestratorError> {
+    let (projection, described, corpus) =
+        project_without(ctx, request, passages, &BTreeSet::new())?;
+    exam_seal::seal(ctx, &corpus, &projection)?;
+    Ok((projection, described))
+}
+
+/// [`build`], leaving out every experience that would cross the exam seal
+/// ([`exam_seal::leaks`]) instead of refusing the build. The dataset is
+/// projected again without them and sealed as usual, so it is refused if
+/// anything still leaks. They are counted under [`Exclusion::ExamLeak`] and
+/// listed, with why, in the result.
+pub fn build_dropping_leaks(
+    ctx: &Context,
+    request: &BuildRequest,
+) -> Result<Built, OrchestratorError> {
+    let (first, _, corpus) = project_without(ctx, request, None, &BTreeSet::new())?;
+    let dropped = exam_seal::leaks(ctx, &corpus, &first)?;
+    let leaving: BTreeSet<ExperienceId> = dropped.iter().map(|l| l.experience.clone()).collect();
+    let (mut projection, described, corpus) = project_without(ctx, request, None, &leaving)?;
+    if !leaving.is_empty() {
+        projection
+            .excluded
+            .insert(Exclusion::ExamLeak, leaving.len());
+    }
+    exam_seal::seal(ctx, &corpus, &projection)?;
+    let stored = store_dataset(ctx, &projection, request.export_only)?;
+    Ok(Built {
+        described,
+        dropped,
+        ..Built::from(stored)
+    })
+}
+
+/// [`project_with`] without the experiences in `left_out` and without the
+/// exam seal: the projection and the corpus it was made from.
+fn project_without(
+    ctx: &Context,
+    request: &BuildRequest,
+    passages: Option<&Passages<'_>>,
+    left_out: &BTreeSet<ExperienceId>,
+) -> Result<(Projection, Option<Described>, Corpus), OrchestratorError> {
     let view = request.view;
     if request.strip.is_some() && !view.takes_strip() {
         return Err(OrchestratorError::Refused(format!(
@@ -390,7 +245,7 @@ pub fn project_with(
     let mut ids: Vec<ExperienceId> = Vec::new();
     for set in &request.sets {
         for member in store.get_set(set)?.members {
-            if !ids.contains(&member) {
+            if !ids.contains(&member) && !left_out.contains(&member) {
                 ids.push(member);
             }
         }
@@ -540,8 +395,7 @@ pub fn project_with(
         )?;
     }
     assign_groups(ctx, &corpus, &mut projection)?;
-    exam_seal::seal(ctx, &corpus, &projection)?;
-    Ok((projection, described))
+    Ok((projection, described, corpus))
 }
 
 /// `projection` without the records longer than `max_block` of the policy's
@@ -760,38 +614,5 @@ mod tests {
         std::fs::write(&path, format!("{dialogue}\n\n{single}\n{pair}\n")).unwrap();
         assert_eq!(examples_in(&path).unwrap(), 4);
         std::fs::remove_file(&path).unwrap();
-    }
-
-    #[test]
-    fn strip_policies_and_strengths_parse_or_are_refused() {
-        let never = || -> Result<Seed, ()> { Err(()) };
-        assert_eq!(
-            parse_strip("all").ok().map(|p| p.with_seed(never)),
-            Some(Ok(Strip::All))
-        );
-        assert_eq!(
-            parse_strip("keep:hint,other:executable-check")
-                .ok()
-                .map(|p| p.with_seed(never)),
-            Some(Ok(Strip::Keep(vec![
-                PrivilegedKind::Hint,
-                PrivilegedKind::Other("executable-check".into())
-            ])))
-        );
-        // `mix:F` takes the seed it is given, and only it asks for one.
-        let given = splinter_model::seed::draw();
-        let mixed = parse_strip("mix:0.25")
-            .unwrap()
-            .with_seed::<()>(|| Ok(given));
-        assert!(matches!(mixed, Ok(Strip::Mix { seed, .. }) if seed == given.value()));
-        for refused in ["none", "keep:hnt", "mix:2", "mix:x", "keep:other:"] {
-            assert!(parse_strip(refused).is_err(), "{refused}");
-        }
-        assert_eq!(parse_strength("formal").ok(), Some(Strength::Formal));
-        assert!(parse_strength("strong").is_err());
-        for view in ViewName::ALL {
-            assert_eq!(view.as_str().parse::<ViewName>().ok(), Some(view));
-        }
-        assert!("sft".parse::<ViewName>().is_err());
     }
 }

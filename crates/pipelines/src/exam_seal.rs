@@ -27,7 +27,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 use splinter_core::chat::WireMessage;
 use splinter_core::digest::Digest;
-use splinter_core::experience::Experience;
+use splinter_core::experience::{Experience, ExperienceId};
 use splinter_core::kinds::WORKSPACE_CHANGE;
 use splinter_core::rng::Seed;
 use splinter_data::{Corpus, Projection, RecordBody};
@@ -100,35 +100,50 @@ pub fn remember_trained(
     remember(ctx, (TRAINED, TRAINED_POINTER), &before, families, None)
 }
 
-/// The gate for a projection of `corpus`: refuses it when it crosses the
-/// seal (see the module), else remembers the families its workspace records
-/// train on. Nothing is checked, or remembered, for a corpus with no
-/// workspace attempt.
-pub fn seal(
+/// An experience that would cross the seal, and why.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Leak {
+    /// The experience.
+    pub experience: ExperienceId,
+    /// What crosses the seal.
+    pub reason: String,
+}
+
+/// Every experience of `corpus` that `projection` of it would carry across
+/// the seal (see the module), once each, with the first reason found: an
+/// attempt at a reserved family first, then a record that names no family or
+/// supervises an action naming a reserved family's file. Empty for a corpus
+/// with no workspace attempt, and when no family is reserved.
+pub fn leaks(
     ctx: &Context,
     corpus: &Corpus,
     projection: &Projection,
-) -> Result<(), OrchestratorError> {
-    let workspace: Vec<_> = corpus
-        .entries()
-        .iter()
-        .filter(|entry| entry.experience.task.kind == WORKSPACE_CHANGE)
-        .collect();
-    if workspace.is_empty() {
-        return Ok(());
-    }
+) -> Result<Vec<Leak>, OrchestratorError> {
     let exam = reserved(ctx)?;
-    if !exam.is_empty() {
-        for entry in &workspace {
-            if let Some(family) = family_of(&entry.experience).filter(|f| exam.contains(*f)) {
-                return Err(leak(format!(
+    if exam.is_empty() {
+        return Ok(Vec::new());
+    }
+    let workspace = workspace_entries(corpus);
+    let mut found: Vec<Leak> = Vec::new();
+    let mut note = |experience: &ExperienceId, reason: String| {
+        if !found.iter().any(|l| &l.experience == experience) {
+            found.push(Leak {
+                experience: experience.clone(),
+                reason,
+            });
+        }
+    };
+    for entry in &workspace {
+        if let Some(family) = family_of(&entry.experience).filter(|f| exam.contains(*f)) {
+            note(
+                &entry.id,
+                format!(
                     "experience {} is an attempt at a task of the exam family {family}",
                     entry.id
-                )));
-            }
+                ),
+            );
         }
     }
-    let mut trained = BTreeSet::new();
     for (n, record) in projection.records.iter().enumerate() {
         let Some(entry) = record
             .metadata
@@ -138,30 +153,66 @@ pub fn seal(
         else {
             continue;
         };
-        match family_of(&entry.experience) {
-            Some(family) => trained.insert(family.to_string()),
-            None if exam.is_empty() => continue,
-            None => {
-                return Err(leak(format!(
+        if family_of(&entry.experience).is_none() {
+            note(
+                &entry.id,
+                format!(
                     "record {} of experience {} names no family, so it cannot be shown to be \
                      outside the exam",
                     n + 1,
                     entry.id
-                )))
-            }
-        };
+                ),
+            );
+        }
         if let RecordBody::Chat { messages, .. } = &record.body {
             if let Some(family) = named_exam_file(messages, &exam) {
-                return Err(leak(format!(
-                    "record {} of experience {} supervises an action naming the file of the exam \
-                     family {family}",
-                    n + 1,
-                    entry.id
-                )));
+                note(
+                    &entry.id,
+                    format!(
+                        "record {} of experience {} supervises an action naming the file of the \
+                         exam family {family}",
+                        n + 1,
+                        entry.id
+                    ),
+                );
             }
         }
     }
+    Ok(found)
+}
+
+/// The gate for a projection of `corpus`: refuses it when it crosses the
+/// seal (see the module), else remembers the families its workspace records
+/// train on. Nothing is checked, or remembered, for a corpus with no
+/// workspace attempt.
+pub fn seal(
+    ctx: &Context,
+    corpus: &Corpus,
+    projection: &Projection,
+) -> Result<(), OrchestratorError> {
+    if let Some(first) = leaks(ctx, corpus, projection)?.first() {
+        return Err(leak(first.reason.clone()));
+    }
+    let workspace = workspace_entries(corpus);
+    let trained: BTreeSet<String> = projection
+        .records
+        .iter()
+        .filter_map(|record| record.metadata.experiences.first())
+        .filter_map(|id| workspace.iter().find(|entry| &entry.id == id))
+        .filter_map(|entry| family_of(&entry.experience).map(str::to_string))
+        .collect();
+    if workspace.is_empty() {
+        return Ok(());
+    }
     remember_trained(ctx, &trained)
+}
+
+fn workspace_entries(corpus: &Corpus) -> Vec<&splinter_data::Entry> {
+    corpus
+        .entries()
+        .iter()
+        .filter(|entry| entry.experience.task.kind == WORKSPACE_CHANGE)
+        .collect()
 }
 
 /// The family the task of `experience` declares: its first concept.

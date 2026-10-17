@@ -566,6 +566,11 @@ pub enum DatasetCommand {
         /// admitted action supervised, not one record per action.
         #[arg(long)]
         pack: bool,
+        /// Leave out, and list in the report, every experience that would
+        /// carry an exam family's attempt or file into the dataset, instead
+        /// of refusing the build. What remains is sealed as usual.
+        #[arg(long)]
+        drop_leaking: bool,
         /// For the voice view: who the writer is. Requests are written as
         /// theirs and half the records open with their persona prompt, half
         /// with the line that says who the model is; refused with

@@ -33,9 +33,10 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_core::kinds::WORKSPACE_CHANGE;
 use splinter_core::rng::Seed;
+use splinter_data::Exclusion;
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::datasets::ViewName;
-use splinter_pipelines::datasets::{build, BuildRequest, VoiceBuild};
+use splinter_pipelines::datasets::{build, build_dropping_leaks, BuildRequest, VoiceBuild};
 use splinter_pipelines::exam_seal;
 use splinter_store::experiences::{ExperienceSet, SetId};
 
@@ -102,23 +103,23 @@ fn set_of(ctx: &Context, attempts: &[Experience]) -> SetId {
         .unwrap()
 }
 
+fn request(set: SetId) -> BuildRequest {
+    BuildRequest {
+        sets: vec![set],
+        view: ViewName::SftStep,
+        strip: None,
+        min_strength: Some(Strength::Executable),
+        system_prompt: None,
+        export_only: false,
+        limit: None,
+        voice: VoiceBuild::default(),
+        max_block: None,
+        pack: false,
+    }
+}
+
 fn build_sft_step(ctx: &Context, set: SetId) -> Result<(), OrchestratorError> {
-    build(
-        ctx,
-        &BuildRequest {
-            sets: vec![set],
-            view: ViewName::SftStep,
-            strip: None,
-            min_strength: Some(Strength::Executable),
-            system_prompt: None,
-            export_only: false,
-            limit: None,
-            voice: VoiceBuild::default(),
-            max_block: None,
-            pack: false,
-        },
-    )
-    .map(|_| ())
+    build(ctx, &request(set)).map(|_| ())
 }
 
 fn families(names: &[&str]) -> BTreeSet<String> {
@@ -165,4 +166,40 @@ fn a_clean_build_records_the_families_it_trained_on() {
     build_sft_step(&ctx, set).unwrap();
     assert_eq!(exam_seal::trained(&ctx).unwrap(), families(&["train.py"]));
     assert_eq!(exam_seal::reserved(&ctx).unwrap(), families(&["exam.py"]));
+}
+
+#[test]
+fn dropping_leaks_leaves_out_and_lists_what_would_cross_the_seal() {
+    let ctx = context("seal-drop");
+    let clean = attempt(&ctx, "train.py", "train.py");
+    let by_family = attempt(&ctx, "exam.py", "exam.py");
+    let by_action = attempt(&ctx, "other.py", "src/exam.py");
+    let set = set_of(&ctx, &[clean.clone(), by_family.clone(), by_action.clone()]);
+    // Without the flag the build is refused, as before.
+    assert!(build_sft_step(&ctx, set.clone()).is_err());
+
+    let built = build_dropping_leaks(&ctx, &request(set)).unwrap();
+    let mut dropped: Vec<_> = built.dropped.iter().map(|l| l.experience.clone()).collect();
+    dropped.sort();
+    let mut expected = vec![by_family.id().unwrap(), by_action.id().unwrap()];
+    expected.sort();
+    assert_eq!(dropped, expected);
+    assert!(built.dropped.iter().all(|l| l.reason.contains("exam.py")));
+    assert_eq!(built.excluded.get(&Exclusion::ExamLeak), Some(&2));
+    assert!(built.records > 0);
+    let text = std::fs::read_to_string(&built.path).unwrap();
+    assert!(
+        !text.contains("exam.py"),
+        "nothing of the exam is in the dataset"
+    );
+    assert_eq!(exam_seal::trained(&ctx).unwrap(), families(&["train.py"]));
+}
+
+#[test]
+fn dropping_leaks_from_a_clean_set_drops_nothing() {
+    let ctx = context("seal-drop-clean");
+    let set = set_of(&ctx, &[attempt(&ctx, "train.py", "train.py")]);
+    let built = build_dropping_leaks(&ctx, &request(set)).unwrap();
+    assert!(built.dropped.is_empty());
+    assert!(!built.excluded.contains_key(&Exclusion::ExamLeak));
 }

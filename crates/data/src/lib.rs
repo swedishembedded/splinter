@@ -300,6 +300,9 @@ pub enum Exclusion {
     NotSelfContained,
     /// A step labelled bad.
     BadStep,
+    /// Left out on request because it would carry an exam family's attempt or
+    /// file into the training data (`dataset build --drop-leaking`).
+    ExamLeak,
     /// The trajectory holds something a chat record cannot represent (an
     /// image, a second user turn, an observation answering no call).
     Unrepresentable,
