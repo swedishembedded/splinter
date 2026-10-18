@@ -222,6 +222,11 @@ hooks and gates.
   training runs with the largest micro-batch the card holds. Independent work
   is split across every available GPU. A sequential path exists only where
   the order of answers is the thing measured, and it says so.
+- **Heavy GPU work is profiled before it runs long.** A training run or a
+  large inference job is first measured on the hardware it will run on: where
+  its time goes (prefill, decode, sampling, data movement, the host), how full
+  the card is, and how throughput scales with batch. A slow path is fixed
+  (here, or upstream in brain) before the long run, not after it.
 
 ### Two questions before adding anything
 
