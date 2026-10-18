@@ -252,9 +252,9 @@ fn served_config(
         "response_format": null
     });
     if let Some(seed) = seed {
-        // The server reads a seed as a signed 64-bit integer; the same 64
-        // bits name the same draw.
-        options["seed"] = serde_json::json!(i64::from_ne_bytes(seed.to_ne_bytes()));
+        // An unsigned 64-bit seed, the range brain draws and echoes its own
+        // seeds from.
+        options["seed"] = serde_json::json!(seed);
     }
     config.model.driver_options = options;
     Ok(config)
@@ -472,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn a_seed_given_to_a_served_model_is_sent_with_every_request_as_the_same_bits() {
+    fn a_seed_given_to_a_served_model_is_sent_with_every_request_as_the_same_number() {
         let seed = u64::MAX - 6;
         let config = served_config(
             "openai/m",
@@ -482,8 +482,7 @@ mod tests {
             Some(seed),
         )
         .unwrap();
-        let sent = config.model.driver_options["seed"].as_i64().unwrap();
-        assert_eq!(u64::from_ne_bytes(sent.to_ne_bytes()), seed);
+        assert_eq!(config.model.driver_options["seed"].as_u64(), Some(seed));
     }
 
     use super::*;
