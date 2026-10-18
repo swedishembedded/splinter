@@ -59,6 +59,7 @@
 #![warn(missing_docs)]
 
 pub mod annotation;
+pub mod baseline;
 pub mod build;
 pub mod chat;
 pub mod claim;

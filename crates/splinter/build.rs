@@ -20,6 +20,17 @@ fn git(args: &[&str]) -> Option<String> {
 }
 
 fn main() {
+    // The compiler on PATH when the build ran, which is the one cargo picks
+    // unless a build names another with RUSTC.
+    if let Some(version) = Command::new("rustc")
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+    {
+        let version = String::from_utf8_lossy(&version.stdout);
+        println!("cargo:rustc-env=SPLINTER_RUSTC={}", version.trim());
+    }
     println!("cargo:rerun-if-changed=../../Cargo.lock");
     println!("cargo:rerun-if-changed=../../crates");
     // The paths that move when HEAD, the current branch or the index do.

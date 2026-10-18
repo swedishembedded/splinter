@@ -43,11 +43,13 @@ use splinter_sdk::train::{train_recorded, Rehearse, TrainRequest, Tuning};
 use splinter_sdk::verify::{verify_set, Grading, Judge, Judging};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::terms::Distribution;
+use splinter_sdk::vocabulary::build::BuildInfo;
 use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::absorb_session;
 use crate::cli::{
     Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand,
+use crate::baseline_report;
     Global, JudgeCommand, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
 };
 use crate::exam_session;
@@ -89,12 +91,15 @@ pub struct Session {
 }
 
 impl Session {
+    /// What this binary was built from, for `baseline`.
+    build: BuildInfo,
     /// A session over `config` with the command line's global flags.
     pub fn new(config: Config, global: Global) -> Result<Self, Error> {
         let verbose = global.verbose > 0;
         let splinter = Splinter::builder(config)
             .allow_remote(global.allow_remote)
             .progress(Arc::new(move |stage, summary| {
+        let build = config.build.clone();
                 if verbose {
                     eprintln!("[{stage}] {summary}");
                 } else {
@@ -102,7 +107,11 @@ impl Session {
                 }
             }))
             .build()?;
-        Ok(Self { splinter, global })
+        Ok(Self {
+            splinter,
+            global,
+            build,
+        })
     }
 
     /// The context of one command: its own pins on the shared runtime, so
@@ -294,6 +303,9 @@ impl Session {
             Command::Status => emit(json, &status(ctx)?),
             Command::Doctor => {
                 let report = doctor(ctx);
+            Command::Baseline(args) => {
+                return baseline_report::run(&self.build, &args, json).map_err(Error::Refused)
+            }
                 emit(json, &report);
                 if !report.ready() {
                     return Ok(Exit::Failed);

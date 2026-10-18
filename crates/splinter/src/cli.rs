@@ -80,6 +80,10 @@ pub enum Command {
     /// resolves to weights on disk. Loads no model and uses no network. Exits 1
     /// when a check fails.
     Doctor,
+    /// Print the `baseline-v1` record of what a registered run runs on: the
+    /// three commits, toolchain, binaries, model and tokenizer digests, seeds
+    /// and hardware.
+    Baseline(BaselineArgs),
     /// Capture and inspect sources.
     #[command(subcommand)]
     Source(SourceCommand),
@@ -757,6 +761,7 @@ mod state;
 mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use consolidate::ConsolidateArgs;
+mod baseline;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;
 pub use global::Global;
@@ -768,6 +773,7 @@ use train::positive_count;
 
 /// A sampling temperature a provider accepts: 0 to 2.
 pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};
+pub use baseline::BaselineArgs;
 
 #[cfg(test)]
 mod tests;

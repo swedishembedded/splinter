@@ -20,6 +20,7 @@
 
 mod absorb_output;
 mod absorb_session;
+mod baseline_report;
 mod build_info;
 mod cli;
 mod compare_output;

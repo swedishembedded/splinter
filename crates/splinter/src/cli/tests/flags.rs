@@ -85,3 +85,27 @@ fn the_solve_deadline_is_a_global_flag_of_whole_seconds() {
     assert!(parse(&["--solve-deadline", "0", "status"]).is_err());
     assert!(parse(&["--solve-deadline", "1.5", "status"]).is_err());
 }
+
+#[test]
+fn baseline_takes_the_binary_models_and_seeds_as_given_and_no_default_seed() {
+    let Command::Baseline(args) = command(&[
+        "baseline",
+        "--brain-bin",
+        "/b/brain",
+        "--model",
+        "/m/a",
+        "--model",
+        "/m/b",
+        "--exam-seed",
+        "20261017",
+        "--require-clean",
+    ]) else {
+        panic!("not baseline");
+    };
+    assert_eq!(args.models.len(), 2);
+    assert_eq!(
+        (args.exam_seed, args.training_seed),
+        (Some(20_261_017), None)
+    );
+    assert!(args.require_clean);
+}
