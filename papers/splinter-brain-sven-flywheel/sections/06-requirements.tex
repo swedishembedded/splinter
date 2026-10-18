@@ -82,7 +82,24 @@ the wait is reported, with a stalling mock provider to test it.\cl{AU06}
 implementation and were tightened.\cl{AU07}
 \item \textbf{Serving several adapters} (Brain; implemented in the qwen3 server). An adapter bank
 lets one batch serve the base and many LoRA adapters.\cl{AU08}
-\item \textbf{Containment} (planned). A coding agent's shell is not a sandbox. Where no
-container is configured every environment record says \code{isolation: none}, and the
-exposure audit detects exposure but cannot prevent it.\cl{AU09}
+\item \textbf{Containment} (implemented for commands run on the host; a container remains
+the stronger option). A solver's forbidden operations are prevented by the kernel, not
+detected afterwards by the exposure audit. A command of the solver (its shell, and the
+checks) runs under Landlock with read access to the system and write access to its own tree
+and a private directory only, so the withheld tests,\cl{CN01} a path traversal or a symlink
+out of the tree,\cl{CN02} the host's credential files,\cl{CN03} and a sibling candidate's
+tree\cl{CN06} are refused with a permission error, also when reached through \code{sh -c}, an
+interpreter or a compiled helper the candidate brought along.\cl{CN07} The command's
+environment is built from an allowlist from which names that look like secrets are dropped even
+when the allowlist names them;\cl{CN04} the supervisor makes itself non-dumpable so its own
+environment cannot be read through \code{/proc};\cl{CN05} the network is denied (Landlock's
+TCP rules and a socket filter that also covers UDP), so a command cannot reach a model server on the
+loopback;\cl{CN08} and a process budget stops a fork bomb when the operator sets one.\cl{CN09} A kernel
+without Landlock ABI~4 refuses to run the command rather than run it open. The agent's own file
+and search tools are confined to the attempt's tree by the agent framework's project root,
+which its delegated children share.\cl{CN10} Only an experience that an independent verdict
+passed at executable strength is training evidence.\cl{CN11} A path outside the tree that a command names is reported by what came of it (the sandbox refused it, it did not exist, or something came back), so the audit separates a harmless mention from an access; all three still fail it.\cl{CN12} Not covered: other processes
+of the same user that hold secrets in their environment remain readable through
+\code{/proc}, and the process budget and network opt-ins change the environment record, so
+they are off or unset by default to keep the identity of tasks generated earlier.
 \end{enumerate}

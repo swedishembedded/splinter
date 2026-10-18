@@ -19,9 +19,10 @@ a \code{tests} directory (run as \code{python3 -m unittest}) and a Cargo project
 \code{cargo test --offline}); any other suite is named with \code{--test-command}, and the files
 tasks may change with repeated \code{--file}.\cl{PS01,PS04} The suite is run twice on a clean
 copy first, and a red or flaky baseline stops the run before any model is loaded.\cl{PS01}
-Isolation is \code{none} unless a container client and a digest-pinned image are configured;
-a repository whose tests need isolation for soundness is not suitable on a host without
-one.\cl{AU09}
+Isolation is recorded as \code{none} unless a container client and a digest-pinned image are
+configured, although a host command is confined by the kernel to its tree without a network;
+a repository whose tests need the network or a process-level boundary for soundness is not
+suitable on a host without a container.\cl{AU09,CN08}
 
 \subsection{Task-family construction}
 

@@ -306,3 +306,15 @@
 {"id": "FX04.3", "repo": "splinter", "rev": "292512eeb86a9688cae063f94e922fc4098d2314", "kind": "ancestor"}
 {"id": "OP01.2", "repo": "splinter", "path": "crates/pipelines/src/release/gating.rs", "kind": "regex", "pattern": "suite\\.absorb\\(exams::suite\\(", "min": 1, "pin": "splinter_head"}
 {"id": "PS02.9", "repo": "splinter", "path": "tasks/README.md", "kind": "regex", "pattern": "baselines \\(five identical green runs\\)", "min": 1, "pin": "splinter_head"}
+{"id": "CN01.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn withheld_tests_cannot_be_read_by_any_route", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN02.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn path_traversal_and_symlinks_cannot_leave_the_tree", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN03.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn host_credentials_are_unreachable", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN04.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn a_secret_in_the_callers_environment_never_reaches_a_command", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN05.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn the_supervisors_environment_is_not_readable_through_proc", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN06.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn a_candidate_cannot_write_into_a_sibling_candidates_tree", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN07.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn a_subprocess_inherits_the_confinement", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN08.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn the_network_is_denied_to_a_command_by_default", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN09.1", "repo": "splinter", "path": "crates/sandbox/tests/containment.rs", "pattern": "fn a_fork_bomb_is_stopped_at_the_process_budget", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN11.1", "repo": "splinter", "path": "crates/data/tests/sft_admission.rs", "pattern": "fn a_failed_verdict_is_not_training_evidence_whatever_the_solver_claimed", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN12.1", "repo": "splinter", "path": "crates/eval/tests/exposure_audit.rs", "pattern": "fn a_path_outside_the_tree_is_reported_by_what_came_of_it_and_none_is_dropped", "kind": "regex", "min": 1, "pin": "splinter_containment"}
+{"id": "CN10.1", "repo": "sven", "path": "crates/sdk/tests/project_root_children.rs", "pattern": "fn a_delegated_child_is_confined_to_the_parents_root", "kind": "regex", "min": 1, "pin": "sven_containment"}

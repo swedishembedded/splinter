@@ -22,8 +22,9 @@ sign-test table is a design calculation. The registration fixes one model size f
 training result (Qwen3-8B, because training, saving and serving an adapter work end to end for
 it), trained on a stronger teacher's verified trajectories because the untrained 8B produced
 too few edits to supply its own (so a gain is distillation from the teacher, not
-self-improvement; the self-improving 27B is the separate experiment CE8),\cl{PR15,PR16} one agent harness, and runs with process isolation \code{none} on the node, so the exposure
-audit detects but cannot prevent a solver reading hidden files (\cref{sec:audit}).\cl{AU09} Mutation-seeded
+self-improvement; the self-improving 27B is the separate experiment CE8),\cl{PR15,PR16} one agent harness, and runs with process isolation \code{none} on the node (a solver's commands are
+confined by the kernel to their tree and have no network, but the node is not a container;
+\cref{sec:audit}).\cl{AU09,CN01,CN08} Mutation-seeded
 tasks test whether a model can undo a synthetic fault, not whether it can debug a historical one;
 tasks from repository history are registered as a source, not yet built.\cl{PR10} A family is the file a
 fault was seeded in for the authored repositories, so clusters are files, not subsystems.\cl{PR02}
