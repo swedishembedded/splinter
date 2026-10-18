@@ -1,0 +1,61 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
+
+\section{Replication on eight authors}\label{sec:replication}
+
+The study of \cref{sec:results} has three authors, one training run each and an examination
+of \ExamItems\ items. Its main comparison, the adapter against retrieval, was repeated on
+eight new authors under a protocol written and frozen before any of their corpora existed.
+This section gives that protocol; its results follow it.
+
+\subsection{Protocol}\label{sec:protocol}
+
+\paragraph{Authors and corpora.} Eight authors were drawn by seed, each with its own beliefs,
+lexicon and situations, by the procedure of \cref{sec:benchmark}. Each corpus plans 60 essays
+of three episodes each and at least 700 words; a writer, a reader and a miner model
+(\cref{sec:reproducibility}) write the essays, read the decisions in them and mine their
+briefings. The protocol fixes these models, the number of
+attempts per essay (3) and a ceiling on requests (600) and output tokens per author.
+
+\paragraph{Examination.} Each author's examination has 480 items: 120 in each of the four
+cells of withheld and seen topics and combinations of \cref{sec:benchmark}. The number was
+chosen before the corpora existed, from the first study's author 101: of its 160 items, 37
+were discordant between the adapter and retrieval, 23 of them in the adapter's favour. At that
+rate of discordance (0.23) and share of wins (0.62), 480 items give an exact sign test at
+$\alpha = 0.05$ a power of 0.80 for one author.
+
+\paragraph{Arms.} The arms of \cref{sec:arms} are asked of every author, with three more
+retrieval arms: two and twelve paragraphs instead of six, and retrieval of two, six or twelve
+whole decision records instead of paragraphs. The adapter is trained three times per author
+with seeds the protocol draws, with the hyperparameters of \cref{sec:lora} except the base's precision (below); an author's
+adapter accuracy is the mean over the three. Two ablations train once each on a part of the
+briefings: the reader's own wording only, and the fixed wording only.
+
+\paragraph{Comparisons.} The primary comparison is the adapter against retrieval of six
+paragraphs. The confirmatory family has ten comparisons of the adapter: against
+retrieval of six paragraphs and of six records, base, named, principles, principles with
+verdicts, the two ablations, and the trivial baselines that always take the first-listed or
+the majority option; each is a sign test over authors (an author counts
+as better when its paired gain is positive), with Holm's correction over the family at
+$\alpha = 0.05$. The other comparisons are exploratory and reported without correction. Each
+author's gain is the paired difference in accuracy, with an interval clustered by item.
+
+\paragraph{Decoding.} Greedy decoding is primary. As a secondary decoding, every item is
+asked eight more times at temperature 0.7 with a seed per draw.
+
+\paragraph{Amendment.} The protocol held the base model in fp32 during training, which for an
+8B model is 32~GB of weights and does not fit one 24~GB card. Before any adapter was trained,
+the protocol was amended to hold the training base in int8 with one scale per 32 weights. The
+amendment is recorded in the protocol with the digest of the version it replaces; corpora made
+under the earlier digest are accepted because the change does not touch them.
+
+\paragraph{Serving.} Every arm is asked through one serving path: a local server holds the
+base, or the base with one adapter, with int8 weights and an int8 key--value cache, and
+decodes 128 sequences together. The examination keeps all 128 decoding slots busy. Batched
+decoding is not bit-identical to decoding one sequence at a time; on 264 items of one author's
+base arm, the batched server and the sequential in-process model chose the same option on 210
+(80\%). Because all arms share the batched path, the comparisons between arms are unaffected
+by this difference, but absolute accuracies are not comparable with \cref{sec:results} to
+better than a few points.
+
+\IfFileExists{study_macros.tex}{\input{study_replication_results}}{}
