@@ -52,9 +52,9 @@ under the earlier digest are accepted because the change does not touch them.
 \paragraph{Serving.} Every arm is asked through one serving path: a local server holds the
 base, or the base with one adapter, with int8 weights and an int8 key--value cache, and
 decodes 128 sequences together. The examination keeps all 128 decoding slots busy. Batched
-decoding is not bit-identical to decoding one sequence at a time; on 264 items of one author's
-base arm, the batched server and the sequential in-process model chose the same option on 210
-(80\%). Because all arms share the batched path, the comparisons between arms are unaffected
+decoding is not bit-identical to decoding one sequence at a time; on 532 items of two authors'
+base arms, the batched server and the sequential in-process model chose the same option on 441
+(83\%). Because all arms share the batched path, the comparisons between arms are unaffected
 by this difference, but absolute accuracies are not comparable with \cref{sec:results} to
 better than a few points.
 
