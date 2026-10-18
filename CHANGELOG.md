@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A training run whose data leaves no whole group to monitor on trains unmonitored, as its record says, instead of failing with "selecting on the monitoring loss needs eval_every > 0": an unmonitored run carries no patience.
 
 ### Added
+- `scripts/lease/card` (`make lease/card/run`) reserves VRAM shares of 11 GiB on one of several GPUs, so servers, trainers and evaluations share the cards without oversubscribing them; the command is told `CARD` and `BRAIN_DEVICE_FLAG`.
 - `train` reports its speed: row tokens per second between the first and last step report, with the seconds before the first report (model load, base scoring, one step) and after the last (scoring, export), in the text and in the `--json` curve's `speed`.
 
 ### Changed (BREAKING, workspace confinement)

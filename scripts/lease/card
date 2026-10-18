@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for sharing GPUs between training
+# and serving jobs for its clients. If your team needs expertise in GPU
+# scheduling for model training and serving then you can procure our services
+# by sending an email to info@swedishembedded.com.
+
+# Run a command on one of several GPUs (the GH200s of the campaign) with a VRAM
+# reservation, so several jobs can share the cards without oversubscribing
+# memory. `gpu` holds the whole node for exclusive measurements; `card` is the
+# per-card, per-share lock the campaign's servers, trainers and evaluations use.
+#
+# Usage: card [--lock-dir DIR] [--card 0|1|any] --gb <GiB> [--wait] -- <command> [args...]
+#
+# Each card's usable VRAM is split into 8 shares of 11 GiB (88 GiB), each a
+# flock file (gpu<card>.s<k>.lock under --lock-dir, default
+# ~/.cache/splinter/card-locks; every user of a node must name the same one). A job takes
+# ceil(GiB/11) shares on one card; with --card any it takes the first card
+# that has enough free shares. Without --wait it fails (status 75) when no
+# card has room; with --wait it retries every 15 s. The command sees
+# CARD=<n> and BRAIN_DEVICE_FLAG=--device gpu<n>; pass "$BRAIN_DEVICE_FLAG"
+# (or --device gpu$CARD) to brain/splinter. The shares are held until the
+# command exits; nothing else is enforced, so a job must stay inside its
+# reservation.
+set -u
+dir=${HOME:?}/.cache/splinter/card-locks
+card=any gb="" wait=0
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --lock-dir) dir=${2:?}; shift 2 ;;
+        --card) card=${2:?}; shift 2 ;;
+        --gb) gb=${2:?}; shift 2 ;;
+        --wait) wait=1; shift ;;
+        --) shift; break ;;
+        *) echo "card: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+[ -n "$gb" ] && [ "$#" -gt 0 ] || { echo "card: usage: card [--lock-dir DIR] [--card 0|1|any] --gb N [--wait] -- cmd..." >&2; exit 2; }
+need=$(( (gb + 10) / 11 ))
+[ "$need" -ge 1 ] && [ "$need" -le 8 ] || { echo "card: --gb $gb needs $need shares; 1..8 (<= 88 GiB)" >&2; exit 2; }
+mkdir -p "$dir"
+case "$card" in any) cards="0 1" ;; 0|1) cards=$card ;; *) echo "card: --card 0|1|any" >&2; exit 2 ;; esac
+
+held=()
+release() { for fd in "${held[@]}"; do exec {fd}>&-; done; held=(); }
+try_card() {
+    local c=$1 k fd
+    for k in 0 1 2 3 4 5 6 7; do
+        [ "${#held[@]}" -ge "$need" ] && break
+        exec {fd}>"$dir/gpu$c.s$k.lock"
+        if flock -n "$fd"; then held+=("$fd"); else exec {fd}>&-; fi
+    done
+    [ "${#held[@]}" -ge "$need" ] && return 0
+    release; return 1
+}
+while :; do
+    for c in $cards; do
+        if try_card "$c"; then
+            export CARD=$c BRAIN_DEVICE_FLAG="--device gpu$c"
+            echo "card: gpu$c, $need share(s) for ${gb} GiB: $*" >&2
+            "$@"
+            exit $?
+        fi
+    done
+    [ "$wait" = 1 ] || { echo "card: no card has $need free share(s)" >&2; exit 75; }
+    sleep 15
+done

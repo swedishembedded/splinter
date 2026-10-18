@@ -214,6 +214,14 @@ lease/gpu:
 lease/gpu/run:
 	bash scripts/lease/gpu --lock $(GPU_LOCK) $(if $(EXCLUSIVE),--exclusive) -- $(CMD)
 
+## lease/card - lists the per-card GPU reservation targets; does nothing
+lease/card:
+	@bash scripts/make-help.sh lease/card
+
+## lease/card/run - run CMD with a GB GiB VRAM reservation on one GPU (CARD=0|1|any, default any; blocks until the shares are free; the command sees CARD and BRAIN_DEVICE_FLAG)
+lease/card/run:
+	bash scripts/lease/card --lock-dir $(LEASE_ROOT)/locks --card $(or $(CARD),any) --gb $(GB) --wait -- $(CMD)
+
 ## lease/worktree - lists the lane worktree targets; does nothing
 lease/worktree:
 	@bash scripts/make-help.sh lease/worktree
@@ -268,7 +276,7 @@ help:
 # Declared last so every generated list above is already defined.
 .PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families fmt \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
-	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
+	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
 	deps deps/local deps/lock \
 	hooks hooks/install \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
