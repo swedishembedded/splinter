@@ -142,16 +142,12 @@ fn a_command_naming_a_path_outside_the_tree_is_exposure_but_the_system_and_the_t
     assert!(outside("cat /srv/x/y.py"));
     assert!(outside("find / -name iniparse"));
     assert!(outside("git -C /srv/x/repo log"));
-    assert!(outside(
-        "ls /work/a/tree && cat /work/b/tree/a.py"
-    ));
+    assert!(outside("ls /work/a/tree && cat /work/b/tree/a.py"));
     assert!(!outside("cat /usr/lib/python3/os.py"));
     assert!(!outside("python3 /bin/true && ls /dev/null"));
     assert!(!outside("python3 -c 'print(1 / 2)'"));
     assert!(!outside("curl https://example.com/x"));
-    assert!(!outside(
-        "ls /work/a/tree && cat /work/a/tree/a.py"
-    ));
+    assert!(!outside("ls /work/a/tree && cat /work/a/tree/a.py"));
 }
 
 #[test]
