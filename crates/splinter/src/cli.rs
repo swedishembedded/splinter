@@ -538,73 +538,7 @@ pub enum ExperiencesCommand {
 #[derive(Debug, Subcommand)]
 pub enum DatasetCommand {
     /// Project experience sets through a view into a stored dataset.
-    Build {
-        /// The experience sets, by id or unique prefix.
-        #[arg(required = true, value_name = "EXPERIENCE-SET")]
-        sets: Vec<String>,
-        /// sft-final, sft-step, critic, preference, verifier, decision,
-        /// retrieval, outcome, denoise, cpt, voice or rehearsal.
-        #[arg(long, required = true, value_parser = view, value_name = "VIEW")]
-        view: ViewName,
-        /// What the student sees: all (only the instruction), keep:K,..
-        /// or mix:F.
-        #[arg(long, value_parser = strip, value_name = "all|keep:K,..|mix:F")]
-        strip: Option<StripPolicy>,
-        /// The seed that picks which subjects keep their privileged context
-        /// under `--strip mix:F` (drawn and printed when not given; a
-        /// dataset built again with the same seed holds the same records).
-        #[arg(long, value_name = "N", requires = "strip")]
-        mix_seed: Option<Seed>,
-        /// The weakest decision counted: executable, formal, consistency
-        /// (default) or judged.
-        #[arg(long, value_parser = strength, value_name = "STRENGTH")]
-        min_strength: Option<Strength>,
-        /// The system prompt every conversation opens with, in place of the
-        /// default assistant's; the dataset records it.
-        #[arg(long, value_name = "TEXT")]
-        system_prompt: Option<String>,
-        /// Write an objective brain cannot train in the export format.
-        #[arg(long)]
-        export_only: bool,
-        /// Keep at most this many records, evenly spread over the
-        /// projection (for voice, over the parts of the sources).
-        #[arg(long, value_name = "N")]
-        limit: Option<usize>,
-        /// The longest record, in tokens, the training that reads the
-        /// dataset fits: a longer record is left out and counted instead of
-        /// stopping the training.
-        #[arg(long, value_name = "TOKENS", value_parser = positive_count)]
-        max_block: Option<usize>,
-        /// For the sft-step view: one record per trajectory with every
-        /// admitted action supervised, not one record per action.
-        #[arg(long)]
-        pack: bool,
-        /// Leave out, and list in the report, every experience that would
-        /// carry an exam family's attempt or file into the dataset, instead
-        /// of refusing the build. What remains is sealed as usual.
-        #[arg(long)]
-        drop_leaking: bool,
-        /// For the voice view: who the writer is. Requests are written as
-        /// theirs and half the records open with their persona prompt, half
-        /// with the line that says who the model is; refused with
-        /// --system-prompt.
-        #[arg(long, value_name = "NAME")]
-        writer: Option<String>,
-        /// For the voice view: keep at most this many tokens of the
-        /// writer's text, evenly spread over all of it.
-        #[arg(long, value_name = "N")]
-        token_limit: Option<usize>,
-        /// For the voice view: the most of the tokens one family may
-        /// supply.
-        #[arg(long, value_name = "SHARE")]
-        max_family_share: Option<f64>,
-        /// For the voice view: the model that writes, for each passage, a
-        /// description of what it is about, which its request carries in
-        /// place of the passage's opening (a passage with no admitted
-        /// description keeps the opening).
-        #[arg(long, value_parser = model_ref, value_name = "REF")]
-        describe_with: Option<ModelRef>,
-    },
+    Build(Box<BuildArgs>),
     /// Copy a dataset and its manifest into a directory.
     Export {
         /// The dataset, by id or unique prefix.
@@ -750,7 +684,10 @@ impl LineageArgs {
 }
 
 mod absorb;
+mod baseline;
 mod consolidate;
+mod control;
+mod dataset;
 mod exam;
 mod gate;
 mod global;
@@ -760,8 +697,10 @@ mod practice;
 mod state;
 mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
+pub use baseline::BaselineArgs;
 pub use consolidate::ConsolidateArgs;
-mod baseline;
+pub use control::ControlKind;
+pub use dataset::BuildArgs;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;
 pub use global::Global;
@@ -773,7 +712,6 @@ use train::positive_count;
 
 /// A sampling temperature a provider accepts: 0 to 2.
 pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};
-pub use baseline::BaselineArgs;
 
 #[cfg(test)]
 mod tests;

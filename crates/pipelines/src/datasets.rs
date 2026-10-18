@@ -19,12 +19,12 @@ use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::ExperienceId;
 use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
-pub use splinter_data::Strip;
 use splinter_data::{
     manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Objective,
     OutcomeView, Preference, Projection, RecordBody, Rehearsal, Retrieval, SftFinal, SftStep,
     StoredDataset, VerifierView, View, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
+pub use splinter_data::{Control, Strip};
 use splinter_knowledge::sections::sections;
 use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
 use splinter_store::error::StoreError;
@@ -76,6 +76,9 @@ pub struct BuildRequest {
     /// For the sft-step view: one record per trajectory with every admitted
     /// action supervised ([`SftStep::packed`]), not one record per action.
     pub pack: bool,
+    /// For the sft-step view: a negative control to build instead of the
+    /// verified dataset ([`Control`]).
+    pub control: Control,
 }
 
 /// How the voice view writes the writer's text into records; the other
@@ -235,6 +238,12 @@ fn project_without(
             view.as_str()
         )));
     }
+    if request.control != Control::Verified && view != ViewName::SftStep {
+        return Err(OrchestratorError::Refused(format!(
+            "view {} has no negative controls, so --control does not apply",
+            view.as_str()
+        )));
+    }
     if request.min_strength.is_some() && !view.takes_min_strength() {
         return Err(OrchestratorError::Refused(format!(
             "view {} reads no verdict, so --min-strength does not apply",
@@ -273,6 +282,7 @@ fn project_without(
         ViewName::SftStep => SftStep::new(strength)
             .with_strip(strip)
             .packed(request.pack)
+            .control(request.control)
             .project(&corpus),
         ViewName::Critic => Critic::new(strength).with_strip(strip).project(&corpus),
         ViewName::Preference => Preference::new(strength).with_strip(strip).project(&corpus),

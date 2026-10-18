@@ -38,17 +38,39 @@
 //! Packed ([`SftStep::packed`]), the actions an experience admits are one
 //! record, not one each.
 
-use splinter_core::annotation::{AnnotationBody, Label, Strength};
+use splinter_core::annotation::{AnnotationBody, Label, Outcome, Strength};
+use splinter_core::chat::WireMessage;
+use splinter_core::rng::SplitMix64;
 
 use crate::render::student_turn;
 use crate::trajectory::conversation;
 use crate::{
-    require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, Strip, View,
-    ViewError,
+    require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
+    View, ViewError,
 };
 
 /// The name every sft-step record carries.
 const NAME: &str = "sft-step";
+
+/// How the view admits what it projects: normally only verified work; the
+/// negative controls of the coding experiments change one thing each.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Control {
+    /// Only experiences decided pass at the minimum strength.
+    #[default]
+    Verified,
+    /// Trajectories whatever their verdict (a failed one, or none), except
+    /// those an exposure audit failed: it tests whether verification matters.
+    Unverified,
+    /// The verified trajectories, each under the instruction of another
+    /// task, paired by a seeded permutation with no fixed point: it tests
+    /// that the gain comes from the pairing and not from the format.
+    ShuffledInstructions {
+        /// Seeds the permutation.
+        seed: u64,
+    },
+}
 
 /// Supervised fine-tuning on each action of a trajectory.
 #[derive(Clone, Debug)]
@@ -56,6 +78,7 @@ pub struct SftStep {
     min_strength: Strength,
     strip: Strip,
     packed: bool,
+    control: Control,
 }
 
 impl SftStep {
@@ -68,6 +91,7 @@ impl SftStep {
             min_strength,
             strip: Strip::default(),
             packed: false,
+            control: Control::Verified,
         }
     }
 
@@ -85,6 +109,12 @@ impl SftStep {
         Self { packed, ..self }
     }
 
+    /// The same view under a negative `control`.
+    #[must_use]
+    pub fn control(self, control: Control) -> Self {
+        Self { control, ..self }
+    }
+
     /// The same view under `strip`.
     #[must_use]
     pub fn with_strip(self, strip: Strip) -> Self {
@@ -92,7 +122,10 @@ impl SftStep {
     }
 
     fn project_entry(&self, entry: &Entry, projection: &mut Projection) {
-        let passed = require_pass(entry, self.min_strength);
+        let passed = match self.control {
+            Control::Unverified => admit_unverified(entry),
+            _ => require_pass(entry, self.min_strength),
+        };
         let any_good = entry.notes.iter().any(|n| {
             matches!(
                 n.body,
@@ -160,6 +193,71 @@ impl View for SftStep {
         for entry in corpus.entries() {
             self.project_entry(entry, &mut projection);
         }
+        if let Control::ShuffledInstructions { seed } = self.control {
+            shuffle_instructions(&mut projection, seed)?;
+        }
         Ok(projection)
     }
+}
+
+/// Admits `entry` whatever its verdict unless an exposure audit failed it: a
+/// failed constraint means the trajectory touched material it must not.
+fn admit_unverified(entry: &Entry) -> Result<(), Exclusion> {
+    let exposed = entry.notes.iter().any(|n| {
+        matches!(
+            n.body,
+            AnnotationBody::Verdict {
+                outcome: Outcome::Fail,
+                strength: Strength::Constraint,
+                ..
+            }
+        )
+    });
+    if exposed {
+        Err(Exclusion::Failed)
+    } else {
+        Ok(())
+    }
+}
+
+/// The instruction of a record: its first user message.
+fn first_user_message(body: &mut RecordBody) -> Option<&mut WireMessage> {
+    match body {
+        RecordBody::Chat { messages, .. } => messages.iter_mut().find(|m| m.role == "user"),
+        _ => None,
+    }
+}
+
+/// Replaces the instruction (the first user message) of every record with
+/// another record's, by a seeded permutation of the distinct instructions
+/// with no fixed point. Records of one instruction keep one donor.
+fn shuffle_instructions(projection: &mut Projection, seed: u64) -> Result<(), ViewError> {
+    let mut distinct: Vec<String> = Vec::new();
+    for record in &mut projection.records {
+        if let Some(text) = first_user_message(&mut record.body).map(|m| m.content.clone()) {
+            if !distinct.contains(&text) {
+                distinct.push(text);
+            }
+        }
+    }
+    if distinct.len() < 2 {
+        return Err(ViewError::Parameter {
+            name: "control",
+            reason: "shuffling instructions needs at least two distinct instructions".into(),
+        });
+    }
+    let mut order = distinct.clone();
+    SplitMix64::new(seed).shuffle(&mut order);
+    let donor = |own: &str| {
+        let at = order.iter().position(|t| t == own)?;
+        order.get((at + 1) % order.len()).cloned()
+    };
+    for record in &mut projection.records {
+        if let Some(message) = first_user_message(&mut record.body) {
+            if let Some(other) = donor(&message.content) {
+                message.content = other;
+            }
+        }
+    }
+    Ok(())
 }

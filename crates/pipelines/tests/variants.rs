@@ -265,6 +265,7 @@ fn a_variant_never_enters_a_training_dataset() {
             voice: VoiceBuild::default(),
             max_block: None,
             pack: false,
+            control: Default::default(),
         },
     )
     .unwrap_err();
@@ -462,6 +463,7 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
             voice: VoiceBuild::default(),
             max_block: None,
             pack: false,
+            control: Default::default(),
         },
     )
     .unwrap();

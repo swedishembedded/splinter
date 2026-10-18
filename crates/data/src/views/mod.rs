@@ -26,7 +26,7 @@ pub use preference::Preference;
 pub use rehearsal::Rehearsal;
 pub use retrieval::Retrieval;
 pub use sft_final::SftFinal;
-pub use sft_step::SftStep;
+pub use sft_step::{Control, SftStep};
 pub use verifier::VerifierView;
 pub use voice::description;
 pub use voice::{chars_as_tokens, DescriptionOf, Sectioner, Voice, DEFAULT_MAX_FAMILY_SHARE};

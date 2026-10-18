@@ -101,7 +101,7 @@ pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use trajectory::{projection_refusal, session_dialogue, Unprojectable};
 pub use views::{
-    chars_as_tokens, description, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
+    chars_as_tokens, description, Control, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
     OutcomeView, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep, VerifierView,
     Voice, DEFAULT_MAX_FAMILY_SHARE,
 };

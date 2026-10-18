@@ -303,6 +303,7 @@ pub fn rehearse_on(
             voice: VoiceBuild::default(),
             max_block: None,
             pack: false,
+            control: Default::default(),
         },
     )?;
     Ok(Rehearsed {

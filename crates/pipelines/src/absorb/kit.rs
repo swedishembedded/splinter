@@ -489,6 +489,7 @@ fn teach_records(
             voice: VoiceBuild::default(),
             max_block: None,
             pack: false,
+            control: Default::default(),
         },
         None,
     )?;

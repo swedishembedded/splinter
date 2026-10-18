@@ -115,6 +115,7 @@ fn request(set: SetId) -> BuildRequest {
         voice: VoiceBuild::default(),
         max_block: None,
         pack: false,
+        control: Default::default(),
     }
 }
 

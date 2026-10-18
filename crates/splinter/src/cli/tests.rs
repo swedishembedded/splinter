@@ -186,23 +186,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     ));
     assert!(parse(&["experiences", "compare", "ab12"]).is_err());
 
-    let Command::Dataset(DatasetCommand::Build {
-        sets,
-        view,
-        strip,
-        mix_seed,
-        min_strength,
-        system_prompt,
-        export_only,
-        limit,
-        max_block,
-        pack,
-        drop_leaking,
-        writer,
-        token_limit,
-        max_family_share,
-        describe_with,
-    }) = command(&[
+    let Command::Dataset(DatasetCommand::Build(args)) = command(&[
         "dataset",
         "build",
         "ab12",
@@ -221,6 +205,10 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "--max-block",
         "4096",
         "--pack",
+        "--control",
+        "shuffled",
+        "--control-seed",
+        "5",
         "--drop-leaking",
         "--writer",
         "The Writer",
@@ -230,10 +218,30 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "0.2",
         "--describe-with",
         "local:Qwen/Qwen3-8B",
-    ])
-    else {
+    ]) else {
         panic!("dataset build");
     };
+    let super::BuildArgs {
+        sets,
+        view,
+        strip,
+        mix_seed,
+        min_strength,
+        system_prompt,
+        export_only,
+        limit,
+        max_block,
+        pack,
+        control,
+        control_seed,
+        drop_leaking,
+        writer,
+        token_limit,
+        max_family_share,
+        describe_with,
+    } = *args;
+    assert_eq!(control, Some(super::ControlKind::Shuffled));
+    assert_eq!(control_seed.map(splinter_sdk::seed::Seed::value), Some(5));
     assert_eq!(
         (writer.as_deref(), token_limit, max_family_share),
         (Some("The Writer"), Some(9000), Some(0.2))
@@ -250,6 +258,19 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     assert_eq!(limit, Some(5));
     assert_eq!(max_block, Some(4096));
     assert!(parse(&["dataset", "build", "ab12", "--view", "sft"]).is_err());
+    assert!(
+        parse(&[
+            "dataset",
+            "build",
+            "ab12",
+            "--view",
+            "sft-step",
+            "--control-seed",
+            "1"
+        ])
+        .is_err(),
+        "a control seed needs a control"
+    );
     assert!(
         parse(&["dataset", "export", "ab12"]).is_err(),
         "--out is required"

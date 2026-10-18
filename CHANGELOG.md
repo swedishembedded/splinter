@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A training run whose data leaves no whole group to monitor on trains unmonitored, as its record says, instead of failing with "selecting on the monitoring loss needs eval_every > 0": an unmonitored run carries no patience.
 
 ### Added
+- `dataset build --view sft-step --control unverified|shuffled` builds the negative controls of the coding experiments: the same experiences whatever their verdict (never one an exposure audit failed), or the verified trajectories each under another task's instruction by a seeded permutation (`--control-seed`, drawn and recorded when not given).
 - `splinter baseline` prints the `baseline-v1` record of what a registered run runs on: the three commits and tree state, the compiler, the brain binary's digest and version, model files and tokenizer by digest, the registered seeds (given, never defaulted) and the hardware; `--require-clean` exits 1 on a dirty tree, an unknown commit or an undigested binary.
 - `scripts/lease/card` (`make lease/card/run`) reserves VRAM shares of 11 GiB on one of several GPUs, so servers, trainers and evaluations share the cards without oversubscribing them; the command is told `CARD` and `BRAIN_DEVICE_FLAG`.
 - `train` reports its speed: row tokens per second between the first and last step report, with the seconds before the first report (model load, base scoring, one step) and after the last (scoring, export), in the text and in the `--json` curve's `speed`.

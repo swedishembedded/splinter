@@ -17,7 +17,9 @@ use splinter_sdk::canaries;
 use splinter_sdk::compare::compare;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
-use splinter_sdk::datasets::{build, build_dropping_leaks, export, BuildRequest, VoiceBuild};
+use splinter_sdk::datasets::{
+    build, build_dropping_leaks, export, BuildRequest, Control, VoiceBuild,
+};
 use splinter_sdk::describe::DescribeRequest;
 use splinter_sdk::doctor::doctor;
 use splinter_sdk::eval::{evaluate, EvalRequest};
@@ -41,16 +43,17 @@ use splinter_sdk::status::status;
 use splinter_sdk::tasks::resolve_set as resolve_task_set;
 use splinter_sdk::train::{train_recorded, Rehearse, TrainRequest, Tuning};
 use splinter_sdk::verify::{verify_set, Grading, Judge, Judging};
+use splinter_sdk::vocabulary::build::BuildInfo;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::terms::Distribution;
-use splinter_sdk::vocabulary::build::BuildInfo;
 use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::absorb_session;
-use crate::cli::{
-    Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand,
 use crate::baseline_report;
-    Global, JudgeCommand, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
+use crate::cli::{
+    BuildArgs, Cli, Command, ControlKind, DatasetCommand, EvalArgs, EvalCommand,
+    ExperiencesCommand, ExperimentCommand, Global, JudgeCommand, ReleaseCommand, RetrieveArgs,
+    RunsCommand, SourceCommand, StateCommand,
 };
 use crate::exam_session;
 use crate::harness_session;
@@ -88,18 +91,18 @@ impl From<Exit> for std::process::ExitCode {
 pub struct Session {
     splinter: Splinter,
     global: Global,
+    /// What this binary was built from, for `baseline`.
+    build: BuildInfo,
 }
 
 impl Session {
-    /// What this binary was built from, for `baseline`.
-    build: BuildInfo,
     /// A session over `config` with the command line's global flags.
     pub fn new(config: Config, global: Global) -> Result<Self, Error> {
         let verbose = global.verbose > 0;
+        let build = config.build.clone();
         let splinter = Splinter::builder(config)
             .allow_remote(global.allow_remote)
             .progress(Arc::new(move |stage, summary| {
-        let build = config.build.clone();
                 if verbose {
                     eprintln!("[{stage}] {summary}");
                 } else {
@@ -300,12 +303,12 @@ impl Session {
                     );
                 }
             }
-            Command::Status => emit(json, &status(ctx)?),
-            Command::Doctor => {
-                let report = doctor(ctx);
             Command::Baseline(args) => {
                 return baseline_report::run(&self.build, &args, json).map_err(Error::Refused)
             }
+            Command::Status => emit(json, &status(ctx)?),
+            Command::Doctor => {
+                let report = doctor(ctx);
                 emit(json, &report);
                 if !report.ready() {
                     return Ok(Exit::Failed);
@@ -465,23 +468,26 @@ impl Session {
                 })?;
                 emit(json, &compared);
             }
-            Command::Dataset(DatasetCommand::Build {
-                sets,
-                view,
-                strip,
-                mix_seed,
-                min_strength,
-                system_prompt,
-                export_only,
-                limit,
-                max_block,
-                pack,
-                drop_leaking,
-                writer,
-                token_limit,
-                max_family_share,
-                describe_with,
-            }) => {
+            Command::Dataset(DatasetCommand::Build(args)) => {
+                let BuildArgs {
+                    sets,
+                    view,
+                    strip,
+                    mix_seed,
+                    min_strength,
+                    system_prompt,
+                    export_only,
+                    limit,
+                    max_block,
+                    pack,
+                    control,
+                    control_seed,
+                    drop_leaking,
+                    writer,
+                    token_limit,
+                    max_family_share,
+                    describe_with,
+                } = *args;
                 let request = BuildRequest {
                     sets: sets
                         .iter()
@@ -505,18 +511,29 @@ impl Session {
                     },
                     max_block,
                     pack,
+                    control: Control::Verified,
                 };
                 // The strip is settled inside the run, which states the seed
                 // `mix:F` picks its subjects by.
-                let arguments = json!({ "request": &request, "strip": &strip });
+                let arguments = json!({
+                    "request": &request, "strip": &strip, "control": &control, "control_seed": &control_seed,
+                });
                 emit(
                     json,
                     &record(ctx, "dataset build", &arguments, |run| {
                         let strip = strip
                             .map(|policy| policy.with_seed(|| run.seed("mix-seed", mix_seed)))
                             .transpose()?;
+                        let control = match control {
+                            None => Control::Verified,
+                            Some(ControlKind::Unverified) => Control::Unverified,
+                            Some(ControlKind::Shuffled) => Control::ShuffledInstructions {
+                                seed: run.seed("control-seed", control_seed)?.value(),
+                            },
+                        };
                         let request = BuildRequest {
                             strip,
+                            control,
                             ..request.clone()
                         };
                         if drop_leaking {
