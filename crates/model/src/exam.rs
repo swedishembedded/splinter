@@ -12,11 +12,15 @@
 //! stopped, so an interrupted run costs nothing already measured.
 
 use std::collections::{BTreeMap, HashSet};
+use std::future::Future;
 use std::io::Write;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
+use splinter_core::concurrency::fan_out;
 use splinter_eval::verifiers::answer::final_answer;
 
 use crate::answer::{Answerer, Decoding, Reply};
@@ -171,7 +175,11 @@ pub fn pending<'a, Q: Question>(
 }
 
 /// Ask every pending question and append its graded answer to `out`, one line
-/// at a time, flushed, so a stop loses at most the question in flight.
+/// at a time, flushed, so a stop loses at most the questions in flight.
+///
+/// This asks one question at a time: for a model that answers one request at
+/// a time, as a model loaded in this process does. A model that decodes
+/// several together is asked through [`run_batched`].
 ///
 /// # Errors
 /// `out` cannot be written or `ask` fails.
@@ -182,44 +190,104 @@ pub fn run_with<Q: Question>(
     ask: &mut dyn FnMut(&Q) -> anyhow::Result<Reply>,
     grade: &dyn Fn(&Q, &str) -> Verdict,
 ) -> anyhow::Result<usize> {
+    futures::executor::block_on(run_batched(
+        questions,
+        out,
+        limit,
+        1,
+        |q| std::future::ready(ask(q)),
+        grade,
+    ))
+}
+
+/// [`run_with`] asking `slots` questions at once, as many as a batching
+/// server decodes together, so its decode slots stay full.
+///
+/// Each answer is graded and appended as it arrives, so the order of the
+/// lines in `out` is the order answers came in; the run resumes by question
+/// id, and an answer is never written twice. After the first failure no
+/// question is begun; those already in flight finish and are kept.
+///
+/// # Errors
+/// `out` cannot be written or `ask` fails; the first failure in question
+/// order is returned.
+pub async fn run_batched<'q, Q, F, Fut>(
+    questions: &'q [Q],
+    out: &Path,
+    limit: Option<usize>,
+    slots: usize,
+    mut ask: F,
+    grade: &dyn Fn(&Q, &str) -> Verdict,
+) -> anyhow::Result<usize>
+where
+    Q: Question,
+    F: FnMut(&'q Q) -> Fut,
+    Fut: Future<Output = anyhow::Result<Reply>>,
+{
     let todo = pending(questions, out, limit)?;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(out)?;
-    for (n, question) in todo.iter().enumerate() {
-        let reply = ask(question)?;
-        let answer = final_answer(&reply.thinking, &reply.text, reply.truncated);
-        let verdict = answer.as_deref().map(|a| grade(question, a));
-        let graded = Graded {
-            id: question.id().to_string(),
-            kind: question.kind().to_string(),
-            split: question.split().to_string(),
-            reference: question.reference().to_string(),
-            checks: verdict
-                .as_ref()
-                .map(|v| v.checks.iter().cloned().collect())
-                .unwrap_or_default(),
-            correct: verdict.is_some_and(|v| v.correct),
-            answer,
-            tokens: reply.tokens,
-            truncated: reply.truncated,
-            seconds: reply.seconds,
-        };
-        writeln!(file, "{}", serde_json::to_string(&graded)?)?;
-        file.flush()?;
-        eprintln!(
-            "[{}/{}] {} {} correct={} thinking={} chars, visible={} chars",
-            n + 1,
-            todo.len(),
-            graded.kind,
-            graded.split,
-            graded.correct,
-            reply.thinking.chars().count(),
-            reply.text.chars().count()
-        );
+    let file = Mutex::new(
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(out)?,
+    );
+    let (failed, finished) = (AtomicBool::new(false), AtomicUsize::new(0));
+    let total = todo.len();
+    let outcomes = fan_out(todo, slots, |question| {
+        let asked = ask(question);
+        let (file, failed, finished) = (&file, &failed, &finished);
+        async move {
+            if failed.load(Ordering::SeqCst) {
+                return Ok(());
+            }
+            let recorded = async {
+                let reply = asked.await?;
+                let graded = graded(question, &reply, grade);
+                let mut file = file.lock().unwrap_or_else(PoisonError::into_inner);
+                writeln!(file, "{}", serde_json::to_string(&graded)?)?;
+                file.flush()?;
+                let n = finished.fetch_add(1, Ordering::SeqCst) + 1;
+                eprintln!(
+                    "[{n}/{total}] {} {} correct={} thinking={} chars, visible={} chars",
+                    graded.kind,
+                    graded.split,
+                    graded.correct,
+                    reply.thinking.chars().count(),
+                    reply.text.chars().count()
+                );
+                anyhow::Ok(())
+            }
+            .await;
+            if recorded.is_err() {
+                failed.store(true, Ordering::SeqCst);
+            }
+            recorded
+        }
+    })
+    .await;
+    outcomes.into_iter().collect::<anyhow::Result<()>>()?;
+    Ok(total)
+}
+
+/// `reply` to `question`, graded by `grade` when it holds a final answer.
+fn graded<Q: Question>(question: &Q, reply: &Reply, grade: &dyn Fn(&Q, &str) -> Verdict) -> Graded {
+    let answer = final_answer(&reply.thinking, &reply.text, reply.truncated);
+    let verdict = answer.as_deref().map(|a| grade(question, a));
+    Graded {
+        id: question.id().to_string(),
+        kind: question.kind().to_string(),
+        split: question.split().to_string(),
+        reference: question.reference().to_string(),
+        checks: verdict
+            .as_ref()
+            .map(|v| v.checks.iter().cloned().collect())
+            .unwrap_or_default(),
+        correct: verdict.is_some_and(|v| v.correct),
+        answer,
+        tokens: reply.tokens,
+        truncated: reply.truncated,
+        seconds: reply.seconds,
     }
-    Ok(todo.len())
 }
 
 /// How a model is asked: which weights, under which system message, and how
@@ -241,6 +309,11 @@ pub struct Model<'a> {
 
 /// The exam against a local model. The model is loaded only when something is
 /// pending, so a finished exam costs nothing to resume.
+///
+/// Questions are asked one at a time because a model loaded in this process
+/// is one engine behind a lock: a second request on it cancels the one
+/// decoding, so it has no slots to fill. An exam against a batching server
+/// is [`run_batched`].
 ///
 /// # Errors
 /// The model cannot be loaded, a generation fails or `out` cannot be written.
@@ -481,5 +554,107 @@ mod tests {
             2
         );
         assert_eq!(samples(&qs, 0).len(), 2, "there is always one sample");
+    }
+
+    /// A model that takes a while to answer and counts the questions waiting
+    /// on it at once. Earlier questions take longer, so answers come back in
+    /// the reverse of the order they were asked.
+    #[derive(Default)]
+    struct Busy {
+        waiting: AtomicUsize,
+        most: AtomicUsize,
+    }
+
+    impl Busy {
+        async fn ask(&self, q: &Q) -> anyhow::Result<Reply> {
+            let now = self.waiting.fetch_add(1, Ordering::SeqCst) + 1;
+            self.most.fetch_max(now, Ordering::SeqCst);
+            let n: u64 = q.id[1..].parse()?;
+            tokio::time::sleep(std::time::Duration::from_millis((10 - n) * 8)).await;
+            self.waiting.fetch_sub(1, Ordering::SeqCst);
+            if n == 5 {
+                anyhow::bail!("device lost");
+            }
+            Ok(Reply {
+                text: "1770".into(),
+                ..Reply::default()
+            })
+        }
+    }
+
+    fn timed() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_batching_model_is_asked_as_many_questions_at_once_as_it_has_slots_and_each_is_kept_once() {
+        let d = dir();
+        for slots in [1, 4] {
+            let out = d.path().join(format!("slots-{slots}.jsonl"));
+            let busy = Busy::default();
+            let qs = questions(4)
+                .into_iter()
+                .chain((6..10).map(|i| Q {
+                    id: format!("q{i}"),
+                    reference: "1770".into(),
+                }))
+                .collect::<Vec<_>>();
+            let n = timed()
+                .block_on(run_batched(
+                    &qs,
+                    &out,
+                    None,
+                    slots,
+                    |q| busy.ask(q),
+                    &|_, _| true.into(),
+                ))
+                .unwrap();
+            assert_eq!(n, 8);
+            assert_eq!(busy.most.load(Ordering::SeqCst), slots);
+            let mut ids: Vec<_> = read_results(&out)
+                .unwrap()
+                .into_iter()
+                .map(|g| g.id)
+                .collect();
+            ids.sort();
+            let mut asked: Vec<_> = qs.iter().map(|q| q.id.clone()).collect();
+            asked.sort();
+            assert_eq!(ids, asked, "every answer written once");
+        }
+    }
+
+    #[test]
+    fn a_failure_among_batched_questions_keeps_what_finished_and_a_rerun_asks_only_the_rest() {
+        let d = dir();
+        let out = d.path().join("r.jsonl");
+        let qs = questions(8);
+        let busy = Busy::default();
+        let failed = timed().block_on(run_batched(&qs, &out, None, 3, |q| busy.ask(q), &|_, _| {
+            true.into()
+        }));
+        assert!(failed.is_err());
+        let kept: HashSet<String> = read_results(&out)
+            .unwrap()
+            .into_iter()
+            .map(|g| g.id)
+            .collect();
+        assert!(!kept.contains("q5") && !kept.is_empty());
+        let mut again = Vec::new();
+        let mut ask = |q: &Q| {
+            again.push(q.id.clone());
+            Ok(Reply {
+                text: "1770".into(),
+                ..Reply::default()
+            })
+        };
+        run_with(&qs, &out, None, &mut ask, &|_, _| true.into()).unwrap();
+        assert!(
+            again.iter().all(|id| !kept.contains(id)),
+            "{again:?} vs {kept:?}"
+        );
+        assert_eq!(read_results(&out).unwrap().len(), 8, "each question once");
     }
 }
