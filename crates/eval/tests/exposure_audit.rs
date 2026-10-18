@@ -164,3 +164,60 @@ fn the_recorded_tree_is_the_one_that_counts() {
         Outcome::Abstain
     );
 }
+
+/// The kinds the audit reports for `command` whose output was `output`.
+fn kinds_of(command: &str, output: &str) -> Vec<String> {
+    let task = the_task();
+    let finding = audit_exposure(&task, &run_of(&task, command, output), &hidden());
+    finding.evidence["exposed"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|f| f["kind"].as_str().map(str::to_string))
+        .collect()
+}
+
+#[test]
+fn a_path_outside_the_tree_is_reported_by_what_came_of_it_and_none_is_dropped() {
+    // The sandbox refused it.
+    assert_eq!(
+        kinds_of("cat /srv/x/y.py", "cat: /srv/x/y.py: Permission denied"),
+        ["outside_workspace_denied"]
+    );
+    // A path that is not there, and a search that returned nothing.
+    assert_eq!(
+        kinds_of(
+            "cd /nowhere/user",
+            "bash: cd: /nowhere/user: No such file or directory"
+        ),
+        ["outside_workspace_absent"]
+    );
+    assert_eq!(
+        kinds_of("find / -name iniparse", ""),
+        ["outside_workspace_absent"]
+    );
+    // Something came back: an access that may have succeeded.
+    assert_eq!(
+        kinds_of("cat /srv/x/y.py", "SECRET = 1"),
+        ["outside_workspace"]
+    );
+    // A refusal next to a result is not a refusal.
+    assert_eq!(
+        kinds_of(
+            "find / -name a.py",
+            "find: '/root': Permission denied\n/srv/x/a.py"
+        ),
+        ["outside_workspace"]
+    );
+    // Every class still fails the audit.
+    let task = the_task();
+    let denied = run_of(
+        &task,
+        "ls /srv",
+        "ls: cannot open directory '/srv': Permission denied",
+    );
+    assert_eq!(
+        audit_exposure(&task, &denied, &hidden()).outcome,
+        Outcome::Fail
+    );
+}

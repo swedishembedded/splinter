@@ -22,7 +22,12 @@
 //! * a tool call or output holds one of the **forbidden strings**, such as
 //!   the path of the state root;
 //! * for a workspace task, a tool call names an **absolute path outside the
-//!   episode's tree** ([`crate::exposure_paths`]).
+//!   episode's tree** ([`crate::exposure_paths`]), reported as
+//!   `outside_workspace` where the step's output shows something came back,
+//!   `outside_workspace_denied` where the sandbox refused it and
+//!   `outside_workspace_absent` where the path did not exist or nothing
+//!   came back. All three still fail the audit; the evidence keeps them
+//!   apart so a caller can count them by class.
 //!
 //! A clean trajectory is an **abstention**, not a pass: not having seen the
 //! material does not make an answer right. The audit is a
@@ -264,10 +269,10 @@ pub fn audit_exposure(task: &Task, exp: &Experience, hidden: &HiddenMaterial) ->
             .as_ref()
             .and_then(|extra| extra.get(WORKSPACE_TREE_KEY))
             .and_then(|tree| tree.as_str());
-        for (step, count) in outside_workspace(&exp.trajectory.steps, recorded) {
+        for (step, count, reach) in outside_workspace(&exp.trajectory.steps, recorded) {
             matches.push(json!({
                 "step": step, "in": Place::ToolCall.label(),
-                "kind": "outside_workspace", "item": count,
+                "kind": reach.kind(), "item": count,
             }));
         }
     }
