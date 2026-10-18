@@ -184,6 +184,10 @@ impl Verifier for JudgeVerifier {
         Strength::Judged
     }
 
+    fn concurrency(&self) -> usize {
+        self.model.slots()
+    }
+
     /// Refuses an experience whose solver or policy is the judge's own
     /// model. The evidence records the judge's identity, the digests of the
     /// prompt and the reply, the (capped) reason and how the run ended.

@@ -74,6 +74,14 @@ pub trait Verifier: Send + Sync {
     /// verifier does not apply to the task or cannot decide; an error means
     /// it could not carry out the check at all. Blocks until it has run.
     fn verify(&self, task: &Task, exp: &Experience) -> Result<Finding, VerifyError>;
+
+    /// How many verdicts may be asked for at once: the decode slots of the
+    /// model that decides them, one for a check that holds its thread or
+    /// whose model answers a request at a time. A caller grading many
+    /// independent answers keeps this many [`Self::verify`] calls running.
+    fn concurrency(&self) -> usize {
+        1
+    }
 }
 
 /// What a verifier found: the body of a verdict, before it is attached to

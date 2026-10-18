@@ -151,6 +151,20 @@ fn outcome(verifier: &dyn Verifier, task: &Task, exp: &Experience) -> (Outcome, 
 }
 
 #[test]
+fn a_judge_is_asked_as_many_verdicts_at_once_as_its_model_has_slots() {
+    let rt = runtime();
+    let model = ScriptedJudge::new(grades_five);
+    let one = judge(model.clone(), &rt);
+    assert_eq!(one.concurrency(), 1, "a model that answers one at a time");
+    let batching = JudgeVerifier::new(
+        Model::new(model, JUDGE).with_slots(8),
+        rt.handle().clone(),
+        Duration::from_secs(60),
+    );
+    assert_eq!(batching.concurrency(), 8);
+}
+
+#[test]
 fn the_judge_grades_closed_book_from_the_output_and_the_reference() {
     let rt = runtime();
     let model = ScriptedJudge::new(grades_five);

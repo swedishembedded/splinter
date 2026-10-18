@@ -19,6 +19,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use splinter_core::annotation::{AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::concurrency::fan_out_blocking;
 use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{Experience, ExperienceError, ExperienceId, Task};
 
@@ -87,13 +88,21 @@ pub fn measure(
     judge: &dyn Verifier,
     labelled: &[(Task, Experience, Outcome)],
 ) -> Result<(Calibration, Vec<Measurement>), VerifyError> {
+    if let Some(index) = labelled
+        .iter()
+        .position(|(_, _, label)| *label == Outcome::Abstain)
+    {
+        return Err(VerifyError::Label { index });
+    }
+    // The controls are independent: a judge that decodes several requests
+    // together is asked as many at once as it has slots.
+    let notes = fan_out_blocking(labelled, judge.concurrency(), |(task, exp, _)| {
+        annotation(judge, task, exp)
+    });
     let mut measured = Vec::with_capacity(labelled.len());
     let mut measurements = Vec::with_capacity(labelled.len());
-    for (index, (task, exp, label)) in labelled.iter().enumerate() {
-        if *label == Outcome::Abstain {
-            return Err(VerifyError::Label { index });
-        }
-        let note = annotation(judge, task, exp)?;
+    for ((_, _, label), note) in labelled.iter().zip(notes) {
+        let note = note?;
         let AnnotationBody::Verdict {
             outcome, evidence, ..
         } = note.body
@@ -199,6 +208,10 @@ impl<V: Verifier> Verifier for CalibratedJudge<V> {
 
     fn strength(&self) -> Strength {
         self.inner.strength()
+    }
+
+    fn concurrency(&self) -> usize {
+        self.inner.concurrency()
     }
 
     fn verify(&self, task: &Task, exp: &Experience) -> Result<Finding, VerifyError> {
