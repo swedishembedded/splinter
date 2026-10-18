@@ -393,6 +393,111 @@ verdict from the runner's summary (`--test-output-cap`, 1 MiB per stream), and c
 near-duplicate faults by their failing tests only; the eight CE4 repositories keep the
 admission they have.
 
+### Amendment 4, 2026-10-18, 23:55 CEST: controls and arms as built, teacher passes, binaries
+
+Made after the containment smoke and the start of teacher pass 1 on the development
+partition, and before any dataset is built, any training run and any qualification-partition
+query. No result of a registered arm exists. It registers what A1.1 and the roadmap left as
+names and changes no threshold.
+
+**A4.1 Teacher pass 1 as run.** Pass 1 (greedy, one attempt, `--solve-deadline 3600`, concurrency
+8 per server, A3.3) runs on two 27B servers, one per GH200, each with the A2.6 flags. The
+development sets are split by repository: card 0 solves iniparse, exprcalc, linediff and caldate
+(194 tasks), card 1 ttlcache, mdrender, graphkit and tokenbucket (178 tasks). Greedy outputs do
+not depend on the split. The binaries of the run are splinter b5fb1674 (built against local
+brain and sven checkouts, whose commits are in the run record) and brain 5c1aa4863; the run
+passes `--test-output-cap 65536` and the default search path, because the tasks were admitted
+under those and a solve refuses an environment that differs (A3.4). Containment was checked
+before it on 5 development tasks (0 host paths in 5 trajectories, 1 `outside_workspace`
+exposure from a `find /` call that returned nothing).
+
+**A4.2 What "cancelled" means.** A solve concludes `cancelled` when the harness itself stops the
+run: the cap of 60 tool calls, the repetition stop of A1.3 (the same call returning the same
+result three times), or a caller's cancel. The experience records the conclusion but not which
+of them it was; none counts as a pass and none carries a final output. The count is reported
+with CE1. This is a description of the registered harness, not a change to it.
+
+**A4.3 Controls as built.** All are development-partition comparisons (A1.1), one adapter each on
+the A2.7 recipe and the same number of optimiser steps as the primary adapter, evaluated like the
+primary adapter on the development partition, greedy, k = 1, same server build, one arm at a
+time, compared with `compare`.
+- (a) Unverified: `dataset build --view sft-step --pack --drop-leaking --control unverified`,
+  the same experiences whatever their verdict, never one an exposure audit failed.
+- (b) Other repository: the primary recipe on the verified, exposure-clean teacher trajectories of
+  the CE7 repository (sqlglot) only, records capped evenly to the number of the primary dataset.
+- (c) Replay: not run; no earlier round exists.
+- A5, shuffled: `--control shuffled --control-seed N` on the primary dataset's experiences:
+  every trajectory under another task's instruction, by a seeded permutation with no fixed point
+  (a negative control for pairing, with format, tools and token count preserved).
+- A1, plain patch SFT: `--view sft-final` on the primary dataset's experiences (instruction to
+  final patch, no tool turns), as the ordinary-fine-tuning baseline.
+A3 (replay) and A4 (preference) of the roadmap are not registered and not run: A3 needs an earlier
+round, A4 a pair view over solved and failed attempts of one task, which pass 1 and pass 2 may
+not yield. If a control's dataset has fewer than 40 trajectories it is reported as not run for
+that reason (A2.7 applies to every arm). A control that matches the primary adapter on the
+development partition is read as A1.1 says.
+
+**A4.4 Pass 2.** Pass 2 of the teacher (temperature 0.7, unseeded) runs after pass 1 on the same
+servers, development partition only, same bounds. Training data are the verified,
+exposure-clean trajectories of both passes (A2.7); a task solved in both passes contributes both
+trajectories.
+
+**A4.5 Binary switches.** A binary is named per solve of one development set (A3.4). A faster
+brain build may replace the one in use between two sets of pass 1 or pass 2, never inside one;
+the run record of each set names its binaries, the number of sets run on each is reported, and
+no result compares sets across builds. Teacher trajectories are training data, not an arm of any
+test, so a switch between sets does not change a test. The two arms of every comparison (the
+untrained 8B and an adapter, and every control against the primary adapter) are always run
+against one server instance of one build, one arm at a time (A2.2, A2.10); a switch before
+the first arm of a comparison starts is allowed, and between its arms is not. The numerics of
+a faster build (precision, kernels) are reported with the evidence that they preserve
+accuracy, and the first set run on a new build is repeated on the old one when it can be, to
+report the agreement of verdicts.
+
+**A4.6 Infrastructure errors and resumed solves.** The node's memory cap has killed servers
+mid-run. An attempt in which the solver could not be reached or failed to run (a dead server, a
+closed connection) is an infrastructure error: it is reported with its task, it has no experience
+and no conclusion, it counts as neither a pass nor a failure, and the exclusion rule for harness
+failures applies to it. The solve keeps every attempt that completed (made durable as it finishes,
+with a partial experience set named in its progress lines) and `solve --resume <set>` asks only
+the tasks the set does not hold, against a restarted server with the same flags; the experience
+of a resumed task is that of its first complete attempt, and greedy outputs do not depend on the
+restart. The number of infrastructure errors and resumes of every set is reported with CE1.
+Concurrency slots are also no longer held by a finished attempt behind a slower one (the harness
+now starts the next task as soon as any attempt ends); this changes wall time, not outputs.
+
+**A4.7 Teacher server flags per set.** A2.6 registers the 27B server's context (32768), KV
+precision, batch and prefix slots; the first two sets of pass 1 (iniparse, ttlcache) ran on exactly
+those flags. Three findings then changed what serves the remaining sets, none of them a
+decoding parameter. (i) `--speculative off`, which brain documents as leaving greedy output
+unchanged and which measured 33% faster on a multi-turn replay (runs/b27/status.md), is used from
+the third set on. (ii) The batch and prefix slots are lowered together to the 8 concurrent
+episodes of A3.3 (A2.6 allows lowering them together). (iii) A served context of 65536 was tried
+on two sets (mdrender on card 1, exprcalc on card 0), because 22k-token prompts reached the
+agent's compaction threshold in a 32768 context and 32 of the 61 withdrawn-run episodes show
+compaction before they were stopped. It measured 68.5 GB resident and served 44 k-token prompts,
+but an episode still outgrew it (67140 tokens, mdrender lost, A4.8) and requests of 20 to 60 k
+tokens made a set several times slower than at 32768, so the context returns to the registered
+32768 for every later set. Every set records the flags and the binaries of its server in
+`runs/ce/STATUS.md`, and the number of compacted trajectories per set is reported with CE1. The
+student is unaffected: the 8B arms keep the A2.6 flags and no training record exceeds the
+16384-token block.
+
+**A4.8 Lost set, new splinter build, stricter containment.** The first solve of the iniparse
+development set (card 0, splinter b5fb1674, 61 tasks, 9457 s) ended with an infrastructure error:
+the server failed an over-context request ("needs 33805 tokens, engine capacity is 32768") without
+answering it, the client gave up after its 600 s first-byte bound, and the old harness discarded
+every result of the set, which it held in memory until the end. It produced no experience, no
+verdict and no number, and the set is solved again from the start; the loss is recorded here and
+in `runs/ce/STATUS.md`, not counted as a solve. The sets after it run on splinter f61cfa5f, which
+contains the A4.6 handling and the containment of splinter 8384f9dc (network denial, a scrubbed
+environment, a non-dumpable supervisor, delegated children pinned to the project root, and an
+exposure audit that reports an outside path as denied, absent or reached; all three still mark the
+experience exposed, so the A3.1 rule is unchanged); it changes no environment digest of an
+admitted task. The brain binary of the servers stays 5c1aa4863 (A4.5: a binary is named per set).
+The set-by-set record of binaries and server flags is in `runs/ce/STATUS.md` and is reported
+with CE1.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
