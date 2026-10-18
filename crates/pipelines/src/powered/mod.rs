@@ -46,6 +46,7 @@ use serde::{Deserialize, Serialize};
 use splinter_agent::solve::{with_system_addendum, Model};
 use splinter_agent::CancelToken;
 use splinter_core::annotation::Outcome;
+use splinter_core::concurrency::fan_out_blocking;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Task};
@@ -56,7 +57,7 @@ use crate::exam_set::{ExamSet, ExamTask};
 use crate::grouping::groups_of;
 use crate::judging::{hard_controls, reference};
 use crate::release::arm as arm_ref;
-use crate::release::probe::{answer_prompted, greedy};
+use crate::release::probe::{answer_many, greedy};
 use crate::reserve::touched_blobs;
 use crate::train::{load_candidate, Candidate};
 use crate::verify::grounding_verifier;
@@ -433,14 +434,15 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
     let calibrated = calibrate_judge(ctx, &judge_ref, &with_reference)?;
     let hard_controls = if calibrated.trust.trusted {
         let hard = hard_controls(ctx, &with_reference)?;
-        let mut passed = 0;
-        for (task, exp) in &hard {
+        let verdicts = fan_out_blocking(&hard, calibrated.judge.concurrency(), |(task, exp)| {
             if request.cancel.is_cancelled() {
                 return Err(OrchestratorError::Cancelled);
             }
-            if calibrated.judge.verify(task, exp)?.outcome == Outcome::Pass {
-                passed += 1;
-            }
+            Ok(calibrated.judge.verify(task, exp)?.outcome)
+        });
+        let mut passed = 0;
+        for verdict in verdicts {
+            passed += usize::from(verdict? == Outcome::Pass);
         }
         (!hard.is_empty()).then_some(HardControls {
             wrong_answers: hard.len(),
@@ -458,17 +460,29 @@ pub fn run(ctx: &Context, request: &PoweredRequest<'_>) -> Result<Powered, Orche
             arms: BTreeMap::new(),
         })
         .collect();
-    for (name, per_task) in &answered {
-        for (n, answers) in per_task.iter().enumerate() {
-            let mut graded = Vec::with_capacity(answers.len());
-            for exp in answers {
-                if request.cancel.is_cancelled() {
-                    return Err(OrchestratorError::Cancelled);
-                }
-                graded.push(grade(&calibrated.judge, &grounding, &tasks[n], exp)?);
-            }
-            records[n].arms.insert((*name).to_string(), graded);
+    // Every answer of every arm is graded independently: as many at once as
+    // the judge has slots.
+    let answers: Vec<(&str, usize, &Experience)> = answered
+        .iter()
+        .flat_map(|(name, per_task)| {
+            per_task
+                .iter()
+                .enumerate()
+                .flat_map(move |(n, given)| given.iter().map(move |exp| (*name, n, exp)))
+        })
+        .collect();
+    let graded = fan_out_blocking(&answers, calibrated.judge.concurrency(), |&(_, n, exp)| {
+        if request.cancel.is_cancelled() {
+            return Err(OrchestratorError::Cancelled);
         }
+        grade(&calibrated.judge, &grounding, &tasks[n], exp)
+    });
+    for ((name, n, _), answer) in answers.iter().zip(graded) {
+        records[*n]
+            .arms
+            .entry((*name).to_string())
+            .or_default()
+            .push(answer?);
     }
 
     let arm_names: Vec<String> = specs.iter().map(|s| s.name.to_string()).collect();
@@ -650,21 +664,32 @@ fn ask(
     } else {
         None
     };
-    let mut answers = Vec::with_capacity(tasks.len());
-    for task in tasks {
-        let mut given = vec![answer_prompted(
-            ctx,
-            &greedy_model,
-            task,
-            None,
-            request.cancel,
-        )?];
-        if let Some(model) = &sampled_model {
-            for _ in 1..request.resamples {
-                given.push(answer_prompted(ctx, model, task, None, request.cancel)?);
-            }
+    // Every draw of every task is independent of the others: asked as many at
+    // once as the model has slots, the greedy answers first and then the
+    // sampled ones, task by task and draw by draw as they were asked one at a
+    // time, so a sampling model draws its seeds in the same order.
+    let asked: Vec<(&Task, Option<&str>)> = tasks.iter().map(|task| (task, None)).collect();
+    let greedy_answers = answer_many(ctx, &greedy_model, &asked, request.cancel)?;
+    let mut sampled_answers = match &sampled_model {
+        Some(model) => {
+            let draws: Vec<(&Task, Option<&str>)> = asked
+                .iter()
+                .flat_map(|job| std::iter::repeat_n(*job, request.resamples - 1))
+                .collect();
+            answer_many(ctx, model, &draws, request.cancel)?.into_iter()
         }
-        answers.push(given);
-    }
-    Ok(answers)
+        None => Vec::new().into_iter(),
+    };
+    Ok(greedy_answers
+        .into_iter()
+        .map(|first| {
+            let mut given = vec![first];
+            given.extend(
+                sampled_answers
+                    .by_ref()
+                    .take(request.resamples.saturating_sub(1)),
+            );
+            given
+        })
+        .collect())
 }

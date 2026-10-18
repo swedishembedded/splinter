@@ -28,6 +28,11 @@ const STARTUP_PREFIX: &str = "brain serve: ";
 /// The most output lines kept to explain a server that did not start or stopped answering.
 const KEPT_LINES: usize = 20;
 
+/// The sequences `brain serve` decodes together when it is not told otherwise
+/// (`--qwen-max-batch`): the width a server is asked at when its launch names
+/// none.
+pub const DEFAULT_SERVE_SLOTS: u32 = 16;
+
 /// Why the check has no result.
 pub enum Failure {
     /// The check was cancelled.
@@ -67,9 +72,18 @@ pub struct Launch<'a> {
     /// The compute it may schedule, in brain's `--device` grammar; brain's
     /// own choice when `None`.
     pub device: Option<&'a str>,
-    /// Sequences it decodes together (`--qwen-max-batch`); brain's default
-    /// when `None`.
+    /// Sequences it decodes together (`--qwen-max-batch`);
+    /// [`DEFAULT_SERVE_SLOTS`] when `None`.
     pub max_batch: Option<u32>,
+}
+
+impl Launch<'_> {
+    /// The sequences the server is started to decode together: what a caller
+    /// that asks it many things at once keeps in flight.
+    #[must_use]
+    pub fn slots(&self) -> u32 {
+        self.max_batch.unwrap_or(DEFAULT_SERVE_SLOTS).max(1)
+    }
 }
 
 /// A running server, stopped when dropped.
@@ -102,6 +116,8 @@ pub struct Started {
     pub served_digest: String,
     /// The OpenAI surface's key.
     pub key: String,
+    /// The sequences it was started to decode together ([`Launch::slots`]).
+    pub slots: u32,
 }
 
 impl Started {
@@ -128,9 +144,9 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
         command.args(["--device", device]);
     }
     command.arg("serve").args(["--openai", &address]);
-    if let Some(slots) = launch.max_batch {
-        command.args(["--qwen-max-batch", &slots.to_string()]);
-    }
+    // Always named, so the width a caller asks at is the one the server was
+    // told rather than a default it might not share.
+    command.args(["--qwen-max-batch", &launch.slots().to_string()]);
     match launch.offer {
         Offer::Adapter(adapter) => {
             command.arg("--adapter").arg(adapter);
@@ -231,6 +247,7 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
         model,
         served_digest,
         key,
+        slots: launch.slots(),
     })
 }
 

@@ -43,6 +43,17 @@ pub fn request_log(scratch: &Scratch) -> PathBuf {
 
 const REQUEST_LOG: &str = "requests.log";
 
+/// The file the `brain` stand-in appends a line to for each request it
+/// answers: the `--qwen-max-batch` it was started with and how many requests
+/// it was answering at that moment, this one included. While the file `pause`
+/// exists in the scratch directory each request takes a second to answer, so
+/// requests asked together overlap.
+pub fn slots_log(scratch: &Scratch) -> PathBuf {
+    scratch.0.join(SLOTS_LOG)
+}
+
+const SLOTS_LOG: &str = "slots.log";
+
 /// [`device_lock`]'s name in the scratch directory.
 const DEVICE_LOCK: &str = "device.lock";
 
@@ -56,7 +67,9 @@ pub fn fake_brain(dir: &Path, brain: Brain) -> PathBuf {
         .replace("@DIFFERENT@", python(brain == Brain::Different))
         .replace("@CRASHING@", python(brain == Brain::Crashing))
         .replace("@DEVICE@", &dir.join(DEVICE_LOCK).display().to_string())
-        .replace("@LOG@", &dir.join(REQUEST_LOG).display().to_string());
+        .replace("@LOG@", &dir.join(REQUEST_LOG).display().to_string())
+        .replace("@SLOTS@", &dir.join(SLOTS_LOG).display().to_string())
+        .replace("@PAUSE@", &dir.join("pause").display().to_string());
     std::fs::write(&path, script).unwrap();
     #[cfg(unix)]
     {
@@ -68,7 +81,7 @@ pub fn fake_brain(dir: &Path, brain: Brain) -> PathBuf {
 
 const FAKE_BRAIN: &str = r#"#!/usr/bin/env python3
 # A test double of `brain serve`: see the fixtures' module documentation.
-import hashlib, http.server, json, os, re, sys
+import hashlib, http.server, json, os, re, sys, threading, time
 
 if os.path.exists("@DEVICE@"):
     print("the device is held by another process", file=sys.stderr, flush=True)
@@ -149,8 +162,25 @@ def text_of(content):
         return " ".join(p.get("text", "") for p in content if isinstance(p, dict))
     return content or ""
 
+answering = 0
+answering_lock = threading.Lock()
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
+        global answering
+        with answering_lock:
+            answering += 1
+            with open("@SLOTS@", "a") as log:
+                log.write("%s %d\n" % (opts.get("--qwen-max-batch", "default"), answering))
+        try:
+            if os.path.exists("@PAUSE@"):
+                time.sleep(1.0)
+            self.answer()
+        finally:
+            with answering_lock:
+                answering -= 1
+
+    def answer(self):
         if @CRASHING@:
             print("wgpu error: Out of Memory", file=sys.stderr, flush=True)
             os._exit(1)
@@ -200,7 +230,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 host, port = opts["--openai"].rsplit(":", 1)
-server = http.server.ThreadingHTTPServer((host, int(port)), Handler)
+class Server(http.server.ThreadingHTTPServer):
+    # Many requests asked at once connect at once; the default backlog of five
+    # would drop the rest and make the client wait a second to retry.
+    request_queue_size = 128
+
+server = Server((host, int(port)), Handler)
 open(opts["--ready-file"], "w").close()
 server.serve_forever()
 "#;

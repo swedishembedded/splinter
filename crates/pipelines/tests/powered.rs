@@ -22,7 +22,7 @@ use std::sync::Arc;
 use common::gate::{
     candidate_on, dataset_citing, gate_context, policy, Brain, FakeTrainer, ANCHOR, FACTS,
 };
-use common::Scripted;
+use common::{Counted, Scripted};
 use serde_json::json;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
@@ -281,6 +281,80 @@ fn every_verdict_of_every_arm_is_kept_and_the_arms_are_compared_by_family() {
     assert_eq!((pilot.families, pilot.tasks), (3, 6));
     let hard = report.hard_controls.unwrap();
     assert_eq!(hard.passed, 0, "{hard:?}");
+}
+
+#[test]
+fn a_batching_model_is_asked_every_draw_of_every_task_at_once_up_to_its_slots_and_judged_alike() {
+    let (scratch, ctx) = gate_context("powered-slots", Brain::Missing);
+    let exam = exam(&ctx, &scratch);
+    let facts: Vec<usize> = (0..FACTS).collect();
+    let data = dataset_citing(&ctx, "alpha", &facts, Some(PERSONA_PROMPT), &[]);
+    let (candidate, _) = candidate_on(&ctx, data, &[ANCHOR, "alpha"]);
+    let judge = arms(&ctx, &candidate.adapter);
+    // The same arms and judge, now behind servers that decode four at once
+    // and answer the earlier questions last.
+    let slow = |script: Scripted| {
+        Counted::new(script, |prompt| {
+            let n: u64 = number_after(prompt, "Letter ")
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(0);
+            std::time::Duration::from_millis((12 - n.min(12)) * 5 + 20)
+        })
+    };
+    let (base, tuned, judged) = (
+        slow(knowing(false)),
+        slow(knowing(true)),
+        slow(Scripted::new(|prompt| {
+            let reference = prompt
+                .split("REFERENCE:\\n")
+                .nth(1)
+                .and_then(|t| t.split("\\n\\nANSWER:").next())
+                .unwrap_or_default();
+            let answer = prompt.split("ANSWER:\\n").nth(1).unwrap_or_default();
+            if !reference.is_empty() && answer.contains(reference) {
+                "PASS\nit states the reference".into()
+            } else {
+                "FAIL\nit does not".into()
+            }
+        })),
+    );
+    for (reference, model, name) in [
+        (arm(ctx.config(), None), &base, "base"),
+        (arm(ctx.config(), Some(&candidate.adapter)), &tuned, "tuned"),
+        (judge.clone(), &judged, "judge"),
+    ] {
+        ctx.add_model(
+            reference,
+            Model::new(model.clone(), format!("scripted/{name}")).with_slots(4),
+        );
+    }
+    let report = examined(&ctx, &exam, &candidate.candidate, &judge);
+    assert_eq!(
+        (base.most(), tuned.most(), judged.most()),
+        (4, 4, 4),
+        "each is asked four at once"
+    );
+    // Whatever order the answers came in, each is the answer to its own task.
+    assert_eq!(report.records.len(), 12);
+    for record in &report.records {
+        let id = &exam
+            .tasks
+            .iter()
+            .find(|t| t.task.to_string() == record.task)
+            .unwrap()
+            .task;
+        let task = ctx.tasks().get(id).unwrap();
+        let letter = number_after(&task.instruction, "Letter ").unwrap();
+        for draw in &record.arms[CANDIDATE] {
+            assert_eq!(draw.judged, Some(true));
+            assert!(draw
+                .text
+                .as_deref()
+                .unwrap()
+                .contains(&format!("l{letter}w0")));
+        }
+        assert!(record.arms[BASE].iter().all(|a| a.judged == Some(false)));
+    }
 }
 
 #[test]

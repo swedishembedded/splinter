@@ -24,7 +24,7 @@ mod common;
 
 use std::sync::Arc;
 
-use common::{scratch_context, Scratch, Scripted};
+use common::{scratch_context, Counted, Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
@@ -110,11 +110,28 @@ fn setup(
     Vec<Task>,
 ) {
     let (scratch, ctx) = scratch_context(test, Scripted::new(|_| String::new()), false);
+    let (tasks, controls) = tasks_of(&scratch, &ctx);
+    for (name, script) in [
+        ("base", arm(false, None)),
+        ("tuned", arm(true, Some(3))),
+        ("judge", judge),
+    ] {
+        ctx.add_model(
+            format!("local:exam/{name}").parse().unwrap(),
+            Model::new(Arc::new(script), format!("scripted/{name}")),
+        );
+    }
+    (scratch, ctx, tasks, controls)
+}
+
+/// The six tasks of two families of sources, stored in `ctx`, and the same
+/// as its judge's controls.
+fn tasks_of(scratch: &Scratch, ctx: &splinter_orchestrator::Context) -> (Vec<Task>, Vec<Task>) {
     let span_of = |name: &str, text: &str| -> Span {
         let path = scratch.0.join(name);
         std::fs::write(&path, text).unwrap();
         let id = sources::add(
-            &ctx,
+            ctx,
             &SourceTarget::from_learn_arg(&path.display().to_string()).unwrap(),
         )
         .unwrap()
@@ -132,17 +149,7 @@ fn setup(
         .map(|n| task(n, if n <= 3 { &first } else { &second }))
         .collect();
     let controls = tasks.clone();
-    for (name, script) in [
-        ("base", arm(false, None)),
-        ("tuned", arm(true, Some(3))),
-        ("judge", judge),
-    ] {
-        ctx.add_model(
-            format!("local:exam/{name}").parse().unwrap(),
-            Model::new(Arc::new(script), format!("scripted/{name}")),
-        );
-    }
-    (scratch, ctx, tasks, controls)
+    (tasks, controls)
 }
 
 fn run(
@@ -168,6 +175,78 @@ fn run(
         },
     )
     .unwrap()
+}
+
+/// `script` answering after a pause that is longer for the earlier questions.
+fn counted(script: Scripted) -> Arc<Counted> {
+    Counted::new(script, |prompt| {
+        let n = (1..=6)
+            .find(|n| prompt.contains(&format!("question {n})")))
+            .unwrap_or(7);
+        std::time::Duration::from_millis((7 - n as u64) * 10 + 20)
+    })
+}
+
+#[test]
+fn a_batching_model_is_asked_and_judged_as_many_tasks_at_once_as_it_has_slots_with_the_same_report()
+{
+    let scratch = Scratch::new("exam-slots");
+    let mut settings = common::config(&scratch);
+    settings.remote_concurrency = 3;
+    let ctx = splinter_orchestrator::Context::new(settings, true).unwrap();
+    let (tasks, controls) = tasks_of(&scratch, &ctx);
+    let (base, tuned, judged) = (
+        counted(arm(false, None)),
+        counted(arm(true, Some(3))),
+        counted(judge(false)),
+    );
+    for (name, model) in [("base", &base), ("tuned", &tuned), ("judge", &judged)] {
+        ctx.add_model(
+            format!("remote:exam/{name}").parse().unwrap(),
+            Model::new(model.clone(), format!("scripted/{name}")),
+        );
+    }
+    let model = |name: &str| -> ModelRef { format!("remote:exam/{name}").parse().unwrap() };
+    let report = exam(
+        &ctx,
+        &ExamRequest {
+            tasks: &tasks,
+            controls: &controls,
+            base: &model("base"),
+            candidate: &model("tuned"),
+            judge: &model("judge"),
+            prompted: None,
+            retrieval: None,
+            base_system: None,
+            candidate_system: None,
+            interval_seed: INTERVAL_SEED,
+            cancel: CancelToken::new(),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        (base.most(), tuned.most(), judged.most()),
+        (3, 3, 3),
+        "the arms and the judge are each asked three at once"
+    );
+    // Whatever order the answers came in, they are the sequential run's.
+    assert_eq!(report.tasks, 6);
+    assert_eq!(
+        (report.base.judged_right, report.base.judged),
+        (0, 6),
+        "{:#?}",
+        report.base
+    );
+    assert_eq!(
+        (report.candidate.judged_right, report.candidate.judged),
+        (6, 6),
+        "{:#?}",
+        report.candidate
+    );
+    assert_eq!(
+        (report.candidate.invented, report.candidate.checked),
+        (1, 6)
+    );
 }
 
 #[test]

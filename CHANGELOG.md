@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/lease/card` (`make lease/card/run`) reserves VRAM shares of 11 GiB on one of several GPUs, so servers, trainers and evaluations share the cards without oversubscribing them; the command is told `CARD` and `BRAIN_DEVICE_FLAG`.
 - `train` reports its speed: row tokens per second between the first and last step report, with the seconds before the first report (model load, base scoring, one step) and after the last (scoring, export), in the text and in the `--json` curve's `speed`.
 
+### Changed (batched probing)
+- The release gate's probing, the exams (`exam`, the powered exam) and the serve check ask a model that decodes several requests together as many tasks at once as it has slots, and decide the answers as many at once as the judge has slots; outcomes keep the order of the tasks. A model loaded in this process is still asked one at a time (its engine has no slots), and `remote:` models are asked `--remote-concurrency` at once.
+- The `brain serve` the serve check starts is always given `--qwen-max-batch` (16 unless the launch says otherwise), so the width it is asked at is the one it was told.
+
 ### Changed (BREAKING, workspace confinement)
 - A command a workspace runs on the process sandbox (the solver's shell and every test run) is confined by the kernel's Landlock to its tree, a private directory (`HOME` and `TMPDIR`), the system directories, the directories its `PATH` and `CARGO_HOME` name, and the device files: no home directory, no other tree, no state root. The solver's `shell` is always the sandbox's, never sven's own, which ran with the whole filesystem. Where Landlock is unavailable the command is refused unless `--allow-unconfined-workspace` is given, and then the environment record says `unconfined_commands`. A confined environment keeps the record it had.
 - The exposure audit fails a workspace experience whose tool calls name an absolute path outside the episode's tree and the system directories (`outside_workspace`); a trajectory now records its tree as `workspace_tree` in the agent's `extra`.

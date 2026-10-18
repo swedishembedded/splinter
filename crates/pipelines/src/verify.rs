@@ -272,6 +272,13 @@ impl Judge {
         trusted_for(&self.calibration, purpose)
     }
 
+    /// How many answers it may be asked to decide at once: the decode slots
+    /// of the model that judges.
+    #[must_use]
+    pub fn concurrency(&self) -> usize {
+        self.model.slots()
+    }
+
     /// Whether its measured precision, on passes and on fails, reaches
     /// [`DEFAULT_MIN_PRECISION`]: [`Judge::trusted_for`] a comparison.
     #[must_use]

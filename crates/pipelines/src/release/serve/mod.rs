@@ -161,7 +161,8 @@ struct Spawn<'a> {
 }
 
 /// The model the served endpoint is, asked as the candidate is: greedily,
-/// under the prompt it was trained under.
+/// under the prompt it was trained under, and as many requests at once as the
+/// server was started to decode together.
 fn served_model(started: &Started, system: Option<&str>) -> Result<Model, Failure> {
     let loaded = splinter_model::selection::served_model(
         &format!("http://{}/v1", started.address),
@@ -171,7 +172,8 @@ fn served_model(started: &Started, system: Option<&str>) -> Result<Model, Failur
         None,
     )
     .map_err(|e| Failure::Unmeasured(format!("the served endpoint: {e}")))?;
-    let served = Model::new(loaded.provider(), loaded.identity());
+    let served =
+        Model::new(loaded.provider(), loaded.identity()).with_slots(started.slots as usize);
     Ok(match system {
         Some(system) => served.with_system(system),
         None => served,

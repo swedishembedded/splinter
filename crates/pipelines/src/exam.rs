@@ -33,6 +33,7 @@ use serde::Serialize;
 use splinter_agent::solve::with_system_addendum;
 use splinter_agent::CancelToken;
 use splinter_core::annotation::Outcome;
+use splinter_core::concurrency::fan_out_blocking;
 use splinter_core::experience::{Experience, Task};
 use splinter_eval::paired::{by_cluster, PairedOutcome};
 use splinter_eval::significance::SignTest;
@@ -45,7 +46,7 @@ use splinter_model::stats::{bootstrap_interval, sign_test, Interval};
 use crate::grouping::task_clusters;
 use crate::judging::{controls, reference, spaced};
 use crate::release::arm_on;
-use crate::release::probe::{answer_prompted, greedy, held_out, trained_tasks};
+use crate::release::probe::{answer_many, greedy, held_out, trained_tasks};
 use crate::retrieval::Retrieval;
 use crate::train::load_candidate;
 use crate::verify::{grounding_verifier, judge_verifier};
@@ -351,15 +352,15 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
         if prompts.is_some() {
             model.identity = format!("{}+retrieval", model.identity);
         }
-        let given = request
+        // The tasks are independent: a model that decodes several requests
+        // together is asked as many at once as it has slots.
+        let asked: Vec<(&Task, Option<&str>)> = request
             .tasks
             .iter()
             .enumerate()
-            .map(|(n, task)| {
-                let prompt = prompts.map(|p| p[n].as_str());
-                answer_prompted(ctx, &model, task, prompt, &request.cancel)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|(n, task)| (task, prompts.map(|p| p[n].as_str())))
+            .collect();
+        let given = answer_many(ctx, &model, &asked, &request.cancel)?;
         Ok((model.identity, given))
     };
     // Both arms answer before the judge is loaded, so the device swaps models
@@ -392,27 +393,32 @@ pub fn exam(ctx: &Context, request: &ExamRequest<'_>) -> Result<Examined, Orches
     let grounding = grounding_verifier(ctx);
 
     let grade = |given: &[Experience]| -> Result<(Decided, Decided), OrchestratorError> {
-        let mut judged = Vec::with_capacity(given.len());
-        let mut grounded = Vec::with_capacity(given.len());
-        for (task, exp) in request.tasks.iter().zip(given) {
-            if request.cancel.is_cancelled() {
+        let decided = |finding: splinter_eval::verifiers::Finding| match finding.outcome {
+            Outcome::Pass => Some(true),
+            Outcome::Fail => Some(false),
+            Outcome::Abstain => None,
+        };
+        // The answers are judged as many at once as the judge has slots.
+        let pairs: Vec<(&Task, &Experience)> = request.tasks.iter().zip(given).collect();
+        let cancel = &request.cancel;
+        let outcomes = fan_out_blocking(&pairs, judge.concurrency(), |&(task, exp)| {
+            if cancel.is_cancelled() {
                 return Err(OrchestratorError::Cancelled);
             }
-            let decided = |finding: splinter_eval::verifiers::Finding| match finding.outcome {
-                Outcome::Pass => Some(true),
-                Outcome::Fail => Some(false),
-                Outcome::Abstain => None,
-            };
             if exp.final_output.is_none() {
                 // Nothing was said: not done, and nothing to hold to the source.
-                judged.push(Some(false));
-                grounded.push(None);
-                continue;
+                return Ok((Some(false), None));
             }
-            judged.push(decided(judge.verify(task, exp)?));
-            grounded.push(decided(grounding.verify(task, exp)?));
-        }
-        Ok((judged, grounded))
+            Ok((
+                decided(judge.verify(task, exp)?),
+                decided(grounding.verify(task, exp)?),
+            ))
+        });
+        Ok(outcomes
+            .into_iter()
+            .collect::<Result<Vec<_>, OrchestratorError>>()?
+            .into_iter()
+            .unzip())
     };
     let (base_judged, base_grounded) = grade(&base_answers)?;
     let (candidate_judged, candidate_grounded) = grade(&candidate_answers)?;

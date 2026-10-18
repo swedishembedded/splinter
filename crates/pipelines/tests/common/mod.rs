@@ -18,7 +18,9 @@ pub mod timeline;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use splinter_agent::solve::Model;
 use splinter_core::model_ref::ModelRef;
@@ -142,4 +144,54 @@ pub fn scratch_context(test: &str, policy: Scripted, allow_remote: bool) -> (Scr
             Model::new(Arc::new(policy), POLICY),
         );
     (scratch, ctx)
+}
+
+/// A model that answers as `inner` does after a pause of its own for each
+/// prompt, and counts the most requests waiting on it at once: what a
+/// batching server's slots are measured by. A pause that is shorter for
+/// later prompts makes the answers come back in the reverse of the order
+/// they were asked.
+pub struct Counted {
+    inner: Scripted,
+    pause: Box<dyn Fn(&str) -> Duration + Send + Sync>,
+    waiting: AtomicUsize,
+    most: AtomicUsize,
+}
+
+impl Counted {
+    /// `inner`, answering after `pause(prompt)`.
+    pub fn new(
+        inner: Scripted,
+        pause: impl Fn(&str) -> Duration + Send + Sync + 'static,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            inner,
+            pause: Box::new(pause),
+            waiting: AtomicUsize::new(0),
+            most: AtomicUsize::new(0),
+        })
+    }
+
+    /// The most requests that waited on it at once so far.
+    pub fn most(&self) -> usize {
+        self.most.load(Ordering::SeqCst)
+    }
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Counted {
+    fn name(&self) -> &str {
+        "counted"
+    }
+    fn model_name(&self) -> &str {
+        "counted-1"
+    }
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let now = self.waiting.fetch_add(1, Ordering::SeqCst) + 1;
+        self.most.fetch_max(now, Ordering::SeqCst);
+        let pause = (self.pause)(&format!("{:?}", req.messages));
+        tokio::time::sleep(pause).await;
+        self.waiting.fetch_sub(1, Ordering::SeqCst);
+        self.inner.complete(req).await
+    }
 }

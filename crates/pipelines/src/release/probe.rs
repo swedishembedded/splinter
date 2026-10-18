@@ -49,6 +49,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use splinter_agent::solve::{solve, solve_prompted, Model, SolveOptions};
 use splinter_agent::CancelToken;
+use splinter_core::concurrency::{fan_out, fan_out_blocking};
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance, Task};
@@ -473,6 +474,9 @@ pub struct Answered(Vec<Experience>);
 /// them; [`judge_all`] decides them. The two are apart so that a model
 /// served by another process can be stopped between them: the judge is a
 /// model of its own that needs the device the server holds.
+///
+/// The tasks are independent, so a model that decodes several requests
+/// together is asked as many at once as it has slots ([`Model::slots`]).
 pub fn answer_all(
     ctx: &Context,
     model: &Model,
@@ -482,47 +486,53 @@ pub fn answer_all(
     // Every task is answered before any is judged: a device holds one base
     // at a time, and a judge that is another model than the one asked would
     // otherwise be loaded and the asked model reloaded for every task.
-    suite
-        .tasks
-        .iter()
-        .map(|task| answer(ctx, model, task, cancel))
-        .collect::<Result<Vec<_>, _>>()
-        .map(Answered)
+    let asked: Vec<(&Task, Option<&str>)> = suite.tasks.iter().map(|task| (task, None)).collect();
+    answer_many(ctx, model, &asked, cancel).map(Answered)
 }
 
 /// The outcome of every answer of `answered`, to the tasks of `suite`, as
 /// [`grade`] decides it. The judge the command names grades the kinds a
 /// judge grades; the judged verdict is the one a task of such a kind is
-/// decided by, and two models are compared on it.
+/// decided by, and two models are compared on it. Answers are decided as
+/// many at once as the judge has slots.
 pub fn judge_all(
     ctx: &Context,
     suite: &Suite,
     answered: Answered,
 ) -> Result<Vec<Probe>, OrchestratorError> {
     let judge = Judge::active(ctx, Use::Comparison)?;
-    suite
-        .tasks
-        .iter()
-        .zip(answered.0)
-        .map(|(task, experience)| verdict_of(ctx, task, experience, judge.as_ref()))
-        .collect()
+    let width = judge.as_ref().map_or(1, Judge::concurrency);
+    let decided: Vec<(&Task, Experience)> = suite.tasks.iter().zip(answered.0).collect();
+    fan_out_blocking(&decided, width, |(task, experience)| {
+        verdict_of(ctx, task, experience, judge.as_ref())
+    })
+    .into_iter()
+    .collect()
+}
+
+/// Each of `jobs` - a task, and the prompt to ask in place of its
+/// instruction - answered by `model` closed-book, as many at once as the
+/// model has slots ([`Model::slots`]), the experiences back in the order of
+/// `jobs`. A job that begins after a cancel does not run; the first failure
+/// in the order of `jobs` is returned.
+pub(crate) fn answer_many(
+    ctx: &Context,
+    model: &Model,
+    jobs: &[(&Task, Option<&str>)],
+    cancel: &CancelToken,
+) -> Result<Vec<Experience>, OrchestratorError> {
+    ctx.block_on(fan_out(jobs, model.slots(), |&(task, prompt)| {
+        answer_prompted_async(ctx, model, task, prompt, cancel)
+    }))
+    .into_iter()
+    .collect()
 }
 
 /// `model`'s closed-book answer to `task`, as an experience that is never
-/// stored.
-pub(crate) fn answer(
-    ctx: &Context,
-    model: &Model,
-    task: &Task,
-    cancel: &CancelToken,
-) -> Result<Experience, OrchestratorError> {
-    answer_prompted(ctx, model, task, None, cancel)
-}
-
-/// [`answer`], asked `prompt` in place of the task's instruction (the
-/// instruction with material shown before it, say); the experience records
-/// the task as it is.
-pub(crate) fn answer_prompted(
+/// stored: asked `prompt` in place of the task's instruction (the
+/// instruction with material shown before it, say) when one is given, and
+/// the experience records the task as it is.
+async fn answer_prompted_async(
     ctx: &Context,
     model: &Model,
     task: &Task,
@@ -537,14 +547,10 @@ pub(crate) fn answer_prompted(
     let options = model.solving(options);
     let environment = ResolvedEnvironment::ClosedBook;
     let solution = match prompt {
-        None => ctx.block_on(solve(task, &environment, model.provider.clone(), options))?,
-        Some(prompt) => ctx.block_on(solve_prompted(
-            task,
-            prompt,
-            &environment,
-            model.provider.clone(),
-            options,
-        ))?,
+        None => solve(task, &environment, model.provider.clone(), options).await?,
+        Some(prompt) => {
+            solve_prompted(task, prompt, &environment, model.provider.clone(), options).await?
+        }
     };
     if cancel.is_cancelled() {
         return Err(OrchestratorError::Cancelled);
@@ -559,13 +565,13 @@ pub(crate) fn answer_prompted(
 fn verdict_of(
     ctx: &Context,
     task: &Task,
-    experience: Experience,
+    experience: &Experience,
     judge: Option<&Judge>,
 ) -> Result<Probe, OrchestratorError> {
     let verifiers: Strongest = verifiers_for(ctx, task, &[], judge)?;
-    let verification = verifiers.run(task, &experience)?;
+    let verification = verifiers.run(task, experience)?;
     let probe = Probe::graded(
-        experience.final_output,
+        experience.final_output.clone(),
         decide(&verification.annotations).map(|d| d.passed),
     );
     Ok(match crate::graded::reason_of(&verification.annotations) {
