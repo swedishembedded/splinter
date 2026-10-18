@@ -282,6 +282,7 @@ pub fn rehearse_on(
             deadline: request.deadline,
             harness: None,
             cancel: request.cancel.clone(),
+            resume: None,
         },
     )?;
     let verified = verify_set(

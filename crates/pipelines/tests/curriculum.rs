@@ -511,7 +511,7 @@ fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     let policy = ModelRef::policy_default();
     ctx.add_model(policy.clone(), knower(&[ANCHOR, "gamma"]));
     let set = facts(&ctx, &["alpha", "gamma"], 3);
-    let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new()).unwrap();
+    let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new(), None).unwrap();
     let verified = verify_set(
         &ctx,
         &solved.experience_set,
@@ -547,7 +547,7 @@ fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     // A release that learned alpha; the policy now answers as it does.
     let release = released(&ctx, "alpha", &[ANCHOR, "alpha", "gamma"]);
     ctx.add_model(policy.clone(), knower(&[ANCHOR, "alpha"]));
-    let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new()).unwrap();
+    let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new(), None).unwrap();
     verify_set(
         &ctx,
         &solved.experience_set,

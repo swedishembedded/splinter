@@ -59,6 +59,7 @@ pub fn solve(ctx: &Context, json: bool, args: &SolveArgs) -> Result<Exit, Error>
                 harness: Some(&document),
                 deadline: None,
                 cancel: run.cancel_token(),
+                resume: None,
             },
         )
     })?;

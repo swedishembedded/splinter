@@ -101,6 +101,7 @@ fn solve_with(test: &str, reference: ModelRef, width: usize) -> (usize, Vec<Stri
             deadline: None,
             harness: None,
             cancel: CancelToken::new(),
+            resume: None,
         },
     )
     .unwrap();
@@ -178,6 +179,7 @@ fn every_solved_attempt_keeps_the_facts_the_experience_cannot() {
             deadline: None,
             harness: None,
             cancel: CancelToken::new(),
+            resume: None,
         },
     )
     .unwrap();

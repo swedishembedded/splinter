@@ -97,3 +97,36 @@ fn an_item_not_yet_started_sees_a_stop_raised_meanwhile() {
         "{results:?}"
     );
 }
+
+#[test]
+fn a_slow_first_item_does_not_hold_the_slots_of_the_items_behind_it() {
+    // The first item waits until the other four are done, with a limit of
+    // two. A finished item that is not yet at the head of the results must
+    // not keep its slot, or the items behind it never start and one runaway
+    // episode stalls the whole solve.
+    let finished = AtomicUsize::new(0);
+    let results = run(async {
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            fan_out(0..5usize, 2, |n| {
+                let finished = &finished;
+                async move {
+                    if n == 0 {
+                        while finished.load(Ordering::SeqCst) < 4 {
+                            tokio::time::sleep(Duration::from_millis(5)).await;
+                        }
+                    } else {
+                        tokio::time::sleep(Duration::from_millis(5)).await;
+                        finished.fetch_add(1, Ordering::SeqCst);
+                    }
+                    n
+                }
+            }),
+        )
+        .await
+    });
+    assert_eq!(
+        results.expect("the other items finish while the first is still running"),
+        [0, 1, 2, 3, 4]
+    );
+}

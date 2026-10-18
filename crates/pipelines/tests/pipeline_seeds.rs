@@ -106,6 +106,7 @@ fn a_mixed_dataset_records_the_seed_that_picked_its_subjects_and_rebuilds_from_i
         &ModelRef::policy_default(),
         None,
         &CancelToken::new(),
+        None,
     )
     .unwrap();
     verify_set(

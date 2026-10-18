@@ -489,7 +489,12 @@ the server failed an over-context request ("needs 33805 tokens, engine capacity 
 answering it, the client gave up after its 600 s first-byte bound, and the old harness discarded
 every result of the set, which it held in memory until the end. It produced no experience, no
 verdict and no number, and the set is solved again from the start; the loss is recorded here and
-in `runs/ce/STATUS.md`, not counted as a solve. The sets after it run on splinter f61cfa5f, which
+in `runs/ce/STATUS.md`, not counted as a solve. A second set (mdrender, 6697 s) was lost the same
+way when an episode outgrew even the 65536 context (67140 tokens): enlarging the context only
+delays an overflow, so the harness now records an episode whose request the server refuses as
+too long as a skipped task (`episode outgrew the served context`), reported with the set, never
+retried and never a pass, and keeps every other result. The sets after it run on splinter
+19295459 (the commit of this amendment's branch that built the binary), which
 contains the A4.6 handling and the containment of splinter 8384f9dc (network denial, a scrubbed
 environment, a non-dumpable supervisor, delegated children pinned to the project root, and an
 exposure audit that reports an outside path as denied, absent or reached; all three still mark the

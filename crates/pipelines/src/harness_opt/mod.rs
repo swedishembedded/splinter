@@ -191,6 +191,7 @@ fn run_arm(
             harness: Some(harness),
             deadline: None,
             cancel: request.cancel.clone(),
+            resume: None,
         },
     )?;
     verify_set(

@@ -391,6 +391,7 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
             deadline: st.practice.deadline,
             harness: None,
             cancel: run.cancel_token(),
+            resume: None,
         },
     )?;
     let summary = to_value(&solved)?;

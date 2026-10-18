@@ -140,6 +140,7 @@ pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, Orches
             deadline: request.deadline,
             harness: None,
             cancel: request.cancel.clone(),
+            resume: None,
         },
     )?;
     let verify = verify_set(

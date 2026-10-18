@@ -374,9 +374,21 @@ impl Session {
             }
             Command::Solve(args) => {
                 let set = resolve_task_set(ctx, &args.task_set)?;
-                let arguments = json!({ "task_set": set, "solver": args.solver });
+                let resume = args
+                    .resume
+                    .as_deref()
+                    .map(|id| resolve_set(ctx, id))
+                    .transpose()?;
+                let arguments = json!({ "task_set": set, "solver": args.solver, "resume": resume });
                 let solved = record(ctx, "solve", &arguments, |run| {
-                    solve_set(ctx, &set, &args.solver, None, &run.cancel_token())
+                    solve_set(
+                        ctx,
+                        &set,
+                        &args.solver,
+                        None,
+                        &run.cancel_token(),
+                        resume.as_ref(),
+                    )
                 })?;
                 emit(json, &solved);
             }

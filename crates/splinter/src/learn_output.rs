@@ -188,6 +188,12 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
             field("answered"),
             field("experience_set")
         ),
+        "solve-progress" => format!(
+            "{} of {} attempts finished; resume from {}",
+            field("finished"),
+            field("of"),
+            field("partial_set")
+        ),
         "verify" => format!(
             "{} passed, {} failed, {} undecided",
             field("passed"),

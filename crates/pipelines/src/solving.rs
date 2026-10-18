@@ -29,7 +29,7 @@
 //! ([`SolveRequest::system`]) - the one the student is trained under - so
 //! what is learned from was written under the prompt it is learned under.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -41,6 +41,7 @@ use splinter_agent::work::WorkProtocol;
 use splinter_agent::{CancelToken, RunConclusion};
 use splinter_core::annotation::{Annotation, AnnotationBody, Producer};
 use splinter_core::digest::Digest;
+use splinter_core::experience::ExperienceId;
 use splinter_core::experience::{Provenance, Task};
 use splinter_core::outcome::AttemptReport;
 use splinter_eval::gate::AgenticConfig;
@@ -57,7 +58,7 @@ use crate::learn::PolicyUsed;
 use crate::tasks::remaining;
 use crate::workspace_solve::{attempt_seed, solve_attempt, solve_harness_attempt, WorkspaceInputs};
 use splinter_core::model_ref::ModelRef;
-use splinter_orchestrator::concurrency::fan_out;
+use splinter_orchestrator::concurrency::fan_out_each;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -151,6 +152,11 @@ pub struct SolveRequest<'a> {
     pub deadline: Option<Instant>,
     /// Stops the stage.
     pub cancel: CancelToken,
+    /// The experience set of an earlier solve of these tasks that did not
+    /// finish (its last progress line names it): a task it already holds is
+    /// not solved again, and its experiences are members of the new set.
+    /// Needs one attempt per task.
+    pub resume: Option<&'a SetId>,
 }
 
 /// The episode bounds every comparison runs under: the follow-ups and the
@@ -170,13 +176,15 @@ pub fn harness_protocol() -> WorkProtocol {
 
 /// Solves every task of `task_set` once with `solver`, as its provider
 /// samples; no solve starts after `deadline` or runs past it. Workspace
-/// tasks run under [`harness_protocol`].
+/// tasks run under [`harness_protocol`]. With `resume`, the tasks that
+/// earlier, unfinished set already answers are not solved again.
 pub fn solve_set(
     ctx: &Context,
     task_set: &TaskSetId,
     solver: &ModelRef,
     deadline: Option<Instant>,
     cancel: &CancelToken,
+    resume: Option<&SetId>,
 ) -> Result<Solved, OrchestratorError> {
     solve_tasks(
         ctx,
@@ -191,6 +199,7 @@ pub fn solve_set(
             deadline,
             harness: None,
             cancel: cancel.clone(),
+            resume,
         },
     )
 }
@@ -240,7 +249,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         .map_err(|_| OrchestratorError::Refused("too many attempts per task".into()))?;
     let store = ctx.experiences();
     let batch = ctx.workspace().batch();
-    let mut members = Vec::new();
+    let (mut members, already) = resumed(ctx, request)?;
     let mut report = Solved {
         experience_set: SetId(Digest::of(b"")),
         solver: model.identity.clone(),
@@ -258,6 +267,9 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     // and building the prompts is quick and stays in task order.
     let mut plans: Vec<Planned> = Vec::new();
     for entry in &set.members {
+        if already.contains(&entry.task) {
+            continue;
+        }
         let task = ctx.tasks().get(&entry.task)?;
         let environment = match ctx.environments().for_record(&task.environment) {
             Ok(environment) => environment,
@@ -320,17 +332,50 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         }
     }
     let task_wall = ctx.config().solve_deadline;
-    let results = ctx.block_on(fan_out(
+    let total = plans.len() * request.attempts;
+    let mut finished = 0usize;
+    let mut so_far = members.clone();
+    let results = ctx.block_on(fan_out_each(
         items,
         ctx.concurrency_for(request.solver),
         |(plan, attempt, model)| {
-            let plans = &plans;
+            let (plans, store, label) = (&plans, &store, &label);
             async move {
-                (
-                    plan,
-                    attempt,
-                    attempt_once(&plans[plan], &model, request, task_wall).await,
-                )
+                let outcome = attempt_once(&plans[plan], &model, request, task_wall).await;
+                let recorded = record_attempt(
+                    outcome,
+                    &Recording {
+                        store,
+                        planned: &plans[plan],
+                        model: &model,
+                        label: label.as_ref(),
+                        teacher: request.teacher,
+                        attempt: (attempts > 1).then_some(attempt),
+                        ctx,
+                    },
+                );
+                (plan, attempt, recorded)
+            }
+        },
+        |(_, _, recorded)| {
+            // What is done is made durable while the rest runs, and a
+            // partial set names it, so a solve that dies (a server, the
+            // process) is resumed from its last progress line.
+            finished += 1;
+            if let Recorded::Done { id, .. } = recorded {
+                so_far.push(id.clone());
+            }
+            if finished.is_multiple_of(PROGRESS_EVERY) || finished == total {
+                match checkpoint(ctx, &so_far, &model.identity) {
+                    Ok(set) => ctx.report_stage(
+                        "solve-progress",
+                        &serde_json::json!({ "finished": finished, "of": total, "partial_set": set }),
+                    ),
+                    Err(e) => ctx.report_stage(
+                        "solve-progress",
+                        &serde_json::json!({ "finished": finished, "of": total, "no_checkpoint": e.to_string() }),
+                    ),
+                }
             }
         },
     ));
@@ -338,53 +383,50 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     // Fold in order, as one attempt after another would have been: the first
     // cancel, spent budget or unusable environment decides what comes after.
     let mut unusable: Vec<usize> = Vec::new();
-    for (plan, attempt, outcome) in results {
+    for (plan, _attempt, recorded) in results {
         if unusable.contains(&plan) {
             continue;
         }
-        let Planned { entry, task, .. } = &plans[plan];
-        let solved = match outcome {
-            Attempted::Cancelled => return Err(OrchestratorError::Cancelled),
-            Attempted::BudgetSpent => {
+        let entry = plans[plan].entry;
+        match recorded {
+            Recorded::Cancelled => return Err(OrchestratorError::Cancelled),
+            Recorded::BudgetSpent => {
                 report.stopped = Some("the budget was spent before every task was tried".into());
                 break;
             }
-            Attempted::Solved(solved) => solved,
-        };
-        let (solution, attempt_report) = match solved {
-            Ok(solved) => *solved,
-            Err(e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_))) => {
+            Recorded::Unusable(e) => {
                 report.skipped.push(skip(&entry.task, &e));
                 unusable.push(plan);
-                continue;
             }
-            Err(e) => return Err(e.into()),
-        };
-        *report
-            .conclusions
-            .entry(conclusion_name(solution.conclusion))
-            .or_default() += 1;
-        report.answered += usize::from(solution.final_output.is_some());
-        let provenance = Provenance {
-            generator: entry.generator.clone(),
-            policy: label.clone(),
-            prompt_digests: entry.prompt.iter().cloned().collect(),
-            attempt: (attempts > 1).then_some(attempt),
-            teacher: request.teacher,
-            ..Provenance::new(model.identity.clone(), ctx.clock())
-        };
-        let experience = solution.into_experience(task.clone(), provenance)?;
-        let id = store.put(&experience)?;
-        store.annotate(&Annotation {
-            experience: id.clone(),
-            producer: Producer {
-                name: ATTEMPT_PRODUCER.into(),
-                version: ATTEMPT_VERSION.into(),
-            },
-            body: AnnotationBody::AttemptReport(attempt_report),
-        })?;
-        if !members.contains(&id) {
-            members.push(id);
+            Recorded::Infrastructure(e) => {
+                // The attempt did not complete: not a failure of the solver,
+                // and no experience. It is solved by a resume.
+                report
+                    .skipped
+                    .push(skip(&entry.task, &format!("infrastructure error: {e}")));
+            }
+            Recorded::Outgrew(e) => {
+                // Not infrastructure: a resume would be refused the same way.
+                report.skipped.push(skip(
+                    &entry.task,
+                    &format!("episode outgrew the served context: {e}"),
+                ));
+            }
+            Recorded::Failed(e) => return Err(e),
+            Recorded::Done {
+                id,
+                conclusion,
+                answered,
+            } => {
+                *report
+                    .conclusions
+                    .entry(conclusion_name(conclusion))
+                    .or_default() += 1;
+                report.answered += usize::from(answered);
+                if !members.contains(&id) {
+                    members.push(id);
+                }
+            }
         }
     }
     report.solved = members.len();
@@ -446,6 +488,132 @@ struct Planned<'a> {
     workspace: Option<WorkspaceInputs>,
     dialogue: bool,
     prompt: String,
+}
+
+/// Attempts between two durable checkpoints of a solve in progress.
+const PROGRESS_EVERY: usize = 8;
+
+/// The members of the set to resume, and the tasks they answer.
+fn resumed(
+    ctx: &Context,
+    request: &SolveRequest<'_>,
+) -> Result<(Vec<ExperienceId>, BTreeSet<Digest>), OrchestratorError> {
+    let Some(earlier) = request.resume else {
+        return Ok((Vec::new(), BTreeSet::new()));
+    };
+    if request.attempts != 1 {
+        return Err(OrchestratorError::Refused(
+            "a solve is resumed with one attempt per task".into(),
+        ));
+    }
+    let members = ctx.experiences().get_set(earlier)?.members;
+    let mut tasks = BTreeSet::new();
+    for id in &members {
+        tasks.insert(ctx.experiences().get(id)?.task.id.clone());
+    }
+    Ok((members, tasks))
+}
+
+/// Makes everything recorded so far durable and stores the set of `members`.
+fn checkpoint(
+    ctx: &Context,
+    members: &[ExperienceId],
+    solver: &str,
+) -> Result<SetId, OrchestratorError> {
+    ctx.workspace().commit()?;
+    let set = ctx.experiences().put_set(&ExperienceSet {
+        name: format!("partial solve by {solver}"),
+        members: members.to_vec(),
+    })?;
+    ctx.workspace().commit()?;
+    Ok(set)
+}
+
+/// What one attempt came to once it was recorded.
+enum Recorded {
+    Cancelled,
+    BudgetSpent,
+    /// The task's environment is not the one offered.
+    Unusable(SolveError),
+    /// The solver could not be reached or failed to run: no outcome of its.
+    Infrastructure(SolveError),
+    /// The episode's prompt outgrew the context the server is built for: the
+    /// server refuses the request, and asking again refuses it again.
+    Outgrew(SolveError),
+    /// The store refused the experience.
+    Failed(OrchestratorError),
+    Done {
+        id: ExperienceId,
+        conclusion: RunConclusion,
+        answered: bool,
+    },
+}
+
+/// Where and how an attempt's experience is stored.
+struct Recording<'a> {
+    ctx: &'a Context,
+    store: &'a splinter_store::experiences::ExperienceStore,
+    planned: &'a Planned<'a>,
+    model: &'a Model,
+    label: Option<&'a String>,
+    teacher: bool,
+    attempt: Option<u32>,
+}
+
+/// Whether the server refused the request because it needs more tokens than
+/// the context it serves (brain's `context_length_exceeded`).
+fn outgrew_context(error: &SolveError) -> bool {
+    error.to_string().contains("context_length_exceeded")
+}
+
+/// Stores the experience of a finished attempt, with its report, the moment
+/// it finishes.
+fn record_attempt(outcome: Attempted, at: &Recording<'_>) -> Recorded {
+    let solved = match outcome {
+        Attempted::Cancelled => return Recorded::Cancelled,
+        Attempted::BudgetSpent => return Recorded::BudgetSpent,
+        Attempted::Solved(solved) => solved,
+    };
+    let (solution, attempt_report) = match solved {
+        Ok(solved) => *solved,
+        Err(e @ (SolveError::EnvironmentMismatch { .. } | SolveError::Environment(_))) => {
+            return Recorded::Unusable(e)
+        }
+        Err(e) if outgrew_context(&e) => return Recorded::Outgrew(e),
+        Err(e) => return Recorded::Infrastructure(e),
+    };
+    let (conclusion, answered) = (solution.conclusion, solution.final_output.is_some());
+    let provenance = Provenance {
+        generator: at.planned.entry.generator.clone(),
+        policy: at.label.cloned(),
+        prompt_digests: at.planned.entry.prompt.iter().cloned().collect(),
+        attempt: at.attempt,
+        teacher: at.teacher,
+        ..Provenance::new(at.model.identity.clone(), at.ctx.clock())
+    };
+    let stored = solution
+        .into_experience(at.planned.task.clone(), provenance)
+        .map_err(OrchestratorError::from)
+        .and_then(|experience| Ok(at.store.put(&experience)?))
+        .and_then(|id| {
+            at.store.annotate(&Annotation {
+                experience: id.clone(),
+                producer: Producer {
+                    name: ATTEMPT_PRODUCER.into(),
+                    version: ATTEMPT_VERSION.into(),
+                },
+                body: AnnotationBody::AttemptReport(attempt_report),
+            })?;
+            Ok(id)
+        });
+    match stored {
+        Ok(id) => Recorded::Done {
+            id,
+            conclusion,
+            answered,
+        },
+        Err(e) => Recorded::Failed(e),
+    }
 }
 
 /// How one attempt went.

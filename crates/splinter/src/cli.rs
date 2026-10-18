@@ -437,6 +437,11 @@ pub struct SolveArgs {
     /// like any other (`experiences compare`).
     #[arg(long, value_name = "FILE", conflicts_with_all = ["frontier", "teacher"])]
     pub harness: Option<PathBuf>,
+    /// Resume an interrupted solve: the experience set its last progress
+    /// line named. A task that set already answers is not solved again, and
+    /// its experiences are members of the new set.
+    #[arg(long, value_name = "EXPERIENCE-SET", conflicts_with = "frontier")]
+    pub resume: Option<String>,
 }
 
 /// `verify`.

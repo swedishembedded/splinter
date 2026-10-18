@@ -24,21 +24,48 @@ use splinter_core::model_ref::ModelRef;
 /// Runs `work` over `items`, at most `limit` at a time (zero is one), and
 /// returns the results in the order of `items`.
 ///
-/// Items start in order and one starts only when a slot is free, so a work
-/// item that checks a stop - a cancel, a spent budget - when it begins sees
-/// everything raised while the items before it ran. Items already running
-/// when a stop is raised are drained, never dropped.
+/// Items start in order and one starts as soon as a slot is free, whichever
+/// item freed it: a finished item never keeps its slot while an earlier,
+/// slower one is still running, or one runaway episode would hold back every
+/// item behind it. A work item that checks a stop - a cancel, a spent budget -
+/// when it begins sees what the items that had finished by then raised. Items
+/// already running when a stop is raised are drained, never dropped.
 pub async fn fan_out<I, T, F, Fut>(items: I, limit: usize, work: F) -> Vec<T>
 where
     I: IntoIterator,
     F: FnMut(I::Item) -> Fut,
     Fut: Future<Output = T>,
 {
-    stream::iter(items)
-        .map(work)
-        .buffered(limit.max(1))
-        .collect()
-        .await
+    fan_out_each(items, limit, work, |_| {}).await
+}
+
+/// [`fan_out`], calling `each` with every result as it arrives, in the order
+/// the results finish: for a caller that makes what is done so far durable
+/// while the rest runs.
+pub async fn fan_out_each<I, T, F, Fut>(
+    items: I,
+    limit: usize,
+    mut work: F,
+    mut each: impl FnMut(&T),
+) -> Vec<T>
+where
+    I: IntoIterator,
+    F: FnMut(I::Item) -> Fut,
+    Fut: Future<Output = T>,
+{
+    let mut finished = stream::iter(items.into_iter().enumerate())
+        .map(|(at, item)| {
+            let running = work(item);
+            async move { (at, running.await) }
+        })
+        .buffer_unordered(limit.max(1));
+    let mut done: Vec<(usize, T)> = Vec::new();
+    while let Some((at, result)) = finished.next().await {
+        each(&result);
+        done.push((at, result));
+    }
+    done.sort_by_key(|(at, _)| *at);
+    done.into_iter().map(|(_, result)| result).collect()
 }
 
 impl Context {

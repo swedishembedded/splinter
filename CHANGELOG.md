@@ -11,9 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A solve over a remote model no longer lets one slow episode hold the slots of the episodes behind it: `fan_out` kept a finished item's slot until every earlier item had finished, so one runaway episode collapsed the concurrency to one; the next item now starts as soon as any item ends (results still come back in item order).
 - A training run whose data leaves no whole group to monitor on trains unmonitored, as its record says, instead of failing with "selecting on the monitoring loss needs eval_every > 0": an unmonitored run carries no patience.
 
 ### Added
+- `solve --resume <experience-set>` continues an interrupted solve: a task the set already answers is not solved again. A solve now stores each attempt the moment it finishes, makes it durable every eight attempts and prints `[solve-progress] ... resume from <set>`, so a server or process that dies costs only the attempts in flight; an attempt whose solver could not be reached is reported under `skipped` as an `infrastructure error` (no experience, no conclusion) instead of aborting the whole solve and losing every other task's result.
 - `dataset build --view sft-step --control unverified|shuffled` builds the negative controls of the coding experiments: the same experiences whatever their verdict (never one an exposure audit failed), or the verified trajectories each under another task's instruction by a seeded permutation (`--control-seed`, drawn and recorded when not given).
 - `splinter baseline` prints the `baseline-v1` record of what a registered run runs on: the three commits and tree state, the compiler, the brain binary's digest and version, model files and tokenizer by digest, the registered seeds (given, never defaulted) and the hardware; `--require-clean` exits 1 on a dirty tree, an unknown commit or an undigested binary.
 - `scripts/lease/card` (`make lease/card/run`) reserves VRAM shares of 11 GiB on one of several GPUs, so servers, trainers and evaluations share the cards without oversubscribing them; the command is told `CARD` and `BRAIN_DEVICE_FLAG`.

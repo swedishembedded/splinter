@@ -367,6 +367,7 @@ pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, 
             deadline: request.deadline,
             harness: None,
             cancel: request.cancel.clone(),
+            resume: None,
         },
     )?;
     let verify = verify_set(
