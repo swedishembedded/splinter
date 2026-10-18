@@ -97,12 +97,16 @@ impl Loader for ServedLoader {
             Some(file) => crate::binding::file_digest(file)?,
             None => String::new(),
         };
+        // The server serves the base it is given and the adapter offered,
+        // nothing else: brain scans the store it is given at startup, so it
+        // gets an empty one (a store that does not exist would leave brain
+        // its default, every model pulled on the machine).
+        let no_store = work.path().join("no-store");
+        std::fs::create_dir(&no_store)?;
         let launch = Launch {
             binary: &self.brain,
             work: work.path(),
-            // No store is scanned: the server serves the base it is given
-            // and the adapter offered, nothing else.
-            models: &work.path().join("no-store"),
+            models: &no_store,
             base: &self.base,
             offer: adapter.map_or(Offer::Nothing, Offer::Adapter),
             expected_digest: &digest,
