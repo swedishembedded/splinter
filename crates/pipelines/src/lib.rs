@@ -54,6 +54,7 @@ pub mod absorb;
 pub mod abstain;
 pub mod ask;
 pub mod author;
+pub mod brain_server;
 pub mod budget;
 pub mod canaries;
 pub mod checkpoints;

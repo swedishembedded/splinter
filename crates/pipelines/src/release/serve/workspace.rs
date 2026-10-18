@@ -36,8 +36,8 @@ use splinter_eval::gate::{self, Agreement, Check, Disagreement, Serve};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
-use super::server::{self, Failure, Launch, Offer};
 use super::{finished, scratch, served_model, ServeCheck, NO_BINARY};
+use crate::brain_server::{self as server, Failure, Launch, Offer};
 use crate::release::probe::{self, Arm, Probe};
 
 /// The most characters of a patch a disagreement keeps: the report is stored
@@ -101,6 +101,8 @@ fn serve_and_work(
             offer,
             expected_digest: request.adapter_digest,
             startup: request.startup,
+            device: None,
+            max_batch: None,
         },
         cancel,
     )?;

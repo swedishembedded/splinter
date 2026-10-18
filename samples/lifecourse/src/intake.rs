@@ -391,8 +391,13 @@ pub fn intake(
         serde_json::to_string_pretty(&report)?,
     )?;
     let Some(s) = served else { return Ok(()) };
-    let loaded =
-        splinter_sdk::model::selection::served_model(&s.base_url, &s.api_key, &s.model, Some(0.0))?;
+    let loaded = splinter_sdk::model::selection::served_model(
+        &s.base_url,
+        &s.api_key,
+        &s.model,
+        Some(0.0),
+        None,
+    )?;
     let model = Model::new(loaded.provider(), loaded.identity());
     let identity = model.identity.replace('/', "_");
     let scored = propose_all(&all, model)?;

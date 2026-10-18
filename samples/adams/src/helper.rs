@@ -47,6 +47,7 @@ impl Helper {
             served.api_key,
             served.model,
             Some(0.2),
+            None,
         )?;
         Ok(Self::with_model(Model::new(
             loaded.provider(),

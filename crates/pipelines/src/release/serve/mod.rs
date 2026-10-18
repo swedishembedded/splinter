@@ -54,7 +54,6 @@
 //! measured - and the gate fails.
 
 mod compare;
-mod server;
 pub mod workspace;
 
 use std::path::Path;
@@ -64,9 +63,9 @@ use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_model::local::GREEDY_SAMPLING;
 
+use crate::brain_server::{self, recent_output, Failure, Launch, Offer, Running, Started};
 use crate::release::probe::{answer_all, judge_all, Probe, Suite};
 use compare::{agreements, unanswered};
-use server::{recent_output, Failure, Launch, Offer, Running, Started};
 use splinter_eval::gate::{self, Agreement, Check, Disagreement, Serve};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -169,6 +168,7 @@ fn served_model(started: &Started, system: Option<&str>) -> Result<Model, Failur
         &started.key,
         &started.model,
         Some(GREEDY_SAMPLING.temperature),
+        None,
     )
     .map_err(|e| Failure::Unmeasured(format!("the served endpoint: {e}")))?;
     let served = Model::new(loaded.provider(), loaded.identity());
@@ -185,7 +185,7 @@ fn serve_and_ask(
     cancel: &CancelToken,
 ) -> Result<Check<Serve>, Failure> {
     let (sample, in_process) = (request.sample, request.in_process);
-    let started = server::start(
+    let started = brain_server::start(
         &Launch {
             binary: server.binary,
             work: server.work,
@@ -194,6 +194,8 @@ fn serve_and_ask(
             offer: request.adapter.map_or(Offer::Nothing, Offer::Adapter),
             expected_digest: request.adapter_digest,
             startup: request.startup,
+            device: None,
+            max_batch: None,
         },
         cancel,
     )?;

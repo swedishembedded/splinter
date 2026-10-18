@@ -195,15 +195,17 @@ fn probed_provider(config: &sven_sdk::config::Config) -> anyhow::Result<Box<dyn 
 /// measured is the server, and no setting of the person running the check
 /// (a temperature, a token limit) may change what it answers. `temperature`
 /// replaces the default's when given: zero asks the server to decode
-/// greedily.
+/// greedily. `seed`, when given, is sent with every request, so a sampled
+/// answer is the one that seed draws.
 pub fn served_model(
     base_url: &str,
     api_key: &str,
     model: &str,
     temperature: Option<f32>,
+    seed: Option<u64>,
 ) -> Result<LoadedModel, PolicyError> {
     let spec = format!("openai/{model}");
-    let config = served_config(&spec, base_url, api_key, temperature)?;
+    let config = served_config(&spec, base_url, api_key, temperature, seed)?;
     let driver =
         sven_sdk::drivers::from_config(&config.model).map_err(|e| PolicyError::Remote {
             spec: spec.clone(),
@@ -231,6 +233,7 @@ fn served_config(
     base_url: &str,
     api_key: &str,
     temperature: Option<f32>,
+    seed: Option<u64>,
 ) -> Result<sven_sdk::config::Config, PolicyError> {
     let remote = RemoteModel {
         spec: spec.to_string(),
@@ -244,10 +247,16 @@ fn served_config(
     if temperature.is_some() {
         config.model.temperature = temperature;
     }
-    config.model.driver_options = serde_json::json!({
+    let mut options = serde_json::json!({
         "chat_template_kwargs": { "enable_thinking": false },
         "response_format": null
     });
+    if let Some(seed) = seed {
+        // The server reads a seed as a signed 64-bit integer; the same 64
+        // bits name the same draw.
+        options["seed"] = serde_json::json!(i64::from_ne_bytes(seed.to_ne_bytes()));
+    }
+    config.model.driver_options = options;
     Ok(config)
 }
 
@@ -345,7 +354,8 @@ pub fn local_model_name(base: &Path) -> String {
 mod tests {
     #[test]
     fn a_served_model_is_asked_to_answer_without_a_reasoning_block_and_greedily() {
-        let config = served_config("openai/m", "http://127.0.0.1:1/v1", "k", Some(0.0)).unwrap();
+        let config =
+            served_config("openai/m", "http://127.0.0.1:1/v1", "k", Some(0.0), None).unwrap();
         assert_eq!(
             config.model.driver_options["chat_template_kwargs"]["enable_thinking"],
             serde_json::json!(false)
@@ -450,11 +460,30 @@ mod tests {
     fn a_served_model_is_never_sent_a_structured_output_request_its_server_would_refuse() {
         // brain's server refuses `response_format` rather than ignore it; an explicit
         // null is "absent" to it, and keeps a typed call on its prompt-described schema.
-        let config = served_config("openai/m", "http://127.0.0.1:1/v1", "k", None).unwrap();
+        let config = served_config("openai/m", "http://127.0.0.1:1/v1", "k", None, None).unwrap();
         let options = config.model.driver_options.as_object().unwrap();
         assert!(options
             .get("response_format")
             .is_some_and(serde_json::Value::is_null));
+        assert!(
+            options.get("seed").is_none(),
+            "no seed is sent unless given"
+        );
+    }
+
+    #[test]
+    fn a_seed_given_to_a_served_model_is_sent_with_every_request_as_the_same_bits() {
+        let seed = u64::MAX - 6;
+        let config = served_config(
+            "openai/m",
+            "http://127.0.0.1:1/v1",
+            "k",
+            Some(0.7),
+            Some(seed),
+        )
+        .unwrap();
+        let sent = config.model.driver_options["seed"].as_i64().unwrap();
+        assert_eq!(u64::from_ne_bytes(sent.to_ne_bytes()), seed);
     }
 
     use super::*;

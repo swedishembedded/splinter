@@ -6,10 +6,11 @@
 // needs expertise in model deployment, you can procure our services by
 // sending an email to info@swedishembedded.com.
 
-//! The `brain serve` process of a serve check: started on the base with the
-//! candidate offered as an adapter file or as a release manifest to follow,
-//! waited for until it reports what it serves and that it is ready, and
-//! stopped when dropped.
+//! A `brain serve` process: started on a base with an adapter offered as a
+//! file or as a release manifest to follow, waited for until it reports what
+//! it serves and that it is ready, and stopped when dropped. A release's serve
+//! check and an examination that batches its items both run their models
+//! through it.
 
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -28,7 +29,7 @@ const STARTUP_PREFIX: &str = "brain serve: ";
 const KEPT_LINES: usize = 20;
 
 /// Why the check has no result.
-pub(super) enum Failure {
+pub enum Failure {
     /// The check was cancelled.
     Cancelled,
     /// It could not be measured, and why.
@@ -37,7 +38,7 @@ pub(super) enum Failure {
 
 /// How the candidate is put in front of the server.
 #[derive(Clone, Copy)]
-pub(super) enum Offer<'a> {
+pub enum Offer<'a> {
     /// `--adapter FILE`: exactly this adapter, for the server's life.
     Adapter(&'a Path),
     /// `--adapter-manifest FILE`: whichever adapter the manifest names, as a
@@ -48,25 +49,31 @@ pub(super) enum Offer<'a> {
 }
 
 /// What it takes to start the server.
-pub(super) struct Launch<'a> {
+pub struct Launch<'a> {
     /// The `brain` binary.
-    pub(super) binary: &'a Path,
+    pub binary: &'a Path,
     /// A scratch directory for the keys and the ready marker.
-    pub(super) work: &'a Path,
+    pub work: &'a Path,
     /// Brain's model store, scanned at startup when it exists.
-    pub(super) models: &'a Path,
+    pub models: &'a Path,
     /// The base checkpoint, as `BRAIN_QWEN_WEIGHTS`.
-    pub(super) base: &'a Path,
+    pub base: &'a Path,
     /// How the candidate is offered.
-    pub(super) offer: Offer<'a>,
+    pub offer: Offer<'a>,
     /// The digest the candidate must be served under.
-    pub(super) expected_digest: &'a str,
+    pub expected_digest: &'a str,
     /// How long the server may take to bind.
-    pub(super) startup: Duration,
+    pub startup: Duration,
+    /// The compute it may schedule, in brain's `--device` grammar; brain's
+    /// own choice when `None`.
+    pub device: Option<&'a str>,
+    /// Sequences it decodes together (`--qwen-max-batch`); brain's default
+    /// when `None`.
+    pub max_batch: Option<u32>,
 }
 
 /// A running server, stopped when dropped.
-pub(super) struct Running(pub(super) Child);
+pub struct Running(pub Child);
 
 impl Drop for Running {
     fn drop(&mut self) {
@@ -78,46 +85,52 @@ impl Drop for Running {
 }
 
 /// A server that has bound and is ready.
-pub(super) struct Started {
+pub struct Started {
     /// The process.
-    pub(super) running: Running,
+    pub running: Running,
     /// What it writes, line by line.
-    pub(super) lines: Receiver<String>,
+    pub lines: Receiver<String>,
     /// The last lines it wrote.
-    pub(super) kept: Vec<String>,
+    pub kept: Vec<String>,
     /// Where it listens.
-    pub(super) address: String,
+    pub address: String,
     /// The line that named what it serves.
-    pub(super) startup_line: String,
+    pub startup_line: String,
     /// The model name it answers to.
-    pub(super) model: String,
+    pub model: String,
     /// The digest it reports for the adapter.
-    pub(super) served_digest: String,
+    pub served_digest: String,
     /// The OpenAI surface's key.
-    pub(super) key: String,
+    pub key: String,
 }
 
 impl Started {
     /// Whether what it serves is the candidate.
-    pub(super) fn serves_candidate(&self, expected: &str) -> bool {
+    pub fn serves_candidate(&self, expected: &str) -> bool {
         self.served_digest == expected
     }
 
     /// What the server last wrote, as one line of text.
-    pub(super) fn recent_output(&mut self) -> String {
+    pub fn recent_output(&mut self) -> String {
         recent_output(&self.lines, &mut self.kept)
     }
 }
 
 /// Starts the server `launch` describes and waits for it to report what it
 /// serves and that it is ready.
-pub(super) fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failure> {
+pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failure> {
     let port = free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
     let address = format!("127.0.0.1:{port}");
     let keys = launch.work.join("keys.json");
     let ready = launch.work.join("ready");
     let mut command = Command::new(launch.binary);
+    if let Some(device) = launch.device {
+        command.args(["--device", device]);
+    }
     command.arg("serve").args(["--openai", &address]);
+    if let Some(slots) = launch.max_batch {
+        command.args(["--qwen-max-batch", &slots.to_string()]);
+    }
     match launch.offer {
         Offer::Adapter(adapter) => {
             command.arg("--adapter").arg(adapter);
@@ -217,7 +230,7 @@ pub(super) fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started
 }
 
 /// Keeps `line` among the last [`KEPT_LINES`] of `kept`.
-pub(super) fn remember(kept: &mut Vec<String>, line: String) {
+pub fn remember(kept: &mut Vec<String>, line: String) {
     if kept.len() == KEPT_LINES {
         kept.remove(0);
     }
@@ -225,7 +238,7 @@ pub(super) fn remember(kept: &mut Vec<String>, line: String) {
 }
 
 /// What the server last wrote, as one line of text.
-pub(super) fn recent_output(lines: &Receiver<String>, kept: &mut Vec<String>) -> String {
+pub fn recent_output(lines: &Receiver<String>, kept: &mut Vec<String>) -> String {
     for line in lines.try_iter() {
         remember(kept, line);
     }
