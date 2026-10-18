@@ -168,6 +168,7 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
         },
         exam: args.exam,
         adopt: args.adopt,
+        slots: 1,
     };
     let answerer = Answerer::load_with(
         &args.base,
@@ -190,10 +191,10 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
             let temperature = requested.temperature;
             let how = sampled::resolve(&cache, arm, requested)?;
             let provider_for = |seed| {
-                answerer.provider_with(Decoding::Sampled {
+                Ok(answerer.provider_with(Decoding::Sampled {
                     temperature,
                     seed: Some(seed),
-                })
+                }))
             };
             let outcomes =
                 sampled::run_arm_sampled(&cache, &persona, arm, &provider_for, &all, &run, &how)?;

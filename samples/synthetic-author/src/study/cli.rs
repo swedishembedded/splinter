@@ -21,6 +21,7 @@ use super::amend::{amend_base_hold, BaseHold};
 use super::corpus::{self, Staff};
 use super::examine::{self, BrainLoader};
 use super::layout::Study;
+use super::served::ServedLoader;
 use super::train;
 use super::{render, report};
 use crate::binding::Base;
@@ -116,6 +117,14 @@ pub struct ExamStageArgs {
     /// one.
     #[arg(long)]
     sampled: bool,
+    /// Put the examination to a `brain serve` started with this `brain`
+    /// binary, one server per model, which decodes `--slots` items in one
+    /// batch, instead of to an in-process model that answers one at a time.
+    #[arg(long)]
+    brain: Option<PathBuf>,
+    /// Items a server decodes together, and so asks at once.
+    #[arg(long, default_value_t = 16, requires = "brain")]
+    slots: u32,
 }
 
 /// Run the corpus stage.
@@ -456,9 +465,27 @@ fn exam_stage(args: &ExamStageArgs) -> anyhow::Result<()> {
     let study = Study::open(&args.study)?;
     let authors = chosen_authors(&study, &args.only)?;
     let base = open_base(&args.base)?;
-    let loader = BrainLoader { base: base.path() };
+    let served;
+    let in_process;
+    let loader: &dyn examine::Loader = match &args.brain {
+        Some(brain) => {
+            let device = splinter_sdk::model::device::selected().source().to_string();
+            served = ServedLoader {
+                brain: brain.clone(),
+                base: base.path().to_path_buf(),
+                work: study.root().join("serve"),
+                device: (device != "all").then_some(device),
+                slots: args.slots,
+            };
+            &served
+        }
+        None => {
+            in_process = BrainLoader { base: base.path() };
+            &in_process
+        }
+    };
     for_each_author(&authors, |seed| {
-        let examined = examine::run(&study, seed, &base, &loader, args.sampled)?;
+        let examined = examine::run(&study, seed, &base, loader, args.sampled)?;
         for (slot, arm, items) in &examined.arms {
             println!("author {seed} {slot} {arm}: {items} items answered");
         }

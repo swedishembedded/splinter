@@ -46,8 +46,8 @@ impl Examinee for Answers {
             requests: self.0.clone(),
         })
     }
-    fn sampled(&self, _: f32, _: u64) -> Arc<dyn ModelProvider> {
-        self.greedy()
+    fn sampled(&self, _: f32, _: u64) -> anyhow::Result<Arc<dyn ModelProvider>> {
+        Ok(self.greedy())
     }
 }
 

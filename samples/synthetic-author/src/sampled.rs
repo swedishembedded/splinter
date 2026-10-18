@@ -199,7 +199,7 @@ pub fn run_arm_sampled(
     cache: &Cache,
     persona: &Persona,
     arm: Arm,
-    provider_for: &dyn Fn(u64) -> Arc<dyn ModelProvider>,
+    provider_for: &dyn Fn(u64) -> anyhow::Result<Arc<dyn ModelProvider>>,
     items: &[Item],
     run: &ExamRun,
     how: &SampledDecoding,
@@ -214,31 +214,62 @@ pub fn run_arm_sampled(
     let mut done = read_sampled_file(&path)?;
     let runtime = tokio::runtime::Runtime::new()?;
     let log = jsonl::Log::open(&path)?;
+    // Every draw of every item not yet answered, asked `run.slots` at a
+    // time; an item's outcome is appended once all its draws are in, so a
+    // stop never leaves an item with some of its draws.
+    let mut asked = Vec::new();
+    let mut pending: std::collections::BTreeMap<usize, Vec<Option<Draw>>> = Default::default();
     for (place, item) in items.iter().enumerate() {
         if done.iter().any(|o| o.id == item.id) {
             continue;
         }
-        let mut draws = Vec::with_capacity(how.draws);
+        pending.insert(place, vec![None; how.draws]);
+        let system = system(item);
         for draw in 0..how.draws {
             let seed = draw_seed(how.run_seed, place, draw);
-            let provider = provider_for(seed);
-            let answered =
-                runtime.block_on(answer(&provider, &system(item), item, run.max_tokens))?;
-            draws.push(Draw {
+            asked.push((place, draw, seed, provider_for(seed)?, system.clone()));
+        }
+    }
+    runtime.block_on(async {
+        use futures::stream::{self, StreamExt as _};
+        let mut answers = stream::iter(asked)
+            .map(|(place, draw, seed, provider, system)| async move {
+                let answered = answer(&provider, &system, &items[place], run.max_tokens).await;
+                (place, draw, seed, answered)
+            })
+            .buffer_unordered(run.slots.max(1));
+        while let Some((place, draw, seed, answered)) = answers.next().await {
+            let answered = answered?;
+            let Some(draws) = pending.get_mut(&place) else {
+                continue;
+            };
+            draws[draw] = Some(Draw {
                 seed,
                 correct: answered.correct,
                 call: answered.call,
             });
+            if draws.iter().all(Option::is_some) {
+                let draws = pending
+                    .remove(&place)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                let item = &items[place];
+                let outcome = SampledOutcome {
+                    id: item.id.clone(),
+                    item: item_digest(item).to_string(),
+                    model: model.clone(),
+                    draws,
+                };
+                log.append(&outcome)?;
+                done.push(outcome);
+            }
         }
-        let outcome = SampledOutcome {
-            id: item.id.clone(),
-            item: item_digest(item).to_string(),
-            model: model.clone(),
-            draws,
-        };
-        log.append(&outcome)?;
-        done.push(outcome);
-    }
+        anyhow::Ok(())
+    })?;
+    let position = |id: &str| items.iter().position(|item| item.id == id);
+    done.sort_by_key(|o| position(&o.id));
     Ok(done)
 }
 

@@ -474,6 +474,10 @@ pub struct ExamRun {
     pub exam: Version,
     /// Take over outcomes that exist without a manifest.
     pub adopt: bool,
+    /// Items put to the model at once: what a batching server decodes
+    /// together. The outcomes do not depend on it, so it is no part of the
+    /// manifest.
+    pub slots: usize,
 }
 
 /// The record of `arm` examined with `run` on `items`: what its outcomes
@@ -545,6 +549,7 @@ pub fn run_arm(
         &path,
         run.max_tokens,
         &run.model.digest().to_string(),
+        run.slots,
     )
 }
 

@@ -264,6 +264,7 @@ fn examined(dir: &std::path::Path, persona: &Persona, seed: u64) {
         },
         exam: Version::V1,
         adopt: false,
+        slots: 1,
     };
     let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
     run_arm(

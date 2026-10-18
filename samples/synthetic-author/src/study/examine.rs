@@ -35,7 +35,15 @@ pub trait Examinee {
     /// Answers greedily.
     fn greedy(&self) -> Arc<dyn ModelProvider>;
     /// Answers by sampling at `temperature` with `seed`.
-    fn sampled(&self, temperature: f32, seed: u64) -> Arc<dyn ModelProvider>;
+    ///
+    /// # Errors
+    /// The sampled model cannot be set up.
+    fn sampled(&self, temperature: f32, seed: u64) -> anyhow::Result<Arc<dyn ModelProvider>>;
+    /// How many requests it answers at once: an in-process model answers
+    /// one, a batching server as many as it has decode slots.
+    fn slots(&self) -> usize {
+        1
+    }
 }
 
 /// Loads the model the examination is put to, with an adapter or without.
@@ -60,11 +68,11 @@ impl Examinee for Loaded {
         self.0.provider()
     }
 
-    fn sampled(&self, temperature: f32, seed: u64) -> Arc<dyn ModelProvider> {
-        self.0.provider_with(Decoding::Sampled {
+    fn sampled(&self, temperature: f32, seed: u64) -> anyhow::Result<Arc<dyn ModelProvider>> {
+        Ok(self.0.provider_with(Decoding::Sampled {
             temperature,
             seed: Some(seed),
-        })
+        }))
     }
 }
 
@@ -178,6 +186,7 @@ pub fn run(
                 },
                 exam: protocol.exam.version,
                 adopt: false,
+                slots: model.slots(),
             };
             let outcomes = run_arm(
                 &slotted,

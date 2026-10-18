@@ -384,16 +384,16 @@ impl Examinee for Plain {
     fn greedy(&self) -> Arc<dyn ModelProvider> {
         self.0.clone()
     }
-    fn sampled(&self, _: f32, _: u64) -> Arc<dyn ModelProvider> {
-        self.0.clone()
+    fn sampled(&self, _: f32, _: u64) -> anyhow::Result<Arc<dyn ModelProvider>> {
+        Ok(self.0.clone())
     }
 }
 impl Examinee for Tuned {
     fn greedy(&self) -> Arc<dyn ModelProvider> {
         self.0.clone()
     }
-    fn sampled(&self, _: f32, _: u64) -> Arc<dyn ModelProvider> {
-        self.0.clone()
+    fn sampled(&self, _: f32, _: u64) -> anyhow::Result<Arc<dyn ModelProvider>> {
+        Ok(self.0.clone())
     }
 }
 

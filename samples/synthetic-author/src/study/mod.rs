@@ -26,5 +26,6 @@ pub mod power;
 pub mod protocol;
 pub mod render;
 pub mod report;
+pub mod served;
 pub mod stats;
 pub mod train;

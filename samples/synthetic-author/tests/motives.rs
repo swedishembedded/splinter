@@ -251,6 +251,7 @@ fn the_report_lists_what_each_arm_s_reasons_come_to() {
         },
         exam: Version::V1,
         adopt: false,
+        slots: 1,
     };
     let provider: Arc<dyn ModelProvider> = Arc::new(Terse);
     run_arm(&cache, &persona, Arm::Base, &provider, &all, &run).unwrap();

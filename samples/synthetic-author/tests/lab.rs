@@ -21,7 +21,7 @@ use serde_json::{json, Value};
 use splinter_sdk::agent::sven::model::{
     CompletionRequest, ModelProvider, ResponseEvent, ResponseStream,
 };
-use synthetic_author::arms::{ask, run_items};
+use synthetic_author::arms::{ask, run_items, run_items_with};
 use synthetic_author::dataset::records_for;
 use synthetic_author::exam::items;
 use synthetic_author::mine::{MinedFacts, Verified};
@@ -670,6 +670,66 @@ fn constant_policies_are_listed_beside_the_arms_and_compared_with_the_tuned_one(
             text.contains("combination trained"),
             trained_columns,
             "{text}"
+        );
+    }
+}
+
+/// Answers like [`FirstOption`] after a pause, counting how many requests are
+/// in flight at once.
+#[derive(Default)]
+struct Busy {
+    in_flight: std::sync::atomic::AtomicUsize,
+    most: std::sync::atomic::AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Busy {
+    fn name(&self) -> &str {
+        "busy"
+    }
+    fn model_name(&self) -> &str {
+        "busy-1"
+    }
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        use std::sync::atomic::Ordering::SeqCst;
+        let now = self.in_flight.fetch_add(1, SeqCst) + 1;
+        self.most.fetch_max(now, SeqCst);
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        self.in_flight.fetch_sub(1, SeqCst);
+        FirstOption.complete(req).await
+    }
+}
+
+#[test]
+fn a_batching_model_is_asked_as_many_items_at_once_as_it_has_slots_and_the_outcomes_keep_their_order(
+) {
+    use std::sync::atomic::Ordering::SeqCst;
+    let all: Vec<_> = exam_items().into_iter().take(12).collect();
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthetic-author-lab-slots");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for slots in [1, 4] {
+        let busy = Arc::new(Busy::default());
+        let provider: Arc<dyn ModelProvider> = busy.clone();
+        let out = dir.join(format!("slots-{slots}.jsonl"));
+        let outcomes = run_items_with(
+            &provider,
+            |_| "system".to_string(),
+            &all,
+            &out,
+            64,
+            "m",
+            slots,
+        )
+        .unwrap();
+        assert_eq!(busy.most.load(SeqCst), slots, "{slots} slots kept full");
+        let ids: Vec<_> = outcomes.iter().map(|o| o.id.clone()).collect();
+        let asked: Vec<_> = all.iter().map(|i| i.id.clone()).collect();
+        assert_eq!(ids, asked, "outcomes in the order of the items");
+        assert_eq!(
+            std::fs::read_to_string(&out).unwrap().lines().count(),
+            all.len(),
+            "every answer written once"
         );
     }
 }

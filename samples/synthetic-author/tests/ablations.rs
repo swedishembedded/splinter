@@ -333,6 +333,7 @@ fn run() -> ExamRun {
         },
         exam: Version::V1,
         adopt: false,
+        slots: 1,
     }
 }
 

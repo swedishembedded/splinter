@@ -224,6 +224,7 @@ impl Study {
             model: model(adapter),
             exam: Version::V1,
             adopt,
+            slots: 1,
         };
         run_arm(
             &self.cache,
@@ -260,6 +261,7 @@ fn an_exam_rerun_for_other_items_is_refused_naming_both_digests() {
         model: model(Some("sha256:a")),
         exam: Version::V1,
         adopt: false,
+        slots: 1,
     };
     let other = arm_record(
         &s.cache,
@@ -309,6 +311,7 @@ fn the_second_exam_is_a_new_exam_and_the_first_one_s_outcomes_are_refused_under_
         model: model(Some("sha256:a")),
         exam: Version::V2,
         adopt: false,
+        slots: 1,
     };
     let message = format!(
         "{:#}",
@@ -477,6 +480,7 @@ fn the_baselines_are_scored_only_on_the_items_the_arms_were_asked() {
         model: model(Some("sha256:a")),
         exam: Version::V2,
         adopt: false,
+        slots: 1,
     };
     let provider: Arc<dyn ModelProvider> = Arc::new(FirstOption);
     run_arm(&s.cache, &s.persona, Arm::Tuned, &provider, &items, &run).unwrap();

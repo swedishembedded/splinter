@@ -110,6 +110,7 @@ fn run() -> ExamRun {
         },
         exam: Version::V1,
         adopt: false,
+        slots: 1,
     }
 }
 
@@ -124,9 +125,9 @@ fn sampled(run_seed: u64, draws: usize) -> SampledDecoding {
 impl Study {
     fn ask(&self, how: &SampledDecoding) -> anyhow::Result<Vec<SampledOutcome>> {
         let built_with = Arc::clone(&self.built_with);
-        let provider_for = move |seed: u64| -> Arc<dyn ModelProvider> {
+        let provider_for = move |seed: u64| -> anyhow::Result<Arc<dyn ModelProvider>> {
             built_with.lock().unwrap().push(seed);
-            Arc::new(ByParity(seed))
+            Ok(Arc::new(ByParity(seed)))
         };
         run_arm_sampled(
             &self.cache,

@@ -140,10 +140,15 @@ pub fn run_items(
         out,
         max_tokens,
         model,
+        1,
     )
 }
 
-/// As [`run_items`], with the system turn chosen for each item.
+/// As [`run_items`], with the system turn chosen for each item, and up to
+/// `slots` items asked at once: a server that batches answers them together.
+/// Each outcome is appended as its answer arrives, so a stop keeps every item
+/// already answered whatever the order; the outcomes returned are in the order
+/// of `items`, those kept before first.
 ///
 /// # Errors
 /// The provider failed, or `out` cannot be written.
@@ -154,28 +159,44 @@ pub fn run_items_with(
     out: &Path,
     max_tokens: u32,
     model: &str,
+    slots: usize,
 ) -> anyhow::Result<Vec<Outcome>> {
+    use futures::stream::{self, StreamExt as _};
+
     let mut done = read_outcomes(out)?;
     let runtime = tokio::runtime::Runtime::new()?;
     let log = jsonl::Log::open(out)?;
-    for item in items {
-        if done.iter().any(|o| o.id == item.id) {
-            continue;
+    let asked: Vec<(&Item, String)> = items
+        .iter()
+        .filter(|item| !done.iter().any(|o| o.id == item.id))
+        .map(|item| (item, system(item)))
+        .collect();
+    runtime.block_on(async {
+        let mut answers = stream::iter(asked)
+            .map(|(item, system)| async move {
+                let answered = answer(provider, &system, item, max_tokens).await;
+                (item, answered)
+            })
+            .buffer_unordered(slots.max(1));
+        while let Some((item, answered)) = answers.next().await {
+            let answered = answered?;
+            let outcome = Outcome {
+                id: item.id.clone(),
+                correct: answered.correct,
+                topic_seen: item.topic_seen,
+                combo_seen: item.combo_seen,
+                combo_trained: item.combo_trained,
+                tool_seen: item.tool_seen,
+                call: answered.call,
+                item: item_digest(item).to_string(),
+                model: model.to_string(),
+            };
+            log.append(&outcome)?;
+            done.push(outcome);
         }
-        let answered = runtime.block_on(answer(provider, &system(item), item, max_tokens))?;
-        let outcome = Outcome {
-            id: item.id.clone(),
-            correct: answered.correct,
-            topic_seen: item.topic_seen,
-            combo_seen: item.combo_seen,
-            combo_trained: item.combo_trained,
-            tool_seen: item.tool_seen,
-            call: answered.call,
-            item: item_digest(item).to_string(),
-            model: model.to_string(),
-        };
-        log.append(&outcome)?;
-        done.push(outcome);
-    }
+        anyhow::Ok(())
+    })?;
+    let position = |id: &str| items.iter().position(|item| item.id == id);
+    done.sort_by_key(|o| position(&o.id));
     Ok(done)
 }
