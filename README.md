@@ -29,19 +29,20 @@ One system carries the whole loop:
  it at       never edited                            replay       serve checks  plain brain
 ```
 
-## What it is built on
+## Three projects, one stack
 
-Splinter is built on two standalone projects and replaces neither:
+Splinter is one of three open projects that work together:
 
-- **sven** runs the agent: tools, sessions, delegation, and a trustworthy
-  record of what the agent did.
-- **brain** runs the model: inference, training, evaluation and serving.
+| Project | Its role |
+|---|---|
+| **[Splinter](https://github.com/mkschreder/splinter)** (this repository) | **Turns agent experience into better local models.** It decides what is learned: which tasks to write, which experience qualifies as training data, what to train, and whether the result is better. |
+| **[sven](https://github.com/swedishembedded/sven)** | **Runs the agent:** tools, sessions, delegation, and a trustworthy record of what the agent did. |
+| **[brain](https://github.com/swedishembedded/brain)** | **Runs the model:** inference, training, evaluation and serving, on the hardware you have. |
 
-Splinter decides what is learned: which tasks to write, which experience
-qualifies as training data, what to train, and whether the result is better.
-What it releases is an ordinary brain adapter with a manifest. It runs on plain
-`brain serve`, and plain sven can use it through its brain provider; neither
-needs Splinter installed.
+Splinter is built on the other two and replaces neither. What it releases is an
+ordinary brain adapter with a manifest. It runs on plain `brain serve`, and
+plain sven can use it through its brain provider; neither needs Splinter
+installed.
 
 ## What it learns from
 
