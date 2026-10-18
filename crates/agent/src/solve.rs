@@ -204,6 +204,10 @@ pub struct Model {
     /// The system prompt this model answers under, when that is not the
     /// default: a policy trained to be a person has that person's.
     pub system: Option<String>,
+    /// How many requests the model's owner declared it decodes together
+    /// (the slots of the batching server it launched); `None` leaves the
+    /// width to the reference the model is asked for by. See [`Self::slots`].
+    declared_slots: Option<usize>,
 }
 
 impl Model {
@@ -215,7 +219,31 @@ impl Model {
             identity: identity.into(),
             stream_idle: None,
             system: None,
+            declared_slots: None,
         }
+    }
+
+    /// This model, declared to decode `slots` requests together (zero is
+    /// one): what the owner of a batching server knows of it.
+    #[must_use]
+    pub fn with_slots(mut self, slots: usize) -> Self {
+        self.declared_slots = Some(slots.max(1));
+        self
+    }
+
+    /// The requests this model decodes together, which a stage with many
+    /// independent prompts keeps in flight: the declared slots, else one -
+    /// a model that answers a request at a time.
+    #[must_use]
+    pub fn slots(&self) -> usize {
+        self.declared_slots.unwrap_or(1)
+    }
+
+    /// Whether the owner declared how many requests the model decodes
+    /// together ([`Self::with_slots`]).
+    #[must_use]
+    pub fn declares_slots(&self) -> bool {
+        self.declared_slots.is_some()
     }
 
     /// This model, answering under `system` in place of the default prompt.
@@ -247,6 +275,7 @@ impl std::fmt::Debug for Model {
         f.debug_struct("Model")
             .field("identity", &self.identity)
             .field("stream_idle", &self.stream_idle)
+            .field("slots", &self.slots())
             .finish_non_exhaustive()
     }
 }

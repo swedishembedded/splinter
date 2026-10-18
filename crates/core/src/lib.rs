@@ -14,6 +14,8 @@
 //! * [`build`] - the commits, tree state and binary a run was made by.
 //! * [`clock`] - the UTC clock records are stamped by, injected so a test
 //!   fixes it.
+//! * [`concurrency`] - bounded fan-out of independent work, results in item
+//!   order.
 //! * [`source`] - what Splinter learns from: documents, repositories and
 //!   command runs, their parts addressed by content.
 //! * [`experience`] - the task a solver is given, and the immutable,
@@ -52,7 +54,7 @@
 //! * [`terms`] - the terms data came under, combined most-restrictively
 //!   over sources and carried to datasets and releases.
 //!
-//! This crate performs no I/O. It knows no store, no model and no agent
+//! This crate performs no I/O (the fan-out runs the work it is handed and does none). It knows no store, no model and no agent
 //! runtime: it is the language they share, and the invariants every record
 //! in it keeps no matter who builds one.
 
@@ -64,6 +66,7 @@ pub mod build;
 pub mod chat;
 pub mod claim;
 pub mod clock;
+pub mod concurrency;
 pub mod dataset;
 pub mod digest;
 pub mod evidence;

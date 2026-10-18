@@ -155,6 +155,33 @@ fn a_model_on_the_local_device_is_asked_one_request_at_a_time() {
 }
 
 #[test]
+fn a_model_is_handed_to_a_stage_with_the_width_it_is_asked_at() {
+    let scratch = Scratch::new("model-slots");
+    let mut settings = config(&scratch);
+    settings.remote_concurrency = 5;
+    let ctx = Context::new(settings, true).unwrap();
+    let slow = Arc::new(Slow {
+        waiting: AtomicUsize::new(0),
+        most: AtomicUsize::new(0),
+    });
+    let remote: ModelRef = "remote:test/model".parse().unwrap();
+    let local: ModelRef = "local:/models/base".parse().unwrap();
+    for reference in [&remote, &local] {
+        ctx.add_model(reference.clone(), Model::new(slow.clone(), "slow/model"));
+    }
+    assert_eq!(ctx.model(&remote).unwrap().slots(), 5);
+    assert_eq!(ctx.model(&local).unwrap().slots(), 1);
+    // A model whose owner says how many requests it decodes together keeps
+    // that width, whatever its reference.
+    let served: ModelRef = "local:/models/served".parse().unwrap();
+    ctx.add_model(
+        served.clone(),
+        Model::new(slow, "slow/served").with_slots(16),
+    );
+    assert_eq!(ctx.model(&served).unwrap().slots(), 16);
+}
+
+#[test]
 fn every_solved_attempt_keeps_the_facts_the_experience_cannot() {
     use splinter_core::annotation::AnnotationBody;
     let scratch = Scratch::new("attempt-facts");

@@ -379,7 +379,11 @@ impl Runtime {
             .lock_models()
             .get(&(reference.clone(), adapter))
             .and_then(|held| held.loaded.resampled(sampling));
-        Ok(provider.map(|provider| Model { provider, ..model }))
+        Ok(provider.map(|provider| {
+            let mut resampled = model;
+            resampled.provider = provider;
+            resampled
+        }))
     }
 
     /// Every seed the loaded local models drew for sampled requests since the
@@ -687,6 +691,18 @@ impl Context {
         let (adapter, selection) = self.resolve(reference)?;
         let model = self.runtime.model(reference, adapter, &selection)?;
         self.with_release_prompt(reference, model)
+            .map(|model| self.with_width(reference, model))
+    }
+
+    /// `model`, asked as many requests at once as it declares, else as
+    /// many as `reference` takes ([`Runtime::concurrency_for`]).
+    fn with_width(&self, reference: &ModelRef, model: Model) -> Model {
+        if model.declares_slots() {
+            model
+        } else {
+            let width = self.concurrency_for(reference);
+            model.with_slots(width)
+        }
     }
 
     /// `model`, answering under the system prompt of the release
@@ -718,6 +734,7 @@ impl Context {
             .resampled(reference, adapter, &selection, sampling)?
             .map(|model| self.with_release_prompt(reference, model))
             .transpose()
+            .map(|model| model.map(|model| self.with_width(reference, model)))
     }
 
     /// Every seed the local models loaded in this process drew for sampled

@@ -5845,6 +5845,7 @@ version = "0.1.0"
 dependencies = [
  "atif",
  "blake3",
+ "futures",
  "serde",
  "serde_json",
  "sha2",
