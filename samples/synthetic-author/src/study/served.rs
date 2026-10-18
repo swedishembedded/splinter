@@ -31,7 +31,8 @@ pub struct ServedLoader {
     pub brain: PathBuf,
     /// The base checkpoint.
     pub base: PathBuf,
-    /// A scratch directory for each server's keys and ready marker.
+    /// Where each server gets a fresh directory for its keys and ready
+    /// marker, so examinations running side by side never share one.
     pub work: PathBuf,
     /// The compute the servers may schedule, in brain's `--device` grammar.
     pub device: Option<String>,
@@ -43,6 +44,9 @@ pub struct ServedLoader {
 struct Served {
     /// Kept for the model's life; the server stops when it is dropped.
     server: Started,
+    /// The server's directory, removed after the server has stopped (fields
+    /// drop in declaration order).
+    _work: tempfile::TempDir,
     url: String,
     greedy: Arc<dyn ModelProvider>,
     slots: usize,
@@ -81,26 +85,24 @@ impl Examinee for Served {
 
 impl Loader for ServedLoader {
     fn load(&self, adapter: Option<&Path>) -> anyhow::Result<Box<dyn Examinee>> {
-        let work = self.work.join(adapter.map_or_else(
-            || "base".to_string(),
-            |a| {
-                a.parent().and_then(Path::file_name).map_or_else(
-                    || "adapter".to_string(),
-                    |n| n.to_string_lossy().into_owned(),
-                )
-            },
-        ));
-        std::fs::create_dir_all(&work)?;
+        std::fs::create_dir_all(&self.work)?;
+        let work = tempfile::Builder::new()
+            .prefix(if adapter.is_some() {
+                "adapter-"
+            } else {
+                "base-"
+            })
+            .tempdir_in(&self.work)?;
         let digest = match adapter {
             Some(file) => crate::binding::file_digest(file)?,
             None => String::new(),
         };
         let launch = Launch {
             binary: &self.brain,
-            work: &work,
+            work: work.path(),
             // No store is scanned: the server serves the base it is given
             // and the adapter offered, nothing else.
-            models: &work.join("no-store"),
+            models: &work.path().join("no-store"),
             base: &self.base,
             offer: adapter.map_or(Offer::Nothing, Offer::Adapter),
             expected_digest: &digest,
@@ -122,6 +124,7 @@ impl Loader for ServedLoader {
         let greedy = served_model(&url, &server.key, &server.model, Some(0.0), None)?.provider();
         Ok(Box::new(Served {
             server,
+            _work: work,
             url,
             greedy,
             slots: self.slots as usize,

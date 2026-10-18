@@ -216,7 +216,12 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
             launch.expected_digest.to_string(),
         ),
     };
-    let key = read_key(&keys).map_err(Failure::Unmeasured)?;
+    let key = read_key(&keys).map_err(|why| {
+        Failure::Unmeasured(format!(
+            "{why}; it wrote: {}",
+            recent_output(&lines, &mut kept)
+        ))
+    })?;
     Ok(Started {
         running,
         lines,
