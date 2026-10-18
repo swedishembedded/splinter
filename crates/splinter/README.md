@@ -227,6 +227,27 @@ checkpoint has no adapter to name, so its manifest is withdrawn. A candidate the
 gate blocks, or cannot measure, is not released, and the run exits 1 with the
 reason. `--test-command` takes the rest of the command line, so it comes last.
 
+On the host the kernel confines what the agent runs: a command (the solver's
+shell, the checks) reaches the system read only, its own tree and a private
+directory, and nothing else of the filesystem (no home directory, no state
+root with the hidden tests, no sibling attempt's tree); it cannot connect
+anywhere, loopback included (Landlock denies TCP, a seccomp filter refuses
+every internet socket, UDP too); and its environment holds no variable named
+like a secret (key, token, password, auth socket), even when an allowlist
+names one. Without a kernel that can do this (Landlock ABI 4) the command is
+refused, never run open. `--allow-workspace-network` opens the network,
+`--allow-unconfined-workspace` the filesystem on a kernel that cannot confine,
+and `--workspace-max-processes N` bounds the processes and threads of a
+command; each is part of the environment record, so a task generated without
+it names another environment. The agent's own file and search tools are
+confined to the attempt's tree by sven's project root, for its delegated
+children too. The supervisor makes itself non-dumpable when it starts an
+attempt, so a command cannot read its environment through `/proc`. The exposure
+audit reports a command's mention of a path outside the tree by what came of it:
+`outside_workspace` (something came back), `outside_workspace_denied` (the sandbox
+refused) and `outside_workspace_absent` (no such path, or nothing returned); all
+three still fail the audit, and the stage counts them by kind.
+
 ## Learning to think like a person
 
 ```bash

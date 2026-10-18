@@ -6,10 +6,16 @@
 // language-model agent away from material it must not read, you can
 // procure our services by sending an email to info@swedishembedded.com.
 
-//! Filesystem confinement of a child process with Landlock, through the
-//! kernel's three system calls (no library): the child can read and run
-//! what [`Confinement::read_only`] names, read and write what
-//! [`Confinement::read_write`] names, and reach nothing else.
+//! Confinement of a child process with Landlock, through the kernel's three
+//! system calls (no library): the child can read and run what
+//! [`Confinement::read_only`] names, read and write what
+//! [`Confinement::read_write`] names, and reach nothing else - and, unless
+//! [`Confinement::allow_network`] says otherwise, no network: TCP `bind` and
+//! `connect` are denied by Landlock (ABI 4) and the creation of every
+//! internet-family or packet socket is refused by a seccomp filter (which
+//! also closes UDP, that Landlock does not cover). Only local (unix-domain)
+//! sockets remain. A kernel that can do neither refuses the confinement
+//! instead of running the child with the network open.
 //!
 //! The ruleset is built in the parent ([`Confinement::prepare`]: it opens
 //! paths and allocates), and the child only enforces it ([`Prepared::enforce`]:
@@ -34,6 +40,10 @@ const WRITE_FILE: u64 = 1 << 1;
 const READ_FILE: u64 = 1 << 2;
 const READ_DIR: u64 = 1 << 3;
 const REFER: u64 = 1 << 13;
+/// Network rights of ABI 4: TCP `bind` and TCP `connect`.
+const NET_BIND_TCP: u64 = 1 << 0;
+const NET_CONNECT_TCP: u64 = 1 << 1;
+const NET_ABI: u32 = 4;
 const TRUNCATE: u64 = 1 << 14;
 /// Rights ABI 1 knows: bits 0 to 12.
 const ABI1: u64 = (1 << 13) - 1;
@@ -43,7 +53,12 @@ const FILE_RIGHTS: u64 = EXECUTE | WRITE_FILE | READ_FILE | TRUNCATE;
 #[repr(C)]
 struct RulesetAttr {
     handled_access_fs: u64,
+    /// Present from ABI 4; the kernel reads it only when told the larger size.
+    handled_access_net: u64,
 }
+
+/// The size of the part of [`RulesetAttr`] ABI 1 to 3 kernels know.
+const RULESET_ATTR_FS_ONLY: usize = std::mem::size_of::<u64>();
 
 #[repr(C, packed)]
 struct PathBeneathAttr {
@@ -74,11 +89,15 @@ pub struct Confinement {
     pub read_only: Vec<PathBuf>,
     /// Paths it may read, write, create and remove beneath.
     pub read_write: Vec<PathBuf>,
+    /// Whether the child may use the network. Off by default: a confinement
+    /// is network-less unless it says otherwise.
+    pub allow_network: bool,
 }
 
 /// A ruleset ready to be enforced in a child.
 pub struct Prepared {
     ruleset: OwnedFd,
+    socket_filter: Option<crate::seccomp::Filter>,
 }
 
 impl Confinement {
@@ -94,15 +113,35 @@ impl Confinement {
         if abi >= 3 {
             handled |= TRUNCATE;
         }
+        let deny_network = !self.allow_network;
+        if deny_network && abi < NET_ABI {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!("denying the network needs Landlock ABI {NET_ABI}; the kernel has {abi}"),
+            ));
+        }
+        let socket_filter = deny_network
+            .then(crate::seccomp::Filter::deny_inet_sockets)
+            .transpose()?;
         let attr = RulesetAttr {
             handled_access_fs: handled,
+            handled_access_net: if deny_network {
+                NET_BIND_TCP | NET_CONNECT_TCP
+            } else {
+                0
+            },
+        };
+        let attr_size = if abi >= NET_ABI {
+            std::mem::size_of::<RulesetAttr>()
+        } else {
+            RULESET_ATTR_FS_ONLY
         };
         // SAFETY: `attr` is a valid `landlock_ruleset_attr` of the size passed.
         let fd = unsafe {
             libc::syscall(
                 SYS_CREATE_RULESET,
                 &attr as *const RulesetAttr,
-                std::mem::size_of::<RulesetAttr>(),
+                attr_size,
                 0 as libc::c_ulong,
             )
         };
@@ -118,7 +157,10 @@ impl Confinement {
         for path in &self.read_write {
             add_rule(&ruleset, path, handled)?;
         }
-        Ok(Prepared { ruleset })
+        Ok(Prepared {
+            ruleset,
+            socket_filter,
+        })
     }
 }
 
@@ -162,24 +204,28 @@ fn add_rule(ruleset: &OwnedFd, path: &Path, access: u64) -> io::Result<()> {
 }
 
 impl Prepared {
-    /// The descriptor [`enforce_fd`] needs; open for as long as `self` is.
-    #[must_use]
-    pub fn raw_fd(&self) -> RawFd {
-        self.ruleset.as_raw_fd()
-    }
-}
-
-/// Confines the calling process (a child between `fork` and `exec`) to the
-/// ruleset behind `fd`, for good. Makes only system calls.
-pub fn enforce_fd(fd: RawFd) -> io::Result<()> {
-    // SAFETY: `prctl` and `landlock_restrict_self` take plain integers.
-    unsafe {
-        if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
+    /// Confines the calling process (a child between `fork` and `exec`) to
+    /// the ruleset, for good. Makes only system calls and allocates nothing.
+    pub fn enforce(&self) -> io::Result<()> {
+        // SAFETY: `prctl` takes plain integers.
+        if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
             return Err(io::Error::last_os_error());
         }
-        if libc::syscall(SYS_RESTRICT_SELF, fd, 0 as libc::c_uint) != 0 {
+        if let Some(filter) = &self.socket_filter {
+            filter.install()?;
+        }
+        // SAFETY: `landlock_restrict_self` takes a descriptor and flags; the
+        // ruleset descriptor is open for as long as `self` is.
+        if unsafe {
+            libc::syscall(
+                SYS_RESTRICT_SELF,
+                self.ruleset.as_raw_fd(),
+                0 as libc::c_uint,
+            )
+        } != 0
+        {
             return Err(io::Error::last_os_error());
         }
+        Ok(())
     }
-    Ok(())
 }

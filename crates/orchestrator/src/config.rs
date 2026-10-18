@@ -140,6 +140,14 @@ pub struct WorkspaceSettings {
     /// kernel cannot confine them. Without it such a workspace is refused:
     /// a solver that can read the whole disk can read the answer.
     pub allow_unconfined: bool,
+    /// Let workspace commands use the network. Without it they cannot
+    /// connect anywhere, a model server on the loopback included: a solver
+    /// that can reach one can reach whatever it serves. The environment
+    /// record says when it was allowed.
+    pub allow_network: bool,
+    /// How many processes and threads a workspace command may start; `None`
+    /// is no bound. Part of the environment's snapshot.
+    pub max_processes: Option<u64>,
 }
 
 impl Default for WorkspaceSettings {
@@ -152,6 +160,8 @@ impl Default for WorkspaceSettings {
             cargo_home: None,
             output_cap_bytes: WORKSPACE_OUTPUT_CAP_BYTES,
             allow_unconfined: false,
+            allow_network: false,
+            max_processes: None,
         }
     }
 }
@@ -267,6 +277,8 @@ impl Config {
                 cargo_home: var("SPLINTER_CARGO_HOME").map(PathBuf::from),
                 output_cap_bytes: WORKSPACE_OUTPUT_CAP_BYTES,
                 allow_unconfined: false,
+                allow_network: false,
+                max_processes: None,
             },
             build: BuildInfo {
                 gpu_contexts: var("SPLINTER_GPU_CONTEXTS").and_then(|v| v.trim().parse().ok()),

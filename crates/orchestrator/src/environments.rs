@@ -206,7 +206,9 @@ impl Environments {
                 &["CARGO_HOME", "CARGO_INCREMENTAL"],
                 workspace_limits(settings.output_cap_bytes),
             )
-            .allow_unconfined(settings.allow_unconfined),
+            .allow_unconfined(settings.allow_unconfined)
+            .allow_network(settings.allow_network)
+            .max_processes(settings.max_processes),
         ))
     }
 

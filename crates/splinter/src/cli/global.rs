@@ -59,6 +59,18 @@ pub struct Global {
     /// was allowed.
     #[arg(long, global = true)]
     pub allow_unconfined_workspace: bool,
+    /// Let a project's commands (the solver's shell, the test runs) use the
+    /// network. Without it they cannot connect anywhere, a model server on
+    /// the loopback included; the environment record says when it was
+    /// allowed.
+    #[arg(long, global = true)]
+    pub allow_workspace_network: bool,
+    /// Bound the processes and threads one project command may start. Part
+    /// of the environment record, so tasks generated without it name a
+    /// different environment.
+    #[arg(long, global = true, value_name = "N",
+        value_parser = clap::value_parser!(u64).range(1..))]
+    pub workspace_max_processes: Option<u64>,
     /// The sampling temperature, 0 to 2, asked of a model reached through
     /// sven's providers (the provider's own default when not given). The
     /// same flag sets the pass@k sampling of a verb that measures it; when

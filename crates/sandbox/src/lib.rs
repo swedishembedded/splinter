@@ -45,6 +45,7 @@ pub mod landlock;
 pub mod limits;
 pub mod process;
 pub mod runtime;
+pub mod seccomp;
 pub mod workspace;
 pub mod workspace_host;
 

@@ -29,7 +29,6 @@ mod curriculum_output;
 mod doctor_output;
 mod exam_output;
 mod exam_session;
-mod tasks_session;
 mod experiment_output;
 mod learn_output;
 mod learn_request;
@@ -40,6 +39,7 @@ mod practice_request;
 mod release_output;
 mod session;
 mod state_output;
+mod tasks_session;
 mod train_output;
 
 use std::process::ExitCode;
@@ -83,6 +83,9 @@ fn main() -> ExitCode {
     if let Some(bytes) = cli.global.test_output_cap {
         config.workspace.output_cap_bytes = bytes;
     }
+    config.workspace.allow_unconfined = cli.global.allow_unconfined_workspace;
+    config.workspace.allow_network = cli.global.allow_workspace_network;
+    config.workspace.max_processes = cli.global.workspace_max_processes;
     config.build = build_info::current(config.build.gpu_contexts);
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,

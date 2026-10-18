@@ -439,6 +439,7 @@ impl Sandbox for ContainerSandbox {
             limits: self.limits,
             env: self.env.clone(),
             unconfined_commands: false,
+            network_allowed: false,
         }
     }
 

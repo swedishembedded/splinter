@@ -132,6 +132,10 @@ pub struct SandboxSpec {
     /// confined sandbox is the one it always had.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub unconfined_commands: bool,
+    /// Set only where commands were explicitly allowed to use the network;
+    /// absent otherwise (a command's network is denied by default).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub network_allowed: bool,
 }
 
 /// Where code calls run.

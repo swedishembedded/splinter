@@ -17,15 +17,23 @@
 //! call; a wall-clock timeout that kills its whole process group; output
 //! caps; and kernel resource limits (CPU time, address space, file size)
 //! set in the child before the runtime starts. The number of processes a
-//! call starts is not bounded: the kernel's per-user limit cannot bound
-//! one call, so the sandbox records `max_processes: None`.
+//! call starts can be bounded by a budget on top of the user's own task
+//! count when the call starts ([`ProcessSandbox::max_processes`]; unbounded
+//! unless set, and the record says which).
 //!
-//! None of that confines the code. It runs as the calling user and can
-//! read and write whatever that user can, reach the network, and leave its
-//! process group. Use it where the code is trusted as much as the user
-//! running Splinter; the environment it produces records
-//! `isolation: "none"`, so an experience produced in it is never mistaken
-//! for a sandboxed one.
+//! A code call is bounded only. A command in a directory tree
+//! ([`Sandbox::run_command`], how a workspace is worked in) is also
+//! confined by the kernel: it reaches the system (read only), its tree and
+//! its private directory and nothing else of the filesystem, and no network
+//! (TCP by Landlock, every internet socket by seccomp) unless [`ProcessSandbox::allow_network`] says so. Its
+//! environment holds no variable named like a secret even when the
+//! allowlist names one ([`is_secret_name`]). A kernel that cannot confine
+//! a command refuses it. The environment records `isolation: "none"` all
+//! the same (code calls are not confined), so an experience produced here
+//! is never mistaken for a container-isolated one. `/proc` stays readable
+//! (system tools need it), so the supervisor makes itself non-dumpable with
+//! [`crate::process::protect_supervisor_environment`]; that is what keeps its
+//! `/proc/<pid>/environ` unreadable to its commands.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -54,6 +62,27 @@ pub const DEFAULT_TERM: &str = "dumb";
 const SYSTEM_ROOTS: [&str; 9] = [
     "/usr", "/lib", "/lib32", "/lib64", "/bin", "/sbin", "/etc", "/opt", "/proc",
 ];
+
+/// Whether a variable of this name carries a credential: an API key, token,
+/// secret, password, authentication socket or the like. Such a variable is
+/// never passed to a command, whatever the allowlist says, so a
+/// misconfigured allowlist cannot hand the solver the supervisor's keys.
+#[must_use]
+pub fn is_secret_name(name: &str) -> bool {
+    const MARKERS: [&str; 8] = [
+        "KEY",
+        "TOKEN",
+        "SECRET",
+        "PASSWORD",
+        "PASSWD",
+        "CREDENTIAL",
+        "AUTH",
+        "COOKIE",
+    ];
+    const PREFIXES: [&str; 6] = ["AWS_", "GOOGLE_", "AZURE_", "GITHUB_", "GH_", "HF_"];
+    let upper = name.to_ascii_uppercase();
+    MARKERS.iter().any(|m| upper.contains(m)) || PREFIXES.iter().any(|p| upper.starts_with(p))
+}
 
 /// Variables of the environment that name a toolchain's home directory.
 const TOOLCHAIN_HOMES: [&str; 2] = ["CARGO_HOME", "RUSTUP_HOME"];
@@ -85,6 +114,7 @@ pub struct ProcessSandbox {
     env: BTreeMap<String, String>,
     limits: Limits,
     allow_unconfined: bool,
+    allow_network: bool,
     landlock: bool,
 }
 
@@ -110,7 +140,11 @@ impl ProcessSandbox {
         .into_iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
-        env.extend(environment_from(caller_env, allowlist));
+        env.extend(
+            environment_from(caller_env, allowlist)
+                .into_iter()
+                .filter(|(name, _)| !is_secret_name(name)),
+        );
         for name in PER_CALL_VARIABLES {
             env.remove(name);
         }
@@ -122,6 +156,7 @@ impl ProcessSandbox {
                 ..limits
             },
             allow_unconfined: false,
+            allow_network: false,
             landlock: crate::landlock::abi_version().is_some(),
         }
     }
@@ -134,6 +169,27 @@ impl ProcessSandbox {
     #[must_use]
     pub fn allow_unconfined(mut self, allow: bool) -> Self {
         self.allow_unconfined = allow;
+        self
+    }
+
+    /// Bounds the processes and threads of every call to `budget` beyond the
+    /// ones the user runs when the call starts (see [`Limits::max_processes`]);
+    /// `None` (the default) is no bound. The record carries it, so it is part
+    /// of the environment's identity: a sandbox built without it is a
+    /// different environment from one built with it.
+    #[must_use]
+    pub fn max_processes(mut self, budget: Option<u64>) -> Self {
+        self.limits.max_processes = budget;
+        self
+    }
+
+    /// Lets commands use the network. Off by default: a command cannot
+    /// connect anywhere (a brain server on the loopback included) and a
+    /// kernel that cannot deny the network refuses to run it. The
+    /// environment record says so when it is set.
+    #[must_use]
+    pub fn allow_network(mut self, allow: bool) -> Self {
+        self.allow_network = allow;
         self
     }
 
@@ -173,6 +229,7 @@ impl ProcessSandbox {
         Confinement {
             read_only,
             read_write,
+            allow_network: self.allow_network,
         }
     }
 
@@ -250,6 +307,7 @@ impl Sandbox for ProcessSandbox {
             limits: self.limits,
             env: self.env.clone(),
             unconfined_commands: self.allow_unconfined,
+            network_allowed: self.allow_network,
         }
     }
 

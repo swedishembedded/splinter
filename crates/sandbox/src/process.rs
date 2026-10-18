@@ -54,6 +54,49 @@ pub struct ResourceLimits {
     pub address_space_bytes: u64,
     /// The largest file a process may write, in bytes (`RLIMIT_FSIZE`).
     pub file_size_bytes: u64,
+    /// How many processes and threads the run may start beyond the ones its
+    /// user already has when it starts (`RLIMIT_NPROC`, which the kernel
+    /// checks against all of the user's tasks, so the limit set is that
+    /// count plus this budget). A run that spends it fails to fork with
+    /// `EAGAIN`; other processes of the user starting meanwhile spend it too.
+    pub max_processes: Option<u64>,
+}
+
+/// Makes the calling process non-dumpable (`PR_SET_DUMPABLE` 0), so that the
+/// files under its `/proc/<pid>` (its `environ`, `mem`, `maps`) belong to root
+/// and a confined command of the same user cannot read the supervisor's
+/// environment, credentials included, through `/proc`. The command's own
+/// confinement cannot do it: system tools need `/proc/self`, which names a
+/// different directory in every process. The cost is that the process
+/// leaves no core dump and cannot be debugger-attached by its user.
+pub fn protect_supervisor_environment() -> std::io::Result<()> {
+    // SAFETY: `prctl` takes plain integers.
+    if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// The processes and threads the calling user runs now, counted from
+/// `/proc`: the base a run's process budget is added to.
+fn user_task_count() -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: `getuid` takes no arguments and cannot fail.
+    let uid = unsafe { libc::getuid() };
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return 0;
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .bytes()
+                .all(|b| b.is_ascii_digit())
+        })
+        .filter(|e| e.metadata().is_ok_and(|m| m.uid() == uid))
+        .map(|e| std::fs::read_dir(e.path().join("task")).map_or(1, |tasks| tasks.count() as u64))
+        .sum()
 }
 
 impl ResourceLimits {
@@ -64,7 +107,10 @@ impl ResourceLimits {
     /// between `fork` and `exec`.
     fn apply(&self) -> std::io::Result<()> {
         let cpu_hard = self.cpu_seconds.saturating_add(1);
-        for (resource, soft, hard) in [
+        let processes = self
+            .max_processes
+            .map(|total| (libc::RLIMIT_NPROC, total, total));
+        for (resource, soft, hard) in processes.into_iter().chain([
             (libc::RLIMIT_CPU, self.cpu_seconds, cpu_hard),
             (
                 libc::RLIMIT_AS,
@@ -77,7 +123,7 @@ impl ResourceLimits {
                 self.file_size_bytes,
             ),
             (libc::RLIMIT_CORE, 0, 0),
-        ] {
+        ]) {
             let limit = libc::rlimit {
                 rlim_cur: soft,
                 rlim_max: hard,
@@ -430,7 +476,10 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0);
-    if let Some(resources) = spec.resources {
+    if let Some(mut resources) = spec.resources {
+        resources.max_processes = resources
+            .max_processes
+            .map(|budget| budget.saturating_add(user_task_count()));
         // SAFETY: the closure runs in the child between fork and exec and
         // makes only async-signal-safe calls (`setrlimit`), touching no
         // memory shared with the parent.
@@ -440,26 +489,18 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
     }
 
     // Built here, where it may allocate; the child only enforces it.
-    let ruleset = match &spec.confinement {
-        Some(confinement) => {
-            Some(
-                confinement
-                    .prepare()
-                    .map_err(|source| ProcessError::Confine {
-                        program: program.clone(),
-                        source,
-                    })?,
-            )
-        }
-        None => None,
-    };
-    if let Some(ruleset) = &ruleset {
-        let fd = ruleset.raw_fd();
-        // SAFETY: the closure makes only system calls (`prctl`,
-        // `landlock_restrict_self`) on a descriptor the parent keeps open
-        // until the child is spawned.
+    if let Some(confinement) = &spec.confinement {
+        let prepared = confinement
+            .prepare()
+            .map_err(|source| ProcessError::Confine {
+                program: program.clone(),
+                source,
+            })?;
+        // SAFETY: the closure makes only system calls (`prctl`, `seccomp`,
+        // `landlock_*`) and allocates nothing; it owns the ruleset, which
+        // lives as long as the command.
         unsafe {
-            command.pre_exec(move || crate::landlock::enforce_fd(fd));
+            command.pre_exec(move || prepared.enforce());
         }
     }
 

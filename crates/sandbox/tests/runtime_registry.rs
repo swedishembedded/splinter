@@ -138,8 +138,9 @@ fn changing_any_enforced_limit_changes_the_snapshot() {
             "{limits:?}"
         );
     }
-    // The process sandbox cannot bound a call's processes, so it does not
-    // enforce the setting and it does not move the snapshot.
+    // A process sandbox takes its process budget from `max_processes()`,
+    // not from the limits it is built with, so the setting does not move the
+    // snapshot (the budget, when given, does: see tests/containment.rs).
     let unenforced = Limits {
         max_processes: Some(d.max_processes.unwrap_or(0) + 1),
         ..d

@@ -612,6 +612,7 @@ impl Sandbox for RecordingContainer {
             limits: Limits::default(),
             env: BTreeMap::new(),
             unconfined_commands: false,
+            network_allowed: false,
         }
     }
     fn resolve(&self, _: &RuntimeSpec) -> Result<ResolvedRuntime, SandboxError> {
