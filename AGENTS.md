@@ -216,6 +216,12 @@ hooks and gates.
 - **The stage engine records, stages do not.** A stage does its work and
   reports what it did; cancel, budget, skipping, timing and the run record
   are the engine's.
+- **Model work runs batched, on every card.** Inference over many prompts
+  (exams, gates, sampling, generation) keeps the server's decode slots full
+  by asking as many requests at once as it has slots, never one at a time;
+  training runs with the largest micro-batch the card holds. Independent work
+  is split across every available GPU. A sequential path exists only where
+  the order of answers is the thing measured, and it says so.
 
 ### Two questions before adding anything
 
