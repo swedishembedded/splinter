@@ -389,6 +389,7 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
                 max_repeated_results: agentic.max_repeated_results,
             },
             deadline: st.practice.deadline,
+            harness: None,
             cancel: run.cancel_token(),
         },
     )?;

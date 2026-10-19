@@ -248,6 +248,40 @@ audit reports a command's mention of a path outside the tree by what came of it:
 refused) and `outside_workspace_absent` (no such path, or nothing returned); all
 three still fail the audit, and the stage counts them by kind.
 
+## Improving a harness
+
+The agent loop is not the only way to solve a repository task: a sven harness
+is a programmable sequence of model turns, tool calls, verifications and
+retries, written as a YAML document. `solve TASKSET --harness FILE` runs such a
+document on each workspace task in place of the agent loop - in the same fresh
+copy of the task's snapshot, with the same confinement - and stores the attempts
+as experiences, so `verify` grades them and `experiences compare` sets them
+against another arm exactly as it does for the agent loop. The document may
+declare an input `task` (a string) to receive the task's instruction.
+
+`harness optimise` automates the comparison across many candidates:
+
+```sh
+splinter harness optimise TASKSET-ID --baseline harness.yaml --space space.yaml \
+    --evaluations 12 --attempts 2 --strategy annealing --search-seed "$SEED"
+```
+
+The space lists knobs, each a `path` into the document and the `choices` it may
+take (`[limits, max_model_turns]` with `[4, 6, 8]`, or a step's prompt with
+alternatives); a candidate is the baseline with a few knobs changed. The search
+is sven's (best-of-N or simulated annealing) and follows the share of tasks the
+candidate solved, which guides and never decides. Each candidate is run on the
+whole task set, its attempts verified by the tasks' own verifiers, and compared
+with the baseline's attempts, a family counted once. A candidate is promoted
+only if no family got worse and the one-sided sign test over families is below
+`--alpha`; one that regressed a family is rejected whatever its totals, and one
+that merely did not regress is inconclusive. The first evaluation is the
+baseline against its own arm, a replicate that shows how far two identical runs
+differ. A promotion stores the candidate document with its evidence and the
+experience sets behind it and moves the `harness/champion` pointer, whose
+history is the lineage of champions. `--search-seed` has no default: the same
+seed draws the same candidates.
+
 ## Learning to think like a person
 
 ```bash

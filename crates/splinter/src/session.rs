@@ -51,6 +51,7 @@ use crate::cli::{
     Global, JudgeCommand, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
 };
 use crate::exam_session;
+use crate::harness_session;
 use crate::learn_output;
 use crate::learn_request::learn_request;
 use crate::output::{self, emit, shell_words};
@@ -353,6 +354,9 @@ impl Session {
                 })?;
                 emit(json, &measured);
             }
+            Command::Solve(args) if args.harness.is_some() => {
+                return harness_session::solve(ctx, json, &args)
+            }
             Command::Solve(args) => {
                 let set = resolve_task_set(ctx, &args.task_set)?;
                 let arguments = json!({ "task_set": set, "solver": args.solver });
@@ -361,6 +365,7 @@ impl Session {
                 })?;
                 emit(json, &solved);
             }
+            Command::Harness(command) => return harness_session::harness(ctx, json, command),
             Command::Verify(args) => {
                 let set = resolve_set(ctx, &args.experience_set)?;
                 let judge = args

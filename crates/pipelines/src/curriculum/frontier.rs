@@ -365,6 +365,7 @@ pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, 
             system: None,
             work: splinter_agent::work::WorkProtocol::default(),
             deadline: request.deadline,
+            harness: None,
             cancel: request.cancel.clone(),
         },
     )?;

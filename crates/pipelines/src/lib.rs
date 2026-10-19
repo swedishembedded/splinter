@@ -77,6 +77,7 @@ pub mod experiment;
 pub mod family;
 pub mod graded;
 pub mod grouping;
+pub mod harness_opt;
 pub mod index;
 pub mod judge;
 pub mod judging;

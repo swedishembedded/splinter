@@ -99,6 +99,7 @@ fn solve_with(test: &str, reference: ModelRef, width: usize) -> (usize, Vec<Stri
             system: None,
             work: splinter_agent::work::WorkProtocol::default(),
             deadline: None,
+            harness: None,
             cancel: CancelToken::new(),
         },
     )
@@ -175,6 +176,7 @@ fn every_solved_attempt_keeps_the_facts_the_experience_cannot() {
             system: None,
             work: splinter_agent::work::WorkProtocol::default(),
             deadline: None,
+            harness: None,
             cancel: CancelToken::new(),
         },
     )

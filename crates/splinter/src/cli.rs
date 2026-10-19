@@ -110,6 +110,11 @@ pub enum Command {
     Tasks(TasksCommand),
     /// Solve every task of a task set, each in the environment it records.
     Solve(SolveArgs),
+    /// Improve a sven harness: candidates are run on a frozen task set,
+    /// verified, compared with the baseline, and promoted only on a verified
+    /// improvement with no regression.
+    #[command(subcommand)]
+    Harness(HarnessCommand),
     /// Append verdicts to an experience set (re-grades without re-running).
     Verify(VerifyArgs),
     /// Critique the failed experiences of a set and retry them with it.
@@ -423,6 +428,11 @@ pub struct SolveArgs {
     /// How the frontier is measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,
+    /// Run this sven harness document on each workspace task in place of the
+    /// conversational agent loop; the attempts are verified and compared
+    /// like any other (`experiences compare`).
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["frontier", "teacher"])]
+    pub harness: Option<PathBuf>,
 }
 
 /// `verify`.
@@ -740,6 +750,7 @@ mod consolidate;
 mod exam;
 mod gate;
 mod global;
+mod harness;
 mod learn;
 mod practice;
 mod state;
@@ -749,6 +760,7 @@ pub use consolidate::ConsolidateArgs;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;
 pub use global::Global;
+pub use harness::{HarnessCommand, StrategyArg};
 pub use learn::LearnArgs;
 pub use practice::PracticeArgs;
 pub use state::{RunsCommand, StateCommand};

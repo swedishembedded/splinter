@@ -55,7 +55,7 @@ use crate::curriculum::policy_label;
 use crate::dialogue::{teacher_instruction, Student, DIALOGUE_TURNS};
 use crate::learn::PolicyUsed;
 use crate::tasks::remaining;
-use crate::workspace_solve::{attempt_seed, solve_attempt, WorkspaceInputs};
+use crate::workspace_solve::{attempt_seed, solve_attempt, solve_harness_attempt, WorkspaceInputs};
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::concurrency::fan_out;
 use splinter_orchestrator::context::Context;
@@ -142,6 +142,11 @@ pub struct SolveRequest<'a> {
     /// checks and the bounds on tool calls. Tasks in other environments
     /// ignore it.
     pub work: WorkProtocol,
+    /// A sven harness document run in place of the conversational agent loop
+    /// on a workspace task ([`splinter_agent::harness_work`]); `work` is not
+    /// used then, the document has its own steps and bounds. Tasks in other
+    /// environments ignore it.
+    pub harness: Option<&'a str>,
     /// No solve starts after this, and none runs past it.
     pub deadline: Option<Instant>,
     /// Stops the stage.
@@ -184,6 +189,7 @@ pub fn solve_set(
             system: None,
             work: harness_protocol(),
             deadline,
+            harness: None,
             cancel: cancel.clone(),
         },
     )
@@ -478,7 +484,12 @@ async fn attempt_once(
         prompt,
     } = planned;
     if let (ResolvedEnvironment::Workspace(env), Some(inputs)) = (environment, workspace) {
-        let solved = solve_attempt(task, env, inputs, model, options, &request.work).await;
+        let solved = match request.harness {
+            Some(harness) => {
+                solve_harness_attempt(task, env, inputs, harness, model, options).await
+            }
+            None => solve_attempt(task, env, inputs, model, options, &request.work).await,
+        };
         return Attempted::Solved(solved.map(Box::new));
     }
     let solved = if *dialogue {

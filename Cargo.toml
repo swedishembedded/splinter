@@ -83,6 +83,8 @@ schemars = { version = "1", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 # `float_roundtrip`: a stored document is checked against its address on read, so
 # a measured number must parse back to the very same float it was written as.
+# The harness optimiser edits sven harness documents (YAML); sven already uses this crate.
+serde_yaml = "0.9"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"
 tempfile = "3"

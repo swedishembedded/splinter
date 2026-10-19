@@ -138,6 +138,7 @@ pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, Orches
             system: request.system,
             work: splinter_agent::work::WorkProtocol::default(),
             deadline: request.deadline,
+            harness: None,
             cancel: request.cancel.clone(),
         },
     )?;

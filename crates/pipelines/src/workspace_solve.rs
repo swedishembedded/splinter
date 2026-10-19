@@ -20,6 +20,7 @@
 use splinter_agent::solve::{Model, Solution, SolveError, SolveOptions};
 use std::time::Instant;
 
+use splinter_agent::harness_work::solve_harness_in_workspace;
 use splinter_agent::work::{solve_in_workspace, WorkOptions, WorkProtocol};
 use splinter_core::digest::Digest;
 use splinter_core::experience::Task;
@@ -92,6 +93,31 @@ pub(crate) async fn solve_attempt(
         model.provider.clone(),
         WorkOptions::new(options),
         protocol,
+    )
+    .await?;
+    let report = solved.report.attempt_report(started.elapsed());
+    Ok((solved.solution, report))
+}
+
+/// One attempt at `task` by the sven harness `harness` in place of the agent
+/// loop: [`solve_attempt`]'s result for the same environment, so the attempt
+/// is verified and stored as any other.
+pub(crate) async fn solve_harness_attempt(
+    task: &Task,
+    env: &WorkspaceEnvironment,
+    inputs: &WorkspaceInputs,
+    harness: &str,
+    model: &Model,
+    options: SolveOptions,
+) -> Result<(Solution, AttemptReport), SolveError> {
+    let started = Instant::now();
+    let solved = solve_harness_in_workspace(
+        task,
+        env,
+        &inputs.archive,
+        harness,
+        model.provider.clone(),
+        WorkOptions::new(options),
     )
     .await?;
     let report = solved.report.attempt_report(started.elapsed());

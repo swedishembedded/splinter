@@ -30,6 +30,8 @@ mod doctor_output;
 mod exam_output;
 mod exam_session;
 mod experiment_output;
+mod harness_output;
+mod harness_session;
 mod learn_output;
 mod learn_request;
 mod lineage_output;

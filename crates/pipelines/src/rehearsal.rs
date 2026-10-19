@@ -280,6 +280,7 @@ pub fn rehearse_on(
             system: None,
             work: splinter_agent::work::WorkProtocol::default(),
             deadline: request.deadline,
+            harness: None,
             cancel: request.cancel.clone(),
         },
     )?;

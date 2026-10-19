@@ -766,4 +766,5 @@ fn abstentions_are_taken_from_the_records_given_passages() {
 
 mod absorb;
 mod flags;
+mod harness;
 mod measure;

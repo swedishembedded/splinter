@@ -479,6 +479,7 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             system: system.as_deref(),
             work: splinter_agent::work::WorkProtocol::default(),
             deadline: st.stage_deadlines.attempts,
+            harness: None,
             cancel: run.cancel_token(),
         },
     )?;
