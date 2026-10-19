@@ -92,6 +92,7 @@ pub mod raft;
 pub mod rehearsal;
 pub mod release;
 pub mod rerank;
+pub mod improve;
 pub mod reserve;
 pub mod retrieval;
 pub mod router;
