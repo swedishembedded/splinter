@@ -103,6 +103,9 @@ impl Loader for ServedLoader {
         // its default, every model pulled on the machine).
         let no_store = work.path().join("no-store");
         std::fs::create_dir(&no_store)?;
+        // The server's own output, kept beside its directory once it is gone.
+        let log = work.path().with_extension("log");
+        eprintln!("brain serve for this model logs to {}", log.display());
         let launch = Launch {
             binary: &self.brain,
             work: work.path(),
@@ -113,6 +116,7 @@ impl Loader for ServedLoader {
             startup: STARTUP,
             device: self.device.as_deref(),
             max_batch: Some(self.slots),
+            log: Some(&log),
         };
         let server =
             brain_server::start(&launch, &CancelToken::default()).map_err(|e| match e {

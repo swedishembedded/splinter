@@ -12,7 +12,7 @@
 //! check and an examination that batches its items both run their models
 //! through it.
 
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -75,6 +75,9 @@ pub struct Launch<'a> {
     /// Sequences it decodes together (`--qwen-max-batch`);
     /// [`DEFAULT_SERVE_SLOTS`] when `None`.
     pub max_batch: Option<u32>,
+    /// A file every line the server writes is appended to, for an operator
+    /// to read after the fact; only the last lines are kept otherwise.
+    pub log: Option<&'a Path>,
 }
 
 impl Launch<'_> {
@@ -180,7 +183,17 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
         .map_err(|e| {
             Failure::Unmeasured(format!("{} could not start: {e}", launch.binary.display()))
         })?;
-    let lines = forward_lines(&mut child);
+    let log = match launch.log {
+        Some(path) => Some(
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .map_err(|e| Failure::Unmeasured(format!("{}: {e}", path.display())))?,
+        ),
+        None => None,
+    };
+    let lines = forward_lines(&mut child, log);
     let mut running = Running(child);
 
     let deadline = Instant::now() + launch.startup;
@@ -267,15 +280,26 @@ pub fn recent_output(lines: &Receiver<String>, kept: &mut Vec<String>) -> String
     kept.join(" | ")
 }
 
-/// Every line the child writes, from stdout and stderr alike.
-fn forward_lines(child: &mut Child) -> Receiver<String> {
+/// Every line the child writes, from stdout and stderr alike, each also
+/// appended to `log` when one is given.
+fn forward_lines(child: &mut Child, log: Option<std::fs::File>) -> Receiver<String> {
     let (tx, rx) = channel();
+    let log = log.map(|file| std::sync::Arc::new(std::sync::Mutex::new(file)));
     let spawn = |stream: Option<Box<dyn Read + Send>>| {
         if let Some(stream) = stream {
             let tx = tx.clone();
+            let log = log.clone();
             std::thread::spawn(move || {
                 for line in BufReader::new(stream).lines() {
                     let Ok(line) = line else { break };
+                    if let Some(log) = &log {
+                        let mut file = log
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        // A log that cannot be written loses the line there
+                        // only; the line still reaches the caller.
+                        let _ = writeln!(file, "{line}");
+                    }
                     if tx.send(line).is_err() {
                         break;
                     }

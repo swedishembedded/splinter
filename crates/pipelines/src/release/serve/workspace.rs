@@ -103,6 +103,7 @@ fn serve_and_work(
             startup: request.startup,
             device: None,
             max_batch: None,
+            log: None,
         },
         cancel,
     )?;
