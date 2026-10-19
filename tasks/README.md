@@ -23,11 +23,8 @@ tasks/<family>/
 The interesting property of these tasks is that they cannot be solved by
 reading. That has to be a fact about the system, not a hope about the agent.
 
-The plan was to enforce it with a namespace sandbox, mounting only the
-workspace. **That is not available on every machine this has to run on** - user
-namespaces are denied in the container this was built in, there is no
-`bubblewrap`, and no Docker daemon - and a boundary that only exists on some
-machines is not a boundary.
+A namespace sandbox cannot be assumed: user namespaces are denied in some containers, `bubblewrap` and a Docker
+daemon are not always present, and a boundary that only exists on some machines is not a boundary.
 
 So the property is arranged structurally instead: **during an episode, the
 answer does not exist anywhere on the filesystem.**

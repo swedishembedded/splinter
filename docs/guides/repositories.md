@@ -1,0 +1,114 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
+
+# Learn a repository from its own tests
+
+Use `splinter practice` to teach the policy a codebase. The project's own tests
+are the verifier: faults are seeded into the code, and a task exists only where the
+tests catch the fault every time. The agent works in a copy of the tree and is graded
+by tests it never sees.
+
+The agent runs on [sven](https://swedishembedded.com/docs/sven); the commands it
+runs are bounded as described under [Confinement](#confinement). Read
+[limitations](../concepts/limitations.md) before pointing it at code you do not trust.
+
+
+```bash
+splinter practice ./shop --rev v1.4
+splinter practice ./shop --rev HEAD --exam-families 2 --k 4 --no-release \
+    --test-command python3 -m pytest -x
+```
+
+`practice` learns a codebase from its own tests, as one recorded run. The
+repository is a git work tree or bare repository and `--rev` (default `HEAD`)
+any revision git resolves to a commit; the tracked files of that commit are
+archived as the snapshot every task is pinned to (a checked-out revision with
+uncommitted changes is refused unless `--allow-dirty`). Its stages, in
+order:
+
+| Stage | What it does |
+|---|---|
+| `policy` | resolves `policy:default` once |
+| `snapshot` | archives the revision; the same tree is the same snapshot |
+| `profile` | finds how the tests are run (`python3 -m unittest` for a Python project with a `tests` directory, `cargo test --offline` for a Cargo project; `--test-command` and `--file` name them otherwise) and runs the suite twice on a clean copy: a red or flaky baseline stops the run |
+| `tasks` | seeds faults by code in the files under test and keeps a task only where the project's own tests catch it every time, the change reversed makes its check pass, and the catching tests live in files of their own, which are taken out of the tree the agent is given; a task the store already holds, or a request that repeats one made for the same file, is not made again, so a second run over the same snapshot ends here |
+| `reserve` | sets the exam's families aside (a family is the file a fault was seeded in) by a stable hash of their names, before any attempt; `--exam-families N` (default a quarter), and a family an earlier run reserved stays the exam |
+| `solve` | the policy attempts each remaining task `--k` times as an agent in its own copy of the tree, with sven's file, search and shell tools, up to `--follow-ups` more turns when the visible checks stay red and `--max-tool-calls` calls; each attempt draws from a seed that is a function of the task and the attempt |
+| `verify` | applies each patch to a clean copy, lays the hidden tests over it and runs the project's checks; an exposure audit fails any attempt whose trajectory names a hidden path, quotes the hidden tests or names the state root, whatever its patch did, and the stage counts those by kind |
+| `teach` | only with `--teacher`: each task no graded attempt solved is given to the teacher, which is `reference` (the task's own reference change, the inverse of the seeded fault, replayed as an agent's actions through sven's tools: read the file, edit it by the patch's hunks) or a model (`remote:`/`local:`) that solves the task as an agent. Either is graded by the same workspace verifier and exposure audit as the policy's attempts and never grades itself; the exam's tasks are never given to it. A demonstration names the file without searching for it |
+| `frontier` | keeps the tasks the policy solves sometimes (pass@k), and with a teacher the never-solved tasks whose demonstration was verified |
+| `dataset` | the passing attempts, action by action (`sft-step`), with the tools the agent was offered (an action a labeller marked good is also admitted from an experience nobody verified or whose verdict failed, unless `--control outcome-verified` is given; the manifest records it); `--max-block TOKENS` leaves out and counts records longer than the card fits; the dataset is checked to hold no family of the exam |
+| `train` | a candidate from the champion with earlier releases' records replayed (`--replay none|uniform|balanced`; `--rebuild` trains a fresh adapter on the base from every earlier release's records and the new ones instead of continuing the champion) |
+| `release` | the gate, over the exam this run reserved (`--no-release` stops at the candidate): the champion and the candidate attempt the exam's tasks as agents, under the bounds and seeds of `solve`, graded as `verify` grades; paired outcomes are counted by family in the sign test; each earlier release is held to the exam of its own run; the anchor suite is held (a frozen suite with no coding-agent task is decided on the tasks it holds, and the report says it holds none); the candidate is served by `brain serve --adapter-manifest` and must be graded as it was in-process on at least three quarters of a sample of the exam. A blocked candidate is not released and the run stops with the reason of each check that failed; `practice` gives the gate the bounds it solved under, and `splinter release` on such a candidate probes with the default ones |
+
+Where no container is configured, the commands the agent works with run on
+the host, bounded but not isolated, and every environment record says
+`isolation: none`; naming a docker client and a digest-pinned image
+(`SPLINTER_DOCKER`, `SPLINTER_WORKSPACE_IMAGE`) runs them in a container with
+no network instead. `SPLINTER_CARGO_HOME` gives the commands a
+cargo home to build offline from, and `SPLINTER_WORKSPACE_SCRATCH` says where
+trees are laid out. An attempt whose trajectory shows the hidden tests,
+and an attempt the harness could not carry out, are set aside and counted in the
+gate's report; neither is in a denominator. A release moves the alias and
+rewrites `<state>/serving/<alias>.json`, the manifest `brain serve
+--adapter-manifest` follows (a rollback repoints it); an alias at a full
+checkpoint has no adapter to name, so its manifest is withdrawn. A candidate the
+gate blocks, or cannot measure, is not released, and the run exits 1 with the
+reason. `--test-command` takes the rest of the command line, so it comes last.
+
+A task the policy never solves is not dropped when a teacher is named (`splinter practice
+--teacher reference`, or `--teacher remote:<provider>/<model>`): the task's own reference change
+is replayed as the actions of an agent through sven's real tools (read the file, edit it by the
+patch's hunks), or a stronger model solves it as an agent. Either is graded by the same
+workspace verifier and exposure audit as the policy's attempts and never grades itself, and the
+demonstration teaches what to do once the place is known, not how to find it. `--replay
+none|uniform|balanced` chooses what of the earlier releases' records is replayed, and
+`--rebuild` trains a fresh adapter on the base from all of them instead of continuing the
+champion.
+
+## Confinement
+
+On the host the kernel confines what the agent runs: a command (the solver's
+shell, the checks) reaches the system read only, its own tree and a private
+directory, and nothing else of the filesystem (no home directory, no state
+root with the hidden tests, no sibling attempt's tree); it cannot connect
+anywhere, loopback included (Landlock denies TCP, a seccomp filter refuses
+every internet socket, UDP too); and its environment holds no variable named
+like a secret (key, token, password, auth socket), even when an allowlist
+names one. Without a kernel that can do this (Landlock ABI 4) the command is
+refused, never run open. `--allow-workspace-network` opens the network,
+`--allow-unconfined-workspace` the filesystem on a kernel that cannot confine,
+and `--workspace-max-processes N` bounds the processes and threads of a
+command; each is part of the environment record, so a task generated without
+it names another environment. The agent's own file and search tools are
+confined to the attempt's tree by sven's project root, for its delegated
+children too. A command, a code call of `run_code` included, runs in a private user and pid
+namespace with a `/proc` of its own, so no other process of the host is visible to it
+(Landlock alone already refuses it another process's environment); a kernel that cannot
+make one refuses the command. The exposure
+audit reports a command's mention of a path outside the tree by what came of it:
+`outside_workspace` (something came back), `outside_workspace_denied` (the sandbox
+refused) and `outside_workspace_absent` (no such path, or nothing returned); all
+three still fail the audit, and the stage counts them by kind.
+
+## Generations of a coding policy
+
+`splinter generation run REPO --experiment NAME --plan PLAN.toml --generation N` measures the
+champion on every protected task (the exam of every earlier generation), runs `practice` to a
+candidate, measures both on the protected tasks and the new exam at equal settings, rejects the
+candidate when a protected family falls by more than `--max-family-drop`, the mean falls by more
+than `--max-mean-drop` or it gains no more than `--min-new-gain` on the new exam, and otherwise
+releases it through the gate. Every generation, accepted or not, is in the experiment's ledger.
+`--replay none|uniform|balanced|failure-targeted` and `--rebuild` choose how the earlier
+experience is carried forward. `splinter generation matrix --experiment NAME` prints the ledger
+and the full retention matrix of the lineage: the base as generation 0 and every generation on
+every protected task, with ACC, BWT, forgetting, forward transfer and learning gain.
+
+## Related
+
+- Check a plan of which repositories a lineage trains on and which are sealed as the final
+  exam with `splinter experiment check`; the frozen repositories this project ships are
+  described in [Task families](../reference/tasks.md#repository-families).
+- Import tasks written for the Harbor benchmark format, or export these as Harbor tasks:
+  [Harbor tasks and trials](harbor-tasks.md).
+- Try other agent loops on the same tasks: [Improve a harness](improving-a-harness.md).

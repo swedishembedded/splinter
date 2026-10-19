@@ -1,3 +1,6 @@
+# Generated documentation and its PDF (make docs).
+/build/
+
 # Build output. A local build normally goes to a shared target directory
 # chosen by `make deps/local`; this covers a build without one.
 /target/

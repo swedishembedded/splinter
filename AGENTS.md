@@ -92,7 +92,7 @@ the decision about when and on what to use it.
 | Outstanding work | `.agents/roadmap/` |
 | Research and design notes that inform the roadmap | `.agents/research/` |
 | Research papers (finished, citable writing) | `papers/<topic>/`, LaTeX, builds with `make` |
-| User-facing documentation | `README.md` |
+| User-facing documentation | `docs/` (the manual; `docs/manifest.yaml` lists and orders its pages), with `README.md` as the overview. The command reference is generated: `splinter cli-reference` |
 
 Code never cites a `docs/` or `.agents/` path (a gate enforces it): state the
 fact inline instead.

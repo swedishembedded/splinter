@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: CC-BY-4.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The published manual. The navigation is the one source of order for the website
+# sidebar and the PDF (make docs/pdf). Sample and example READMEs stay next to their
+# code and are included from here.
+schema: 1
+project: splinter
+title: Splinter
+description: Turns agent experience into better local models, released only on held-out evidence.
+repository: https://github.com/mkschreder/splinter
+branch: main
+home: docs/index.md
+navigation:
+  - title: Getting started
+    pages:
+      - docs/getting-started/installation.md
+      - docs/getting-started/requirements.md
+      - docs/getting-started/first-learning-run.md
+      - docs/getting-started/configuration.md
+  - title: Guides
+    pages:
+      - docs/guides/documents.md
+      - docs/guides/repositories.md
+      - docs/guides/agent-sessions.md
+      - docs/guides/personas.md
+      - docs/guides/training.md
+      - docs/guides/evaluation.md
+      - docs/guides/releases.md
+      - docs/guides/improving-a-harness.md
+      - docs/guides/harbor-tasks.md
+  - title: Concepts
+    pages:
+      - docs/concepts/architecture.md
+      - docs/concepts/learning-loop.md
+      - docs/concepts/experience.md
+      - docs/concepts/verification.md
+      - docs/concepts/provenance.md
+      - docs/concepts/release-policy.md
+      - docs/concepts/limitations.md
+  - title: Reference
+    pages:
+      - docs/reference/cli.md
+      - docs/reference/output.md
+      - docs/reference/tasks.md
+      - docs/reference/datasets.md
+      - docs/reference/evaluation.md
+      - docs/reference/storage.md
+      - docs/reference/sdk.md
+  - title: Examples
+    pages:
+      - docs/examples/index.md
+      - source: examples/first-run/README.md
+        path: examples/first-run.md
+        title: First run
+      - source: tasks/README.md
+        path: examples/tasks.md
+        title: Repository task families
+      - source: samples/absorb/README.md
+        path: examples/absorb.md
+        title: absorb
+      - source: samples/absorb-story/README.md
+        path: examples/absorb-story.md
+        title: absorb-story
+      - source: samples/generations/README.md
+        path: examples/generations.md
+        title: generations
+      - source: samples/jefferson/README.md
+        path: examples/jefferson.md
+        title: jefferson
+      - source: samples/adams/README.md
+        path: examples/adams.md
+        title: adams
+      - source: samples/synthetic-author/README.md
+        path: examples/synthetic-author.md
+        title: synthetic-author
+      - source: samples/tool-syntax/README.md
+        path: examples/tool-syntax.md
+        title: tool-syntax
+      - source: samples/agent/loop/README.md
+        path: examples/agent-loop.md
+        title: agent-loop
+      - source: samples/health/README.md
+        path: examples/health.md
+        title: health
+      - source: samples/lifecourse/README.md
+        path: examples/lifecourse.md
+        title: lifecourse
+      - source: samples/persona-chat/README.md
+        path: examples/persona-chat.md
+        title: persona-chat
+      - source: samples/voice-loop/README.md
+        path: examples/voice-loop.md
+        title: voice-loop
+  - title: Contributing
+    pages:
+      - docs/contributing/build.md
+      - docs/contributing/test.md
+      - docs/contributing/gates.md
+      - docs/contributing/documentation.md

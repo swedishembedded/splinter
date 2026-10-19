@@ -192,6 +192,46 @@ samples/tool-syntax/audit:
 	$(CARGO) run $(PROFILE) -p splinter-tool-syntax -- audit
 
 # ---------------------------------------------------------------------------
+##@ Documentation
+## The manual under docs/, published as Markdown pages and a PDF by the pinned publisher.
+
+NODE ?= node
+DOCS_PUBLISHER ?= tools/docs-publisher/docs-publisher.mjs
+DOCS_OUT := build/docs
+DOCS_PDF := build/splinter-manual.pdf
+# Every page whose commands the command-line grammar must accept: the manual, the
+# READMEs it includes, and the READMEs that introduce the repository and the command.
+DOCS_COMMAND_PAGES = $(shell find docs -name '*.md' | sort) README.md crates/splinter/README.md \
+	$(shell sed -n 's/^ *- source: //p' docs/manifest.yaml)
+
+# The pin is verified unless DOCS_PUBLISHER is overridden on the command line.
+_docs-publisher-pin:
+	@$(if $(filter command line,$(origin DOCS_PUBLISHER)),true,cd tools/docs-publisher && sha256sum -c docs-publisher.mjs.sha256 >/dev/null)
+
+## docs - default: docs/build
+docs: docs/build
+
+## docs/build - the documentation publication in build/docs (offline: compiles no Rust, loads no model)
+docs/build: _docs-publisher-pin
+	$(NODE) $(DOCS_PUBLISHER) build --root . --manifest docs/manifest.yaml --out $(DOCS_OUT)
+
+## docs/check - build twice and compare, check links and coverage, then the generated command reference and every command the manual shows against the built SPLINTER_BIN
+docs/check: _docs-publisher-pin docs/build
+	$(NODE) $(DOCS_PUBLISHER) check --root . --manifest docs/manifest.yaml
+	@test -x $(SPLINTER_BIN) || { echo "docs/check: $(SPLINTER_BIN) is missing; build it with: make build/crate/splinter" >&2; exit 1; }
+	$(SPLINTER_BIN) cli-reference --check docs/reference/cli.md
+	$(SPLINTER_BIN) cli-reference --check-invocations $(DOCS_COMMAND_PAGES)
+	python3 scripts/docs/check-site-links.py $(DOCS_OUT) $$( (git ls-files '*.md'; find docs -name '*.md') | grep -v -e '^papers/' -e '^\.agents/' | sort -u)
+
+## docs/pdf - the manual as one PDF in the order of docs/manifest.yaml (needs pandoc and xelatex)
+docs/pdf: docs/build
+	python3 scripts/docs/pdf.py $(DOCS_OUT) $(DOCS_PDF)
+
+## docs/clean - remove the generated documentation (build/docs and the PDF)
+docs/clean:
+	rm -rf $(DOCS_OUT) $(DOCS_PDF)
+
+# ---------------------------------------------------------------------------
 ##@ Lease kit
 ## Wrappers for the shared leased node: build slots, the GPU lock, lane worktrees.
 
@@ -304,4 +344,5 @@ help:
 	hooks hooks/install \
 	qualify qualify/list qualify/test qualify/run \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
-	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit
+	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit \
+	docs docs/build docs/check docs/pdf docs/clean _docs-publisher-pin
