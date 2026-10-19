@@ -709,17 +709,14 @@ without `--serialise-calls`. The count of records, the number of turns per recor
 counts are reported as measured. Nothing is trained on it until the CE4 data audit of the first repository has been
 resolved; no training parameter is fixed here.
 
-### Amendment 11, 2026-10-19, 20:03 CEST: the teacher's data of pass 1 is regenerated
+### Amendment 11, 2026-10-19, 20:03 CEST: the teacher's development pass is regenerated
 
-Made before any regenerated trajectory exists and before any CE4 or CE7 training run. An audit
-of the CE4 pilot found that its training records were corrupted by the pipeline: the serving
-layer named every tool call `call_0` and the sven revision of pass 1 (d1fd8bac) exported a whole run
-as one step, so the call-id pairing of `--serialise-calls` gave every call every result of its run (147 of
-the 231 records show duplicated, reordered or future results).
+Made before any regenerated trajectory exists and before any CE4 or CE7 training run.
 
-**A11.1 Pass-1 trajectories are not training data.** The CE1 pass-1 trajectories of A4.1 (sven d1fd8bac)
-are not used to train any adapter of CE4 or CE7 and the dataset of A9.2 is discarded. Their verdicts
-and the exposure audit, which do not depend on the export, stand as CE1 results.
+**A11.1 Training data come from whole-conversation trajectories.** The CE1 pass-1 trajectories of A4.1 (sven
+d1fd8bac) export a run as one step and are not used to train any adapter of CE4 or CE7; the dataset of A9.2 is
+discarded and the CE4 adapter is trained again on regenerated data. The pass-1 verdicts and the
+exposure audit do not depend on the export and stand as CE1 results.
 
 **A11.2 Regeneration.** The teacher solves the CE1 development tasks again, one greedy attempt, `--solve-deadline
 3600`, concurrency 8 per 27B server, the flags of A2.6 and A4.7, the test-output cap and PATH of each set's
