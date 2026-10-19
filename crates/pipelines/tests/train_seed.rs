@@ -86,6 +86,7 @@ fn trained(test: &str, seed: Option<u64>) -> (Candidate, Vec<(String, u64)>, usi
         rehearsal: None,
         from: policy(),
         replay_fraction: DEFAULT_REPLAY_FRACTION,
+        replay_policy: Default::default(),
         steps: Some(3),
         rank: 4,
         beta: None,

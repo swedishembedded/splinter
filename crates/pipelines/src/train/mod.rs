@@ -80,7 +80,7 @@ use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::training::{Regime, ReplaySample, ReplaySource};
 use splinter_data::holdout::split_dataset_file;
-use splinter_data::{replay_sample, Format, Fraction, StoredDataset};
+use splinter_data::{select_replay, Format, Fraction, ReplayPolicy, StoredDataset};
 use splinter_model::train::{
     fine_tune, train_preference, FineTune, PreferenceTune, Trained, TrainedPreference,
 };
@@ -152,6 +152,11 @@ pub fn regime_of(format: Format) -> Option<Regime> {
 /// base and the card, not on the data.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 pub struct Tuning {
+    /// Start a fresh adapter on the frozen base instead of continuing the
+    /// release the reference names, which stays the candidate's parent: a
+    /// rebuild from the base on all the experience given, not a step on
+    /// from the champion.
+    pub restart: bool,
     /// Hold the frozen base at bf16, half the bytes of fp32: what lets a 7B
     /// base train on one 24 GiB card. Supervised runs only; brain's
     /// preference trainer holds its base at its own tier.
@@ -207,6 +212,9 @@ pub struct TrainRequest {
     pub from: ModelRef,
     /// The fraction of each earlier release's training records replayed.
     pub replay_fraction: f64,
+    /// Which of them: how the replay is spread over the capabilities the
+    /// earlier records are of.
+    pub replay_policy: ReplayPolicy,
     /// The step budget; `None` is [`auto_steps`] of the datasets' examples.
     pub steps: Option<u32>,
     /// LoRA rank of a new adapter.
@@ -592,7 +600,13 @@ pub(crate) fn plan_training(
     std::fs::create_dir_all(&dir).map_err(io(&dir))?;
     let seed = seeds::resolve(ctx, request.tuning.seed);
     let replay = match (&pin, regime) {
-        (Some(pin), Regime::Sft) => Some(draw_replay(ctx, &pin.release, fraction, &dir, seed)?),
+        (Some(pin), Regime::Sft) => Some(draw_replay(
+            ctx,
+            &pin.release,
+            (fraction, &request.replay_policy),
+            &dir,
+            seed,
+        )?),
         _ => None,
     };
     let replay_share = replay
@@ -627,7 +641,11 @@ pub(crate) fn plan_training(
         dir: dir.clone(),
         datasets,
         base: weights.base.clone(),
-        continue_from: weights.adapter.clone(),
+        continue_from: if request.tuning.restart {
+            None
+        } else {
+            weights.adapter.clone()
+        },
         parent: pin.map(|p| p.release),
         replay_file: replay
             .as_ref()
@@ -712,7 +730,7 @@ pub fn train(
 fn draw_replay(
     ctx: &Context,
     release: &ReleaseId,
-    fraction: Fraction,
+    (fraction, policy): (Fraction, &ReplayPolicy),
     dir: &Path,
     seed: u64,
 ) -> Result<ReplaySample, OrchestratorError> {
@@ -724,21 +742,50 @@ fn draw_replay(
         records: 0,
         digest: None,
     };
-    let mut text = String::new();
-    for earlier in lineage.iter().rev() {
-        let datasets = earlier.manifest.datasets.clone();
-        if earlier.manifest.training.regime != Regime::Sft {
+    // Each release's training records, oldest release first.
+    let mut earlier = Vec::new();
+    for release in lineage.iter().rev() {
+        if release.manifest.training.regime != Regime::Sft {
             continue;
         }
+        let datasets = release.manifest.datasets.clone();
         let (trained_on, _held_out) = split_records(ctx, &datasets)?;
-        let picked = replay_sample(&trained_on, fraction, seed);
+        earlier.push((release.id.clone(), datasets, trained_on));
+    }
+    // Uniform draws from each release on its own; a policy that spreads the
+    // replay over capabilities draws from every release's records at once,
+    // since a capability is not one release's.
+    let picked: Vec<Vec<usize>> = if *policy == ReplayPolicy::Uniform {
+        earlier
+            .iter()
+            .map(|(_, _, records)| select_replay(records, policy, fraction, seed))
+            .collect()
+    } else {
+        let pooled: Vec<&String> = earlier.iter().flat_map(|(_, _, r)| r.iter()).collect();
+        let chosen = select_replay(&pooled, policy, fraction, seed);
+        let mut per_release = Vec::with_capacity(earlier.len());
+        let mut start = 0;
+        for (_, _, records) in &earlier {
+            per_release.push(
+                chosen
+                    .iter()
+                    .filter(|i| (start..start + records.len()).contains(*i))
+                    .map(|i| i - start)
+                    .collect(),
+            );
+            start += records.len();
+        }
+        per_release
+    };
+    let mut text = String::new();
+    for ((id, datasets, trained_on), picked) in earlier.into_iter().zip(picked) {
         for &index in &picked {
             text.push_str(&trained_on[index]);
             text.push('\n');
         }
         sample.records += picked.len();
         sample.sources.push(ReplaySource {
-            release: earlier.id.clone(),
+            release: id,
             datasets,
             available: trained_on.len(),
             sampled: picked.len(),

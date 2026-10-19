@@ -282,6 +282,7 @@ fn a_train_with_a_rehearsal_mixes_it_in_at_its_share_and_monitors_on_it() {
         rehearsal,
         from: common::gate::policy(),
         replay_fraction: DEFAULT_REPLAY_FRACTION,
+        replay_policy: Default::default(),
         steps: None,
         rank: 4,
         beta: None,

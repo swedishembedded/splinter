@@ -733,7 +733,7 @@ pub use global::Global;
 pub use harbor::{HarborCommand, OracleArg};
 pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
 pub use learn::LearnArgs;
-pub use practice::PracticeArgs;
+pub use practice::{PracticeArgs, ReplayArg};
 pub use reference::CliReferenceArgs;
 pub use state::{RunsCommand, StateCommand};
 use train::positive_count;

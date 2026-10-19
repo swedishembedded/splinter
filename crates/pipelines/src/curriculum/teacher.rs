@@ -30,7 +30,7 @@ use std::time::Instant;
 use serde::Serialize;
 use splinter_agent::CancelToken;
 use splinter_store::experiences::{ExperienceSet, SetId};
-use splinter_store::tasks::{TaskSet, TaskSetId};
+use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use crate::curriculum::frontier::tally;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
@@ -102,12 +102,15 @@ pub fn untaught(ctx: &Context, task_set: &TaskSetId) -> Result<Taught, Orchestra
     })
 }
 
-/// Has `request.teacher` solve, open-book, every task of
-/// `request.task_set` that the student's graded attempts never solved, and
-/// grades each solve; see the module documentation.
-pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, OrchestratorError> {
-    let set = ctx.tasks().get_set(request.task_set)?;
-    let (members, name) = match request.attempts {
+/// The tasks of `task_set` the student's graded `attempts` never solved
+/// (every task when it made none), and the name of the set they make.
+pub(crate) fn never_solved(
+    ctx: &Context,
+    task_set: &TaskSetId,
+    attempts: Option<&SetId>,
+) -> Result<(Vec<TaskEntry>, String), OrchestratorError> {
+    let set = ctx.tasks().get_set(task_set)?;
+    Ok(match attempts {
         Some(attempts) => {
             let student = tally(ctx, attempts)?;
             let never_solved = set
@@ -121,11 +124,18 @@ pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, Orches
                 .collect();
             (
                 never_solved,
-                format!("never solved closed-book of {}", request.task_set),
+                format!("never solved closed-book of {task_set}"),
             )
         }
-        None => (set.members, format!("every task of {}", request.task_set)),
-    };
+        None => (set.members, format!("every task of {task_set}")),
+    })
+}
+
+/// Has `request.teacher` solve, open-book, every task of
+/// `request.task_set` that the student's graded attempts never solved, and
+/// grades each solve; see the module documentation.
+pub fn teach(ctx: &Context, request: &TeachRequest<'_>) -> Result<Taught, OrchestratorError> {
+    let (members, name) = never_solved(ctx, request.task_set, request.attempts)?;
     let task_set = ctx.tasks().put_set(&TaskSet { name, members })?;
     let solve = solve_tasks(
         ctx,

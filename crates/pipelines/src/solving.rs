@@ -41,8 +41,7 @@ use splinter_agent::work::WorkProtocol;
 use splinter_agent::{CancelToken, RunConclusion};
 use splinter_core::annotation::{Annotation, AnnotationBody, Producer};
 use splinter_core::digest::Digest;
-use splinter_core::experience::ExperienceId;
-use splinter_core::experience::{Provenance, Task};
+use splinter_core::experience::{ExperienceId, Provenance, Task};
 use splinter_core::outcome::AttemptReport;
 use splinter_eval::gate::AgenticConfig;
 use splinter_knowledge::material::teacher_material;
@@ -292,7 +291,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
             && Catalogue::builtin()
                 .get(&task.task.kind)
                 .is_some_and(|kind| kind.dialogue);
-        let prompt = if request.teacher {
+        let prompt = if request.teacher && workspace.is_none() {
             let material = teacher_material(&ctx.sources(), &task)?;
             if material.is_empty() {
                 report.skipped.push(skip(&entry.task, &NOTHING_TO_SHOW));

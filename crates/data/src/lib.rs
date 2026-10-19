@@ -96,7 +96,7 @@ pub use dataset::{
     manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest, Unchecked,
     EXPORT_FORMAT,
 };
-pub use replay::replay_sample;
+pub use replay::{replay_sample, select_replay, ReplayPolicy};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use trajectory::{projection_refusal, session_dialogue, Unprojectable};

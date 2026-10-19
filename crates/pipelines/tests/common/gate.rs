@@ -387,6 +387,7 @@ pub fn candidate_on(ctx: &Context, data: DatasetId, knows: &[&str]) -> (Candidat
             rehearsal: None,
             from: policy(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
+            replay_policy: Default::default(),
             steps: Some(1),
             rank: 4,
             beta: None,

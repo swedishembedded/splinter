@@ -36,13 +36,14 @@ use super::held::{held_tasks, keep_tasks};
 use super::report::{PracticeReport, Profiled, Snapshotted, TasksMade};
 use super::PracticeRequest;
 use crate::curriculum::frontier::select_frontier;
-use crate::curriculum::teacher::untaught;
+use crate::curriculum::repository_teacher::{teach_repository, TeachRepositoryRequest};
+use crate::curriculum::teacher::{untaught, Taught};
 use crate::datasets::{build, BuildRequest, ViewName, VoiceBuild};
 use crate::learn::PolicyUsed;
 use crate::release::exams::{self, ExamRecord};
 use crate::release::{release_recorded, ReleaseRequest};
 use crate::solving::{solve_tasks, SolveRequest};
-use crate::train::{train_recorded, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
+use crate::train::{train_recorded, Trainer, Tuning, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use crate::verify::{verify_set, Grading};
 use splinter_core::annotation::Strength;
 use splinter_eval::gate::GateConfig;
@@ -68,6 +69,8 @@ pub(super) struct PracticeState<'a> {
     /// Every family the exam is made of, this run's and earlier runs'.
     exam_families: BTreeSet<String>,
     attempts: Option<SetId>,
+    /// The teacher's graded demonstrations, when one was named.
+    taught: Option<Taught>,
     candidate: Option<String>,
 }
 
@@ -84,6 +87,7 @@ impl<'a> PracticeState<'a> {
             training: None,
             exam_families: BTreeSet::new(),
             attempts: None,
+            taught: None,
             candidate: None,
         }
     }
@@ -109,6 +113,7 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, PracticeState<'a>> {
         .then(FnStage::new("reserve", reserve_stage).ignoring_budget())
         .then(FnStage::new("solve", solve_stage))
         .then(FnStage::new("verify", verify_stage).ignoring_budget())
+        .then(FnStage::new("teach", teach_stage).when(|s| s.practice.request.teacher.is_some()))
         .then(FnStage::new("frontier", frontier_stage).ignoring_budget())
         .then(FnStage::new("dataset", dataset_stage).ignoring_budget())
         .then(FnStage::new("train", train_stage))
@@ -410,13 +415,49 @@ fn verify_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_
     Ok(StageEnd::done(summary))
 }
 
-/// Keeps the tasks the policy solves sometimes: no teacher is asked, since a
-/// change to a repository has no passage to show one.
+/// Has the teacher the request names demonstrate each task the policy never
+/// solved; the demonstrations are graded like the policy's attempts.
+fn teach_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
+    let (Some(tasks), Some(attempts), Some(teacher)) = (
+        st.training.as_ref(),
+        st.attempts.as_ref(),
+        st.practice.request.teacher.as_ref(),
+    ) else {
+        unreachable!("the teach stage follows the verify stage and is asked for a teacher")
+    };
+    let agentic = st.practice.request.agentic();
+    let taught = teach_repository(
+        ctx,
+        &TeachRepositoryRequest {
+            task_set: tasks,
+            attempts: Some(attempts),
+            teacher,
+            work: WorkProtocol {
+                follow_ups: agentic.follow_ups,
+                max_tool_calls: agentic.max_tool_calls,
+                max_repeated_results: agentic.max_repeated_results,
+            },
+            deadline: st.practice.deadline,
+            cancel: run.cancel_token(),
+        },
+    )?;
+    let summary = to_value(&taught)?;
+    st.report.teach = Some(taught.clone());
+    st.taught = Some(taught);
+    Ok(StageEnd::done(summary))
+}
+
+/// Keeps the tasks the policy solves sometimes, and the never-solved ones a
+/// teacher's verified demonstration answers.
 fn frontier_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
     let (Some(tasks), Some(solved)) = (st.training.as_ref(), st.report.solve.as_ref()) else {
         unreachable!("the frontier stage follows the solve stage")
     };
-    let kept = select_frontier(ctx, tasks, solved, &untaught(ctx, tasks)?)?;
+    let taught = match st.taught.take() {
+        Some(taught) => taught,
+        None => untaught(ctx, tasks)?,
+    };
+    let kept = select_frontier(ctx, tasks, solved, &taught)?;
     let summary = to_value(&kept)?;
     st.attempts = Some(kept.frontier_experience_set.clone());
     let distribution = kept.distribution;
@@ -499,23 +540,54 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
     })
 }
 
+/// The datasets the releases the policy descends from were trained on,
+/// oldest first: what a rebuild trains on beside the new records.
+fn accumulated_datasets(ctx: &Context) -> Result<Vec<String>, OrchestratorError> {
+    let Some(pin) = ctx.policy_pin(POLICY_DEFAULT)? else {
+        return Ok(Vec::new());
+    };
+    let mut lineage = ctx.releases().lineage(&pin.release)?;
+    lineage.reverse();
+    Ok(lineage
+        .iter()
+        .filter(|release| release.manifest.training.regime == splinter_core::training::Regime::Sft)
+        .flat_map(|release| release.manifest.datasets.iter().map(ToString::to_string))
+        .collect())
+}
+
 fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
     let Some(dataset) = st.report.dataset.as_ref() else {
         unreachable!("the train stage follows the dataset stage")
     };
     let request = st.practice.request;
+    let mut datasets = if request.rebuild {
+        accumulated_datasets(ctx)?
+    } else {
+        Vec::new()
+    };
+    datasets.push(dataset.dataset.to_string());
     let candidate = train_recorded(
         ctx,
         run,
         &crate::train::TrainRequest {
-            datasets: vec![dataset.dataset.to_string()],
+            datasets,
             rehearsal: None,
             from: ModelRef::policy_default(),
-            replay_fraction: DEFAULT_REPLAY_FRACTION,
+            // A rebuild trains on everything given as one set: nothing is
+            // replayed beside it.
+            replay_fraction: if request.rebuild {
+                0.0
+            } else {
+                DEFAULT_REPLAY_FRACTION
+            },
+            replay_policy: request.replay_policy.clone(),
             steps: request.steps,
             rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
             beta: None,
-            tuning: request.tuning,
+            tuning: Tuning {
+                restart: request.rebuild,
+                ..request.tuning
+            },
         },
         st.practice.trainer,
     )?;

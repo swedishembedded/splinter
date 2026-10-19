@@ -17,6 +17,7 @@ use splinter_store::tasks::TaskSetId;
 
 use super::exam::ExamReserved;
 use crate::curriculum::frontier::Frontier;
+use crate::curriculum::teacher::Taught;
 use crate::datasets::Built;
 use crate::learn::PolicyUsed;
 use crate::release::Released;
@@ -83,6 +84,9 @@ pub struct PracticeReport {
     pub solve: Option<Solved>,
     /// The verify stage, with the experiences the exposure audit failed.
     pub verify: Option<Verified>,
+    /// The teach stage, when a teacher was named: its demonstrations of the
+    /// tasks never solved, graded.
+    pub teach: Option<Taught>,
     /// The frontier stage: pass@k, and the tasks kept.
     pub frontier: Option<Frontier>,
     /// The dataset stage: the agent's actions in the passing attempts.

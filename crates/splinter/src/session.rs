@@ -599,6 +599,7 @@ impl Session {
             Command::Rehearse(args) => {
                 let arguments =
                     json!({ "records": args.records, "rehearsal_seed": args.rehearsal_seed });
+                    replay_policy: Default::default(),
                 let rehearsed = record(ctx, "rehearse", &arguments, |run| {
                     rehearse(
                         ctx,

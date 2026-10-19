@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use clap::Args;
 use splinter_sdk::canaries::CANARY_COUNT;
+use splinter_sdk::curriculum::repository_teacher::RepositoryTeacher;
 use splinter_sdk::practice::{
     DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS, DEFAULT_MAX_TOOL_CALLS,
 };
@@ -20,6 +21,7 @@ use splinter_sdk::seed::Seed;
 use splinter_sdk::train::DEFAULT_LORA_RANK;
 
 use super::{budget, GateArgs, MonitoringArgs, OptimiserArgs, PassAtKArgs};
+use splinter_sdk::data::ReplayPolicy;
 
 /// `practice`.
 #[derive(Debug, Args)]
@@ -102,6 +104,22 @@ pub struct PracticeArgs {
     /// Stop at the trained candidate: do not run the release gate.
     #[arg(long)]
     pub no_release: bool,
+    /// Who demonstrates the tasks the policy never solves, so they are not
+    /// dropped: `reference` replays each task's own reference change as an
+    /// agent's actions, or a model that solves them as an agent
+    /// (`remote:`/`local:`). Either is graded by the same independent
+    /// verifier as the policy's attempts; it never grades itself.
+    #[arg(long, value_parser = repository_teacher, value_name = "reference|REF")]
+    pub teacher: Option<RepositoryTeacher>,
+    /// Which of the earlier releases' records are replayed beside the new
+    /// ones (default uniform): none, uniform over every record, or balanced
+    /// over capabilities.
+    #[arg(long, value_enum, value_name = "POLICY")]
+    pub replay: Option<ReplayArg>,
+    /// Train a fresh adapter on the frozen base from the records of every
+    /// earlier release and the new ones, instead of continuing the champion.
+    #[arg(long, conflicts_with = "replay")]
+    pub rebuild: bool,
     /// The release gate's statistical settings.
     #[command(flatten)]
     pub gate: GateArgs,
@@ -155,4 +173,41 @@ pub struct PracticeArgs {
         value_name = "PROGRAM ARG..."
     )]
     pub test_command: Vec<String>,
+}
+
+/// A repository teacher, for clap: `reference` or a model reference.
+pub fn repository_teacher(text: &str) -> Result<RepositoryTeacher, String> {
+    text.parse()
+        .map_err(|e: splinter_sdk::vocabulary::model_ref::RefError| e.to_string())
+}
+
+/// Which earlier records a `practice` replays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum ReplayArg {
+    /// Nothing.
+    None,
+    /// A seeded share of every earlier record.
+    Uniform,
+    /// The same number of records of each capability.
+    Balanced,
+    /// Records of the capabilities the champion fails most, in proportion
+    /// (`generation run` only: it measures the failures first).
+    FailureTargeted,
+}
+
+impl ReplayArg {
+    /// The policy it names, for a `practice`, which cannot measure the
+    /// champion's failures.
+    pub fn policy(self) -> Result<ReplayPolicy, splinter_sdk::Error> {
+        match self {
+            Self::None => Ok(ReplayPolicy::None),
+            Self::Uniform => Ok(ReplayPolicy::Uniform),
+            Self::Balanced => Ok(ReplayPolicy::CapabilityBalanced),
+            Self::FailureTargeted => Err(splinter_sdk::Error::Refused(
+                "failure-targeted replay weighs the champion's failures, which `generation run` \
+                 measures first: use it there"
+                    .into(),
+            )),
+        }
+    }
 }

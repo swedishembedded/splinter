@@ -40,6 +40,7 @@ fn request(data: &str, steps: Option<u32>, tuning: Tuning) -> TrainRequest {
         rehearsal: None,
         from: policy(),
         replay_fraction: DEFAULT_REPLAY_FRACTION,
+        replay_policy: Default::default(),
         steps,
         rank: 4,
         beta: None,

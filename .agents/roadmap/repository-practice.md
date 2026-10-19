@@ -63,6 +63,14 @@ gate and lineage.
    private process runner and git checkout logic are deleted; a run captures the baseline as a
    snapshot, each attempt is `solve_in_workspace`, a candidate is judged by the workspace grading
    and audited by the exposure audit, and the sample depends on the SDK alone.
+11. [x] A teacher for the tasks the policy never solves: `practice --teacher reference` replays a
+    task's own reference change (the inverse of the seeded fault) as an agent's actions through
+    sven's real tools (read the file, edit it by the patch's hunks), `--teacher remote:|local:`
+    has a stronger model solve the task as an agent; both are graded by the same workspace
+    verifier and exposure audit as the policy's attempts, never grade themselves, and are asked
+    only about tasks outside the exam. The demonstration names the file without searching for it:
+    it teaches the edit once the place is known, not the localisation (open: demonstrations that
+    include the search an agent would have made, from a stronger model's verified trajectories).
 10. [ ] Acceptance on the GPUs: plumbing on the small model, then the measured run on the 8B
     model with frozen exam families, then served through brain and used from sven.
 

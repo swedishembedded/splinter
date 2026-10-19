@@ -45,6 +45,7 @@ fn request(datasets: &[&DatasetId], beta: Option<f32>) -> TrainRequest {
         rehearsal: None,
         from: policy(),
         replay_fraction: DEFAULT_REPLAY_FRACTION,
+        replay_policy: Default::default(),
         steps: Some(1),
         rank: 4,
         beta,

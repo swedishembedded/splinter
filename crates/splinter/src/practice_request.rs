@@ -13,7 +13,7 @@ use splinter_sdk::practice::{PlanSlot, PracticeRequest};
 use splinter_sdk::train::Tuning;
 use splinter_sdk::Error;
 
-use crate::cli::PracticeArgs;
+use crate::cli::{PracticeArgs, ReplayArg};
 
 /// The `practice` the command line asked for; refused when the plan it names
 /// cannot be read or is not valid.
@@ -43,6 +43,13 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
         max_repeated_results: args.max_repeated_results,
         budget: args.budget,
         no_release: args.no_release,
+        teacher: args.teacher,
+        replay_policy: args
+            .replay
+            .map(ReplayArg::policy)
+            .transpose()?
+            .unwrap_or_default(),
+        rebuild: args.rebuild,
         gate: args.gate.plan(),
         steps: args.steps,
         rank: args.rank,

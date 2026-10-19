@@ -110,6 +110,18 @@ impl Report for PracticeReport {
         if let Some(r) = &self.verify {
             stage(&mut out, "verify", r.human());
         }
+        if let Some(r) = &self.teach {
+            stage(
+                &mut out,
+                "teach",
+                format!(
+                    "the tasks never solved ({}):\n{}{}",
+                    r.task_set,
+                    r.solve.human(),
+                    r.verify.human()
+                ),
+            );
+        }
         if let Some(r) = &self.frontier {
             stage(&mut out, "frontier", r.human());
         }

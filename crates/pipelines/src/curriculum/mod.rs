@@ -22,6 +22,10 @@
 //!   once more by a teacher, open-book, with the task's grounding material
 //!   shown; a verified teacher's answer is how the policy learns what it
 //!   does not know.
+//! * [`repository_teacher`] - the same for a change to a repository, which
+//!   has no passage to show: the task's reference change replayed as the
+//!   actions of an agent, or a stronger model solving it as an agent, either
+//!   graded by the workspace verifier like a student's attempt.
 //! * [`mastery`] - each concept's rolling pass rate per release, from the
 //!   student's closed-book solves; `status` shows the weakest.
 //! * [`queue`] - concepts the release gate saw forgotten (a retention suite
@@ -45,6 +49,7 @@ pub mod frontier;
 pub mod mastery;
 pub mod queue;
 pub mod quota;
+pub mod repository_teacher;
 pub mod teacher;
 
 use splinter_core::digest::Digest;

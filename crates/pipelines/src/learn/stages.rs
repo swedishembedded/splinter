@@ -691,6 +691,7 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             }),
             from: st.learn.policy.clone(),
             replay_fraction: DEFAULT_REPLAY_FRACTION,
+            replay_policy: Default::default(),
             steps: st.learn.steps,
             rank: st.learn.rank,
             beta: None,

@@ -40,9 +40,16 @@
 //!   project's checks run, with the hidden tests laid over it; an exposure
 //!   audit reads the trajectory for anything only the grader holds, and an
 //!   experience it fails is decided fail and counted.
+//! * **teach** - only when a teacher is named (`--teacher`): each task no
+//!   graded attempt solved is given to it. A change to a repository has no
+//!   passage to show a teacher, so the teacher is the task's reference change
+//!   replayed as an agent's actions, or a stronger model solving it as an
+//!   agent; either is graded by the same workspace verifier and exposure
+//!   audit as the student's attempts, and never grades itself
+//!   ([`crate::curriculum::repository_teacher`]).
 //! * **frontier** - pass@k keeps the tasks the policy solves sometimes: it
-//!   has an attempt that passed and one that did not. No teacher is asked: a
-//!   change to a repository has no passage to show one.
+//!   has an attempt that passed and one that did not, and, with a teacher,
+//!   the never-solved tasks whose demonstration was verified.
 //! * **dataset** - the passing attempts, action by action (`sft-step`),
 //!   with the tools the agent was offered; records longer than the block the
 //!   trainer fits are left out, counted, and the dataset is checked to hold
@@ -67,11 +74,13 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use splinter_core::rng::Seed;
+use splinter_data::ReplayPolicy;
 use splinter_eval::gate::{AgenticConfig, GatePlan, DEFAULT_PROBE_ATTEMPTS};
 
 use crate::experiment::ExperimentPlan;
 
 use crate::curriculum::frontier::PassAtK;
+use crate::curriculum::repository_teacher::RepositoryTeacher;
 use crate::train::{Trainer, Tuning};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -81,9 +90,9 @@ pub use exam::{exam_canaries, ExamReserved};
 pub use report::{PracticeReport, Profiled, Snapshotted};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 10] = [
-    "policy", "snapshot", "profile", "tasks", "reserve", "solve", "verify", "frontier", "dataset",
-    "train",
+pub const STAGES: [&str; 11] = [
+    "policy", "snapshot", "profile", "tasks", "reserve", "solve", "verify", "teach", "frontier",
+    "dataset", "train",
 ];
 
 /// The release stage, which follows training unless the request stops at
@@ -146,6 +155,18 @@ pub struct PracticeRequest {
     pub no_release: bool,
     /// The release gate's statistical settings.
     pub gate: GatePlan,
+    /// Who demonstrates the tasks the policy never solves (the reference
+    /// change replayed, or a stronger model); `None` asks nobody, and such
+    /// tasks are dropped.
+    pub teacher: Option<RepositoryTeacher>,
+    /// Train a fresh adapter on the frozen base from the records of every
+    /// earlier release and the new ones, instead of continuing the champion
+    /// on the new records with a replay of the earlier: the rebuild a
+    /// continual run compares replay against.
+    pub rebuild: bool,
+    /// Which of the earlier releases' records are replayed beside the new
+    /// ones, and how the replay is spread over capabilities.
+    pub replay_policy: ReplayPolicy,
     /// The step budget of the training; sized from the examples when `None`.
     pub steps: Option<u32>,
     /// LoRA rank of the adapter; the default rank when `None`.

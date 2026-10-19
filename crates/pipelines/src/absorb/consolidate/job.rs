@@ -288,6 +288,7 @@ fn full(
             rehearsal,
             from: from_ref,
             replay_fraction: 0.0,
+            replay_policy: Default::default(),
             steps: Some(steps),
             rank: DEFAULT_LORA_RANK,
             beta: None,
