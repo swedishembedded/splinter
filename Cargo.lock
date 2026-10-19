@@ -5799,7 +5799,7 @@ dependencies = [
 
 [[package]]
 name = "splinter"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "serde",
@@ -5810,7 +5810,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-absorb"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5827,7 +5827,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-absorb-story"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -5840,7 +5840,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-adams"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5856,7 +5856,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-agent"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5880,7 +5880,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-agent-loop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5896,7 +5896,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "atif",
  "blake3",
@@ -5909,7 +5909,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-data"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "atif",
  "serde",
@@ -5923,7 +5923,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-eval"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "atif",
  "serde",
@@ -5936,7 +5936,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-expdb"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "crc32fast",
@@ -5951,7 +5951,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-health"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5963,7 +5963,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-jefferson"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -5978,7 +5978,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-knowledge"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6000,7 +6000,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-lifecourse"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -6013,7 +6013,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-model"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6036,7 +6036,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-orchestrator"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures",
  "serde",
@@ -6055,7 +6055,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-persona-chat"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6070,7 +6070,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-pipelines"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6098,7 +6098,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-sandbox"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "libc",
  "serde",
@@ -6110,7 +6110,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-sdk"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "serde",
@@ -6131,7 +6131,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-store"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "atif",
  "blake3",
@@ -6148,7 +6148,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-synthetic-author"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6164,7 +6164,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-tool-syntax"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -6176,7 +6176,7 @@ dependencies = [
 
 [[package]]
 name = "splinter-voice-loop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",

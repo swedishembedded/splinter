@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (exposure audit)
 - The exposure audit classes an outside-path call by its own result instead of the whole step's pooled output, ignores the shell's `[exit code N]` trailer, and no longer fails an attempt for a refused, absent or empty probe (`outside_probes` in the evidence) or for naming a hidden path in a call whose read failed (`hidden_path_absent`). Reached outside paths, hidden paths in outputs and messages, shingles and the state root still fail it. Amendment 13 of the coding protocol applies this to datasets built from now on; earlier yields were computed under the old rule.
 
+## [0.2.0] - 2026-10-19
+
 ### Fixed
 - A solve over a remote model no longer lets one slow episode hold the slots of the episodes behind it: `fan_out` kept a finished item's slot until every earlier item had finished, so one runaway episode collapsed the concurrency to one; the next item now starts as soon as any item ends (results still come back in item order).
 - A training run whose data leaves no whole group to monitor on trains unmonitored, as its record says, instead of failing with "selecting on the monitoring loss needs eval_every > 0": an unmonitored run carries no patience.
