@@ -321,3 +321,31 @@ pub fn failures(report: &splinter_eval::predictive_gate::PredictiveReport) -> Ve
     }
     out
 }
+
+/// The longest one of the timeline specs may take. Measured alone each takes
+/// well under two minutes; the bound is for a machine so oversubscribed
+/// (brain's CPU backend takes every core it is allowed) that training does
+/// not finish, which must fail the spec instead of holding the suite.
+pub const DEADLINE: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+/// Runs `body` on a thread of its own and fails when it has not finished
+/// within `limit`, naming the limit. A panic in `body` is the spec's panic.
+pub fn bounded(limit: std::time::Duration, body: impl FnOnce() + Send + 'static) {
+    let (done, finished) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        body();
+        let _ = done.send(());
+    });
+    match finished.recv_timeout(limit) {
+        // Finished, or the body panicked and dropped the sender: either way
+        // the thread is done and its result says which.
+        Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            if let Err(panic) = worker.join() {
+                std::panic::resume_unwind(panic);
+            }
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            panic!("the spec did not finish within {limit:?}: is the machine oversubscribed?")
+        }
+    }
+}
