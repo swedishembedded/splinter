@@ -77,6 +77,11 @@ pub struct BuildArgs {
     /// of refusing the build. What remains is sealed as usual.
     #[arg(long)]
     pub drop_leaking: bool,
+    /// For the sft-step view: a trajectory exported as one agent step that holds
+    /// a whole run's tool calls is read as one call per turn, each followed by
+    /// its result, then the final reply.
+    #[arg(long)]
+    pub serialise_calls: bool,
     /// For the voice view: who the writer is. Requests are written as
     /// theirs and half the records open with their persona prompt, half
     /// with the line that says who the model is; refused with

@@ -497,6 +497,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
             max_block: st.practice.request.tuning.max_block.map(|b| b as usize),
             pack: false,
             control: Default::default(),
+            serialise_calls: false,
             voice: VoiceBuild::default(),
         },
     ) {

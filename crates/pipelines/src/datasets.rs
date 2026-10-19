@@ -79,6 +79,9 @@ pub struct BuildRequest {
     /// For the sft-step view: a negative control to build instead of the
     /// verified dataset ([`Control`]).
     pub control: Control,
+    /// For the sft-step view: read a trajectory exported as one agent step as
+    /// one tool call per turn ([`SftStep::serialise_calls`]).
+    pub serialise_calls: bool,
 }
 
 /// How the voice view writes the writer's text into records; the other
@@ -244,6 +247,12 @@ fn project_without(
             view.as_str()
         )));
     }
+    if request.serialise_calls && view != ViewName::SftStep {
+        return Err(OrchestratorError::Refused(format!(
+            "view {} has no run to take apart, so --serialise-calls does not apply",
+            view.as_str()
+        )));
+    }
     if request.min_strength.is_some() && !view.takes_min_strength() {
         return Err(OrchestratorError::Refused(format!(
             "view {} reads no verdict, so --min-strength does not apply",
@@ -283,6 +292,7 @@ fn project_without(
             .with_strip(strip)
             .packed(request.pack)
             .control(request.control)
+            .serialise_calls(request.serialise_calls)
             .project(&corpus),
         ViewName::Critic => Critic::new(strength).with_strip(strip).project(&corpus),
         ViewName::Preference => Preference::new(strength).with_strip(strip).project(&corpus),

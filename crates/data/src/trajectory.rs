@@ -147,7 +147,7 @@ pub fn projection_refusal(trajectory: &Trajectory) -> Option<Unprojectable> {
     if users >= 2 {
         try_dialogue(trajectory, "", &|_, _| true).err()
     } else {
-        try_conversation(trajectory, "", Setting::Closed).err()
+        try_conversation(trajectory, "", Setting::Closed, false).err()
     }
 }
 
@@ -246,6 +246,17 @@ pub(crate) fn conversation(
     experience: &Experience,
     student_turn: &str,
 ) -> Result<Conversation, Exclusion> {
+    conversation_serialised(experience, student_turn, false)
+}
+
+/// [`conversation`], and with `serialise_calls` a trajectory whose whole run
+/// was exported as one agent step is taken as one call per turn: see
+/// [`try_conversation`].
+pub(crate) fn conversation_serialised(
+    experience: &Experience,
+    student_turn: &str,
+    serialise_calls: bool,
+) -> Result<Conversation, Exclusion> {
     let setting = if experience.environment.kind == Environment::WORKSPACE {
         Setting::Workspace
     } else {
@@ -255,15 +266,28 @@ pub(crate) fn conversation(
         &experience.trajectory,
         student_turn,
         setting,
+        serialise_calls,
     )?)
 }
 
-/// [`conversation`], naming what makes it impossible.
+/// [`conversation`], naming what makes it impossible. A trajectory with a
+/// single agent step that holds several tool calls is a whole run exported as
+/// one step, whose turn boundaries are not recorded; with `serialise_calls` its
+/// calls become one assistant turn each, followed by its result, and the step's
+/// text one last assistant turn. A trajectory with several agent steps keeps
+/// each step as one turn, parallel calls included.
 fn try_conversation(
     trajectory: &Trajectory,
     student_turn: &str,
     setting: Setting,
+    serialise_calls: bool,
 ) -> Result<Conversation, Unprojectable> {
+    let one_run_step = trajectory
+        .steps
+        .iter()
+        .filter(|s| s.source == StepOrigin::Agent)
+        .count()
+        == 1;
     if is_incomplete(trajectory) {
         return Err(Unprojectable::Incomplete);
     }
@@ -313,6 +337,10 @@ fn try_conversation(
                 if text.is_empty() && calls.is_empty() {
                     continue;
                 }
+                if serialise_calls && one_run_step && calls.len() > 1 {
+                    serialise_run_step(step, &text, calls, &mut messages, &mut actions)?;
+                    continue;
+                }
                 let is_action = !calls.is_empty() || Some(position) == last_agent;
                 let ids: Vec<String> = calls.iter().filter_map(|c| c.id.clone()).collect();
                 let mut assistant = message("assistant", &text, false);
@@ -349,6 +377,60 @@ fn try_conversation(
         actions,
         tools,
     })
+}
+
+/// Appends the turns of a run exported as one agent step: each call as an
+/// assistant turn with its result after it, then the step's text as the last
+/// turn. Every assistant turn is an action of the step.
+fn serialise_run_step(
+    step: &TraceStep,
+    text: &str,
+    calls: Vec<WireToolCall>,
+    messages: &mut Vec<WireMessage>,
+    actions: &mut Vec<Action>,
+) -> Result<(), Unprojectable> {
+    let ids: Vec<&String> = calls.iter().filter_map(|c| c.id.as_ref()).collect();
+    for result in step.observation.iter().flat_map(|o| &o.results) {
+        if !result
+            .source_call_id
+            .as_ref()
+            .is_some_and(|id| ids.contains(&id))
+        {
+            return Err(Unprojectable::UnansweredObservation { step: step.step_id });
+        }
+    }
+    let mut action = |messages: &mut Vec<WireMessage>, assistant: WireMessage| {
+        actions.push(Action {
+            index: messages.len(),
+            step: step.step_id,
+            copied: step.is_excluded_from_sft(),
+        });
+        messages.push(assistant);
+    };
+    for call in calls {
+        let id = call.id.clone();
+        let mut assistant = message("assistant", "", false);
+        assistant.tool_calls = vec![call];
+        action(messages, assistant);
+        for result in step
+            .observation
+            .iter()
+            .flat_map(|o| &o.results)
+            .filter(|r| r.source_call_id == id)
+        {
+            let content = match &result.content {
+                Some(body) => text_of(body).ok_or(Unprojectable::Image { step: step.step_id })?,
+                None => String::new(),
+            };
+            let mut tool = message("tool", &content, false);
+            tool.tool_call_id = id.clone();
+            messages.push(tool);
+        }
+    }
+    if !text.is_empty() {
+        action(messages, message("assistant", text, false));
+    }
+    Ok(())
 }
 
 /// `trajectory` as one conversation of alternating turns, every reply

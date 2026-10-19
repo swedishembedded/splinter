@@ -116,6 +116,7 @@ fn request(set: SetId) -> BuildRequest {
         max_block: None,
         pack: false,
         control: Default::default(),
+        serialise_calls: false,
     }
 }
 

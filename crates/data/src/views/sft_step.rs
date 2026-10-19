@@ -43,7 +43,7 @@ use splinter_core::chat::WireMessage;
 use splinter_core::rng::SplitMix64;
 
 use crate::render::student_turn;
-use crate::trajectory::conversation;
+use crate::trajectory::conversation_serialised;
 use crate::{
     require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
     View, ViewError,
@@ -85,6 +85,7 @@ pub struct SftStep {
     strip: Strip,
     packed: bool,
     control: Control,
+    serialise_calls: bool,
 }
 
 impl SftStep {
@@ -98,6 +99,7 @@ impl SftStep {
             strip: Strip::default(),
             packed: false,
             control: Control::Verified,
+            serialise_calls: false,
         }
     }
 
@@ -113,6 +115,17 @@ impl SftStep {
     #[must_use]
     pub fn packed(self, packed: bool) -> Self {
         Self { packed, ..self }
+    }
+
+    /// The same view reading a run exported as one agent step as one call per
+    /// turn ([`crate::trajectory`]): for trajectories recorded before the agent
+    /// kept its turns apart.
+    #[must_use]
+    pub fn serialise_calls(self, serialise_calls: bool) -> Self {
+        Self {
+            serialise_calls,
+            ..self
+        }
     }
 
     /// The same view under a negative `control`.
@@ -152,10 +165,11 @@ impl SftStep {
             Ok(turn) => turn,
             Err(reason) => return projection.exclude(reason),
         };
-        let conversation = match conversation(&entry.experience, &turn) {
-            Ok(conversation) => conversation,
-            Err(reason) => return projection.exclude(reason),
-        };
+        let conversation =
+            match conversation_serialised(&entry.experience, &turn, self.serialise_calls) {
+                Ok(conversation) => conversation,
+                Err(reason) => return projection.exclude(reason),
+            };
         if conversation.actions.is_empty() {
             return projection.exclude(Exclusion::NoAction);
         }

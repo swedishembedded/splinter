@@ -473,6 +473,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         max_block: None,
         pack: false,
         control: Default::default(),
+        serialise_calls: false,
     };
     let retrieval = Retrieval {
         library: &library,

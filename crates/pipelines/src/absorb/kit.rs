@@ -490,6 +490,7 @@ fn teach_records(
             max_block: None,
             pack: false,
             control: Default::default(),
+            serialise_calls: false,
         },
         None,
     )?;

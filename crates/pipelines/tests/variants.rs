@@ -267,6 +267,7 @@ fn a_variant_never_enters_a_training_dataset() {
             max_block: None,
             pack: false,
             control: Default::default(),
+            serialise_calls: false,
         },
     )
     .unwrap_err();
@@ -466,6 +467,7 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
             max_block: None,
             pack: false,
             control: Default::default(),
+            serialise_calls: false,
         },
     )
     .unwrap();

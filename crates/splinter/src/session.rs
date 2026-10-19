@@ -504,6 +504,7 @@ impl Session {
                     control,
                     control_seed,
                     drop_leaking,
+                    serialise_calls,
                     writer,
                     token_limit,
                     max_family_share,
@@ -533,6 +534,7 @@ impl Session {
                     max_block,
                     pack,
                     control: Control::Verified,
+                    serialise_calls,
                 };
                 // The strip is settled inside the run, which states the seed
                 // `mix:F` picks its subjects by.

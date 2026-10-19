@@ -135,6 +135,7 @@ fn a_mixed_dataset_records_the_seed_that_picked_its_subjects_and_rebuilds_from_i
                 max_block: None,
                 pack: false,
                 control: Default::default(),
+                serialise_calls: false,
             },
         )
         .unwrap();
