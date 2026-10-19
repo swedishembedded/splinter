@@ -185,7 +185,7 @@ pub struct Worker {
 /// `workspace`, without the tools in [`WITHHELD_TOOLS`], on `model` under
 /// the system prompt in `options`. A tool in `replacing` takes the place of
 /// the built-in of its name.
-fn engine(
+pub(crate) fn engine(
     workspace: &Path,
     model: Arc<dyn ModelProvider>,
     options: &WorkOptions,
