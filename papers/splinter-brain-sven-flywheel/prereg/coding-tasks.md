@@ -533,6 +533,26 @@ manifest records it. The unverified control of A4.3 is the one dataset that does
 **A5.3 Datasets are tied to a binary.** A dataset is built by the splinter binary named in its run
 record (64cad0e6 for CE1 and CE4), and a dataset built by another binary is built again before it
 is trained on. Training links brain at the commit named in A5.1.
+### Amendment 6, 2026-10-19, 09:48 CEST: CE7 admission parameters
+
+Made before the admission of sqlglot and before any rollout on it. It fixes the values A3.6
+left open and nothing else.
+
+**A6.1 Files, tests, partition.** The files under test are 60 of the 113 module files of
+`sqlglot/` with at least 60 lines whose stem a selected test names (the rule of the selection
+funnel), taken at evenly spaced ranks of the sorted list (`runs/ce/ce7-files.txt`); the suite
+is `python3 -m unittest` over the 55 test modules of the selection record
+(`runs/ce7-select/sqlglot-modules.txt`: all but the executor and optimizer modules, which need
+numpy, pandas and duckdb), in the virtual environment of that record placed first on PATH, which
+becomes part of the recorded environment of every sqlglot task. Tasks are generated with
+`--mutants-per-file 40`, `--test-output-cap 1048576` and `--workspace-max-processes 512`, with
+the exam seed 20261017 and 30 of the 60 families reserved for qualification (`--exam-families
+30`); the other 30 are the development partition. As for the eight repositories, the count of
+admitted tasks is a measured outcome and nothing is added or removed after the partition is made.
+
+**A6.2 What counts for the 25 non-tied families.** The CE7 qualification query is labelled
+PILOT when it has fewer than 25 non-tied families, by the existing rule; 30 families are
+reserved so that 25 are possible.
 
 ## Provenance
 
