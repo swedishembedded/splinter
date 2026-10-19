@@ -164,7 +164,9 @@ fn a_candidate_that_mends_the_exam_the_champion_fails_is_released_and_a_server_f
     let improvement = gate.improvement.measured.as_ref().unwrap();
     assert_eq!(improvement.suite.name, "exam");
     assert_eq!(improvement.suite.tasks, reserve.exam_tasks);
-    assert_eq!(reserve.exam_tasks, EXAM_FAMILIES, "{reserve:#?}");
+    // Faults of one module with different symptoms are different tasks, so a
+    // family holds several; the sign test below still counts it once.
+    assert!(reserve.exam_tasks >= EXAM_FAMILIES, "{reserve:#?}");
     assert_eq!(improvement.comparison.candidate_wins, reserve.exam_tasks);
     assert_eq!(improvement.comparison.baseline_wins, 0);
     assert_eq!(improvement.sign_test.discordant, EXAM_FAMILIES);
@@ -454,7 +456,10 @@ fn an_attempt_that_saw_the_hidden_tests_or_could_not_be_run_is_set_aside_and_cou
         })
     };
     let exposed = real.iter().filter(|task| in_peeked(task)).count();
-    assert_eq!(exposed, 4, "two tasks of each of two families");
+    assert!(
+        exposed >= peeked.len(),
+        "each of the two families holds at least one task"
+    );
     assert_eq!(probed.candidate.exposed, exposed);
     assert_eq!(probed.champion.exposed, 0);
     assert_eq!(probed.candidate.environment_failures, 1);
@@ -468,7 +473,10 @@ fn an_attempt_that_saw_the_hidden_tests_or_could_not_be_run_is_set_aside_and_cou
     assert_eq!(c.unpaired, exposed + 1);
     assert_eq!(c.paired, tasks - exposed);
     assert_eq!(c.candidate_wins, c.paired);
-    assert_eq!(c.paired, 2 * (EXAM_FAMILIES - 2));
+    // Each task is attempted twice over (itself and its rewording), and a
+    // family holds as many tasks as the generator admitted for it.
+    let per_family = kept.members.len() / EXAM_FAMILIES;
+    assert_eq!(c.paired, 2 * per_family * (EXAM_FAMILIES - 2));
     assert_eq!(improvement.sign_test.discordant, EXAM_FAMILIES - 2);
 
     let anchor = released.gate.anchor.measured.as_ref().unwrap();
