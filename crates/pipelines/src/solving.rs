@@ -418,10 +418,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
                 conclusion,
                 answered,
             } => {
-                *report
-                    .conclusions
-                    .entry(conclusion_name(conclusion))
-                    .or_default() += 1;
+                *report.conclusions.entry(conclusion).or_default() += 1;
                 report.answered += usize::from(answered);
                 if !members.contains(&id) {
                     members.push(id);
@@ -544,7 +541,8 @@ enum Recorded {
     Failed(OrchestratorError),
     Done {
         id: ExperienceId,
-        conclusion: RunConclusion,
+        /// How it ended, named as the report names it ([`conclusion_label`]).
+        conclusion: String,
         answered: bool,
     },
 }
@@ -582,7 +580,10 @@ fn record_attempt(outcome: Attempted, at: &Recording<'_>) -> Recorded {
         Err(e) if outgrew_context(&e) => return Recorded::Outgrew(e),
         Err(e) => return Recorded::Infrastructure(e),
     };
-    let (conclusion, answered) = (solution.conclusion, solution.final_output.is_some());
+    let (conclusion, answered) = (
+        conclusion_label(solution.conclusion, &attempt_report),
+        solution.final_output.is_some(),
+    );
     let provenance = Provenance {
         generator: at.planned.entry.generator.clone(),
         policy: at.label.cloned(),
@@ -708,6 +709,22 @@ fn skip(task: &Digest, why: &dyn std::fmt::Display) -> Skipped {
     }
 }
 
+/// How an attempt ended, as the solve report names it: the run's conclusion,
+/// except that an episode splinter's own watch stopped (the same answer
+/// repeated, or too many tool calls) is named for that bound. The agent runtime
+/// reports every stop that came from a cancel token as `cancelled`, and these
+/// bounds stop episodes by firing the token; the attempt report knows which
+/// fired it.
+pub(crate) fn conclusion_label(conclusion: RunConclusion, attempt: &AttemptReport) -> String {
+    if attempt.stopped_by_repetition {
+        "repetition_stopped".to_string()
+    } else if attempt.stopped_by_tool_cap {
+        "tool_cap_stopped".to_string()
+    } else {
+        conclusion_name(conclusion)
+    }
+}
+
 /// How a run ended, as reports name it: `success`, `timeout`, ...
 pub(crate) fn conclusion_name(conclusion: RunConclusion) -> String {
     let debug = format!("{conclusion:?}");
@@ -723,7 +740,45 @@ pub(crate) fn conclusion_name(conclusion: RunConclusion) -> String {
 
 #[cfg(test)]
 mod harness_tests {
-    use super::harness_protocol;
+    use super::{conclusion_label, harness_protocol};
+    use splinter_agent::RunConclusion;
+    use splinter_core::outcome::AttemptReport;
+
+    /// An episode stopped by splinter's own bound is a stuck agent, not a
+    /// cancelled run: the report must say which, or a campaign reads its own
+    /// bounds as infrastructure noise (34 of 61 conclusions were once labelled
+    /// "cancelled" for this reason).
+    #[test]
+    fn an_episode_stopped_by_its_own_bounds_is_named_for_the_bound_not_for_a_cancel() {
+        let by = |tool_cap, repetition| AttemptReport {
+            stopped_by_tool_cap: tool_cap,
+            stopped_by_repetition: repetition,
+            ..AttemptReport::default()
+        };
+        assert_eq!(
+            conclusion_label(RunConclusion::Cancelled, &by(false, true)),
+            "repetition_stopped"
+        );
+        assert_eq!(
+            conclusion_label(RunConclusion::Cancelled, &by(true, false)),
+            "tool_cap_stopped"
+        );
+        assert_eq!(
+            conclusion_label(RunConclusion::Cancelled, &by(false, false)),
+            "cancelled"
+        );
+        assert_eq!(
+            conclusion_label(RunConclusion::Success, &by(false, false)),
+            "success"
+        );
+        // A bound that fired after the agent had finished does not rename a
+        // finished run's own conclusion... except that the bound is what
+        // ended it, so the bound is named.
+        assert_eq!(
+            conclusion_label(RunConclusion::Cancelled, &by(true, true)),
+            "repetition_stopped"
+        );
+    }
 
     #[test]
     fn a_set_is_solved_under_the_registered_episode_bounds() {
