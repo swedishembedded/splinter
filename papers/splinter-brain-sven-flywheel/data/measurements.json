@@ -232,6 +232,26 @@
    "splinter": "64cad0e6",
    "brain": "98106c845",
    "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-graphkit); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-graphkit"
+  },
+  "ce1-p1-tokenbucket": {
+   "log": "ce1/ce1-p1-tokenbucket.summary.json",
+   "sha256": "5681f9a45e48b283bea24433e773ee88388c84a52a25dc13a85b56436ee7fd40",
+   "metric_prefix": "ce1.tokenbucket_p1",
+   "metrics": {
+    "tasks": 38,
+    "solved": 38,
+    "success": 25,
+    "cancelled": 0,
+    "passed_clean": 18,
+    "failed": 20,
+    "undecided": 0,
+    "exposed": 10,
+    "hidden_path": 3,
+    "outside_workspace": 9
+   },
+   "splinter": "64cad0e6",
+   "brain": "98106c845",
+   "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-tokenbucket); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-tokenbucket"
   }
  }
 }
