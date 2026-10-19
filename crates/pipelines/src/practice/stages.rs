@@ -37,6 +37,7 @@ use super::report::{PracticeReport, Profiled, Snapshotted, TasksMade};
 use super::PracticeRequest;
 use crate::curriculum::frontier::select_frontier;
 use crate::curriculum::repository_teacher::{teach_repository, TeachRepositoryRequest};
+use crate::curriculum::schedule::{schedule, yield_of, Strategy};
 use crate::curriculum::teacher::{untaught, Taught};
 use crate::datasets::{build, BuildRequest, ViewName, VoiceBuild};
 use crate::learn::PolicyUsed;
@@ -100,6 +101,7 @@ pub(super) fn validate(request: &PracticeRequest) -> Result<(), OrchestratorErro
             "name the revision of the repository to learn from".into(),
         ));
     }
+    request.progress.validate()?;
     request.pass_at_k.validate()
 }
 
@@ -111,6 +113,11 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, PracticeState<'a>> {
         .then(FnStage::new("profile", profile_stage).ignoring_budget())
         .then(FnStage::new("tasks", tasks_stage).ignoring_budget())
         .then(FnStage::new("reserve", reserve_stage).ignoring_budget())
+        .then(
+            FnStage::new("schedule", schedule_stage)
+                .when(|s| s.practice.request.curriculum != Strategy::Frontier)
+                .ignoring_budget(),
+        )
         .then(FnStage::new("solve", solve_stage))
         .then(FnStage::new("verify", verify_stage).ignoring_budget())
         .then(FnStage::new("teach", teach_stage).when(|s| s.practice.request.teacher.is_some()))
@@ -372,6 +379,24 @@ fn reserve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'
     })
 }
 
+/// Puts the tasks in the order the curriculum strategy names, before any is
+/// solved.
+fn schedule_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
+    let Some(tasks) = st.training.take() else {
+        unreachable!("the schedule stage follows the reserve stage")
+    };
+    let request = st.practice.request;
+    let seed = match request.curriculum {
+        Strategy::LearningProgress => Some(run.seed("curriculum-seed", request.curriculum_seed)?),
+        _ => None,
+    };
+    let scheduled = schedule(ctx, &tasks, request.curriculum, &request.progress, seed)?;
+    let summary = to_value(&scheduled.report)?;
+    st.training = Some(scheduled.task_set);
+    st.report.schedule = Some(scheduled.report);
+    Ok(StageEnd::done(summary))
+}
+
 fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
     let Some(tasks) = st.training.as_ref() else {
         unreachable!("the solve stage follows the reserve stage")
@@ -458,6 +483,11 @@ fn frontier_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_
         None => untaught(ctx, tasks)?,
     };
     let kept = select_frontier(ctx, tasks, solved, &taught)?;
+    st.report.yield_ = Some(yield_of(
+        ctx,
+        &[&solved.experience_set, &taught.solve.experience_set],
+        kept.distribution.kept(),
+    )?);
     let summary = to_value(&kept)?;
     st.attempts = Some(kept.frontier_experience_set.clone());
     let distribution = kept.distribution;

@@ -122,6 +122,32 @@ experience is carried forward. `splinter generation matrix --experiment NAME` pr
 and the full retention matrix of the lineage: the base as generation 0 and every generation on
 every protected task, with ACC, BWT, forgetting, forward transfer and learning gain.
 
+## Which tasks a budget reaches first
+
+`practice` and `generation run` go through the admitted tasks in the order they were admitted
+and stop at `--budget`. `--curriculum learning-progress` or `--curriculum gain-ranked` puts them
+in the order of how fast the policy is still improving, per GPU second, on each family (the file a
+fault was seeded in), in a `schedule` stage between `reserve` and `solve`; the solve and teach
+stages then reach those families first. The pass@k frontier still decides afterwards which
+solved tasks are kept for training.
+
+A family's learning progress is the absolute difference between its verified pass rate in the
+newest `--lp-window` releases and in the window before, read from the attempts the store already
+holds (the same history `status` shows as concept mastery). It is divided by the family's GPU
+seconds per attempt relative to the mean over families (a family with no recorded device time is
+priced at the mean, never at zero) and a novelty bonus (`--lp-novelty`, shrinking with attempts) is
+added, so a family nothing has attempted is not ignored. `learning-progress` draws every family
+once, without replacement and in proportion to that weight, from `--curriculum-seed` (drawn and
+recorded when absent), mixed with the uniform distribution by `--lp-explore` so no family gets less
+than that share divided by the number of families. `gain-ranked` takes the families heaviest
+first, with no draw. The report's `schedule` lists each family's progress, cost, novelty and
+weight, the order, and `informative`: how many families were measured under two or more
+releases. A family first met by this run has no history, so on a repository none of whose files an
+earlier release attempted `informative` is 0 and the order is the novelty-weighted draw; the
+signal discriminates from the second release a family is attempted under. The report's `yield`
+gives the device seconds of the solve and teach attempts against the tasks kept, so the
+strategies can be compared per GPU hour.
+
 ## Related
 
 - Check a plan of which repositories a lineage trains on and which are sealed as the final

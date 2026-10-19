@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (workspace task requests)
 - The request of a workspace task names only the test modules that are in the solver's tree, and a failing test whose label has fewer than 3 words is listed with what its assertion observed (the two values of an equality, or the error the code raised; never a traceback frame, diff, path or call) instead of the bare label. A candidate fault whose withheld module in-tree tests import (`HiddenImportedByTree`), or whose assertion cannot be rendered (`SymptomNotActionable`), is refused with a counted reason. The exposure audit counts a task's own request as text the solver may see. `TestReport::messages` carries the exception message of each failed unittest test. Amendment 15.
 
+### Added (learning-progress curriculum)
+- `practice` and `generation run` take `--curriculum frontier|learning-progress|gain-ranked` (with `--curriculum-seed`, `--lp-window`, `--lp-novelty`, `--lp-explore`): a `schedule` stage orders the admitted tasks by each family's learning progress per GPU second (the change in verified pass rate between releases, from the stored attempts, divided by measured device seconds, plus a novelty bonus, mixed with the uniform distribution so no family starves) before the budget-limited solve and teach stages; the default `frontier` keeps the admission order. The report gains `schedule` (each family's weight and the order drawn) and `yield` (device seconds of the solve and teach attempts against the tasks kept). Concept mastery can be read with each release's device seconds (`mastery_costed`).
+
 ### Fixed
 - `max_repeated_results` stops a stagnating worker at the same call on every run: the count is taken before each model request (`RepetitionGuard`) instead of by the event watcher, which under load let the run make 22 or more calls before it was cancelled.
 

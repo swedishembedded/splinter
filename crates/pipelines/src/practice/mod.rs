@@ -33,6 +33,10 @@
 //!   any rollout**. Their tasks are kept apart and never solved here, so no
 //!   attempt at them can reach training data, and a family reserved by an
 //!   earlier run stays reserved: nothing trained on can be examined later.
+//! * **schedule** - only under `--curriculum learning-progress` or
+//!   `gain-ranked`: the remaining tasks are put in the order the strategy
+//!   names, so that a budget that runs out reaches the families the policy
+//!   is still improving on first ([`crate::curriculum::schedule`]).
 //! * **solve** - each remaining task is attempted k times by the policy as
 //!   an agent in its own copy of the snapshot, every attempt drawing from a
 //!   seed that is a function of the task and the attempt alone.
@@ -80,7 +84,9 @@ use splinter_eval::gate::{AgenticConfig, GatePlan, DEFAULT_PROBE_ATTEMPTS};
 use crate::experiment::ExperimentPlan;
 
 use crate::curriculum::frontier::PassAtK;
+use crate::curriculum::progress::Params as ProgressParams;
 use crate::curriculum::repository_teacher::RepositoryTeacher;
+use crate::curriculum::schedule::Strategy;
 use crate::train::{Trainer, Tuning};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -90,9 +96,9 @@ pub use exam::{exam_canaries, ExamReserved};
 pub use report::{PracticeReport, Profiled, Snapshotted};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 11] = [
-    "policy", "snapshot", "profile", "tasks", "reserve", "solve", "verify", "teach", "frontier",
-    "dataset", "train",
+pub const STAGES: [&str; 12] = [
+    "policy", "snapshot", "profile", "tasks", "reserve", "schedule", "solve", "verify", "teach",
+    "frontier", "dataset", "train",
 ];
 
 /// The release stage, which follows training unless the request stops at
@@ -167,6 +173,15 @@ pub struct PracticeRequest {
     /// Which of the earlier releases' records are replayed beside the new
     /// ones, and how the replay is spread over capabilities.
     pub replay_policy: ReplayPolicy,
+    /// In which order the tasks are solved and taught when the budget may
+    /// not reach them all; the order they were admitted in by default.
+    pub curriculum: Strategy,
+    /// The learning-progress signal's parameters, for the strategies that
+    /// use it.
+    pub progress: ProgressParams,
+    /// The seed of the learning-progress draw: drawn and recorded when
+    /// `None`.
+    pub curriculum_seed: Option<Seed>,
     /// The step budget of the training; sized from the examples when `None`.
     pub steps: Option<u32>,
     /// LoRA rank of the adapter; the default rank when `None`.

@@ -17,6 +17,7 @@ use splinter_store::tasks::TaskSetId;
 
 use super::exam::ExamReserved;
 use crate::curriculum::frontier::Frontier;
+use crate::curriculum::schedule::{ScheduleReport, Yield};
 use crate::curriculum::teacher::Taught;
 use crate::datasets::Built;
 use crate::learn::PolicyUsed;
@@ -80,6 +81,9 @@ pub struct PracticeReport {
     pub tasks: Option<TasksMade>,
     /// The reserve stage: the exam's families, decided before any attempt.
     pub reserve: Option<ExamReserved>,
+    /// The schedule stage, when a curriculum strategy other than the
+    /// frontier order was asked for.
+    pub schedule: Option<ScheduleReport>,
     /// The solve stage: k attempts at each task not reserved.
     pub solve: Option<Solved>,
     /// The verify stage, with the experiences the exposure audit failed.
@@ -89,6 +93,10 @@ pub struct PracticeReport {
     pub teach: Option<Taught>,
     /// The frontier stage: pass@k, and the tasks kept.
     pub frontier: Option<Frontier>,
+    /// What the solve and teach stages cost in device time against the tasks
+    /// the frontier kept.
+    #[serde(rename = "yield")]
+    pub yield_: Option<Yield>,
     /// The dataset stage: the agent's actions in the passing attempts.
     pub dataset: Option<Built>,
     /// The candidate trained.

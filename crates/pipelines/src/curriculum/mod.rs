@@ -47,9 +47,11 @@
 
 pub mod frontier;
 pub mod mastery;
+pub mod progress;
 pub mod queue;
 pub mod quota;
 pub mod repository_teacher;
+pub mod schedule;
 pub mod teacher;
 
 use splinter_core::digest::Digest;

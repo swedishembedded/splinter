@@ -13,7 +13,9 @@ use std::time::Duration;
 
 use clap::Args;
 use splinter_sdk::canaries::CANARY_COUNT;
+use splinter_sdk::curriculum::progress::Params as ProgressParams;
 use splinter_sdk::curriculum::repository_teacher::RepositoryTeacher;
+use splinter_sdk::curriculum::schedule::Strategy;
 use splinter_sdk::practice::{
     DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS, DEFAULT_MAX_TOOL_CALLS,
 };
@@ -120,6 +122,9 @@ pub struct PracticeArgs {
     /// earlier release and the new ones, instead of continuing the champion.
     #[arg(long, conflicts_with = "replay")]
     pub rebuild: bool,
+    /// Which tasks a budget that runs out reaches first.
+    #[command(flatten)]
+    pub curriculum: CurriculumArgs,
     /// The release gate's statistical settings.
     #[command(flatten)]
     pub gate: GateArgs,
@@ -173,6 +178,72 @@ pub struct PracticeArgs {
         value_name = "PROGRAM ARG..."
     )]
     pub test_command: Vec<String>,
+}
+
+/// Which order the solve and teach stages go through the tasks in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum CurriculumArg {
+    /// The order the tasks were admitted in.
+    Frontier,
+    /// Families drawn in proportion to their learning progress per GPU
+    /// second, from a recorded seed.
+    LearningProgress,
+    /// Families ranked by learning progress per GPU second, no draw.
+    GainRanked,
+}
+
+/// The curriculum strategy and the learning-progress signal's parameters.
+#[derive(Clone, Copy, Debug, Args)]
+pub struct CurriculumArgs {
+    /// The order tasks are solved and taught in (`--budget` may end the run
+    /// before all are reached): the order they were admitted in, or by
+    /// learning progress (the change in a family's verified pass rate
+    /// between releases, per GPU second it cost).
+    #[arg(
+        long = "curriculum",
+        value_enum,
+        default_value = "frontier",
+        value_name = "STRATEGY"
+    )]
+    pub strategy: CurriculumArg,
+    /// The seed of the learning-progress draw (drawn, printed and recorded
+    /// if not given).
+    #[arg(long, value_name = "N")]
+    pub curriculum_seed: Option<Seed>,
+    /// Releases in each of the two windows learning progress compares.
+    #[arg(long, value_name = "N", default_value_t = ProgressParams::default().window,
+        value_parser = clap::value_parser!(usize))]
+    pub lp_window: usize,
+    /// The novelty bonus of a family nothing has attempted, in pass-rate
+    /// units; it shrinks with attempts.
+    #[arg(long, value_name = "X", default_value_t = ProgressParams::default().novelty)]
+    pub lp_novelty: f64,
+    /// The share of the draw that is uniform over families, in [0, 1]: no
+    /// family gets less than this share divided by the number of families.
+    #[arg(long, value_name = "X", default_value_t = ProgressParams::default().epsilon)]
+    pub lp_explore: f64,
+}
+
+impl CurriculumArgs {
+    /// The strategy they name.
+    #[must_use]
+    pub fn strategy(&self) -> Strategy {
+        match self.strategy {
+            CurriculumArg::Frontier => Strategy::Frontier,
+            CurriculumArg::LearningProgress => Strategy::LearningProgress,
+            CurriculumArg::GainRanked => Strategy::GainRanked,
+        }
+    }
+
+    /// The signal's parameters.
+    #[must_use]
+    pub fn params(&self) -> ProgressParams {
+        ProgressParams {
+            window: self.lp_window,
+            novelty: self.lp_novelty,
+            epsilon: self.lp_explore,
+        }
+    }
 }
 
 /// A repository teacher, for clap: `reference` or a model reference.

@@ -50,6 +50,9 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
             .transpose()?
             .unwrap_or_default(),
         rebuild: args.rebuild,
+        curriculum: args.curriculum.strategy(),
+        progress: args.curriculum.params(),
+        curriculum_seed: args.curriculum.curriculum_seed,
         gate: args.gate.plan(),
         steps: args.steps,
         rank: args.rank,
@@ -111,6 +114,34 @@ mod tests {
         assert_eq!(asked.pass_at_k.k, 3);
         assert_eq!(asked.tuning.max_block, Some(8192));
         assert_eq!(asked.test_command, ["python3", "-m", "pytest", "-x"]);
+    }
+
+    #[test]
+    fn a_curriculum_strategy_and_its_signal_reach_the_request_and_default_to_the_frontier() {
+        let plain = request(&["./shop"]);
+        assert_eq!(
+            plain.curriculum,
+            splinter_sdk::curriculum::schedule::Strategy::Frontier
+        );
+        assert_eq!(plain.curriculum_seed, None);
+
+        let asked = request(&[
+            "./shop",
+            "--curriculum",
+            "learning-progress",
+            "--curriculum-seed",
+            "9",
+            "--lp-window",
+            "3",
+            "--lp-explore",
+            "0.25",
+        ]);
+        assert_eq!(
+            asked.curriculum,
+            splinter_sdk::curriculum::schedule::Strategy::LearningProgress
+        );
+        assert_eq!(asked.curriculum_seed.map(|s| s.value()), Some(9));
+        assert_eq!((asked.progress.window, asked.progress.epsilon), (3, 0.25));
     }
 
     #[test]
