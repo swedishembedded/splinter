@@ -13,6 +13,7 @@ Every command takes these.
 
 - `--device <DEVICE>`: Which compute may be scheduled: `gpu`, `gpu1`, `gpu0,gpu1`, `cpu0-7`, `vulkan`, ... in brain's grammar. Without it, every device the machine has.
 - `--backend <BACKEND>`: How the hardware is driven: wgpu, vulkan, cuda or cpu. Without it brain picks, which on a CUDA host is not CUDA.
+- `--vram-budget <VRAM_BUDGET>`: The VRAM, in GiB, this process was granted: every card it budgets from is capped at it, so a run on a share of a card sizes its model, KV pool and context to the share. Without it the whole card is budgeted.
 - `--state <DIR>`: The state root (default: $SPLINTER_STATE, else ~/.splinter)
 - `--json`: Print machine-readable JSON on stdout instead of text.
 - `-v, --verbose`: Report more as work goes (each stage's full summary)
@@ -24,6 +25,7 @@ Every command takes these.
 - `--allow-unconfined-workspace`: Let a project's commands (the solver's shell, the test runs) see the whole filesystem where the kernel cannot confine them to their tree. Without it such a run is refused; the environment record says when it was allowed.
 - `--allow-workspace-network`: Let a project's commands (the solver's shell, the test runs) use the network. Without it they cannot connect anywhere, a model server on the loopback included; the environment record says when it was allowed.
 - `--workspace-max-processes <N>`: Bound the processes and threads one project command may start. Part of the environment record, so tasks generated without it name a different environment.
+- `--runtime-dir <DIR>...`: A directory searched before the system's for the interpreters code runs in (`lua` is Lua 5.1 and no other: `make deps/lua` builds the pinned one); repeat for more.
 - `--temperature <T>`: The sampling temperature, 0 to 2, asked of a model reached through sven's providers (the provider's own default when not given). The same flag sets the pass@k sampling of a verb that measures it; when given twice, the last wins.
 
 ## Commands
@@ -42,6 +44,10 @@ Every command takes these.
   - [splinter experiment check](#splinter-experiment-check) - Validate a plan against the catalog of families and show its schedule
 - [splinter absorb](#splinter-absorb) - Learn from the sessions you held with an agent
 - [splinter consolidate](#splinter-consolidate) - Take the generation the policy is in into the weights
+- [splinter improve](#splinter-improve) - Choose how to improve an agent on a target capability from what each way was measured to do, net of what it costs
+- [splinter generation](#splinter-generation) - Generations of a coding policy, each held to what the ones before it had
+  - [splinter generation run](#splinter-generation-run) - Run one generation of a coding policy
+  - [splinter generation matrix](#splinter-generation-matrix) - The ledger of an experiment and the full retention matrix of the lineage `policy:<alias>` points at
 - [splinter session](#splinter-session) - Take in recorded agent sessions, secrets removed
   - [splinter session add](#splinter-session-add) - Take recorded agent sessions in as sources
   - [splinter session list](#splinter-session-list) - List the stored sessions
@@ -135,6 +141,8 @@ Subcommands:
 - [`experiment`](#splinter-experiment) - Check an experiment plan
 - [`absorb`](#splinter-absorb) - Learn from the sessions you held with an agent
 - [`consolidate`](#splinter-consolidate) - Take the generation the policy is in into the weights
+- [`improve`](#splinter-improve) - Choose how to improve an agent on a target capability from what each way was measured to do, net of what it costs
+- [`generation`](#splinter-generation) - Generations of a coding policy, each held to what the ones before it had
 - [`session`](#splinter-session) - Take in recorded agent sessions, secrets removed
 - [`claims`](#splinter-claims) - What a person taught in sessions
 - [`tasks`](#splinter-tasks) - Generate and inspect task sets
@@ -163,15 +171,22 @@ Subcommands:
 Learn from sources: capture them, generate tasks, solve, verify, critique and retry failures, build an sft-final dataset, train a candidate on it from the champion, and release it if it passes the release gate
 
 ```text
-splinter learn [OPTIONS] <SOURCE>...
+splinter learn [OPTIONS] [SOURCE]...
 ```
 
 Arguments:
 
-- `<SOURCE>...` (required): Files, directories, cmd:\<command\> (quoted as one argument), or stored source ids.
+- `<SOURCE>...`: Files, directories, cmd:\<command\> (quoted as one argument), or stored source ids; with --source, the words of the objective instead.
 
 Options:
 
+- `--source <URL|PATH>...`: Learn an objective from documentation: `learn "Become an exceptional Lua 5.1 programmer" --source https://www.lua.org/manual/5.1/manual.html`. The positional words are the objective, and each --source (a URL, a file or a directory; repeat for more) is read into a skill graph with probes, a measured baseline, training rounds on the skill expected to benefit most and an assessment on probes that decided nothing.
+- `--mastery <SHARE>`: The pass rate on a skill's probes that counts as mastered [default: 0.7]
+- `--probes <N>`: Probes per skill in each half (dev and final)
+- `--min-probes <N>`: The graded probes a skill's competence must rest on [default: 3]
+- `--max-rounds <N>`: Training rounds in all [default: 8]
+- `--max-rounds-per-skill <N>`: Training rounds one skill may take [default: 2]
+- `--retention-drop <SHARE>`: How far a skill measured earlier may fall in a round before its candidate is rejected [default: 0.25]
 - `--goal <TEXT>`: What the learner is after; steers the tasks generated.
 - `--kinds <K,..>...`: Task kinds, comma-separated; when not named, a planner model surveys the sources and chooses them.
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
@@ -250,6 +265,9 @@ Options:
 - `--max-repeated-results <N>`: How often one tool call may return the same answer before the attempt is stopped as going nowhere [default: 3]
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
 - `--no-release`: Stop at the trained candidate: do not run the release gate.
+- `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
+- `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`.
+- `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
 - `--alpha-spending`: Spend the significance level across the releases of a lineage by a fixed schedule, so that a long run of candidates no better than their champions releases one with probability below the level.
 - `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a miss on an exam too small to see it is reported inconclusive, not as a failure.
 - `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
@@ -466,6 +484,105 @@ Options:
 - `--lr <LR>`: The peak learning rate [default: 0.00001]
 - `--sealed-probes <FILE>...`: Files of sealed probes (JSON Lines of {"question", "reference"?, "name"?}): a training record containing one is refused.
 - `--no-release`: Gate the checkpoint but do not release it: it is not kept.
+
+### splinter improve
+
+Choose how to improve an agent on a target capability from what each way was measured to do, net of what it costs: more samples, another episode protocol, a trained candidate, or no change
+
+```text
+splinter improve [OPTIONS] <EXPERIMENT>...
+```
+
+Arguments:
+
+- `<EXPERIMENT>...` (required): Improvement experiments, each a TOML file: the capability (a task set), the incumbent, the interventions to consider (more samples, another episode protocol, a trained candidate, no change) and what a success is worth. Each intervention is measured against the incumbent on the same tasks and the one with the greatest net value is chosen, or none; nothing is applied.
+
+Options:
+
+- `--compare-fixed`: Beside the choices, what applying one intervention to every experiment would have come to.
+
+### splinter generation
+
+Generations of a coding policy, each held to what the ones before it had: run one, or show the ledger and the full retention matrix
+
+```text
+splinter generation [OPTIONS] <COMMAND>
+```
+
+Subcommands:
+
+- [`run`](#splinter-generation-run) - Run one generation of a coding policy
+- [`matrix`](#splinter-generation-matrix) - The ledger of an experiment and the full retention matrix of the lineage `policy:<alias>` points at
+
+#### splinter generation run
+
+Run one generation of a coding policy: measure the champion on every protected task, `practice` the repository to a candidate, measure both on the protected tasks and the new exam, reject the candidate on a retention or regression limit, release it through the gate otherwise, and keep a ledger entry with everything it was decided on
+
+```text
+splinter generation run [OPTIONS] --experiment <NAME> <REPO>
+```
+
+Arguments:
+
+- `<REPO>` (required): The git repository to learn from: a work tree or a bare repository.
+
+Options:
+
+- `--experiment <NAME>` (required): The experiment this generation belongs to; names its ledger.
+- `--max-family-drop <SHARE>`: The most a protected family's pass rate may fall [default: 0.2]
+- `--max-mean-drop <SHARE>`: The most the mean over protected families may fall [default: 0.05]
+- `--min-new-gain <SHARE>`: What the candidate must gain on the new exam: more than this [default: 0]
+- `--rev <REV>`: The revision of it to learn from: anything git resolves to a commit. The tracked files of that commit are the snapshot every task is pinned to; uncommitted work is not in it. Default: `HEAD`.
+- `--allow-dirty`: Snapshot the committed files of a revision that is checked out with uncommitted changes, instead of refusing it.
+- `--file <PATH>...`: A file, relative to the repository, that tasks may change; repeat for more. Without any, every source file of the project the rules recognise (a Python project with a tests directory, a Cargo project)
+- `--max-tasks <N>`: The most tasks one run admits.
+- `--mutants-per-file <N>`: The most faults seeded in one file.
+- `--exam-families <N>`: How many families (a family is the file a fault was seeded in) to reserve for the exam before any attempt is made at any task: their tasks are set apart and never solved or trained on, in this run or a later one; 0 reserves none [default: a quarter of the families]
+- `--canaries <N>`: The most canaries (exam tasks no honest change can pass) the release gate hands the candidate; a pass on one refuses it; 0 hands none [default: 20]
+- `--exam-seed <N>`: The seed the exam families are chosen by when this run reserves the first: drawn and printed [default], then kept with the families, so every later run reads it back and naming another is refused.
+- `--k <N>`: Attempts per task when measuring pass@k. Default: `4`.
+- `--temperature <T>`: The policy's sampling temperature for its pass@k attempts [default for a local model: 0.8; a remote model samples as its server does unless this is given]
+- `--top-k <N>`: The policy's top-k cut for its pass@k attempts [default for a local model: 20]
+- `--follow-ups <N>`: Follow-up turns an agent is sent after the checks it was shown stay red [default: 2]
+- `--max-tool-calls <N>`: Tool calls an agent may make in one attempt, follow-ups included [default: 60]
+- `--max-repeated-results <N>`: How often one tool call may return the same answer before the attempt is stopped as going nowhere [default: 3]
+- `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
+- `--no-release`: Stop at the trained candidate: do not run the release gate.
+- `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
+- `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`.
+- `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
+- `--alpha-spending`: Spend the significance level across the releases of a lineage by a fixed schedule, so that a long run of candidates no better than their champions releases one with probability below the level.
+- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a miss on an exam too small to see it is reported inconclusive, not as a failure.
+- `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
+- `--steps <N>`: The step budget of the training: the most steps it may take.
+- `--rank <N>`: LoRA rank of the adapter [default: 8]
+- `--max-block <TOKENS>`: The longest training record, in tokens, the card fits: a longer record is left out of the dataset and counted, instead of stopping the training.
+- `--lr <LR>`: The peak learning rate [default: 0.0002]
+- `--alpha <A>`: The LoRA alpha, the update scaled by alpha / rank [default: 2 x the rank]
+- `--weight-decay <WD>`: The AdamW weight decay on the adapter's matrices [default: 0]
+- `--records-per-step <N>`: Records averaged into one optimizer step.
+- `--seed <N>`: The seed of the adapter's initialisation and the batch order (drawn, printed and recorded if not given)
+- `--eval-every <N>`: Steps between evaluations of the monitoring records; 0 monitors nothing and the candidate carries its last step [default: 16 evaluations over the step budget]
+- `--patience <N>`: Evaluations without improvement before the training stops; 0 runs the whole budget (the best evaluation is carried either way) [default: 4]
+- `--monitor-share <SHARE>`: The share of the training families set aside as the monitoring records, in (0, 0.5]: whole families, never the held-out ones the gate and the exam decide on [default: 0.1]
+- `--keep-evaluations`: Keep the adapter of every evaluation with the candidate, so a step can be chosen on the dev suite (`select`) instead of the monitoring loss.
+- `--bf16-base`: Hold the frozen base at bf16, half the bytes of fp32.
+- `--plan <FILE>`: An experiment plan (`experiment check`) this run is one generation of: the repository must be a family the plan trains in `--generation`, and a sealed family is always refused. The catalog is the catalog.toml beside the plan.
+- `--generation <N>`: The generation of the plan, counted from 1.
+- `--test-command <PROGRAM ARG...>...`: The command that runs the project's whole test suite in the root of its tree, as a program and its arguments (everything after this flag, so it comes last). Without it the rules give one: `python3 -m unittest` for a Python project, `cargo test --offline` for a Cargo project.
+
+#### splinter generation matrix
+
+The ledger of an experiment and the full retention matrix of the lineage `policy:<alias>` points at: every generation, the base included, measured on every protected task
+
+```text
+splinter generation matrix [OPTIONS] --experiment <NAME>
+```
+
+Options:
+
+- `--experiment <NAME>` (required): The experiment whose ledger is shown.
+- `--alias <ALIAS>`: The alias whose lineage is measured. Default: `default`.
 
 ### splinter session
 
@@ -1030,6 +1147,7 @@ Options:
 - `--control <CONTROL>`: For the sft-step view: build another dataset than the default. `outcome-verified` admits only experiences an independent verdict passed (the default also admits an action labelled good from one that was not verified or failed; the manifest records `outcome-verified`). The negative controls: `unverified` keeps trajectories whatever their verdict (never an exposed one); `shuffled` gives each verified trajectory the instruction of another task. Values: `outcome-verified`, `unverified`, `shuffled`.
 - `--control-seed <N>`: The seed of the `shuffled` pairing (drawn and printed when not given)
 - `--drop-leaking`: Leave out, and list in the report, every experience that would carry an exam family's attempt or file into the dataset, instead of refusing the build. What remains is sealed as usual.
+- `--serialise-calls`: For the sft-step view: a trajectory exported as one agent step that holds a whole run's tool calls is read as one call per turn, each followed by its result, then the final reply.
 - `--writer <NAME>`: For the voice view: who the writer is. Requests are written as theirs and half the records open with their persona prompt, half with the line that says who the model is; refused with --system-prompt.
 - `--token-limit <N>`: For the voice view: keep at most this many tokens of the writer's text, evenly spread over all of it.
 - `--max-family-share <SHARE>`: For the voice view: the most of the tokens one family may supply.
