@@ -286,14 +286,19 @@ fn chosen_authors(study: &Study, only: &[u64]) -> anyhow::Result<Vec<u64>> {
 }
 
 /// Runs `stage` for each of `authors`, going on to the next when one fails,
-/// and fails at the end naming every author that did.
+/// and fails at the end naming every author that did. A failure is also
+/// printed when it happens, so a long run does not hide it until the end.
 fn for_each_author(
     authors: &[u64],
     mut stage: impl FnMut(u64) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let failed: Vec<String> = authors
         .iter()
-        .filter_map(|&seed| stage(seed).err().map(|e| format!("author {seed}: {e:#}")))
+        .filter_map(|&seed| {
+            let failure = format!("author {seed}: {:#}", stage(seed).err()?);
+            eprintln!("{failure}");
+            Some(failure)
+        })
         .collect();
     anyhow::ensure!(failed.is_empty(), "{}", failed.join("\n"));
     Ok(())
