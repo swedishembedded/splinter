@@ -775,6 +775,30 @@ not rerun on the stored sets), 129 of the 152 remain; the two numbers are report
 quoted, per set, with the classes of A7.4. No stored verdict is rewritten (an experience and its annotations are
 immutable); a re-verification appends new annotations.
 
+### Amendment 14, 2026-10-20, 01:07 CEST: the dataset build, the step rule and the serving build of the corrected CE4 adapter
+
+Made before any dataset is built from the regenerated trajectories, any training run on them and any 8B verdict
+on them. It changes no gate and no parameter of A2.7 other than the one stated.
+
+**A14.1 Dataset.** The training set is built by splinter cf3f02d2 (brain 19f0ba146, sven f0cfb82c; it pairs a
+result to its call within the step, refuses ambiguous steps and unconserved projections, and runs brain's
+record check before storing) from the regenerated sqlglot development pass of A12.1 (set named in the run record),
+unpacked `sft-step` view (one record per answer), without `--serialise-calls`, `--control outcome-verified
+--drop-leaking --min-strength executable`, block bound 8192 as in A9.2, under the exposure rule of A13.2. The
+count of records, of exclusions by reason and of tokens is reported; three records are rendered through the
+trainer's path and checked for one result per call and unique call ids before training.
+
+**A14.2 Training.** Recipe A2.7, with the step count the registered rule ceil(2R/8) from the R the trainer
+reports (no extra steps); the loss on the training and the monitoring records is read every few steps and the
+best monitored evaluation kept. Training that shows memorisation (training loss below half its initial value
+while the monitoring loss rises) is reported as such.
+
+**A14.3 Serving build and a pipeline check.** The 8B arms of a check on the adapter are served by brain c373ae464
+(adapter in the bank, one resident, default flags, tensor-core tier of A5.1), the same server for both arms; A4.5
+applies. The first such run is on the 23-task subset `S1` of A9.6 and is a pipeline check only: it reports
+the repetition-stop counts, the tool-call mix and the verified counts, it is not the confirmatory query of
+A2.3, and no result of it enters the paper.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
