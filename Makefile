@@ -75,6 +75,7 @@ $(BUILD_CRATE_TARGETS): build/crate/%:
 test:
 	$(CARGO) test $(PROFILE) --workspace
 	python3 samples/adams/test_fetch.py
+	python3 scripts/qualify/test_qualify.py
 
 ## test/crate - lists the per-package test targets; tests nothing
 test/crate:
@@ -253,14 +254,31 @@ deps:
 deps/local:
 	bash scripts/local-config.sh $(SVEN_DIR) $(BRAIN_DIR)
 
-## deps/lock - pin Cargo.lock to the HEADs of SVEN_DIR and BRAIN_DIR (push those commits before sharing the lock)
 ## deps/lua - build the pinned Lua 5.1.5 into LUA_DIR/bin/lua from its checksummed source tarball; run tasks with --runtime-dir LUA_DIR/bin (LUA_DIR=<directory>)
 deps/lua:
 	test -n "$(LUA_DIR)" || { echo "deps/lua: give LUA_DIR=<directory to build into>"; exit 2; }
 	bash scripts/deps/lua51.sh "$(LUA_DIR)"
 
+## deps/lock - pin Cargo.lock to the HEADs of SVEN_DIR and BRAIN_DIR (push those commits before sharing the lock)
 deps/lock:
 	bash scripts/pin-lock.sh $(SVEN_DIR) $(BRAIN_DIR)
+
+## qualify - lists the qualification targets; runs nothing
+qualify:
+	@bash scripts/make-help.sh qualify
+
+## qualify/list - validate the qualification plan and list every check and mandatory ablation (runs nothing)
+qualify/list:
+	python3 scripts/qualify/qualify.py scripts/qualify/plan.toml --out "$${TMPDIR:-/tmp}/qualify-list" --list
+
+## qualify/test - the qualification harness's own spec (no model, no GPU, seconds)
+qualify/test:
+	python3 scripts/qualify/test_qualify.py
+
+## qualify/run - run the qualification matrix and the ablations once, recorded under OUT (OUT=<dir>, VARS="--var splinter=... --var card=..."; the evidence stays out of git)
+qualify/run:
+	test -n "$(OUT)" || { echo "qualify/run: give OUT=<directory for the evidence>"; exit 2; }
+	python3 scripts/qualify/qualify.py scripts/qualify/plan.toml --out "$(OUT)" $(VARS)
 
 ## hooks - lists the hook targets; installs nothing
 hooks:
@@ -284,5 +302,6 @@ help:
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
 	deps deps/local deps/lua deps/lock \
 	hooks hooks/install \
+	qualify qualify/list qualify/test qualify/run \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
 	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit

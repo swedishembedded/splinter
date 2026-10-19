@@ -1,0 +1,237 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements qualification of learning agent systems
+# against a matrix fixed before the first run, for its clients. If your team
+# needs expertise in designing a qualification matrix and ablations for an
+# agent that improves itself, you can procure our services by sending an
+# email to info@swedishembedded.com.
+
+# The qualification matrix and the mandatory ablations of the unified
+# roadmap, run as `scripts/qualify/qualify.py plan.toml --out DIR --var ...`.
+# Registered before the first run: `plan.lock.json` records this file's
+# digest, and `--expect-plan` refuses another. A threshold below is a
+# pre-registered one; changing it is a new plan.
+#
+# Where the evidence is a run another lane owns (the registered coding
+# flywheel arms, harness optimisation, search, retrieval, the decision
+# model), the entry reads that run's result file (`result`); until the file
+# exists the entry is BLOCKED, never a pass. A result file is the JSON
+# `splinter experiences compare --json` prints (or the report of the
+# command named in the entry's title).
+
+[vars]
+splinter = ""        # the splinter binary
+splinter_dir = ""    # the three repositories: the build gates run in them
+sven_dir = ""
+brain_dir = ""
+state = ""           # a directory for the state roots of the runs
+results = ""         # where the registered runs wrote their result files
+device = "gpu0"
+backend = "cuda"
+card = ""            # the GPU reservation helper; a check that needs a card is BLOCKED without it
+manual = ""          # a documented domain: a URL or a path
+objective = ""
+experiments = ""     # improvement experiments, one file per failure cluster
+repo_g1 = ""         # the repositories of three generations, in order
+repo_g2 = ""
+repo_g3 = ""
+generation_plan = "" # the experiment plan: families per generation, the sealed exam
+
+# --- the matrix ---------------------------------------------------------------
+
+[[check]]
+id = "builds"
+title = "Independent builds are green: splinter's gates"
+command = ["make", "check"]
+cwd = "{splinter_dir}"
+timeout_s = 7200
+exit_is_evidence = true
+
+[[check]]
+id = "tests"
+title = "Independent builds are green: splinter's tests"
+command = ["cargo", "test", "--workspace"]
+cwd = "{splinter_dir}"
+timeout_s = 14400
+exit_is_evidence = true
+
+[[check]]
+id = "isolation"
+title = "Hidden material is isolated: the confinement fixtures prevent, not detect"
+command = ["cargo", "test", "-p", "splinter-sandbox", "--test", "confinement"]
+cwd = "{splinter_dir}"
+timeout_s = 3600
+exit_is_evidence = true
+
+[[check]]
+id = "failed-candidate-never-champion"
+title = "A candidate that loses or ties is never released and the alias does not move"
+command = ["cargo", "test", "-p", "splinter-pipelines", "--test", "release_workspace"]
+cwd = "{splinter_dir}"
+timeout_s = 3600
+exit_is_evidence = true
+
+[[check]]
+id = "autonomous-curriculum"
+title = "An unfamiliar documented domain becomes skills, probes, rounds and an assessment that decided nothing"
+command = [
+  "{splinter}", "--json", "--state", "{state}/acquire", "--device", "{device}", "--backend", "{backend}",
+  "learn", "{objective}", "--source", "{manual}", "--no-release",
+]
+card_gb = 40
+timeout_s = 43200
+[[check.assert]]
+path = "accepted"
+op = "=="
+value = true
+[[check.assert]]
+path = "assessment.improved"
+op = ">="
+value = 3
+
+[[check]]
+id = "intervention-choice"
+title = "Intervention choice is worth at least any fixed strategy, cost-adjusted"
+command = ["{splinter}", "--json", "--state", "{state}/improve", "improve", "--compare-fixed", "{experiments}"]
+card_gb = 40
+timeout_s = 43200
+[[check.assert]]
+path = "fixed.selected_net"
+op = ">="
+value = 0
+[[check.assert]]
+path = "fixed.beats_every_fixed_strategy"
+op = "=="
+value = true
+
+[[check]]
+id = "three-generations"
+title = "Three generations are accepted and what each held, the later ones kept"
+command = [
+  "sh", "-ec",
+  """
+  g() { {splinter} --json --state {state}/generations --device {device} --backend {backend} generation run "$1" --experiment qualify --plan {generation_plan} --generation "$2" >/dev/null; }
+  g {repo_g1} 1; g {repo_g2} 2; g {repo_g3} 3
+  {splinter} --json --state {state}/generations generation matrix --experiment qualify
+  """,
+]
+card_gb = 80
+timeout_s = 172800
+metric = "matrix.metrics.acc.value"
+[[check.assert]]
+path = "accepted"
+op = ">="
+value = 3
+[[check.assert]]
+path = "matrix.metrics.bwt.value"
+op = ">="
+value = -0.05
+[[check.assert]]
+path = "matrix.metrics.forgetting.value"
+op = "<="
+value = 0.05
+
+[[check]]
+id = "sft-beats-frozen-control"
+title = "The trained agent beats the frozen control on protected tasks (registered arm A2 against A0)"
+result = "{results}/a2-against-a0.json"
+metric = "candidate.competence.quality.value"
+[[check.assert]]
+path = "sign_test.p_value"
+op = "<="
+value = 0.05
+[[check.assert]]
+path = "candidate.competence.quality.value"
+op = ">"
+value = 0
+
+[[check]]
+id = "negative-control-shows-no-gain"
+title = "The negative control (shuffled pairs, registered arm A5) shows no gain"
+result = "{results}/a5-against-a0.json"
+[[check.assert]]
+path = "sign_test.p_value"
+op = ">"
+value = 0.05
+
+[[check]]
+id = "harness-optimisation-helps"
+title = "Harness optimisation helps on the same protected tasks (paired comparison of the optimised and the baseline harness)"
+result = "{results}/harness-optimised-against-baseline.json"
+[[check.assert]]
+path = "sign_test.p_value"
+op = "<="
+value = 0.05
+
+[[check]]
+id = "reproducible-conclusions"
+title = "Reproducible: the registered comparison, recomputed from the stored experiences, is the same"
+result = "{results}/a2-against-a0-recomputed.json"
+[[check.assert]]
+path = "sign_test.p_value"
+op = "<="
+value = 0.05
+
+[[check]]
+id = "final-exam-independent-of-selection"
+title = "The final exam shares no family with anything trained on or used to select"
+command = ["{splinter}", "--json", "experiment", "check", "{generation_plan}"]
+[[check.assert]]
+path = "sealed"
+op = "exists"
+
+# --- the mandatory ablations -------------------------------------------------
+# Each removes one thing from the full system and states the effect on the
+# metric of the check it is of: the measured difference is the finding.
+
+[[ablation]]
+id = "ablation-no-replay"
+title = "No replay: three generations trained on their new records alone"
+of = "three-generations"
+command = [
+  "sh", "-ec",
+  """
+  g() { {splinter} --json --state {state}/ablation-no-replay --device {device} --backend {backend} generation run "$1" --experiment qualify --replay none --plan {generation_plan} --generation "$2" >/dev/null; }
+  g {repo_g1} 1; g {repo_g2} 2; g {repo_g3} 3
+  {splinter} --json --state {state}/ablation-no-replay generation matrix --experiment qualify
+  """,
+]
+card_gb = 80
+timeout_s = 172800
+metric = "matrix.metrics.acc.value"
+
+[[ablation]]
+id = "ablation-no-harness-optimisation"
+title = "No harness optimisation: the registered trained arm under the baseline harness"
+of = "sft-beats-frozen-control"
+result = "{results}/ablation-no-harness-optimisation.json"
+metric = "candidate.competence.quality.value"
+
+[[ablation]]
+id = "ablation-harness-optimisation-without-training"
+title = "Harness optimisation without weight training: the optimised harness on the frozen base"
+of = "sft-beats-frozen-control"
+result = "{results}/ablation-harness-without-training.json"
+metric = "candidate.competence.quality.value"
+
+[[ablation]]
+id = "ablation-decision-assistance-off"
+title = "Decision assistance off"
+of = "sft-beats-frozen-control"
+result = "{results}/ablation-decision-off.json"
+metric = "candidate.competence.quality.value"
+
+[[ablation]]
+id = "ablation-search-off"
+title = "Search off"
+of = "sft-beats-frozen-control"
+result = "{results}/ablation-search-off.json"
+metric = "candidate.competence.quality.value"
+
+[[ablation]]
+id = "ablation-retrieval-off"
+title = "Retrieval off"
+of = "sft-beats-frozen-control"
+result = "{results}/ablation-retrieval-off.json"
+metric = "candidate.competence.quality.value"
