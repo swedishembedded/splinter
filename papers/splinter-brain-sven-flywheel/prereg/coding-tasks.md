@@ -678,6 +678,37 @@ infrastructure error and is repeated by a resumed solve (A4.6); it is never a fa
 choice is made before the verdict of any arm has been read: the first base arm was lost to
 time-outs (67 of 69 attempts) and has no verdicts.
 
+### Amendment 10, 2026-10-19, 19:47 CEST: the CE7 teacher pass and dataset
+
+Made before any sqlglot task has been solved and before any verdict on it exists. It fixes
+how the CE7 teacher pass and the CE7 training dataset are produced and changes no parameter
+of A6.
+
+**A10.1 Admission of group 0.** The first call of group 0 of A6.3 was still running when the previous lease ended and stored no
+result; it is run again alone, with the same command and the same binary (splinter 64cad0e6),
+over `runs/ce/ce7/group0.txt`. The development partition is the union of the ten development sets
+and the qualification partition the union of the ten exam sets, built with `tasks pick --seed
+20261017 --family-share 1` over the ten admission runs.
+
+**A10.2 Teacher pass.** One pass over the development partition: the 27B teacher, greedy (temperature
+0), one attempt per task, `--solve-deadline 3600`, concurrency 8 per server (A3.3), pass 2 not run (A7.1),
+`--test-output-cap 1048576 --workspace-max-processes 512` and the virtual environment of A6.1 first on
+PATH (the recorded environment of the tasks). The server flags are those of A2.6 with the values of A4.7
+(context 32768, batch 8, prefix slots 8, speculative off) on brain 98106c845. The splinter binary is the
+build of origin/main 7bd63719, which links sven 319a2e05 and brain 83e2f44a3 (admission by 64cad0e6
+stands, A3.4); sven 319a2e05 exports a run as a whole conversation with its true turns, so the
+projection of A9.1 is not needed. Sets that cannot be run in one call are split by family and each
+set is named with its binary in the run record (A4.5). A second server on the other card, when
+one is available, takes a disjoint half of the development partition; greedy outputs do not depend on
+the split.
+
+**A10.3 Dataset.** Verification and the exposure audit are applied as registered (A3.1, A3.2, A7.4). The CE7
+training dataset is built by the same binary as the teacher pass (A5.3), unpacked sft-step view, `--control
+outcome-verified --drop-leaking --min-strength executable`, with block bound 8192 as in A9.2 and
+without `--serialise-calls`. The count of records, the number of turns per record and the token
+counts are reported as measured. Nothing is trained on it until the CE4 data audit of the first repository has been
+resolved; no training parameter is fixed here.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
