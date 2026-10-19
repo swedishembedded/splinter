@@ -19,6 +19,9 @@ repos:
         entry: python3 scripts/hooks/text-hygiene.py --fix
         language: system
         types: [text]
+        # The vendored docs publisher reproduces third-party license texts
+        # verbatim and is pinned by sha256.
+        exclude: ^tools/docs-publisher/
 
       - id: spdx-license-headers
         name: SPDX license and copyright headers
