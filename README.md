@@ -217,6 +217,34 @@ back off it on a rollback without a restart. Where no container is
 configured the agent's shell runs on the host, bounded but not isolated, and the
 record of every environment says so; the audit is then detection, not prevention.
 
+A task the policy never solves is not dropped when a teacher is named (`splinter practice
+--teacher reference`, or `--teacher remote:<provider>/<model>`): the task's own reference change
+is replayed as the actions of an agent through sven's real tools (read the file, edit it by the
+patch's hunks), or a stronger model solves it as an agent. Either is graded by the same
+workspace verifier and exposure audit as the policy's attempts and never grades itself, and the
+demonstration teaches what to do once the place is known, not how to find it. `--replay
+none|uniform|balanced` chooses what of the earlier releases' records is replayed, and
+`--rebuild` trains a fresh adapter on the base from all of them instead of continuing the
+champion.
+
+A documented domain is learned from an objective and its documentation
+(`splinter learn "Become exact about the Zork controller" --source <URL|PATH>`): the
+sections become a graph of skills (with the constraints and requirements the text states and the
+prerequisites between them), each skill gets probes that are never trained on - split into dev
+probes that measure the policy as rounds go and final probes only the closing assessment touches -
+the policy's baseline competence is measured on them, and rounds train the skill expected to
+benefit most (prerequisites first) until every skill is mastered, no skill can be chosen, or the
+budget is spent. A candidate is accepted when its skill improved and nothing measured before fell
+past the retention bound; the run is accepted only if every assessed skill reaches the target on
+the final probes. `splinter improve <EXPERIMENT>...` decides which way of improving an agent
+(more samples, another episode protocol, a trained candidate, no change) is worth its cost from
+what each was measured to do; `splinter generation run|matrix` runs generations of a coding policy
+held to what earlier generations had and prints the full retention matrix. The Lua families and
+the `lua` runtime are Lua 5.1 and no other: `make deps/lua LUA_DIR=<dir>` builds the pinned
+interpreter and `--runtime-dir <dir>/bin` puts it first.
+`make qualify/list` shows the qualification matrix and the mandatory ablations
+`scripts/qualify/qualify.py` runs as one recorded command.
+
 ## Compiling from source
 
 sven and brain are git dependencies at the revisions pinned in `Cargo.lock`:
