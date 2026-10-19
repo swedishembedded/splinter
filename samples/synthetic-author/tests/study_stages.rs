@@ -272,6 +272,39 @@ fn each_arm_is_examined_in_its_own_slot_under_the_manifest_of_its_model() {
 }
 
 #[test]
+fn an_examination_restricted_to_some_arms_loads_and_asks_only_those() {
+    let (study, author, base) = corpus_done("stages-some-arms");
+    train::run(&study, author, &base, &Scripted::default()).unwrap();
+    let loader = scripting();
+    let only = ["tuned".to_string(), "tuned-reader-only".to_string()];
+    let examined = examine::run_arms(&study, author, &base, &loader, false, &only).unwrap();
+
+    // No load for the arms without an adapter: one per adapter asked.
+    let plan = study.author_plan(author).unwrap();
+    assert_eq!(
+        loader.loads.lock().unwrap().len(),
+        plan.training_seeds.len() + 1
+    );
+    assert!(examined.arms.iter().all(|(_, arm, _)| only.contains(arm)));
+    let shared = study.author_dir(author).join("exam").join(SHARED_SLOT);
+    assert!(recorded(&shared, "base").unwrap().is_none());
+
+    let message = format!(
+        "{:#}",
+        examine::run_arms(
+            &study,
+            author,
+            &base,
+            &loader,
+            false,
+            &["tuned-x".to_string()]
+        )
+        .unwrap_err()
+    );
+    assert!(message.contains("tuned-x"), "{message}");
+}
+
+#[test]
 fn the_sampled_decoding_is_asked_beside_the_greedy_one_with_its_seed_recorded() {
     let (study, author, base) = corpus_done("stages-sampled");
     train::run(&study, author, &base, &Scripted::default()).unwrap();

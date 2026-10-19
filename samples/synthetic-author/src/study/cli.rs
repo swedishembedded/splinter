@@ -117,6 +117,10 @@ pub struct ExamStageArgs {
     /// one.
     #[arg(long)]
     sampled: bool,
+    /// The arms to ask, by name, comma separated; every arm the protocol asks
+    /// when absent.
+    #[arg(long = "arms", value_delimiter = ',')]
+    arms: Vec<String>,
     /// Put the examination to a `brain serve` started with this `brain`
     /// binary, one server per model, which decodes `--slots` items in one
     /// batch, instead of to an in-process model that answers one at a time.
@@ -496,7 +500,7 @@ fn exam_stage(args: &ExamStageArgs) -> anyhow::Result<()> {
         }
     };
     for_each_author(&authors, |seed| {
-        let examined = examine::run(&study, seed, &base, loader, args.sampled)?;
+        let examined = examine::run_arms(&study, seed, &base, loader, args.sampled, &args.arms)?;
         for (slot, arm, items) in &examined.arms {
             println!("author {seed} {slot} {arm}: {items} items answered");
         }

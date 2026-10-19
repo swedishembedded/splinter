@@ -112,6 +112,22 @@ pub fn run(
     loader: &dyn Loader,
     sampled: bool,
 ) -> anyhow::Result<Examined> {
+    run_arms(study, author_seed, base, loader, sampled, &[])
+}
+
+/// [`run`], restricted to the arms named in `only` (every arm the protocol
+/// asks when it is empty); a model whose arms are all left out is not loaded.
+///
+/// # Errors
+/// As [`run`]; also a name in `only` that is not an arm the protocol asks.
+pub fn run_arms(
+    study: &Study,
+    author_seed: u64,
+    base: &Base,
+    loader: &dyn Loader,
+    sampled: bool,
+    only: &[String],
+) -> anyhow::Result<Examined> {
     let protocol = study.protocol();
     let plan = study.author_plan(author_seed)?;
     let frozen = study.require_author_manifest(author_seed)?;
@@ -139,7 +155,16 @@ pub fn run(
     };
 
     // Everything an adapter needs exists before any model is loaded.
-    let keys = protocol.arm_keys()?;
+    let mut keys = protocol.arm_keys()?;
+    if let Some(unknown) = only
+        .iter()
+        .find(|name| !keys.iter().any(|k| k.name() == name.as_str()))
+    {
+        anyhow::bail!("{unknown:?} is not an arm the protocol asks");
+    }
+    if !only.is_empty() {
+        keys.retain(|k| only.iter().any(|name| name.as_str() == k.name()));
+    }
     let mut adapters = Vec::new();
     for key in keys.iter().copied().filter(|k| k.is_adapter()) {
         let wanted = protocol.seeds_for(plan, key);
