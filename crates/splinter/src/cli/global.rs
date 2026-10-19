@@ -71,6 +71,11 @@ pub struct Global {
     #[arg(long, global = true, value_name = "N",
         value_parser = clap::value_parser!(u64).range(1..))]
     pub workspace_max_processes: Option<u64>,
+    /// A directory searched before the system's for the interpreters code
+    /// runs in (`lua` is Lua 5.1 and no other: `make deps/lua` builds the
+    /// pinned one); repeat for more.
+    #[arg(long, global = true, value_name = "DIR")]
+    pub runtime_dir: Vec<PathBuf>,
     /// The sampling temperature, 0 to 2, asked of a model reached through
     /// sven's providers (the provider's own default when not given). The
     /// same flag sets the pass@k sampling of a verb that measures it; when

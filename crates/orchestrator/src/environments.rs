@@ -88,6 +88,16 @@ impl WorkspaceBackend {
     }
 }
 
+/// The search path of the commands a sandbox runs: `dirs` first, then the
+/// system's.
+fn search_path(dirs: &[std::path::PathBuf]) -> String {
+    dirs.iter()
+        .map(|dir| dir.display().to_string())
+        .chain(std::iter::once(DEFAULT_SEARCH_PATH.to_string()))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
 /// The runtimes code runs in and the workspaces commands run in, each
 /// resolved once.
 pub struct Environments {
@@ -105,7 +115,14 @@ impl Environments {
     /// workspace backend `workspace` describes (resolved when first used).
     #[must_use]
     pub fn new(root: &StateRoot, workspace: &WorkspaceSettings) -> Self {
-        let sandbox = ProcessSandbox::new(root.sandbox(), Vec::new(), &[], Limits::default());
+        // The interpreters code runs in are looked for in the directories
+        // named for them first.
+        let sandbox = ProcessSandbox::new(
+            root.sandbox(),
+            [("PATH".to_string(), search_path(&workspace.runtime_dirs))],
+            &["PATH"],
+            Limits::default(),
+        );
         let scratch = workspace
             .scratch_root
             .clone()
@@ -189,7 +206,7 @@ impl Environments {
         }
         // Cargo builds offline from the cargo home it is given and leaves no
         // incremental cache in a tree that is thrown away.
-        let cargo: Vec<(String, String)> = settings
+        let mut cargo: Vec<(String, String)> = settings
             .cargo_home
             .iter()
             .flat_map(|home| {
@@ -199,11 +216,16 @@ impl Environments {
                 ]
             })
             .collect();
+        // A pinned interpreter is found first by the project's commands too:
+        // a Lua family's tests start `lua`.
+        if !settings.runtime_dirs.is_empty() {
+            cargo.push(("PATH".to_string(), search_path(&settings.runtime_dirs)));
+        }
         Ok(Arc::new(
             ProcessSandbox::new(
                 &self.workspace_calls,
                 cargo,
-                &["CARGO_HOME", "CARGO_INCREMENTAL"],
+                &["CARGO_HOME", "CARGO_INCREMENTAL", "PATH"],
                 workspace_limits(settings.output_cap_bytes),
             )
             .allow_unconfined(settings.allow_unconfined)

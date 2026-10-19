@@ -254,6 +254,11 @@ deps/local:
 	bash scripts/local-config.sh $(SVEN_DIR) $(BRAIN_DIR)
 
 ## deps/lock - pin Cargo.lock to the HEADs of SVEN_DIR and BRAIN_DIR (push those commits before sharing the lock)
+## deps/lua - build the pinned Lua 5.1.5 into LUA_DIR/bin/lua from its checksummed source tarball; run tasks with --runtime-dir LUA_DIR/bin (LUA_DIR=<directory>)
+deps/lua:
+	test -n "$(LUA_DIR)" || { echo "deps/lua: give LUA_DIR=<directory to build into>"; exit 2; }
+	bash scripts/deps/lua51.sh "$(LUA_DIR)"
+
 deps/lock:
 	bash scripts/pin-lock.sh $(SVEN_DIR) $(BRAIN_DIR)
 
@@ -277,7 +282,7 @@ help:
 .PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families fmt \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
-	deps deps/local deps/lock \
+	deps deps/local deps/lua deps/lock \
 	hooks hooks/install \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
 	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit

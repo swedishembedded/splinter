@@ -272,8 +272,32 @@ def test_names(report: dict[str, str]) -> list[str]:
     return problems
 
 
+LUA_VERSION = "Lua 5.1"
+
+
+def lua_pin() -> list[str]:
+    """Problems with the `lua` the Lua families run on: it must be Lua 5.1.
+
+    A program that is right in 5.1 may be wrong in 5.3 (`unpack`, integer
+    division, `setfenv`), and `lua` on a path is whatever the host's
+    alternatives say. `make deps/lua` builds the pinned interpreter; put its
+    directory first on `PATH` (`splinter --runtime-dir` does the same for a
+    run).
+    """
+    exe = shutil.which("lua")
+    if exe is None:
+        return ["no `lua` on PATH: build the pinned one with `make deps/lua`"]
+    done = subprocess.run([exe, "-v"], capture_output=True, text=True)
+    line = (done.stdout or done.stderr).strip().splitlines()[:1]
+    if not line or not line[0].startswith(LUA_VERSION):
+        return [f"`lua` on PATH ({exe}) reports {line[:1]}, not {LUA_VERSION}: put the pinned build first"]
+    return []
+
+
 def check_one(family: Family) -> list[str]:
     problems = layout(family) + hygiene(family) + stdlib_only(family)
+    if family.lua:
+        problems += lua_pin()
     first: dict[str, str] | None = None
     report_bytes = 0
     slowest = 0.0

@@ -361,7 +361,8 @@ impl Catalogue {
 
     /// The kinds Splinter ships: recall, taught, arithmetic, format, advise, converse,
     /// explain, predict, construct, debug, counterexample, transform, classify,
-    /// retrieve, multi-turn, combine and workspace-change.
+    /// retrieve, multi-turn, combine and workspace-change, and the Lua 5.1
+    /// variants of predict, construct and debug.
     #[must_use]
     pub fn builtin() -> Self {
         let kinds = builtin_kinds()
@@ -402,6 +403,9 @@ pub const WORKSPACE_CHANGE: &str = splinter_core::kinds::WORKSPACE_CHANGE;
 /// The runtime the built-in code kinds run in.
 pub const DEFAULT_CODE_RUNTIME: &str = "python3";
 
+/// The runtime the `-lua` variants of the code kinds run in.
+pub const LUA_RUNTIME: &str = "lua";
+
 /// A text kind, closed-book, graded by `verifiers`.
 fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
     TaskKind {
@@ -422,6 +426,23 @@ fn text(name: &str, brief: &str, verifiers: &[VerifierKind]) -> TaskKind {
 }
 
 fn builtin_kinds() -> Vec<TaskKind> {
+    let mut kinds = base_kinds();
+    // The code kinds again for Lua 5.1: the same briefs and checks, run in
+    // the `lua` runtime, which is that version and no other.
+    let lua: Vec<TaskKind> = kinds
+        .iter()
+        .filter(|k| matches!(k.name.as_str(), "predict" | "construct" | "debug"))
+        .map(|k| TaskKind {
+            name: format!("{}-lua", k.name),
+            runtime: Some(LUA_RUNTIME.to_string()),
+            ..k.clone()
+        })
+        .collect();
+    kinds.extend(lua);
+    kinds
+}
+
+fn base_kinds() -> Vec<TaskKind> {
     use VerifierKind::{
         Consistency, Executable, FinalNumber, Formal, Grounding, Judged, LineCount,
         MutationValidated, Quotation, Speech, Stated, Terms, Workspace,
@@ -718,6 +739,28 @@ mod tests {
         let mut broken = kind;
         broken.environment = SolverEnvironment::ClosedBook;
         assert!(broken.validate().is_err());
+    }
+
+    /// The Lua variants of the code kinds are the same kinds in another
+    /// runtime: nothing but the name and the runtime differs.
+    #[test]
+    fn the_lua_kinds_are_the_code_kinds_run_in_lua() {
+        let catalogue = Catalogue::builtin();
+        for name in ["predict", "construct", "debug"] {
+            let python = catalogue.get(name).unwrap();
+            let lua = catalogue
+                .get(&format!("{name}-lua"))
+                .unwrap_or_else(|| panic!("{name}-lua is a kind"));
+            assert_eq!(lua.runtime.as_deref(), Some(LUA_RUNTIME));
+            assert_eq!(python.runtime.as_deref(), Some(DEFAULT_CODE_RUNTIME));
+            let renamed = TaskKind {
+                name: lua.name.clone(),
+                runtime: lua.runtime.clone(),
+                ..python.clone()
+            };
+            assert_eq!(&renamed, lua);
+            assert!(lua.validate().is_ok());
+        }
     }
 
     #[test]

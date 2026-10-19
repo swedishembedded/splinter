@@ -63,6 +63,7 @@ fn a_missing_executable_is_a_typed_error() {
         extension: "gh".into(),
         version_argv: Some(vec!["{exe}".into(), "--version".into()]),
         completion: "print('{line}')".into(),
+        version_prefix: None,
     });
     let missing = RuntimeEnvironment::new(&registry, "ghost", sandbox(Limits::default()));
     assert!(
@@ -154,4 +155,51 @@ fn changing_any_enforced_limit_changes_the_snapshot() {
         ResolvedEnvironment::ClosedBook.record().unwrap(),
         Environment::closed_book()
     );
+}
+
+/// A script that is an interpreter as far as a version probe goes.
+fn interpreter(dir: &std::path::Path, name: &str, version: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let path = dir.join(name);
+    std::fs::write(&path, format!("#!/bin/sh\necho '{version}'\n")).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+#[test]
+fn the_lua_runtime_is_lua_5_1_and_an_interpreter_that_reports_another_version_is_refused() {
+    let dir = std::env::temp_dir().join(format!("splinter-lua-pin-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let resolve = |version: &str, name: &str| {
+        let exe = interpreter(&dir, name, version);
+        let mut registry = RuntimeRegistry::builtin();
+        let mut spec = registry.get("lua").unwrap().clone();
+        assert_eq!(spec.version_prefix.as_deref(), Some("Lua 5.1"));
+        spec.program = exe.display().to_string();
+        registry.register(spec);
+        RuntimeEnvironment::new(&registry, "lua", sandbox(Limits::default()))
+    };
+    let pinned = resolve(
+        "Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio",
+        "lua51",
+    )
+    .unwrap();
+    assert!(pinned
+        .runtime()
+        .version
+        .as_deref()
+        .unwrap()
+        .starts_with("Lua 5.1"));
+    let other = resolve(
+        "Lua 5.4.6  Copyright (C) 1994-2023 Lua.org, PUC-Rio",
+        "lua54",
+    );
+    assert!(
+        matches!(
+            other,
+            Err(SandboxError::Runtime(RuntimeError::WrongVersion { .. }))
+        ),
+        "{other:?}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
 }

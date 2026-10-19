@@ -94,6 +94,10 @@ fn main() -> ExitCode {
     config.workspace.max_processes = cli.global.workspace_max_processes;
     config.build = build_info::current(config.build.gpu_contexts);
     let session = match Session::new(config, cli.global.clone()) {
+    config
+        .workspace
+        .runtime_dirs
+        .clone_from(&cli.global.runtime_dir);
         Ok(session) => session,
         Err(e) => {
             output::error(cli.global.json, &e);

@@ -41,6 +41,9 @@ pub const FILE: &str = "{file}";
 /// The placeholder in a completion statement for the line it prints.
 pub const LINE: &str = "{line}";
 
+/// What the version line of the `lua` runtime must begin with.
+pub const LUA_VERSION: &str = "Lua 5.1";
+
 /// How long a version probe may take.
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -69,6 +72,13 @@ pub struct RuntimeSpec {
     /// before it made it. The placeholder is replaced by a line of ASCII
     /// letters, digits, `-` and `:` only, so it may sit inside any quotes.
     pub completion: String,
+    /// What the version probe's first line must begin with, when the
+    /// language's version is part of what a task is written for: `lua` is
+    /// Lua 5.1, and an interpreter that reports another version is refused
+    /// rather than run, since a program that is right in 5.1 may be wrong
+    /// in 5.4. `None` accepts any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version_prefix: Option<String>,
 }
 
 impl RuntimeSpec {
@@ -87,7 +97,15 @@ impl RuntimeSpec {
             extension: extension.to_string(),
             version_argv: version_argv.map(owned),
             completion: completion.to_string(),
+            version_prefix: None,
         }
+    }
+
+    /// This runtime, refused unless its version probe begins with `prefix`.
+    #[must_use]
+    pub fn requiring_version(mut self, prefix: &str) -> Self {
+        self.version_prefix = Some(prefix.to_string());
+        self
     }
 
     /// A program the supervisor itself runs on the host (not a language
@@ -100,6 +118,7 @@ impl RuntimeSpec {
             extension: String::new(),
             version_argv: Some(vec![EXE.to_string(), "--version".to_string()]),
             completion: String::new(),
+            version_prefix: None,
         }
     }
 
@@ -147,13 +166,16 @@ impl RuntimeRegistry {
                 Some(&[EXE, "--version"]),
                 "print(\"{line}\", flush=True)",
             ),
+            // Lua 5.1 and no other: the families and tasks written for it are
+            // not Lua 5.3 programs, and `lua` on a path can be either.
             RuntimeSpec::new(
                 "lua",
                 &[EXE, FILE],
                 "lua",
                 Some(&[EXE, "-v"]),
                 "io.write(\"{line}\\n\")",
-            ),
+            )
+            .requiring_version(LUA_VERSION),
             RuntimeSpec::new(
                 "node",
                 &[EXE, FILE],
@@ -252,6 +274,17 @@ pub enum RuntimeError {
         /// Why.
         source: ProcessError,
     },
+    /// The runtime reports a version other than the one it is registered
+    /// for.
+    #[error("runtime {runtime:?} must report a version beginning {required:?}, not {found:?}: pin the right interpreter first on the search path")]
+    WrongVersion {
+        /// The runtime.
+        runtime: String,
+        /// What its version line must begin with.
+        required: String,
+        /// What it reported.
+        found: String,
+    },
     /// The version probe ran and did not report a version.
     #[error("runtime {runtime:?}: the version probe reported no version: {detail}")]
     NoVersion {
@@ -298,7 +331,18 @@ pub(crate) fn resolve_on_host(
                 runtime: spec.name.clone(),
                 source,
             })?;
-            Some(version_from(&spec.name, &output)?)
+            let version = version_from(&spec.name, &output)?;
+            if let Some(required) = &spec.version_prefix {
+                if !version.starts_with(required.as_str()) {
+                    return Err(RuntimeError::WrongVersion {
+                        runtime: spec.name.clone(),
+                        required: required.clone(),
+                        found: version,
+                    }
+                    .into());
+                }
+            }
+            Some(version)
         }
     };
     Ok(ResolvedRuntime {

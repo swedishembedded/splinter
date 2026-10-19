@@ -148,6 +148,10 @@ pub struct WorkspaceSettings {
     /// How many processes and threads a workspace command may start; `None`
     /// is no bound. Part of the environment's snapshot.
     pub max_processes: Option<u64>,
+    /// Directories searched before the system's for the interpreters code
+    /// runs in: where a pinned build of a language (Lua 5.1, built from its
+    /// verified source) is put first. Empty is the system's search path.
+    pub runtime_dirs: Vec<PathBuf>,
 }
 
 impl Default for WorkspaceSettings {
@@ -162,6 +166,7 @@ impl Default for WorkspaceSettings {
             allow_unconfined: false,
             allow_network: false,
             max_processes: None,
+            runtime_dirs: Vec::new(),
         }
     }
 }
@@ -279,6 +284,7 @@ impl Config {
                 allow_unconfined: false,
                 allow_network: false,
                 max_processes: None,
+                runtime_dirs: Vec::new(),
             },
             build: BuildInfo {
                 gpu_contexts: var("SPLINTER_GPU_CONTEXTS").and_then(|v| v.trim().parse().ok()),

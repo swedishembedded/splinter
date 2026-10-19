@@ -57,3 +57,4 @@ in the same commit.
 | [069](069-a-run-report-keeps-only-the-wrong-answers-so-undecided-ones-cannot-be-regraded.md) | A run report keeps only the wrong answers, so undecided ones cannot be regraded |
 | [070](070-the-solver-shell-saw-every-process-of-the-host-through-proc-and-the-unconfined-flag-was-never-wired.md) | The solver shell saw every process of the host through /proc, and the unconfined flag was never wired |
 | [071](071-a-solve-report-named-the-episode-bounds-cancelled-and-34-of-61-looked-like-infrastructure-noise.md) | A solve report named the episode bounds "cancelled", and 34 of 61 conclusions looked like infrastructure noise |
+| [072](072-lua-on-the-path-was-whatever-the-hosts-alternatives-named-and-the-runtime-accepted-it.md) | `lua` on the path was whatever the host's alternatives named, and the runtime accepted it |
