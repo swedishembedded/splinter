@@ -185,7 +185,9 @@ pub enum Command {
     /// and down to everything that came from it.
     Lineage(LineageArgs),
     /// Print the command reference as Markdown, generated from this grammar;
-    /// with --check FILE, fail when a committed copy of it is stale.
+    /// with --check FILE, fail when a committed copy of it is stale; with
+    /// --check-invocations FILE..., fail on a command a manual shows that
+    /// this grammar rejects.
     #[command(hide = true)]
     CliReference(CliReferenceArgs),
 }
@@ -727,6 +729,7 @@ mod global;
 mod harbor;
 mod harness;
 mod improve;
+mod invocations;
 mod learn;
 mod practice;
 pub mod reference;

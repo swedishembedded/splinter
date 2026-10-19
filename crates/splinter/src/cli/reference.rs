@@ -10,24 +10,31 @@
 //!
 //! [`markdown`] walks a clap command tree and writes every visible command,
 //! argument, default and value as Markdown, so the reference cannot disagree
-//! with the program. `splinter cli-reference` prints it and
-//! `splinter cli-reference --check FILE` fails when a committed copy is stale.
+//! with the program. `splinter cli-reference` prints it,
+//! `splinter cli-reference --check FILE` fails when a committed copy is stale and
+//! `splinter cli-reference --check-invocations FILE...` fails when a manual
+//! shows a command the grammar rejects.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use clap::{Arg, ArgAction, Args, Command, CommandFactory};
 
-use crate::cli::Cli;
+use crate::cli::{invocations, Cli};
 use crate::session::Exit;
 
-/// `cli-reference`: print the command reference, or check a committed copy.
+/// `cli-reference`: print the command reference, or check the documentation.
 #[derive(Debug, Args)]
 pub struct CliReferenceArgs {
     /// Do not print; compare against this file and exit 1 when it differs
     /// from what the grammar generates.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, value_name = "FILE", conflicts_with = "check_invocations")]
     pub check: Option<PathBuf>,
+    /// Do not print; parse the `splinter` commands in the shell blocks of
+    /// these Markdown files against the grammar and exit 1, naming each file
+    /// and line, for every one it rejects.
+    #[arg(long, value_name = "FILE", num_args = 1..)]
+    pub check_invocations: Vec<PathBuf>,
 }
 
 /// The Markdown reference of the whole command line.
@@ -39,6 +46,17 @@ pub fn reference() -> String {
 /// Runs `cli-reference`.
 #[must_use]
 pub fn run(args: &CliReferenceArgs) -> Exit {
+    if !args.check_invocations.is_empty() {
+        let problems = invocations::check(&args.check_invocations);
+        for problem in &problems {
+            eprintln!("splinter: {problem}");
+        }
+        return if problems.is_empty() {
+            Exit::Ok
+        } else {
+            Exit::Failed
+        };
+    }
     let generated = reference();
     let Some(file) = &args.check else {
         print!("{generated}");
