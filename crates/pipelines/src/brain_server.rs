@@ -75,6 +75,10 @@ pub struct Launch<'a> {
     /// Sequences it decodes together (`--qwen-max-batch`);
     /// [`DEFAULT_SERVE_SLOTS`] when `None`.
     pub max_batch: Option<u32>,
+    /// Host RAM, in GB, the server may swap a waiting sequence's KV cache to
+    /// when the KV pool fills (`--qwen-kv-offload-gb`); brain's default when
+    /// `None`.
+    pub kv_offload_gb: Option<f64>,
     /// A file every line the server writes is appended to, for an operator
     /// to read after the fact; only the last lines are kept otherwise.
     pub log: Option<&'a Path>,
@@ -150,6 +154,9 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     // Always named, so the width a caller asks at is the one the server was
     // told rather than a default it might not share.
     command.args(["--qwen-max-batch", &launch.slots().to_string()]);
+    if let Some(gb) = launch.kv_offload_gb {
+        command.args(["--qwen-kv-offload-gb", &gb.to_string()]);
+    }
     match launch.offer {
         Offer::Adapter(adapter) => {
             command.arg("--adapter").arg(adapter);

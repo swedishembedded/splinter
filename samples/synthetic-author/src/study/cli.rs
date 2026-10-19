@@ -125,6 +125,11 @@ pub struct ExamStageArgs {
     /// Items a server decodes together, and so asks at once.
     #[arg(long, default_value_t = 16, requires = "brain")]
     slots: u32,
+    /// Host RAM, in GB, a server may move a waiting sequence's KV cache to
+    /// when the sequences it decodes outgrow the card's KV pool; brain's own
+    /// default when absent.
+    #[arg(long, requires = "brain")]
+    kv_offload_gb: Option<f64>,
 }
 
 /// Run the corpus stage.
@@ -481,6 +486,7 @@ fn exam_stage(args: &ExamStageArgs) -> anyhow::Result<()> {
                 work: study.root().join("serve"),
                 device: (device != "all").then_some(device),
                 slots: args.slots,
+                kv_offload_gb: args.kv_offload_gb,
             };
             &served
         }

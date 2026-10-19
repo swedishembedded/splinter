@@ -38,6 +38,8 @@ pub struct ServedLoader {
     pub device: Option<String>,
     /// Sequences a server decodes together, and so items asked at once.
     pub slots: u32,
+    /// Host RAM, in GB, for KV the server swaps out of a full pool.
+    pub kv_offload_gb: Option<f64>,
 }
 
 /// A model one running server answers for.
@@ -116,6 +118,7 @@ impl Loader for ServedLoader {
             startup: STARTUP,
             device: self.device.as_deref(),
             max_batch: Some(self.slots),
+            kv_offload_gb: self.kv_offload_gb,
             log: Some(&log),
         };
         let server =
