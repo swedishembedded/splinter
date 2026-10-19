@@ -131,3 +131,56 @@ environment record, so they are off or unset by default to keep the identity of 
 earlier, and a kernel that cannot create a user namespace refuses to run a command unless the
 operator allows the host's \code{/proc}.
 \end{enumerate}
+
+\subsection{After the first generation: teaching, acquiring, choosing, retaining}\label{sec:after}
+
+Four further requirements follow from asking the loop to run past one repository and one
+round. Each is a property of the stack, shown by a specification that runs on scripted agents
+and a test double of the trainer; none is a measurement of a trained model. The experiments
+that would be are registered in \code{prereg/acquisition.md} (ACQ1, INT1, GEN1) and have no
+result.\cl{PL03}
+
+\paragraph{A task nobody solves needs a teacher that is not trusted.} A repository task has no
+passage to show a teacher, so \code{practice} used to drop every task the policy never solved:
+the frontier keeps only what is solved sometimes. A teacher is now named for those tasks. It is
+either the task's own reference change (the inverse of the seeded fault, which the task keeps
+and the student is never shown) replayed as the actions of an agent through sven's tools, or a
+stronger model solving the task as an agent. Either produces an experience that is graded by the
+same workspace verifier and the same exposure audit as the policy's attempts: a demonstration
+that does not make the hidden checks pass is not kept, whoever proposed it.\cl{TC01,TC02,TC03} A
+replayed demonstration names the file without searching for it, so it teaches the edit once the
+place is known and not the localisation; that is a stated limit.\cl{TC04}
+
+\paragraph{The probes must exist before the training and decide nothing in it.} A run that
+turns documentation into skills measures each skill on probes written from the skill's own
+sections and checked to exercise it. The probes are split: the dev half measures the baseline,
+each round's gain and what a round cost the skills measured before, and the final half is
+touched only by the closing assessment, which compares the policy the run began with and the one
+it ends with. No training task repeats a probe, and no teacher answers one.\cl{AQ01,AQ02} A
+candidate that learns nothing is rejected, counted against its skill, and leaves the policy as it
+was.\cl{AQ03} What a planner model proposes is kept only as far as the text bears it out: a quote
+that is not in a section the skill cites, a symbol that is not in them, a prerequisite that is
+no skill or closes a cycle are refused with the reason.\cl{AQ04}
+
+\paragraph{An intervention is chosen by what it was measured to do, net of what it costs.} The
+choice among more samples, another episode protocol, a trained candidate and no change rests on
+the lower confidence bound of the paired gain over families, priced against what a success is
+worth, and a mechanism that is not available is reported as not measured, never as a gain of
+zero.\cl{IV02} On four synthetic clusters whose outcomes are drawn from a known world, the choice
+differs by cluster and its realised value exceeds every strategy that applies one intervention to
+all four.\cl{IV01}
+
+\paragraph{Retention is measured on every generation, not inferred.} A generation of the coding
+policy measures the champion on every protected task before it trains and the candidate and the
+champion on the same tasks at the same settings; the full matrix has the base as generation 0 and
+every generation on every protected task, so backward and forward transfer have measured
+cells.\cl{GN01,GN02} A candidate that loses a protected family beyond a limit, or does not gain
+on the new exam, is rejected before the gate is asked, the alias stays, and the rejection is
+recorded with the numbers it rested on.\cl{GN03} Replay is a policy rather than a constant: none,
+uniform, balanced over capabilities, weighted by the champion's failures, or a rebuild from the
+base on everything accumulated.\cl{GN04}
+
+\paragraph{A language's version is part of the environment.} The Lua families and the \code{lua}
+runtime ran on whatever \code{lua} the host's alternatives named. The runtime now refuses an
+interpreter whose version line is not Lua 5.1, and the interpreter is built from its checksummed
+release tarball.\cl{LU01}
