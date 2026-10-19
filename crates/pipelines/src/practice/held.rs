@@ -25,7 +25,7 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
 /// Everything the task store holds that the workspace generator made.
-pub(super) fn held_tasks(ctx: &Context) -> Result<Held, OrchestratorError> {
+pub(crate) fn held_tasks(ctx: &Context) -> Result<Held, OrchestratorError> {
     let store = ctx.tasks();
     let mut held = Held::none();
     let mut seen: BTreeSet<Digest> = BTreeSet::new();
@@ -50,7 +50,7 @@ pub(super) fn held_tasks(ctx: &Context) -> Result<Held, OrchestratorError> {
 }
 
 /// Stores `tasks` and the set they make, named for `commit`.
-pub(super) fn keep_tasks(
+pub(crate) fn keep_tasks(
     ctx: &Context,
     commit: &str,
     tasks: &[WorkspaceTask],

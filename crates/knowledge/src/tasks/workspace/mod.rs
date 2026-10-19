@@ -39,6 +39,7 @@
 //! path of the file that was changed.
 
 mod fixtures;
+mod harbor;
 mod harness;
 mod held;
 mod instruction;
@@ -64,6 +65,7 @@ use splinter_store::artifacts::ArtifactStore;
 use splinter_store::error::StoreError;
 
 pub use fixtures::Fixture;
+pub use harbor::{discover, Discovered, HarborTask, Oracle, SplinterMeta, SPLINTER_SCHEMA};
 pub use harness::{Harness, SuiteReport};
 pub use held::Held;
 pub use profile::{

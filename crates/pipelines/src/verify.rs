@@ -664,6 +664,18 @@ pub fn verify_set(
             experience: id.clone(),
             reason,
         };
+        let graded_by_harbor = store
+            .annotations(id)?
+            .annotations
+            .iter()
+            .any(|note| note.producer.name == crate::harbor::VERIFIER_PRODUCER);
+        if graded_by_harbor {
+            report.unverified.push(unverified(
+                "graded by Harbor's verifier in the trial; it carries no patch to grade here"
+                    .into(),
+            ));
+            continue;
+        }
         let verifiers = match verifiers_for(ctx, &task, &experiences, judge) {
             Ok(verifiers) => verifiers,
             Err(e) => {

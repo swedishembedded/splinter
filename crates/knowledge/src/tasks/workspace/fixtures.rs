@@ -23,6 +23,8 @@ use splinter_core::clock::Clock;
 use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{Privileged, PrivilegedKind};
 use splinter_core::selfcontained::check_self_contained;
+use splinter_eval::verifiers::hidden_strength::HiddenStrength;
+use splinter_eval::verifiers::test_report::TestExpectation;
 use splinter_eval::verifiers::workspace::WorkspaceCheck;
 use splinter_sandbox::CommandCall;
 
@@ -77,6 +79,16 @@ pub struct Fixture {
     /// The change that solves the task, as `git diff` writes it, when the
     /// author has one. Without it, that the task can be solved is not shown.
     pub reference: Option<String>,
+    /// The tests each command must be seen to run and pass (see
+    /// [`WorkspaceCheck::expectations`]); empty for a command graded by its
+    /// exit status alone.
+    pub expectations: Vec<TestExpectation>,
+    /// Paths that must be byte-identical to the snapshot's after the change
+    /// (see [`WorkspaceCheck::pinned`]).
+    pub pinned: Vec<String>,
+    /// How much a pass is worth, when the author or an earlier admission
+    /// measured it (see [`WorkspaceCheck::hidden_strength`]).
+    pub hidden_strength: Option<HiddenStrength>,
 }
 
 impl Fixture {
@@ -108,6 +120,9 @@ impl Fixture {
             pass_to_pass: vec![argv(&UNITTEST_DISCOVER)],
             protected: vec!["tests".into()],
             reference: None,
+            expectations: Vec::new(),
+            pinned: Vec::new(),
+            hidden_strength: None,
         })
     }
 
@@ -187,6 +202,9 @@ impl Fixture {
             pass_to_pass,
             protected,
             reference: None,
+            expectations: Vec::new(),
+            pinned: Vec::new(),
+            hidden_strength: None,
         })
     }
 
@@ -288,9 +306,9 @@ impl WorkspaceGenerator {
             protected: fixture.protected.clone(),
             hidden_paths: paths,
             // An authored fixture's hidden tests are the author's to vouch for.
-            hidden_strength: None,
-            expectations: Vec::new(),
-            pinned: Vec::new(),
+            hidden_strength: fixture.hidden_strength,
+            expectations: fixture.expectations.clone(),
+            pinned: fixture.pinned.clone(),
         };
         let change = Digest::of(&canonical_json(&check).map_err(WorkspaceError::from)?);
         let key = task_key(&staged.snapshot, &change, &fixture.family)?;

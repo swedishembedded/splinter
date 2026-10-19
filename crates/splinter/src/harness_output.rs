@@ -56,3 +56,83 @@ impl Report for Optimised {
         out
     }
 }
+
+impl Report for splinter_sdk::harbor::Discovery {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "{} (commit {}{})\n",
+            self.root.display(),
+            self.commit.as_deref().unwrap_or("none"),
+            if self.dirty == Some(true) {
+                ", dirty"
+            } else {
+                ""
+            }
+        );
+        for task in &self.tasks {
+            let _ = match &task.refusal {
+                None => writeln!(
+                    out,
+                    "  importable {} ({})",
+                    task.dir.display(),
+                    task.name.as_deref().unwrap_or("")
+                ),
+                Some(why) => writeln!(out, "  refused    {}: {why}", task.dir.display()),
+            };
+        }
+        out
+    }
+}
+
+impl Report for splinter_sdk::harbor::Imported {
+    fn human(&self) -> String {
+        let mut out = match &self.task_set {
+            Some(set) => format!("imported {} task(s) into set {set}\n", self.imported.len()),
+            None => "nothing imported\n".to_string(),
+        };
+        for origin in &self.imported {
+            let _ = writeln!(
+                out,
+                "  {} -> {} (source digest {})",
+                origin.name, origin.task, origin.source.digest
+            );
+        }
+        for refused in &self.refused {
+            let _ = writeln!(
+                out,
+                "  refused {}: {}",
+                refused.directory.display(),
+                refused.reason
+            );
+        }
+        out
+    }
+}
+
+impl Report for splinter_sdk::harbor::Exports {
+    fn human(&self) -> String {
+        let mut out = format!("wrote {} Harbor task(s)\n", self.written.len());
+        for task in &self.written {
+            let _ = writeln!(out, "  {} -> {}", task.task, task.directory.display());
+        }
+        out
+    }
+}
+
+impl Report for splinter_sdk::harbor::Ingested {
+    fn human(&self) -> String {
+        let mut out = match &self.experience_set {
+            Some(set) => format!("ingested into experience set {set}: {:?}\n", self.verdicts),
+            None => "nothing ingested\n".to_string(),
+        };
+        for refused in &self.refused {
+            let _ = writeln!(
+                out,
+                "  refused {}: {}",
+                refused.directory.display(),
+                refused.reason
+            );
+        }
+        out
+    }
+}

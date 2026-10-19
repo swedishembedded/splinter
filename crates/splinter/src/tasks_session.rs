@@ -13,9 +13,11 @@ use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
 use splinter_sdk::variants;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::TasksCommand;
+use crate::cli::{HarborCommand, OracleArg, TasksCommand};
 use crate::output::emit;
 use crate::session::Exit;
+use splinter_sdk::harbor;
+use splinter_sdk::knowledge::tasks::workspace::Oracle;
 
 /// Runs a `tasks` command.
 pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, Error> {
@@ -59,6 +61,32 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                 )
             })?;
             emit(json, &generated);
+        }
+        TasksCommand::Harbor(HarborCommand::Discover { root }) => {
+            emit(json, &harbor::discover_harbor(&root)?);
+        }
+        TasksCommand::Harbor(HarborCommand::Import {
+            directories,
+            oracle,
+        }) => {
+            let oracle = match oracle {
+                OracleArg::Skip => Oracle::Skip,
+                OracleArg::Try => Oracle::Try,
+                OracleArg::Require => Oracle::Require,
+            };
+            let arguments = json!({ "directories": directories, "oracle": format!("{oracle:?}") });
+            let imported = record(ctx, "tasks harbor import", &arguments, |_| {
+                harbor::import_harbor(ctx, &directories, oracle)
+            })?;
+            emit(json, &imported);
+        }
+        TasksCommand::Harbor(HarborCommand::Export {
+            task_set,
+            out,
+            image,
+        }) => {
+            let set = resolve_task_set(ctx, &task_set)?;
+            emit(json, &harbor::export_harbor(ctx, &set, &out, &image)?);
         }
         TasksCommand::Variants {
             task_set,

@@ -59,6 +59,7 @@
 
 mod exam;
 mod held;
+pub(crate) use held::{held_tasks, keep_tasks};
 mod report;
 mod stages;
 

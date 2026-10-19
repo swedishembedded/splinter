@@ -398,6 +398,9 @@ pub enum TasksCommand {
         #[arg(long, value_name = "N")]
         seed: Seed,
     },
+    /// Harbor tasks: discover, import and export.
+    #[command(subcommand)]
+    Harbor(HarborCommand),
     /// List the stored task sets.
     List,
     /// Show a task set's tasks, or one task.
@@ -521,6 +524,18 @@ pub enum ExperiencesCommand {
     Replay {
         /// An experience set's or an experience's id, or a unique prefix.
         id: String,
+    },
+    /// Read the trials Harbor left for imported tasks (each a trial directory
+    /// with result.json and agent/trajectory.json in ATIF) as experiences
+    /// carrying Harbor's own verdict: a reward of exactly 1 passes, any other
+    /// fails, no reward or an exception is no verdict.
+    IngestHarbor {
+        /// The task set the trials' tasks were imported into.
+        #[arg(value_name = "TASKSET-ID")]
+        task_set: String,
+        /// The trial directories.
+        #[arg(required = true, value_name = "TRIAL")]
+        trials: Vec<PathBuf>,
     },
     /// Compare two experience sets of the same tasks: the candidate's against
     /// the baseline's, paired by task, a family counted once. Exposed and
@@ -696,6 +711,7 @@ mod dataset;
 mod exam;
 mod gate;
 mod global;
+mod harbor;
 mod harness;
 mod learn;
 mod practice;
@@ -709,6 +725,7 @@ pub use dataset::BuildArgs;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;
 pub use global::Global;
+pub use harbor::{HarborCommand, OracleArg};
 pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
 pub use learn::LearnArgs;
 pub use practice::PracticeArgs;

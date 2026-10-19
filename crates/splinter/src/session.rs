@@ -458,6 +458,14 @@ impl Session {
             Command::Experiences(ExperiencesCommand::Replay { id }) => {
                 emit(json, &experiences::replay(ctx, &id)?);
             }
+            Command::Experiences(ExperiencesCommand::IngestHarbor { task_set, trials }) => {
+                let set = resolve_task_set(ctx, &task_set)?;
+                let arguments = json!({ "task_set": set, "trials": trials });
+                let ingested = record(ctx, "experiences ingest-harbor", &arguments, |_| {
+                    splinter_sdk::harbor::ingest_harbor_trials(ctx, &set, &trials)
+                })?;
+                emit(json, &ingested);
+            }
             Command::Experiences(ExperiencesCommand::Compare {
                 candidate,
                 baseline,

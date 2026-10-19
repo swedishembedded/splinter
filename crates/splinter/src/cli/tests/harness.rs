@@ -96,3 +96,31 @@ fn a_harness_solves_tasks_and_is_searched_with_an_explicit_seed() {
     );
     assert_eq!((by_model.parallel, by_model.proposer_repairs), (4, 3));
 }
+
+#[test]
+fn harbor_tasks_are_discovered_imported_exported_and_their_trials_ingested() {
+    assert!(matches!(
+        command(&["tasks", "harbor", "discover", "tasks/"]),
+        Command::Tasks(TasksCommand::Harbor(HarborCommand::Discover { .. }))
+    ));
+    let Command::Tasks(TasksCommand::Harbor(HarborCommand::Import {
+        directories,
+        oracle,
+    })) = command(&["tasks", "harbor", "import", "a", "b", "--oracle", "require"])
+    else {
+        panic!("tasks harbor import");
+    };
+    assert_eq!((directories.len(), oracle), (2, OracleArg::Require));
+    assert!(matches!(
+        command(&["tasks", "harbor", "export", "ab12", "--out", "out"]),
+        Command::Tasks(TasksCommand::Harbor(HarborCommand::Export { .. }))
+    ));
+    assert!(
+        parse(&["tasks", "harbor", "export", "ab12"]).is_err(),
+        "an export names where it writes"
+    );
+    assert!(matches!(
+        command(&["experiences", "ingest-harbor", "ab12", "trial-1", "trial-2"]),
+        Command::Experiences(ExperiencesCommand::IngestHarbor { trials, .. }) if trials.len() == 2
+    ));
+}
