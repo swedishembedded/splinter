@@ -132,6 +132,26 @@
     "cap_exported_min": 4,
     "cap_exported_max": 42
    }
+  },
+  "ce1-p1-ttlcache": {
+   "log": "ce1/ce1-p1-ttlcache.summary.json",
+   "sha256": "d1c475b0584b189f16506cbccdd11ad03f724a39e14942ae539d8a6e379d140d",
+   "metric_prefix": "ce1.ttlcache_p1",
+   "metrics": {
+    "tasks": 46,
+    "solved": 46,
+    "success": 31,
+    "cancelled": 15,
+    "passed_clean": 31,
+    "failed": 14,
+    "undecided": 1,
+    "exposed": 8,
+    "hidden_path": 1,
+    "outside_workspace": 7
+   },
+   "splinter": "b5fb1674",
+   "brain": "5c1aa4863",
+   "command": "runs/ce/solve.sh ce1-p1-ttlcache 1 blake3:c469b6f6935a9228b7bb3b85c4c58973421ba73085efe2d1a4e808520adec75d 8 0 --test-output-cap 65536; splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-ttlcache"
   }
  }
 }

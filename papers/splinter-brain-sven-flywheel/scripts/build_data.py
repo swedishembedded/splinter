@@ -87,10 +87,34 @@ def traj_metrics():
     return m
 
 
+def ce1_metrics():
+    """CE1 pass 1: the counts of every finished development set, read from data/measurements.json."""
+    m = {}
+    for run in load_measurements().values():
+        if run["metric_prefix"].startswith("ce1."):
+            m.update({f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()})
+    return m
+
+
+def ce1_summary_metrics(summary):
+    """The values a claim may cite from one CE1 summary (runs/ce/ce1-evidence.py)."""
+    return {
+        "tasks": summary["tasks"], "solved": summary["solved"],
+        "success": summary["conclusions"].get("success", 0),
+        "cancelled": summary["conclusions"].get("cancelled", 0),
+        "passed_clean": summary["passed_clean"], "failed": summary["failed"],
+        "undecided": summary["undecided"], "exposed": summary["exposed"],
+        "hidden_path": summary["exposed_by"].get("hidden_path", 0),
+        "outside_workspace": sum(n for k, n in summary["exposed_by"].items() if k.startswith("outside_workspace")),
+    }
+
+
 def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
     m = {}
+    if prefix.startswith("ce1."):
+        return ce1_summary_metrics(json.loads(text))
     if prefix.startswith("tj."):
         line = next(l for l in text.splitlines() if l.startswith("TJ "))
         return {k: int(v) for k, v in (kv.split("=") for kv in line.split()[1:])}
@@ -189,6 +213,7 @@ def metrics():
     m.update(ledger_metrics())
     m.update(qual_metrics())
     m.update(traj_metrics())
+    m.update(ce1_metrics())
     return m
 
 
@@ -223,6 +248,22 @@ REGISTERED = [
     ("CE8", "27B SFT on its own verified trajectories against the 27B base", "sign test, qualification, alpha 0.05"),
 ]
 COMPARISONS = ("CE4", "CE7", "CE8")
+
+
+def ce1_table():
+    """One row per finished CE1 set, from the measurements; empty until a set is finished."""
+    rows = {}
+    for key, value in ce1_metrics().items():
+        prefix, field = key.rsplit(".", 1)
+        rows.setdefault(prefix, {})[field] = value
+    if not rows:
+        return r"\textbf{NOT MEASURED}"
+    lines = [r"\begin{tabular}{lrrrrrrr}", r"\toprule",
+             r"Set & Tasks & Success & Cancelled & Passed clean & Failed & Exposed & Undecided \\", r"\midrule"]
+    for prefix, r in sorted(rows.items()):
+        lines.append(f"{prefix.removeprefix('ce1.').replace('_', ' ')} & {r['tasks']} & {r['success']} & {r['cancelled']} "
+                     f"& {r['passed_clean']} & {r['failed']} & {r['exposed']} & {r['undecided']} \\\\")
+    return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
 
 
 def read_results():
@@ -306,6 +347,7 @@ def write_outputs(out):
     (out / "e4_table.tex").write_text(e4_table() + "\n")
     (out / "registered_table.tex").write_text(registered_table() + "\n")
     (out / "results_table.tex").write_text(results_table() + "\n")
+    (out / "ce1_table.tex").write_text(ce1_table() + "\n")
     (out / "design_table.tex").write_text(design_table() + "\n")
     (out / "power_curve.csv").write_text(power_curve())
     (out / "families_table.tex").write_text(families_table() + "\n")
