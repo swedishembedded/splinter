@@ -16,14 +16,14 @@ use serde_json::json;
 use splinter_sdk::agent::sven::search::Strategy;
 use splinter_sdk::harness_opt::gate::PromotionRule;
 use splinter_sdk::harness_opt::space::MutationSpace;
-use splinter_sdk::harness_opt::{optimise, OptimiseRequest};
+use splinter_sdk::harness_opt::{optimise, OptimiseRequest, ProposerChoice};
 use splinter_sdk::runs::record;
 use splinter_sdk::solving::{harness_protocol, solve_tasks, SamplingChoice, SolveRequest};
 use splinter_sdk::tasks::resolve_set as resolve_task_set;
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::{HarnessCommand, SolveArgs, StrategyArg};
+use crate::cli::{HarnessCommand, ProposerArg, SolveArgs, StrategyArg};
 use crate::output::emit;
 use crate::session::Exit;
 
@@ -71,8 +71,20 @@ pub fn harness(ctx: &Context, json: bool, command: HarnessCommand) -> Result<Exi
     let HarnessCommand::Optimise(args) = command;
     let set = resolve_task_set(ctx, &args.task_set)?;
     let baseline = read(&args.baseline)?;
-    let space_text = read(&args.space)?;
-    let space = MutationSpace::parse(&space_text).map_err(|e| Error::Refused(e.to_string()))?;
+    let space_text = args.space.as_deref().map(read).transpose()?;
+    let space = space_text
+        .as_deref()
+        .map(MutationSpace::parse)
+        .transpose()
+        .map_err(|e| Error::Refused(e.to_string()))?;
+    let proposer = match (args.proposer, &args.proposer_model) {
+        (ProposerArg::Model, Some(model)) => ProposerChoice::Model {
+            model: model.clone(),
+            deadline: std::time::Duration::from_secs(args.proposer_deadline),
+            repairs: args.proposer_repairs,
+        },
+        _ => ProposerChoice::Mutation,
+    };
     let strategy = match args.strategy {
         StrategyArg::BestOfN => Strategy::BestOfN,
         StrategyArg::Annealing => Strategy::SimulatedAnnealing {
@@ -84,7 +96,10 @@ pub fn harness(ctx: &Context, json: bool, command: HarnessCommand) -> Result<Exi
         "task_set": set,
         "solver": args.solver,
         "baseline": Digest::of(baseline.as_bytes()),
-        "space": Digest::of(space_text.as_bytes()),
+        "space": space_text.as_deref().map(|t| Digest::of(t.as_bytes())),
+        "proposer": format!("{:?}", args.proposer),
+        "proposer_model": args.proposer_model,
+        "parallel": args.parallel,
         "strategy": format!("{:?}", args.strategy),
         "evaluations": args.evaluations,
         "attempts": args.attempts,
@@ -101,8 +116,10 @@ pub fn harness(ctx: &Context, json: bool, command: HarnessCommand) -> Result<Exi
                 solver: &args.solver,
                 baseline: &baseline,
                 space: space.clone(),
+                proposer: proposer.clone(),
                 strategy,
                 evaluations: args.evaluations,
+                parallelism: args.parallel,
                 attempts: args.attempts,
                 rule: PromotionRule {
                     alpha: args.alpha,

@@ -51,6 +51,7 @@ pub mod claims;
 pub mod converse;
 pub mod critic;
 pub mod forms;
+pub mod harness_edit;
 pub mod harness_work;
 pub mod judge;
 pub mod mapper;

@@ -282,6 +282,17 @@ experience sets behind it and moves the `harness/champion` pointer, whose
 history is the lineage of champions. `--search-seed` has no default: the same
 seed draws the same candidates.
 
+`--proposer model --proposer-model REF` has a model propose the candidates instead of
+the mutation space: it is shown the parent document and how that document did when
+last evaluated, and answers with edits (a path into the YAML and the value to set).
+An edit counts only once the document it makes compiles under sven's compiler; a reply
+that does not compile is sent back with the compiler's message, up to
+`--proposer-repairs`, and a proposal never fixed is replaced by a mutation of `--space`
+when there is one (counted in the report) and stops the run when there is not.
+`--parallel N` evaluates N candidates at once (best-of-N only; annealing's next
+candidate depends on the last): each is a whole arm, so the model server sees N arms'
+attempts together on top of `--remote-concurrency`.
+
 ## Learning to think like a person
 
 ```bash

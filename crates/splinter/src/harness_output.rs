@@ -36,6 +36,13 @@ impl Report for Optimised {
                 line.decision.reason,
             );
         }
+        if let Some(p) = &self.proposals {
+            let _ = writeln!(
+                out,
+                "proposing model: {} proposal(s) compiled, {} did not, {} replaced by a mutation",
+                p.model_proposals, p.model_failures, p.mutation_fallbacks
+            );
+        }
         match &self.promoted {
             Some(p) => {
                 let _ = writeln!(

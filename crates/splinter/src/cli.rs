@@ -760,7 +760,7 @@ pub use consolidate::ConsolidateArgs;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;
 pub use global::Global;
-pub use harness::{HarnessCommand, StrategyArg};
+pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
 pub use learn::LearnArgs;
 pub use practice::PracticeArgs;
 pub use state::{RunsCommand, StateCommand};

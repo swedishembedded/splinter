@@ -26,14 +26,17 @@
 //! differ, and the search's starting point.
 
 pub mod gate;
+pub mod llm;
 pub mod space;
 
+use std::collections::BTreeMap;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::Serialize;
 use splinter_agent::sven::search::{
-    search, CandidateEnvironment, EvalLimits, SearchBudget, SearchError, SearchEvaluation,
-    SearchMetrics, StopReason, Strategy, TrajectoryRef, VerifierVerdict,
+    search, CandidateEnvironment, EvalLimits, Proposer, SearchBudget, SearchError,
+    SearchEvaluation, SearchMetrics, StopReason, Strategy, TrajectoryRef, VerifierVerdict,
 };
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
@@ -48,6 +51,7 @@ use crate::compare::compare;
 use crate::solving::{harness_protocol, solve_tasks, SamplingChoice, SolveRequest};
 use crate::verify::{verify_set, Grading};
 use gate::{decide, Decision, Evidence, PromotionRule, Verdict};
+use llm::{Feedback, LlmProposer, ProposalStats};
 use space::{MutationProposer, MutationSpace};
 
 /// The document class a promotion is stored under.
@@ -55,6 +59,24 @@ const CHAMPION: &str = "harness_champion";
 
 /// The pointer that names the current champion document.
 pub const CHAMPION_POINTER: &str = "harness/champion";
+
+/// Who proposes candidates.
+#[derive(Clone, Debug)]
+pub enum ProposerChoice {
+    /// One mechanical mutation of the space per candidate.
+    Mutation,
+    /// A model proposes edits, each compiled by sven before it counts; a
+    /// proposal the model cannot make compile falls back to a mutation when
+    /// the request has a space.
+    Model {
+        /// The proposing model.
+        model: ModelRef,
+        /// How long one proposal may take, repairs included.
+        deadline: Duration,
+        /// Corrections a reply that does not compile may be sent back for.
+        repairs: u32,
+    },
+}
 
 /// What an optimisation is asked to do.
 pub struct OptimiseRequest<'a> {
@@ -65,12 +87,18 @@ pub struct OptimiseRequest<'a> {
     /// The baseline harness document: the starting point and the arm every
     /// candidate is compared with.
     pub baseline: &'a str,
-    /// Where candidates may differ from it.
-    pub space: MutationSpace,
+    /// Where mutations may differ from the baseline; required by
+    /// [`ProposerChoice::Mutation`], the fallback of [`ProposerChoice::Model`].
+    pub space: Option<MutationSpace>,
+    /// Who proposes.
+    pub proposer: ProposerChoice,
     /// Best-of-N or annealing.
     pub strategy: Strategy,
     /// Harnesses evaluated, the baseline's replicate included.
     pub evaluations: u64,
+    /// Candidates evaluated at once (best-of-N only); each is a whole arm, so
+    /// the model server sees this many arms' attempts together.
+    pub parallelism: usize,
     /// Solves per task and harness (at least one).
     pub attempts: usize,
     /// What a candidate must show to be promoted.
@@ -118,6 +146,8 @@ pub struct Optimised {
     pub baseline_set: SetId,
     /// Every harness evaluated, in order.
     pub candidates: Vec<CandidateLine>,
+    /// What the proposing model did; `None` for a mutation proposer.
+    pub proposals: Option<ProposalStats>,
     /// The promotion, when a candidate earned it.
     pub promoted: Option<Promotion>,
     /// Why the search ended.
@@ -172,42 +202,52 @@ fn run_arm(
     Ok(solved.experience_set)
 }
 
+/// What a candidate's comparison showed, kept by the set it was run as.
+type Findings = Mutex<BTreeMap<String, (Digest, Evidence, Decision, SetId)>>;
+
 /// The candidate environment of a search: one candidate is one arm and its
-/// comparison with the baseline's.
-struct HarnessEnvironment<'a> {
-    ctx: &'a Context,
-    request: &'a OptimiseRequest<'a>,
+/// comparison with the baseline's, run on a thread of its own so that
+/// candidates in flight overlap.
+struct HarnessEnvironment<'scope, 'env: 'scope> {
+    scope: &'scope std::thread::Scope<'scope, 'env>,
+    ctx: &'env Context,
+    request: &'env OptimiseRequest<'env>,
     baseline_set: SetId,
-    lines: Mutex<Vec<CandidateLine>>,
+    feedback: &'env Feedback,
+    findings: Findings,
 }
 
-impl CandidateEnvironment<String> for HarnessEnvironment<'_> {
+impl CandidateEnvironment<String> for HarnessEnvironment<'_, '_> {
     async fn evaluate(
         &self,
         candidate: &String,
         _limits: &EvalLimits,
     ) -> Result<SearchEvaluation, SearchError> {
-        // The pipeline stages are blocking and drive runtimes of their own, so
-        // they run on a thread of their own rather than inside this one.
-        let compared = std::thread::scope(|scope| {
-            scope
-                .spawn(|| -> Result<_, OrchestratorError> {
-                    let set = run_arm(self.ctx, self.request, candidate)?;
-                    let comparison = compare(
-                        self.ctx,
-                        &set,
-                        &self.baseline_set,
-                        self.request.interval_seed,
-                    )?;
-                    Ok((set, comparison))
-                })
-                .join()
-        })
-        .map_err(|_| SearchError::environment("the evaluation thread panicked"))?
-        .map_err(SearchError::environment)?;
-        let (set, comparison) = compared;
+        // The pipeline stages are blocking and drive runtimes of their own,
+        // so each runs on its own thread and is awaited through a channel.
+        let (done, reply) = tokio::sync::oneshot::channel();
+        let (ctx, request, baseline_set) = (self.ctx, self.request, self.baseline_set.clone());
+        let document = candidate.clone();
+        self.scope.spawn(move || {
+            let compared = run_arm(ctx, request, &document).and_then(|set| {
+                let comparison = compare(ctx, &set, &baseline_set, request.interval_seed)?;
+                Ok((set, comparison))
+            });
+            let _ = done.send(compared);
+        });
+        let (set, comparison) = reply
+            .await
+            .map_err(|_| SearchError::environment("the evaluation thread panicked"))?
+            .map_err(SearchError::environment)?;
         let evidence = Evidence::of(&comparison);
         let decision = decide(&evidence, &self.request.rule);
+        self.feedback.record(
+            candidate,
+            format!(
+                "{}; the candidate solved {} of {} paired tasks, the baseline {}",
+                decision.reason, evidence.candidate_right, evidence.paired, evidence.baseline_right
+            ),
+        );
         let terminal = if decision.verdict == Verdict::Promote {
             VerifierVerdict::Passed
         } else {
@@ -233,18 +273,13 @@ impl CandidateEnvironment<String> for HarnessEnvironment<'_> {
                 location: None,
             }],
         };
-        let mut lines = self
-            .lines
+        self.findings
             .lock()
-            .map_err(|_| SearchError::environment("the candidate log is poisoned"))?;
-        let index = lines.len() as u64;
-        lines.push(CandidateLine {
-            index,
-            document: document_digest(candidate),
-            experience_set: set,
-            evidence,
-            decision,
-        });
+            .map_err(|_| SearchError::environment("the findings log is poisoned"))?
+            .insert(
+                set.to_string(),
+                (document_digest(candidate), evidence, decision, set),
+            );
         Ok(evaluation)
     }
 }
@@ -253,51 +288,101 @@ impl CandidateEnvironment<String> for HarnessEnvironment<'_> {
 ///
 /// # Errors
 ///
-/// [`OrchestratorError`] when the baseline cannot be run, the search fails (a
-/// candidate that cannot be drawn, an environment failure) or the promotion
+/// [`OrchestratorError`] when the request is unusable (a mutation proposer
+/// without a space), the baseline cannot be run, the search fails (a
+/// proposal that cannot be made, an environment failure) or the promotion
 /// cannot be recorded. Candidates that merely fail are results, not errors.
 pub fn optimise(
     ctx: &Context,
     request: &OptimiseRequest<'_>,
 ) -> Result<Optimised, OrchestratorError> {
+    let refuse = |why: &str| Err(OrchestratorError::Refused(why.to_string()));
     if request.attempts == 0 {
-        return Err(OrchestratorError::Refused(
-            "a harness needs at least one attempt per task".into(),
-        ));
+        return refuse("a harness needs at least one attempt per task");
+    }
+    if matches!(request.proposer, ProposerChoice::Mutation) && request.space.is_none() {
+        return refuse("the mutation proposer needs a mutation space");
     }
     let baseline_set = run_arm(ctx, request, request.baseline)?;
-    let environment = HarnessEnvironment {
-        ctx,
-        request,
-        baseline_set: baseline_set.clone(),
-        lines: Mutex::new(Vec::new()),
-    };
-    let proposer = MutationProposer {
-        space: request.space.clone(),
-    };
+    let feedback = Feedback::default();
     let budget = SearchBudget {
         max_evaluations: request.evaluations,
         max_tokens: None,
         max_wall: None,
         stop_on_verified: false,
+        parallelism: request.parallelism,
     };
+    let llm = match &request.proposer {
+        ProposerChoice::Mutation => None,
+        ProposerChoice::Model {
+            model,
+            deadline,
+            repairs,
+        } => Some(LlmProposer::new(
+            ctx.model(model)?,
+            &feedback,
+            request.space.clone(),
+            *deadline,
+            *repairs,
+            request.cancel.clone(),
+        )),
+    };
+    let mutation = request
+        .space
+        .clone()
+        .map(|space| MutationProposer { space });
     let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
         .build()
         .map_err(|e| OrchestratorError::Refused(format!("cannot start the search: {e}")))?;
-    let report = runtime
-        .block_on(search(
-            request.strategy,
-            request.baseline.to_string(),
-            &proposer,
-            &environment,
-            &budget,
-            request.search_seed,
-        ))
-        .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
-    let candidates = environment
-        .lines
+    let (report, findings) = std::thread::scope(|scope| {
+        let environment = HarnessEnvironment {
+            scope,
+            ctx,
+            request,
+            baseline_set: baseline_set.clone(),
+            feedback: &feedback,
+            findings: Mutex::default(),
+        };
+        let report = match (&llm, &mutation) {
+            (Some(proposer), _) => {
+                runtime.block_on(run_search(request, proposer, &environment, &budget))
+            }
+            (None, Some(proposer)) => {
+                runtime.block_on(run_search(request, proposer, &environment, &budget))
+            }
+            (None, None) => unreachable!("checked above: a mutation proposer has a space"),
+        };
+        (report, environment.findings)
+    });
+    let report = report.map_err(|e| OrchestratorError::Refused(e.to_string()))?;
+    let findings = findings
         .into_inner()
-        .map_err(|_| OrchestratorError::Refused("the candidate log is poisoned".into()))?;
+        .map_err(|_| OrchestratorError::Refused("the findings log is poisoned".into()))?;
+
+    let candidates: Vec<CandidateLine> = report
+        .trace
+        .iter()
+        .map(|entry| {
+            let set = entry
+                .evaluation
+                .trajectories
+                .first()
+                .map(|t| t.run_id.clone())
+                .unwrap_or_default();
+            let (document, evidence, decision, experience_set) = findings
+                .get(&set)
+                .cloned()
+                .ok_or_else(|| OrchestratorError::Refused(format!("no finding for set {set}")))?;
+            Ok(CandidateLine {
+                index: entry.index,
+                document,
+                experience_set,
+                evidence,
+                decision,
+            })
+        })
+        .collect::<Result<_, OrchestratorError>>()?;
 
     let baseline = document_digest(request.baseline);
     let promoted = match report.best_verified() {
@@ -334,8 +419,26 @@ pub fn optimise(
         baseline,
         baseline_set,
         candidates,
+        proposals: llm.as_ref().map(LlmProposer::stats),
         promoted,
         stop: report.stop,
         metrics: report.metrics,
     })
+}
+
+async fn run_search<P: Proposer<String>>(
+    request: &OptimiseRequest<'_>,
+    proposer: &P,
+    environment: &HarnessEnvironment<'_, '_>,
+    budget: &SearchBudget,
+) -> Result<splinter_agent::sven::search::SearchReport<String>, SearchError> {
+    search(
+        request.strategy,
+        request.baseline.to_string(),
+        proposer,
+        environment,
+        budget,
+        request.search_seed,
+    )
+    .await
 }

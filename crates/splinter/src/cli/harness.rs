@@ -38,6 +38,15 @@ pub enum StrategyArg {
     Annealing,
 }
 
+/// Who proposes candidates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ProposerArg {
+    /// One mutation of the space per candidate.
+    Mutation,
+    /// A model proposes edits.
+    Model,
+}
+
 /// `harness optimise`.
 #[derive(Debug, Args)]
 pub struct OptimiseArgs {
@@ -51,9 +60,28 @@ pub struct OptimiseArgs {
     #[arg(long, required = true, value_name = "FILE")]
     pub baseline: PathBuf,
     /// The mutation space: a YAML list of knobs, each a `path` into the
-    /// document and the `choices` it may take.
-    #[arg(long, required = true, value_name = "FILE")]
-    pub space: PathBuf,
+    /// document and the `choices` it may take. Required by the mutation
+    /// proposer; with a model proposer it is the fallback for a proposal the
+    /// model cannot make compile.
+    #[arg(long, value_name = "FILE")]
+    pub space: Option<PathBuf>,
+    /// Who proposes candidates: a mechanical mutation of the space, or a model
+    /// asked for edits that sven's compiler must accept.
+    #[arg(long, value_enum, default_value = "mutation")]
+    pub proposer: ProposerArg,
+    /// The proposing model (with `--proposer model`).
+    #[arg(long, value_parser = model_ref, value_name = "REF", required_if_eq("proposer", "model"))]
+    pub proposer_model: Option<ModelRef>,
+    /// Seconds one model proposal may take, corrections included.
+    #[arg(long, default_value_t = 300, value_name = "SECS")]
+    pub proposer_deadline: u64,
+    /// Corrections a model reply that does not compile is sent back for.
+    #[arg(long, default_value_t = 3, value_name = "N")]
+    pub proposer_repairs: u32,
+    /// Candidates evaluated at once (best-of-N only): each is a whole arm, so
+    /// the model server sees that many arms' attempts together.
+    #[arg(long, default_value_t = 1, value_name = "N")]
+    pub parallel: usize,
     /// How candidates are searched.
     #[arg(long, value_enum, default_value = "annealing")]
     pub strategy: StrategyArg,

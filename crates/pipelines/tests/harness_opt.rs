@@ -36,7 +36,9 @@ use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
 use splinter_pipelines::harness_opt::gate::{PromotionRule, Verdict};
 use splinter_pipelines::harness_opt::space::MutationSpace;
-use splinter_pipelines::harness_opt::{optimise, OptimiseRequest, CHAMPION_POINTER};
+use splinter_pipelines::harness_opt::{
+    optimise, OptimiseRequest, ProposerChoice, CHAMPION_POINTER,
+};
 use splinter_pipelines::practice::{practice, PracticeRequest};
 use splinter_store::tasks::TaskSetId;
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
@@ -74,6 +76,46 @@ impl ModelProvider for Prompted {
     }
 }
 
+fn editor_ref() -> ModelRef {
+    "local:scripted/editor".parse().unwrap()
+}
+
+/// Answers each request with the next reply (the last one again after that).
+struct Replies {
+    replies: Vec<String>,
+    next: std::sync::atomic::AtomicUsize,
+}
+
+impl Replies {
+    fn new(replies: &[&str]) -> Arc<Self> {
+        Arc::new(Self {
+            replies: replies.iter().map(ToString::to_string).collect(),
+            next: 0.into(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Replies {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+    fn model_name(&self) -> &str {
+        "editor-1"
+    }
+    async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let at = self
+            .next
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            .min(self.replies.len().saturating_sub(1));
+        let text = self.replies.get(at).cloned().unwrap_or_default();
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta(text)),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
 const PLAIN: &str = "{{ inputs.task }}";
 const MENDING: &str = "MEND {{ inputs.task }}";
 
@@ -103,6 +145,11 @@ fn space() -> MutationSpace {
 /// A context whose `policy:default` is the prompt-sensitive model, over a
 /// state root holding the tasks `practice` made of a tiny project.
 fn context_with_tasks(test: &str) -> (Scratch, Context, TaskSetId) {
+    context_with_editor(test, Replies::new(&[]))
+}
+
+/// As [`context_with_tasks`], with `editor` serving the `local:scripted/editor` model.
+fn context_with_editor(test: &str, editor: Arc<Replies>) -> (Scratch, Context, TaskSetId) {
     let scratch = Scratch::new(test);
     let build = |model: Arc<dyn ModelProvider>| {
         Context::new(config(&scratch), false)
@@ -134,7 +181,8 @@ fn context_with_tasks(test: &str) -> (Scratch, Context, TaskSetId) {
     .unwrap();
     let tasks = recorded.report.tasks.unwrap().task_set.unwrap();
     drop(making);
-    let ctx = build(Arc::new(Prompted));
+    let ctx =
+        build(Arc::new(Prompted)).with_model(editor_ref(), Model::new(editor, "scripted/editor-1"));
     put_base(&ctx);
     (scratch, ctx, tasks)
 }
@@ -148,9 +196,11 @@ fn request<'a>(
         task_set: tasks,
         solver,
         baseline,
-        space: space(),
+        space: Some(space()),
+        proposer: splinter_pipelines::harness_opt::ProposerChoice::Mutation,
         strategy: Strategy::BestOfN,
         evaluations: 3,
+        parallelism: 1,
         attempts: 1,
         rule: PromotionRule {
             alpha: 0.1,
@@ -229,4 +279,93 @@ fn the_same_search_seed_draws_the_same_candidates() {
             .collect::<Vec<_>>()
     };
     assert_eq!(documents(&first), documents(&second));
+
+    // Candidates evaluated two at a time are the same candidates.
+    let parallel = optimise(
+        &ctx,
+        &OptimiseRequest {
+            parallelism: 2,
+            ..request(&tasks, &solver, &baseline)
+        },
+    )
+    .unwrap();
+    assert_eq!(documents(&first), documents(&parallel));
+}
+
+const BREAKS: &str = r#"{"rationale": "r", "edits": [{"path": ["entry"], "value": "nowhere"}]}"#;
+const MENDS: &str = r#"{"rationale": "ask it to mend", "edits": [{"path": ["steps", "work", "agent", "prompt"], "value": "MEND {{ inputs.task }}"}]}"#;
+
+fn by_model<'a>(
+    tasks: &'a TaskSetId,
+    solver: &'a ModelRef,
+    baseline: &'a str,
+    space: Option<MutationSpace>,
+) -> OptimiseRequest<'a> {
+    OptimiseRequest {
+        space,
+        proposer: ProposerChoice::Model {
+            model: editor_ref(),
+            deadline: std::time::Duration::from_secs(60),
+            repairs: 2,
+        },
+        evaluations: 2,
+        ..request(tasks, solver, baseline)
+    }
+}
+
+#[test]
+fn a_model_edit_the_compiler_refuses_is_corrected_before_it_counts_and_then_promoted() {
+    let editor = Replies::new(&[BREAKS, MENDS]);
+    let (_scratch, ctx, tasks) = context_with_editor("harness-opt-model", editor);
+    let solver = ModelRef::policy_default();
+    let baseline = harness(PLAIN);
+
+    let report = optimise(&ctx, &by_model(&tasks, &solver, &baseline, None)).unwrap();
+
+    let stats = report.proposals.expect("a model proposed");
+    assert_eq!(
+        (
+            stats.model_proposals,
+            stats.model_failures,
+            stats.mutation_fallbacks
+        ),
+        (1, 0, 0)
+    );
+    let promoted = report
+        .promoted
+        .as_ref()
+        .expect("the corrected edit mends the tasks");
+    assert_eq!(
+        report.candidates[promoted.index as usize].decision.verdict,
+        Verdict::Promote
+    );
+    // Only the document that compiled was ever evaluated.
+    assert_eq!(report.candidates.len(), 2);
+}
+
+#[test]
+fn a_model_that_never_makes_a_compiling_edit_is_replaced_by_a_mutation_or_stops_the_run() {
+    let (_scratch, ctx, tasks) =
+        context_with_editor("harness-opt-fallback", Replies::new(&[BREAKS]));
+    let solver = ModelRef::policy_default();
+    let baseline = harness(PLAIN);
+
+    let with_space = optimise(&ctx, &by_model(&tasks, &solver, &baseline, Some(space()))).unwrap();
+    let stats = with_space.proposals.unwrap();
+    assert_eq!(
+        (
+            stats.model_proposals,
+            stats.model_failures,
+            stats.mutation_fallbacks
+        ),
+        (0, 1, 1)
+    );
+    assert!(
+        with_space.promoted.is_some(),
+        "the mutation of the space mends the tasks"
+    );
+
+    let without = optimise(&ctx, &by_model(&tasks, &solver, &baseline, None));
+    let message = without.unwrap_err().to_string();
+    assert!(message.contains("no edit that compiles"), "{message}");
 }

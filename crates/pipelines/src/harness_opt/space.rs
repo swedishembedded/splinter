@@ -120,6 +120,31 @@ impl MutationSpace {
     }
 }
 
+/// How many mutations are drawn to find one sven's compiler accepts.
+const COMPILING_DRAWS: usize = 16;
+
+impl MutationSpace {
+    /// [`Self::mutate`] until the result compiles under sven's compiler: a
+    /// knob value may break a document, and such a candidate never counts.
+    ///
+    /// # Errors
+    ///
+    /// The last failure when none of a bounded number of draws compiles.
+    pub fn mutate_compiling(&self, document: &str, rng: &mut SearchRng) -> Result<String, String> {
+        let mut last = String::new();
+        for _ in 0..COMPILING_DRAWS {
+            let mutated = self.mutate(document, rng).map_err(|e| e.to_string())?;
+            match splinter_agent::harness_edit::check(&mutated) {
+                Ok(()) => return Ok(mutated),
+                Err(why) => last = why,
+            }
+        }
+        Err(format!(
+            "no mutation compiled in {COMPILING_DRAWS} draws; last: {last}"
+        ))
+    }
+}
+
 /// Proposes candidates by mutating the parent harness document.
 pub struct MutationProposer {
     /// The space mutated within.
@@ -134,7 +159,7 @@ impl Proposer<String> for MutationProposer {
         rng: &mut SearchRng,
     ) -> Result<Proposal<String>, SearchError> {
         self.space
-            .mutate(parent, rng)
+            .mutate_compiling(parent, rng)
             .map(Proposal::free)
             .map_err(SearchError::proposer)
     }

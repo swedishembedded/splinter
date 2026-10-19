@@ -54,4 +54,45 @@ fn a_harness_solves_tasks_and_is_searched_with_an_explicit_seed() {
         .is_err(),
         "the search seed has no default"
     );
+    assert!(
+        parse(&[
+            "harness",
+            "optimise",
+            "ab12",
+            "--baseline",
+            "b.yaml",
+            "--evaluations",
+            "8",
+            "--search-seed",
+            "3",
+            "--proposer",
+            "model",
+        ])
+        .is_err(),
+        "a model proposer names its model"
+    );
+    let Command::Harness(HarnessCommand::Optimise(by_model)) = command(&[
+        "harness",
+        "optimise",
+        "ab12",
+        "--baseline",
+        "b.yaml",
+        "--evaluations",
+        "8",
+        "--search-seed",
+        "3",
+        "--proposer",
+        "model",
+        "--proposer-model",
+        "local:/p",
+        "--parallel",
+        "4",
+    ]) else {
+        panic!("harness optimise");
+    };
+    assert!(
+        by_model.space.is_none(),
+        "a space is optional with a model proposer"
+    );
+    assert_eq!((by_model.parallel, by_model.proposer_repairs), (4, 3));
 }
