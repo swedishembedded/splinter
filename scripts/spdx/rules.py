@@ -39,7 +39,9 @@ CBLOCK_EXTS = {"css", "scss", "less"}
 
 # Directory components that, if present anywhere in the path, exempt the
 # file even if its extension would otherwise match (vendored/generated code).
-EXCLUDED_DIR_PARTS = {"vendor", "third_party", "node_modules", "generated", ".git"}
+# "docs-publisher" is the pinned documentation publisher (tools/docs-publisher):
+# a vendored single-file bundle that carries its own license header.
+EXCLUDED_DIR_PARTS = {"vendor", "third_party", "node_modules", "generated", ".git", "docs-publisher"}
 
 _CODING_RE = re.compile(rb"^#.*coding[:=]\s*[-\w.]+")
 
