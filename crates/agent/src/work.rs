@@ -34,13 +34,11 @@
 //!   worker as a follow-up turn, and the change read back from git as the
 //!   patch.
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use futures::FutureExt;
 use splinter_core::experience::Task;
 use splinter_core::outcome::{AttemptReport, MemoryUse};
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
@@ -52,8 +50,8 @@ use sven_sdk::config::Config;
 use sven_sdk::model::ModelProvider;
 use sven_sdk::tool::Tool;
 use sven_sdk::{
-    Agent, AgentState, ApprovalPolicy, CallError, CancelToken, Engine, EventStream, RunConclusion,
-    RunOptions, SessionEvent, Toolset, Usage,
+    Agent, AgentState, ApprovalPolicy, CallError, CancelToken, Engine, RunConclusion, RunOptions,
+    SessionEvent, Toolset, Usage,
 };
 use tokio::sync::oneshot;
 
@@ -79,6 +77,9 @@ pub const WITHHELD_TOOLS: &[&str] = &[
     "semantic_memory",
     "skill",
 ];
+
+mod watch;
+use watch::{Repeats, Watch};
 
 /// How often a running worker looks at its caller's cancel token: the
 /// longest a cancel waits to be seen between two events.
@@ -382,136 +383,6 @@ impl Worker {
             repeated_call: repeated_call.lock().ok().and_then(|c| c.clone()),
             dropped_events,
         })
-    }
-}
-
-/// The task that watches one send's events: it counts tool calls, stops the
-/// run at the cap or when the caller cancels, and hands every event to the
-/// observer.
-struct Watch {
-    events: EventStream,
-    stop: CancelToken,
-    external: Option<CancelToken>,
-    cap: Option<u32>,
-    repeat_cap: Option<u32>,
-    repeats: Mutex<Repeats>,
-    repeated: Arc<AtomicBool>,
-    repeated_call: Arc<Mutex<Option<String>>>,
-    observer: Option<Observer>,
-    tool_calls: Arc<AtomicU32>,
-    capped: Arc<AtomicBool>,
-}
-
-/// A call as `name\u{1}arguments`, shortened for a message.
-fn describe(asked: &str) -> String {
-    let (name, args) = asked.split_once('\u{1}').unwrap_or((asked, ""));
-    let args: String = args.chars().take(160).collect();
-    format!("{name} {args}")
-}
-
-/// What a send has asked and been answered: each call by its id, and how
-/// often each (call, answer) pair has come back.
-#[derive(Default)]
-struct Repeats {
-    asked: HashMap<String, String>,
-    answered: HashMap<String, u32>,
-}
-
-impl Watch {
-    /// Runs until the send is `finished`, then drains what is buffered;
-    /// returns how many events were lost to a slow observer.
-    async fn run(mut self, mut finished: oneshot::Receiver<()>) -> u64 {
-        let mut dropped = 0;
-        let mut tick = tokio::time::interval(CANCEL_POLL);
-        loop {
-            tokio::select! {
-                received = self.events.recv() => match received {
-                    Some(event) => dropped += self.handle(&event.event),
-                    None => return dropped,
-                },
-                _ = tick.tick() => {
-                    if self.external.as_ref().is_some_and(CancelToken::is_cancelled) {
-                        self.stop.cancel();
-                    }
-                }
-                _ = &mut finished => break,
-            }
-        }
-        // What the finished send left buffered: `now_or_never` reads an
-        // event that is ready and stops at the first that is not.
-        while let Some(Some(event)) = self.events.recv().now_or_never() {
-            dropped += self.handle(&event.event);
-        }
-        dropped
-    }
-
-    /// Takes one event of the stream; returns how many events it says were
-    /// lost (a gap marker stands in for them, it is not an event of the run).
-    fn handle(&self, event: &SessionEvent) -> u64 {
-        if let SessionEvent::EventsDropped { count } = event {
-            return self.lost(*count);
-        }
-        self.see(event);
-        0
-    }
-
-    fn see(&self, event: &SessionEvent) {
-        if matches!(event, SessionEvent::ToolCallStarted(_)) {
-            let calls = self.tool_calls.fetch_add(1, Ordering::SeqCst) + 1;
-            if self.cap.is_some_and(|cap| calls > cap) {
-                self.capped.store(true, Ordering::SeqCst);
-                self.stop.cancel();
-            }
-        }
-        self.watch_repetition(event);
-        if let Some(observer) = &self.observer {
-            observer(Observed::Event(event));
-        }
-    }
-
-    /// Counts how often a call has returned the same answer and stops the
-    /// run when that reaches the bound.
-    fn watch_repetition(&self, event: &SessionEvent) {
-        let Some(bound) = self.repeat_cap else {
-            return;
-        };
-        let Ok(mut repeats) = self.repeats.lock() else {
-            return;
-        };
-        match event {
-            SessionEvent::ToolCallStarted(call) => {
-                repeats
-                    .asked
-                    .insert(call.id.clone(), format!("{}\u{1}{}", call.name, call.args));
-            }
-            SessionEvent::ToolCallFinished {
-                call_id, output, ..
-            } => {
-                let Some(asked) = repeats.asked.get(call_id).cloned() else {
-                    return;
-                };
-                let seen = repeats
-                    .answered
-                    .entry(format!("{asked}\u{1}{output}"))
-                    .or_insert(0);
-                *seen += 1;
-                if *seen >= bound {
-                    if let Ok(mut call) = self.repeated_call.lock() {
-                        call.get_or_insert_with(|| describe(&asked));
-                    }
-                    self.repeated.store(true, Ordering::SeqCst);
-                    self.stop.cancel();
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn lost(&self, count: u64) -> u64 {
-        if let Some(observer) = &self.observer {
-            observer(Observed::Dropped(count));
-        }
-        count
     }
 }
 
