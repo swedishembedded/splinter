@@ -639,12 +639,14 @@ remaining parallel batches.
 
 **A9.2 Records and steps.** The training set is the unpacked sft-step view (one record per
 supervised action, A2.8's alternative) with `--serialise-calls --control outcome-verified
---drop-leaking --max-block 16384 --min-strength executable`, over the eight finished pass-1 sets,
-built by splinter ec7ab240; the packed records are longer than the block for 70 of 86 trajectories.
-The trainer reports R only after it has split off the monitoring families, so the step count is
-fixed from the record count N as ceil(2 x 0.8 N / 8), 80 steps for N = 398 records; the
-reported R and the step count it implies are stated with the result, and a difference of more than
-five steps is stated as a deviation. The floor of 40 is met.
+--drop-leaking --min-strength executable`, over the eight finished pass-1 sets, built by splinter
+ec7ab240; the packed records are longer than the block for 70 of 86 trajectories. The block bound
+is 8192 tokens and not the 16384 of A2.7: with 16384 a step measured about six minutes, which
+fits no schedule (a first run was stopped after five steps, 16384-token records, 398 of them);
+with 8192 the dataset holds N = 231 records. The trainer reports R only after it has split off the
+monitoring families, so the step count is fixed from N as ceil(2 x 0.8 N / 8) = 47 steps; the
+reported R and the step count it implies are stated with the result, and a difference of more
+than five steps is stated as a deviation. The floor of 40 is met.
 
 **A9.3 Qualification subset.** The 8B server does not reuse a conversation's prefix between turns,
 so every request re-prefills the whole history; two arms measured about 0.7 tasks per minute each
