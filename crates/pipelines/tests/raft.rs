@@ -21,6 +21,7 @@ mod common;
 
 use common::{scratch_context, Scripted};
 use splinter_core::chat::WireMessage;
+use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
@@ -389,7 +390,12 @@ fn the_modes_of_the_records_follow_their_shares() {
             let experience = Experience::answered_without_a_run(
                 renamed,
                 "Teach the young to reason.",
-                Provenance::new("splinter/author", ctx.clock()),
+                // A fixed time, so each record's id - which the draw is a function
+                // of - is the same on every run.
+                Provenance::new(
+                    "splinter/author",
+                    &FixedClock::new("2026-10-16T01:00:00.000Z"),
+                ),
             )
             .unwrap();
             r.metadata.experiences = vec![ctx.experiences().put(&experience).unwrap()];
