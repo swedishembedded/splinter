@@ -729,6 +729,21 @@ iniparse 18/61, mdrender 13/43, exprcalc 10/56), so that the sets most likely to
 trajectories come first; this order is a choice of training data and not of evaluation (no arm is compared on
 these tasks, A1.1), and no later set is skipped except for lack of lease time, which is reported.
 
+### Amendment 12, 2026-10-19, 23:08 CEST: the recording build of the regenerated passes
+
+Made before any regenerated trajectory exists. It replaces the revisions named in A10.2 and A11.2 and
+changes no other parameter.
+
+**A12.1 Binaries.** The regenerated teacher passes (CE7 development, then the CE1 development sets in the
+order of A11.2) are recorded by splinter 7bd63719 linked against sven f0cfb82c (one agent step per model
+response, distinct call ids) and brain 83e2f44a3, with 27B servers on brain c2d4c9244 (flash prefill
+default; flags of A2.6 and A4.7 unchanged) on both cards. The servers' build is one per set (A4.5) and each set's
+revisions are recorded in `runs/ce/STATUS.md`. Before a full set is run, two tasks are recorded and their
+trajectories are checked to hold one agent step per model response, each call followed by its own result; a
+set is not run if they do not. The CE7 development pass already run on sven 319a2e05 (A10.2) keeps its
+verdicts as CE7 teacher results and is not training data. The training dataset is built by the splinter
+revision named for it in its run record (A5.3).
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
