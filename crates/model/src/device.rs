@@ -28,6 +28,20 @@ pub fn select_backend(backend: &str) -> Result<(), PolicyError> {
     })
 }
 
+/// Cap every card this process budgets from at `gib` GiB, the VRAM it was
+/// granted (`--vram-budget`). A program passes it before loading anything;
+/// every model built afterwards, and every server it starts with
+/// [`vram_budget_gib`], sizes to the grant rather than to the card.
+pub fn set_vram_budget(gib: f64) {
+    gpu_core::capacity::set_vram_budget((gib * (1u64 << 30) as f64) as u64);
+}
+
+/// The grant [`set_vram_budget`] fixed, in GiB; `None` when none was set.
+#[must_use]
+pub fn vram_budget_gib() -> Option<f64> {
+    gpu_core::capacity::vram_budget().map(|bytes| bytes as f64 / (1u64 << 30) as f64)
+}
+
 /// One GPU's memory right now, as the driver reports it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct GpuCard {

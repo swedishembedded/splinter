@@ -150,6 +150,10 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     if let Some(device) = launch.device {
         command.args(["--device", device]);
     }
+    // A grant this process was given bounds the server it starts too.
+    if let Some(gib) = splinter_model::device::vram_budget_gib() {
+        command.args(["--vram-budget", &gib.to_string()]);
+    }
     command.arg("serve").args(["--openai", &address]);
     // Always named, so the width a caller asks at is the one the server was
     // told rather than a default it might not share.

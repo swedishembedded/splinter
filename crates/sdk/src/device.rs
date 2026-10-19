@@ -28,14 +28,19 @@ pub struct DeviceFlags {
     /// brain picks, which on a CUDA host is not CUDA.
     #[arg(long, global = true)]
     pub backend: Option<String>,
+    /// The VRAM, in GiB, this process was granted: every card it budgets from
+    /// is capped at it, so a run on a share of a card sizes its model, KV
+    /// pool and context to the share. Without it the whole card is budgeted.
+    #[arg(long, global = true)]
+    pub vram_budget: Option<f64>,
 }
 
 impl DeviceFlags {
-    /// Removes `--device VALUE` and `--backend VALUE` from `args` and returns
+    /// Removes `--device VALUE`, `--backend VALUE` and `--vram-budget GIB` from `args` and returns
     /// them, for a program that reads its own arguments.
     ///
     /// # Errors
-    /// A flag has no value after it.
+    /// A flag has no value after it, or `--vram-budget` is not a positive number.
     pub fn take(args: &mut Vec<String>) -> Result<Self, String> {
         let mut take = |name: &str| -> Result<Option<String>, String> {
             let Some(at) = args.iter().position(|a| a == name) else {
@@ -48,9 +53,20 @@ impl DeviceFlags {
             args.remove(at);
             Ok(Some(value))
         };
+        let device = take("--device")?;
+        let backend = take("--backend")?;
+        let vram_budget = take("--vram-budget")?
+            .map(|text| match text.parse::<f64>() {
+                Ok(gib) if gib > 0.0 && gib.is_finite() => Ok(gib),
+                _ => Err(format!(
+                    "--vram-budget needs a positive number of GiB, got {text}"
+                )),
+            })
+            .transpose()?;
         Ok(Self {
-            device: take("--device")?,
-            backend: take("--backend")?,
+            device,
+            backend,
+            vram_budget,
         })
     }
 
@@ -64,6 +80,9 @@ impl DeviceFlags {
     pub fn apply(&self) -> Result<(), PolicyError> {
         if let Some(backend) = &self.backend {
             select_backend(backend)?;
+        }
+        if let Some(gib) = self.vram_budget {
+            crate::model::device::set_vram_budget(gib);
         }
         if let Some(text) = &self.device {
             let devices = select(text)?;
@@ -96,10 +115,22 @@ mod tests {
     }
 
     #[test]
+    fn the_vram_budget_is_taken_as_gib_and_refused_when_not_a_positive_number() {
+        let mut args = words("train --vram-budget 66 --out dir");
+        let flags = DeviceFlags::take(&mut args).unwrap();
+        assert_eq!(flags.vram_budget, Some(66.0));
+        assert_eq!(args, words("train --out dir"));
+        for bad in ["0", "-3", "lots", "NaN"] {
+            let mut args = words(&format!("train --vram-budget {bad}"));
+            assert!(DeviceFlags::take(&mut args).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
     fn a_program_without_the_flags_is_left_alone() {
         let mut args = words("train --out dir");
         let flags = DeviceFlags::take(&mut args).unwrap();
-        assert!(flags.device.is_none() && flags.backend.is_none());
+        assert!(flags.device.is_none() && flags.backend.is_none() && flags.vram_budget.is_none());
         assert_eq!(args, words("train --out dir"));
     }
 
