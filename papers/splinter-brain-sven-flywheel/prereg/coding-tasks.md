@@ -667,6 +667,17 @@ pilot is the whole first half (23 families, 253 tasks) if both arms have it comp
 and `S3` (69 tasks) otherwise; the other is reported beside it. This rule is fixed before the
 verdict of any arm has been read.
 
+**A9.6 One task per family.** The 8B arms finished far fewer requests than the first estimate: at 32
+clients a request waits about two minutes (every turn re-prefills its history, A9.3) and about 19
+requests complete per minute, so the 69 tasks of `S3` would need about two hours per arm and the
+remaining time does not allow it. The confirmatory pilot is therefore `S1`, one task of each of the 23
+families of the first half (`tasks pick --seed 20261017 --per-family 1`, 23 tasks), solved by both
+arms with all 23 episodes at once, base arm and adapter arm each on one 8B server. A9.5 does not
+apply (neither `S3` nor the whole half is run). An attempt lost to a client time-out is an
+infrastructure error and is repeated by a resumed solve (A4.6); it is never a failure. This
+choice is made before the verdict of any arm has been read: the first base arm was lost to
+time-outs (67 of 69 attempts) and has no verdicts.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
