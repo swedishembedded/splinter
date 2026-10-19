@@ -563,7 +563,7 @@ hash of the exam seed and the file path within its group. The partition is there
 30 of the 60 families are reserved, three of every group of six, and the union of the ten exam
 sets is the qualification partition and the union of the ten development sets the development
 partition. Everything else of A6.1 is unchanged. No task of sqlglot has been solved.
-### Amendment 7, 2026-10-19, 14:45 CEST: pass 1 only, the controls that are run, how the steps are fixed
+### Amendment 7, 2026-10-19, 14:41 CEST: pass 1 only, the controls that are run, how the steps are fixed
 
 Made before the training dataset is built, before any training run and before any
 qualification-partition query. It rests on the sets of pass 1, whose counts are in the paper's CE1
@@ -593,7 +593,7 @@ the audit's classes, so that a reader sees how much of the evidence the rule rem
 
 **A7.5 Where arms run.** The base arm and the adapter arm of one comparison run on one 8B server
 instance (A2.10) on one card; different comparisons may run on different cards at the same time.
-### Amendment 8, 2026-10-19, 15:05 CEST: parallel arms, qualification in two halves, controls not run
+### Amendment 8, 2026-10-19, 14:58 CEST: parallel arms, qualification in two halves, controls not run
 
 Made before any 8B arm has been run on any partition and before any adapter has been served; the
 primary adapter is trained but no outcome of it exists.
