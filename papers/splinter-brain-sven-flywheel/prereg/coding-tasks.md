@@ -554,6 +554,16 @@ admitted tasks is a measured outcome and nothing is added or removed after the p
 PILOT when it has fewer than 25 non-tied families, by the existing rule; 30 families are
 reserved so that 25 are possible.
 
+**A6.3 Parallel admission, stratified partition.** One call over the 60 files evaluates the mutants
+one at a time at about 20 s each (the 55-module suite), which would take about 13 h, and the first
+such call, started at 09:46, was stopped at 13:20 before it had stored a task. The admission therefore
+runs as ten parallel calls into the one state root: call g takes the files at ranks g, g+10, g+20,
+... of the list (six files) and reserves three families (`--exam-families 3`), by the same stable
+hash of the exam seed and the file path within its group. The partition is thereby stratified:
+30 of the 60 families are reserved, three of every group of six, and the union of the ten exam
+sets is the qualification partition and the union of the ten development sets the development
+partition. Everything else of A6.1 is unchanged. No task of sqlglot has been solved.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
