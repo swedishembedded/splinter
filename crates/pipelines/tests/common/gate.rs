@@ -211,6 +211,7 @@ fn dataset_made(
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,
+        outcome_verified_only: false,
         terms,
     };
     let projection = match prompt {
@@ -264,6 +265,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,
+        outcome_verified_only: false,
         terms: None,
     };
     store_dataset(ctx, &projection, false).unwrap().id

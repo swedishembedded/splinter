@@ -122,6 +122,7 @@ pub(super) fn store(
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,
+        outcome_verified_only: false,
         terms: source_terms(ctx, sessions.iter())?,
     };
     if let Some(prompt) = system {

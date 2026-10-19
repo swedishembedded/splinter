@@ -546,6 +546,7 @@ impl Session {
                             .transpose()?;
                         let control = match control {
                             None => Control::Verified,
+                            Some(ControlKind::OutcomeVerified) => Control::OutcomeVerified,
                             Some(ControlKind::Unverified) => Control::Unverified,
                             Some(ControlKind::Shuffled) => Control::ShuffledInstructions {
                                 seed: run.seed("control-seed", control_seed)?.value(),

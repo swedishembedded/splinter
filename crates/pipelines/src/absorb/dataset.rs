@@ -143,6 +143,7 @@ pub fn assemble(
             excluded: BTreeMap::new(),
             system_prompt: None,
             packed: false,
+            outcome_verified_only: false,
             terms: None,
         };
         for task in &kit.stopping {
@@ -192,6 +193,7 @@ pub fn assemble(
             excluded: BTreeMap::new(),
             system_prompt: None,
             packed: false,
+            outcome_verified_only: false,
             terms: None,
         };
         // A sealed probe is refused wherever a record came from.
@@ -216,6 +218,7 @@ pub fn assemble(
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,
+        outcome_verified_only: false,
         terms: source_terms(ctx, sessions.iter())?,
     };
     if let Some(prompt) = system {

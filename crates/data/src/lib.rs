@@ -417,6 +417,11 @@ pub struct Projection {
     /// turns ([`SftStep::packed`]), which training must keep as one sequence.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub packed: bool,
+    /// Whether every record comes from an experience an independent verdict
+    /// passed ([`SftStep::outcome_verified_only`]); without it an action
+    /// labelled good is admitted from an unverified or failed experience.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub outcome_verified_only: bool,
     /// The terms the records' data came under, combined over their sources
     /// ([`splinter_core::terms::combine_stated`]); `None` when no source
     /// stated any. Set by whoever resolved the sources, never by a view.
@@ -441,6 +446,7 @@ impl Projection {
             excluded: BTreeMap::new(),
             system_prompt: None,
             packed: false,
+            outcome_verified_only: false,
             terms: None,
         }
     }

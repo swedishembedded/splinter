@@ -60,6 +60,12 @@ pub enum Control {
     /// Only experiences decided pass at the minimum strength.
     #[default]
     Verified,
+    /// Only experiences decided pass at the minimum strength, and no action
+    /// is admitted on its own label from one that was not: outcome-verified
+    /// evidence. [`Control::Verified`], the default, also admits an action
+    /// labelled good from an experience nobody verified or whose verdict
+    /// failed (step-level credit, only as trustworthy as whoever labelled).
+    OutcomeVerified,
     /// Trajectories whatever their verdict (a failed one, or none), except
     /// those an exposure audit failed: it tests whether verification matters.
     Unverified,
@@ -122,6 +128,7 @@ impl SftStep {
     }
 
     fn project_entry(&self, entry: &Entry, projection: &mut Projection) {
+        let outcome_verified = self.control == Control::OutcomeVerified;
         let passed = match self.control {
             Control::Unverified => admit_unverified(entry),
             _ => require_pass(entry, self.min_strength),
@@ -136,7 +143,7 @@ impl SftStep {
             )
         });
         if let Err(reason) = passed {
-            if !any_good {
+            if !any_good || outcome_verified {
                 projection.exclude(reason);
                 return;
             }
@@ -156,7 +163,9 @@ impl SftStep {
         for action in conversation.actions.iter().filter(|a| !a.copied) {
             if entry.labelled(action.step, Label::Bad) {
                 projection.exclude(Exclusion::BadStep);
-            } else if passed.is_ok() || entry.labelled(action.step, Label::Good) {
+            } else if passed.is_ok()
+                || (!outcome_verified && entry.labelled(action.step, Label::Good))
+            {
                 admitted.push(action);
             }
         }
@@ -190,6 +199,7 @@ impl View for SftStep {
             Some(self.min_strength),
         );
         projection.packed = self.packed;
+        projection.outcome_verified_only = self.control == Control::OutcomeVerified;
         for entry in corpus.entries() {
             self.project_entry(entry, &mut projection);
         }

@@ -208,7 +208,7 @@ order:
 | `solve` | the policy attempts each remaining task `--k` times as an agent in its own copy of the tree, with sven's file, search and shell tools, up to `--follow-ups` more turns when the visible checks stay red and `--max-tool-calls` calls; each attempt draws from a seed that is a function of the task and the attempt |
 | `verify` | applies each patch to a clean copy, lays the hidden tests over it and runs the project's checks; an exposure audit fails any attempt whose trajectory names a hidden path, quotes the hidden tests or names the state root, whatever its patch did, and the stage counts those by kind |
 | `frontier` | keeps the tasks the policy solves sometimes (pass@k) |
-| `dataset` | the passing attempts, action by action (`sft-step`), with the tools the agent was offered; `--max-block TOKENS` leaves out and counts records longer than the card fits; the dataset is checked to hold no family of the exam |
+| `dataset` | the passing attempts, action by action (`sft-step`), with the tools the agent was offered (an action a labeller marked good is also admitted from an experience nobody verified or whose verdict failed, unless `--control outcome-verified` is given; the manifest records it); `--max-block TOKENS` leaves out and counts records longer than the card fits; the dataset is checked to hold no family of the exam |
 | `train` | a candidate from the champion with earlier releases' records replayed |
 | `release` | the gate, over the exam this run reserved (`--no-release` stops at the candidate): the champion and the candidate attempt the exam's tasks as agents, under the bounds and seeds of `solve`, graded as `verify` grades; paired outcomes are counted by family in the sign test; each earlier release is held to the exam of its own run; the anchor suite is held (a frozen suite with no coding-agent task is decided on the tasks it holds, and the report says it holds none); the candidate is served by `brain serve --adapter-manifest` and must be graded as it was in-process on at least three quarters of a sample of the exam. A blocked candidate is not released and the run stops with the reason of each check that failed; `practice` gives the gate the bounds it solved under, and `splinter release` on such a candidate probes with the default ones |
 
@@ -241,8 +241,10 @@ and `--workspace-max-processes N` bounds the processes and threads of a
 command; each is part of the environment record, so a task generated without
 it names another environment. The agent's own file and search tools are
 confined to the attempt's tree by sven's project root, for its delegated
-children too. The supervisor makes itself non-dumpable when it starts an
-attempt, so a command cannot read its environment through `/proc`. The exposure
+children too. A command, a code call of `run_code` included, runs in a private user and pid
+namespace with a `/proc` of its own, so no other process of the host is visible to it
+(Landlock alone already refuses it another process's environment); a kernel that cannot
+make one refuses the command. The exposure
 audit reports a command's mention of a path outside the tree by what came of it:
 `outside_workspace` (something came back), `outside_workspace_denied` (the sandbox
 refused) and `outside_workspace_absent` (no such path, or nothing returned); all

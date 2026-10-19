@@ -18,9 +18,9 @@ mod common;
 
 use common::*;
 use serde_json::json;
-use splinter_core::annotation::{Outcome, Strength};
+use splinter_core::annotation::{Label, Outcome, Strength};
 use splinter_core::experience::{PrivilegedKind, Task};
-use splinter_data::{Corpus, Exclusion, SftStep, View};
+use splinter_data::{Control, Corpus, Exclusion, SftStep, View};
 
 const INSTRUCTION: &str = "Compute one plus one and report it.";
 
@@ -87,4 +87,45 @@ fn a_pass_weaker_than_execution_is_not_training_evidence() {
 fn an_executable_pass_is_admitted() {
     let (records, excluded) = records_for(&[(Outcome::Pass, Strength::Executable)]);
     assert!(records > 0 && excluded.is_none());
+}
+
+/// An experience nobody verified, or whose verdict failed, in which the
+/// labeller marked the tool call good.
+fn labelled_good(verdicts: &[(Outcome, Strength)]) -> (usize, usize) {
+    let task = arithmetic();
+    let experience = claimed_success(&task);
+    let mut notes: Vec<_> = verdicts
+        .iter()
+        .map(|(outcome, strength)| verdict(&experience, *outcome, *strength))
+        .collect();
+    notes.push(label(&experience, 2, Label::Good));
+    let mut corpus = Corpus::new();
+    corpus.insert(experience, notes).unwrap();
+    let step_credit = SftStep::new(Strength::Executable).project(&corpus).unwrap();
+    let verified = SftStep::new(Strength::Executable)
+        .control(Control::OutcomeVerified)
+        .project(&corpus)
+        .unwrap();
+    assert!(!step_credit.outcome_verified_only && verified.outcome_verified_only);
+    (step_credit.records.len(), verified.records.len())
+}
+
+#[test]
+fn a_good_step_of_an_unverified_or_failed_experience_is_admitted_only_without_outcome_verification()
+{
+    for verdicts in [
+        vec![],
+        vec![(Outcome::Fail, Strength::Executable)],
+        vec![(Outcome::Pass, Strength::Judged)],
+    ] {
+        let (step_credit, verified) = labelled_good(&verdicts);
+        assert!(
+            step_credit > 0,
+            "{verdicts:?}: the default keeps step-level credit"
+        );
+        assert_eq!(verified, 0, "{verdicts:?}: outcome-verified admits nothing");
+    }
+    // A verified experience is admitted either way.
+    let (step_credit, verified) = labelled_good(&[(Outcome::Pass, Strength::Executable)]);
+    assert!(step_credit > 0 && verified > 0);
 }

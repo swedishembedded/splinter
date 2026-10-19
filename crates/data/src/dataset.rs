@@ -156,6 +156,11 @@ pub struct Manifest {
     /// each; a manifest written before this existed is not packed.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub packed: bool,
+    /// Whether every record comes from an experience an independent verdict
+    /// passed (see [`crate::Projection::outcome_verified_only`]); a manifest
+    /// written before this existed was not built that way.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub outcome_verified_only: bool,
     /// The terms the records' data came under, combined over their sources
     /// (the most restrictive of each axis, a source stating none counting as
     /// unknown); `None` when no source stated any, which consumers treat as
@@ -408,6 +413,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         },
         system_prompt: projection.system_prompt.clone(),
         packed: projection.packed,
+        outcome_verified_only: projection.outcome_verified_only,
         terms: projection.terms.clone(),
     }
 }

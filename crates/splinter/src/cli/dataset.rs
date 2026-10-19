@@ -59,8 +59,11 @@ pub struct BuildArgs {
     /// admitted action supervised, not one record per action.
     #[arg(long)]
     pub pack: bool,
-    /// For the sft-step view: build a negative control instead of the
-    /// verified dataset. `unverified` keeps trajectories whatever their
+    /// For the sft-step view: build another dataset than the default.
+    /// `outcome-verified` admits only experiences an independent verdict
+    /// passed (the default also admits an action labelled good from one that
+    /// was not verified or failed; the manifest records `outcome-verified`).
+    /// The negative controls: `unverified` keeps trajectories whatever their
     /// verdict (never an exposed one); `shuffled` gives each verified
     /// trajectory the instruction of another task.
     #[arg(long, value_enum)]
