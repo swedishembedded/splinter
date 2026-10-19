@@ -563,6 +563,36 @@ hash of the exam seed and the file path within its group. The partition is there
 30 of the 60 families are reserved, three of every group of six, and the union of the ten exam
 sets is the qualification partition and the union of the ten development sets the development
 partition. Everything else of A6.1 is unchanged. No task of sqlglot has been solved.
+### Amendment 7, 2026-10-19, 14:45 CEST: pass 1 only, the controls that are run, how the steps are fixed
+
+Made before the training dataset is built, before any training run and before any
+qualification-partition query. It rests on the sets of pass 1, whose counts are in the paper's CE1
+table and are not used to choose anything here.
+
+**A7.1 Teacher pass 2 is not run.** A4.4 registered a second teacher pass (temperature 0.7) as
+further training data. The compute lease that this experiment runs in ends before such a pass could
+finish and still leave room for the evaluation arms, so the training data are the verified,
+exposure-clean, executable-strength trajectories of pass 1 alone (A2.7, A3.2, A5.2). The floor of
+40 trajectories of A2.7 applies to them; if fewer remain, no adapter is trained and the shortfall is
+the result.
+
+**A7.2 Steps.** The step count of A2.7, ceil(2R/8), is computed from R, the number of training
+records after the monitoring share is removed, as the trainer reports it for the dataset; if the
+count differs from the one the run was started with, the run is repeated with the reported one.
+
+**A7.3 The controls run, and the one that does not.** On the development partition, with the same
+recipe and the same number of steps as the primary adapter: the unverified control and the shuffled
+control of A4.3, and plain patch fine-tuning (A1, `--view sft-final`) on the same experiences.
+Control (b) of A1.1 (the other repository's trajectories) needs the CE7 teacher pass and is not
+run; the paper says so. A3 and A4 are not run (A4.3). The G8 sample of A2.9 is not run in this
+lease and is reported as not run.
+
+**A7.4 Yield accounting.** The exposure rule of A3.1 is applied as registered. The paper reports, per
+set, the verified attempts by the hidden checks and those that remain after the exposure audit, by
+the audit's classes, so that a reader sees how much of the evidence the rule removes.
+
+**A7.5 Where arms run.** The base arm and the adapter arm of one comparison run on one 8B server
+instance (A2.10) on one card; different comparisons may run on different cards at the same time.
 
 ## Provenance
 
