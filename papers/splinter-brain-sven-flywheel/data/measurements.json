@@ -135,7 +135,7 @@
   },
   "ce1-p1-ttlcache": {
    "log": "ce1/ce1-p1-ttlcache.summary.json",
-   "sha256": "d1c475b0584b189f16506cbccdd11ad03f724a39e14942ae539d8a6e379d140d",
+   "sha256": "f452ad76b1dd889a80fcf8d9b9c81aef144f7471071b4157b849bcb786d29767",
    "metric_prefix": "ce1.ttlcache_p1",
    "metrics": {
     "tasks": 46,
@@ -147,7 +147,9 @@
     "undecided": 1,
     "exposed": 8,
     "hidden_path": 1,
-    "outside_workspace": 7
+    "outside_workspace": 7,
+    "raw_pass": 34,
+    "audit_removed": 3
    },
    "splinter": "b5fb1674",
    "brain": "5c1aa4863",
@@ -155,7 +157,7 @@
   },
   "ce1-p1-mdrender": {
    "log": "ce1/ce1-p1-mdrender.summary.json",
-   "sha256": "fe615299cc1de4e2f6ede66252d2cc207953006486cc55031272abd18a9f0045",
+   "sha256": "35b6f44389777c41f1b5d600efb7f4722f2478b8095de870e85c7a6c36a97252",
    "metric_prefix": "ce1.mdrender_p1",
    "metrics": {
     "tasks": 43,
@@ -167,7 +169,9 @@
     "undecided": 0,
     "exposed": 17,
     "hidden_path": 0,
-    "outside_workspace": 17
+    "outside_workspace": 17,
+    "raw_pass": 13,
+    "audit_removed": 4
    },
    "splinter": "64cad0e6",
    "brain": "98106c845",
@@ -175,7 +179,7 @@
   },
   "ce1-p1-iniparse": {
    "log": "ce1/ce1-p1-iniparse.summary.json",
-   "sha256": "9cb4255b9f3df859a315a0c902a021d8806d7e02997eb3ec46843b2d4cf4d46a",
+   "sha256": "3800e052724400bb2b4586c0b1813814109eb22254c374ac1c735c8cdbc7f21c",
    "metric_prefix": "ce1.iniparse_p1",
    "metrics": {
     "tasks": 61,
@@ -187,7 +191,9 @@
     "undecided": 0,
     "exposed": 27,
     "hidden_path": 7,
-    "outside_workspace": 22
+    "outside_workspace": 22,
+    "raw_pass": 18,
+    "audit_removed": 7
    },
    "splinter": "64cad0e6",
    "brain": "98106c845",
@@ -195,7 +201,7 @@
   },
   "ce1-p1-exprcalc": {
    "log": "ce1/ce1-p1-exprcalc.summary.json",
-   "sha256": "5194a2ee355f32c09b522a218628737a295016e1eb543af7fbd51ed92c4ce2a4",
+   "sha256": "3f3440c49de944f68a0a96a287f976a824ad237cc16c5a79db65e17cb299a9f5",
    "metric_prefix": "ce1.exprcalc_p1",
    "metrics": {
     "tasks": 56,
@@ -207,7 +213,9 @@
     "undecided": 0,
     "exposed": 30,
     "hidden_path": 14,
-    "outside_workspace": 19
+    "outside_workspace": 19,
+    "raw_pass": 10,
+    "audit_removed": 7
    },
    "splinter": "64cad0e6",
    "brain": "98106c845",
@@ -215,7 +223,7 @@
   },
   "ce1-p1-graphkit": {
    "log": "ce1/ce1-p1-graphkit.summary.json",
-   "sha256": "11b2a8bd8b4f5f971193dfa57adbe8560c0928d2e1126a4d7dd24229209d796e",
+   "sha256": "b89e34a6cfe56cafbe20b487c2ae8763bd7d7fdb8df91e27083c499c861daca2",
    "metric_prefix": "ce1.graphkit_p1",
    "metrics": {
     "tasks": 51,
@@ -227,7 +235,9 @@
     "undecided": 0,
     "exposed": 26,
     "hidden_path": 1,
-    "outside_workspace": 25
+    "outside_workspace": 25,
+    "raw_pass": 24,
+    "audit_removed": 13
    },
    "splinter": "64cad0e6",
    "brain": "98106c845",
@@ -235,7 +245,7 @@
   },
   "ce1-p1-tokenbucket": {
    "log": "ce1/ce1-p1-tokenbucket.summary.json",
-   "sha256": "5681f9a45e48b283bea24433e773ee88388c84a52a25dc13a85b56436ee7fd40",
+   "sha256": "46c8f4fa7294bd9733413f3df1ac0f1e69c17a1eb8511a2260f210ac9c506511",
    "metric_prefix": "ce1.tokenbucket_p1",
    "metrics": {
     "tasks": 38,
@@ -247,11 +257,57 @@
     "undecided": 0,
     "exposed": 10,
     "hidden_path": 3,
-    "outside_workspace": 9
+    "outside_workspace": 9,
+    "raw_pass": 22,
+    "audit_removed": 4
    },
    "splinter": "64cad0e6",
    "brain": "98106c845",
    "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-tokenbucket); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-tokenbucket"
+  },
+  "ce1-p1-linediff": {
+   "log": "ce1/ce1-p1-linediff.summary.json",
+   "sha256": "9fbfbe2c230efebe5ccf6dfb3b33eaef4445d3fd118f79aced60dadbaceca7b2",
+   "metric_prefix": "ce1.linediff_p1",
+   "metrics": {
+    "tasks": 50,
+    "solved": 50,
+    "success": 21,
+    "cancelled": 0,
+    "passed_clean": 11,
+    "failed": 39,
+    "undecided": 0,
+    "exposed": 24,
+    "hidden_path": 7,
+    "outside_workspace": 20,
+    "raw_pass": 18,
+    "audit_removed": 7
+   },
+   "splinter": "64cad0e6",
+   "brain": "98106c845",
+   "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-linediff); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-linediff"
+  },
+  "ce1-p1-caldate": {
+   "log": "ce1/ce1-p1-caldate.summary.json",
+   "sha256": "57762575ddc8f9896a9b61c5be1accaad56e2dc35eeca9313c5e1437db254d44",
+   "metric_prefix": "ce1.caldate_p1",
+   "metrics": {
+    "tasks": 25,
+    "solved": 25,
+    "success": 13,
+    "cancelled": 0,
+    "passed_clean": 6,
+    "failed": 19,
+    "undecided": 0,
+    "exposed": 13,
+    "hidden_path": 1,
+    "outside_workspace": 13,
+    "raw_pass": 13,
+    "audit_removed": 7
+   },
+   "splinter": "64cad0e6",
+   "brain": "98106c845",
+   "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-caldate); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-caldate"
   }
  }
 }

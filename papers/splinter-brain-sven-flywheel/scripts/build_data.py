@@ -106,6 +106,7 @@ def ce1_summary_metrics(summary):
         "undecided": summary["undecided"], "exposed": summary["exposed"],
         "hidden_path": summary["exposed_by"].get("hidden_path", 0),
         "outside_workspace": sum(n for k, n in summary["exposed_by"].items() if k.startswith("outside_workspace")),
+        **({"raw_pass": summary["yield"]["raw_pass"], "audit_removed": summary["yield"]["removed"]} if summary.get("yield") else {}),
     }
 
 
@@ -259,10 +260,11 @@ def ce1_table():
     if not rows:
         return r"\textbf{NOT MEASURED}"
     lines = [r"\begin{tabular}{lrrrrrrr}", r"\toprule",
-             r"Set & Tasks & Success & Cancelled & Passed clean & Failed & Exposed & Undecided \\", r"\midrule"]
+             r"Set & Tasks & Success & Stopped & Hidden pass & Audit removed & Passed clean & Failed \\", r"\midrule"]
     for prefix, r in sorted(rows.items()):
-        lines.append(f"{prefix.removeprefix('ce1.').replace('_', ' ')} & {r['tasks']} & {r['success']} & {r['cancelled']} "
-                     f"& {r['passed_clean']} & {r['failed']} & {r['exposed']} & {r['undecided']} \\\\")
+        name = prefix.removeprefix('ce1.').replace('_', ' ')
+        lines.append(f"{name} & {r['tasks']} & {r['success']} & {r['solved'] - r['success']} & {r.get('raw_pass', '--')} "
+                     f"& {r.get('audit_removed', '--')} & {r['passed_clean']} & {r['failed']} \\\\")
     return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
 
 
