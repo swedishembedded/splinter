@@ -176,6 +176,10 @@ pub enum Command {
     /// Trace any artifact up to where it came from (down to source bytes)
     /// and down to everything that came from it.
     Lineage(LineageArgs),
+    /// Print the command reference as Markdown, generated from this grammar;
+    /// with --check FILE, fail when a committed copy of it is stale.
+    #[command(hide = true)]
+    CliReference(CliReferenceArgs),
 }
 
 /// A model reference, for clap.
@@ -715,6 +719,7 @@ mod harbor;
 mod harness;
 mod learn;
 mod practice;
+pub mod reference;
 mod state;
 mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
@@ -729,6 +734,7 @@ pub use harbor::{HarborCommand, OracleArg};
 pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
 pub use learn::LearnArgs;
 pub use practice::PracticeArgs;
+pub use reference::CliReferenceArgs;
 pub use state::{RunsCommand, StateCommand};
 use train::positive_count;
 

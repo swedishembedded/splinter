@@ -51,7 +51,7 @@ use clap::{CommandFactory, Parser};
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::Config;
 
-use cli::Cli;
+use cli::{Cli, Command};
 use session::Session;
 
 fn main() -> ExitCode {
@@ -63,6 +63,9 @@ fn main() -> ExitCode {
                 "a sentence and a command cannot be given together",
             )
             .exit();
+    }
+    if let Some(Command::CliReference(args)) = &cli.command {
+        return cli::reference::run(args).into();
     }
     if let Err(e) = cli.global.device.apply() {
         output::error(
