@@ -82,7 +82,7 @@ of the family than the base; losses: fewer), with the exact one-sided sign test.
 empty until its run exists; a cell is never filled with an estimate.}\label{tab:results}
 \end{table}
 
-\paragraph{CE1 so far.} The teacher's first pass over the development partition is running; \cref{tab:ce1} lists the sets that have finished, each row read from \code{data/measurements.json}. For the ttlcache set, 46 tasks, 31 conclude as success and 15 as cancelled by the harness's own bounds, the hidden checks pass 31 attempts clean and fail 14 (one is undecided), and 8 attempts are exposed by the audit, 7 of them for naming a path outside the workspace and 1 for a hidden path.\cl{M39} Nothing is trained on it yet and no comparison exists.
+\paragraph{CE1 so far.} The teacher's first pass over the development partition is running; \cref{tab:ce1} lists the sets that have finished, each row read from \code{data/measurements.json} and each backed by a ledger entry that quotes its counts.\cl{M39,M40,M41,M42} A conclusion of cancelled or repetition-stopped is the harness's own bound (\cref{sec:amend}), not a failure of the infrastructure. The exposure audit is applied as registered: an attempt whose trajectory names a path outside its tree is excluded from training evidence and counted, whatever its patch did. No training has used these sets and no comparison exists.
 
 \begin{table}[t]
 \centering\small

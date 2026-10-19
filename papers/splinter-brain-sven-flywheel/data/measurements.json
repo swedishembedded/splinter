@@ -151,7 +151,67 @@
    },
    "splinter": "b5fb1674",
    "brain": "5c1aa4863",
-   "command": "runs/ce/solve.sh ce1-p1-ttlcache 1 blake3:c469b6f6935a9228b7bb3b85c4c58973421ba73085efe2d1a4e808520adec75d 8 0 --test-output-cap 65536; splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-ttlcache"
+   "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-ttlcache); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-ttlcache"
+  },
+  "ce1-p1-mdrender": {
+   "log": "ce1/ce1-p1-mdrender.summary.json",
+   "sha256": "fe615299cc1de4e2f6ede66252d2cc207953006486cc55031272abd18a9f0045",
+   "metric_prefix": "ce1.mdrender_p1",
+   "metrics": {
+    "tasks": 43,
+    "solved": 43,
+    "success": 19,
+    "cancelled": 0,
+    "passed_clean": 9,
+    "failed": 34,
+    "undecided": 0,
+    "exposed": 17,
+    "hidden_path": 0,
+    "outside_workspace": 17
+   },
+   "splinter": "64cad0e6",
+   "brain": "98106c845",
+   "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-mdrender); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-mdrender"
+  },
+  "ce1-p1-iniparse": {
+   "log": "ce1/ce1-p1-iniparse.summary.json",
+   "sha256": "9cb4255b9f3df859a315a0c902a021d8806d7e02997eb3ec46843b2d4cf4d46a",
+   "metric_prefix": "ce1.iniparse_p1",
+   "metrics": {
+    "tasks": 61,
+    "solved": 61,
+    "success": 21,
+    "cancelled": 0,
+    "passed_clean": 11,
+    "failed": 50,
+    "undecided": 0,
+    "exposed": 27,
+    "hidden_path": 7,
+    "outside_workspace": 22
+   },
+   "splinter": "64cad0e6",
+   "brain": "98106c845",
+   "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-iniparse); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-iniparse"
+  },
+  "ce1-p1-exprcalc": {
+   "log": "ce1/ce1-p1-exprcalc.summary.json",
+   "sha256": "5194a2ee355f32c09b522a218628737a295016e1eb543af7fbd51ed92c4ce2a4",
+   "metric_prefix": "ce1.exprcalc_p1",
+   "metrics": {
+    "tasks": 56,
+    "solved": 56,
+    "success": 13,
+    "cancelled": 0,
+    "passed_clean": 3,
+    "failed": 53,
+    "undecided": 0,
+    "exposed": 30,
+    "hidden_path": 14,
+    "outside_workspace": 19
+   },
+   "splinter": "64cad0e6",
+   "brain": "98106c845",
+   "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-exprcalc); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-exprcalc"
   }
  }
 }
