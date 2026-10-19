@@ -108,21 +108,26 @@ lets one batch serve the base and many LoRA adapters.\cl{AU08}
 \item \textbf{Containment} (implemented for commands run on the host; a container remains
 the stronger option). A solver's forbidden operations are prevented by the kernel, not
 detected afterwards by the exposure audit. A command of the solver (its shell, and the
-checks) runs under Landlock with read access to the system and write access to its own tree
+checks, and a code call of the \code{run_code} tool\cl{CN13}) runs under Landlock with read access to the system and write access to its own tree
 and a private directory only, so the withheld tests,\cl{CN01} a path traversal or a symlink
 out of the tree,\cl{CN02} the host's credential files,\cl{CN03} and a sibling candidate's
 tree\cl{CN06} are refused with a permission error, also when reached through \code{sh -c}, an
 interpreter or a compiled helper the candidate brought along.\cl{CN07} The command's
 environment is built from an allowlist from which names that look like secrets are dropped even
-when the allowlist names them;\cl{CN04} the supervisor makes itself non-dumpable so its own
-environment cannot be read through \code{/proc};\cl{CN05} the network is denied (Landlock's
+when the allowlist names them;\cl{CN04} Landlock's ptrace check already refuses the files of another process's
+\code{/proc} directory that need ptrace access (its environment among them),\cl{CN05} and the command
+runs in a private user and pid namespace with a \code{/proc} of its own, in which no other process
+of the host exists at all;\cl{CN14} the network is denied (Landlock's
 TCP rules and a socket filter that also covers UDP), so a command cannot reach a model server on the
 loopback;\cl{CN08} and a process budget stops a fork bomb when the operator sets one.\cl{CN09} A kernel
 without Landlock ABI~4 refuses to run the command rather than run it open. The agent's own file
 and search tools are confined to the attempt's tree by the agent framework's project root,
 which its delegated children share.\cl{CN10} Only an experience that an independent verdict
-passed at executable strength is training evidence.\cl{CN11} A path outside the tree that a command names is reported by what came of it (the sandbox refused it, it did not exist, or something came back), so the audit separates a harmless mention from an access; all three still fail it.\cl{CN12} Not covered: other processes
-of the same user that hold secrets in their environment remain readable through
-\code{/proc}, and the process budget and network opt-ins change the environment record, so
-they are off or unset by default to keep the identity of tasks generated earlier.
+passed at executable strength is training evidence.\cl{CN11} The step-level view of the
+training data also admits an action a labeller marked good from an experience nobody verified;
+that is the default, \code{--control outcome-verified} turns it off, and the dataset manifest
+records which was used.\cl{CN15} A path outside the tree that a command names is reported by what came of it (the sandbox refused it, it did not exist, or something came back), so the audit separates a harmless mention from an access; all three still fail it.\cl{CN12} Not covered: the process budget and network opt-ins change the
+environment record, so they are off or unset by default to keep the identity of tasks generated
+earlier, and a kernel that cannot create a user namespace refuses to run a command unless the
+operator allows the host's \code{/proc}.
 \end{enumerate}
