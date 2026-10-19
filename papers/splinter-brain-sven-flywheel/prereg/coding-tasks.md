@@ -617,6 +617,45 @@ split between the two halves, and no task is dropped from a half after its outco
 **A8.3 Controls.** The plain-patch control of A7.3 builds no record for workspace tasks (the
 view admits none), so it is not run. A7.3's other controls are run after the primary comparison and
 only if time allows; the paper reports which were run.
+### Amendment 9, 2026-10-19, 16:05 CEST: the training records, the step count, the qualification subset
+
+Made before any verdict of an 8B arm exists on any partition. The first adapter (trained on 67
+packed records, 9 steps) was served and driven for about ten minutes on the first qualification half;
+no episode of it finished (every request ran to the 4096-token cap) and no verdict was taken, so that
+adapter, its partial arm and the partial base arm that ran beside it are discarded
+(`runs/ce/runs-ce1/superseded/`).
+
+**A9.1 Why the first adapter was wrong.** The agent in the pinned sven exports a whole run as one
+user step and one agent step holding every tool call and observation (graphkit: 2 steps, one with 61
+calls). The packed sft-step record of such a trajectory is the instruction and one assistant turn
+that holds every call and none of the results (3 messages for each of the 67 records), which is not
+what an agent sees. The projection therefore reads such a trajectory, with `dataset build
+--serialise-calls`, as one call per turn, each followed by its result, then the final reply; a trajectory
+with several agent steps is projected as before. Each request of the run is recorded on the step with
+its tokens: of the 193 experiences that carry them, 118 (61%) have as many requests as calls or one
+more, and 2269 calls were made in 2128 requests, so about 94% of the calls were the only call of
+their response. The approximation is the recorded behaviour for those and serialises the
+remaining parallel batches.
+
+**A9.2 Records and steps.** The training set is the unpacked sft-step view (one record per
+supervised action, A2.8's alternative) with `--serialise-calls --control outcome-verified
+--drop-leaking --max-block 16384 --min-strength executable`, over the eight finished pass-1 sets,
+built by splinter ec7ab240; the packed records are longer than the block for 70 of 86 trajectories.
+The trainer reports R only after it has split off the monitoring families, so the step count is
+fixed from the record count N as ceil(2 x 0.8 N / 8), 80 steps for N = 398 records; the
+reported R and the step count it implies are stated with the result, and a difference of more than
+five steps is stated as a deviation. The floor of 40 is met.
+
+**A9.3 Qualification subset.** The 8B server does not reuse a conversation's prefix between turns,
+so every request re-prefills the whole history; two arms measured about 0.7 tasks per minute each
+at concurrency 32, and 487 tasks per arm would take about 11 hours. Both arms therefore solve the
+subset `S3` of the first half of A8.2: at most three tasks of each of its 23 families, chosen by
+`tasks pick --seed 20261017 --per-family 3` (69 tasks) before any verdict exists. The comparison is
+a PILOT over 23 families by the rule of A2.3, and the second half is not run in this lease.
+
+**A9.4 Binaries.** Datasets and training: splinter ec7ab240 (sven b87b1640, brain 502e12d46 linked);
+the arms: splinter 64cad0e6, brain 502e12d46 servers (A5.1); the base arm's server carries an earlier,
+discarded adapter in its bank, which does not act on base requests.
 
 ## Provenance
 
