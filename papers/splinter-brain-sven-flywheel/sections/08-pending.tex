@@ -91,6 +91,8 @@ empty until its run exists; a cell is never filled with an estimate.}\label{tab:
 \caption{CE1, teacher pass 1 on development sets that have finished. Success and cancelled count solve conclusions, the other columns the verified outcome; exposed attempts are counted among the failed.}\label{tab:ce1}
 \end{table}
 
+\paragraph{CE4, the first confirmatory pilot: not shown.} The registered query could be run only on a subset (\cref{sec:amend}, amendments 8 and 9): one task of each of the 23 families of the first qualification half, solved once by each arm with both served by Brain on the same build and tier. The adapter was trained on the verified, exposure-clean trajectories of the teacher's first pass, projected one tool call per turn. Of the 23 tasks, 21 are paired; the untrained 8B resolves one and the adapter none, so the sign test has a single discordant family against the adapter and does not support the claim; the comparison is a pilot by the registered rule and is reported as \emph{not shown}.\cl{M47,PR24} It is a weak test: with the untrained model near zero there is almost no room for a gain, and the adapter's attempts mostly end at the harness's repetition stop. The step count (47) is not the registered rule's (29 for the 114 training records the trainer reports), and the controls, the second qualification half, retention and the serve-agreement sample were not run.
+
 \paragraph{What a failure would show.} An adapter that does not win (for CE4, one distilled from the teacher's verified trajectories), a gain that a different
 repository's adapter or unverified trajectories match, a retention loss beyond the margin, or
 a served adapter that disagrees with the in-process one are each stated outcomes of the

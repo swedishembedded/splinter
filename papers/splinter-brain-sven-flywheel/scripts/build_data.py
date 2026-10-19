@@ -87,6 +87,14 @@ def traj_metrics():
     return m
 
 
+def ce4_metrics():
+    m = {}
+    for run in load_measurements().values():
+        if run["metric_prefix"].startswith("ce4."):
+            m.update({f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()})
+    return m
+
+
 def ce1_metrics():
     """CE1 pass 1: the counts of every finished development set, read from data/measurements.json."""
     m = {}
@@ -94,6 +102,19 @@ def ce1_metrics():
         if run["metric_prefix"].startswith("ce1."):
             m.update({f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()})
     return m
+
+
+def ce4_compare_metrics(compare):
+    """The values a claim may cite from an `experiences compare` report (logs/pq-S1-compare.json of lane ce)."""
+    families = compare["families"]
+    return {
+        "tasks": compare["tasks"], "paired": compare["paired"], "families": len(families),
+        "wins": compare["clusters"]["wins"], "losses": compare["clusters"]["losses"], "ties": compare["clusters"]["ties"],
+        "discordant": compare["sign_test"]["discordant"], "p_value": compare["sign_test"]["p_value"],
+        "adapter_verified": compare["candidate"]["competence"]["counts"]["verified"],
+        "base_verified": compare["baseline"]["competence"]["counts"]["verified"],
+        "base_exposed": compare["baseline"]["exposed"],
+    }
 
 
 def ce1_summary_metrics(summary):
@@ -116,6 +137,8 @@ def parse_log(prefix, text):
     m = {}
     if prefix.startswith("ce1."):
         return ce1_summary_metrics(json.loads(text))
+    if prefix.startswith("ce4."):
+        return ce4_compare_metrics(json.loads(text))
     if prefix.startswith("tj."):
         line = next(l for l in text.splitlines() if l.startswith("TJ "))
         return {k: int(v) for k, v in (kv.split("=") for kv in line.split()[1:])}
@@ -215,6 +238,7 @@ def metrics():
     m.update(qual_metrics())
     m.update(traj_metrics())
     m.update(ce1_metrics())
+    m.update(ce4_metrics())
     return m
 
 

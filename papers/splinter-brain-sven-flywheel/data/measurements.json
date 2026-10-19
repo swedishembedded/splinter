@@ -308,6 +308,27 @@
    "splinter": "64cad0e6",
    "brain": "98106c845",
    "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-caldate); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-caldate"
+  },
+  "ce4-s1-compare": {
+   "log": "ce4/pq-S1-compare.json",
+   "sha256": "b04c5b1b4c8e05e94d7e45b4065c3f56d94ffc9b12925d25b19ccdffa9cbd25c",
+   "metric_prefix": "ce4.s1",
+   "metrics": {
+    "tasks": 23,
+    "paired": 21,
+    "families": 21,
+    "wins": 0,
+    "losses": 1,
+    "ties": 20,
+    "discordant": 1,
+    "p_value": 1.0,
+    "adapter_verified": 0,
+    "base_verified": 1,
+    "base_exposed": 2
+   },
+   "splinter": "64cad0e6",
+   "brain": "502e12d46",
+   "command": "splinter experiences compare blake3:5cf778ec... blake3:76c8ea5c... --interval-seed 20261019 (runs/ce/logs/pq-S1-compare.json)"
   }
  }
 }

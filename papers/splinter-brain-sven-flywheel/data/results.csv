@@ -1,1 +1,2 @@
 experiment,repository,arm,exam_families,wins,losses,status
+CE4,eight repositories (pilot subset S1),adapter against untrained 8B,21,0,1,PILOT
