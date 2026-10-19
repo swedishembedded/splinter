@@ -87,6 +87,7 @@ pub mod learn;
 pub mod lineage;
 pub mod plan;
 pub mod powered;
+pub mod generations;
 pub mod practice;
 pub mod raft;
 pub mod rehearsal;
