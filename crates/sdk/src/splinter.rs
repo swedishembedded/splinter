@@ -14,6 +14,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use splinter_orchestrator::runs::{record, Recorded, Recorder};
 use splinter_orchestrator::{Config, Context, OrchestratorError, Runtime};
+use splinter_pipelines::acquire::{acquire, AcquireReport, AcquireRequest};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
 use splinter_pipelines::train::{BrainTrainer, Trainer};
@@ -128,6 +129,17 @@ impl Splinter {
     /// `learn`, training with this handle's trainer.
     pub fn learn(&self, request: &LearnRequest) -> Result<Learned, OrchestratorError> {
         learn(&self.context(), request, self.trainer())
+    }
+
+    /// `learn "<objective>" --source <url|path>`, training with this
+    /// handle's trainer: documentation made into a skill graph, probes, a
+    /// baseline, training rounds and an assessment on probes that decided
+    /// nothing.
+    pub fn acquire(
+        &self,
+        request: &AcquireRequest,
+    ) -> Result<Recorded<AcquireReport>, OrchestratorError> {
+        acquire(&self.context(), request, self.trainer())
     }
 
     /// `practice`, training with this handle's trainer: a revision of a

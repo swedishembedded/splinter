@@ -102,6 +102,14 @@ pub enum Command {
     /// of the next generation, whose claim set starts empty. The claims it
     /// holds must keep being answered at every release after.
     Consolidate(Box<ConsolidateArgs>),
+    /// Choose how to improve an agent on a target capability from what each
+    /// way was measured to do, net of what it costs: more samples, another
+    /// episode protocol, a trained candidate, or no change.
+    Improve(ImproveArgs),
+    /// Generations of a coding policy, each held to what the ones before it
+    /// had: run one, or show the ledger and the full retention matrix.
+    #[command(subcommand)]
+    Generation(GenerationCommand),
     /// Take in recorded agent sessions, secrets removed.
     #[command(subcommand)]
     Session(SessionCommand),
@@ -714,9 +722,11 @@ mod control;
 mod dataset;
 mod exam;
 mod gate;
+mod generation;
 mod global;
 mod harbor;
 mod harness;
+mod improve;
 mod learn;
 mod practice;
 pub mod reference;
@@ -729,9 +739,11 @@ pub use control::ControlKind;
 pub use dataset::BuildArgs;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;
+pub use generation::GenerationCommand;
 pub use global::Global;
 pub use harbor::{HarborCommand, OracleArg};
 pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
+pub use improve::ImproveArgs;
 pub use learn::LearnArgs;
 pub use practice::{PracticeArgs, ReplayArg};
 pub use reference::CliReferenceArgs;

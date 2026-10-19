@@ -27,7 +27,6 @@ use splinter_sdk::exam::{examine, ExamineRequest};
 use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::experiment;
 use splinter_sdk::judge::{calibrate_judge, measure_judge};
-use splinter_sdk::learn::{learn, Learned};
 use splinter_sdk::lineage::{lineage, LineageRequest};
 use splinter_sdk::measure::gate::GateConfig;
 use splinter_sdk::rehearsal::{rehearse, RehearseRequest, DEFAULT_REHEARSAL_SHARE};
@@ -58,7 +57,6 @@ use crate::cli::{
 use crate::exam_session;
 use crate::harness_session;
 use crate::learn_output;
-use crate::learn_request::learn_request;
 use crate::output::{self, emit, shell_words};
 use crate::practice_request::practice_request;
 use crate::tasks_session;
@@ -246,15 +244,18 @@ impl Session {
         let json = self.global.json;
         match command {
             Command::Learn(args) => {
-                let release_asked = crate::learn_request::release_asked(&args);
-                let request = learn_request(*args);
-                let learned = learn(ctx, &request, self.splinter.trainer())?;
-                emit(json, &learned);
-                let finished = match &learned {
-                    Learned::Planned(_) => true,
-                    Learned::Ran(run) => run.report.finished(release_asked),
-                };
-                return Ok(if finished { Exit::Ok } else { Exit::Failed });
+                return crate::learn_session::learn_command(&self.splinter, ctx, json, *args)
+            }
+            Command::Improve(args) => {
+                return crate::improve_session::improve_command(ctx, json, args)
+            }
+            Command::Generation(command) => {
+                return crate::improve_session::generation_command(
+                    &self.splinter,
+                    ctx,
+                    json,
+                    command,
+                )
             }
             Command::Practice(args) => {
                 let release_asked = !args.no_release;
@@ -577,6 +578,7 @@ impl Session {
                     }),
                     from: args.from,
                     replay_fraction: args.replay_fraction,
+                    replay_policy: Default::default(),
                     steps: args.steps,
                     rank: args.rank,
                     beta: args.beta,
@@ -599,7 +601,6 @@ impl Session {
             Command::Rehearse(args) => {
                 let arguments =
                     json!({ "records": args.records, "rehearsal_seed": args.rehearsal_seed });
-                    replay_policy: Default::default(),
                 let rehearsed = record(ctx, "rehearse", &arguments, |run| {
                     rehearse(
                         ctx,

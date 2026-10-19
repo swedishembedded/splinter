@@ -183,6 +183,51 @@ prints the plan and writes nothing. A `learn` that stops before training
 (nothing admitted, no task worth training on, nothing passed, the budget
 spent) or whose candidate the gate blocks says why and exits 1.
 
+## Learning a documented domain
+
+```bash
+make deps/lua LUA_DIR=./lua51     # once: the pinned Lua 5.1 interpreter
+splinter --runtime-dir ./lua51/bin learn "Become an exceptional Lua 5.1 programmer" \
+    --source https://www.lua.org/manual/5.1/manual.html --kinds construct-lua,predict-lua
+```
+
+With `--source` the words of the command are the objective and each source (a URL, a file or a
+directory) is read into a graph of skills. A URL is fetched once and an HTML page is read as
+Markdown; the record ties the URL to the digest of the bytes and to the source. Each skill has
+probes written from its own sections, split into dev probes (the baseline, a round's gain and what
+a round cost are measured on them) and final probes (only the closing assessment touches them);
+no training task may repeat a probe. Rounds train the skill expected to benefit most, prerequisites
+first; a candidate is accepted when its skill improved on the dev probes and no skill measured
+before fell by more than `--retention-drop`; the competence graph is kept revision by revision.
+The run ends when every skill is mastered (`--mastery`), no skill can be chosen (a skill has
+`--max-rounds-per-skill`), `--max-rounds` or `--budget` is spent, and is accepted only if every
+assessed skill reaches the target on the final probes. `--no-release` stops before the gate;
+otherwise the final candidate is gated like any other and only the gate moves the alias. The `lua`
+runtime is Lua 5.1 and refuses an interpreter that reports another version.
+
+## Choosing how to improve
+
+`splinter improve EXPERIMENT.toml...` measures each intervention an experiment names (more
+samples, another episode protocol, a candidate that `practice` or `train` kept, no change)
+against the incumbent on the same target tasks and chooses the one with the greatest net value:
+the lower confidence bound of the paired gain per family, times what a success is worth and how
+often it is used, less its one-time and per-use cost, or no change when none pays. Nothing is
+applied. An intervention whose mechanism is not there yet is reported as not measured.
+`--compare-fixed` shows what applying one intervention to every experiment would have come to.
+
+## Generations of a coding policy
+
+`splinter generation run REPO --experiment NAME --plan PLAN.toml --generation N` measures the
+champion on every protected task (the exam of every earlier generation), runs `practice` to a
+candidate, measures both on the protected tasks and the new exam at equal settings, rejects the
+candidate when a protected family falls by more than `--max-family-drop`, the mean falls by more
+than `--max-mean-drop` or it gains no more than `--min-new-gain` on the new exam, and otherwise
+releases it through the gate. Every generation, accepted or not, is in the experiment's ledger.
+`--replay none|uniform|balanced|failure-targeted` and `--rebuild` choose how the earlier
+experience is carried forward. `splinter generation matrix --experiment NAME` prints the ledger
+and the full retention matrix of the lineage: the base as generation 0 and every generation on
+every protected task, with ACC, BWT, forgetting, forward transfer and learning gain.
+
 ## Learning a repository
 
 ```bash
@@ -207,9 +252,10 @@ order:
 | `reserve` | sets the exam's families aside (a family is the file a fault was seeded in) by a stable hash of their names, before any attempt; `--exam-families N` (default a quarter), and a family an earlier run reserved stays the exam |
 | `solve` | the policy attempts each remaining task `--k` times as an agent in its own copy of the tree, with sven's file, search and shell tools, up to `--follow-ups` more turns when the visible checks stay red and `--max-tool-calls` calls; each attempt draws from a seed that is a function of the task and the attempt |
 | `verify` | applies each patch to a clean copy, lays the hidden tests over it and runs the project's checks; an exposure audit fails any attempt whose trajectory names a hidden path, quotes the hidden tests or names the state root, whatever its patch did, and the stage counts those by kind |
-| `frontier` | keeps the tasks the policy solves sometimes (pass@k) |
+| `teach` | only with `--teacher`: each task no graded attempt solved is given to the teacher, which is `reference` (the task's own reference change, the inverse of the seeded fault, replayed as an agent's actions through sven's tools: read the file, edit it by the patch's hunks) or a model (`remote:`/`local:`) that solves the task as an agent. Either is graded by the same workspace verifier and exposure audit as the policy's attempts and never grades itself; the exam's tasks are never given to it. A demonstration names the file without searching for it |
+| `frontier` | keeps the tasks the policy solves sometimes (pass@k), and with a teacher the never-solved tasks whose demonstration was verified |
 | `dataset` | the passing attempts, action by action (`sft-step`), with the tools the agent was offered (an action a labeller marked good is also admitted from an experience nobody verified or whose verdict failed, unless `--control outcome-verified` is given; the manifest records it); `--max-block TOKENS` leaves out and counts records longer than the card fits; the dataset is checked to hold no family of the exam |
-| `train` | a candidate from the champion with earlier releases' records replayed |
+| `train` | a candidate from the champion with earlier releases' records replayed (`--replay none|uniform|balanced`; `--rebuild` trains a fresh adapter on the base from every earlier release's records and the new ones instead of continuing the champion) |
 | `release` | the gate, over the exam this run reserved (`--no-release` stops at the candidate): the champion and the candidate attempt the exam's tasks as agents, under the bounds and seeds of `solve`, graded as `verify` grades; paired outcomes are counted by family in the sign test; each earlier release is held to the exam of its own run; the anchor suite is held (a frozen suite with no coding-agent task is decided on the tasks it holds, and the report says it holds none); the candidate is served by `brain serve --adapter-manifest` and must be graded as it was in-process on at least three quarters of a sample of the exam. A blocked candidate is not released and the run stops with the reason of each check that failed; `practice` gives the gate the bounds it solved under, and `splinter release` on such a candidate probes with the default ones |
 
 Where no container is configured, the commands the agent works with run on

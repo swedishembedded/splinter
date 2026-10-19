@@ -8,6 +8,7 @@
 
 //! The `learn` request the command line asks for.
 
+use splinter_sdk::acquire::AcquireRequest;
 use splinter_sdk::learn::{ExamPlan, LearnRequest};
 use splinter_sdk::raft::PassageShare;
 use splinter_sdk::train::Tuning;
@@ -19,6 +20,48 @@ use crate::cli::LearnArgs;
 /// instead, and `--no-release` stops before the gate.
 pub(crate) fn release_asked(args: &LearnArgs) -> bool {
     !args.no_release && args.adapter.is_none()
+}
+
+/// The acquisition `learn "<objective>" --source <url|path>` asked for: the
+/// positional words are the objective.
+pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
+    let mut request = AcquireRequest::new(args.sources.join(" "), args.source);
+    request.kinds = args.kinds;
+    request.pass_at_k = args.pass_at_k.pass_at_k();
+    let named = args.acquire;
+    request.mastery = named.mastery.unwrap_or(request.mastery);
+    request.probes_per_skill = named.probes.unwrap_or(request.probes_per_skill);
+    request.min_probes = named.min_probes.unwrap_or(request.min_probes);
+    request.max_rounds = named.max_rounds.unwrap_or(request.max_rounds);
+    request.max_rounds_per_skill = named
+        .max_rounds_per_skill
+        .unwrap_or(request.max_rounds_per_skill);
+    request.retention_drop = named.retention_drop.unwrap_or(request.retention_drop);
+    request.budget = args.budget;
+    request.no_release = args.no_release;
+    request.gate = args.gate.plan();
+    request.steps = args.steps;
+    request.rank = args.rank;
+    request.tuning = args.optimiser.applied_to(Tuning {
+        bf16_base: args.bf16_base,
+        records_per_step: args.records_per_step,
+        eval_every: args.monitoring.eval_every,
+        patience: args.monitoring.patience,
+        monitor_share: args.monitoring.monitor_share,
+        keep_evaluations: args.monitoring.keep_evaluations,
+        seed: args.seed,
+        ..Tuning::default()
+    });
+    request.roles = [
+        (Role::Planner, args.planner),
+        (Role::Teacher, args.teacher),
+        (Role::Generator, args.generator),
+        (Role::Judge, args.judge),
+    ]
+    .into_iter()
+    .filter_map(|(role, model)| model.map(|m| (role, m)))
+    .collect();
+    request
 }
 
 /// The `learn` the command line asked for. With no kinds named, a planner
@@ -97,6 +140,35 @@ mod tests {
             Some(Command::Learn(args)) => learn_request(*args),
             other => panic!("not a learn: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_source_makes_the_words_the_objective_and_is_an_acquisition() {
+        let argv = [
+            "splinter",
+            "learn",
+            "Become",
+            "exact",
+            "--source",
+            "https://example.org/manual.html",
+            "--source",
+            "docs",
+            "--mastery",
+            "0.9",
+            "--max-rounds",
+            "3",
+        ];
+        let Some(Command::Learn(args)) = Cli::try_parse_from(argv).unwrap().command else {
+            panic!("not a learn");
+        };
+        let asked = acquire_request(*args);
+        assert_eq!(asked.objective, "Become exact");
+        assert_eq!(asked.sources, ["https://example.org/manual.html", "docs"]);
+        assert_eq!((asked.mastery, asked.max_rounds), (0.9, 3));
+        // The flags of an acquisition mean nothing without a source.
+        assert!(Cli::try_parse_from(["splinter", "learn", "docs", "--mastery", "0.9"]).is_err());
+        // Nor does an objective stand without sources.
+        assert!(Cli::try_parse_from(["splinter", "learn"]).is_err());
     }
 
     #[test]

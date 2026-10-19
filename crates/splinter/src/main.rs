@@ -20,6 +20,7 @@
 
 mod absorb_output;
 mod absorb_session;
+mod acquire_output;
 mod baseline_report;
 mod build_info;
 mod cli;
@@ -33,8 +34,10 @@ mod exam_session;
 mod experiment_output;
 mod harness_output;
 mod harness_session;
+mod improve_session;
 mod learn_output;
 mod learn_request;
+mod learn_session;
 mod lineage_output;
 mod output;
 mod practice_output;
@@ -92,12 +95,12 @@ fn main() -> ExitCode {
     config.workspace.allow_unconfined = cli.global.allow_unconfined_workspace;
     config.workspace.allow_network = cli.global.allow_workspace_network;
     config.workspace.max_processes = cli.global.workspace_max_processes;
-    config.build = build_info::current(config.build.gpu_contexts);
-    let session = match Session::new(config, cli.global.clone()) {
     config
         .workspace
         .runtime_dirs
         .clone_from(&cli.global.runtime_dir);
+    config.build = build_info::current(config.build.gpu_contexts);
+    let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,
         Err(e) => {
             output::error(cli.global.json, &e);

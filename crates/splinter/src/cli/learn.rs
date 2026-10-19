@@ -6,6 +6,10 @@
 use std::time::Duration;
 
 use clap::Args;
+use splinter_sdk::acquire::{
+    DEFAULT_MASTERY, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_ROUNDS_PER_SKILL, DEFAULT_MIN_PROBES,
+    DEFAULT_RETENTION_DROP,
+};
 use splinter_sdk::exam_set::{DEFAULT_DEV_TASKS_PER_FAMILY, DEFAULT_TASKS_PER_FAMILY};
 use splinter_sdk::learn::{DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use splinter_sdk::powered::DEFAULT_RESAMPLES;
@@ -18,13 +22,61 @@ use super::{
     budget, model_ref, share, voice_share, GateArgs, MonitoringArgs, OptimiserArgs, PassAtKArgs,
 };
 
+/// The flags of an acquisition (`learn --source`).
+#[derive(Debug, Args)]
+pub struct AcquireArgs {
+    /// The pass rate on a skill's probes that counts as mastered.
+    #[arg(long, value_name = "SHARE", value_parser = share, requires = "source",
+        help = format!("The pass rate on a skill's probes that counts as mastered \
+        [default: {DEFAULT_MASTERY}]"))]
+    pub mastery: Option<f64>,
+    /// Probes per skill in each half (dev and final).
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize),
+        requires = "source")]
+    pub probes: Option<usize>,
+    /// The graded probes a skill's competence must rest on.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize),
+        requires = "source", help = format!("The graded probes a skill's competence must rest on \
+        [default: {DEFAULT_MIN_PROBES}]"))]
+    pub min_probes: Option<usize>,
+    /// Training rounds in all.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize),
+        requires = "source", help = format!("Training rounds in all [default: {DEFAULT_MAX_ROUNDS}]"))]
+    pub max_rounds: Option<usize>,
+    /// Training rounds one skill may take.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize),
+        requires = "source", help = format!("Training rounds one skill may take \
+        [default: {DEFAULT_MAX_ROUNDS_PER_SKILL}]"))]
+    pub max_rounds_per_skill: Option<usize>,
+    /// How far a skill measured earlier may fall in a round.
+    #[arg(long, value_name = "SHARE", value_parser = voice_share, requires = "source",
+        help = format!("How far a skill measured earlier may fall in a round before its \
+        candidate is rejected [default: {DEFAULT_RETENTION_DROP}]"))]
+    pub retention_drop: Option<f64>,
+}
+
 /// `learn`.
 #[derive(Debug, Args)]
 pub struct LearnArgs {
     /// Files, directories, cmd:<command> (quoted as one argument), or stored
-    /// source ids.
-    #[arg(required = true, value_name = "SOURCE")]
+    /// source ids; with --source, the words of the objective instead.
+    #[arg(required_unless_present = "source", value_name = "SOURCE")]
     pub sources: Vec<String>,
+    /// Learn an objective from documentation: `learn "Become an exceptional
+    /// Lua 5.1 programmer" --source https://www.lua.org/manual/5.1/manual.html`.
+    /// The positional words are the objective, and each --source (a URL, a
+    /// file or a directory; repeat for more) is read into a skill graph with
+    /// probes, a measured baseline, training rounds on the skill expected to
+    /// benefit most and an assessment on probes that decided nothing.
+    #[arg(
+        long = "source",
+        value_name = "URL|PATH",
+        conflicts_with_all = ["goal", "dry_run", "distill", "no_frontier", "adapter", "base", "persona"]
+    )]
+    pub source: Vec<String>,
+    /// How an acquisition (--source) is measured and stopped.
+    #[command(flatten)]
+    pub acquire: AcquireArgs,
     /// What the learner is after; steers the tasks generated.
     #[arg(long, value_name = "TEXT")]
     pub goal: Option<String>,
