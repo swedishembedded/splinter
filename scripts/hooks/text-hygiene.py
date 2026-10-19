@@ -53,6 +53,10 @@ PUNCTUATION_RE = re.compile("[" + "".join(PUNCTUATION) + "]")
 # every other rule still applies. Each entry is a reviewed decision.
 VERBATIM_DOCUMENTS = {
     "crates/splinter/examples/stm32_datasheet.md",
+    # The vendored docs publisher reproduces its dependencies' license texts
+    # verbatim and is pinned by sha256 (tools/docs-publisher/*.sha256); the
+    # pre-commit hook already excludes it.
+    "tools/docs-publisher/docs-publisher.mjs",
 }
 CONFLICT_RE = re.compile(r"^(<<<<<<< |=======$|>>>>>>> )", re.MULTILINE)
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
