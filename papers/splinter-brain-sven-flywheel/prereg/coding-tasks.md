@@ -502,6 +502,37 @@ experience exposed, so the A3.1 rule is unchanged); it changes no environment di
 admitted task. The brain binary of the servers stays 5c1aa4863 (A4.5: a binary is named per set).
 The set-by-set record of binaries and server flags is in `runs/ce/STATUS.md` and is reported
 with CE1.
+### Amendment 5, 2026-10-19, 09:45 CEST: the 8B numeric tier, admission of training evidence, binaries of datasets
+
+Made before any dataset is built, any training run and any qualification-partition query. CE1
+pass 1 on the development partition continues under Amendments 3 and 4 and is not changed.
+
+**A5.1 The tier of the 8B arms.** A2.6 serves Qwen3-8B with fp32 weights and the training of A2.7
+adapts the fp32 base; both were measured on brain's exact fp32 GEMM path, which runs the 8B at
+984 prefill tokens/s and 275 LoRA training tokens/s. Brain now computes on tensor cores by
+default (TF32 GEMMs, native attention): on real Qwen3-8B weights, 16 prompts of 256 tokens, int8
+KV, against the exact tier the greedy tokens are equal on 144 of 144, the top-1 token on 16 of
+16, the KL 1.6e-4 mean and 6.4e-4 at most; the training forward has relative RMS logit
+difference 6.8e-4 and top-1 2048 of 2048, the LoRA step is 8.5 times faster and a served
+prefill about 6 times faster (runs/b8/results.md, brain 502e12d46). The 8B base arm, every
+adapter arm, every control and the training of every adapter therefore run on the default
+tensor-core tier, the same for both arms of every comparison, with fp32 weights
+(`--qwen-weights-fp32`) and no `--qwen-gemm-fp32`; every command and the run record name the
+brain build (502e12d46) and these flags. An 8B server without `--qwen-weights-fp32` serves int8
+weights (greedy tokens equal on 49 of 144 against fp32) and is never used for a registered result.
+The exact tier stays the reference: the per-task verdict agreement of the untrained 8B on one
+development set between the two tiers is reported with CE4, with no threshold. Nothing else of
+A2.6 and A2.7 changes.
+
+**A5.2 Admission of training evidence.** Every training dataset of CE4 and CE7 and every control
+that trains on verified evidence is built with `--control outcome-verified`: only experiences
+decided pass at executable strength by the hidden checks are admitted, and an action is never
+admitted on a step label alone from an experience nobody verified or whose verdict failed. The
+manifest records it. The unverified control of A4.3 is the one dataset that does not.
+
+**A5.3 Datasets are tied to a binary.** A dataset is built by the splinter binary named in its run
+record (64cad0e6 for CE1 and CE4), and a dataset built by another binary is built again before it
+is trained on. Training links brain at the commit named in A5.1.
 
 ## Provenance
 
