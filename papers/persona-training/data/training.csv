@@ -1,4 +1,0 @@
-seed,steps,records_per_step,rank,alpha,learning_rate,train_records,held_out_records,elapsed_at_last_step_s,loss_at_last_step,held_out_loss_before,held_out_loss_after,held_out_token_accuracy_before,held_out_token_accuracy_after
-101,240,4,16,32,0.0003,801,93,7802,0.0661,3.40,1.30,0.706,0.788
-202,240,4,16,32,,834,93,7924,0.0485,,,,
-303,240,4,16,32,,546,60,7697,0.0543,,,,
