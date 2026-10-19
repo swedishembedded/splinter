@@ -135,8 +135,10 @@ pub const FIXED: &str = "def add(a, b):\n    return a + b\n";
 pub struct Fixture {
     pub home: tempfile::TempDir,
     pub repo: PathBuf,
-    _outside: tempfile::TempDir,
-    pub check: PathBuf,
+    /// The acceptance command. It runs in the confined tree like any command,
+    /// so it lives in the contract and not in a file beside the tree; the
+    /// marker in it is what must never reach the worker.
+    pub check: &'static str,
 }
 
 impl Fixture {
@@ -155,14 +157,10 @@ impl Fixture {
         git(&repo, &["init", "-q", "-b", "main"]);
         git(&repo, &["add", "-A"]);
         git(&repo, &["commit", "-q", "-m", "seeded bug"]);
-        let outside = tempfile::tempdir().unwrap();
-        let check = outside.path().join("check.sh");
-        std::fs::write(&check, "PYTHONPATH=. python3 tests/test_calc.py\n").unwrap();
         Self {
             home,
             repo,
-            _outside: outside,
-            check,
+            check: "PYTHONPATH=. python3 tests/test_calc.py # sealed-check-marker",
         }
     }
 
@@ -174,7 +172,7 @@ impl Fixture {
             repository: self.repo.clone(),
             acceptance: vec![Check {
                 name: "unit".into(),
-                command: format!("sh {}", self.check.display()),
+                command: self.check.to_string(),
                 visible: false,
             }],
             protected: vec!["tests/".into()],

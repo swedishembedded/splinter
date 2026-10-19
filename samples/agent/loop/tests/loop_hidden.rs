@@ -55,7 +55,7 @@ fn a_hidden_check_is_named_to_the_retry_and_nothing_more() {
         .find(|p| p.contains("previous attempt failed"))
         .unwrap();
     assert!(retry.contains("acceptance_failed: unit"), "{retry}");
-    for secret in [f.check.to_str().unwrap(), "AssertionError", "test_calc"] {
+    for secret in ["sealed-check-marker", "AssertionError", "test_calc"] {
         assert!(
             !everything.contains(secret),
             "the worker was shown {secret:?} of a check it must not see"
@@ -95,7 +95,7 @@ fn nothing_of_a_hidden_check_is_in_the_workers_tree_or_prompt() {
         .map(|r| format!("{:?}", r.messages))
         .collect::<String>();
     assert!(seen.contains("calc.py"), "the worker saw its tree");
-    for secret in [f.check.to_str().unwrap(), "check.sh", "contract.json"] {
+    for secret in ["sealed-check-marker", "contract.json"] {
         assert!(!seen.contains(secret), "{secret:?} reached the worker");
     }
 }
