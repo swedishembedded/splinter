@@ -49,6 +49,10 @@
 //! * [`exposure`] - the audit that fails an experience whose trajectory shows
 //!   the solver material only the grader may see (hidden paths, a shingle of
 //!   hidden content, the state root).
+//! * [`intervention`] - the choice between more samples, another harness,
+//!   a teacher's demonstrations with training and no change, by each one's
+//!   measured gain, its uncertainty and its cost, over paired results per
+//!   family.
 //! * [`overlap`] - texts that print one passage form a group, so a held-out
 //!   split can keep a group whole.
 //!
@@ -68,6 +72,7 @@ pub mod exposure;
 mod exposure_paths;
 pub mod frontier;
 pub mod gate;
+pub mod intervention;
 pub mod metric_gate;
 pub mod overlap;
 pub mod paired;
