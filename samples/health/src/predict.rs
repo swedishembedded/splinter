@@ -231,9 +231,23 @@ mod tests {
     use super::*;
     use splinter_sdk::model::timeline::{synthetic, train_timeline, TimelineTraining};
 
+    /// The one device a test of this binary may have live at a time. The
+    /// NVIDIA driver deadlocks (every thread in futex wait, one spinning)
+    /// when many wgpu devices are created and destroyed concurrently, and
+    /// each training here builds its own; libtest runs tests in parallel.
+    static DEVICE_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// A tiny model trained on a cohort that states `sd` as the unit of its
-    /// first risk factor, and a subject of that cohort.
-    fn fixture() -> (TimelineModel, Subject) {
+    /// first risk factor, and a subject of that cohort. Holds the device
+    /// turn until it is dropped, model first.
+    struct Fixture {
+        model: TimelineModel,
+        subject: Subject,
+        _turn: std::sync::MutexGuard<'static, ()>,
+    }
+
+    fn fixture() -> Fixture {
+        let turn = DEVICE_TURN.lock().unwrap_or_else(|e| e.into_inner());
         let (mut all, _) = synthetic::population(300, 5);
         for s in &mut all {
             for o in s.observations.iter_mut().filter(|o| o.var == "x1") {
@@ -249,7 +263,11 @@ mod tests {
         config.max_tokens = Some(16);
         config.eval_interval = 10;
         let model = train_timeline(fit, rest, &config).unwrap().model;
-        (model, rest[0].clone())
+        Fixture {
+            model,
+            subject: rest[0].clone(),
+            _turn: turn,
+        }
     }
 
     fn checkup(value: f64, unit: Option<&str>, after: f64) -> Checkup {
@@ -276,11 +294,12 @@ mod tests {
 
     #[test]
     fn a_new_checkup_changes_the_forecast_and_the_report_carries_brains_fields() {
-        let (model, subject) = fixture();
-        let new = value_of(&subject, "x1") + 2.0;
+        let fx = fixture();
+        let (model, subject) = (&fx.model, &fx.subject);
+        let new = value_of(subject, "x1") + 2.0;
         let report = compare(
-            &model,
-            &subject,
+            model,
+            subject,
             &checkup(new, Some("sd"), 2.0),
             &[2.0, 4.0],
             &Certified::new(),
@@ -313,11 +332,12 @@ mod tests {
 
     #[test]
     fn a_duplicate_checkup_leaves_the_forecast_bit_identical_and_is_reported() {
-        let (model, subject) = fixture();
-        let same = value_of(&subject, "x1");
+        let fx = fixture();
+        let (model, subject) = (&fx.model, &fx.subject);
+        let same = value_of(subject, "x1");
         let report = compare(
-            &model,
-            &subject,
+            model,
+            subject,
             &checkup(same, Some("sd"), 0.0),
             &[2.0, 4.0],
             &Certified::new(),
@@ -337,12 +357,13 @@ mod tests {
 
     #[test]
     fn a_malformed_or_mismatched_unit_is_refused_by_name() {
-        let (model, subject) = fixture();
-        let new = value_of(&subject, "x1") + 1.0;
+        let fx = fixture();
+        let (model, subject) = (&fx.model, &fx.subject);
+        let new = value_of(subject, "x1") + 1.0;
         for malformed in [" sd", "", "a-unit-name-that-is-far-longer-than-thirty-two"] {
             let why = compare(
-                &model,
-                &subject,
+                model,
+                subject,
                 &checkup(new, Some(malformed), 1.0),
                 &[2.0],
                 &Certified::new(),
@@ -355,8 +376,8 @@ mod tests {
         let why = format!(
             "{:#}",
             compare(
-                &model,
-                &subject,
+                model,
+                subject,
                 &checkup(new, Some("mg/dL"), 1.0),
                 &[2.0],
                 &Certified::new()
