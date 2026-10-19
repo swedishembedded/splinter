@@ -26,8 +26,9 @@ use std::path::{Path, PathBuf};
 
 use splinter_sandbox::host::is_secret_name;
 use splinter_sandbox::landlock::abi_version;
-use splinter_sandbox::process::protect_supervisor_environment;
-use splinter_sandbox::{CodeResult, CommandCall, Limits, ProcessSandbox, Sandbox};
+use splinter_sandbox::{
+    CodeCall, CodeResult, CommandCall, Limits, ProcessSandbox, RuntimeRegistry, Sandbox,
+};
 
 /// Two candidate trees, a state root holding withheld tests, and a stand-in
 /// home directory with credentials, all beside each other under one scratch.
@@ -262,21 +263,6 @@ fn secret_names_are_recognised() {
 }
 
 #[test]
-fn the_supervisors_environment_is_not_readable_through_proc() {
-    protect_supervisor_environment().unwrap();
-    let rig = Rig::new();
-    let sandbox = rig.sandbox();
-    let result = rig.sh(
-        &sandbox,
-        &format!("cat /proc/{}/environ", std::process::id()),
-    );
-    assert!(
-        refused(&result) && is_permission_error(&result),
-        "the supervisor's /proc/<pid>/environ is refused: {result:?}"
-    );
-}
-
-#[test]
 fn a_candidate_cannot_write_into_a_sibling_candidates_tree() {
     let rig = Rig::new();
     let sandbox = rig.sandbox();
@@ -464,4 +450,163 @@ fn cpu_memory_and_wall_limits_are_in_the_record() {
             .max_processes,
         Some(7)
     );
+}
+
+/// Runs python `code` as a code call (the `run_code` tool's route).
+fn run_code(sandbox: &ProcessSandbox, code: &str) -> CodeResult {
+    let runtime = sandbox
+        .resolve(RuntimeRegistry::builtin().get("python3").unwrap())
+        .unwrap();
+    sandbox
+        .run(
+            &runtime,
+            &CodeCall {
+                code: code.into(),
+                stdin: None,
+            },
+        )
+        .unwrap()
+}
+
+#[test]
+fn a_code_call_cannot_read_write_or_connect_outside_its_directory() {
+    let rig = Rig::new();
+    let sandbox = rig.sandbox();
+    let (listener, port) = loopback_listener();
+    let hidden = rig.state.join("hidden/test_hidden.py");
+    let credential = rig.home.join(".ssh/id_ed25519");
+    let planted = rig.tree_b.join("planted.py");
+    for (what, code) in [
+        ("hidden test", format!("print(open({hidden:?}).read())")),
+        ("credential", format!("print(open({credential:?}).read())")),
+        ("sibling tree", format!("open({planted:?}, 'w').write('x')")),
+        (
+            "network",
+            format!("import socket; socket.create_connection(('127.0.0.1', {port}), timeout=3)"),
+        ),
+    ] {
+        let result = run_code(&sandbox, &code);
+        assert!(
+            refused(&result) && is_permission_error(&result),
+            "{what}: {result:?}"
+        );
+        assert!(!result.stdout.contains("MATERIAL") && !result.stdout.contains("HIDDEN"));
+    }
+    assert!(!planted.exists());
+    assert!(listener.accept().is_err(), "nothing reached the listener");
+
+    // Its own directory and the system still work.
+    let fine = run_code(
+        &sandbox,
+        "import os, json\nopen('note.txt', 'w').write('ok')\nprint(json.dumps(os.listdir('.')))",
+    );
+    assert_eq!(fine.exit_code, Some(0), "{fine:?}");
+    assert!(fine.stdout.contains("note.txt"));
+}
+
+#[test]
+fn a_code_call_is_refused_where_the_kernel_cannot_confine_it() {
+    let rig = Rig::new();
+    let sandbox = rig.sandbox().without_landlock();
+    let runtime = sandbox
+        .resolve(RuntimeRegistry::builtin().get("python3").unwrap())
+        .unwrap();
+    let refused = sandbox.run(
+        &runtime,
+        &CodeCall {
+            code: "print(1)".into(),
+            stdin: None,
+        },
+    );
+    assert!(matches!(
+        refused,
+        Err(splinter_sandbox::SandboxError::Unconfined)
+    ));
+}
+
+/// Starts a process of this user that holds `secret` in its environment, as
+/// the supervisor or a model server would, and returns it with its id.
+struct Bystander(std::process::Child);
+
+impl Bystander {
+    fn holding(secret: &str) -> Self {
+        let child = std::process::Command::new("sleep")
+            .arg("120")
+            .env("BYSTANDER_SECRET", secret)
+            .spawn()
+            .unwrap();
+        Self(child)
+    }
+
+    fn pid(&self) -> u32 {
+        self.0.id()
+    }
+}
+
+impl Drop for Bystander {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+#[test]
+fn another_process_of_the_user_is_invisible_through_proc() {
+    let rig = Rig::new();
+    let bystander = Bystander::holding("bystander-secret-value");
+    let pid = bystander.pid();
+    let environ = format!("cat /proc/{pid}/environ");
+    let status = format!("cat /proc/{pid}/status");
+
+    // With nothing in the way the secret is there to read: the fixture
+    // attacks something real.
+    let open = rig.sh(&rig.sandbox().allow_unconfined(true), &environ);
+    assert!(open.stdout.contains("bystander-secret-value"), "{open:?}");
+
+    // Landlock alone already refuses the files that need ptrace access
+    // (the environment, the memory maps), but leaves the others readable:
+    // that another process exists, whose it is and what it is called.
+    let landlock_only = rig.sandbox().host_proc(true);
+    let refused_by_landlock = rig.sh(&landlock_only, &environ);
+    assert!(
+        refused(&refused_by_landlock) && is_permission_error(&refused_by_landlock),
+        "{refused_by_landlock:?}"
+    );
+    assert!(rig.sh(&landlock_only, &status).stdout.contains("Name:"));
+
+    // The private view shows none of it.
+    let sandbox = rig.sandbox();
+    for script in [
+        environ,
+        status,
+        format!("cat /proc/{pid}/cmdline"),
+        format!("python3 -c 'print(open(\"/proc/{pid}/environ\").read())'"),
+        format!("ls /proc/{pid}"),
+    ] {
+        let result = rig.sh(&sandbox, &script);
+        assert!(refused(&result), "{script}: {result:?}");
+        assert!(
+            result.stderr.contains("No such file or directory"),
+            "{script}: the process does not exist for the command: {result:?}"
+        );
+    }
+    // It sees only its own processes (the shell, ls and what ls lists), not
+    // the host's hundreds.
+    let listed = rig.sh(&sandbox, "ls /proc | grep -c '^[0-9][0-9]*$'");
+    let visible: u32 = listed.stdout.trim().parse().unwrap();
+    assert!((1..=10).contains(&visible), "{listed:?}");
+    assert!(!sandbox.spec().host_proc_visible);
+    assert!(landlock_only.spec().host_proc_visible);
+}
+
+#[test]
+fn the_private_view_still_reports_how_a_command_ended() {
+    let rig = Rig::new();
+    let sandbox = rig.sandbox();
+    assert_eq!(rig.sh(&sandbox, "exit 7").exit_code, Some(7));
+    assert_eq!(rig.sh(&sandbox, "exit 0").exit_code, Some(0));
+    let killed = rig.sh(&sandbox, "kill -9 $$");
+    assert_eq!(killed.signal, Some(9), "{killed:?}");
+    let own = rig.sh(&sandbox, "cat /proc/self/status | head -1; echo $$");
+    assert_eq!(own.exit_code, Some(0), "{own:?}");
 }

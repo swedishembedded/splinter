@@ -21,19 +21,20 @@
 //! count when the call starts ([`ProcessSandbox::max_processes`]; unbounded
 //! unless set, and the record says which).
 //!
-//! A code call is bounded only. A command in a directory tree
-//! ([`Sandbox::run_command`], how a workspace is worked in) is also
-//! confined by the kernel: it reaches the system (read only), its tree and
+//! A code call and a command in a directory tree
+//! ([`Sandbox::run_command`], how a workspace is worked in) are both
+//! confined by the kernel (a code call's tree is its own call directory): it reaches the system (read only), its tree and
 //! its private directory and nothing else of the filesystem, and no network
 //! (TCP by Landlock, every internet socket by seccomp) unless [`ProcessSandbox::allow_network`] says so. Its
 //! environment holds no variable named like a secret even when the
 //! allowlist names one ([`is_secret_name`]). A kernel that cannot confine
 //! a command refuses it. The environment records `isolation: "none"` all
-//! the same (code calls are not confined), so an experience produced here
-//! is never mistaken for a container-isolated one. `/proc` stays readable
-//! (system tools need it), so the supervisor makes itself non-dumpable with
-//! [`crate::process::protect_supervisor_environment`]; that is what keeps its
-//! `/proc/<pid>/environ` unreadable to its commands.
+//! the same (it is not a container), so an experience produced here
+//! is never mistaken for a container-isolated one. A command runs in a private
+//! user and pid namespace with its own `/proc` ([`crate::namespace`]), so no
+//! other process of the host is visible to it. (Landlock alone already
+//! refuses to let a command read another process's `environ` or memory: its
+//! `ptrace` check covers the `/proc` files that need ptrace access.)
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -115,6 +116,7 @@ pub struct ProcessSandbox {
     limits: Limits,
     allow_unconfined: bool,
     allow_network: bool,
+    host_proc: bool,
     landlock: bool,
 }
 
@@ -157,6 +159,7 @@ impl ProcessSandbox {
             },
             allow_unconfined: false,
             allow_network: false,
+            host_proc: false,
             landlock: crate::landlock::abi_version().is_some(),
         }
     }
@@ -180,6 +183,17 @@ impl ProcessSandbox {
     #[must_use]
     pub fn max_processes(mut self, budget: Option<u64>) -> Self {
         self.limits.max_processes = budget;
+        self
+    }
+
+    /// Lets commands see the host's `/proc`: the environment and command line
+    /// of every other process of the user. Off by default: a command runs in
+    /// a private user and pid namespace with a `/proc` of its own, and is
+    /// refused where that cannot be made. The environment record says so when
+    /// this is set.
+    #[must_use]
+    pub fn host_proc(mut self, allow: bool) -> Self {
+        self.host_proc = allow;
         self
     }
 
@@ -230,6 +244,7 @@ impl ProcessSandbox {
             read_only,
             read_write,
             allow_network: self.allow_network,
+            private_proc: !self.host_proc,
         }
     }
 
@@ -291,7 +306,22 @@ impl ProcessSandbox {
             )));
         };
         let argv = runtime.spec.argv_for(&runtime.executable, file_arg);
-        self.execute(&self.process_spec(argv, dir.path(), dir_arg, call.stdin.as_ref()))
+        let mut spec = self.process_spec(argv, dir.path(), dir_arg, call.stdin.as_ref());
+        if !self.allow_unconfined {
+            // The call's directory is its tree and its private directory both;
+            // the runtime's own installation is readable wherever it sits.
+            let mut confinement = self.command_confinement(dir.path(), dir.path());
+            if let Some(program_dir) = Path::new(&runtime.executable).parent() {
+                confinement.read_only.extend(toolchain_root(program_dir));
+                if let Ok(real) = Path::new(&runtime.executable).canonicalize() {
+                    confinement
+                        .read_only
+                        .extend(real.parent().and_then(toolchain_root));
+                }
+            }
+            spec.confinement = Some(confinement);
+        }
+        self.execute(&spec)
     }
 }
 
@@ -308,6 +338,7 @@ impl Sandbox for ProcessSandbox {
             env: self.env.clone(),
             unconfined_commands: self.allow_unconfined,
             network_allowed: self.allow_network,
+            host_proc_visible: self.host_proc,
         }
     }
 
@@ -316,6 +347,9 @@ impl Sandbox for ProcessSandbox {
     }
 
     fn run(&self, runtime: &ResolvedRuntime, call: &CodeCall) -> Result<CodeResult, SandboxError> {
+        if !self.allow_unconfined && !self.landlock {
+            return Err(SandboxError::Unconfined);
+        }
         let dir = CallDir::create(&self.scratch_root)?;
         let result = self.run_in(&dir, runtime, call);
         let removed = dir.remove();

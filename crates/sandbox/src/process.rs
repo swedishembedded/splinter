@@ -62,21 +62,6 @@ pub struct ResourceLimits {
     pub max_processes: Option<u64>,
 }
 
-/// Makes the calling process non-dumpable (`PR_SET_DUMPABLE` 0), so that the
-/// files under its `/proc/<pid>` (its `environ`, `mem`, `maps`) belong to root
-/// and a confined command of the same user cannot read the supervisor's
-/// environment, credentials included, through `/proc`. The command's own
-/// confinement cannot do it: system tools need `/proc/self`, which names a
-/// different directory in every process. The cost is that the process
-/// leaves no core dump and cannot be debugger-attached by its user.
-pub fn protect_supervisor_environment() -> std::io::Result<()> {
-    // SAFETY: `prctl` takes plain integers.
-    if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(())
-}
-
 /// The processes and threads the calling user runs now, counted from
 /// `/proc`: the base a run's process budget is added to.
 fn user_task_count() -> u64 {

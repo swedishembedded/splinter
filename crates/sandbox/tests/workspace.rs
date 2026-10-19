@@ -430,14 +430,6 @@ fn a_command_runs_under_a_scratch_root_that_does_not_exist_yet() {
     assert!(calls.is_dir());
 }
 
-/// Whether process `pid` is still running (a zombie is not).
-fn is_running(pid: u32) -> bool {
-    match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
-        Err(_) => false,
-        Ok(stat) => !stat.rsplit(") ").next().unwrap_or("").starts_with('Z'),
-    }
-}
-
 #[test]
 fn a_command_outliving_its_wall_time_is_killed_with_its_process_group() {
     let fx = Fixture::new();
@@ -450,10 +442,11 @@ fn a_command_outliving_its_wall_time_is_killed_with_its_process_group() {
     let tree = fx.path("tree");
     env.materialize(&archive, &tree).unwrap();
 
+    // The command runs in a pid namespace of its own, so the id its shell
+    // reports means nothing here: the background process is found by the
+    // argument only it was given.
     let began = Instant::now();
-    let result = env
-        .run(&tree, &sh("sleep 60 & echo $! > child.pid; wait"))
-        .unwrap();
+    let result = env.run(&tree, &sh("sleep 61.0731 & wait")).unwrap();
 
     assert!(result.timed_out, "{result:?}");
     assert!(
@@ -461,16 +454,27 @@ fn a_command_outliving_its_wall_time_is_killed_with_its_process_group() {
         "{:?}",
         began.elapsed()
     );
-    let pid: u32 = std::fs::read_to_string(tree.join("child.pid"))
-        .unwrap()
-        .trim()
-        .parse()
-        .unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
-    while is_running(pid) && Instant::now() < deadline {
+    while process_with_argument("61.0731") && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(20));
     }
-    assert!(!is_running(pid), "the background process outlived the call");
+    assert!(
+        !process_with_argument("61.0731"),
+        "the background process outlived the call"
+    );
+}
+
+/// Whether some process of this host has `argument` among its arguments.
+fn process_with_argument(argument: &str) -> bool {
+    std::fs::read_dir("/proc")
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter_map(|entry| std::fs::read(entry.path().join("cmdline")).ok())
+        .any(|cmdline| {
+            cmdline
+                .split(|b| *b == 0)
+                .any(|arg| arg == argument.as_bytes())
+        })
 }
 
 const IMAGE_DIGEST: &str =
@@ -480,16 +484,31 @@ const IMAGE_DIGEST: &str =
 fn recording_docker(dir: &Path) -> (PathBuf, PathBuf) {
     let record = dir.join("docker-argv");
     let script = dir.join("docker");
-    write(
-        &script,
-        format!(
-            "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{}'\ncat >> '{0}.stdin'\n",
-            record.display()
-        )
-        .as_bytes(),
-        0o755,
+    let text = format!(
+        "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{}'\ncat >> '{0}.stdin'\n",
+        record.display()
     );
+    write_by_another_process(&script, text.as_bytes());
     (script, record)
+}
+
+/// Writes the executable `path` from a process of its own. Written from this
+/// one, the file would be open for writing here while a parallel test forks,
+/// and the child would keep it open until its own exec: executing the script
+/// meanwhile fails with "text file busy". A writer that is another process
+/// leaves no descriptor of the file in this one for a fork to copy.
+fn write_by_another_process(path: &Path, content: &[u8]) {
+    use std::io::Write;
+    use std::process::Stdio;
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut writer = Command::new("sh")
+        .args(["-c", "cat > \"$0\" && chmod 755 \"$0\""])
+        .arg(path)
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    writer.stdin.take().unwrap().write_all(content).unwrap();
+    assert!(writer.wait().unwrap().success());
 }
 
 #[test]

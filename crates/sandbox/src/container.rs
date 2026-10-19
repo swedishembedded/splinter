@@ -440,6 +440,7 @@ impl Sandbox for ContainerSandbox {
             env: self.env.clone(),
             unconfined_commands: false,
             network_allowed: false,
+            host_proc_visible: false,
         }
     }
 

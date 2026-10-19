@@ -136,6 +136,10 @@ pub struct SandboxSpec {
     /// absent otherwise (a command's network is denied by default).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub network_allowed: bool,
+    /// Set only where commands were explicitly allowed to see the host's
+    /// `/proc`; absent otherwise (a command's process view is private).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub host_proc_visible: bool,
 }
 
 /// Where code calls run.

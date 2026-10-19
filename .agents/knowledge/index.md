@@ -55,5 +55,5 @@ in the same commit.
 | [067](067-a-looping-mutant-cost-the-sandbox-wall-limit-not-the-time-budget.md) | A looping mutant cost the sandbox's wall limit, not the generator's time budget |
 | [068](068-the-anchor-suite-leaves-verbose-answers-undecided-and-the-served-agent-needs-a-longer-admission-deadline.md) | The anchor suite leaves verbose answers undecided, and the served agent needs a longer admission deadline |
 | [069](069-a-run-report-keeps-only-the-wrong-answers-so-undecided-ones-cannot-be-regraded.md) | A run report keeps only the wrong answers, so undecided ones cannot be regraded |
-| [070](070-the-solver-shell-could-read-the-supervisors-environment-through-proc-and-the-unconfined-flag-was-never-wired.md) | The solver's shell could read the supervisor's environment through /proc, and the unconfined flag was never wired |
+| [070](070-the-solver-shell-saw-every-process-of-the-host-through-proc-and-the-unconfined-flag-was-never-wired.md) | The solver shell saw every process of the host through /proc, and the unconfined flag was never wired |
 | [071](071-a-solve-report-named-the-episode-bounds-cancelled-and-34-of-61-looked-like-infrastructure-noise.md) | A solve report named the episode bounds "cancelled", and 34 of 61 conclusions looked like infrastructure noise |

@@ -92,12 +92,18 @@ pub struct Confinement {
     /// Whether the child may use the network. Off by default: a confinement
     /// is network-less unless it says otherwise.
     pub allow_network: bool,
+    /// Whether the child gets a private user and pid namespace with its own
+    /// `/proc` ([`crate::namespace`]), so no other process of the host is
+    /// visible to it. Where the namespace cannot be made the child is not
+    /// run. Off by default here; the process sandbox turns it on.
+    pub private_proc: bool,
 }
 
 /// A ruleset ready to be enforced in a child.
 pub struct Prepared {
     ruleset: OwnedFd,
     socket_filter: Option<crate::seccomp::Filter>,
+    private_proc: bool,
 }
 
 impl Confinement {
@@ -160,6 +166,7 @@ impl Confinement {
         Ok(Prepared {
             ruleset,
             socket_filter,
+            private_proc: self.private_proc,
         })
     }
 }
@@ -207,6 +214,12 @@ impl Prepared {
     /// Confines the calling process (a child between `fork` and `exec`) to
     /// the ruleset, for good. Makes only system calls and allocates nothing.
     pub fn enforce(&self) -> io::Result<()> {
+        if self.private_proc {
+            crate::namespace::enter_private_proc()?;
+            // The fresh `/proc` is another filesystem than the one the rules
+            // were built from, so it is allowed here, read only.
+            allow_read_beneath(self.ruleset.as_raw_fd(), b"/proc\0")?;
+        }
         // SAFETY: `prctl` takes plain integers.
         if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
             return Err(io::Error::last_os_error());
@@ -228,4 +241,40 @@ impl Prepared {
         }
         Ok(())
     }
+}
+
+/// Adds a rule letting the child read and run beneath `path` (NUL-terminated).
+/// System calls only, no allocation: it runs in a child between `fork` and
+/// `exec`.
+fn allow_read_beneath(ruleset: RawFd, path: &[u8]) -> io::Result<()> {
+    // SAFETY: `path` is NUL-terminated.
+    let fd = unsafe { libc::open(path.as_ptr().cast(), libc::O_PATH | libc::O_CLOEXEC) };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let rule = PathBeneathAttr {
+        allowed_access: READ_FILE | READ_DIR,
+        parent_fd: fd,
+    };
+    // SAFETY: `rule` is a valid `landlock_path_beneath_attr` and both
+    // descriptors are open for the call.
+    let rc = unsafe {
+        libc::syscall(
+            SYS_ADD_RULE,
+            ruleset,
+            RULE_PATH_BENEATH,
+            &rule as *const PathBeneathAttr,
+            0 as libc::c_uint,
+        )
+    };
+    let result = if rc < 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    };
+    // SAFETY: `fd` was opened above and is closed once.
+    unsafe {
+        libc::close(fd);
+    }
+    result
 }

@@ -43,7 +43,6 @@ use std::time::{Duration, Instant};
 use futures::FutureExt;
 use splinter_core::experience::Task;
 use splinter_core::outcome::AttemptReport;
-use splinter_sandbox::process::protect_supervisor_environment;
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
     Baseline, CodeResult, CommandCall, Patch, ResolvedEnvironment, SandboxError,
@@ -539,12 +538,6 @@ pub async fn solve_in_workspace(
             offered_snapshot: offered.snapshot,
         });
     }
-    // The model's commands can read `/proc`, and this process's environment
-    // may hold the keys of the services it talks to.
-    protect_supervisor_environment().map_err(|source| SandboxError::Io {
-        path: "/proc/self".into(),
-        source,
-    })?;
     let scratch = tempfile::tempdir().map_err(|source| SandboxError::Io {
         path: "temporary directory".into(),
         source,

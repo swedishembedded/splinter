@@ -43,6 +43,7 @@ pub mod environment;
 pub mod host;
 pub mod landlock;
 pub mod limits;
+pub mod namespace;
 pub mod process;
 pub mod runtime;
 pub mod seccomp;
