@@ -3,7 +3,7 @@
 
 //! The grammar's specs for the flags that reach the models: the remote
 //! request width, the served temperature, the solve deadline and the training
-//! row's bound.
+//! row's bound, and the tier the frozen base is held at.
 
 use super::{command, parse, Command};
 
@@ -108,4 +108,17 @@ fn baseline_takes_the_binary_models_and_seeds_as_given_and_no_default_seed() {
         (Some(20_261_017), None)
     );
     assert!(args.require_clean);
+}
+#[test]
+fn train_names_the_tier_the_frozen_base_is_held_at() {
+    use splinter_sdk::model::train::BasePrecision;
+    let Command::Train(plain) = command(&["train", "ds-1"]) else {
+        panic!("train");
+    };
+    assert_eq!(plain.base_precision, None);
+    let Command::Train(nf4) = command(&["train", "ds-1", "--base-precision", "nf4"]) else {
+        panic!("train --base-precision");
+    };
+    assert_eq!(nf4.base_precision, Some(BasePrecision::Nf4));
+    assert!(parse(&["train", "ds-1", "--base-precision", "fp8"]).is_err());
 }

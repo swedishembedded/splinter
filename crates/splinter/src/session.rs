@@ -592,6 +592,7 @@ impl Session {
                         keep_evaluations: args.monitoring.keep_evaluations,
                         max_block: args.max_block,
                         seed: args.seed,
+                        base_precision: args.base_precision,
                         ..Tuning::default()
                     }),
                 };

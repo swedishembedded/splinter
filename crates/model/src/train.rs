@@ -391,6 +391,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .weight_decay(request.weight_decay)
         .bf16_base(request.base == BasePrecision::Bf16)
         .int8_base(request.base == BasePrecision::Int8)
+        .nf4_base(request.base == BasePrecision::Nf4)
         .grad_accum(request.grad_accum)
         .eval_every(request.eval_every)
         .patience(request.patience)

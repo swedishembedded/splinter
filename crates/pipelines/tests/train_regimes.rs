@@ -32,6 +32,7 @@ use common::gate::{
 use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
 use splinter_core::training::Regime;
+use splinter_model::train::BasePrecision;
 use splinter_orchestrator::Context;
 use splinter_pipelines::release::anchor;
 use splinter_pipelines::train::{
@@ -178,6 +179,7 @@ fn the_tuning_of_a_run_reaches_the_trainer_and_every_default_is_resolved_into_th
     let tuned = TrainRequest {
         tuning: Tuning {
             bf16_base: true,
+            base_precision: Some(BasePrecision::Nf4),
             learning_rate: Some(1e-4),
             alpha: Some(64.0),
             weight_decay: Some(0.01),
@@ -191,6 +193,7 @@ fn the_tuning_of_a_run_reaches_the_trainer_and_every_default_is_resolved_into_th
     train(&ctx, &tuned, &trainer, &CancelToken::new()).unwrap();
     let plan = trainer.plans.lock().unwrap()[0].clone();
     assert!(plan.tuning.bf16_base);
+    assert_eq!(plan.tuning.base_precision, Some(BasePrecision::Nf4));
     assert_eq!(plan.tuning.learning_rate, Some(1e-4));
     assert_eq!((plan.rank, plan.tuning.alpha), (32, Some(64.0)));
     assert_eq!(plan.tuning.weight_decay, Some(0.01));

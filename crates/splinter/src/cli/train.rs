@@ -6,6 +6,7 @@
 
 use clap::Args;
 use splinter_sdk::learn::DEFAULT_REHEARSAL_SHARE;
+use splinter_sdk::model::train::BasePrecision;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{
     Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE, DEFAULT_LORA_ALPHA_PER_RANK,
@@ -139,6 +140,12 @@ pub struct TrainArgs {
     /// The base to train, and an adapter on it to continue.
     #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
     pub from: ModelRef,
+    /// How the frozen base is held while the adapter trains; the adapter and
+    /// its optimizer stay fp32. NF4 is a `qwen35` (27B) tier.
+    #[arg(long, value_name = "TIER", value_parser = clap::value_parser!(BasePrecision),
+        help = "How the frozen base is held while the adapter trains: fp32, bf16, int8 or nf4 \
+                [default: fp32, or bf16 when SPLINTER_BF16_BASE is set]")]
+    pub base_precision: Option<BasePrecision>,
     /// The fraction of each earlier release's training records replayed,
     /// when training from a policy alias.
     #[arg(long, default_value_t = DEFAULT_REPLAY_FRACTION, value_name = "F")]
