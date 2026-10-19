@@ -43,6 +43,9 @@ const KILL_GRACE: Duration = Duration::from_secs(2);
 /// How often a running program is checked for having finished.
 const POLL: Duration = Duration::from_millis(10);
 
+/// The first wait between looks at a run that has not ended.
+const FIRST_POLL: Duration = Duration::from_micros(100);
+
 /// Kernel resource limits for a run, each applied as both the soft and the
 /// hard limit except the CPU time, whose hard limit is one second above the
 /// soft one so the program is sent `SIGXCPU` before `SIGKILL`.
@@ -374,7 +377,54 @@ fn has_exited(child: &Child) -> std::io::Result<bool> {
 /// `/proc` (none where it is not mounted). A descendant that left the run's
 /// process group (`setsid`, `timeout`) is found this way as long as the chain
 /// of parents to `root` is unbroken.
+///
+/// The kernel lists each task's children (`/proc/<pid>/task/<tid>/children`),
+/// so the walk reads only the processes of the tree. Reading every process's
+/// `stat` to find the tree instead made every command pay for every process
+/// of a shared host, and a test that runs thousands of commands took over an
+/// hour (see knowledge entry 074). A kernel built without that file gets the
+/// full scan.
 fn descendants(root: libc::pid_t) -> Vec<libc::pid_t> {
+    let mut found = Vec::new();
+    let mut frontier = vec![root];
+    while let Some(parent) = frontier.pop() {
+        match children_of(parent) {
+            Some(children) => {
+                found.extend(&children);
+                frontier.extend(children);
+            }
+            None => return descendants_by_scan(root),
+        }
+    }
+    found
+}
+
+/// The processes whose parent is `pid`, as the kernel lists them. Empty for a
+/// process that is gone; `None` when the kernel does not provide the list.
+fn children_of(pid: libc::pid_t) -> Option<Vec<libc::pid_t>> {
+    let Ok(tasks) = std::fs::read_dir(format!("/proc/{pid}/task")) else {
+        return Some(Vec::new());
+    };
+    let mut children = Vec::new();
+    for task in tasks.flatten() {
+        match std::fs::read_to_string(task.path().join("children")) {
+            Ok(list) => children.extend(
+                list.split_whitespace()
+                    .filter_map(|child| child.parse::<libc::pid_t>().ok()),
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && task.path().exists() => {
+                return None;
+            }
+            // The thread ended while it was being read.
+            Err(_) => {}
+        }
+    }
+    Some(children)
+}
+
+/// [`descendants`] for a kernel that does not list children: every process's
+/// parent is read from `/proc/<pid>/stat`.
+fn descendants_by_scan(root: libc::pid_t) -> Vec<libc::pid_t> {
     let Ok(entries) = std::fs::read_dir("/proc") else {
         return Vec::new();
     };
@@ -512,6 +562,10 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
     let deadline = started + spec.timeout;
     let mut exited = false;
     let mut timed_out = false;
+    // A command that ends at once (most of a campaign's git and test
+    // commands) must not wait a whole `POLL` to be noticed: the wait starts
+    // short and doubles up to `POLL`.
+    let mut wait = FIRST_POLL;
     loop {
         if !exited {
             exited = has_exited(&child).map_err(failed)?;
@@ -524,7 +578,8 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
             timed_out = true;
             break;
         }
-        std::thread::sleep(POLL.min(deadline - now));
+        std::thread::sleep(wait.min(deadline - now));
+        wait = (wait * 2).min(POLL);
     }
     // The leader is not reaped yet, so the group id is still its own.
     kill_group(&child);
@@ -552,4 +607,41 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         signal: status.signal(),
         timed_out,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::{Command, Stdio};
+
+    /// The processes below a root are found through the kernel's lists as the
+    /// full scan finds them, a grandchild in a session of its own included.
+    #[test]
+    fn descendants_are_the_same_listed_by_the_kernel_or_found_by_scan() {
+        let mut leader = Command::new("sh")
+            .args(["-c", "setsid sleep 30 & sleep 30 & wait"])
+            .stdout(Stdio::null())
+            .spawn()
+            .expect("a shell starts");
+        let root = libc::pid_t::try_from(leader.id()).unwrap();
+        let mut listed = Vec::new();
+        for _ in 0..200 {
+            listed = descendants(root);
+            if listed.len() >= 2 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let mut scanned = descendants_by_scan(root);
+        listed.sort_unstable();
+        scanned.sort_unstable();
+        let _ = leader.kill();
+        for pid in &listed {
+            // SAFETY: plain signal to a process this test started.
+            unsafe { libc::kill(*pid, libc::SIGKILL) };
+        }
+        let _ = leader.wait();
+        assert!(listed.len() >= 2, "{listed:?}");
+        assert_eq!(listed, scanned);
+    }
 }

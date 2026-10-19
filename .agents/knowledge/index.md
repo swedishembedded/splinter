@@ -59,3 +59,4 @@ in the same commit.
 | [071](071-a-solve-report-named-the-episode-bounds-cancelled-and-34-of-61-looked-like-infrastructure-noise.md) | A solve report named the episode bounds "cancelled", and 34 of 61 conclusions looked like infrastructure noise |
 | [072](072-lua-on-the-path-was-whatever-the-hosts-alternatives-named-and-the-runtime-accepted-it.md) | `lua` on the path was whatever the host's alternatives named, and the runtime accepted it |
 | [073](073-health-forecast-tests-hung-because-each-training-built-its-own-vulkan-device.md) | The health forecast tests hung because each training built its own Vulkan device |
+| [074](074-every-sandboxed-command-paid-a-scan-of-all-host-processes-and-a-ten-millisecond-poll.md) | Every sandboxed command paid a scan of all host processes and a ten-millisecond poll |
