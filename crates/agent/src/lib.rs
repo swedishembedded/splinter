@@ -33,6 +33,8 @@
 //!   shared concept, its proposal left to the knowledge crate to admit.
 //! * [`prompts`] - a model asked to write user requests of a domain, each
 //!   a string, which requests are kept left to the caller.
+//! * [`skill_planner`] - a planner model asked to propose the skills a
+//!   documented domain asks of a learner, its proposal admitted by code.
 //! * [`replay`] - an experience's code calls run again in the environment
 //!   it records, each result compared with the one it observed.
 //! * [`work`] - a coding agent working in one directory it is confined to,
@@ -62,6 +64,7 @@ pub mod proposer;
 pub mod repair;
 pub mod replay;
 pub mod run_code;
+pub mod skill_planner;
 pub mod solve;
 mod system_prompt;
 pub mod teach;

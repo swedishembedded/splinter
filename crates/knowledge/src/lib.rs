@@ -38,6 +38,10 @@
 //!   built by code with fresh numbers, the brief a model writes general
 //!   requests from, and the admission that keeps every anchor task and its
 //!   near copies out.
+//! * [`skills`] - the skill graph of a body of documentation: skills
+//!   grounded in sections, with the constraints and requirements the text
+//!   states and the skills each uses, read by rule or proposed by a model and
+//!   admitted by code, versioned by content address.
 //! * [`stance`] - the code checks a stance pair rests on: a fact's keys, a
 //!   falsehood made by replacing one, whether a reply holds the true value or
 //!   adopts the false one, and whether it invents a term or declines.
@@ -58,6 +62,7 @@ pub mod rehearsal;
 pub mod retrieve;
 pub mod sections;
 pub mod session;
+pub mod skills;
 pub mod stance;
 pub mod survey;
 pub mod tabular;

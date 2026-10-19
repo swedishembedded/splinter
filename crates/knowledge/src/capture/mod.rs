@@ -26,6 +26,7 @@
 
 mod atif_keys;
 mod command;
+mod html;
 mod repository;
 mod session;
 mod tree;
@@ -40,6 +41,7 @@ pub use command::{
     capture_command, default_environment, CommandSpec, DEFAULT_ENV_ALLOWLIST, DEFAULT_OUTPUT_CAP,
     DEFAULT_TERM, DEFAULT_TIMEOUT,
 };
+pub use html::html_to_markdown;
 pub use repository::{capture_repository, IGNORED_NAMES};
 pub use session::{
     capture_session, capture_session_file, SessionRefusal, DEFAULT_MAX_SESSION_BYTES,

@@ -27,6 +27,16 @@
 //!   selection, concept mastery across releases, concepts the gate saw
 //!   forgotten queued for new tasks, and diversity quotas on a training
 //!   set.
+//! * [`acquire`] - `learn "<objective>" --source <url|path>`: documentation
+//!   becomes a skill graph, probes, a measured baseline, training rounds on the
+//!   skill expected to benefit most, and an assessment on probes that decided
+//!   nothing.
+//! * [`generations`] - generations of a coding policy: the protected panel,
+//!   the full retention matrix, replay policies, and one generation decided
+//!   on retention and regression limits before the gate.
+//! * [`improve`] - which way of improving an agent on a target capability
+//!   (more samples, another harness, a trained candidate, no change) is
+//!   worth its cost, decided from what each was measured to do.
 //! * [`critique`] - failures critiqued and retried.
 //! * [`datasets`] - experience sets projected into a stored dataset.
 //! * [`train`] - datasets become a candidate adapter, continuing the
@@ -52,6 +62,7 @@
 
 pub mod absorb;
 pub mod abstain;
+pub mod acquire;
 pub mod ask;
 pub mod author;
 pub mod brain_server;
@@ -76,10 +87,12 @@ pub mod exam_set;
 pub mod experiences;
 pub mod experiment;
 pub mod family;
+pub mod generations;
 pub mod graded;
 pub mod grouping;
 pub mod harbor;
 pub mod harness_opt;
+pub mod improve;
 pub mod index;
 pub mod judge;
 pub mod judging;
@@ -87,13 +100,11 @@ pub mod learn;
 pub mod lineage;
 pub mod plan;
 pub mod powered;
-pub mod generations;
 pub mod practice;
 pub mod raft;
 pub mod rehearsal;
 pub mod release;
 pub mod rerank;
-pub mod improve;
 pub mod reserve;
 pub mod retrieval;
 pub mod router;
