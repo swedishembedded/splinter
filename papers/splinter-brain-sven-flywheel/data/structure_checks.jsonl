@@ -318,3 +318,20 @@
 {"id": "CN11.1", "repo": "splinter", "path": "crates/data/tests/sft_admission.rs", "pattern": "fn a_failed_verdict_is_not_training_evidence_whatever_the_solver_claimed", "kind": "regex", "min": 1, "pin": "splinter_containment"}
 {"id": "CN12.1", "repo": "splinter", "path": "crates/eval/tests/exposure_audit.rs", "pattern": "fn a_path_outside_the_tree_is_reported_by_what_came_of_it_and_none_is_dropped", "kind": "regex", "min": 1, "pin": "splinter_containment"}
 {"id": "CN10.1", "repo": "sven", "path": "crates/sdk/tests/project_root_children.rs", "pattern": "fn a_delegated_child_is_confined_to_the_parents_root", "kind": "regex", "min": 1, "pin": "sven_containment"}
+{"id": "TJ02.1", "repo": "splinter", "path": "crates/pipelines/src/solving.rs", "kind": "regex", "pattern": "fn conclusion_label", "min": 1, "pin": "splinter_traj"}
+{"id": "TJ02.2", "repo": "splinter", "path": "crates/pipelines/src/solving.rs", "kind": "regex", "pattern": "an_episode_stopped_by_its_own_bounds_is_named_for_the_bound_not_for_a_cancel", "min": 1, "pin": "splinter_traj"}
+{"id": "TJ04.1", "repo": "sven", "path": "crates/executors/src/thread_store.rs", "kind": "regex", "pattern": "pub fn transcript\\(", "min": 1, "pin": "sven_traj"}
+{"id": "TJ04.2", "repo": "sven", "path": "crates/sdk/tests/trajectory_fidelity.rs", "kind": "regex", "pattern": "a_compaction_does_not_drop_the_steps_it_replaced_from_the_trajectory", "min": 1, "pin": "sven_traj"}
+{"id": "TJ05.1", "repo": "sven", "path": "crates/sdk/src/run.rs", "kind": "regex", "pattern": "pub fn sampling", "min": 1, "pin": "sven_traj"}
+{"id": "TJ05.2", "repo": "sven", "path": "crates/sdk/src/run.rs", "kind": "regex", "pattern": "pub fn want_logprobs", "min": 1, "pin": "sven_traj"}
+{"id": "TJ05.3", "repo": "sven", "path": "scripts/e2e/capture_check.py", "kind": "regex", "pattern": "completion_token_ids differ from the server", "min": 1, "pin": "sven_traj"}
+{"id": "TJ06.1", "repo": "brain", "path": "crates/apiserve/src/sampling.rs", "kind": "regex", "pattern": "pub fn apply_token_capture", "min": 1, "pin": "brain_traj"}
+{"id": "TJ06.2", "repo": "brain", "path": "crates/apiserve/tests/api.rs", "kind": "regex", "pattern": "a_chat_reply_returns_token_ids_and_logprobs_only_when_asked", "min": 1, "pin": "brain_traj"}
+{"id": "TJ07.1", "repo": "brain", "path": "crates/apiserve/src/sampling.rs", "kind": "regex", "pattern": "v\\.as_u64\\(\\)", "min": 1, "pin": "brain_traj"}
+{"id": "TJ07.2", "repo": "brain", "path": "crates/apiserve/src/sampling.rs", "kind": "regex", "pattern": "a_seed_the_model_drew_is_accepted_back_over_the_whole_u64_range", "min": 1, "pin": "brain_traj"}
+{"id": "TJ08.1", "repo": "sven", "path": "crates/atif/src/persist/journal.rs", "kind": "regex", "pattern": "pub fn read_journal", "min": 1, "pin": "sven_traj"}
+{"id": "TJ08.2", "repo": "sven", "path": "crates/sdk/tests/journal_kill.rs", "kind": "regex", "pattern": "a_killed_run_leaves_a_parseable_incomplete_journal_of_its_settled_steps", "min": 1, "pin": "sven_traj"}
+{"id": "TJ09.1", "repo": "splinter", "path": "crates/data/src/trajectory.rs", "kind": "regex", "pattern": "Unprojectable::Incomplete", "min": 1, "pin": "splinter_traj"}
+{"id": "TJ09.2", "repo": "splinter", "path": "crates/data/tests/projection_refusal.rs", "kind": "regex", "pattern": "a_trajectory_the_capture_marks_incomplete_is_refused_whatever_it_ends_on", "min": 1, "pin": "splinter_traj"}
+{"id": "TJ10.1", "repo": "sven", "path": "crates/bootstrap/src/child_records.rs", "kind": "regex", "pattern": "pub\\(crate\\) fn record_child", "min": 1, "pin": "sven_traj"}
+{"id": "TJ10.2", "repo": "sven", "path": "crates/sdk/tests/harness_child_records.rs", "kind": "regex", "pattern": "a_delegated_childs_conversation_and_sampling_identity_are_in_the_parents_trajectory", "min": 1, "pin": "sven_traj"}

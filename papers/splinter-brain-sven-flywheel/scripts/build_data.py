@@ -77,10 +77,23 @@ def qual_metrics():
     return m
 
 
+def traj_metrics():
+    """The trajectory-capture findings: values a log printed on a `TJ key=value ...` line, read from
+    data/measurements.json."""
+    m = {}
+    for run in load_measurements().values():
+        if run["metric_prefix"].startswith("tj."):
+            m.update({f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()})
+    return m
+
+
 def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
     m = {}
+    if prefix.startswith("tj."):
+        line = next(l for l in text.splitlines() if l.startswith("TJ "))
+        return {k: int(v) for k, v in (kv.split("=") for kv in line.split()[1:])}
     if prefix.startswith("e4.probe_"):
         for field in ("built_mib", "peak_mib"):
             m[field] = int(re.search(rf"PROBE {field}=(\d+)", text).group(1))
@@ -175,6 +188,7 @@ def metrics():
     m.update(throughput_metrics())
     m.update(ledger_metrics())
     m.update(qual_metrics())
+    m.update(traj_metrics())
     return m
 
 

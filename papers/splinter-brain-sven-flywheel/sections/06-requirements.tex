@@ -72,6 +72,29 @@ marked no context compaction and kept the uncompacted history, listed every regi
 rather than those offered, and turned unparseable tool-call arguments into an empty object.
 Compactions are now marked and the compacted history kept, the offered tools are exported,
 and the raw text of non-JSON arguments is kept.\cl{AU03}
+\item \textbf{The record is the whole conversation} (Sven; implemented). After a context
+compaction the export was rebuilt from the compacted history, so a run that compacted lost the
+steps the compaction replaced and the model requests recorded on them. In the withdrawn 27B run
+the five episodes stopped at the 60-call cap counted 61 or 62 tool calls while their trajectories
+held four to 42. The agent now keeps an append-only record beside the history the model reads, a
+child run's store keeps a transcript the same way, and a compaction is marked where it fired. The
+projection into training conversations still refuses a trajectory that holds a compaction marker,
+so such episodes can be analysed and are not trained on.\cl{TJ03,TJ04}
+\item \textbf{Sampling identity on every request} (Sven and Brain; implemented). A run's
+sampling (temperature, top-$p$, top-$k$, seed) and its request for the sampled tokens reach every
+model request of the run and of the children it starts. Brain's chat endpoint returns the prompt
+token ids, the sampled token ids, the log-probability of each sampled token under the
+distribution it was decoded from, and the seed it used, the adapter, the base-checkpoint digest, the
+backend and the engine build; a step of the trajectory records them, and records each request's
+own prompt and tokens when a step covers several. A seed the server drew above $2^{63}$ was once
+dropped from the reply and refused when sent back.\cl{TJ05,TJ06,TJ07}
+\item \textbf{Crash-robust capture} (Sven; implemented). The trajectory can be written one
+record at a time as the run happens, with a flush policy and size bounds; a journal that was never
+closed reads back marked incomplete, a test kills a real second process inside a model request
+and reads the journal back, and Splinter's projection refuses a trajectory marked incomplete.\cl{TJ08,TJ09}
+\item \textbf{Children in the parent's record} (Sven; implemented). A harness run's trajectory
+embeds every finished child as a trajectory with its tool actions and the account of each of
+its model requests, sampling identity included.\cl{TJ10}
 \item \textbf{Release probes were closed-book} (implemented). A coding agent is now gated on the
 exam its run reserved, with report types for workspace suites.\cl{AU04}
 \item \textbf{Contamination paths} (implemented). The semantic-memory tool is withheld from the
