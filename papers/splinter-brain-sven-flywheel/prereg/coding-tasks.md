@@ -709,6 +709,29 @@ without `--serialise-calls`. The count of records, the number of turns per recor
 counts are reported as measured. Nothing is trained on it until the CE4 data audit of the first repository has been
 resolved; no training parameter is fixed here.
 
+### Amendment 11, 2026-10-19, 20:03 CEST: the teacher's data of pass 1 is regenerated
+
+Made before any regenerated trajectory exists and before any CE4 or CE7 training run. An audit
+of the CE4 pilot found that its training records were corrupted by the pipeline: the serving
+layer named every tool call `call_0` and the sven revision of pass 1 (d1fd8bac) exported a whole run
+as one step, so the call-id pairing of `--serialise-calls` gave every call every result of its run (147 of
+the 231 records show duplicated, reordered or future results).
+
+**A11.1 Pass-1 trajectories are not training data.** The CE1 pass-1 trajectories of A4.1 (sven d1fd8bac)
+are not used to train any adapter of CE4 or CE7 and the dataset of A9.2 is discarded. Their verdicts
+and the exposure audit, which do not depend on the export, stand as CE1 results.
+
+**A11.2 Regeneration.** The teacher solves the CE1 development tasks again, one greedy attempt, `--solve-deadline
+3600`, concurrency 8 per 27B server, the flags of A2.6 and A4.7, the test-output cap and PATH of each set's
+recorded environment, with the splinter build of origin/main 7bd63719 (sven 319a2e05: whole-conversation
+trajectories with true turns), after the CE7 development pass of A10.2. A splinter revision
+that validates call/result pairing at dataset build time replaces it for the dataset build when it is
+pushed (named in the run record, A5.3). The tasks are solved in whole sets, in the order of the
+raw pass fraction of pass 1 (ttlcache 34/46, tokenbucket 22/38, caldate 13/25, graphkit 24/51, linediff 18/50,
+iniparse 18/61, mdrender 13/43, exprcalc 10/56), so that the sets most likely to yield verified
+trajectories come first; this order is a choice of training data and not of evaluation (no arm is compared on
+these tasks, A1.1), and no later set is skipped except for lack of lease time, which is reported.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
