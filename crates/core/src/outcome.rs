@@ -51,6 +51,32 @@ pub enum FailureClass {
     Unclassified,
 }
 
+/// One unit of memory an attempt retrieved.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetrievedUnit {
+    /// The unit.
+    pub unit_id: String,
+    /// The revision of the source it was cut from.
+    pub revision: String,
+    /// Whether it was put into the model's context.
+    pub inserted: bool,
+}
+
+/// The memory an attempt read: which frozen snapshot, and which units it
+/// retrieved from it. With the model's identity this is what an attempt's
+/// result is about; it is how retrieval-assisted behaviour is told from a
+/// change of weights.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryUse {
+    /// The snapshot every retrieval read, when the memory had one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot_id: Option<String>,
+    /// Retrievals the attempt made.
+    pub retrievals: u32,
+    /// The distinct units retrieved, in the order first retrieved.
+    pub units: Vec<RetrievedUnit>,
+}
+
 /// The facts of an attempt that its trajectory and verdicts do not carry.
 /// Every field is optional: what the run did not record is absent.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -88,6 +114,9 @@ pub struct AttemptReport {
     /// The failure class, when something classified the attempt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure: Option<FailureClass>,
+    /// The memory the attempt read, when it was given any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory: Option<MemoryUse>,
 }
 
 /// One attempt at one task, measured.

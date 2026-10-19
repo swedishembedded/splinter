@@ -186,6 +186,9 @@ pub enum SolveError {
     /// sven could not build or run the agent.
     #[error("the solver could not run: {0}")]
     Engine(#[from] CallError),
+    /// The knowledge the attempt was to read could not be frozen.
+    #[error("the knowledge could not be frozen: {0}")]
+    Knowledge(#[from] sven_sdk::memory::MemoryError),
 }
 
 /// A model and the identity experiences record it by (the string an

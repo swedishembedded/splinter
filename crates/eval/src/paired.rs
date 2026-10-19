@@ -19,6 +19,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::arms::{attribute, Arm, Attribution, NotAttributable};
+
 /// One item's outcome for both models.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PairedOutcome {
@@ -226,4 +228,55 @@ mod tests {
         assert_eq!(accuracy(&[None, None]), (None, 0));
         assert_eq!(accuracy(&[Some(true), None, Some(false)]), (Some(0.5), 2));
     }
+}
+
+/// A comparison of two arms: what differs between them and how they compare.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ComparedArms {
+    /// The arm measured against.
+    pub reference: Arm,
+    /// The arm under test.
+    pub candidate: Arm,
+    /// What the effect, if any, is attributed to.
+    pub attribution: Attribution,
+    /// How they compare over the paired items.
+    pub comparison: Comparison,
+}
+
+impl ComparedArms {
+    /// The comparison in words: what varied, and the arms.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let varied = match self.attribution {
+            Attribution::Weights => "weights varied, knowledge held",
+            Attribution::Knowledge => "knowledge varied, weights held",
+        };
+        format!(
+            "{varied}: {} against {}; candidate won {} and reference {} of {} paired items",
+            self.candidate.describe(),
+            self.reference.describe(),
+            self.comparison.candidate_wins,
+            self.comparison.baseline_wins,
+            self.comparison.paired,
+        )
+    }
+}
+
+/// `outcomes` compared between two arms that differ in exactly one treatment.
+///
+/// # Errors
+/// [`NotAttributable`] when the arms are identical or differ in both weights
+/// and knowledge: such a comparison does not say what helped.
+pub fn compare_arms(
+    reference: &Arm,
+    candidate: &Arm,
+    outcomes: &[PairedOutcome],
+) -> Result<ComparedArms, NotAttributable> {
+    let attribution = attribute(reference, candidate)?;
+    Ok(ComparedArms {
+        reference: reference.clone(),
+        candidate: candidate.clone(),
+        attribution,
+        comparison: compare(outcomes),
+    })
 }

@@ -54,6 +54,7 @@ pub mod forms;
 pub mod harness_edit;
 pub mod harness_work;
 pub mod judge;
+pub mod knowledge;
 pub mod mapper;
 pub mod prompts;
 pub mod proposer;

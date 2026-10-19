@@ -42,7 +42,7 @@ use std::time::{Duration, Instant};
 
 use futures::FutureExt;
 use splinter_core::experience::Task;
-use splinter_core::outcome::AttemptReport;
+use splinter_core::outcome::{AttemptReport, MemoryUse};
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
     Baseline, CodeResult, CommandCall, Patch, ResolvedEnvironment, SandboxError,
@@ -57,6 +57,7 @@ use sven_sdk::{
 };
 use tokio::sync::oneshot;
 
+use crate::knowledge::{memory_use, Knowledge};
 use crate::solve::{is_empty_reply, Solution, SolveError, SolveOptions, SOLVER_MODE};
 use crate::system_prompt::UnderSystemPrompt;
 use crate::workspace_shell::SandboxShell;
@@ -122,6 +123,10 @@ pub struct WorkOptions {
     /// tree out itself; told of every event after `observer`. A worker
     /// started in a directory of the caller's has no use for it.
     pub tree_observer: Option<TreeObserver>,
+    /// Memory [`solve_in_workspace`] gives the worker to retrieve from,
+    /// frozen when the episode starts. A worker started directly gets it from
+    /// [`Worker::start_with_knowledge`].
+    pub knowledge: Option<Knowledge>,
 }
 
 impl WorkOptions {
@@ -134,6 +139,7 @@ impl WorkOptions {
             max_repeated_results: None,
             observer: None,
             tree_observer: None,
+            knowledge: None,
         }
     }
 }
@@ -156,6 +162,9 @@ pub struct WorkReport {
     pub repeated_call: Option<String>,
     /// Events the observer missed, if it fell behind.
     pub dropped_events: u64,
+    /// The memory the worker has read so far (all sends, not only this one);
+    /// `None` when it retrieved nothing.
+    pub memory: Option<MemoryUse>,
 }
 
 impl WorkReport {
@@ -169,6 +178,7 @@ impl WorkReport {
             tool_calls: Some(self.tool_calls),
             stopped_by_tool_cap: self.stopped_by_tool_cap,
             stopped_by_repetition: self.stopped_by_repetition,
+            memory: self.memory.clone(),
             ..AttemptReport::default()
         }
     }
@@ -178,6 +188,7 @@ impl WorkReport {
 pub struct Worker {
     agent: Agent,
     options: WorkOptions,
+    memory_snapshot: Option<String>,
 }
 
 /// The engine a worker runs on: sven's coding tools, confined to
@@ -189,9 +200,16 @@ pub(crate) fn engine(
     model: Arc<dyn ModelProvider>,
     options: &WorkOptions,
     replacing: &[Arc<dyn Tool>],
+    with_knowledge: bool,
 ) -> Result<Engine, CallError> {
     let mut config: Config = options.solve.engine_config();
-    config.tools.disabled = WITHHELD_TOOLS.iter().map(|t| (*t).to_string()).collect();
+    // The memory tool is withheld unless the worker is given frozen knowledge,
+    // which replaces whatever store the engine would have found on its own.
+    config.tools.disabled = WITHHELD_TOOLS
+        .iter()
+        .filter(|t| !(with_knowledge && **t == "semantic_memory"))
+        .map(|t| (*t).to_string())
+        .collect();
     let mut builder = Engine::builder()
         .config(config)
         .model_provider(UnderSystemPrompt::wrap(
@@ -225,8 +243,12 @@ impl Worker {
         options: WorkOptions,
         replacing: &[Arc<dyn Tool>],
     ) -> Result<Self, SolveError> {
-        let agent = engine(workspace, model, &options, replacing)?.agent(SOLVER_MODE);
-        Ok(Self { agent, options })
+        let agent = engine(workspace, model, &options, replacing, false)?.agent(SOLVER_MODE);
+        Ok(Self {
+            agent,
+            options,
+            memory_snapshot: None,
+        })
     }
 
     /// A worker continuing the conversation `state` was suspended from.
@@ -236,8 +258,46 @@ impl Worker {
         options: WorkOptions,
         state: AgentState,
     ) -> Result<Self, SolveError> {
-        let agent = engine(workspace, model, &options, &[])?.resume(state)?;
-        Ok(Self { agent, options })
+        let agent = engine(workspace, model, &options, &[], false)?.resume(state)?;
+        Ok(Self {
+            agent,
+            options,
+            memory_snapshot: None,
+        })
+    }
+
+    /// A fresh worker as [`Worker::start_replacing`] makes one, given
+    /// `knowledge` to retrieve from, frozen on the content it has now: the
+    /// worker reads that memory however the store changes, and cannot write to
+    /// it. The memory tool is offered only to a worker started this way.
+    ///
+    /// # Errors
+    /// [`SolveError::Knowledge`] when the memory cannot be frozen.
+    pub async fn start_with_knowledge(
+        workspace: &Path,
+        model: Arc<dyn ModelProvider>,
+        options: WorkOptions,
+        replacing: &[Arc<dyn Tool>],
+        knowledge: &Knowledge,
+    ) -> Result<Self, SolveError> {
+        let scope = knowledge.frozen_scope().await?;
+        let memory_snapshot = scope.snapshot_id().map(str::to_owned);
+        let agent = engine(workspace, model, &options, replacing, true)?
+            .agent(SOLVER_MODE)
+            .with_memory(scope)
+            .await?;
+        Ok(Self {
+            agent,
+            options,
+            memory_snapshot,
+        })
+    }
+
+    /// The identity of the memory the worker was frozen on, if it was given
+    /// knowledge.
+    #[must_use]
+    pub fn memory_snapshot(&self) -> Option<&str> {
+        self.memory_snapshot.as_deref()
     }
 
     /// The conversation so far, in sven's serialisable form.
@@ -307,9 +367,11 @@ impl Worker {
             Err(e) if is_empty_reply(&e) => (None, RunConclusion::AgentError, Usage::default()),
             Err(e) => return Err(e.into()),
         };
+        let trajectory = self.agent.trajectory();
         Ok(WorkReport {
+            memory: memory_use(&trajectory),
             solution: Solution {
-                trajectory: self.agent.trajectory(),
+                trajectory,
                 final_output,
                 conclusion,
                 usage,
@@ -554,7 +616,12 @@ pub async fn solve_in_workspace(
     let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::new(env.clone(), tree.clone()))];
     let episode = options.solve.deadline;
     options.max_repeated_results = protocol.max_repeated_results;
-    let mut worker = Worker::start_replacing(&tree, model, options, &confined)?;
+    let mut worker = match options.knowledge.take() {
+        Some(knowledge) => {
+            Worker::start_with_knowledge(&tree, model, options, &confined, &knowledge).await?
+        }
+        None => Worker::start_replacing(&tree, model, options, &confined)?,
+    };
 
     let started = Instant::now();
     let mut message = task.instruction.clone();
@@ -646,6 +713,7 @@ struct Sum {
     stopped_by_repetition: bool,
     repeated_call: Option<String>,
     dropped_events: u64,
+    memory: Option<MemoryUse>,
 }
 
 impl Sum {
@@ -657,6 +725,8 @@ impl Sum {
             self.repeated_call.clone_from(&report.repeated_call);
         }
         self.dropped_events += report.dropped_events;
+        // Each send reports the whole conversation's reads so far.
+        self.memory.clone_from(&report.memory);
     }
 
     fn into_report(self, solution: Solution) -> WorkReport {
@@ -667,6 +737,7 @@ impl Sum {
             stopped_by_repetition: self.stopped_by_repetition,
             repeated_call: self.repeated_call,
             dropped_events: self.dropped_events,
+            memory: self.memory,
         }
     }
 }

@@ -75,7 +75,7 @@ pub async fn solve_harness_in_workspace(
     let baseline = env.materialize(archive, &tree)?;
 
     let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::new(env.clone(), tree.clone()))];
-    let engine = engine(&tree, model, &options, &confined)?;
+    let engine = engine(&tree, model, &options, &confined, false)?;
     let harness = engine.load_harness_from_str(harness)?;
     let declares_task = harness
         .plan()
@@ -126,6 +126,7 @@ pub async fn solve_harness_in_workspace(
             stopped_by_repetition: false,
             repeated_call: None,
             dropped_events: 0,
+            memory: None,
         },
         solution,
         patch,

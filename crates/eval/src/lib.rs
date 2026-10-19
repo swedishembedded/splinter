@@ -58,6 +58,7 @@
 
 #![warn(missing_docs)]
 
+pub mod arms;
 pub mod canary;
 pub mod claim_gate;
 pub mod competence;
