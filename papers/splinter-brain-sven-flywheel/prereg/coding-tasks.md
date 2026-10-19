@@ -593,6 +593,30 @@ the audit's classes, so that a reader sees how much of the evidence the rule rem
 
 **A7.5 Where arms run.** The base arm and the adapter arm of one comparison run on one 8B server
 instance (A2.10) on one card; different comparisons may run on different cards at the same time.
+### Amendment 8, 2026-10-19, 15:05 CEST: parallel arms, qualification in two halves, controls not run
+
+Made before any 8B arm has been run on any partition and before any adapter has been served; the
+primary adapter is trained but no outcome of it exists.
+
+**A8.1 Arms in parallel.** A2.2 and A2.10 ask for the base arm and the adapter arm on one server
+instance, one after the other. The lease that remains for the confirmatory query is too short for that
+for 487 agentic tasks per arm, so the two arms of the primary comparison run at the same time on two
+8B servers of the same build, flags and tier (A5.1), one per card, both started with the primary
+adapter in their adapter bank, each asked for its own model id. Greedy outputs do not depend on the
+instance or on the concurrency (A3.3); the build, the flags, the harness profile and the
+concurrency are the same for both arms. The same holds for the arms of the development comparisons.
+
+**A8.2 Two halves.** The qualification partition is solved in two halves, chosen by the stable family
+hash of the exam seed before any arm has run: the first half is the 23 families (253 tasks) that
+`tasks pick --seed 20261017 --family-share 0.5` returns, the second half the other 23 (234 tasks).
+Both arms solve the first half, then the second. If time ends before the second half is complete in
+both arms, the comparison is made on the first half alone, over complete families, with the family
+count stated, and is labelled PILOT by the rule of A2.3 whatever that count is; a family is never
+split between the two halves, and no task is dropped from a half after its outcome is seen.
+
+**A8.3 Controls.** The plain-patch control of A7.3 builds no record for workspace tasks (the
+view admits none), so it is not run. A7.3's other controls are run after the primary comparison and
+only if time allows; the paper reports which were run.
 
 ## Provenance
 
