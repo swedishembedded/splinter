@@ -62,3 +62,4 @@ in the same commit.
 | [074](074-every-sandboxed-command-paid-a-scan-of-all-host-processes-and-a-ten-millisecond-poll.md) | Every sandboxed command paid a scan of all host processes and a ten-millisecond poll |
 | [075](075-the-exposure-audit-judged-a-probe-by-its-whole-steps-output-so-a-failed-cd-counted-as-having-reached-the-host.md) | The exposure audit judged a probe by its whole step's output, so a failed `cd` counted as having reached the host |
 | [076](076-the-repetition-stop-was-decided-by-a-task-beside-the-run-so-the-number-of-calls-depended-on-load.md) | The repetition stop was decided by a task beside the run, so the number of calls depended on load |
+| [077](077-a-run-with-every-tool-call-named-call-0-gave-every-call-every-result-of-the-run.md) | A run with every tool call named `call_0` gave every call every result of the run |

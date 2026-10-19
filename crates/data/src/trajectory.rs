@@ -28,6 +28,12 @@
 //!   arguments JSON-encoded - followed by one `tool` message per
 //!   observation result, answering its call by id. Reasoning content is
 //!   not part of the wire format and is left out.
+//! * Results are paired to calls by id within their step. A step in which two
+//!   calls share an id is refused (the pairing is ambiguous); ids repeat across
+//!   steps (a model numbers each response's calls from zero), so the record
+//!   names each call `s<step>-<id>`, unique in the conversation. The projection
+//!   conserves its source: as many tool calls and tool results out as the steps
+//!   it projects hold in.
 //! * An agent step with tool calls is an action; so is the last agent step
 //!   when it answers without one (the final answer). An agent step with
 //!   neither text nor calls adds nothing and is skipped.
@@ -38,6 +44,8 @@
 //! * Image content and an observation that answers no call of its step are
 //!   not representable, and the whole trajectory is refused: a record with
 //!   a hole in its context would teach from a state the solver never saw.
+
+use std::collections::HashSet;
 
 use atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
@@ -113,6 +121,28 @@ pub enum Unprojectable {
         /// The agent step with the call.
         step: u64,
     },
+    /// A tool call id used by two calls of one step: results are paired to
+    /// calls by id, so every call would be given every result.
+    #[error("step {step} makes two tool calls with the same id")]
+    DuplicateCallId {
+        /// The agent step with the two calls.
+        step: u64,
+    },
+    /// The projection lost or invented a call or a result of its source.
+    #[error(
+        "the projection holds {calls} tool calls and {results} tool results where its source has \
+         {source_calls} and {source_results}"
+    )]
+    NotConserved {
+        /// Tool calls in the projected messages.
+        calls: usize,
+        /// Tool results in the projected messages.
+        results: usize,
+        /// Tool calls of the steps projected.
+        source_calls: usize,
+        /// Observation results of the steps projected.
+        source_results: usize,
+    },
     /// A tool schema that is neither an OpenAI function-calling entry nor
     /// a bare function schema.
     #[error("tool definition {index} is not a function schema")]
@@ -158,6 +188,8 @@ impl From<Unprojectable> for Exclusion {
             Unprojectable::Incomplete => Self::Incomplete,
             Unprojectable::Compacted { .. } => Self::Compacted,
             Unprojectable::UnparsedArguments { .. } => Self::UnparsedArguments,
+            Unprojectable::DuplicateCallId { .. } => Self::DuplicateCallId,
+            Unprojectable::NotConserved { .. } => Self::NotConserved,
             _ => Self::Unrepresentable,
         }
     }
@@ -295,6 +327,7 @@ fn try_conversation(
     let mut messages = vec![message("user", student_turn, false)];
     let mut actions = Vec::new();
     let mut users = 0usize;
+    let (mut source_calls, mut source_results) = (0usize, 0usize);
     let last_agent = trajectory
         .steps
         .iter()
@@ -337,6 +370,16 @@ fn try_conversation(
                 if text.is_empty() && calls.is_empty() {
                     continue;
                 }
+                let mut in_step: HashSet<&String> = HashSet::new();
+                if !calls
+                    .iter()
+                    .filter_map(|c| c.id.as_ref())
+                    .all(|id| in_step.insert(id))
+                {
+                    return Err(Unprojectable::DuplicateCallId { step: step.step_id });
+                }
+                source_calls += calls.len();
+                source_results += step.observation.iter().flat_map(|o| &o.results).count();
                 if serialise_calls && one_run_step && calls.len() > 1 {
                     serialise_run_step(step, &text, calls, &mut messages, &mut actions)?;
                     continue;
@@ -344,7 +387,7 @@ fn try_conversation(
                 let is_action = !calls.is_empty() || Some(position) == last_agent;
                 let ids: Vec<String> = calls.iter().filter_map(|c| c.id.clone()).collect();
                 let mut assistant = message("assistant", &text, false);
-                assistant.tool_calls = calls;
+                assistant.tool_calls = calls.into_iter().map(|c| scoped(step, c)).collect();
                 if is_action {
                     actions.push(Action {
                         index: messages.len(),
@@ -366,17 +409,40 @@ fn try_conversation(
                         None => String::new(),
                     };
                     let mut tool = message("tool", &content, false);
-                    tool.tool_call_id = Some(call.clone());
+                    tool.tool_call_id = Some(scoped_id(step, call));
                     messages.push(tool);
                 }
             }
         }
+    }
+    let calls = messages.iter().map(|m| m.tool_calls.len()).sum();
+    let results = messages.iter().filter(|m| m.role == "tool").count();
+    if (calls, results) != (source_calls, source_results) {
+        return Err(Unprojectable::NotConserved {
+            calls,
+            results,
+            source_calls,
+            source_results,
+        });
     }
     Ok(Conversation {
         messages,
         actions,
         tools,
     })
+}
+
+/// A call id as the record names it: scoped to its step. A model numbers the
+/// calls of each response from zero, so ids repeat across the steps of one
+/// trajectory; results are paired to calls within their step, and the record
+/// must name every call uniquely (brain refuses a conversation that does not).
+fn scoped_id(step: &TraceStep, id: &str) -> String {
+    format!("s{}-{id}", step.step_id)
+}
+
+fn scoped(step: &TraceStep, mut call: WireToolCall) -> WireToolCall {
+    call.id = call.id.as_deref().map(|id| scoped_id(step, id));
+    call
 }
 
 /// Appends the turns of a run exported as one agent step: each call as an
@@ -410,7 +476,7 @@ fn serialise_run_step(
     for call in calls {
         let id = call.id.clone();
         let mut assistant = message("assistant", "", false);
-        assistant.tool_calls = vec![call];
+        assistant.tool_calls = vec![scoped(step, call)];
         action(messages, assistant);
         for result in step
             .observation
@@ -423,7 +489,7 @@ fn serialise_run_step(
                 None => String::new(),
             };
             let mut tool = message("tool", &content, false);
-            tool.tool_call_id = id.clone();
+            tool.tool_call_id = id.as_deref().map(|id| scoped_id(step, id));
             messages.push(tool);
         }
     }

@@ -509,7 +509,9 @@ fn write_part(
     split: Option<&Digest>,
 ) -> Result<Dataset, ViewError> {
     if projection.records.is_empty() {
-        return Err(ViewError::Empty);
+        return Err(ViewError::Empty {
+            excluded: "nothing was projected".into(),
+        });
     }
     let mut text = String::new();
     for r in &projection.records {

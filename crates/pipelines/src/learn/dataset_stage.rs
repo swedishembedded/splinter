@@ -124,7 +124,7 @@ pub(super) fn dataset_stage(
     };
     let built = match build_with(ctx, &request, passages.as_ref()) {
         Ok(built) => built,
-        Err(OrchestratorError::View(splinter_data::ViewError::Empty)) => {
+        Err(OrchestratorError::View(splinter_data::ViewError::Empty { .. })) => {
             return Ok(StageEnd::halt(
                 "no experience passed verification, so there is nothing to train on",
             ));

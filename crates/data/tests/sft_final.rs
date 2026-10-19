@@ -208,7 +208,7 @@ fn the_dataset_is_generic_messages_v2_and_names_its_digest() {
     empty.records.clear();
     assert!(matches!(
         write_dataset(&dir.join("empty.jsonl"), &empty, &Unchecked),
-        Err(ViewError::Empty)
+        Err(ViewError::Empty { .. })
     ));
     assert!(!dir.join("empty.jsonl").exists());
     std::fs::remove_dir_all(&dir).unwrap();

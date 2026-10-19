@@ -76,6 +76,23 @@ fn a_record_with_tools_passes_the_dataset_check() {
         .expect("a chat record with tools is trainable input");
 }
 
+/// The check a dataset crosses before it is stored refuses a record in which
+/// one tool call id names two calls (every call would be given every result
+/// of the run), naming the line and the id, whatever produced the file.
+#[test]
+fn a_record_that_names_two_calls_alike_is_refused_by_the_dataset_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let repeated = TOOL_RECORD.replace(
+        r#"{"role":"tool","tool_call_id":"c1","content":"hello","train":false},"#,
+        r#"{"role":"tool","tool_call_id":"c1","content":"hello","train":false},{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"read","arguments":"{}"}}],"train":true},{"role":"tool","tool_call_id":"c1","content":"again","train":false},"#,
+    );
+    let path = write(dir.path(), "dup.jsonl", &[plain_record("ok"), repeated]);
+    let err = BrainDatasetCheck
+        .check(Format::GenericMessagesV2, &path, 2)
+        .expect_err("a repeated call id must not be stored");
+    assert!(err.contains(":2:") && err.contains("c1"), "{err}");
+}
+
 /// A record over the cap is named by its file, line and metadata origin with
 /// its length; records within the cap are not reported.
 #[test]

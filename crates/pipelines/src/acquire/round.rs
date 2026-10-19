@@ -240,7 +240,7 @@ impl Acquisition<'_> {
             },
         ) {
             Ok(built) => built,
-            Err(OrchestratorError::View(splinter_data::ViewError::Empty)) => {
+            Err(OrchestratorError::View(splinter_data::ViewError::Empty { .. })) => {
                 skip(
                     &mut report,
                     "no verified answer could be made a training record",

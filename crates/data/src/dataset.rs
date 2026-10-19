@@ -249,7 +249,13 @@ pub fn write_dataset(
     let objective = projection.objective;
     let format = objective.line_format();
     if projection.records.is_empty() {
-        return Err(ViewError::Empty);
+        let excluded = projection
+            .excluded
+            .iter()
+            .map(|(reason, n)| format!("{reason:?}: {n}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(ViewError::Empty { excluded });
     }
     let mut text = String::new();
     for (index, record) in projection.records.iter().enumerate() {

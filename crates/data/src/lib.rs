@@ -352,6 +352,13 @@ pub enum Exclusion {
     /// A tool call whose arguments the model sent as text that is not
     /// JSON; the trajectory keeps `{}`, which is not what the model said.
     UnparsedArguments,
+    /// Two tool calls of one trajectory share an id, so results cannot be
+    /// paired to their calls: every call would receive every result, with
+    /// duplicated, reordered and future results in its context.
+    DuplicateCallId,
+    /// The projection did not keep every call and result of its source: a
+    /// defect of the projection, never a property of the data.
+    NotConserved,
     /// A record longer than the training block it was projected for.
     OverBlock,
     /// An episode in a workspace, which the policy never answers
@@ -691,8 +698,11 @@ pub enum ViewError {
     UnknownDataset(DatasetId),
     /// There are no records to write; a dataset that trains on nothing is
     /// a producer bug, not a dataset.
-    #[error("no records to write")]
-    Empty,
+    #[error("no records to write (left out: {excluded})")]
+    Empty {
+        /// What the projection left out and why, as `reason: count` pairs.
+        excluded: String,
+    },
     /// A record does not have the shape its projection's objective needs.
     #[error("record {index} is a {shape} record, which does not serve objective {objective:?}")]
     Shape {

@@ -30,6 +30,17 @@ chosen and the rejected answer), each checked by brain's own parser.
 Objectives brain cannot train (contrastive, reward, raw text) need
 `--export-only`.
 
+A trajectory is projected only when its source survives the projection whole.
+Results are paired to calls by id within their step; a step whose calls share
+an id is left out and counted under `duplicate_call_id` in the manifest's
+`excluded` map. Ids repeat across steps (a model numbers each response's calls
+from zero), so a record names its calls `s<step>-<id>`, unique in the
+conversation. The projection must keep every call and result of the steps it
+renders, else the trajectory is left out as `not_conserved`. Brain's chat
+parser then checks every record, with the same pairing rule, before a dataset
+is stored, so a dataset with a repeated call id, a call answered twice or a
+result before its call cannot be stored.
+
 ## Manifest
 
 Every dataset is stored under the state root by content address, beside a manifest that

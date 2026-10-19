@@ -502,7 +502,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
         },
     ) {
         Ok(built) => built,
-        Err(OrchestratorError::View(splinter_data::ViewError::Empty)) => {
+        Err(OrchestratorError::View(splinter_data::ViewError::Empty { .. })) => {
             return Ok(StageEnd::halt(
                 "no attempt passed verification untouched by the exposure audit, so there is \
                  nothing to train on",

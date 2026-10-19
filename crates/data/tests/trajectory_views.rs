@@ -99,7 +99,7 @@ fn sft_step_supervises_each_action_in_the_context_the_solver_had() {
     let [tool_call] = &messages[1].tool_calls[..] else {
         panic!("one call, got {:?}", messages[1].tool_calls)
     };
-    assert_eq!(tool_call.id.as_deref(), Some("c1"));
+    assert_eq!(tool_call.id.as_deref(), Some("s2-c1"));
     assert_eq!(tool_call.function.name, "run_code");
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments).unwrap(),
@@ -111,7 +111,7 @@ fn sft_step_supervises_each_action_in_the_context_the_solver_had() {
     let messages = chat(second);
     let roles: Vec<&str> = messages.iter().map(|m| m.role.as_str()).collect();
     assert_eq!(roles, ["user", "assistant", "tool", "assistant"]);
-    assert_eq!(messages[2].tool_call_id.as_deref(), Some("c1"));
+    assert_eq!(messages[2].tool_call_id.as_deref(), Some("s2-c1"));
     assert_eq!(messages[2].content, "2");
     assert_eq!(messages[3].content, "The answer is 2");
     assert_eq!(supervised(second), [3], "only the action is supervised");

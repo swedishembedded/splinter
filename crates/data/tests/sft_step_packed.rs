@@ -130,7 +130,11 @@ fn a_step_labelled_bad_stays_unsupervised_in_the_packed_record() {
     assert_eq!(targets(&packed_records), targets(&messages(&unpacked)));
     let bad = record
         .iter()
-        .find(|m| m.tool_calls.iter().any(|c| c.id.as_deref() == Some("c2")))
+        .find(|m| {
+            m.tool_calls
+                .iter()
+                .any(|c| c.id.as_deref() == Some("s3-c2"))
+        })
         .unwrap();
     assert!(!bad.train, "the bad action is context, not a target");
     assert_eq!(packed.count(Exclusion::BadStep), 1);

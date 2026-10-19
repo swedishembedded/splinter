@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-10-19
 
 ### Fixed
+- `dataset build` leaves out a trajectory with a step in which two tool calls share an id (counted as `duplicate_call_id`), names the calls of a record `s<step>-<id>` so ids are unique across steps, and one whose projection does not keep every call and result of its source (`not_conserved`). A run recorded with every call named `call_0` used to give every call every result of the run in `--serialise-calls`, and 147 of 231 examples of the CE4 dataset were built that way. A dataset is also refused at storing when brain's record check (now: unique call ids, each result answering one earlier unanswered call) fails
 - A solve over a remote model no longer lets one slow episode hold the slots of the episodes behind it: `fan_out` kept a finished item's slot until every earlier item had finished, so one runaway episode collapsed the concurrency to one; the next item now starts as soon as any item ends (results still come back in item order).
 - A training run whose data leaves no whole group to monitor on trains unmonitored, as its record says, instead of failing with "selecting on the monitoring loss needs eval_every > 0": an unmonitored run carries no patience.
 
