@@ -60,6 +60,43 @@ fn a_dialogue_and_a_tool_call_session_are_projectable() {
 }
 
 #[test]
+fn a_trajectory_the_capture_marks_incomplete_is_refused_whatever_it_ends_on() {
+    let mut cut_short = trajectory(vec![
+        user(1, "Restart the service."),
+        call(
+            2,
+            "c1",
+            "shell",
+            json!({"cmd": "systemctl restart svc"}),
+            "ok",
+        ),
+        say(3, "Restarted."),
+    ]);
+    assert_eq!(projection_refusal(&cut_short), None, "whole, it projects");
+    cut_short.extra = Some(json!({ atif::persist::CAPTURE_STATUS_KEY: "incomplete" }));
+    assert_eq!(
+        projection_refusal(&cut_short),
+        Some(Unprojectable::Incomplete)
+    );
+
+    // A journal that was closed says so, and projects.
+    cut_short.extra = Some(json!({ atif::persist::CAPTURE_STATUS_KEY: "complete" }));
+    assert_eq!(projection_refusal(&cut_short), None);
+
+    let mut dialogue = trajectory(vec![
+        user(1, "Port?"),
+        say(2, "80."),
+        user(3, "No, 90."),
+        say(4, "Ok."),
+    ]);
+    dialogue.extra = Some(json!({ atif::persist::CAPTURE_STATUS_KEY: "incomplete" }));
+    assert_eq!(
+        projection_refusal(&dialogue),
+        Some(Unprojectable::Incomplete)
+    );
+}
+
+#[test]
 fn a_second_user_step_beside_a_tool_call_is_refused_naming_the_step() {
     let mixed = trajectory(vec![
         user(1, "Restart the service."),

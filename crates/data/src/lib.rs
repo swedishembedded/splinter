@@ -343,6 +343,9 @@ pub enum Exclusion {
     /// record does not carry: training on it would teach the template's
     /// reasoning block as answer text.
     ReasoningInText,
+    /// The capture marks the run incomplete (a journal never closed): a
+    /// prefix of a run, never a success.
+    Incomplete,
     /// The agent's context was compacted during the run, so the turns
     /// before the compaction are not what it saw when it acted after it.
     Compacted,

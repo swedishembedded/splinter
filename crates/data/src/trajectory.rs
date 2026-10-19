@@ -43,7 +43,9 @@ use atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
 use splinter_core::experience::{Environment, Experience};
 
-use crate::markers::{chat_tools, has_unparsed_arguments, is_compaction, is_harness_prompt};
+use crate::markers::{
+    chat_tools, has_unparsed_arguments, is_compaction, is_harness_prompt, is_incomplete,
+};
 use crate::render::message;
 use crate::{Exclusion, RecordBody};
 
@@ -51,6 +53,11 @@ use crate::{Exclusion, RecordBody};
 /// variant names the ATIF `step_id` that decided it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Unprojectable {
+    /// The capture says the run did not end cleanly (see
+    /// `atif::persist::CAPTURE_STATUS_KEY`): a prefix of a run is not a record
+    /// of one, and its steps are not a success whatever they end on.
+    #[error("the trajectory is marked incomplete: the run it records did not finish")]
+    Incomplete,
     /// The step holds image content, which a chat record cannot carry.
     #[error("step {step} holds image content, which a training record cannot represent")]
     Image {
@@ -148,6 +155,7 @@ impl From<Unprojectable> for Exclusion {
     fn from(refusal: Unprojectable) -> Self {
         match refusal {
             Unprojectable::ReasoningInText { .. } => Self::ReasoningInText,
+            Unprojectable::Incomplete => Self::Incomplete,
             Unprojectable::Compacted { .. } => Self::Compacted,
             Unprojectable::UnparsedArguments { .. } => Self::UnparsedArguments,
             _ => Self::Unrepresentable,
@@ -256,6 +264,9 @@ fn try_conversation(
     student_turn: &str,
     setting: Setting,
 ) -> Result<Conversation, Unprojectable> {
+    if is_incomplete(trajectory) {
+        return Err(Unprojectable::Incomplete);
+    }
     let tools = chat_tools(trajectory)?;
     let mut messages = vec![message("user", student_turn, false)];
     let mut actions = Vec::new();
@@ -385,6 +396,9 @@ fn try_dialogue(
     student_turn: &str,
     supervise: &dyn Fn(u64, &str) -> bool,
 ) -> Result<Vec<WireMessage>, Unprojectable> {
+    if is_incomplete(trajectory) {
+        return Err(Unprojectable::Incomplete);
+    }
     let mut messages = Vec::new();
     let mut users = 0usize;
     let mut last_step = 0;

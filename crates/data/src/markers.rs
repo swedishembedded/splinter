@@ -46,6 +46,19 @@ pub(crate) fn is_compaction(step: &TraceStep) -> bool {
             })
 }
 
+/// Whether the capture says the run did not end cleanly: a journal that was
+/// never closed (a crash, a kill, a run still going) reads back with
+/// `extra.capture_status` of `incomplete`. What such a trajectory holds is a
+/// prefix of a run, and a record of how it ended it cannot be.
+pub(crate) fn is_incomplete(trajectory: &Trajectory) -> bool {
+    trajectory
+        .extra
+        .as_ref()
+        .and_then(|extra| extra.get(atif::persist::CAPTURE_STATUS_KEY))
+        .and_then(Value::as_str)
+        == Some("incomplete")
+}
+
 /// Whether `step` is a system step that is the harness's prompt, not a
 /// marker of something done to the context.
 pub(crate) fn is_harness_prompt(step: &TraceStep) -> bool {
