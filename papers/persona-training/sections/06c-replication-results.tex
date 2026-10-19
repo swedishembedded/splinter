@@ -1,0 +1,63 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schr\"oder <info@swedishembedded.com>
+
+% Read only when the study's report has been built into study_macros.tex and
+% the study_*.tex tables (scripts/study_tables.py); every number is theirs.
+\input{study_macros}
+
+\subsection{Results}\label{sec:replication-results}
+
+\paragraph{Primary comparison.} The adapter was more accurate than retrieval of six
+paragraphs for \StudyPrimaryImproved\ of \StudyPrimaryMeasured\ authors (sign test over
+authors $p = \StudyPrimaryP$, Holm-corrected $p = \StudyPrimaryPHolm$); its mean paired gain
+was \StudyPrimaryMeanGain\ points. Of the \StudyConfirmatory\ confirmatory comparisons,
+\StudyConfirmed\ were confirmed at $\alpha = 0.05$ after Holm's correction
+(\cref{tab:study-comparisons}). Each author's gain, with its interval clustered by item, is
+in \cref{tab:study-authors}.
+
+\begin{table}[t]
+\centering\small
+\input{study_comparisons}
+\caption{Every comparison the protocol names, over the \StudyAuthors\ authors. An author is
+better when its paired gain is positive. The confirmatory family comes first, with Holm's
+correction; the exploratory comparisons below it are uncorrected.}
+\label{tab:study-comparisons}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\input{study_authors}
+\caption{Each author's accuracy under retrieval and the adapter (mean over its
+\StudyTrainingSeeds\ training seeds), on \StudyItemsPerAuthor\ items, with the paired gain
+and its 95\% interval clustered by item, the items the adapter alone answered right and
+wrong, and the exact sign test over items.}
+\label{tab:study-authors}
+\end{table}
+
+\paragraph{All arms.} \Cref{tab:study-arms} gives each arm's accuracy averaged over the
+authors, with the lowest and highest author. \Cref{tab:study-spread} shows how much an
+author's adapter varies with the training seed, and \cref{tab:study-corpora} what each
+corpus held: \StudyArticlesKept\ essays and \StudyDecisionsKept\ decisions in all.
+
+\begin{table}[t]
+\centering\small
+\input{study_arms}
+\caption{Accuracy of every arm, averaged over the authors, with the lowest and highest
+author.}
+\label{tab:study-arms}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\input{study_spread}
+\caption{The adapter's accuracy across its training seeds, per author.}
+\label{tab:study-spread}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\input{study_corpora}
+\caption{Each author's corpus: essays planned and kept, cases read, decisions kept and the
+requests the writer, reader and miner made.}
+\label{tab:study-corpora}
+\end{table}
