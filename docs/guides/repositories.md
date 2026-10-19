@@ -86,10 +86,14 @@ children too. A command, a code call of `run_code` included, runs in a private u
 namespace with a `/proc` of its own, so no other process of the host is visible to it
 (Landlock alone already refuses it another process's environment); a kernel that cannot
 make one refuses the command. The exposure
-audit reports a command's mention of a path outside the tree by what came of it:
-`outside_workspace` (something came back), `outside_workspace_denied` (the sandbox
-refused) and `outside_workspace_absent` (no such path, or nothing returned); all
-three still fail the audit, and the stage counts them by kind.
+audit reads a command's mention of a path outside the tree by what that call's own
+result shows (the shell's `[exit code N]` line is not a result, and the other calls of
+the same step are not consulted): `outside_workspace` (something came back) fails the
+audit; `outside_workspace_denied` (the sandbox refused) and `outside_workspace_absent`
+(no such path, or nothing returned) are recorded as `outside_probes` in the evidence and
+do not. A call that names a hidden path and only got a refusal or "no such file" is
+recorded the same way (`hidden_path_absent`); a hidden path in what a tool returned,
+hidden content and the state root still fail it.
 
 ## Generations of a coding policy
 

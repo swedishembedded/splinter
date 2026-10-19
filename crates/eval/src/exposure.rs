@@ -14,7 +14,9 @@
 //! reads what the solver was shown and what it sent to its tools, and fails
 //! the experience when
 //!
-//! * a tool call or a tool output **names a hidden path**;
+//! * a tool call or a tool output **names a hidden path** (a call whose own
+//!   result is only a refusal or "no such file" read nothing and is recorded
+//!   as a probe, `hidden_path_absent`, see below);
 //! * a tool output (or any other text shown to the solver) contains a
 //!   **shingle** of hidden content: a run of [`SHINGLE_TOKENS`] consecutive
 //!   tokens that also occurs in hidden material and in no text the solver
@@ -22,12 +24,15 @@
 //! * a tool call or output holds one of the **forbidden strings**, such as
 //!   the path of the state root;
 //! * for a workspace task, a tool call names an **absolute path outside the
-//!   episode's tree** ([`crate::exposure_paths`]), reported as
-//!   `outside_workspace` where the step's output shows something came back,
-//!   `outside_workspace_denied` where the sandbox refused it and
-//!   `outside_workspace_absent` where the path did not exist or nothing
-//!   came back. All three still fail the audit; the evidence keeps them
-//!   apart so a caller can count them by class.
+//!   episode's tree** ([`crate::exposure_paths`]) and that call's own output
+//!   shows something came back (`outside_workspace`).
+//!
+//! A call that named such a path and was refused by the sandbox
+//! (`outside_workspace_denied`) or found nothing there
+//! (`outside_workspace_absent`) is a recorded **probe**, not exposure: it is
+//! listed under `outside_probes` in the evidence (of an abstention as well as
+//! of a fail) so a caller can count and filter by it, and it does not fail
+//! the audit.
 //!
 //! A clean trajectory is an **abstention**, not a pass: not having seen the
 //! material does not make an answer right. The audit is a
@@ -45,8 +50,8 @@ use serde_json::json;
 use splinter_core::annotation::{Producer, Strength};
 use splinter_core::experience::{Experience, Task};
 
-use crate::exposure_paths::outside_workspace;
 pub use crate::exposure_paths::WORKSPACE_TREE_KEY;
+use crate::exposure_paths::{outputs_by_call, outside_workspace, returned_only_a_failure};
 use crate::verifiers::{Finding, Verifier, VerifyError};
 
 /// The producer name an exposure audit's annotations carry.
@@ -105,6 +110,8 @@ struct Seen {
     step: u64,
     place: Place,
     text: String,
+    /// For a tool call, the output that call itself returned.
+    result: Option<String>,
 }
 
 /// What a trajectory shows the solver or sends to its tools: each agent
@@ -113,11 +120,13 @@ struct Seen {
 fn seen(exp: &Experience) -> Vec<Seen> {
     let mut texts = Vec::new();
     for step in &exp.trajectory.steps {
-        for call in step.tool_calls.iter().flatten() {
+        let outputs = outputs_by_call(step);
+        for (call, output) in step.tool_calls.iter().flatten().zip(outputs) {
             texts.push(Seen {
                 step: step.step_id,
                 place: Place::ToolCall,
                 text: format!("{} {}", call.function_name, call.arguments),
+                result: Some(output),
             });
         }
         for result in step.observation.iter().flat_map(|o| &o.results) {
@@ -126,6 +135,7 @@ fn seen(exp: &Experience) -> Vec<Seen> {
                     step: step.step_id,
                     place: Place::ToolOutput,
                     text: text_of(content),
+                    result: None,
                 });
             }
         }
@@ -141,6 +151,7 @@ fn shown(step: &TraceStep) -> Seen {
         step: step.step_id,
         place: Place::Shown,
         text: text_of(&step.message),
+        result: None,
     }
 }
 
@@ -240,6 +251,7 @@ pub fn audit_exposure(task: &Task, exp: &Experience, hidden: &HiddenMaterial) ->
         .map(|text| Secret::of(text, &public))
         .collect();
     let mut matches = Vec::new();
+    let mut probes = Vec::new();
     for text in &texts {
         let named = |list: &[String], kind: &str, out: &mut Vec<serde_json::Value>| {
             for (item, name) in list.iter().enumerate() {
@@ -248,7 +260,15 @@ pub fn audit_exposure(task: &Task, exp: &Experience, hidden: &HiddenMaterial) ->
                 }
             }
         };
-        named(&hidden.paths, "hidden_path", &mut matches);
+        // A call that named a hidden path and whose own result is only a
+        // refusal or "no such file" read nothing: a recorded probe, not exposure.
+        let failed_call = text.place == Place::ToolCall
+            && text.result.as_deref().is_some_and(returned_only_a_failure);
+        if failed_call {
+            named(&hidden.paths, "hidden_path_absent", &mut probes);
+        } else {
+            named(&hidden.paths, "hidden_path", &mut matches);
+        }
         named(&hidden.forbidden, "forbidden_string", &mut matches);
         // A call may quote what it was never shown only by guessing; the
         // shingle test is about what the solver was given to read.
@@ -270,21 +290,30 @@ pub fn audit_exposure(task: &Task, exp: &Experience, hidden: &HiddenMaterial) ->
             .and_then(|extra| extra.get(WORKSPACE_TREE_KEY))
             .and_then(|tree| tree.as_str());
         for (step, count, reach) in outside_workspace(&exp.trajectory.steps, recorded) {
-            matches.push(json!({
+            let hit = json!({
                 "step": step, "in": Place::ToolCall.label(),
                 "kind": reach.kind(), "item": count,
-            }));
+            });
+            if reach.exposes() {
+                matches.push(hit);
+            } else {
+                probes.push(hit);
+            }
         }
     }
     if matches.is_empty() {
         return Finding::abstain(
             "no privileged material appears in the trajectory",
-            json!({ "texts_audited": texts.len() }),
+            json!({ "texts_audited": texts.len(), "outside_probes": probes }),
         );
     }
     Finding::decided(
         false,
-        json!({ "exposed": matches, "texts_audited": texts.len() }),
+        json!({
+            "exposed": matches,
+            "outside_probes": probes,
+            "texts_audited": texts.len(),
+        }),
     )
 }
 

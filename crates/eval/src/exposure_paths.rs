@@ -17,11 +17,14 @@
 //! system's own directories ([`SYSTEM_PREFIXES`]) are not a place to look
 //! for an answer and are never counted.
 //!
-//! Every hit is classed by what the step's output shows ([`Reach`]): the
+//! Every hit is classed by what its own call's output shows ([`Reach`]): the
 //! sandbox denied the access, the path did not exist or nothing came back, or
-//! something was returned. The classes are reported separately and none is
-//! dropped; whether a denied attempt still excludes a trajectory is the
-//! caller's rule, not this reader's.
+//! something was returned. A step that made several calls at once is read call
+//! by call (a result belongs to the call at its position; only a step whose
+//! results do not pair with its calls is read as a whole), and the shell
+//! tool's own `[exit code N]` line is not a result. The classes are reported
+//! separately and none is dropped; whether a denied attempt still excludes a
+//! trajectory is the caller's rule, not this reader's.
 
 use atif::TraceStep;
 use serde_json::Value;
@@ -132,6 +135,13 @@ pub(crate) enum Reach {
 }
 
 impl Reach {
+    /// Whether a hit of this class is exposure: only an access that returned
+    /// something may have read material the solver was not given. A refused
+    /// or empty probe is recorded and does not fail the audit.
+    pub(crate) fn exposes(self) -> bool {
+        self == Self::Reached
+    }
+
     /// The kind a hit of this class is reported under.
     pub(crate) fn kind(self) -> &'static str {
         match self {
@@ -154,7 +164,11 @@ const ABSENCES: [&str; 2] = ["no such file or directory", "does not exist"];
 fn reach_of(output: &str) -> Reach {
     let mut refused = false;
     let mut absent = false;
-    for line in output.lines().map(str::trim).filter(|l| !l.is_empty()) {
+    for line in output
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !is_exit_code_line(l))
+    {
         let lower = line.to_ascii_lowercase();
         if DENIALS.iter().any(|d| lower.contains(d)) {
             refused = true;
@@ -170,72 +184,95 @@ fn reach_of(output: &str) -> Reach {
     }
 }
 
-/// The text a step's observation holds.
-fn output_of(step: &TraceStep) -> String {
-    step.observation
-        .iter()
-        .flat_map(|o| &o.results)
-        .filter_map(|r| r.content.as_ref())
-        .map(|c| match c {
-            atif::MessageBody::Text(t) => t.clone(),
-            atif::MessageBody::Segments(segments) => segments
-                .iter()
-                .filter_map(|s| match s {
-                    atif::ContentSegment::Text { text } => Some(text.as_str()),
-                    atif::ContentSegment::Image { .. } => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+/// The text of one observation result.
+fn text_of(result: &atif::ObservationEntry) -> String {
+    match result.content.as_ref() {
+        None => String::new(),
+        Some(atif::MessageBody::Text(t)) => t.clone(),
+        Some(atif::MessageBody::Segments(segments)) => segments
+            .iter()
+            .filter_map(|s| match s {
+                atif::ContentSegment::Text { text } => Some(text.as_str()),
+                atif::ContentSegment::Image { .. } => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    }
 }
 
-/// The steps, with the count of paths in each and what came of them, whose
-/// tool calls name an absolute path outside `own_tree` and outside the
-/// system.
+/// Whether `output` says the access failed (refused, or no such path) and
+/// returned nothing else: a call with such a result read nothing.
+pub(crate) fn returned_only_a_failure(output: &str) -> bool {
+    output
+        .lines()
+        .any(|l| !l.trim().is_empty() && !is_exit_code_line(l.trim()))
+        && reach_of(output) != Reach::Reached
+}
+
+/// The shell tool's own trailer, `[exit code N]`: it says how the command
+/// ended, it is not something the command returned.
+fn is_exit_code_line(line: &str) -> bool {
+    line.strip_prefix("[exit code ")
+        .and_then(|rest| rest.strip_suffix(']'))
+        .is_some_and(|code| {
+            let digits = code.strip_prefix('-').unwrap_or(code);
+            !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
+        })
+}
+
+/// The output each call of `step` returned, by position, when the step's
+/// results pair with its calls one to one; else the whole step's output for
+/// every call, which is the most that can be said of it.
+pub(crate) fn outputs_by_call(step: &TraceStep) -> Vec<String> {
+    let calls = step.tool_calls.as_deref().map_or(0, <[_]>::len);
+    let results: Vec<String> = step
+        .observation
+        .iter()
+        .flat_map(|o| &o.results)
+        .map(text_of)
+        .collect();
+    if results.len() == calls {
+        results
+    } else {
+        vec![results.join("\n"); calls]
+    }
+}
+
+/// The calls, with the count of paths in each and what came of them (what
+/// that call's own output shows), that name an absolute path outside
+/// `own_tree` and outside the system, as `(step, outside paths, reach)`.
 pub(crate) fn outside_workspace(
     steps: &[TraceStep],
     recorded_tree: Option<&str>,
 ) -> Vec<(u64, usize, Reach)> {
-    let named: Vec<(u64, Vec<&str>)> = steps
-        .iter()
-        .map(|step| {
-            let paths = step
-                .tool_calls
-                .iter()
-                .flatten()
-                .flat_map(|call| call_texts(&call.arguments))
-                .flat_map(absolute_paths)
-                .collect();
-            (step.step_id, paths)
-        })
-        .collect();
     let own = recorded_tree.map(str::to_string).or_else(|| {
-        named
+        steps
             .iter()
-            .flat_map(|(_, paths)| paths)
-            .find_map(|p| tree_of(p))
+            .flat_map(|step| step.tool_calls.iter().flatten())
+            .flat_map(|call| call_texts(&call.arguments))
+            .flat_map(absolute_paths)
+            .find_map(tree_of)
             .map(str::to_string)
     });
-    let outputs: std::collections::HashMap<u64, Reach> = steps
-        .iter()
-        .map(|step| (step.step_id, reach_of(&output_of(step))))
-        .collect();
-    named
-        .into_iter()
-        .filter_map(|(step, paths)| {
-            let outside = paths
-                .iter()
-                .filter(|p| !is_system(p))
-                .filter(|p| {
-                    !own.as_deref().is_some_and(|tree| {
-                        p.strip_prefix(tree)
-                            .is_some_and(|r| r.is_empty() || r.starts_with('/'))
-                    })
-                })
-                .count();
-            (outside > 0).then(|| (step, outside, outputs[&step]))
+    let inside_own = |path: &str| {
+        own.as_deref().is_some_and(|tree| {
+            path.strip_prefix(tree)
+                .is_some_and(|r| r.is_empty() || r.starts_with('/'))
         })
-        .collect()
+    };
+    let mut hits = Vec::new();
+    for step in steps {
+        let outputs = outputs_by_call(step);
+        for (call, output) in step.tool_calls.iter().flatten().zip(&outputs) {
+            let outside = call_texts(&call.arguments)
+                .into_iter()
+                .flat_map(absolute_paths)
+                .filter(|p| !is_system(p) && !inside_own(p))
+                .count();
+            if outside > 0 {
+                hits.push((step.step_id, outside, reach_of(output)));
+            }
+        }
+    }
+    hits
 }

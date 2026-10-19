@@ -744,6 +744,37 @@ set is not run if they do not. The CE7 development pass already run on sven 319a
 verdicts as CE7 teacher results and is not training data. The training dataset is built by the splinter
 revision named for it in its run record (A5.3).
 
+### Amendment 13, 2026-10-19, 20:46 CEST: the exposure rule judges each probe by its own result
+
+Made before any dataset is built with the changed rule and before any CE4 or CE7 training run. It changes
+how the `outside_workspace` rule of A3.1 classifies a tool call and which classes fail the audit; it changes
+no verifier, no task, no environment digest and no parameter of the gates.
+
+**A13.1 Defect.** A verifier audit of the CE1 pass-1 records re-computed every recorded exposure hit. The rule
+classed an outside-path call by the whole step's output: a step of several parallel calls pooled all their
+results, and the shell tool's own `[exit code N]` trailer counted as a result. A `cd /app` that failed with
+"No such file or directory" was therefore "reached" whenever a sibling call in its step returned text, or
+whenever the command exited non-zero. A3.1 and the note of A4.6 also made every class (reached, denied, absent) fail
+the audit.
+
+**A13.2 The rule from now on.** (a) A call is classed by its own result (the result at its position in the step;
+a step whose results do not pair one to one with its calls is read as a whole), and the `[exit code N]` line is not
+a result. (b) An outside-path call whose own result is only a refusal, a missing path or nothing is a recorded
+probe (`outside_probes` in the audit's evidence, kinds `outside_workspace_denied` and `outside_workspace_absent`);
+it does not fail the audit and the attempt is not excluded for it. An outside-path call that returned anything else
+(`outside_workspace`) fails the audit and the attempt is excluded from training as before. (c) A call that names a
+hidden path and whose own result is only a refusal or "no such file" read nothing: it is a recorded probe
+(`hidden_path_absent`) and does not fail the audit. (d) A hidden path named in what a tool returned or in a message shown to the
+solver, a `content_shingle` of hidden material, and a forbidden string (the state root) remain hard exclusions.
+
+**A13.3 Scope and reporting.** The change applies to every dataset and every verification run from this amendment on.
+The CE1 pass-1 yield numbers already published were computed under the old rule and stand as results of that rule:
+152 of 370 attempts pass the hidden checks, 100 remain after the exposure audit. Re-evaluated under A13.2 from the stored
+trajectories (an independent re-implementation of the rule, `runs/audit/verifier/q4rules.py`; the verified binary is
+not rerun on the stored sets), 129 of the 152 remain; the two numbers are reported side by side wherever the yield is
+quoted, per set, with the classes of A7.4. No stored verdict is rewritten (an experience and its annotations are
+immutable); a re-verification appends new annotations.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on

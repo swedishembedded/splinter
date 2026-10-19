@@ -46,6 +46,13 @@ fn the_task() -> Task {
 
 /// An experience of `task` with one tool call and its output.
 fn run_of(task: &Task, command: &str, output: &str) -> Experience {
+    run_of_parallel(task, &[(command, output)])
+}
+
+/// An experience of `task` whose one agent step made all of `calls` in
+/// parallel, each with the output it returned. Every call has the id `call_0`,
+/// as the recorded trajectories do.
+fn run_of_parallel(task: &Task, calls: &[(&str, &str)]) -> Experience {
     let profile = AgentProfile {
         name: "t".into(),
         version: "1".into(),
@@ -58,12 +65,20 @@ fn run_of(task: &Task, command: &str, output: &str) -> Experience {
         .steps
         .push(TraceStep::new(1, StepOrigin::User, "Fix the bug."));
     let mut act = TraceStep::new(2, StepOrigin::Agent, "Looking.");
-    act.tool_calls = Some(vec![
-        ToolInvocation::new("c1", "shell").with_arguments(json!({ "command": command }))
-    ]);
-    act.observation = Some(StepObservation::single(ObservationEntry::for_call(
-        "c1", output,
-    )));
+    act.tool_calls = Some(
+        calls
+            .iter()
+            .map(|(command, _)| {
+                ToolInvocation::new("call_0", "shell").with_arguments(json!({ "command": command }))
+            })
+            .collect(),
+    );
+    let mut results = calls
+        .iter()
+        .map(|(_, output)| ObservationEntry::for_call("call_0", *output));
+    let mut observation = StepObservation::single(results.next().unwrap());
+    observation.results.extend(results);
+    act.observation = Some(observation);
     trajectory.steps.push(act);
     Experience::new(
         task.clone(),
@@ -133,7 +148,7 @@ fn a_clean_trajectory_abstains_and_visible_boilerplate_is_not_exposure() {
 
 fn outside(command: &str) -> bool {
     let task = the_task();
-    let finding = audit_exposure(&task, &run_of(&task, command, ""), &hidden());
+    let finding = audit_exposure(&task, &run_of(&task, command, "SECRET = 1"), &hidden());
     finding.outcome == Outcome::Fail && finding.evidence.to_string().contains("outside_workspace")
 }
 
@@ -153,7 +168,11 @@ fn a_command_naming_a_path_outside_the_tree_is_exposure_but_the_system_and_the_t
 #[test]
 fn the_recorded_tree_is_the_one_that_counts() {
     let task = the_task();
-    let mut exp = run_of(&task, "cat /work/mine/a.py && cat /work/other/a.py", "");
+    let mut exp = run_of(
+        &task,
+        "cat /work/mine/a.py && cat /work/other/a.py",
+        "x = 1",
+    );
     exp.trajectory.agent.extra = Some(json!({ "workspace_tree": "/work/mine" }));
     let finding = audit_exposure(&task, &exp, &hidden());
     assert_eq!(finding.outcome, Outcome::Fail);
@@ -171,6 +190,7 @@ fn kinds_of(command: &str, output: &str) -> Vec<String> {
     let finding = audit_exposure(&task, &run_of(&task, command, output), &hidden());
     finding.evidence["exposed"]
         .as_array()
+        .or_else(|| finding.evidence["detail"]["outside_probes"].as_array())
         .into_iter()
         .flatten()
         .filter_map(|f| f["kind"].as_str().map(str::to_string))
@@ -209,15 +229,94 @@ fn a_path_outside_the_tree_is_reported_by_what_came_of_it_and_none_is_dropped() 
         ),
         ["outside_workspace"]
     );
-    // Every class still fails the audit.
+    // Only an access that returned something fails the audit; a refused or
+    // empty probe is recorded as a soft flag and the attempt stays clean.
     let task = the_task();
     let denied = run_of(
         &task,
         "ls /srv",
         "ls: cannot open directory '/srv': Permission denied",
     );
+    let finding = audit_exposure(&task, &denied, &hidden());
+    assert_eq!(finding.outcome, Outcome::Abstain);
     assert_eq!(
-        audit_exposure(&task, &denied, &hidden()).outcome,
+        finding.evidence["detail"]["outside_probes"][0]["kind"],
+        "outside_workspace_denied"
+    );
+}
+
+#[test]
+fn the_shells_exit_code_line_is_not_something_that_came_back() {
+    // `cd` into a path that is not there ends the shell tool's output with its
+    // own `[exit code 1]` line; that line is not a result.
+    let task = the_task();
+    let exp = run_of(
+        &task,
+        "cd /nowhere/repos/x && python3 -m unittest",
+        "bash: line 1: cd: /nowhere/repos/x: No such file or directory\n\n[exit code 1]",
+    );
+    let finding = audit_exposure(&task, &exp, &hidden());
+    assert_eq!(finding.outcome, Outcome::Abstain);
+    assert_eq!(
+        finding.evidence["detail"]["outside_probes"][0]["kind"],
+        "outside_workspace_absent"
+    );
+}
+
+#[test]
+fn a_probe_is_judged_by_its_own_result_not_by_its_parallel_siblings() {
+    // One step, two parallel calls: a failed `cd` and a file read that
+    // returned text. The read's output must not make the `cd` look reached.
+    let task = the_task();
+    let exp = run_of_parallel(
+        &task,
+        &[
+            (
+                "cd /app && python3 -m unittest",
+                "bash: line 1: cd: /app: No such file or directory\n\n[exit code 1]",
+            ),
+            ("cat README.md", "L1:# project"),
+        ],
+    );
+    let finding = audit_exposure(&task, &exp, &hidden());
+    assert_eq!(finding.outcome, Outcome::Abstain, "{}", finding.evidence);
+
+    // A sibling that really reached outside still fails the audit.
+    let reached = run_of_parallel(
+        &task,
+        &[
+            ("cd /app && ls", "bash: cd: /app: No such file or directory"),
+            ("cat /srv/x/y.py", "SECRET = 1"),
+        ],
+    );
+    assert_eq!(
+        audit_exposure(&task, &reached, &hidden()).outcome,
+        Outcome::Fail
+    );
+}
+
+#[test]
+fn a_failed_read_of_a_hidden_path_saw_nothing_and_is_only_a_probe() {
+    let task = the_task();
+    let hidden_name = &hidden().paths[0];
+    let command = format!("cat {hidden_name}");
+    let failed = run_of(
+        &task,
+        &command,
+        "cat: tests/test_x.py: No such file or directory\n\n[exit code 1]",
+    );
+    let finding = audit_exposure(&task, &failed, &hidden());
+    assert_eq!(finding.outcome, Outcome::Abstain, "{}", finding.evidence);
+    assert_eq!(
+        finding.evidence["detail"]["outside_probes"][0]["kind"],
+        "hidden_path_absent"
+    );
+
+    // The same call that returned text is exposure, and so is a hidden path
+    // named in what a call returned.
+    let read = run_of(&task, &command, "L1:import unittest");
+    assert_eq!(
+        audit_exposure(&task, &read, &hidden()).outcome,
         Outcome::Fail
     );
 }
