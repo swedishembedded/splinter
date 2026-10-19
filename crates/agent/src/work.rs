@@ -78,8 +78,10 @@ pub const WITHHELD_TOOLS: &[&str] = &[
     "skill",
 ];
 
+mod guard;
 mod watch;
-use watch::{Repeats, Watch};
+use guard::{Armed, GuardSlot, RepetitionGuard};
+use watch::Watch;
 
 /// How often a running worker looks at its caller's cancel token: the
 /// longest a cancel waits to be seen between two events.
@@ -188,6 +190,7 @@ impl WorkReport {
 /// A coding agent working in one directory.
 pub struct Worker {
     agent: Agent,
+    guard: GuardSlot,
     options: WorkOptions,
     memory_snapshot: Option<String>,
 }
@@ -244,9 +247,12 @@ impl Worker {
         options: WorkOptions,
         replacing: &[Arc<dyn Tool>],
     ) -> Result<Self, SolveError> {
+        let guard = GuardSlot::default();
+        let model = RepetitionGuard::wrap(model, guard.clone());
         let agent = engine(workspace, model, &options, replacing, false)?.agent(SOLVER_MODE);
         Ok(Self {
             agent,
+            guard,
             options,
             memory_snapshot: None,
         })
@@ -259,9 +265,12 @@ impl Worker {
         options: WorkOptions,
         state: AgentState,
     ) -> Result<Self, SolveError> {
+        let guard = GuardSlot::default();
+        let model = RepetitionGuard::wrap(model, guard.clone());
         let agent = engine(workspace, model, &options, &[], false)?.resume(state)?;
         Ok(Self {
             agent,
+            guard,
             options,
             memory_snapshot: None,
         })
@@ -283,12 +292,15 @@ impl Worker {
     ) -> Result<Self, SolveError> {
         let scope = knowledge.frozen_scope().await?;
         let memory_snapshot = scope.snapshot_id().map(str::to_owned);
+        let guard = GuardSlot::default();
+        let model = RepetitionGuard::wrap(model, guard.clone());
         let agent = engine(workspace, model, &options, replacing, true)?
             .agent(SOLVER_MODE)
             .with_memory(scope)
             .await?;
         Ok(Self {
             agent,
+            guard,
             options,
             memory_snapshot,
         })
@@ -336,24 +348,26 @@ impl Worker {
             stop,
             external: self.options.solve.cancel.clone(),
             cap: self.options.max_tool_calls,
-            repeat_cap: self.options.max_repeated_results,
-            repeats: Mutex::new(Repeats::default()),
-            repeated: Arc::new(AtomicBool::new(false)),
-            repeated_call: Arc::new(Mutex::new(None)),
             observer: self.options.observer.clone(),
             tool_calls: Arc::new(AtomicU32::new(0)),
             capped: Arc::new(AtomicBool::new(false)),
         };
-        let (tool_calls, capped, repeated, repeated_call) = (
-            watch.tool_calls.clone(),
-            watch.capped.clone(),
-            watch.repeated.clone(),
-            watch.repeated_call.clone(),
-        );
+        let (tool_calls, capped) = (watch.tool_calls.clone(), watch.capped.clone());
+        let repeated = Arc::new(AtomicBool::new(false));
+        let repeated_call = Arc::new(Mutex::new(None));
+        if let Some(bound) = self.options.max_repeated_results {
+            self.guard.arm(Armed {
+                bound,
+                stop: watch.stop.clone(),
+                repeated: repeated.clone(),
+                repeated_call: repeated_call.clone(),
+            });
+        }
         let (done, finished) = oneshot::channel();
         let watcher = tokio::spawn(watch.run(finished));
 
         let outcome = self.agent.send_with(prompt, run).await;
+        self.guard.disarm();
         // The watcher drains what is buffered before it returns, so the
         // observer has seen every event of this run by the time we do.
         let _ = done.send(());

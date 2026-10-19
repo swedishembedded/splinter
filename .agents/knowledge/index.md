@@ -61,3 +61,4 @@ in the same commit.
 | [073](073-health-forecast-tests-hung-because-each-training-built-its-own-vulkan-device.md) | The health forecast tests hung because each training built its own Vulkan device |
 | [074](074-every-sandboxed-command-paid-a-scan-of-all-host-processes-and-a-ten-millisecond-poll.md) | Every sandboxed command paid a scan of all host processes and a ten-millisecond poll |
 | [075](075-the-exposure-audit-judged-a-probe-by-its-whole-steps-output-so-a-failed-cd-counted-as-having-reached-the-host.md) | The exposure audit judged a probe by its whole step's output, so a failed `cd` counted as having reached the host |
+| [076](076-the-repetition-stop-was-decided-by-a-task-beside-the-run-so-the-number-of-calls-depended-on-load.md) | The repetition stop was decided by a task beside the run, so the number of calls depended on load |

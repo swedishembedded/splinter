@@ -9,9 +9,8 @@
 
 //! The watcher of one send's events.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use futures::FutureExt;
 use sven_sdk::{CancelToken, EventStream, SessionEvent};
@@ -21,34 +20,22 @@ use super::{Observed, Observer, CANCEL_POLL};
 
 /// The task that watches one send's events: it counts tool calls, stops the
 /// run at the cap or when the caller cancels, and hands every event to the
-/// observer.
+/// observer. (The repetition stop is not here: see [`super::guard`].)
 pub(super) struct Watch {
     pub(super) events: EventStream,
     pub(super) stop: CancelToken,
     pub(super) external: Option<CancelToken>,
     pub(super) cap: Option<u32>,
-    pub(super) repeat_cap: Option<u32>,
-    pub(super) repeats: Mutex<Repeats>,
-    pub(super) repeated: Arc<AtomicBool>,
-    pub(super) repeated_call: Arc<Mutex<Option<String>>>,
     pub(super) observer: Option<Observer>,
     pub(super) tool_calls: Arc<AtomicU32>,
     pub(super) capped: Arc<AtomicBool>,
 }
 
 /// A call as `name\u{1}arguments`, shortened for a message.
-fn describe(asked: &str) -> String {
+pub(super) fn describe(asked: &str) -> String {
     let (name, args) = asked.split_once('\u{1}').unwrap_or((asked, ""));
     let args: String = args.chars().take(160).collect();
     format!("{name} {args}")
-}
-
-/// What a send has asked and been answered: each call by its id, and how
-/// often each (call, answer) pair has come back.
-#[derive(Default)]
-pub(super) struct Repeats {
-    asked: HashMap<String, String>,
-    answered: HashMap<String, u32>,
 }
 
 impl Watch {
@@ -97,47 +84,8 @@ impl Watch {
                 self.stop.cancel();
             }
         }
-        self.watch_repetition(event);
         if let Some(observer) = &self.observer {
             observer(Observed::Event(event));
-        }
-    }
-
-    /// Counts how often a call has returned the same answer and stops the
-    /// run when that reaches the bound.
-    fn watch_repetition(&self, event: &SessionEvent) {
-        let Some(bound) = self.repeat_cap else {
-            return;
-        };
-        let Ok(mut repeats) = self.repeats.lock() else {
-            return;
-        };
-        match event {
-            SessionEvent::ToolCallStarted(call) => {
-                repeats
-                    .asked
-                    .insert(call.id.clone(), format!("{}\u{1}{}", call.name, call.args));
-            }
-            SessionEvent::ToolCallFinished {
-                call_id, output, ..
-            } => {
-                let Some(asked) = repeats.asked.get(call_id).cloned() else {
-                    return;
-                };
-                let seen = repeats
-                    .answered
-                    .entry(format!("{asked}\u{1}{output}"))
-                    .or_insert(0);
-                *seen += 1;
-                if *seen >= bound {
-                    if let Ok(mut call) = self.repeated_call.lock() {
-                        call.get_or_insert_with(|| describe(&asked));
-                    }
-                    self.repeated.store(true, Ordering::SeqCst);
-                    self.stop.cancel();
-                }
-            }
-            _ => {}
         }
     }
 

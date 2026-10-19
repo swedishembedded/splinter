@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `max_repeated_results` stops a stagnating worker at the same call on every run: the count is taken before each model request (`RepetitionGuard`) instead of by the event watcher, which under load let the run make 22 or more calls before it was cancelled.
+
 ### Changed (exposure audit)
 - The exposure audit classes an outside-path call by its own result instead of the whole step's pooled output, ignores the shell's `[exit code N]` trailer, and no longer fails an attempt for a refused, absent or empty probe (`outside_probes` in the evidence) or for naming a hidden path in a call whose read failed (`hidden_path_absent`). Reached outside paths, hidden paths in outputs and messages, shingles and the state root still fail it. Amendment 13 of the coding protocol applies this to datasets built from now on; earlier yields were computed under the old rule.
 

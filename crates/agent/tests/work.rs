@@ -288,12 +288,39 @@ async fn a_run_that_repeats_one_call_and_gets_the_same_answer_is_stopped_and_say
         "{:?}",
         report.repeated_call
     );
-    // The cancel is seen between events, so the next call may already have
-    // been requested: at most one beyond the bound.
-    assert!(
-        (3..=4).contains(&report.tool_calls),
+    assert_eq!(
+        report.tool_calls, 3,
         "stopped at the third identical answer, not {}",
         report.tool_calls
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_repetition_stop_does_not_wait_for_a_slow_event_consumer() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.txt"), "same").unwrap();
+    let model = Scripted::new(|req| {
+        call(
+            &format!("c{}", tool_results(req)),
+            "read_file",
+            serde_json::json!({"path": "a.txt"}),
+        )
+    });
+    let mut bounded = options();
+    bounded.max_repeated_results = Some(3);
+    // A consumer that falls behind, as any task does on a loaded machine: the
+    // stop is decided before the next model request, not when events are read.
+    bounded.observer = Some(Arc::new(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    }));
+    let mut worker = Worker::start(dir.path(), model, bounded).unwrap();
+
+    let report = worker.send("look at a.txt").await.unwrap();
+
+    assert!(report.stopped_by_repetition);
+    assert_eq!(
+        report.tool_calls, 3,
+        "the request after the third identical answer is the one that is stopped"
     );
 }
 
