@@ -657,6 +657,14 @@ a PILOT over 23 families by the rule of A2.3, and the second half is not run in 
 the arms: splinter 64cad0e6, brain 502e12d46 servers (A5.1); the base arm's server carries an earlier,
 discarded adapter in its bank, which does not act on base requests.
 
+**A9.5 Extension of the subset.** The subset arms ran faster than the first estimate (the first 32 of
+69 tasks of the base arm finished in 15 minutes). Both arms therefore also solve the remaining tasks
+of the first half of A8.2 (`tasks pick --seed 20261017 --per-family 3` returns the rest as its second
+set), base arm and adapter arm each on one server as before. The comparison reported as the primary
+pilot is the whole first half (23 families, 253 tasks) if both arms have it complete by 18:45 CEST,
+and `S3` (69 tasks) otherwise; the other is reported beside it. This rule is fixed before the
+verdict of any arm has been read.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
