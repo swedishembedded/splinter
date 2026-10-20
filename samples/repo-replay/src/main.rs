@@ -25,6 +25,7 @@ use splinter_sdk::agent::solve::Model;
 use splinter_sdk::model::selection::{served_model_sampled, ServedSampling};
 
 use splinter_repo_replay::audit::{audit_and_print, default_config, open_context};
+use splinter_repo_replay::budget::Budget;
 use splinter_repo_replay::dataset::{attempts_set, build_dataset, DatasetSettings};
 use splinter_repo_replay::gate::GateConfig;
 use splinter_repo_replay::ledger;
@@ -98,20 +99,33 @@ struct RunArgs {
     /// The seed every request carries (required: no default is fixed).
     #[arg(long)]
     seed: u64,
-    /// Sampling temperature (default: the server's).
+    /// Sampling temperature (default 0.7, the model card's recommendation for the 27B).
+    #[arg(long, default_value_t = 0.7)]
+    temperature: f32,
+    /// Nucleus sampling (default 0.8).
+    #[arg(long, default_value_t = 0.8)]
+    top_p: f32,
+    /// Sample among this many likeliest tokens (default 20).
+    #[arg(long, default_value_t = 20)]
+    top_k: u32,
+    /// Let the model reason before it answers (default: it does not).
     #[arg(long)]
-    temperature: Option<f32>,
+    thinking: bool,
+    /// With --thinking: the most thinking tokens per response.
+    #[arg(long)]
+    thinking_budget: Option<u32>,
     /// Plan styles to attempt per commit, comma separated: terse, detailed.
     #[arg(long, value_delimiter = ',', default_value = "terse,detailed")]
     styles: Vec<String>,
     /// Attempts run at once.
     #[arg(long, default_value_t = 1)]
     jobs: usize,
-    /// Seconds one attempt may take.
-    #[arg(long, default_value_t = 600)]
+    /// Seconds one attempt may take: a backstop far above any queueing, since the
+    /// tool-call budget (by commit size) is what bounds an attempt.
+    #[arg(long, default_value_t = 86_400)]
     attempt_secs: u64,
     /// Seconds one plan may take.
-    #[arg(long, default_value_t = 120)]
+    #[arg(long, default_value_t = 900)]
     plan_secs: u64,
     /// Output tokens one attempt may generate.
     #[arg(long)]
@@ -149,9 +163,18 @@ struct RunArgs {
     /// Fewest tool calls an attempt may make.
     #[arg(long, default_value_t = GateConfig::default().min_tool_calls)]
     min_tool_calls: usize,
-    /// Most tool calls an attempt may make.
-    #[arg(long, default_value_t = GateConfig::default().max_tool_calls)]
-    max_tool_calls: usize,
+    /// Tool calls every attempt gets, before the size of the commit adds to it.
+    #[arg(long, default_value_t = Budget::default().base)]
+    calls_base: usize,
+    /// Tool calls each changed file adds.
+    #[arg(long, default_value_t = Budget::default().per_file)]
+    calls_per_file: usize,
+    /// Tool calls each hunk adds.
+    #[arg(long, default_value_t = Budget::default().per_hunk)]
+    calls_per_hunk: usize,
+    /// The most tool calls any attempt gets.
+    #[arg(long, default_value_t = Budget::default().cap)]
+    calls_cap: usize,
     /// A project check run in the attempt tree after the edits, through `sh -c`;
     /// its outcome is recorded, never gated. It executes the history's code on
     /// this machine. Repeatable.
@@ -229,9 +252,12 @@ fn run_command(args: &RunArgs) -> Result<()> {
         key,
         &args.model,
         &ServedSampling {
-            temperature: args.temperature,
+            temperature: Some(args.temperature),
+            top_p: Some(args.top_p),
+            top_k: Some(args.top_k),
+            thinking: args.thinking,
+            thinking_budget: args.thinking_budget,
             seed: Some(args.seed),
-            ..ServedSampling::default()
         },
     )?;
     let provider = loaded.provider();
@@ -273,8 +299,19 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.gate = GateConfig {
         min_edits_per_file: args.min_edits_per_file,
         min_tool_calls: args.min_tool_calls,
-        max_tool_calls: args.max_tool_calls,
+        max_tool_calls: GateConfig::default().max_tool_calls,
     };
+    config.budget = Budget {
+        base: args.calls_base,
+        per_file: args.calls_per_file,
+        per_hunk: args.calls_per_hunk,
+        cap: args.calls_cap,
+    };
+    config.record = serde_json::json!({
+        "model": args.model, "seed": args.seed, "temperature": args.temperature, "top_p": args.top_p,
+        "top_k": args.top_k, "thinking": args.thinking, "thinking_budget": args.thinking_budget,
+        "base_url": args.base_url,
+    });
     config.checks.clone_from(&args.checks);
     config.check_timeout = Duration::from_secs(args.check_secs);
     config.error_retries = args.error_retries;

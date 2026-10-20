@@ -64,8 +64,10 @@ pub struct AttemptSettings {
     pub first_response: Option<Duration>,
     /// Times an attempt that stopped announcing an unmade call is told to go on.
     pub follow_ups: usize,
-    /// The gate's bounds.
+    /// The gate's bounds (its `max_tool_calls` is set per commit from the budget).
     pub gate: GateConfig,
+    /// Tool calls by commit size.
+    pub budget: crate::budget::Budget,
     /// Paths of the source repository and the run's state, which the shell may not name.
     pub forbidden_locations: Vec<String>,
     /// Where attempt trees are laid out.
@@ -107,6 +109,8 @@ pub struct AttemptOutcome {
     pub seconds: f64,
     /// The agent's last words.
     pub final_message: Option<String>,
+    /// What the requests of the attempt waited and took.
+    pub stats: crate::timed::Stats,
 }
 
 /// Runs `command` through `sh -c` in `dir`, killed after `timeout`.
@@ -178,16 +182,28 @@ pub async fn attempt(
         .collect();
 
     // What the parent's code already says, read before the agent touches the tree.
-    let parent_words = vocabulary(&read_tree(&tree_dir)?);
+    let parent_tree = read_tree(&tree_dir)?;
+    let parent_words = vocabulary(&parent_tree);
+    let parent_paths: std::collections::HashSet<String> = parent_tree.keys().cloned().collect();
 
     let mut solve = SolveOptions::new(settings.deadline);
-    solve.system = Some(grounding_prompt(&commit.diff));
+    // The budget follows the commit's size; the gate and the agent's own cap agree.
+    let calls = settings
+        .budget
+        .calls(commit.changes.len(), crate::budget::hunks_of(&commit.diff));
+    let gate = GateConfig {
+        max_tool_calls: calls,
+        ..settings.gate
+    };
+    solve.system = Some(grounding_prompt(&commit.diff, calls));
     solve.max_output_tokens = settings.max_output_tokens;
     solve.first_response = settings.first_response;
     let mut options = WorkOptions::new(solve);
-    options.max_tool_calls = Some(u32::try_from(settings.gate.max_tool_calls).unwrap_or(u32::MAX));
+    options.max_tool_calls = Some(u32::try_from(gate.max_tool_calls).unwrap_or(u32::MAX));
     options.max_repeated_results = Some(4);
-    let mut worker = Worker::start(&tree_dir, Arc::clone(&settings.model), options)
+    let stats = Arc::new(std::sync::Mutex::new(crate::timed::Stats::default()));
+    let model = crate::timed::Timed::wrap(Arc::clone(&settings.model), Arc::clone(&stats));
+    let mut worker = Worker::start(&tree_dir, model, options)
         .map_err(|e| anyhow::anyhow!("starting the agent: {e}"))?;
     let started = Instant::now();
     let mut report = worker
@@ -209,7 +225,7 @@ pub async fn attempt(
         let bounds = worker.options_mut();
         bounds.solve.deadline = left;
         bounds.max_tool_calls = Some(
-            u32::try_from(settings.gate.max_tool_calls)
+            u32::try_from(gate.max_tool_calls)
                 .unwrap_or(u32::MAX)
                 .saturating_sub(calls_used),
         );
@@ -235,7 +251,16 @@ pub async fn attempt(
         git.export_tree(&commit.sha, dir.path())?;
         read_tree(dir.path())?
     };
-    let residual = compare(&target_tree, &actual, &|p| is_generated_path(p));
+    let mut residual = compare(&target_tree, &actual, &|p| is_generated_path(p));
+    for r in &mut residual {
+        if let Residual::Extra { path } = r {
+            if parent_paths.contains(path.as_str()) {
+                *r = Residual::Stale {
+                    path: std::mem::take(path),
+                };
+            }
+        }
+    }
     let trajectory = report.solution.trajectory.clone();
     let trace = Trace::of(&trajectory);
     let stopped = if report.stopped_by_tool_cap {
@@ -264,7 +289,7 @@ pub async fn attempt(
             attempt_roots: &roots,
             stopped: stopped.as_deref(),
         },
-        &settings.gate,
+        &gate,
     );
     Ok(AttemptOutcome {
         verdict,
@@ -273,6 +298,7 @@ pub async fn attempt(
         trace,
         residual,
         checks,
+        stats: stats.lock().map(|s| s.clone()).unwrap_or_default(),
         seconds,
     })
 }

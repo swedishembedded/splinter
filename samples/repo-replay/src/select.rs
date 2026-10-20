@@ -68,8 +68,8 @@ impl SelectConfig {
 impl Default for SelectConfig {
     fn default() -> Self {
         Self {
-            max_changed_lines: 400,
-            max_files: 12,
+            max_changed_lines: 100,
+            max_files: 3,
             max_diff_tokens: DEFAULT_CONTEXT_TOKENS * DEFAULT_CONTEXT_SHARE_PERCENT / 100,
             max_generated_percent: 50,
         }

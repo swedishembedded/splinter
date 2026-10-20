@@ -68,6 +68,20 @@ name or literal value that cannot be found anywhere in the repository (a new opt
 function a caller must use), give it: a person who asks for something says where it goes and what it \
 is called. Write plain prose.";
 
+/// Examples of requests as a person writes them, for other changes. They show
+/// the manner (intent, behaviour, where in words, constraints, no code); the
+/// planner is told not to copy them.
+const PLAN_EXAMPLES: &str = "Examples of good requests, for other projects (show the manner; do \
+not copy them):\n\
+- \"Uploads to the object store give up after three tries, which is too few on a flaky network. \
+Make the number of tries configurable in the client's config file and keep three as the default.\"\n\
+- \"Pressing escape in the search dialog should close it; today it first clears the text. The \
+dialog lives in the ui crate.\"\n\
+- \"The export command prints a stack trace when the output directory does not exist. It should \
+create the directory, parents included, and carry on. This is in the export module of the cli \
+crate. A path that exists but is a file must still fail with the current error message, and no \
+new dependency is wanted.\"";
+
 /// The instruction that sets the plan's length and shape.
 const PLAN_TERSE: &str = "Style: terse. One to three sentences, as a person types a request in \
 a hurry: the goal and the behaviour wanted. Name at most one file or area, and only when the \
@@ -85,7 +99,7 @@ pub fn plan_system_prompt(style: PlanStyle) -> String {
         PlanStyle::Terse => PLAN_TERSE,
         PlanStyle::Detailed => PLAN_DETAILED,
     };
-    format!("{PLAN_COMMON}\n\n{style_text}")
+    format!("{PLAN_COMMON}\n\n{style_text}\n\n{PLAN_EXAMPLES}")
 }
 
 /// The user turn of the planning model: the change to describe.

@@ -88,6 +88,7 @@ pub fn default_config(source: &Path, state: &Path) -> RunConfig {
         jobs: 4,
         select: SelectConfig::default(),
         gate: GateConfig::default(),
+        budget: crate::budget::Budget::default(),
         plan_tries: 2,
         min_line_tokens: 6,
         deadline: Duration::from_secs(120),
@@ -99,6 +100,7 @@ pub fn default_config(source: &Path, state: &Path) -> RunConfig {
         check_timeout: Duration::from_secs(30),
         error_retries: 0,
         retry_wait: Duration::from_secs(0),
+        record: serde_json::Value::Null,
         redo_classes: Vec::new(),
     }
 }

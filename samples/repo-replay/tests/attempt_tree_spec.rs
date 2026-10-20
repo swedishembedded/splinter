@@ -80,11 +80,18 @@ fn a_plan_must_not_carry_the_answer() {
     let refers = format!("{good} Do what the diff does.");
     assert_eq!(class(&refers, PlanStyle::Detailed), "plan_refers_to_change");
     assert_eq!(class("Fix it.", PlanStyle::Detailed), "plan_length");
-    let dense = "Change `total` so that `price * quantity` becomes `subtotal` and then `subtotal + tax` for every `rate`.";
+    // Names in backticks are what a good request is made of.
+    let named = "Change `total` so that it includes `rate` in what it returns, as `compute_total_with_tax` does elsewhere in the project.";
+    validate(named, PlanStyle::Terse, &check).unwrap();
+    // A fenced block is code, and too much of it is the answer.
+    let fenced = "Make total include tax:\n```python\ndef total(price, quantity, rate):\n    subtotal = price * quantity\n    return subtotal + subtotal * rate\n```\nThat is all.";
     assert!(matches!(
-        validate(dense, PlanStyle::Terse, &check),
+        validate(fenced, PlanStyle::Terse, &check),
         Err(PlanRejection::CodeDensity { .. })
     ));
+    // A long span quoted from a changed line is the answer quoted.
+    let quoted = "Make total return `result = subtotal + subtotal * rate - discount + rounding_adjustment` for every caller of the function, please do so now.";
+    assert_eq!(class(quoted, PlanStyle::Terse), "plan_verbatim_diff");
 }
 
 #[test]
@@ -174,12 +181,31 @@ fn the_diff_the_agent_sees_has_no_offsets_and_no_unchanged_lines() {
     ] {
         assert!(masked.contains(kept), "{kept} missing from {masked}");
     }
-    assert!(!grounding_prompt(diff).contains("@@ -5"));
+    assert!(!grounding_prompt(diff, 20).contains("@@ -5"));
 }
 
 #[test]
 fn the_prompts_say_where_the_repository_is_and_that_new_paths_must_be_given() {
-    assert!(grounding_prompt("").contains("working directory is the repository root"));
+    assert!(grounding_prompt("", 20).contains("working directory is the repository root"));
     let plan = splinter_repo_replay::plan_prompt::plan_system_prompt(PlanStyle::Terse);
     assert!(plan.contains("the exact new path"), "{plan}");
+}
+
+#[test]
+fn the_replay_prompt_carries_the_per_file_procedure_and_the_budget() {
+    let prompt = grounding_prompt("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n", 37);
+    for part in [
+        "calling todo with action set",
+        "Locate.",
+        "Read the region.",
+        "Edit, minimally.",
+        "Read the edited region again",
+        "git diff --stat",
+        "budget of 37 tool calls",
+    ] {
+        assert!(prompt.contains(part), "{part} missing");
+    }
+    assert!(!prompt.contains("{BUDGET}"));
+    let plan = splinter_repo_replay::plan_prompt::plan_system_prompt(PlanStyle::Detailed);
+    assert!(plan.contains("Examples of good requests"));
 }

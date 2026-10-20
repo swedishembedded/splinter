@@ -128,11 +128,16 @@ fn words(text: &str) -> usize {
 fn code_chars(plan: &str) -> usize {
     let fence =
         Regex::new(r"(?s)```.*?(```|$)").unwrap_or_else(|_| unreachable!("a fixed pattern"));
-    let inline = Regex::new(r"`[^`\n]+`").unwrap_or_else(|_| unreachable!("a fixed pattern"));
-    let fenced: usize = fence.find_iter(plan).map(|m| m.as_str().len()).sum();
-    let rest = fence.replace_all(plan, "");
-    let spans: usize = inline.find_iter(&rest).map(|m| m.as_str().len()).sum();
-    fenced + spans
+    fence.find_iter(plan).map(|m| m.as_str().len()).sum()
+}
+
+/// The share of `plan`'s characters, in percent, that are in fenced code
+/// blocks. Inline names in backticks do not count: a good request names the
+/// functions, types and files it is about. Code copied from the change is
+/// caught by the verbatim checks, not by this share.
+#[must_use]
+pub fn code_percent(plan: &str) -> usize {
+    code_chars(plan) * 100 / plan.len().max(1)
 }
 
 /// Accepts `plan` for a change of `style`, or says why not.
@@ -174,7 +179,16 @@ pub fn validate(plan: &str, style: PlanStyle, check: &PlanCheck<'_>) -> Result<(
             return Err(PlanRejection::VerbatimDiffLine { line });
         }
     }
-    let percent = code_chars(plan) * 100 / plan.len().max(1);
+    // A long span in backticks that is a piece of a changed line is the
+    // answer quoted, whatever the share of code.
+    let inline = Regex::new(r"`([^`\n]{30,})`").unwrap_or_else(|_| unreachable!("a fixed pattern"));
+    for span in inline.captures_iter(plan) {
+        let span = squeeze(&span[1]);
+        if check.diff_lines.iter().any(|l| squeeze(l).contains(&span)) {
+            return Err(PlanRejection::VerbatimDiffLine { line: span });
+        }
+    }
+    let percent = code_percent(plan);
     let limit = density_limit(style);
     if percent > limit {
         return Err(PlanRejection::CodeDensity {

@@ -233,6 +233,21 @@ pub fn actions(system_prompt: &str, behaviour: &Behaviour, truths: &[String]) ->
         )),
         _ => {}
     }
+    // What the replay prompt asks first: the agent's own todo list, one item
+    // per change, naming (in its own words) what it will write.
+    let named = diff
+        .lines()
+        .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+        .flat_map(|l| l.split(|c: char| !(c.is_alphanumeric() || c == '_')))
+        .find(|w| w.len() >= 12 && w.contains('_'))
+        .unwrap_or("the change");
+    let items: Vec<Value> = files
+        .iter()
+        .enumerate()
+        .map(|(n, _)| json!({"id": format!("{}", n + 1), "content": format!("change {} ({named})", n + 1), "status": "pending"}))
+        .chain([json!({"id": "review", "content": "review my work with git diff", "status": "pending"})])
+        .collect();
+    out.push(act("todo", json!({"action": "set", "todos": items})));
     let last = files.len().saturating_sub(1);
     for (index, file) in files.iter().enumerate() {
         if *behaviour == Behaviour::MissingEdit && index == last {
@@ -306,6 +321,8 @@ pub fn actions(system_prompt: &str, behaviour: &Behaviour, truths: &[String]) ->
             }
         }
     }
+    // And the self-review it ends with.
+    out.push(act("shell", json!({"shell_command": "git diff --stat"})));
     out
 }
 

@@ -67,6 +67,18 @@ pub struct Entry {
     pub checks: Vec<CheckOutcome>,
     /// Words in the plan.
     pub plan_words: Option<usize>,
+    /// Percent of the plan's characters that are code (blocks and inline spans).
+    #[serde(default)]
+    pub plan_code_percent: Option<usize>,
+    /// Model requests the attempt sent.
+    #[serde(default)]
+    pub requests: usize,
+    /// Seconds the requests spent from sending to their last stream item.
+    #[serde(default)]
+    pub model_seconds: f64,
+    /// The longest a request waited for its first stream item (queueing).
+    #[serde(default)]
+    pub max_wait_seconds: f64,
     /// Free text: the first reason's detail, or the infrastructure error.
     pub detail: Option<String>,
 }
@@ -86,13 +98,14 @@ pub fn note_run(
     source: &Path,
     from: Option<&str>,
     to: Option<&str>,
+    settings: &serde_json::Value,
 ) -> Result<()> {
     let file = state.join("runs.jsonl");
     let mut out = fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&file)?;
-    let line = serde_json::json!({"git_version": git_version, "source": source.display().to_string(), "from": from, "to": to});
+    let line = serde_json::json!({"git_version": git_version, "source": source.display().to_string(), "from": from, "to": to, "settings": settings});
     writeln!(out, "{line}")?;
     Ok(())
 }
@@ -263,6 +276,10 @@ mod tests {
             experience: None,
             checks: vec![],
             plan_words: None,
+            plan_code_percent: None,
+            requests: 0,
+            model_seconds: 0.0,
+            max_wait_seconds: 0.0,
             detail: None,
         }
     }

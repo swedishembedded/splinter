@@ -84,8 +84,15 @@ pub enum Residual {
         /// The path.
         path: String,
     },
-    /// The attempt has a path the commit does not (junk).
+    /// The attempt has a path the commit does not, and the parent did not
+    /// have it either (junk).
     Extra {
+        /// The path.
+        path: String,
+    },
+    /// The parent had the path, the commit removes it, and the attempt still
+    /// has it: work not done, not junk.
+    Stale {
         /// The path.
         path: String,
     },
@@ -103,7 +110,10 @@ impl Residual {
     #[must_use]
     pub fn path(&self) -> &str {
         match self {
-            Self::Missing { path } | Self::Extra { path } | Self::Differs { path, .. } => path,
+            Self::Missing { path }
+            | Self::Extra { path }
+            | Self::Stale { path }
+            | Self::Differs { path, .. } => path,
         }
     }
 }

@@ -202,6 +202,10 @@ pub fn evaluate(input: &GateInput<'_>, config: &GateConfig) -> Verdict {
                 "junk",
                 format!("{path} exists and the commit has no such file"),
             ),
+            Residual::Stale { path } => add(
+                "tree_mismatch",
+                format!("{path} is still present; the commit removes it"),
+            ),
             Residual::Missing { path } => add("tree_mismatch", format!("{path} is missing")),
             Residual::Differs {
                 path,
@@ -501,7 +505,9 @@ fn leak_rules(input: &GateInput<'_>, add: &mut impl FnMut(&str, String)) {
         .flat_map(|c| identifiers(&c.path))
         .collect();
     for call in &input.trace.calls {
-        if EDIT_TOOLS.contains(&call.tool.as_str()) {
+        // An edit writes the new names; the todo list is the agent's own plan of
+        // what it will write, in its own words. Neither is a search.
+        if EDIT_TOOLS.contains(&call.tool.as_str()) || call.tool == "todo" {
             continue;
         }
         let is_move = call.command().is_some_and(is_removal);

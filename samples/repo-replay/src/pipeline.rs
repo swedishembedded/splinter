@@ -71,6 +71,8 @@ pub struct RunConfig {
     pub select: SelectConfig,
     /// Gate bounds.
     pub gate: GateConfig,
+    /// Tool calls by commit size.
+    pub budget: crate::budget::Budget,
     /// Plans written per attempt before giving up.
     pub plan_tries: usize,
     /// A diff line of this many words may not be repeated in a plan.
@@ -89,6 +91,8 @@ pub struct RunConfig {
     pub checks: Vec<String>,
     /// Longest a project check may run.
     pub check_timeout: Duration,
+    /// Free-form facts of the run the caller wants kept with it (model, sampling).
+    pub record: serde_json::Value,
     /// Passes that retry the attempts lost to the model or the disk, after the first.
     pub error_retries: usize,
     /// How long to wait before a retry pass.
@@ -192,6 +196,21 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         &config.source,
         config.from.as_deref(),
         config.to.as_deref(),
+        &serde_json::json!({
+            "caller": config.record,
+            "jobs": config.jobs,
+            "attempt_secs": config.deadline.as_secs(),
+            "plan_secs": config.plan_deadline.as_secs(),
+            "first_response_secs": config.first_response.map(|d| d.as_secs()),
+            "follow_ups": config.follow_ups,
+            "plan_tries": config.plan_tries,
+            "error_retries": config.error_retries,
+            "redo_classes": config.redo_classes,
+            "styles": config.styles,
+            "select": config.select,
+            "gate": config.gate,
+            "budget": config.budget,
+        }),
     )?;
     let chain = git.first_parent_chain(config.from.as_deref(), config.to.as_deref())?;
     let scrubber = Scrubber::new(people(&chain).iter().map(String::as_str));
@@ -238,6 +257,7 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         first_response: config.first_response,
         follow_ups: config.follow_ups,
         gate: config.gate,
+        budget: config.budget,
         forbidden_locations: [&config.source, &parts.mirror]
             .into_iter()
             .flat_map(|p| [Some(p.clone()), p.canonicalize().ok()])
@@ -357,6 +377,10 @@ async fn process(
                 experience: None,
                 checks: vec![],
                 plan_words: None,
+                plan_code_percent: None,
+                requests: 0,
+                model_seconds: 0.0,
+                max_wait_seconds: 0.0,
                 detail: Some(detail),
             },
             Unit::Refused(failure) => Entry {
@@ -371,6 +395,10 @@ async fn process(
                 experience: None,
                 checks: vec![],
                 plan_words: None,
+                plan_code_percent: None,
+                requests: 0,
+                model_seconds: 0.0,
+                max_wait_seconds: 0.0,
                 detail: Some(failure.to_string()),
             },
             Unit::Attempted(boxed) => {
@@ -388,6 +416,10 @@ async fn process(
                         experience: None,
                         checks: vec![],
                         plan_words: None,
+                        plan_code_percent: None,
+                        requests: 0,
+                        model_seconds: 0.0,
+                        max_wait_seconds: 0.0,
                         detail: Some(format!("storing the attempt: {e:#}")),
                     },
                     Ok(id) => Entry {
@@ -411,6 +443,10 @@ async fn process(
                         experience: Some(id.hex().to_string()),
                         checks: outcome.checks.clone(),
                         plan_words: Some(plan.split_whitespace().count()),
+                        plan_code_percent: Some(crate::plan::code_percent(&plan)),
+                        requests: outcome.stats.requests,
+                        model_seconds: outcome.stats.model_seconds,
+                        max_wait_seconds: outcome.stats.max_wait_seconds,
                         detail: outcome.verdict.reasons.first().map(|r| r.detail.clone()),
                     },
                 }
@@ -452,6 +488,10 @@ fn skip_entry(sha: &str, class: &str) -> Entry {
         experience: None,
         checks: vec![],
         plan_words: None,
+        plan_code_percent: None,
+        requests: 0,
+        model_seconds: 0.0,
+        max_wait_seconds: 0.0,
         detail: None,
     }
 }
@@ -516,7 +556,7 @@ fn store_attempt(
     provenance.generator = Some("splinter-repo-replay".into());
     provenance.prompt_digests = vec![
         digest(&plan_system_prompt(style)),
-        digest(&grounding_prompt("")),
+        digest(&grounding_prompt("", 0)),
     ];
     let trajectory = scrub_trajectory(&outcome.trajectory, scrubber)?;
     let final_output = outcome.final_message.as_deref().map(|m| scrubber.scrub(m));
