@@ -230,18 +230,34 @@ mod tests {
         path
     }
 
+    /// `perform` against a freshly written script. A concurrent fork in
+    /// another test can briefly hold the script's write descriptor, and
+    /// executing it then fails with "text file busy"; that says nothing about
+    /// `perform`, so it is retried.
+    fn perform_script(sven: &Path, action: &Action) -> Result<Performed, PerformError> {
+        for _ in 0..50 {
+            match perform(sven, Path::new("/tmp"), &[], action) {
+                Err(PerformError::Spawn { source, .. }) if source.raw_os_error() == Some(26) => {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                other => return other,
+            }
+        }
+        perform(sven, Path::new("/tmp"), &[], action)
+    }
+
     #[test]
     fn an_observation_that_says_the_call_failed_is_not_a_demonstration() {
         let action = Action::new("shell", serde_json::json!({ "shell_command": "x" }));
         for failing in ["[exit 1]\n[stderr]\nboom", "error: no such tool"] {
             let sven = executor_printing(failing);
-            let err = perform(&sven, Path::new("/tmp"), &[], &action)
+            let err = perform_script(&sven, &action)
                 .expect_err("a failed call must not become a demonstrated step");
             assert!(matches!(err, PerformError::Refused { .. }), "{err}");
             std::fs::remove_file(sven).ok();
         }
         let sven = executor_printing("active deployment: staging");
-        let done = perform(&sven, Path::new("/tmp"), &[], &action).expect("a plain answer passes");
+        let done = perform_script(&sven, &action).expect("a plain answer passes");
         assert_eq!(done.observation, "active deployment: staging");
         std::fs::remove_file(sven).ok();
     }
