@@ -71,6 +71,13 @@ pub struct Global {
     #[arg(long, global = true, value_name = "N",
         value_parser = clap::value_parser!(u64).range(1..))]
     pub workspace_max_processes: Option<u64>,
+    /// A variable every project command runs with (for example
+    /// `PYTHONDONTWRITEBYTECODE=1`, so a Python project leaves no bytecode
+    /// caches in the tree the solver reads); repeat for more. Part of the
+    /// environment record, so tasks generated with it name a different
+    /// environment than tasks generated without it.
+    #[arg(long, global = true, value_name = "NAME=VALUE", value_parser = workspace_variable)]
+    pub workspace_env: Vec<(String, String)>,
     /// A directory searched before the system's for the interpreters code
     /// runs in (`lua` is Lua 5.1 and no other: `make deps/lua` builds the
     /// pinned one); repeat for more.
@@ -122,4 +129,24 @@ fn served_temperature(text: &str) -> Result<f32, String> {
         Ok(t) if (0.0..=2.0).contains(&t) => Ok(t),
         _ => Err(format!("{text:?} is not a temperature from 0 to 2")),
     }
+}
+
+/// `NAME=VALUE`, a variable for a project's commands: a name of letters,
+/// digits and underscores that does not start with a digit, and not one the
+/// sandbox sets for each command itself (`HOME`, `TMPDIR`), whose value would
+/// be replaced.
+fn workspace_variable(text: &str) -> Result<(String, String), String> {
+    let (name, value) = text
+        .split_once('=')
+        .ok_or_else(|| format!("{text:?} is not NAME=VALUE"))?;
+    let valid = !name.is_empty()
+        && !name.starts_with(|c: char| c.is_ascii_digit())
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !valid {
+        return Err(format!("{name:?} is not a variable name"));
+    }
+    if matches!(name, "HOME" | "TMPDIR") {
+        return Err(format!("{name} is set by the sandbox for each command"));
+    }
+    Ok((name.to_string(), value.to_string()))
 }

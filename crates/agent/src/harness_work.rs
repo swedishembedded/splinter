@@ -74,7 +74,11 @@ pub async fn solve_harness_in_workspace(
     let tree = scratch.path().join("tree");
     let baseline = env.materialize(archive, &tree)?;
 
-    let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::new(env.clone(), tree.clone()))];
+    let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::for_episode(
+        env.clone(),
+        tree.clone(),
+        scratch.path(),
+    )?)];
     let engine = engine(&tree, model, &options, &confined, false)?;
     let harness = engine.load_harness_from_str(harness)?;
     let declares_task = harness

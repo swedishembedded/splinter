@@ -138,3 +138,33 @@ fn without_kernel_confinement_a_command_is_refused_unless_unconfined_was_allowed
     );
     assert!(allowed.spec().unconfined_commands, "the record says so");
 }
+
+#[test]
+fn a_scratch_directory_is_kept_between_commands_and_is_the_only_extra_place_they_write() {
+    let rig = Rig::new();
+    let sandbox = rig.sandbox();
+    let scratch = rig.scratch.path().join("episode");
+    let run = |script: &str| {
+        let call = CommandCall {
+            argv: vec!["sh".into(), "-c".into(), script.into()],
+            stdin: None,
+        };
+        sandbox
+            .run_command_with_scratch(&rig.tree, &call, &scratch)
+            .unwrap()
+    };
+    let first = run("echo kept > \"$TMPDIR/note\" && test \"$HOME\" = \"$TMPDIR\"");
+    assert_eq!(first.exit_code, Some(0), "{first:?}");
+    let second = run("cat \"$TMPDIR/note\"; ls \"$TMPDIR\"");
+    assert!(second.stdout.contains("kept"), "{second:?}");
+    assert!(
+        !rig.tree.join("note").exists(),
+        "scratch files are not in the tree"
+    );
+    // The rest of the sandbox's scratch root stays out of reach.
+    let sibling = run(&format!(
+        "ls {}",
+        rig.scratch.path().join("calls").display()
+    ));
+    assert_ne!(sibling.exit_code, Some(0), "{sibling:?}");
+}

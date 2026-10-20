@@ -37,7 +37,7 @@ use crate::workspace_host::WorkspaceHost;
 /// working directory (its audit log and logs, written into the project
 /// root) and Python bytecode caches. Git glob patterns, relative to the
 /// tree.
-pub const DEFAULT_EXCLUDED: [&str; 2] = [".sven/**", "**/__pycache__/**"];
+pub const DEFAULT_EXCLUDED: [&str; 3] = [".sven", ".sven/**", "**/__pycache__/**"];
 
 /// A source tree as an environment pins it: the archive and what it makes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,6 +175,19 @@ impl WorkspaceEnvironment {
     /// environment's sandbox.
     pub fn run(&self, tree: &Path, call: &CommandCall) -> Result<CodeResult, SandboxError> {
         self.sandbox.run_command(tree, call)
+    }
+
+    /// [`WorkspaceEnvironment::run`] for a session of commands: `scratch`,
+    /// outside `tree`, is the command's `HOME` and `TMPDIR` and keeps its files
+    /// from one command to the next, so what a solver keeps there never
+    /// reaches the patch read back from the tree.
+    pub fn run_in_session(
+        &self,
+        tree: &Path,
+        call: &CommandCall,
+        scratch: &Path,
+    ) -> Result<CodeResult, SandboxError> {
+        self.sandbox.run_command_with_scratch(tree, call, scratch)
     }
 
     /// What `tree` differs from `baseline` by, leaving out the paths that

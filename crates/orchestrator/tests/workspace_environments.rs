@@ -227,3 +227,37 @@ fn a_record_that_is_not_a_workspace_of_a_known_tree_is_refused() {
     );
     assert!(Arc::ptr_eq(&first.host, &second.host));
 }
+
+#[test]
+fn variables_the_configuration_sets_for_project_commands_are_part_of_the_record_and_nothing_else_is(
+) {
+    let scratch = Scratch::new("env");
+    let plain = runtime(&scratch, WorkspaceSettings::default());
+    let archive = archive(&scratch);
+    let before = recorded(&plain, &archive);
+    assert!(
+        before.spec["sandbox"]["env"]
+            .get("PYTHONDONTWRITEBYTECODE")
+            .is_none(),
+        "no variable unless asked: an existing task keeps its address"
+    );
+
+    let settings = WorkspaceSettings {
+        env: BTreeMap::from([("PYTHONDONTWRITEBYTECODE".to_string(), "1".to_string())]),
+        ..WorkspaceSettings::default()
+    };
+    let with = runtime(&scratch, settings);
+    let after = recorded(&with, &archive);
+    assert_eq!(after.spec["sandbox"]["env"]["PYTHONDONTWRITEBYTECODE"], "1");
+    assert_ne!(
+        before.snapshot, after.snapshot,
+        "a task generated with it names another environment"
+    );
+    assert!(
+        matches!(
+            plain.environments().for_record(&after),
+            Ok(ResolvedEnvironment::Workspace(_))
+        ),
+        "resolving is from the configuration; the solve compares the records"
+    );
+}

@@ -221,11 +221,18 @@ impl Environments {
         if !settings.runtime_dirs.is_empty() {
             cargo.push(("PATH".to_string(), search_path(&settings.runtime_dirs)));
         }
+        // What the configuration sets for every project command (it is part of
+        // the environment's record).
+        cargo.extend(settings.env.iter().map(|(k, v)| (k.clone(), v.clone())));
+        let allowed: Vec<&str> = ["CARGO_HOME", "CARGO_INCREMENTAL", "PATH"]
+            .into_iter()
+            .chain(settings.env.keys().map(String::as_str))
+            .collect();
         Ok(Arc::new(
             ProcessSandbox::new(
                 &self.workspace_calls,
                 cargo,
-                &["CARGO_HOME", "CARGO_INCREMENTAL", "PATH"],
+                &allowed,
                 workspace_limits(settings.output_cap_bytes),
             )
             .allow_unconfined(settings.allow_unconfined)

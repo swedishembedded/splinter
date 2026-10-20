@@ -18,9 +18,9 @@
 //! container confines the command, and the process sandbox confines it to
 //! its tree with the kernel's Landlock (or refuses to run it).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use splinter_sandbox::{CodeResult, CommandCall, WorkspaceEnvironment};
+use splinter_sandbox::{CodeResult, CommandCall, SandboxError, WorkspaceEnvironment};
 use sven_sdk::tool::{ApprovalPolicy, OutputCategory, Tool, ToolCall, ToolCapability, ToolOutput};
 
 /// The most bytes of a command's output the model is shown. The sandbox may
@@ -35,14 +35,49 @@ pub const SHELL: &str = "shell";
 pub struct SandboxShell {
     environment: WorkspaceEnvironment,
     tree: PathBuf,
+    /// The commands' `HOME` and `TMPDIR`: kept between commands, outside the
+    /// tree.
+    scratch: PathBuf,
 }
 
 impl SandboxShell {
-    /// The tool running commands in `tree`, which `environment`'s sandbox
-    /// mounts as the only place a command can keep files.
-    #[must_use]
-    pub fn new(environment: WorkspaceEnvironment, tree: PathBuf) -> Self {
-        Self { environment, tree }
+    /// The tool running commands in `tree` for an episode whose own files live
+    /// under `episode`, a directory outside the tree that goes when the
+    /// episode does. `environment`'s sandbox mounts the tree as the place a
+    /// command keeps files that belong to the work, and `episode/scratch` as
+    /// the place it keeps the ones that do not.
+    ///
+    /// The harness's own state (sven writes its audit log beneath the project
+    /// root's `.sven`) is kept in `episode/state` and `.sven` in the tree is a
+    /// link to it, a place the sandbox does not let a command read: a solver
+    /// that opens it reads the harness's tool log, not the task.
+    ///
+    /// # Errors
+    /// When the directories or the link cannot be made.
+    pub fn for_episode(
+        environment: WorkspaceEnvironment,
+        tree: PathBuf,
+        episode: &Path,
+    ) -> Result<Self, SandboxError> {
+        let made = |path: &Path| {
+            std::fs::create_dir_all(path).map_err(|source| SandboxError::Io {
+                path: path.to_path_buf(),
+                source,
+            })
+        };
+        let (scratch, state) = (episode.join("scratch"), episode.join("state"));
+        made(&scratch)?;
+        made(&state)?;
+        let link = tree.join(".sven");
+        if !link.exists() {
+            std::os::unix::fs::symlink(&state, &link)
+                .map_err(|source| SandboxError::Io { path: link, source })?;
+        }
+        Ok(Self {
+            environment,
+            tree,
+            scratch,
+        })
     }
 }
 
@@ -56,9 +91,12 @@ impl Tool for SandboxShell {
         "Run a bash command in the project directory; returns stdout, stderr and how \
          the command ended.\n\
          'description' is one short line naming what the command does.\n\
-         Non-interactive only. The command runs confined to the project directory (the only place it can \
-         write); nothing else of the disk is visible to it; it is stopped at a time limit. Narrow big \
-         output at the source (`tail -200`, `grep -E 'error:'`)."
+         Non-interactive only. Every command starts in the project directory: paths are relative to it, \
+         there is no other directory to change to. It runs confined to the project directory (the only \
+         place it can write the project) and to a scratch directory, $TMPDIR (also $HOME): /tmp is not \
+         available. Scratch files go in $TMPDIR; they stay there between commands and are not part of \
+         your change. Nothing else of the disk is visible. A command is stopped at a time limit. Narrow \
+         big output at the source (`tail -200`, `grep -E 'error:'`)."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -102,11 +140,18 @@ impl Tool for SandboxShell {
             argv: vec!["bash".into(), "-c".into(), command.into()],
             stdin: None,
         };
-        let (environment, tree) = (self.environment.clone(), self.tree.clone());
+        let (environment, tree, scratch) = (
+            self.environment.clone(),
+            self.tree.clone(),
+            self.scratch.clone(),
+        );
         // The sandbox blocks until the command ends or a limit stops it; if
         // the run is cancelled meanwhile, the command still ends at its own
         // limits.
-        let ran = tokio::task::spawn_blocking(move || environment.run(&tree, &command_call)).await;
+        let ran = tokio::task::spawn_blocking(move || {
+            environment.run_in_session(&tree, &command_call, &scratch)
+        })
+        .await;
         match ran {
             Ok(Ok(result)) => ToolOutput::ok(&call.id, render(&result)),
             Ok(Err(e)) => ToolOutput::err(&call.id, format!("{SHELL} could not run: {e}")),

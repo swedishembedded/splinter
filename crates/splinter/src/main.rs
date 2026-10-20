@@ -100,6 +100,7 @@ fn main() -> ExitCode {
     config.workspace.allow_unconfined = cli.global.allow_unconfined_workspace;
     config.workspace.allow_network = cli.global.allow_workspace_network;
     config.workspace.max_processes = cli.global.workspace_max_processes;
+    config.workspace.env = cli.global.workspace_env.iter().cloned().collect();
     config
         .workspace
         .runtime_dirs

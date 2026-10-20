@@ -160,6 +160,11 @@ pub struct WorkspaceSettings {
     /// How many processes and threads a workspace command may start; `None`
     /// is no bound. Part of the environment's snapshot.
     pub max_processes: Option<u64>,
+    /// Variables every workspace command is run with besides the ones the
+    /// sandbox sets, the command line's `--workspace-env`. Part of the
+    /// environment's snapshot, so a task generated with one names another
+    /// environment than a task generated without it.
+    pub env: BTreeMap<String, String>,
     /// Directories searched before the system's for the interpreters code
     /// runs in: where a pinned build of a language (Lua 5.1, built from its
     /// verified source) is put first. Empty is the system's search path.
@@ -178,6 +183,7 @@ impl Default for WorkspaceSettings {
             allow_unconfined: false,
             allow_network: false,
             max_processes: None,
+            env: BTreeMap::new(),
             runtime_dirs: Vec::new(),
         }
     }
@@ -300,6 +306,7 @@ impl Config {
                 allow_unconfined: false,
                 allow_network: false,
                 max_processes: None,
+                env: BTreeMap::new(),
                 runtime_dirs: Vec::new(),
             },
             build: BuildInfo {

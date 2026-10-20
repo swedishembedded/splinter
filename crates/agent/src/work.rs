@@ -511,7 +511,11 @@ pub async fn solve_in_workspace(
     // The model's commands always go through the sandbox: a container, or
     // the process sandbox's filesystem confinement. sven's own shell would
     // run them with the whole filesystem.
-    let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::new(env.clone(), tree.clone()))];
+    let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::for_episode(
+        env.clone(),
+        tree.clone(),
+        scratch.path(),
+    )?)];
     let episode = options.solve.deadline;
     options.max_repeated_results = protocol.max_repeated_results;
     let mut worker = match options.knowledge.take() {

@@ -166,6 +166,20 @@ pub trait Sandbox: Send + Sync + std::fmt::Debug {
     /// command may keep files, and is neither created nor removed here. A
     /// program that fails or is stopped by a limit is a [`CodeResult`].
     fn run_command(&self, dir: &Path, call: &CommandCall) -> Result<CodeResult, SandboxError>;
+
+    /// [`Sandbox::run_command`] with `scratch`, a directory outside `dir`, as
+    /// the command's `HOME` and `TMPDIR`: made when missing, writable, kept
+    /// between commands and left for the caller to remove. A sandbox whose
+    /// commands already have a writable `/tmp` of their own (a container's)
+    /// runs the command as [`Sandbox::run_command`] does.
+    fn run_command_with_scratch(
+        &self,
+        dir: &Path,
+        call: &CommandCall,
+        _scratch: &Path,
+    ) -> Result<CodeResult, SandboxError> {
+        self.run_command(dir, call)
+    }
 }
 
 /// Why a sandbox could not resolve a runtime or carry out a call.

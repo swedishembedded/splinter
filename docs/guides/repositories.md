@@ -79,8 +79,14 @@ names one. Without a kernel that can do this (Landlock ABI 4) the command is
 refused, never run open. `--allow-workspace-network` opens the network,
 `--allow-unconfined-workspace` the filesystem on a kernel that cannot confine,
 and `--workspace-max-processes N` bounds the processes and threads of a
-command; each is part of the environment record, so a task generated without
-it names another environment. The agent's own file and search tools are
+command, and `--workspace-env NAME=VALUE` gives every command a variable (for
+example `PYTHONDONTWRITEBYTECODE=1`, so a Python project leaves no bytecode in the tree
+the solver reads); each is part of the environment record, so a task generated without
+it names another environment. The solver's shell says where it works: every command
+starts in the project directory, `/tmp` is not there, and a scratch directory outside the
+tree (`$TMPDIR`, also `$HOME`) keeps its files between commands and never reaches the
+patch. The harness keeps its own state (sven's audit log) out of what the solver reads:
+`.sven` in the tree is a link to a directory the sandbox does not let a command open. The agent's own file and search tools are
 confined to the attempt's tree by sven's project root, for its delegated
 children too. A command, a code call of `run_code` included, runs in a private user and pid
 namespace with a `/proc` of its own, so no other process of the host is visible to it

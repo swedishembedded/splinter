@@ -363,27 +363,50 @@ impl Sandbox for ProcessSandbox {
     /// removed afterwards, so what the command keeps in `dir` is only what
     /// it means to leave there.
     fn run_command(&self, dir: &Path, call: &CommandCall) -> Result<CodeResult, SandboxError> {
-        if !self.allow_unconfined && !self.landlock {
-            return Err(SandboxError::Unconfined);
-        }
         let home = CallDir::create(&self.scratch_root)?;
-        let result = match home.path().to_str() {
-            Some(home_arg) => {
-                let mut spec =
-                    self.process_spec(call.argv.clone(), dir, home_arg, call.stdin.as_ref());
-                if !self.allow_unconfined {
-                    spec.confinement = Some(self.command_confinement(dir, home.path()));
-                }
-                self.execute(&spec)
-            }
-            None => Err(io(home.path())(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "the scratch root is not a UTF-8 path",
-            ))),
-        };
+        let result = self.run_command_at(dir, call, home.path());
         let removed = home.remove();
         let result = result?;
         removed?;
         Ok(result)
+    }
+
+    /// Runs the command with `scratch` as `HOME` and `TMPDIR` and the one
+    /// directory besides `dir` it may write: made here, kept for the next
+    /// command, removed by the caller.
+    fn run_command_with_scratch(
+        &self,
+        dir: &Path,
+        call: &CommandCall,
+        scratch: &Path,
+    ) -> Result<CodeResult, SandboxError> {
+        std::fs::create_dir_all(scratch).map_err(io(scratch))?;
+        self.run_command_at(dir, call, scratch)
+    }
+}
+
+impl ProcessSandbox {
+    /// The command run in `dir` with `home` as its `HOME`, `TMPDIR` and
+    /// private writable directory.
+    fn run_command_at(
+        &self,
+        dir: &Path,
+        call: &CommandCall,
+        home: &Path,
+    ) -> Result<CodeResult, SandboxError> {
+        if !self.allow_unconfined && !self.landlock {
+            return Err(SandboxError::Unconfined);
+        }
+        let Some(home_arg) = home.to_str() else {
+            return Err(io(home)(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "the scratch root is not a UTF-8 path",
+            )));
+        };
+        let mut spec = self.process_spec(call.argv.clone(), dir, home_arg, call.stdin.as_ref());
+        if !self.allow_unconfined {
+            spec.confinement = Some(self.command_confinement(dir, home));
+        }
+        self.execute(&spec)
     }
 }

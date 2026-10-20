@@ -163,3 +163,25 @@ fn the_sampling_of_a_served_model_is_global_flags_and_bounded() {
         assert!(parse(&[bad[0], bad[1], "status"]).is_err(), "{bad:?}");
     }
 }
+
+#[test]
+fn a_project_variable_is_name_equals_value_and_not_one_the_sandbox_sets() {
+    let cli = parse(&[
+        "--workspace-env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "--workspace-env",
+        "A_B=x=y",
+        "status",
+    ])
+    .unwrap();
+    assert_eq!(
+        cli.global.workspace_env,
+        [
+            ("PYTHONDONTWRITEBYTECODE".to_string(), "1".to_string()),
+            ("A_B".to_string(), "x=y".to_string())
+        ]
+    );
+    for bad in ["NOVALUE", "=1", "1A=1", "A-B=1", "HOME=/x", "TMPDIR=/x"] {
+        assert!(parse(&["--workspace-env", bad, "status"]).is_err(), "{bad}");
+    }
+}
