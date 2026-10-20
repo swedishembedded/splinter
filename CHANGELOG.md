@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The orchestrator's async runtime has 4 worker threads instead of one per core: on a 144-core node every subprocess a run spawned copied 144 thread stacks.
+- The `generations` and `release_workspace` integration tests of `splinter-pipelines` run in a third to a half of the time (one shared two-generation run for the specs that read the same ledger, replay policies as separate tests, one mutant per file).
 - The `brain serve` it starts is given brain's model-agnostic serving options: `--max-batch` and `--kv-offload-gb` replace the `--qwen-` spellings (which brain still accepts with a deprecation warning). Needs a brain build with the serving policy.
 
 ### Added (model-check sample)

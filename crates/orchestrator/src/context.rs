@@ -122,11 +122,21 @@ pub struct Runtime {
     environments: Environments,
 }
 
+/// Worker threads of the runtime the blocking commands drive their async
+/// work on. The work is I/O to model servers and subprocesses, not compute;
+/// the default of one worker per core (144 on a large node) costs every
+/// subprocess a campaign spawns the copying of that many thread stacks.
+const RUNTIME_WORKERS: usize = 4;
+
 impl Runtime {
     /// A runtime over `config`, with `allow_remote` as the command line's
     /// network opt-in, stamping records with the wall clock.
     pub fn new(config: Config, allow_remote: bool) -> Result<Self, OrchestratorError> {
-        let runtime = tokio::runtime::Runtime::new().map_err(OrchestratorError::Runtime)?;
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(RUNTIME_WORKERS)
+            .enable_all()
+            .build()
+            .map_err(OrchestratorError::Runtime)?;
         let environments = Environments::new(&config.state_root, &config.workspace);
         let workspace = Workspace::at(&config.state_root);
         Ok(Self {
