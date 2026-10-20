@@ -856,6 +856,79 @@ build is named in its run record. The two-task check of A12.1 is repeated on thi
 default; flags of A2.6 and A4.7 unchanged), switched only between two sets (A4.5); the set boundaries and the
 build of each set are recorded in `runs/ce/STATUS.md`.
 
+### Amendment 17, 2026-10-20, 03:46 CEST: a learning-progress curriculum arm of GEN1 (Gate D), an ablation
+
+Made before any generation of any arm below has run. It adds one arm to GEN1 of `acquisition.md` and changes
+nothing else: not the E3 plan, the exam, the acceptance criterion of GEN1 (at least three accepted generations,
+BWT of the full retention matrix not below -0.05), the limits of a generation, the gate, the verifiers or the
+replay arms. It is an ablation of how the solve and teach budget is spent. It is not a headline, and no result
+of it is part of the paper's claim that the loop works.
+
+**A17.1 What is added.** `splinter practice` and `splinter generation run` take `--curriculum
+frontier|learning-progress|gain-ranked`. The new `schedule` stage runs between `reserve` and `solve` and puts the
+tasks left after the exam is reserved in an order; the solve and teach stages go through them in that order and stop
+at `--budget`; the pass@k frontier classification that follows is unchanged. A task family is the file a fault was
+seeded in. The competence history of a family is its verified pass rate (decided attempts of the policy
+closed-book, not the teacher's and not a critic's) under each release the policy has been, oldest first, read from
+the experience store, with the device-busy seconds of those attempts from their attempt reports.
+(a) Learning progress of a family is the absolute difference between the mean pass rate over the newest W releases
+and over the W before them (W = `--lp-window`, fewer when the history is short, half of it, at least one); it is 0
+with fewer than two measured releases. (b) The weight of a family is its progress divided by its GPU seconds per
+attempt relative to the mean of the families that recorded device time (a family that recorded none is priced at
+that mean, never at zero; the ratio is floored at 0.05), plus a novelty bonus N / sqrt(1 + attempts), normalised
+over families and mixed with the uniform distribution: weight = (1 - E) * normalised + E / n. (c)
+`learning-progress` draws every family once, without replacement and in proportion to its weight, from
+`--curriculum-seed`, the order depending on the seed and the family names alone; `gain-ranked` orders families by
+weight, heaviest first, ties by name, with no draw. Tasks of one family stay together in their admission order.
+(d) The parameters are fixed here and are not tuned on any result: W = 2, N = 0.1, E = 0.1 (the defaults of
+`--lp-window`, `--lp-novelty`, `--lp-explore`). Every family keeps at least E / n of the draw, so none starves.
+It follows the bandit framing of Self-Evolving Curriculum for LLM Reasoning (2025, arXiv 2505.14970), each task
+family an arm of a non-stationary bandit, but its reward is the measured change in verified pass rate per GPU
+second, where that paper's reward is the absolute policy-gradient advantage and its curriculum policy is learned;
+nothing here is learned, and no result of that paper is claimed. The implementation is the commit named
+in `data/commits.json` as `acq-lp`; the arms are run with a splinter binary built from it or a later one, one
+binary and one brain binary for all arms.
+
+**A17.2 Arms.** On the E3 plan (`tasks/e3-plan.toml`), three generations, the same `--exam-families`,
+`--exam-seed`, training `--seed`, `--k`, teacher, `--replay uniform` and `--budget` in every arm and generation:
+the frontier arm (`--curriculum frontier`, the admission order; the existing behaviour), the learning-progress arm
+(`--curriculum learning-progress`, one `--curriculum-seed` per replicate) and the gain-ranked arm
+(`--curriculum gain-ranked`). The arms start from the same base on fresh state roots. The budget is fixed before the
+first generation of any arm as 60 percent of the wall-clock time of the solve and teach stages of an
+unbudgeted frontier-arm generation 1, measured once and written to `runs/acq/lp-budget.txt`; a budget that does
+not truncate any arm's solve is the case where the order cannot matter, and the report then states it (the
+`solve.stopped` field of every generation). Replicates are three draws of the training seed and, for the
+learning-progress arm, the curriculum seed, drawn once from `/dev/urandom` and written to `runs/acq/lp-seeds.txt`
+before the first generation; a frontier-arm replicate and a learning-progress replicate with the same index share
+the training seed. If the lease allows fewer than three replicates, the comparison is a pilot of the replicates
+that ran and carries no claim.
+
+**A17.3 Outcomes.** For each arm and replicate: the number of accepted generations and the BWT of
+`splinter generation matrix` (the Gate D metrics, unchanged); and the verified held-out gain per GPU hour, the sum
+over the three generations of `assessment.new_gain` (the candidate's gain over the champion on that
+generation's own exam, accepted or not) divided by the GPU hours the arm held its card for (the wall-clock of its
+`card`-reserved commands, summed, which includes solving, teaching, training and every measurement of the panel).
+Secondary, each generation: the report's `yield` (tasks kept per GPU hour of the solve and teach attempts, with the
+count of attempts that recorded no device time) and the `schedule.informative` count.
+
+**A17.4 What counts.** The learning-progress arm is reported as ahead of the frontier arm only if, in at least two
+of three replicates, its verified held-out gain per GPU hour is greater than the paired frontier replicate's, its
+accepted generations are not fewer, and its BWT is not below -0.05. Otherwise the result is reported as no
+demonstrated advantage, whatever the means. With three replicates no interval is claimed; the three paired
+differences are listed. The gain-ranked arm is reported on the same outcomes and is not part of the decision. A
+generation that is Stopped or whose exam could not be measured is reported as such and counts as a gain of 0 for
+that replicate only in the denominator-bearing sum, with the reason beside it.
+
+**A17.5 A stated limit on what this can show.** A family has history only once a release has attempted it. In the
+E3 plan each generation trains on repositories no earlier generation touched, so at generation N every family is
+new and `schedule.informative` is 0: the learning-progress order is then the novelty-weighted draw, which is a
+seeded shuffle of the families, and `gain-ranked` is the order by novelty, which is the admission order up to
+ties. A result in which `schedule.informative` is 0 in every generation of an arm is reported as a comparison of
+a seeded family shuffle against the admission order under a truncating budget, and not as evidence about learning
+progress. The signal can only act where a family is attempted under two releases, for instance a second
+`generation run` over the same repository at a later revision; no such arm is registered here.
+
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
