@@ -64,3 +64,4 @@ in the same commit.
 | [076](076-the-repetition-stop-was-decided-by-a-task-beside-the-run-so-the-number-of-calls-depended-on-load.md) | The repetition stop was decided by a task beside the run, so the number of calls depended on load |
 | [077](077-a-run-with-every-tool-call-named-call-0-gave-every-call-every-result-of-the-run.md) | A run with every tool call named `call_0` gave every call every result of the run |
 | [078](078-the-sqlglot-tasks-named-their-symptoms-by-one-word-and-listed-hidden-modules-in-the-test-command.md) | The sqlglot tasks named their symptoms by one word and listed hidden modules in the test command |
+| [079](079-a-test-that-searched-a-whole-dataset-file-for-8080-failed-when-a-blake3-hash-contained-it.md) | A test that searched a whole dataset file for "8080" failed when a blake3 hash contained it |

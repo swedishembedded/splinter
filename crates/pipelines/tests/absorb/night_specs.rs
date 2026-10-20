@@ -52,9 +52,21 @@ fn a_night_teaches_every_claim_from_many_records_and_releases_what_it_answers() 
 
     // The agent's wrong reply and its capitulation are never trained on.
     let text = std::fs::read_to_string(&data.path)?;
+    // Only what the records say: their metadata holds blake3 hex, which
+    // contains "8080" for some inputs.
+    let said: String = text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(serde_json::from_str::<serde_json::Value>)
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .flat_map(|record| record["messages"].as_array().into_iter().flatten())
+        .filter_map(|message| message["content"].as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(
-        !text.contains("8080") && !text.contains("You are right"),
-        "{text}"
+        !said.contains("8080") && !said.contains("You are right"),
+        "{said}"
     );
     assert!(
         text.contains("Svc0 - what port is it on?"),
