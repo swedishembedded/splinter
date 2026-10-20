@@ -295,7 +295,7 @@ pub fn actions(
         .iter()
         .enumerate()
         .map(|(n, _)| json!({"id": format!("{}", n + 1), "content": format!("change {} ({named})", n + 1), "status": "pending"}))
-        .chain([json!({"id": "review", "content": "review my work with git diff", "status": "pending"})])
+        .chain([json!({"id": "review", "content": "review my work against the task", "status": "pending"})])
         .collect();
     out.push(act("todo", json!({"action": "set", "todos": items})));
     let last = files.len().saturating_sub(1);

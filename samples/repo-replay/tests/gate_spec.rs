@@ -152,3 +152,29 @@ fn talking_about_its_own_git_diff_is_not_a_reference_to_the_given_change() {
         );
     }
 }
+
+#[test]
+fn comparing_work_with_the_change_it_was_shown_is_a_reference_but_comparing_with_the_task_is_not() {
+    let read = || vec![call(1, "read_file", json!({"path": "src/ppu.rs"}), "x")];
+    for ok in [
+        "My git diff covers everything the task asked for and nothing else.",
+        "Comparing my git diff with the task, one requirement is still open.",
+    ] {
+        let found = classes_saying(read(), &[ok]);
+        assert!(
+            !found.contains(&"diff_reference".to_string()),
+            "{ok}: {found:?}"
+        );
+    }
+    for leak in [
+        "My edits match the change above.",
+        "Checking my work against the change shown to me.",
+        "I compared the result with the provided diff line by line.",
+    ] {
+        let found = classes_saying(read(), &[leak]);
+        assert!(
+            found.contains(&"diff_reference".to_string()),
+            "{leak}: {found:?}"
+        );
+    }
+}

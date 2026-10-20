@@ -42,7 +42,7 @@ The change:\n";
 /// positions, no names only the diff has, no wholesale apply.
 const GROUNDING_RULES: &str = "\n\nHow to work:\n\
 0. Start by calling todo with action set: one item per change in the diff above, in your own \
-words (what the change does, not its file path), and a last item `review my work with git diff`. \
+words (what the change does, not its file path), and a last item `review my work against the task`. \
 Keep the list up to date as you go.\n\
 For each change, in turn:\n\
 1. Locate. The diff shows file paths, but treat them as unknown: unless the task names the file, \
@@ -58,11 +58,12 @@ step 2, never from the masked diff (xxx is not file content); write_file for a n
 git mv, git rm or rm to move or delete.\n\
 4. Read the edited region again and check it holds exactly the added lines and none of the \
 removed ones: indentation, punctuation, a final newline.\n\
-When every change is done, review: run git diff --stat and git diff on your own work and compare \
-them with the change above. Every removed and added line must be there, and no other hunk or \
-file; fix what is missing or extra with more edits. If the project has a cheap check (a test run \
-or a syntax check), run it at most twice; a failing check does not mean you should deviate from \
-the change.\n\
+When every change is done, review against the TASK the user gave you, not against the diff in this prompt: \
+run git diff --stat and git diff on your own work and check it line by line against what \
+the task asks for. Every requirement of the task must be met by your diff, and your diff must \
+hold nothing the task did not ask for; fix what is missing or extra with more edits. If the \
+project has a cheap check (a test run or a syntax check), run it at most twice; a failing check \
+does not mean you should deviate from the task.\n\
 Do not apply the change wholesale: no git apply, no patch, no git checkout, restore, fetch or \
 other command that fetches or replaces files, no sed -i or perl -i, no here-documents, tee or \
 redirection that writes a file, and no commands that touch anything outside this repository.\n\
