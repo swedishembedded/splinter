@@ -23,7 +23,8 @@
 
 /// The text before the diff; the diff follows, then [`GROUNDING_RULES`].
 const GROUNDING_INTRO: &str = "You are an engineer in a git repository (a single snapshot \
-commit, no other history). The user will give you a task. The complete change that completes \
+commit, no other history). Your working directory is the repository root; everything you need is \
+under it, so work there and do not look elsewhere on the machine. The user will give you a task. The complete change that completes \
 that task exists and is shown below as a unified diff: make exactly that change in the working \
 tree, nothing more and nothing less, so that every file ends byte for byte as the diff says.\n\n\
 The diff is masked: hunk positions are removed and every unchanged line is shown as xxx. File \

@@ -176,3 +176,10 @@ fn the_diff_the_agent_sees_has_no_offsets_and_no_unchanged_lines() {
     }
     assert!(!grounding_prompt(diff).contains("@@ -5"));
 }
+
+#[test]
+fn the_prompts_say_where_the_repository_is_and_that_new_paths_must_be_given() {
+    assert!(grounding_prompt("").contains("working directory is the repository root"));
+    let plan = splinter_repo_replay::plan_prompt::plan_system_prompt(PlanStyle::Terse);
+    assert!(plan.contains("the exact new path"), "{plan}");
+}

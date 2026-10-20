@@ -39,7 +39,7 @@
 //! * `leaked_target` - an identifier that only the diff introduces appeared
 //!   in a call that is not an edit (a search for a name nobody could know).
 //! * `diff_offset_read` - a `read_file` with an explicit line offset whose
-//!   range covers where a hunk of the diff starts, before any search result
+//!   range begins at or just before (within 15 lines of) where a hunk of the diff starts, before any search result
 //!   named that file: the agent knew the place from the diff's positions.
 //! * `diff_reference` - the agent's words refer to the diff or its
 //!   instructions.
@@ -283,7 +283,7 @@ fn shell_rules(command: &str, input: &GateInput<'_>, add: &mut impl FnMut(&str, 
     }
     // Quoted text (a grep pattern with `=>`) is not a redirection.
     let unquoted = re(r#""[^"]*"|'[^']*'"#).replace_all(command, "");
-    for caps in re(r"(\d?>{1,2})\s*(\S+)").captures_iter(&unquoted) {
+    for caps in re(r"(\d?>{1,2})\s*([^\s;|&)]+|&\d)").captures_iter(&unquoted) {
         let target = &caps[2];
         if !(target.starts_with('&') || is_null_device(target)) {
             add(
@@ -537,6 +537,11 @@ fn hunk_starts(diff: &str) -> Vec<(String, u64)> {
     out
 }
 
+/// How many lines before a hunk's start a read may begin and still count as
+/// aimed at the hunk. A read paging through a file lands on hunk starts by
+/// chance only when it begins within this window of one.
+const READ_AHEAD: u64 = 15;
+
 /// A read at the place the diff says, before a search found the file.
 fn offset_rules(input: &GateInput<'_>, add: &mut impl FnMut(&str, String)) {
     let hunks = hunk_starts(input.diff);
@@ -553,17 +558,12 @@ fn offset_rules(input: &GateInput<'_>, add: &mut impl FnMut(&str, String)) {
         else {
             continue;
         };
-        let limit = call
-            .args
-            .get("limit")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(200);
         let Some(path) = call.arg("path").map(|p| norm(p, input.attempt_roots)) else {
             continue;
         };
-        let covers = hunks
-            .iter()
-            .any(|(p, start)| *p == path && offset <= *start && *start < offset + limit);
+        let covers = hunks.iter().any(|(p, start)| {
+            *p == path && start.saturating_sub(READ_AHEAD) <= offset && offset <= *start
+        });
         let searched = calls[..index].iter().any(|c| {
             let search = match c.tool.as_str() {
                 "find_file" | "grep" => true,

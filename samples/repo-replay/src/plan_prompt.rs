@@ -62,7 +62,11 @@ and why it matters; you may name files, modules or functions that exist before t
 engineer knows where to look; do not paste code, diff lines or whole lines from the diff, do not \
 quote the commit message, and do not mention a diff, a patch, a commit, a revision or these \
 instructions; do not write a code block longer than two lines; do not give step-by-step edit \
-instructions or the exact new text of any line. Write plain prose.";
+instructions or the exact new text of any line. But when the change creates, moves, renames or \
+deletes a file, say which one and, for a new or moved file, the exact new path; when it needs a \
+name or literal value that cannot be found anywhere in the repository (a new option, a new \
+function a caller must use), give it: a person who asks for something says where it goes and what it \
+is called. Write plain prose.";
 
 /// The instruction that sets the plan's length and shape.
 const PLAN_TERSE: &str = "Style: terse. One to three sentences, as a person types a request in \
