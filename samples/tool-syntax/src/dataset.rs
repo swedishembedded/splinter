@@ -146,34 +146,19 @@ pub fn to_jsonl(records: &[Record]) -> Result<String, serde_json::Error> {
     Ok(out)
 }
 
-/// Build training records from a captured prompt and performed actions.
+/// Build the training record of one verified performance: the whole episode as
+/// one packed conversation, every assistant decision supervised and every
+/// other message context.
 ///
-/// **The first decision only.** Not a simplification - the only shape this
-/// checkpoint's chat template can be masked against.
-///
-/// The template renders an assistant turn conditionally on whether anything
-/// follows it:
-///
-/// ```jinja
-/// {%- if loop.index0 > ns.last_query_index %}
-///     {%- if loop.last or (not loop.last and reasoning_content) %}
-/// ```
-///
-/// so the same message produces different text in isolation than in context,
-/// there is no honest boundary to mask at, and the trainer refuses it rather
-/// than guessing. One record per decision does not help either: the earlier
-/// decisions are still context in the later records and fail identically.
-/// Only a record whose sole assistant turn is its last message is stable.
-///
-/// The template's own escape is a non-empty `reasoning_content`, which makes
-/// both branches identical - but `generic-messages-v2` has no such field and
-/// is `deny_unknown_fields`, so a producer cannot reach it. Multi-turn
-/// trajectory SFT on this checkpoint is a masking problem on the engine side,
-/// not something a dataset producer can work around.
-///
-/// This is not a consolation prize for this sample: the measured failure is
-/// that the model acts without investigating, so the first decision is the one
-/// that matters.
+/// The conversation is the one the served model is asked to continue at each
+/// step: system prompt, request, then for each action an assistant turn
+/// carrying exactly one tool call (ids `call_0`, `call_1`, ... unique within
+/// the conversation) followed by the tool message that answers that call and
+/// no other, and finally the closing answer. brain's chat fine-tuner encodes
+/// such a record one example per supervised answer, each rendered the way
+/// the serving renderer renders the same messages when the model is asked for
+/// that answer (earlier assistant turns as context, the supervised one last),
+/// so no decision is trained against context the model never sees.
 ///
 /// The system prompt and tool schemas come from a request the agent really
 /// sent, so a record renders at training time the way the prompt renders at
@@ -208,24 +193,15 @@ pub fn records_from_performance(
         .and_then(|t| t.as_array())
         .cloned()
         .unwrap_or_default();
-    let metadata = || RecordMetadata {
-        family: family.to_string(),
-        provenance: Provenance::Scripted,
-        hidden_state: hidden_state.to_string(),
-    };
 
-    // Context as it stood before the first decision: the prompt and the
-    // request, nothing else. Anything more would put an assistant turn in the
-    // context and make the record unmaskable.
-    let (tool, arguments, _observation) = &performed[0];
-    let messages = vec![
-        context("system", system),
-        context("user", request),
-        WireMessage {
+    let mut messages = vec![context("system", system), context("user", request)];
+    for (index, (tool, arguments, observation)) in performed.iter().enumerate() {
+        let id = format!("call_{index}");
+        messages.push(WireMessage {
             role: "assistant".into(),
             content: String::new(),
             tool_calls: vec![WireToolCall {
-                id: Some("call_0".into()),
+                id: Some(id.clone()),
                 kind: "function".into(),
                 function: WireFunction {
                     name: tool.clone(),
@@ -234,16 +210,26 @@ pub fn records_from_performance(
             }],
             tool_call_id: None,
             train: true,
-        },
-    ];
-    let records = vec![Record {
+        });
+        messages.push(WireMessage {
+            tool_call_id: Some(id),
+            ..context("tool", observation)
+        });
+    }
+    messages.push(WireMessage {
+        train: true,
+        ..context("assistant", closing)
+    });
+
+    Ok(vec![Record {
         messages,
         tools,
-        metadata: metadata(),
-    }];
-    let _ = closing;
-
-    Ok(records)
+        metadata: RecordMetadata {
+            family: family.to_string(),
+            provenance: Provenance::Scripted,
+            hidden_state: hidden_state.to_string(),
+        },
+    }])
 }
 
 #[cfg(test)]
@@ -267,11 +253,18 @@ mod tests {
     }
 
     fn performed() -> Vec<(String, String, String)> {
-        vec![(
-            "shell".into(),
-            r#"{"command":"./svctl status"}"#.into(),
-            "active deployment: staging".into(),
-        )]
+        vec![
+            (
+                "shell".into(),
+                r#"{"command":"./svctl status"}"#.into(),
+                "active deployment: staging".into(),
+            ),
+            (
+                "read_file".into(),
+                r#"{"path":"config/staging.json"}"#.into(),
+                "L1: {}".into(),
+            ),
+        ]
     }
 
     fn records(verdict: &Verdict) -> Result<Vec<Record>, Excluded> {
@@ -287,19 +280,58 @@ mod tests {
     }
 
     #[test]
-    fn only_the_first_decision_is_supervised() {
+    fn every_decision_and_only_decisions_are_supervised() {
         // Supervising context teaches the model to produce it - the system
-        // prompt, the request, a tool result - instead of acting.
+        // prompt, the request, a tool result - instead of acting; leaving a
+        // decision unsupervised teaches nothing about it.
         let records = records(&verdict(true)).expect("a solved performance yields records");
         assert_eq!(records.len(), 1);
+        let roles: Vec<&str> = records[0]
+            .messages
+            .iter()
+            .map(|m| m.role.as_str())
+            .collect();
+        assert_eq!(
+            roles,
+            [
+                "system",
+                "user",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant"
+            ]
+        );
         for message in &records[0].messages {
             assert_eq!(
                 message.train,
                 message.role == "assistant",
-                "only the decision may be trained on, got {message:?}"
+                "only the decisions may be trained on, got {message:?}"
             );
         }
         assert_eq!(records[0].tools.len(), 1, "the prompt's tools travel along");
+    }
+
+    #[test]
+    fn each_tool_result_answers_exactly_the_call_before_it() {
+        // The invariant the corrupted CE4 data broke: unique call ids, and a
+        // result that answers one earlier call and no other.
+        let records = records(&verdict(true)).expect("records");
+        let messages = &records[0].messages;
+        let mut ids = Vec::new();
+        for (at, message) in messages.iter().enumerate() {
+            for call in &message.tool_calls {
+                ids.push(call.id.clone().expect("a call id"));
+            }
+            if message.role == "tool" {
+                let before = &messages[at - 1];
+                assert_eq!(before.tool_calls.len(), 1, "one call per decision");
+                assert_eq!(message.tool_call_id, before.tool_calls[0].id);
+            }
+        }
+        let unique: std::collections::BTreeSet<_> = ids.iter().collect();
+        assert_eq!(unique.len(), ids.len(), "call ids repeat: {ids:?}");
     }
 
     #[test]

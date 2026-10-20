@@ -59,6 +59,10 @@ impl std::fmt::Display for EpisodeError {
 
 impl std::error::Error for EpisodeError {}
 
+/// The longest unix socket path `bind` accepts (`sun_path` is 108 bytes with
+/// its terminator).
+const MAX_SOCKET_PATH: usize = 107;
+
 fn io<T>(what: &str, r: std::io::Result<T>) -> Result<T, EpisodeError> {
     r.map_err(|source| EpisodeError::Io {
         what: what.to_string(),
@@ -70,6 +74,10 @@ impl Episode {
     /// Materialise `family`'s workspace into `dir` and start its world with
     /// `hidden_state` live.
     pub fn start(family: &Family, dir: &Path, hidden_state: &str) -> Result<Episode, EpisodeError> {
+        // The agent's tools run in the workspace, not where this process runs:
+        // a socket path relative to the latter would point nowhere for them.
+        let dir = io("resolving the episode directory", std::path::absolute(dir))?;
+        let dir = dir.as_path();
         io(
             "creating the episode directory",
             std::fs::create_dir_all(dir),
@@ -78,6 +86,16 @@ impl Episode {
         copy_tree(&family.root().join("workspace"), &workspace)?;
 
         let socket = dir.join("service.sock");
+        // The world binds a unix socket there; a path past the platform's
+        // limit fails in the world with no word about why.
+        let socket_len = socket.as_os_str().len();
+        if socket_len > MAX_SOCKET_PATH {
+            return Err(EpisodeError::World(format!(
+                "socket path {} is {socket_len} bytes and a unix socket path holds at most \
+                 {MAX_SOCKET_PATH}; name a shorter run directory",
+                socket.display()
+            )));
+        }
         let world = Command::new("python3")
             .arg(family.root().join("world/service.py"))
             .arg(workspace.join("config"))

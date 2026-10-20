@@ -17,11 +17,11 @@
 //! # Why not drive the agent
 //!
 //! Because it does not need to be driven to produce these. Leading the agent
-//! through a scripted episode exercises the whole loop, which is valuable and
-//! is what the measured arms do - but for building a demonstration it adds a
-//! dependency on the loop behaving, and the loop currently stalls after two
-//! scripted rounds (see the tool-syntax sample's README). The tools are the part a
-//! demonstration needs, and they are reachable on their own.
+//! through a scripted episode exercises the whole loop, which is what the
+//! measured arms do - but for building a demonstration it adds a dependency on
+//! the loop behaving, and the model's own choices are exactly what a
+//! demonstration replaces. The tools are the part a demonstration needs, and
+//! they are reachable on their own.
 //!
 //! What this costs, stated plainly: the demonstration is assembled rather than
 //! observed end to end. The actions, their observations and the final verdict
@@ -163,11 +163,32 @@ pub fn perform(
         });
     }
 
+    // The executor reports a command that failed in its output, with a zero
+    // exit status of its own: a shell step reads `[exit 1]` then `[stderr]`,
+    // any tool error `error: ...`. Such an observation answers the call with
+    // "it did not work", which a demonstration of the task done right must not
+    // contain.
+    if reports_failure(&observation) {
+        return Err(PerformError::Refused {
+            tool: action.tool.clone(),
+            output: observation,
+        });
+    }
+
     Ok(Performed {
         action: action.clone(),
         observation,
         failed: false,
     })
+}
+
+/// Whether the executor's output says the call failed (see [`perform`]).
+fn reports_failure(observation: &str) -> bool {
+    observation.starts_with("error:")
+        || observation
+            .strip_prefix("[exit ")
+            .and_then(|rest| rest.split(']').next())
+            .is_some_and(|code| code != "0")
 }
 
 /// Perform every action in order, stopping at the first refusal.
@@ -194,6 +215,35 @@ mod tests {
         let err = perform(Path::new("/nonexistent"), Path::new("/tmp"), &[], &action)
             .expect_err("a non-object must be refused before anything is run");
         assert!(matches!(err, PerformError::Arguments(_)), "{err}");
+    }
+
+    /// A stand-in for the `sven` binary that prints `output` and exits 0.
+    fn executor_printing(output: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = std::env::temp_dir().join(format!(
+            "perform-fake-sven-{}-{}",
+            std::process::id(),
+            output.len()
+        ));
+        std::fs::write(&path, format!("#!/bin/sh\nprintf '%s' '{output}'\n")).expect("script");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        path
+    }
+
+    #[test]
+    fn an_observation_that_says_the_call_failed_is_not_a_demonstration() {
+        let action = Action::new("shell", serde_json::json!({ "shell_command": "x" }));
+        for failing in ["[exit 1]\n[stderr]\nboom", "error: no such tool"] {
+            let sven = executor_printing(failing);
+            let err = perform(&sven, Path::new("/tmp"), &[], &action)
+                .expect_err("a failed call must not become a demonstrated step");
+            assert!(matches!(err, PerformError::Refused { .. }), "{err}");
+            std::fs::remove_file(sven).ok();
+        }
+        let sven = executor_printing("active deployment: staging");
+        let done = perform(&sven, Path::new("/tmp"), &[], &action).expect("a plain answer passes");
+        assert_eq!(done.observation, "active deployment: staging");
+        std::fs::remove_file(sven).ok();
     }
 
     #[test]

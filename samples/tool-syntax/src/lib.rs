@@ -30,6 +30,7 @@
 
 #![warn(missing_docs)]
 
+mod agent;
 mod dataset;
 mod episode;
 mod family;
@@ -37,8 +38,11 @@ mod model_id;
 mod perform;
 mod recorder;
 mod score;
+mod serving;
+mod training;
 mod verdict;
 
+pub use agent::{run_agent, Bounds, Endpoint, ToolActivity};
 pub use dataset::{
     records_from_performance, to_jsonl, Excluded, Provenance, Record, RecordMetadata,
 };
@@ -48,4 +52,6 @@ pub use model_id::ServedModel;
 pub use perform::{perform, perform_all, Action, PerformError, Performed};
 pub use recorder::{capture_path, upstream_of, Recorder};
 pub use score::{ArmScore, Outcome};
+pub use serving::{listed_models, require_adapter, AdapterProofError, ListedModel};
+pub use training::{summary_path, train, TrainRequest, TrainSummary};
 pub use verdict::{PredicateSet, Unevaluated, Verdict};

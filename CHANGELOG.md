@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `generation run --replay learning-progress` weights the replay of earlier generations' records by the learning progress of each earlier exam's pass rate across the champions measured on the panel (`ReplayChoice::LearningProgress`, `ReplayPolicy::LearningProgress`), with the same signal and flags as `--curriculum learning-progress`.
 - `practice` and `generation run` take `--curriculum frontier|learning-progress|gain-ranked` (with `--curriculum-seed`, `--lp-window`, `--lp-novelty`, `--lp-explore`): a `schedule` stage orders the admitted tasks by each family's learning progress per GPU second (the change in verified pass rate between releases, from the stored attempts, divided by measured device seconds, plus a novelty bonus, mixed with the uniform distribution so no family starves) before the budget-limited solve and teach stages; the default `frontier` keeps the admission order. The report gains `schedule` (each family's weight and the order drawn) and `yield` (device seconds of the solve and teach attempts against the tasks kept). Concept mastery can be read with each release's device seconds (`mastery_costed`).
 
+### Fixed (tool-syntax sample)
+- `samples/tool-syntax` measures an agent that can use tools: its engine is built with sven's coding toolset under the default deferred disclosure (8 tool definitions, 3428 prompt tokens) instead of the embedded engine's default of none, asks the server for no reasoning block (the mode the adapter is trained for), seeds each episode's sampling, and enforces the family's tool-call budget.
+- The sample's demonstrations are whole dialogues - every assistant decision supervised, one tool message answering exactly the call before it, call ids `call_0`, `call_1`, ... unique - trained one example per answer as the model is asked for it, instead of the first decision alone.
+
+### Added (tool-syntax sample)
+- `splinter-tool-syntax train` (one monitored LoRA fine-tune on `demonstrate`'s train and held-out records, with a required `--seed`) and `splinter-tool-syntax measure --arm NAME [--adapter-digest D]`, which refuses to measure an adapter arm unless the server lists the model id with that adapter's digest. `demonstrate` writes four differently worded demonstrations per twin and holds the last one out.
+
 ### Fixed
 - `max_repeated_results` stops a stagnating worker at the same call on every run: the count is taken before each model request (`RepetitionGuard`) instead of by the event watcher, which under load let the run make 22 or more calls before it was cancelled.
 

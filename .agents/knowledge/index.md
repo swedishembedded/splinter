@@ -65,3 +65,4 @@ in the same commit.
 | [077](077-a-run-with-every-tool-call-named-call-0-gave-every-call-every-result-of-the-run.md) | A run with every tool call named `call_0` gave every call every result of the run |
 | [078](078-the-sqlglot-tasks-named-their-symptoms-by-one-word-and-listed-hidden-modules-in-the-test-command.md) | The sqlglot tasks named their symptoms by one word and listed hidden modules in the test command |
 | [079](079-a-test-that-searched-a-whole-dataset-file-for-8080-failed-when-a-blake3-hash-contained-it.md) | A test that searched a whole dataset file for "8080" failed when a blake3 hash contained it |
+| [080](080-the-tool-syntax-sample-measured-an-agent-with-no-tools-in-thinking-mode-while-training-for-no-think.md) | The tool-syntax sample measured an agent with one tool, in thinking mode, while its data was for no-think mode |

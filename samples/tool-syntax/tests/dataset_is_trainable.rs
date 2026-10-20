@@ -72,14 +72,14 @@ fn the_trainer_accepts_what_this_harness_derives() {
         .unwrap_or_else(|e| panic!("the trainer rejected a derived dataset: {e}\n{jsonl}"));
 
     assert_eq!(summary.records, 1);
-    // system, user, assistant(tool call).
+    // system, user, assistant(tool call), tool result, closing answer.
     assert_eq!(
-        summary.messages, 3,
+        summary.messages, 5,
         "every turn the model saw must survive into the record: {jsonl}"
     );
     assert_eq!(
-        summary.trained_messages, 1,
-        "exactly the decision is supervised, no more and no fewer: {jsonl}"
+        summary.trained_messages, 2,
+        "exactly the decisions (the call and the closing answer) are supervised: {jsonl}"
     );
 
     std::fs::remove_dir_all(&dir).ok();
