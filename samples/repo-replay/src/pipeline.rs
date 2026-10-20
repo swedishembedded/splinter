@@ -93,6 +93,9 @@ pub struct RunConfig {
     pub error_retries: usize,
     /// How long to wait before a retry pass.
     pub retry_wait: Duration,
+    /// Failed attempts whose reasons all lie in these gate classes are done again:
+    /// for a rule that was wrong and has been fixed.
+    pub redo_classes: Vec<String>,
 }
 
 /// The models of a run.
@@ -260,11 +263,20 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
             .flat_map(|c| config.styles.iter().map(move |s| (c, *s)))
             .filter(|(c, s)| {
                 let last = verdict_of(c, *s);
-                let settled = done.iter().any(|e| {
-                    e.commit == c.sha
-                        && e.style == Some(*s)
-                        && matches!(e.outcome, Outcome::Passed | Outcome::Failed)
-                });
+                let redo = |e: &Entry| {
+                    e.outcome == Outcome::Failed
+                        && !e.classes.is_empty()
+                        && e.classes.iter().all(|c| config.redo_classes.contains(c))
+                };
+                // The last verdict decides: a redone attempt supersedes the one it redoes.
+                let settled = done
+                    .iter()
+                    .rfind(|e| {
+                        e.commit == c.sha
+                            && e.style == Some(*s)
+                            && matches!(e.outcome, Outcome::Passed | Outcome::Failed)
+                    })
+                    .is_some_and(|e| !redo(e));
                 !settled && (pass == 0 || last == Some(Outcome::Error))
             })
             .collect();

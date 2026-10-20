@@ -111,3 +111,18 @@ fn paging_through_a_file_is_not_a_read_at_the_hunk() {
         "{at_hunk:?}"
     );
 }
+
+#[test]
+fn stashing_to_compare_before_and_after_is_not_a_way_to_the_future() {
+    // The attempt tree has one commit: nothing a stash, a status or a log
+    // shows can be the target. `git apply` still is.
+    let shell = |cmd: &str| call(1, "shell", json!({"shell_command": cmd}), "");
+    let read = call(2, "read_file", json!({"path": "src/ppu.rs"}), "x");
+    let stash = classes(vec![
+        shell("git stash -q && cargo check 2>&1 | tail -3; git stash pop -q"),
+        read.clone(),
+    ]);
+    assert!(!stash.contains(&"forbidden_shell".to_string()), "{stash:?}");
+    let apply = classes(vec![shell("git apply fix.patch"), read]);
+    assert!(apply.contains(&"forbidden_shell".to_string()), "{apply:?}");
+}

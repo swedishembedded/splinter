@@ -99,6 +99,7 @@ pub fn default_config(source: &Path, state: &Path) -> RunConfig {
         check_timeout: Duration::from_secs(30),
         error_retries: 0,
         retry_wait: Duration::from_secs(0),
+        redo_classes: Vec::new(),
     }
 }
 

@@ -261,7 +261,7 @@ fn shell_rules(command: &str, input: &GateInput<'_>, add: &mut impl FnMut(&str, 
         (
             "a git command that changes or fetches files or history",
             re(
-                r"\bgit\s+(?:-\S+\s+)*(?:checkout|switch|restore|fetch|pull|clone|merge|rebase|cherry-pick|reset|stash|remote|worktree|format-patch|revert|bundle|submodule)\b",
+                r"\bgit\s+(?:-\S+\s+)*(?:checkout|switch|restore|fetch|pull|clone|merge|rebase|cherry-pick|reset|remote|worktree|format-patch|revert|bundle|submodule)\b",
             ),
         ),
         (

@@ -160,6 +160,10 @@ struct RunArgs {
     /// Passes after the first that retry attempts lost to the server or the disk.
     #[arg(long, default_value_t = 3)]
     error_retries: usize,
+    /// Redo the failed attempts whose reasons all lie in this gate class (repeatable):
+    /// for a rule that was wrong and has been fixed.
+    #[arg(long = "redo-class")]
+    redo_classes: Vec<String>,
     /// Seconds to wait before a retry pass.
     #[arg(long, default_value_t = 120)]
     retry_wait_secs: u64,
@@ -274,6 +278,7 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.checks.clone_from(&args.checks);
     config.check_timeout = Duration::from_secs(args.check_secs);
     config.error_retries = args.error_retries;
+    config.redo_classes.clone_from(&args.redo_classes);
     config.retry_wait = Duration::from_secs(args.retry_wait_secs);
 
     let report = ctx.runtime().block_on(run(&ctx, &models, &config))?;
