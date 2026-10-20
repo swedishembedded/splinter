@@ -22,8 +22,12 @@ use std::sync::Arc;
 
 use splinter_core::clock::FixedClock;
 use splinter_knowledge::capture::{capture_tree, CapturedTree, DirtyPolicy, TreeRequest};
+use splinter_knowledge::tasks::workspace::{
+    Held, RepositoryProfile, WorkspaceGeneration, WorkspaceGenerator, WorkspacePlan,
+};
 use splinter_sandbox::host::DEFAULT_SEARCH_PATH;
 use splinter_sandbox::WorkspaceHost;
+use splinter_sandbox::{Limits, ProcessSandbox};
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
@@ -230,5 +234,63 @@ impl Repo {
             &self.scratch.0.join("capture"),
             &FixedClock::new(AT),
         )
+    }
+}
+
+impl Repo {
+    /// The tasks generated from the repository's `HEAD`, considering
+    /// `mutants_per_file` mutants of each file under test.
+    pub fn generate(&self, mutants_per_file: usize) -> WorkspaceGeneration {
+        let calls = self.scratch.0.join("calls");
+        fs::create_dir_all(&calls).unwrap();
+        let sandbox = ProcessSandbox::new(&calls, [], &[], Limits::default());
+        let generator = WorkspaceGenerator::new(
+            Arc::new(sandbox),
+            self.host.clone(),
+            self.store.clone(),
+            self.scratch.0.join("work"),
+        )
+        .with_plan(WorkspacePlan {
+            mutants_per_file,
+            ..WorkspacePlan::default()
+        })
+        .unwrap();
+        let tree = self.capture("HEAD");
+        let laid = self.scratch.0.join("laid");
+        generator
+            .environment(&tree.snapshot)
+            .materialize(&tree.archive_path, &laid)
+            .unwrap();
+        let profile = RepositoryProfile::detect(&laid).unwrap();
+        let qualified = generator.qualify(&profile, &tree.snapshot).unwrap();
+        generator
+            .from_mutations(
+                &tree.snapshot,
+                &qualified,
+                &Held::none(),
+                &FixedClock::new(AT),
+            )
+            .unwrap()
+    }
+
+    /// The files of the solver's tree of `task`, laid out under `dir`.
+    pub fn solver_tree(
+        &self,
+        task: &splinter_knowledge::tasks::workspace::WorkspaceTask,
+        dir: &Path,
+    ) {
+        let _ = fs::remove_dir_all(dir);
+        let calls = self.scratch.0.join("calls");
+        let sandbox = ProcessSandbox::new(&calls, [], &[], Limits::default());
+        let generator = WorkspaceGenerator::new(
+            Arc::new(sandbox),
+            self.host.clone(),
+            self.store.clone(),
+            self.scratch.0.join("work"),
+        );
+        generator
+            .environment(&task.snapshot)
+            .materialize(&generator.archive_of(&task.snapshot).unwrap(), dir)
+            .unwrap();
     }
 }

@@ -216,11 +216,10 @@ impl WorkspaceGenerator {
             return Err(Stop::Refuse(Reason::AlreadyHeld));
         }
         let killed = self.kill(base, mutated.path())?;
-        let views = self.stage_views(base, path, &mutant.text, &mutated, &killed)?;
+        let (views, withheld, hidden) =
+            self.solver_views(base, path, &mutant.text, &mutated, &killed)?;
         let env = self.environment(&views.snapshot);
         let (failing, passing) = self.reproduce(base, &env, &views, &killed)?;
-        self.tree_stands_without(base, &env, &views, &killed)?;
-        let hidden = hidden_text(mutated.path(), &killed.files);
         let wording = instruction::Wording {
             version: self.plan.instruction,
             sources: &base.qualified.profile.files_under_test,
@@ -228,7 +227,7 @@ impl WorkspaceGenerator {
         let request = instruction::compose_as(
             &wording,
             base.command(),
-            &killed.files,
+            &withheld.files,
             &failing,
             &killed.docs,
             &killed.messages,
@@ -244,7 +243,7 @@ impl WorkspaceGenerator {
         )?;
         let text = request.text;
 
-        let strength = self.hidden_strength(base, path, original, mutant, &killed)?;
+        let strength = self.hidden_strength(base, path, original, mutant, &withheld)?;
         if strength.variants >= MIN_VARIANTS_TO_REFUSE
             && strength
                 .kill_rate()
@@ -262,8 +261,8 @@ impl WorkspaceGenerator {
             fail_to_pass: vec![base.harness.select(base.command(), &failing)],
             pass_to_pass: select_if_any(base, &passing),
             hidden: views.hidden(),
-            protected: protected(base, &killed.files),
-            hidden_paths: killed.files.iter().cloned().collect(),
+            protected: protected(base, &withheld.files),
+            hidden_paths: withheld.files.iter().cloned().collect(),
             hidden_strength: Some(strength),
             expectations,
             pinned: Vec::new(),
@@ -282,36 +281,62 @@ impl WorkspaceGenerator {
         })
     }
 
-    /// Refuses a task whose solver tree cannot run the tests it keeps: a test
-    /// file that stays imports a module that is withheld (a shared base class
-    /// of the tests, say), so everything that imports it fails in the tree the
-    /// solver is given, whatever it does. Withholding a module that in-tree
-    /// tests import would also give the solver the tests it must not see, so
-    /// the task is refused rather than made with that module left in.
+    /// The tree the solver is given, the tests it lacks and their text. The
+    /// test files that kill the mutant are taken out whole, which hides
+    /// every test in them; when the tests that stay then cannot run (a kept
+    /// test file imports a withheld one, a shared base class of the suite,
+    /// say), only the failing cases are cut out of those files instead, and
+    /// the module stays for its importers. Refused when the kept tests do
+    /// not run in either tree: a solver could not work in it, whatever it
+    /// did.
+    fn solver_views(
+        &self,
+        base: &Parent<'_>,
+        path: &str,
+        mutant: &str,
+        mutated: &FreshTree,
+        killed: &Killed,
+    ) -> Result<(Staged, Withheld, Privileged), Stop> {
+        let mut attempts = vec![Withheld::files(killed)];
+        if base.harness.cuts_cases() {
+            attempts.push(Withheld::cases(base, killed));
+        }
+        let mut last = Stop::Refuse(Reason::HiddenImportedByTree);
+        for withheld in attempts {
+            let (views, hidden) =
+                self.stage_views(base, path, mutant, mutated, killed, &withheld)?;
+            match self.tree_stands_without(base, &views, killed, &withheld) {
+                Ok(()) => return Ok((views, withheld, hidden)),
+                Err(stop @ Stop::Refuse(Reason::HiddenImportedByTree)) => last = stop,
+                Err(other) => return Err(other),
+            }
+        }
+        Err(last)
+    }
+
+    /// Refuses a tree whose kept tests do not all run and pass in it.
     fn tree_stands_without(
         &self,
         base: &Parent<'_>,
-        env: &WorkspaceEnvironment,
         views: &Staged,
         killed: &Killed,
+        withheld: &Withheld,
     ) -> Result<(), Stop> {
-        // The tests of the files that stay: those of a withheld file are not
-        // in the tree and are not the solver's to run.
+        // The tests that stay: those of a withheld file are not in the tree
+        // and are not the solver's to run.
         let kept: BTreeSet<String> = killed
             .passing
             .iter()
-            .filter(|id| {
-                base.locate(id)
-                    .is_none_or(|file| !killed.files.contains(&file))
-            })
+            .filter(|id| !withheld.hides(base, id))
             .cloned()
             .collect();
         if kept.is_empty() {
             return Ok(());
         }
-        let tree = FreshTree::lay(env, &views.archive, &self.scratch)?;
+        let env = self.environment(&views.snapshot);
+        let tree = FreshTree::lay(&env, &views.archive, &self.scratch)?;
         let call = base.harness.select(base.command(), &kept);
-        let report = self.suite(base, env, tree.path(), &call)?;
+        let report = self.suite(base, &env, tree.path(), &call)?;
         let ran: BTreeSet<&String> = report.ran().collect();
         if !report.failed.is_empty() || ran != kept.iter().collect() {
             return Err(Stop::Refuse(Reason::HiddenImportedByTree));
@@ -325,7 +350,7 @@ impl WorkspaceGenerator {
     /// them, each put in the baseline tree and run against the whole suite.
     /// A variant counts when some test catches it (else it may be equivalent
     /// to the original) and the suite still runs the baseline's tests; it is
-    /// caught by the hidden tests when a failing test lives in a hidden file.
+    /// caught by the hidden tests when a failing test is one of `withheld`.
     /// A variant that runs past the budget or truncates the report is left
     /// out: it says nothing of the tests.
     fn hidden_strength(
@@ -334,7 +359,7 @@ impl WorkspaceGenerator {
         path: &str,
         original: &str,
         mutant: &Mutant,
-        killed: &Killed,
+        withheld: &Withheld,
     ) -> Result<HiddenStrength, Stop> {
         let mut strength = HiddenStrength {
             variants: 0,
@@ -361,10 +386,7 @@ impl WorkspaceGenerator {
                 continue;
             }
             strength.variants += 1;
-            if report.failed.iter().any(|id| {
-                base.locate(id)
-                    .is_some_and(|file| killed.files.contains(&file))
-            }) {
+            if report.failed.iter().any(|id| withheld.hides(base, id)) {
                 strength.caught += 1;
             }
         }
@@ -416,8 +438,9 @@ impl WorkspaceGenerator {
         })
     }
 
-    /// The tree the solver is given (the mutant without the files that kill
-    /// it) and the hidden overlay (those files), archived.
+    /// The tree the solver is given (the mutant without the tests `withheld`
+    /// takes out) and the hidden overlay (the files that kill it, whole),
+    /// archived, with the text the solver does not get.
     fn stage_views(
         &self,
         base: &Parent<'_>,
@@ -425,18 +448,31 @@ impl WorkspaceGenerator {
         mutant: &str,
         mutated: &FreshTree,
         killed: &Killed,
-    ) -> Result<Staged, Stop> {
+        withheld: &Withheld,
+    ) -> Result<(Staged, Privileged), Stop> {
         let solver = FreshTree::lay(&base.env, &base.archive, &self.scratch)?;
         write(&solver.path().join(path), mutant)?;
-        for file in &killed.files {
+        for file in &withheld.files {
             let hidden = solver.path().join(file);
             std::fs::remove_file(&hidden).map_err(|source| WorkspaceError::Io {
                 path: hidden,
                 source,
             })?;
         }
+        for (file, ids) in &withheld.cases {
+            let call = base
+                .harness
+                .cut_cases(file, ids)
+                .ok_or(Stop::Refuse(Reason::HiddenImportedByTree))?;
+            let (result, _) = run_quiet(&base.env, solver.path(), &call, Some(base.budget))?;
+            if result.exit_code != Some(0) {
+                return Err(Stop::Refuse(Reason::HiddenImportedByTree));
+            }
+        }
+        let hidden = withheld.text(mutated.path(), solver.path(), &killed.files);
         let files: Vec<String> = killed.files.iter().cloned().collect();
-        Ok(self.stage(solver.path(), &[], Some((mutated.path(), &files)))?)
+        let staged = self.stage(solver.path(), &[], Some((mutated.path(), &files)))?;
+        Ok((staged, hidden))
     }
 
     /// Runs the failing and the passing tests on the solver's tree with the
@@ -573,19 +609,91 @@ fn protected(base: &Parent<'_>, hidden: &BTreeSet<String>) -> Vec<String> {
     files.into_iter().collect()
 }
 
-/// The text of the hidden test files in `tree`.
-fn hidden_text(tree: &Path, files: &BTreeSet<String>) -> Privileged {
-    let content: String = files
-        .iter()
-        .filter_map(|file| std::fs::read(tree.join(file)).ok())
-        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-        .collect::<Vec<_>>()
-        .join("\n");
-    Privileged {
-        kind: PrivilegedKind::Other(HIDDEN_TEST.into()),
-        content,
-        span: None,
+/// The tests the solver's tree lacks.
+struct Withheld {
+    /// Test files taken out whole: every test in them is hidden.
+    files: BTreeSet<String>,
+    /// Test files that stay in the tree without the failing cases (the ids)
+    /// named here, because tests that stay import them.
+    cases: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl Withheld {
+    /// Every test file that kills the mutant, whole.
+    fn files(killed: &Killed) -> Self {
+        Self {
+            files: killed.files.clone(),
+            cases: BTreeMap::new(),
+        }
     }
+
+    /// Only the failing cases of the files that kill the mutant.
+    fn cases(base: &Parent<'_>, killed: &Killed) -> Self {
+        let mut cases: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for id in &killed.failing {
+            if let Some(file) = base.locate(id) {
+                cases.entry(file).or_default().insert(id.clone());
+            }
+        }
+        Self {
+            files: BTreeSet::new(),
+            cases,
+        }
+    }
+
+    /// Whether the solver's tree lacks the test `id`.
+    fn hides(&self, base: &Parent<'_>, id: &str) -> bool {
+        base.locate(id).is_some_and(|file| {
+            self.files.contains(&file) || self.cases.get(&file).is_some_and(|ids| ids.contains(id))
+        })
+    }
+
+    /// The text of the tests the solver's tree lacks: the files of `hidden`
+    /// whole, and of the others the lines that `solver` no longer has.
+    fn text(&self, hidden: &Path, solver: &Path, files: &BTreeSet<String>) -> Privileged {
+        let read = |tree: &Path, file: &String| {
+            std::fs::read(tree.join(file))
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                .ok()
+        };
+        let content: String = files
+            .iter()
+            .filter_map(|file| {
+                let original = read(hidden, file)?;
+                match read(solver, file) {
+                    Some(kept) => Some(lines_missing(&original, &kept)),
+                    None => Some(original),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Privileged {
+            kind: PrivilegedKind::Other(HIDDEN_TEST.into()),
+            content,
+            span: None,
+        }
+    }
+}
+
+/// The lines of `original` that `kept` (a copy of it with some definitions
+/// removed) has no occurrence left for, in order: what a reader of `kept`
+/// cannot see.
+fn lines_missing(original: &str, kept: &str) -> String {
+    let mut left: BTreeMap<&str, usize> = BTreeMap::new();
+    for line in kept.lines() {
+        *left.entry(line).or_default() += 1;
+    }
+    original
+        .lines()
+        .filter(|line| match left.get_mut(line) {
+            Some(count) if *count > 0 => {
+                *count -= 1;
+                false
+            }
+            _ => true,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Records an admitted request for the near-duplicate rule: what it says is

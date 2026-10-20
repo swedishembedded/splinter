@@ -84,6 +84,10 @@ impl SuiteReport {
     }
 }
 
+/// The program that cuts unittest cases out of a module by the parser's line
+/// ranges (see [`Harness::cut_cases`]).
+const CUT_UNITTEST_CASES: &str = include_str!("cut_unittest_cases.py");
+
 /// Characters of a test id that the selection patterns would read as
 /// wildcards.
 const PATTERN_CHARS: [char; 3] = ['*', '?', '['];
@@ -135,6 +139,29 @@ impl Harness {
                 argv.extend(ids.iter().map(|id| cargo_name(id).to_string()));
                 call(argv)
             }
+        }
+    }
+
+    /// Whether [`Harness::cut_cases`] knows this runner's test source.
+    #[must_use]
+    pub fn cuts_cases(self) -> bool {
+        self == Self::Unittest
+    }
+
+    /// The call that takes the cases `ids` out of the test file `file` of the
+    /// tree it runs in, leaving the rest of the file; `None` for a runner
+    /// whose source this does not know how to cut.
+    #[must_use]
+    pub fn cut_cases(self, file: &str, ids: &BTreeSet<String>) -> Option<CommandCall> {
+        match self {
+            Self::Unittest => {
+                let mut argv: Vec<String> = ["python3", "-I", "-c", CUT_UNITTEST_CASES, file]
+                    .map(String::from)
+                    .into();
+                argv.extend(ids.iter().cloned());
+                Some(call(argv))
+            }
+            Self::Cargo => None,
         }
     }
 

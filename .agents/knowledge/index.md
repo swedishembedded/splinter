@@ -73,3 +73,4 @@ in the same commit.
 | [085](085-a-dataset-from-the-27b-teacher-taught-the-host-login-the-scratch-path-and-the-loop-tail-under-a-prompt-it-was-not-served-with.md) | A dataset from the 27B teacher taught the host login, the scratch path and the loop tail, under a prompt it was not served with |
 | [086](086-the-solvers-shell-gave-it-no-scratch-space-and-showed-it-the-harnesss-own-log.md) | The solver's shell gave it no scratch space and showed it the harness's own log |
 | [087](087-the-coding-agent-prompt-and-request-told-the-solver-to-reproduce-with-tests-that-are-hidden.md) | The coding-agent prompt and request told the solver to reproduce with tests that are hidden |
+| [088](088-withholding-a-test-file-the-suite-imports-refused-every-sqlglot-fault-instead-of-cutting-its-failing-cases.md) | Withholding a test file the suite imports refused every sqlglot fault instead of cutting its failing cases |

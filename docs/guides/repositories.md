@@ -141,10 +141,15 @@ with the test modules taken out of the tree left out. A name of fewer than three
 (`databricks`, `time`) is not enough to act on, so such a symptom is listed with what the
 failed check observed: the two values of an equality, or the error the code raised, as one
 line each. A traceback frame, a diff, the test's path and the call of the assertion are never
-shown; those are the hidden test's code. A candidate fault is refused, and counted, when a
-test that stays in the tree imports a module that would be withheld
-(`hidden_imported_by_tree`) or when a short symptom cannot be rendered this way
-(`symptom_not_actionable`). The values shown are the one disclosure a task makes of its
+shown; those are the hidden test's code. The test files that catch a fault are taken out of the
+solver's tree whole. When tests that stay import one of them (a base class every test of the
+suite shares), that file stays and only the failing cases are cut out of it (for `unittest`, by
+the parser's line ranges of each case with its decorators and the comments above it); the
+hidden overlay puts the whole file back at verification, the file is protected from patches
+and the audit counts only the removed text as hidden. A candidate fault is refused, and
+counted, when the tests that stay still cannot all run in the tree
+(`hidden_imported_by_tree`: a runner whose source is not cut, a case that is not a method of
+its module) or when a short symptom cannot be rendered this way (`symptom_not_actionable`). The values shown are the one disclosure a task makes of its
 hidden tests, so the exposure audit counts the request as text the solver may see.
 
 `practice --instruction-version 2` words the request of the tasks it generates afresh: it also

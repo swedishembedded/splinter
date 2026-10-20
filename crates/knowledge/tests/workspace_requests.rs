@@ -7,8 +7,8 @@
 // procure our services by sending an email to info@swedishembedded.com.
 
 //! Spec: what the request of a task made from a seeded fault may say and
-//! name. A test module that tests in the tree import is never withheld (the
-//! candidate is refused); a failing test whose name is too short to act on
+//! name. A test module that tests in the tree import is never withheld
+//! whole; a failing test whose name is too short to act on
 //! is listed with what its assertion observed, never with the test's code,
 //! path or call, and a candidate whose assertion cannot be rendered is
 //! refused with a counted reason.
@@ -17,51 +17,13 @@
 
 mod common;
 
-use std::fs;
-use std::sync::Arc;
-
-use common::{Repo, AT};
-use splinter_core::clock::FixedClock;
+use common::Repo;
 use splinter_eval::verifiers::workspace::WorkspaceCheck;
-use splinter_knowledge::tasks::workspace::{
-    Held, Reason, RepositoryProfile, WorkspaceGeneration, WorkspaceGenerator, WorkspacePlan,
-    WorkspaceTask,
-};
-use splinter_sandbox::{Limits, ProcessSandbox};
+use splinter_knowledge::tasks::workspace::{Reason, WorkspaceGeneration, WorkspaceTask};
 
 /// Tasks generated from the project `extra` is added to.
 fn generate(name: &str, extra: &[(&str, &str)]) -> WorkspaceGeneration {
-    let repo = Repo::new(name, extra);
-    let calls = repo.scratch.0.join("calls");
-    fs::create_dir_all(&calls).unwrap();
-    let sandbox = ProcessSandbox::new(&calls, [], &[], Limits::default());
-    let generator = WorkspaceGenerator::new(
-        Arc::new(sandbox),
-        repo.host.clone(),
-        repo.store.clone(),
-        repo.scratch.0.join("work"),
-    )
-    .with_plan(WorkspacePlan {
-        mutants_per_file: 6,
-        ..WorkspacePlan::default()
-    })
-    .unwrap();
-    let tree = repo.capture("HEAD");
-    let laid = repo.scratch.0.join("laid");
-    generator
-        .environment(&tree.snapshot)
-        .materialize(&tree.archive_path, &laid)
-        .unwrap();
-    let profile = RepositoryProfile::detect(&laid).unwrap();
-    let qualified = generator.qualify(&profile, &tree.snapshot).unwrap();
-    generator
-        .from_mutations(
-            &tree.snapshot,
-            &qualified,
-            &Held::none(),
-            &FixedClock::new(AT),
-        )
-        .unwrap()
+    Repo::new(name, extra).generate(6)
 }
 
 fn check_of(task: &WorkspaceTask) -> WorkspaceCheck {
@@ -87,19 +49,24 @@ class UsesPricingTests(unittest.TestCase):
 ";
 
 #[test]
-fn a_module_that_tests_in_the_tree_import_is_never_withheld_and_the_task_is_refused() {
+fn a_module_that_tests_in_the_tree_import_is_never_withheld_whole() {
     let generation = generate(
         "imported",
         &[("tests/test_uses_pricing.py", USES_PRICING_TESTS)],
     );
     // Faults in pricing are caught by tests/test_pricing.py, which the kept
-    // test imports: taking it out would break the tree, leaving it in would
-    // show the tests.
+    // test imports: taking it out whole would break the tree, leaving it in
+    // would show the tests. Its failing cases are cut instead (see
+    // workspace_shared_helpers).
     assert!(
-        generation.count(Reason::HiddenImportedByTree) >= 1,
+        generation
+            .admitted
+            .iter()
+            .any(|t| t.family == "shop/pricing.py"),
         "refused {:?}",
         generation.refused
     );
+    assert_eq!(generation.count(Reason::HiddenImportedByTree), 0);
     for admitted in &generation.admitted {
         let check = check_of(admitted);
         assert!(
