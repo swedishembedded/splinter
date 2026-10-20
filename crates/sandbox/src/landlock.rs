@@ -215,7 +215,7 @@ impl Prepared {
     /// the ruleset, for good. Makes only system calls and allocates nothing.
     pub fn enforce(&self) -> io::Result<()> {
         if self.private_proc {
-            crate::namespace::enter_private_proc()?;
+            crate::namespace::enter_private_proc(crate::namespace::Need::Always)?;
             // The fresh `/proc` is another filesystem than the one the rules
             // were built from, so it is allowed here, read only.
             allow_read_beneath(self.ruleset.as_raw_fd(), b"/proc\0")?;

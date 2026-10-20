@@ -6,9 +6,9 @@
 // agent from seeing the other processes of its host then you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! A private process view for a confined command: a user and pid namespace
-//! with its own `/proc`, so that no other process of the host (its
-//! environment, command line, memory maps) is visible to the command at all.
+//! A private process view for a command: a user and pid namespace with its
+//! own `/proc`, so that no other process of the host (its environment,
+//! command line, memory maps) is visible to the command at all.
 //!
 //! Landlock cannot do this: system tools read `/proc/self`, which names a
 //! different directory in every process, so `/proc` cannot be allowed for the
@@ -26,6 +26,14 @@
 //! signal, an exit status of 128 plus the signal that the relay turns back
 //! into that signal on itself (the shell's convention; a command that itself
 //! exits with such a status is reported as the signal).
+//!
+//! The same chain contains a command that is not confined: whatever it
+//! starts, however it detaches (`setsid`, double fork, a parent that exits
+//! first), is in the namespace and ends with it, so nothing can be orphaned
+//! out of a run. The reaper also dies with the supervisor (`PR_SET_PDEATHSIG`
+//! on the relay's child), which takes the namespace with it. A host that
+//! forbids user namespaces runs an unconfined command without one
+//! ([`Need::IfAvailable`]); a confined command is refused instead.
 //!
 //! The user in the namespace has the user's own numeric id, so files look as
 //! they do outside, and loses its capabilities when the command is executed.
@@ -128,16 +136,29 @@ fn relay_and_exit(child: libc::pid_t, reaper: bool) -> ! {
     }
 }
 
+/// Whether a host that cannot create the namespace is an error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Need {
+    /// The command must run in the namespace or not at all.
+    Always,
+    /// The command runs without the namespace where the host forbids it.
+    IfAvailable,
+}
+
 /// Enters a new user and pid namespace with a fresh `/proc`. Returns in the
 /// process that goes on to `exec` the command; every other process of the
 /// chain ends here. See the module documentation.
-pub fn enter_private_proc() -> io::Result<()> {
+pub fn enter_private_proc(need: Need) -> io::Result<()> {
     // SAFETY: plain system calls on static, NUL-terminated strings and
     // stack buffers; nothing allocates.
     unsafe {
         let (uid, gid) = (libc::getuid(), libc::getgid());
         if libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNS | libc::CLONE_NEWPID) != 0 {
-            return Err(last_error());
+            // Nothing has changed yet, so the command can go on without.
+            return match need {
+                Need::Always => Err(last_error()),
+                Need::IfAvailable => Ok(()),
+            };
         }
         let mut map = [0u8; 48];
         write_file(b"/proc/self/setgroups\0", b"deny")?;
@@ -152,7 +173,12 @@ pub fn enter_private_proc() -> io::Result<()> {
             0 => {}
             child => relay_and_exit(child, false),
         }
-        // Process 1: a private mount of `/proc`, then the process that execs.
+        // Process 1: dies with the relay (the supervisor's own child, which
+        // is killed when the supervisor dies), taking the namespace along.
+        if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
+            libc::_exit(126);
+        }
+        // A private mount of `/proc`, then the process that execs.
         if libc::mount(
             std::ptr::null(),
             c"/".as_ptr(),

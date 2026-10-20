@@ -35,6 +35,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::landlock::Confinement;
+use crate::namespace::{enter_private_proc, Need};
 
 /// How long a killed run's output may take to close before the run gives
 /// up on it.
@@ -42,6 +43,10 @@ const KILL_GRACE: Duration = Duration::from_secs(2);
 
 /// How often a running program is checked for having finished.
 const POLL: Duration = Duration::from_millis(10);
+
+/// How often the memory a run holds is measured, when it is bounded. Each
+/// measurement reads a few files per process of the run.
+const MEMORY_POLL: Duration = Duration::from_millis(100);
 
 /// The first wait between looks at a run that has not ended.
 const FIRST_POLL: Duration = Duration::from_micros(100);
@@ -63,6 +68,14 @@ pub struct ResourceLimits {
     /// count plus this budget). A run that spends it fails to fork with
     /// `EAGAIN`; other processes of the user starting meanwhile spend it too.
     pub max_processes: Option<u64>,
+    /// The most memory the whole run may hold resident at once, in bytes,
+    /// summed over the program and every descendant (anonymous pages: the
+    /// shared libraries every process maps are not counted per process).
+    /// `RLIMIT_AS` binds each process on its own, so a test command that
+    /// starts many interpreters is bounded by none of them; this bound is
+    /// enforced by the supervisor, which polls the run and kills it when the
+    /// sum passes the bound ([`ProcessOutput::memory_exceeded`]).
+    pub tree_memory_bytes: Option<u64>,
 }
 
 /// The processes and threads the calling user runs now, counted from
@@ -124,6 +137,25 @@ impl ResourceLimits {
         }
         Ok(())
     }
+}
+
+/// Asks the kernel to kill the calling process (a child between `fork` and
+/// `exec`) when its parent, the supervisor `supervisor`, ends.
+///
+/// The signal is tied to the thread that started the child and is cleared by
+/// `exec` of a set-uid program only; a supervisor that died before the request
+/// took effect is detected by its parent id having changed.
+fn die_with_supervisor(supervisor: u32) -> std::io::Result<()> {
+    // SAFETY: `prctl` and `getppid` take and return plain integers.
+    unsafe {
+        if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        if libc::getppid() as u32 != supervisor {
+            return Err(std::io::Error::from_raw_os_error(libc::ESRCH));
+        }
+    }
+    Ok(())
 }
 
 /// One run of a program.
@@ -200,6 +232,9 @@ pub struct ProcessOutput {
     /// Whether the timeout ended the run. A program that exits on time
     /// but leaves a process holding its output open is timed out too.
     pub timed_out: bool,
+    /// Whether the run was killed because the memory it held passed
+    /// [`ResourceLimits::tree_memory_bytes`].
+    pub memory_exceeded: bool,
 }
 
 /// Why a run could not be carried out. A program that fails, or is killed
@@ -461,6 +496,25 @@ fn descendants_by_scan(root: libc::pid_t) -> Vec<libc::pid_t> {
     found
 }
 
+/// The anonymous memory the process `root` and all its descendants hold
+/// resident, in bytes: per process the resident pages of `statm` less the
+/// ones that map a file (the shared libraries of every interpreter are one
+/// copy, not one per process).
+fn tree_resident_bytes(root: libc::pid_t) -> u64 {
+    // SAFETY: `sysconf` takes a plain integer.
+    let page = u64::try_from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) }).unwrap_or(4096);
+    std::iter::once(root)
+        .chain(descendants(root))
+        .filter_map(|pid| std::fs::read_to_string(format!("/proc/{pid}/statm")).ok())
+        .map(|statm| {
+            let mut fields = statm.split_whitespace().skip(1);
+            let mut next = || fields.next().and_then(|f| f.parse::<u64>().ok());
+            let (resident, shared) = (next().unwrap_or(0), next().unwrap_or(0));
+            resident.saturating_sub(shared) * page
+        })
+        .sum()
+}
+
 /// Kills the run's whole process group and every descendant of its leader, so
 /// a process it started cannot keep running, or keep its output open, past
 /// the run, even one that moved to a session or group of its own.
@@ -523,7 +577,22 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         }
     }
 
+    // The leader dies with the supervisor (a crash, a kill, a restart of the
+    // machine's job): nothing the supervisor can no longer wait for may run on.
+    let supervisor = std::process::id();
+    // SAFETY: the closure makes only async-signal-safe calls (`prctl`,
+    // `getppid`) and touches no memory shared with the parent.
+    unsafe {
+        command.pre_exec(move || die_with_supervisor(supervisor));
+    }
+
     // Built here, where it may allocate; the child only enforces it.
+    if spec.confinement.is_none() {
+        // SAFETY: the closure makes only system calls and allocates nothing.
+        unsafe {
+            command.pre_exec(|| enter_private_proc(Need::IfAvailable));
+        }
+    }
     if let Some(confinement) = &spec.confinement {
         let prepared = confinement
             .prepare()
@@ -562,6 +631,10 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
     let deadline = started + spec.timeout;
     let mut exited = false;
     let mut timed_out = false;
+    let mut memory_exceeded = false;
+    let memory_bound = spec.resources.and_then(|r| r.tree_memory_bytes);
+    let leader = libc::pid_t::try_from(child.id()).ok();
+    let mut next_memory_check = started + MEMORY_POLL;
     // A command that ends at once (most of a campaign's git and test
     // commands) must not wait a whole `POLL` to be noticed: the wait starts
     // short and doubles up to `POLL`.
@@ -577,6 +650,15 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         if now >= deadline {
             timed_out = true;
             break;
+        }
+        if let (Some(bound), Some(leader), false) = (memory_bound, leader, exited) {
+            if now >= next_memory_check {
+                if tree_resident_bytes(leader) > bound {
+                    memory_exceeded = true;
+                    break;
+                }
+                next_memory_check = now + MEMORY_POLL;
+            }
         }
         std::thread::sleep(wait.min(deadline - now));
         wait = (wait * 2).min(POLL);
@@ -606,6 +688,7 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         exit_code: status.code(),
         signal: status.signal(),
         timed_out,
+        memory_exceeded,
     })
 }
 

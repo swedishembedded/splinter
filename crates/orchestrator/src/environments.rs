@@ -49,6 +49,14 @@ pub const WORKSPACE_CPU_SECONDS: u64 = 580;
 /// in the process sandbox, which a compiler maps generously.
 pub const WORKSPACE_MEMORY_BYTES: u64 = 32 * 1024 * 1024 * 1024;
 
+/// The most memory the processes of one command of a workspace may hold
+/// resident together, in bytes, in the process sandbox. The address space
+/// limit binds each process alone; a test command that starts many
+/// interpreters (a mutant that leaks in each) is bounded only by this, and a
+/// command that passes it is killed and reported as stopped by a limit. It
+/// is part of the environment record of the tasks made from now on.
+pub const WORKSPACE_TREE_MEMORY_BYTES: u64 = 24 * 1024 * 1024 * 1024;
+
 /// The largest file one command of a workspace may write, in bytes.
 pub const WORKSPACE_FILE_SIZE_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -69,6 +77,17 @@ pub fn workspace_limits(output_cap_bytes: u64, memory_bytes: Option<u64>) -> Lim
         file_size_bytes: WORKSPACE_FILE_SIZE_BYTES,
         output_cap_bytes,
         ..Limits::default()
+    }
+}
+
+/// [`workspace_limits`] for the process sandbox, which also bounds the memory
+/// of the whole command: by `memory_bytes` when one is named (so one figure
+/// bounds each process and their sum), else by [`WORKSPACE_TREE_MEMORY_BYTES`].
+#[must_use]
+pub fn process_workspace_limits(output_cap_bytes: u64, memory_bytes: Option<u64>) -> Limits {
+    Limits {
+        tree_memory_bytes: Some(memory_bytes.unwrap_or(WORKSPACE_TREE_MEMORY_BYTES)),
+        ..workspace_limits(output_cap_bytes, memory_bytes)
     }
 }
 
@@ -238,7 +257,7 @@ impl Environments {
                 &self.workspace_calls,
                 cargo,
                 &allowed,
-                workspace_limits(settings.output_cap_bytes, settings.memory_bytes),
+                process_workspace_limits(settings.output_cap_bytes, settings.memory_bytes),
             )
             .allow_unconfined(settings.allow_unconfined)
             .allow_network(settings.allow_network)
@@ -313,5 +332,17 @@ mod tests {
             },
             default
         );
+    }
+
+    #[test]
+    fn the_process_sandbox_also_bounds_the_whole_command() {
+        let default = process_workspace_limits(1 << 20, None);
+        assert_eq!(default.tree_memory_bytes, Some(WORKSPACE_TREE_MEMORY_BYTES));
+        assert_eq!(default.memory_bytes, WORKSPACE_MEMORY_BYTES);
+        let named = process_workspace_limits(1 << 20, Some(8 << 30));
+        assert_eq!(named.tree_memory_bytes, Some(8 << 30));
+        assert_eq!(named.memory_bytes, 8 << 30);
+        // A container has its own memory limit and records no such bound.
+        assert_eq!(workspace_limits(1 << 20, None).tree_memory_bytes, None);
     }
 }

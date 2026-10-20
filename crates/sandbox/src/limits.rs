@@ -56,6 +56,13 @@ pub struct Limits {
     /// budget, and other processes the user starts during the call spend it
     /// too.
     pub max_processes: Option<u64>,
+    /// The most memory the whole call (every process of it together) may
+    /// hold resident, in bytes; `None` is no bound. The process sandbox
+    /// enforces it (see [`ResourceLimits::tree_memory_bytes`]); it is part of
+    /// an environment's snapshot only when set, so environments made without
+    /// one keep their identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tree_memory_bytes: Option<u64>,
     /// The most bytes kept of each of standard output and standard error.
     pub output_cap_bytes: u64,
 }
@@ -68,6 +75,7 @@ impl Default for Limits {
             memory_bytes: DEFAULT_MEMORY_BYTES,
             file_size_bytes: DEFAULT_FILE_SIZE_BYTES,
             max_processes: Some(DEFAULT_MAX_PROCESSES),
+            tree_memory_bytes: None,
             output_cap_bytes: DEFAULT_OUTPUT_CAP_BYTES,
         }
     }
@@ -95,6 +103,7 @@ impl Limits {
             address_space_bytes: self.memory_bytes,
             file_size_bytes: self.file_size_bytes,
             max_processes: self.max_processes,
+            tree_memory_bytes: self.tree_memory_bytes,
         }
     }
 }

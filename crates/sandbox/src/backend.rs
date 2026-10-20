@@ -75,8 +75,14 @@ pub struct CodeResult {
     pub exit_code: Option<i32>,
     /// The signal that ended the program, when one did.
     pub signal: Option<i32>,
-    /// Whether the call was stopped by its wall-clock or CPU-time limit.
+    /// Whether the call was stopped by a limit rather than ending on its own:
+    /// its wall-clock, CPU-time or memory limit (`memory_exceeded` says which).
     pub timed_out: bool,
+    /// Whether the memory the call held passed its bound and it was killed
+    /// for that; a resource failure of the environment, not a verdict of the
+    /// program. Implies `timed_out`.
+    #[serde(default)]
+    pub memory_exceeded: bool,
     /// Whether standard output was cut at the cap.
     pub stdout_truncated: bool,
     /// Whether standard error was cut at the cap.
@@ -92,7 +98,8 @@ impl CodeResult {
             stderr: String::from_utf8_lossy(&output.stderr.bytes).into_owned(),
             exit_code: output.exit_code,
             signal: output.signal,
-            timed_out,
+            timed_out: timed_out || output.memory_exceeded,
+            memory_exceeded: output.memory_exceeded,
             stdout_truncated: output.stdout.truncated,
             stderr_truncated: output.stderr.truncated,
         }

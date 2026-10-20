@@ -74,3 +74,4 @@ in the same commit.
 | [086](086-the-solvers-shell-gave-it-no-scratch-space-and-showed-it-the-harnesss-own-log.md) | The solver's shell gave it no scratch space and showed it the harness's own log |
 | [087](087-the-coding-agent-prompt-and-request-told-the-solver-to-reproduce-with-tests-that-are-hidden.md) | The coding-agent prompt and request told the solver to reproduce with tests that are hidden |
 | [088](088-withholding-a-test-file-the-suite-imports-refused-every-sqlglot-fault-instead-of-cutting-its-failing-cases.md) | Withholding a test file the suite imports refused every sqlglot fault instead of cutting its failing cases |
+| [089](089-a-process-detached-from-a-run-or-left-by-a-dead-supervisor-kept-running-and-memory-was-bounded-per-process-only.md) | A process detached from a run, or left by a dead supervisor, kept running, and memory was bounded per process only |

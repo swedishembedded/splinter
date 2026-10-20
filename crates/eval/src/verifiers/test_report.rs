@@ -540,6 +540,7 @@ mod tests {
             exit_code: Some(0),
             signal: None,
             timed_out: false,
+            memory_exceeded: false,
             stdout_truncated: false,
             stderr_truncated: false,
         }

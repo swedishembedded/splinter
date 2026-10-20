@@ -327,6 +327,7 @@ Ran 5 tests in 0.002s
             exit_code: Some(1),
             signal: None,
             timed_out: false,
+            memory_exceeded: false,
             stdout_truncated: false,
             stderr_truncated: false,
         });
@@ -411,6 +412,7 @@ test src/lib.rs - total (line 3) ... ok
             exit_code: Some(101),
             signal: None,
             timed_out: false,
+            memory_exceeded: false,
             stdout_truncated: false,
             stderr_truncated: false,
         });

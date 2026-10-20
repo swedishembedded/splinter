@@ -558,10 +558,20 @@ fn another_process_of_the_user_is_invisible_through_proc() {
     let environ = format!("cat /proc/{pid}/environ");
     let status = format!("cat /proc/{pid}/status");
 
-    // With nothing in the way the secret is there to read: the fixture
-    // attacks something real.
-    let open = rig.sh(&rig.sandbox().allow_unconfined(true), &environ);
-    assert!(open.stdout.contains("bystander-secret-value"), "{open:?}");
+    // With nothing in the way the secret is there to read, for any process of
+    // the user: the fixture attacks something real. (An unconfined command
+    // is in a pid namespace of its own too, which only hides it.)
+    // The kernel publishes a new program's environment a moment after spawn
+    // returns, so an early read is empty.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let open = loop {
+        let read = std::fs::read(format!("/proc/{pid}/environ")).unwrap();
+        if !read.is_empty() || std::time::Instant::now() > deadline {
+            break read;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    assert!(String::from_utf8_lossy(&open).contains("bystander-secret-value"));
 
     // Landlock alone already refuses the files that need ptrace access
     // (the environment, the memory maps), but leaves the others readable:

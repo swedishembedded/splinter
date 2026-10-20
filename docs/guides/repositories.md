@@ -79,7 +79,7 @@ names one. Without a kernel that can do this (Landlock ABI 4) the command is
 refused, never run open. `--allow-workspace-network` opens the network,
 `--allow-unconfined-workspace` the filesystem on a kernel that cannot confine,
 `--workspace-max-processes N` bounds the processes and threads of a
-command, `--workspace-memory-gib N` the address space of each of its processes (32 GiB by default), and `--workspace-env NAME=VALUE` gives every command a variable (for
+command, `--workspace-memory-gib N` the address space of each of its processes and the memory the whole command holds resident (32 GiB per process and 24 GiB for the whole command by default; a command that passes the bound is killed and reported as stopped by a limit), and `--workspace-env NAME=VALUE` gives every command a variable (for
 example `PYTHONDONTWRITEBYTECODE=1`, so a Python project leaves no bytecode in the tree
 the solver reads); each is part of the environment record, so a task generated without
 it names another environment. The solver's shell says where it works: every command
@@ -91,7 +91,7 @@ confined to the attempt's tree by sven's project root, for its delegated
 children too. A command, a code call of `run_code` included, runs in a private user and pid
 namespace with a `/proc` of its own, so no other process of the host is visible to it
 (Landlock alone already refuses it another process's environment); a kernel that cannot
-make one refuses the command. The exposure
+make one refuses the command (a command run unconfined is put in the namespace where the host allows it, and any command dies with the process that supervises it, so nothing it started is left running). The exposure
 audit reads a command's mention of a path outside the tree by what that call does with it
 and what its own result shows. Results arrive in the order the calls finished, so each is
 paired to its call by the call id it names (the shell's `[exit code N]` line is not a
