@@ -929,6 +929,54 @@ progress. The signal can only act where a family is attempted under two releases
 `generation run` over the same repository at a later revision; no such arm is registered here.
 
 
+### Amendment 18, 2026-10-20, 03:58 CEST: a learning-progress replay arm of GEN1 (Gate D), an ablation
+
+Made before any generation of any arm of Amendments 17 or 18 has run. It adds replay arms to GEN1 and changes nothing
+else: not the E3 plan, the exam, the limits of a generation, the gate, the verifiers or the acceptance criterion of
+GEN1. Amendment 17 stays as registered, and its task-order arms are expected to be uninformative on E3 for the reason
+A17.5 gives (no family has history at the generation that first meets it); the sentence of A17.5 that no arm is
+registered where a history exists is superseded by this amendment. This is an ablation, not a headline.
+
+**A18.1 What is added.** `splinter generation run --replay learning-progress` (`ReplayChoice::LearningProgress`,
+recorded in the ledger as `replay_policy` of kind `learning_progress` with its weights). Every generation measures its
+champion on the whole protected panel, so each earlier generation's exam (a panel column) has a pass rate under every
+release that has been the champion. The history of a column is one round per release measured on it, oldest first,
+from the ledger's champion measurements and the current generation's own (two measurements of one release are one
+round, the newer; a cell is counted when its task is in the current panel and it has a verdict; a round's attempts are
+the cells counted and its passes those graded right). The weight of a column is the learning-progress weight of
+Amendment 17 (A17.1 a, b, with W = 2, N = 0.1, E = 0.1, the same flags, fixed here and not tuned): the absolute
+difference of the mean pass rates of the newest and the preceding window of releases, a novelty bonus that shrinks with
+the cells counted, mixed with the uniform distribution so that no generation gets less than E / n of the replay. A
+panel measurement records no device time, so the cost divisor is neutral (every column priced at the mean). Each
+earlier release's training families take the weight of that release's exam (an exam's families are reserved apart from
+the families trained on, so the weight is carried across, as the failure-targeted replay carries the champion's
+failure rate), and the replay of earlier records is allocated over them in proportion exactly as for the
+failure-targeted replay: the fraction, seed and per-record draw are unchanged. Generation 1 has nothing to replay.
+Expected behaviour, stated so it is not read as a finding: the first change in a column's pass rate is the rise from the
+generation that trained on it, so a recently learned generation weighs more, and a generation being forgotten weighs
+more by the absolute value; a column measured on few tasks moves by noise, and the exam sizes (cells per column) are
+reported with every weight.
+
+**A18.2 Arms.** On the E3 plan, three generations, with the task order fixed to the frontier order in every arm
+(`--curriculum frontier`) so that the arms differ in replay alone, and the same `--exam-families`, `--exam-seed`,
+training `--seed`, `--k`, teacher and `--budget` as Amendment 17 A17.2: `--replay learning-progress`, `--replay uniform`
+(the arm that is also Amendment 17's frontier arm, run once and used by both) and `--replay failure-targeted`. Fresh
+state roots, the same base, three replicates with the training seeds of A17.2 (the learning-progress replay needs no
+seed of its own: its weights are a function of the measurements and the record draw uses the training seed). If the
+lease allows fewer than three replicates the comparison is a pilot and carries no claim.
+
+**A18.3 Outcomes.** Per arm and replicate, as A17.3: accepted generations, the BWT of `splinter generation matrix`, and
+the verified held-out gain per GPU hour (the sum over the three generations of `assessment.new_gain` over the
+card-reserved wall hours of the arm's commands). Reported beside them: the recorded replay weights and the cells per
+column of every generation, and the average final performance of the full matrix.
+
+**A18.4 What counts.** The learning-progress replay is reported as ahead of a comparator (`uniform`, and separately
+`failure-targeted`; two decisions, no correction for there being two) only if, in at least two of three paired
+replicates, its BWT is not lower and its held-out gain per GPU hour is greater than the comparator's, its accepted
+generations are not fewer, and its BWT is not below -0.05. Otherwise the result is reported as no demonstrated
+advantage. With three replicates no interval is claimed; the paired differences are listed. A generation that is
+Stopped or whose exam could not be measured is reported as such, with the reason.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on

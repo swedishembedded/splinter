@@ -60,3 +60,6 @@ these experiments has been run on a trained model.
 - **Curriculum arm.** Amendment 17 of `coding-tasks.md` adds, before any generation runs, an ablation of
   how the solve and teach budget is spent: the frontier (admission) order against a learning-progress order and
   a gain-ranked order on the same E3 plan, seeds and budget.
+- **Learning-progress replay arm.** Amendment 18 of `coding-tasks.md` adds, before any generation runs, `--replay
+  learning-progress` beside the uniform and failure-targeted replay arms: the replay weighted by how fast each earlier
+  exam's pass rate has moved across releases, on the same E3 plan, seeds and budget.
