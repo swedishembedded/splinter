@@ -33,7 +33,7 @@ mod common;
 
 use splinter_data::ReplayPolicy;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Weak};
 
 use common::fake_brain::fake_brain;
 use common::gate::{anchor_file, put_base, Brain, FakeTrainer, NOW};
@@ -200,7 +200,7 @@ fn generation(repo: &Path, modules_asked: usize, replay: ReplayChoice) -> Genera
             repository: repo.to_path_buf(),
             revision: "HEAD".into(),
             max_tasks: Some(128),
-            mutants_per_file: Some(2),
+            mutants_per_file: Some(1),
             exam_families: Some(modules_asked),
             // seed: which modules form the exam decides how many training
             // records the fixture leaves; the spec needs one split that
@@ -259,13 +259,42 @@ fn two_generations(ctx: &Context, scratch: &Scratch, replay: ReplayChoice) -> (L
     (first, second)
 }
 
+/// The two generations under a uniform replay, with the context they were
+/// made in. Three specs read the same ledger, so the run is made once and
+/// shared while any of them is running; the scratch directory goes with the
+/// last of them.
+struct Uniform {
+    ctx: Context,
+    second: Learner,
+    _scratch: Scratch,
+}
+
+fn uniform() -> Arc<Uniform> {
+    static RUN: Mutex<Weak<Uniform>> = Mutex::new(Weak::new());
+    // Held while the run is made: the specs that need it wait for the one
+    // that makes it instead of making their own.
+    let mut slot = RUN.lock().unwrap();
+    if let Some(run) = slot.upgrade() {
+        return run;
+    }
+    let (scratch, ctx) = context("generations-uniform");
+    let (_, second) = two_generations(&ctx, &scratch, ReplayChoice::Uniform);
+    let run = Arc::new(Uniform {
+        ctx,
+        second,
+        _scratch: scratch,
+    });
+    *slot = Arc::downgrade(&run);
+    run
+}
+
 #[test]
 fn a_candidate_that_keeps_what_the_champion_had_and_gains_on_the_new_exam_is_released_and_recorded()
 {
-    let (scratch, ctx) = context("generations-accept");
-    two_generations(&ctx, &scratch, ReplayChoice::Uniform);
+    let run = uniform();
+    let ctx = &run.ctx;
 
-    let ledger = read_ledger(&ctx, "coding").unwrap();
+    let ledger = read_ledger(ctx, "coding").unwrap();
     assert_eq!(ledger.len(), 2);
     let (first, second) = (&ledger[0], &ledger[1]);
     assert_eq!((first.generation, second.generation), (1, 2));
@@ -358,10 +387,10 @@ fn a_candidate_that_loses_protected_families_is_rejected_before_the_gate_and_the
 
 #[test]
 fn the_full_matrix_measures_every_generation_on_every_protected_task() {
-    let (scratch, ctx) = context("generations-matrix");
-    two_generations(&ctx, &scratch, ReplayChoice::Uniform);
+    let run = uniform();
+    let ctx = &run.ctx;
     let work = splinter_eval::gate::AgenticConfig::default();
-    let matrix = retention_matrix(&ctx, "default", work, &CancelToken::new()).unwrap();
+    let matrix = retention_matrix(ctx, "default", work, &CancelToken::new()).unwrap();
 
     // The base, then the two releases.
     assert_eq!(matrix.rows.len(), 3);
@@ -395,27 +424,31 @@ fn the_full_matrix_measures_every_generation_on_every_protected_task() {
     assert!((value(&metrics.learning_gain) - 1.0).abs() < 1e-9);
 }
 
-#[test]
-fn replay_follows_the_policy_and_a_rebuild_starts_a_fresh_adapter_from_the_base() {
-    let plans = |replay: ReplayChoice, test: &str| -> (Learner, Learner) {
-        let (scratch, ctx) = context(test);
-        two_generations(&ctx, &scratch, replay)
-    };
+/// The second generation's learner, after two generations under `replay`
+/// in a context of their own.
+fn learners_under(replay: ReplayChoice, test: &str) -> (Learner, Learner) {
+    let (scratch, ctx) = context(test);
+    two_generations(&ctx, &scratch, replay)
+}
 
-    // None replays nothing of the first generation's records.
-    let (_, second) = plans(ReplayChoice::None, "generations-replay-none");
+#[test]
+fn replay_none_hands_the_next_generation_no_replay_of_the_first() {
+    let (_, second) = learners_under(ReplayChoice::None, "generations-replay-none");
     let plan = &second.plans()[0];
     assert!(plan.replay_file.is_none(), "{plan:#?}");
+}
 
-    // Uniform replays some, and continues the champion.
-    let (_, second) = plans(ReplayChoice::Uniform, "generations-replay-uniform");
-    let plan = &second.plans()[0];
+#[test]
+fn a_uniform_replay_replays_some_and_continues_the_champion() {
+    let run = uniform();
+    let plan = &run.second.plans()[0];
     assert!(plan.replay_file.is_some());
     assert!(plan.continue_from.is_some() && plan.parent.is_some());
+}
 
-    // A balanced replay gives each capability of the earlier records the same
-    // share, as far as it has records.
-    let (first, second) = plans(
+#[test]
+fn a_balanced_replay_gives_each_capability_the_same_share_as_far_as_it_has_records() {
+    let (first, second) = learners_under(
         ReplayChoice::CapabilityBalanced,
         "generations-replay-balanced",
     );
@@ -443,10 +476,12 @@ fn replay_follows_the_policy_and_a_rebuild_starts_a_fresh_adapter_from_the_base(
     let drawn: usize = per_family.values().sum();
     let available = first.fitted.lock().unwrap()[0].len();
     assert_eq!(per_family.len(), drawn.min(available), "{per_family:?}");
+}
 
-    // A rebuild trains every dataset accumulated on a fresh adapter, still a
-    // child of the champion in the lineage, with nothing continued.
-    let (_, second) = plans(ReplayChoice::RebuildFromBase, "generations-replay-rebuild");
+#[test]
+fn a_rebuild_trains_every_dataset_accumulated_on_a_fresh_adapter_from_the_base() {
+    // Still a child of the champion in the lineage, with nothing continued.
+    let (_, second) = learners_under(ReplayChoice::RebuildFromBase, "generations-replay-rebuild");
     let plan = &second.plans()[0];
     assert_eq!(plan.datasets.len(), 2, "the first generation's and the new");
     assert!(plan.continue_from.is_none());

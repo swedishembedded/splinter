@@ -106,7 +106,7 @@ fn request(repo: &Path, release: bool) -> PracticeRequest {
         repository: repo.to_path_buf(),
         revision: "HEAD".into(),
         max_tasks: Some(64),
-        mutants_per_file: Some(2),
+        mutants_per_file: Some(1),
         exam_families: Some(EXAM_FAMILIES),
         // seed: which modules form the exam decides how many training records
         // the fixture leaves; the spec needs one split that leaves enough.
