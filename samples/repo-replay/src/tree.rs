@@ -193,6 +193,7 @@ pub fn vocabulary(tree: &Tree) -> std::collections::HashSet<String> {
             if let Ok(text) = std::str::from_utf8(bytes) {
                 words.extend(identifiers(text).map(String::from));
                 words.extend(dashed_names(text));
+                words.extend(numbers(text));
             }
         }
     }
@@ -217,5 +218,17 @@ pub fn dashed_names(text: &str) -> Vec<String> {
         .find_iter(text)
         .map(|m| m.as_str().replace('-', "_"))
         .filter(|n| n.chars().count() >= 4)
+        .collect()
+}
+
+/// The numbers of `text` that count as content: two or more digits, or hexadecimal,
+/// lower-cased.
+#[must_use]
+pub fn numbers(text: &str) -> Vec<String> {
+    regex::Regex::new(r"\b0[xX][0-9A-Fa-f_]+\b|\b\d[\d_]*(?:\.\d+)?\b")
+        .unwrap_or_else(|_| unreachable!("a fixed pattern"))
+        .find_iter(text)
+        .map(|m| m.as_str().to_lowercase())
+        .filter(|n| n.chars().filter(char::is_ascii_alphanumeric).count() >= 2)
         .collect()
 }

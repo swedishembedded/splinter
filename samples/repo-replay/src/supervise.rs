@@ -35,10 +35,10 @@ use splinter_sdk::agent::chat::{reply, ChatOptions, Turn};
 use splinter_sdk::agent::solve::Model;
 
 use crate::gate::refers_to_given_change;
-use crate::justify::{code_names, numbers, Support};
+use crate::justify::{code_names, Support};
 use crate::plan::changed_lines;
 use crate::supervisor_prompt::{supervisor_refusal_notice, SUPERVISOR_PROMPT};
-use crate::tree::identifiers;
+use crate::tree::{identifiers, numbers};
 
 /// What a message is checked against.
 pub struct MessageContext<'a> {

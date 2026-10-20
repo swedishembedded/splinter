@@ -246,7 +246,12 @@ pub fn evaluate(input: &GateInput<'_>, config: &GateConfig) -> Verdict {
     }
     edit_rules(input, config, &mut add);
     leak_rules(input, &mut add);
-    for found in unjustified(input.plan, calls, input.guidance) {
+    let known: HashSet<String> = input
+        .parent_words
+        .iter()
+        .map(|w| w.to_lowercase())
+        .collect();
+    for found in unjustified(input.plan, calls, input.guidance, &known) {
         add(
             "unjustified_content",
             format!(

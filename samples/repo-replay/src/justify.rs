@@ -15,9 +15,12 @@
 //! then fails as `unjustified_content` and the plan is to blame - it was
 //! under-specified.
 //!
-//! What counts as content:
+//! What counts as content, in the code an edit writes (a comment, and a prose
+//! file such as markdown, is prose and is not looked at):
 //! * identifier-shaped words of four or more characters
-//!   ([`crate::tree::identifiers`]), compared without regard to letter case;
+//!   ([`crate::tree::identifiers`]), compared without regard to letter case,
+//!   when the parent tree does not already hold them (a name the repository
+//!   has is not new);
 //! * numbers of two or more digits, and hexadecimal numbers;
 //! * double-quoted string literals with at least three letters, which must
 //!   appear verbatim (their words are then covered by the same text).
@@ -32,7 +35,7 @@ use std::collections::HashSet;
 use regex::Regex;
 
 use crate::trace::Call;
-use crate::tree::{dashed_names, identifiers};
+use crate::tree::{dashed_names, identifiers, numbers};
 
 /// Tools whose arguments write file content.
 pub const EDIT_TOOLS: &[&str] = &["edit_file", "write_file"];
@@ -59,15 +62,6 @@ fn squeeze(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// The numbers of `text` that count as content (two or more digits, or hexadecimal).
-pub fn numbers(text: &str) -> Vec<String> {
-    re(r"\b0[xX][0-9A-Fa-f_]+\b|\b\d[\d_]*(?:\.\d+)?\b")
-        .find_iter(text)
-        .map(|m| m.as_str().to_lowercase())
-        .filter(|n| n.chars().filter(char::is_ascii_alphanumeric).count() >= 2)
-        .collect()
-}
-
 /// The strings of `text` that count as content, and `text` without them.
 fn strings(text: &str) -> (Vec<String>, String) {
     let quoted = re(r#""([^"\n\\]*(?:\\.[^"\n\\]*)*)""#);
@@ -86,6 +80,8 @@ fn strings(text: &str) -> (Vec<String>, String) {
 pub struct Support {
     words: HashSet<String>,
     verbatim: String,
+    /// Lower-cased names the repository already holds: not new.
+    known: HashSet<String>,
 }
 
 impl Support {
@@ -95,6 +91,15 @@ impl Support {
         let mut support = Self::default();
         support.add(text);
         support
+    }
+
+    /// The same support, and every name in `known` (lower-cased) is not new.
+    #[must_use]
+    pub fn with_known(self, known: &HashSet<String>) -> Self {
+        Self {
+            known: known.clone(),
+            ..self
+        }
     }
 
     /// Adds what `text` shows.
@@ -113,7 +118,9 @@ impl Support {
     pub fn missing_words(&self, text: &str) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for word in identifiers(text).map(str::to_string).chain(numbers(text)) {
-            if !self.words.contains(&word.to_lowercase()) && !out.contains(&word) {
+            let lower = word.to_lowercase();
+            if !self.words.contains(&lower) && !self.known.contains(&lower) && !out.contains(&word)
+            {
                 out.push(word);
             }
         }
@@ -174,6 +181,41 @@ pub fn code_names(text: &str) -> Vec<String> {
     out
 }
 
+/// Whether `path` names a prose file, whose words are not names.
+fn is_prose_path(path: Option<&str>) -> bool {
+    path.is_some_and(|p| {
+        [".md", ".txt", ".rst", ".adoc"]
+            .iter()
+            .any(|ext| p.to_lowercase().ends_with(ext))
+    })
+}
+
+/// The code of `added` (new text written to `path`): comments taken out, and
+/// everything of a prose file.
+#[must_use]
+pub fn code_part(path: Option<&str>, added: &str) -> String {
+    if is_prose_path(path) {
+        return String::new();
+    }
+    let attribute = re(r"^#(?:\[|!|include|define|ifn?def|if|endif|else|elif|pragma|undef)");
+    let trailing = re(r"\s//.*$");
+    added
+        .lines()
+        .filter(|line| {
+            let t = line.trim_start();
+            let comment = t.starts_with("//")
+                || t.starts_with("--")
+                || t.starts_with("/*")
+                || t.starts_with('*')
+                || t.starts_with(";;")
+                || (t.starts_with('#') && !attribute.is_match(t));
+            !comment
+        })
+        .map(|line| trailing.replace(line, "").into_owned())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// The lines an edit call adds: the `+` lines of an `edit_file` diff, or the
 /// whole text of a `write_file`.
 #[must_use]
@@ -217,15 +259,21 @@ pub fn support_of_run(plan: &str, calls: &[Call], guidance: &[(usize, String)]) 
 /// result nor an earlier message of the user (`guidance`: the message and the
 /// number of calls made when it came) supports, in order.
 #[must_use]
-pub fn unjustified(plan: &str, calls: &[Call], guidance: &[(usize, String)]) -> Vec<Unjustified> {
-    let mut support = Support::of(plan);
+pub fn unjustified(
+    plan: &str,
+    calls: &[Call],
+    guidance: &[(usize, String)],
+    known: &HashSet<String>,
+) -> Vec<Unjustified> {
+    let mut support = Support::of(plan).with_known(known);
     let mut out = Vec::new();
     for (index, call) in calls.iter().enumerate() {
         for (_, message) in guidance.iter().filter(|(at, _)| *at == index) {
             support.add(message);
         }
         if let Some(added) = added_text(call) {
-            for text in support.missing(&added) {
+            let code = code_part(call.arg("path"), &added);
+            for text in support.missing(&code) {
                 out.push(Unjustified {
                     step: call.step,
                     tool: call.tool.clone(),

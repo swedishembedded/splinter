@@ -206,6 +206,51 @@ fn a_crate_named_with_dashes_in_a_result_supports_its_code_spelling_and_a_users_
         ]
     };
     use splinter_repo_replay::justify::unjustified;
-    assert!(unjustified(&plan, &calls(2), &guidance).is_empty());
-    assert!(!unjustified(&plan, &calls(2), &[(2usize, guidance[0].1.clone())]).is_empty());
+    assert!(unjustified(&plan, &calls(2), &guidance, &Default::default()).is_empty());
+    assert!(!unjustified(
+        &plan,
+        &calls(2),
+        &[(2usize, guidance[0].1.clone())],
+        &Default::default()
+    )
+    .is_empty());
+}
+
+#[test]
+fn comments_and_prose_files_are_not_names_and_a_name_the_repository_already_has_is_not_new() {
+    // Prose is not content: the words of a comment, of a markdown file.
+    let comment = "@@\n-    return price * quantity\n+    // Multiplication happens elsewhere, surprisingly.\n+    return price * quantity  // surprising\n";
+    assert!(reasons(PLAN, FILE, comment, vec![]).is_empty());
+    let notes = verdict_of(
+        PLAN,
+        vec![call(
+            1,
+            "write_file",
+            json!({"path": "src/notes.md", "text": "# Surcharge\n\nExplains the unexplained.\n"}),
+            "ok",
+        )],
+    );
+    assert!(notes.is_empty(), "{notes:?}");
+    // A code line in a `#[...]` attribute or an include is code.
+    let attribute = "@@\n-    return price * quantity\n+    #[inline_always_zzz]\n";
+    assert_eq!(reasons(PLAN, FILE, attribute, vec![]).len(), 1);
+
+    // A name the parent tree already holds is not new, whether or not the agent saw it.
+    let edit = "@@\n-    return price * quantity\n+    return apply_surcharge(price * quantity)\n";
+    let known: std::collections::HashSet<String> =
+        ["Apply_Surcharge", "price", "quantity", "return"]
+            .map(String::from)
+            .into();
+    let found = splinter_repo_replay::justify::unjustified(
+        PLAN,
+        &[call(
+            1,
+            "edit_file",
+            json!({"path": "src/calc.rs", "diff": edit}),
+            "ok",
+        )],
+        &[],
+        &known.iter().map(|w| w.to_lowercase()).collect(),
+    );
+    assert!(found.is_empty(), "{found:?}");
 }
