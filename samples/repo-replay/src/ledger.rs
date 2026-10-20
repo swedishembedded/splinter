@@ -80,16 +80,31 @@ pub fn path(state: &Path) -> std::path::PathBuf {
 /// Writes one line to the state directory's run log: the tools a run was
 /// made with (`git --version`), so a verdict can be traced to the git that
 /// produced the commits and diffs it rests on.
-pub fn note_run(state: &Path, git_version: &str, source: &Path) -> Result<()> {
+pub fn note_run(
+    state: &Path,
+    git_version: &str,
+    source: &Path,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Result<()> {
     let file = state.join("runs.jsonl");
     let mut out = fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&file)?;
-    let line =
-        serde_json::json!({"git_version": git_version, "source": source.display().to_string()});
+    let line = serde_json::json!({"git_version": git_version, "source": source.display().to_string(), "from": from, "to": to});
     writeln!(out, "{line}")?;
     Ok(())
+}
+
+/// The `(from, to)` range of the last run noted in `state`.
+pub fn last_range(state: &Path) -> Result<(Option<String>, Option<String>)> {
+    let file = state.join("runs.jsonl");
+    let text = fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
+    let last: serde_json::Value =
+        serde_json::from_str(text.lines().last().context("runs.jsonl is empty")?)?;
+    let get = |k: &str| last[k].as_str().map(String::from);
+    Ok((get("from"), get("to")))
 }
 
 /// Every entry written so far, in order.
@@ -140,6 +155,12 @@ pub struct Counts {
 /// What a run's dataset is made of and what it lacks.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bias {
+    /// Attempts and passes over everything.
+    pub overall: Counts,
+    /// Tool calls over the attempts that ran to a verdict, and how many ran.
+    pub tool_calls: usize,
+    /// Attempts that ran to a verdict (the denominator of `tool_calls`).
+    pub verdicts: usize,
     /// By size bucket.
     pub by_size: BTreeMap<String, Counts>,
     /// By plan style.
@@ -176,6 +197,12 @@ pub fn bias(entries: &[Entry]) -> Bias {
                     group.attempts += 1;
                     group.passed += usize::from(e.outcome == Outcome::Passed);
                 }
+                report.overall.attempts += 1;
+                report.overall.passed += usize::from(e.outcome == Outcome::Passed);
+                if e.outcome != Outcome::PlanRefused {
+                    report.tool_calls += e.tool_calls;
+                    report.verdicts += 1;
+                }
                 if e.outcome != Outcome::Passed {
                     for class in &e.classes {
                         *report.reasons.entry(class.clone()).or_default() += 1;
@@ -190,6 +217,15 @@ pub fn bias(entries: &[Entry]) -> Bias {
 impl std::fmt::Display for Bias {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let rate = |c: &Counts| format!("{}/{}", c.passed, c.attempts);
+        writeln!(f, "pass rate overall: {}", rate(&self.overall))?;
+        if self.verdicts > 0 {
+            writeln!(
+                f,
+                "tool calls per attempt that ran: {:.2} over {}",
+                self.tool_calls as f64 / self.verdicts as f64,
+                self.verdicts
+            )?;
+        }
         writeln!(f, "pass rate by commit size:")?;
         for (k, c) in &self.by_size {
             writeln!(f, "  {k:<16} {}", rate(c))?;

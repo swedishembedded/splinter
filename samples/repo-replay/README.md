@@ -70,6 +70,8 @@ repo-replay run REPO --state DIR --base-url URL --api-key-file FILE --model NAME
             [--from REV] [--to REV] [--max-commits N] [--styles terse,detailed] [--jobs N] ...
 repo-replay report --state DIR [--json]   bias report: pass rate by size and style, reasons, skips
 repo-replay dataset --state DIR [--serving-prompt-file FILE] [--max-block TOKENS]
+            [--splits OUT [--train-percent 80 --eval-percent 10]]   temporal train/eval/test datasets,
+                                          splits.json (boundary commits) and one trace file per attempt
 ```
 
 `--max-commits N` takes the N most recent replayable commits. `--seed` is required: no default is

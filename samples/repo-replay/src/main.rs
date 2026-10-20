@@ -34,6 +34,7 @@ use splinter_repo_replay::select::{
     SelectConfig, DEFAULT_CONTEXT_SHARE_PERCENT, DEFAULT_CONTEXT_TOKENS,
 };
 use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
+use splinter_repo_replay::splits::write_splits;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -165,6 +166,16 @@ struct DatasetArgs {
     /// Records longer than this many tokens are left out and counted.
     #[arg(long)]
     max_block: Option<usize>,
+    /// Write temporal train, eval and test datasets, `splits.json` and one
+    /// readable trace per attempt under this directory instead of one dataset.
+    #[arg(long)]
+    splits: Option<PathBuf>,
+    /// With --splits: the oldest this percent of the commits are train.
+    #[arg(long, default_value_t = 80)]
+    train_percent: usize,
+    /// With --splits: the next this percent of the commits are eval, the rest test.
+    #[arg(long, default_value_t = 10)]
+    eval_percent: usize,
 }
 
 fn main() -> Result<()> {
@@ -272,6 +283,22 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
         None => SERVING_PROMPT.to_string(),
     };
     let ctx = open_context(&args.state)?;
+    if let Some(out) = &args.splits {
+        let settings = DatasetSettings {
+            serving_prompt,
+            max_block: args.max_block,
+        };
+        let summary = write_splits(
+            &ctx,
+            &args.state,
+            out,
+            &settings,
+            args.train_percent,
+            args.eval_percent,
+        )?;
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+        return Ok(());
+    }
     let set = attempts_set(&ctx, &args.state)?;
     let built = build_dataset(
         &ctx,

@@ -16,7 +16,6 @@
 //! and the trailer are people to scrub.
 
 use std::path::Path;
-use std::process::Command;
 
 use anyhow::{bail, Result};
 

@@ -36,8 +36,20 @@ use crate::ledger;
 /// directory holds, so a run that was interrupted still has its attempts
 /// here; putting the same members again names the same set.
 pub fn attempts_set(ctx: &Context, state: &Path) -> Result<String> {
+    attempts_set_where(ctx, state, "all", &|_| true)
+}
+
+/// [`attempts_set`] of the attempts whose commit `keep` accepts, the set
+/// named `label`; `None` of them is an error.
+pub fn attempts_set_where(
+    ctx: &Context,
+    state: &Path,
+    label: &str,
+    keep: &dyn Fn(&str) -> bool,
+) -> Result<String> {
     let members = ledger::read(state)?
         .iter()
+        .filter(|e| keep(&e.commit))
         .filter_map(|e| e.experience.as_deref())
         .map(|hex| {
             Ok(ExperienceId(Digest::from_content_hex(hex).with_context(
@@ -46,10 +58,10 @@ pub fn attempts_set(ctx: &Context, state: &Path) -> Result<String> {
         })
         .collect::<Result<Vec<_>>>()?;
     if members.is_empty() {
-        bail!("{} holds no stored attempt", state.display());
+        bail!("{} holds no stored attempt ({label})", state.display());
     }
     let set = ctx.experiences().put_set(&ExperienceSet {
-        name: format!("repo-replay attempts in {}", state.display()),
+        name: format!("repo-replay attempts ({label}) in {}", state.display()),
         members,
     })?;
     Ok(set.to_string())
