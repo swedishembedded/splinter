@@ -103,8 +103,8 @@ impl Scrubber {
 }
 
 /// `text` with each occurrence of the one-word `name` replaced, unless it is
-/// part of a longer word or a path or identifier (`vemu-snes`, `crates/vemu`,
-/// `vemu_core`): an author's handle that is also the project's name must not
+/// part of a longer word or a path or identifier (`acme-engine`, `crates/acme`,
+/// `acme_core`): an author's handle that is also the project's name must not
 /// rewrite the project's own file names.
 fn replace_standalone(text: &str, name: &str) -> String {
     let joins = |c: char| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | '\\');
@@ -116,7 +116,7 @@ fn replace_standalone(text: &str, name: &str) -> String {
             .next_back()
             .or_else(|| out.chars().next_back());
         let tail = &rest[at + name.len()..];
-        // A full stop ends a sentence unless a word follows it (`vemu.rs`).
+        // A full stop ends a sentence unless a word follows it (`acme.rs`).
         let after = match tail.chars().next() {
             Some('.') if !tail.chars().nth(1).is_some_and(char::is_alphanumeric) => None,
             other => other,
@@ -154,13 +154,13 @@ mod tests {
 
     #[test]
     fn a_handle_that_is_also_the_project_name_does_not_rewrite_paths() {
-        let s = Scrubber::new(["vemu", "vemu@local"]);
+        let s = Scrubber::new(["acme", "acme@local"]);
         let text =
-            "crates/vemu-snes/src/lib.rs and vemu_core and `vemu` by vemu@local, thanks vemu.";
+            "crates/acme-engine/src/lib.rs and acme_core and `acme` by acme@local, thanks acme.";
         let out = s.scrub(text);
-        assert!(out.contains("crates/vemu-snes/src/lib.rs"), "{out}");
-        assert!(out.contains("vemu_core"), "{out}");
-        assert!(!out.contains("vemu@local"), "{out}");
+        assert!(out.contains("crates/acme-engine/src/lib.rs"), "{out}");
+        assert!(out.contains("acme_core"), "{out}");
+        assert!(!out.contains("acme@local"), "{out}");
         assert!(out.contains("thanks [redacted]."), "{out}");
     }
 }
