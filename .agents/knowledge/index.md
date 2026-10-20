@@ -66,3 +66,4 @@ in the same commit.
 | [078](078-the-sqlglot-tasks-named-their-symptoms-by-one-word-and-listed-hidden-modules-in-the-test-command.md) | The sqlglot tasks named their symptoms by one word and listed hidden modules in the test command |
 | [079](079-a-test-that-searched-a-whole-dataset-file-for-8080-failed-when-a-blake3-hash-contained-it.md) | A test that searched a whole dataset file for "8080" failed when a blake3 hash contained it |
 | [080](080-the-tool-syntax-sample-measured-an-agent-with-no-tools-in-thinking-mode-while-training-for-no-think.md) | The tool-syntax sample measured an agent with one tool, in thinking mode, while its data was for no-think mode |
+| [081](081-the-repo-replay-gate-called-honest-work-forbidden-or-unread-in-five-ways-seen-in-real-traces.md) | The repo-replay gate called honest work forbidden or unread in five ways seen in real traces |

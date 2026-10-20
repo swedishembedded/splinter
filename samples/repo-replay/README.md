@@ -35,11 +35,20 @@ succeeds often; the student is never told it (the records carry the serving prom
    prompt with the diff, masked: hunk offsets are removed, every unchanged line is `xxx`, paths and
    removed and added lines are exact, so the agent has to find each place by searching and reading. First user message: the plan.
 4. **Gate.** Deterministic, on the final tree and the recorded trajectory (rules below).
-5. **Store.** Every attempt is an immutable experience with the gate's verdict as an executable
+5. **Correct (optional, `--corrections N`).** When an attempt ends with a wrong tree and nothing else
+   is wrong with it, a supervisor (the same model, in `supervisor_prompt.rs`) sees the task, the agent's
+   changes and the wanted change, and writes a follow-up message as the user would: intent, behaviour
+   and place in words, no diff line, no line number, no name or number nobody gave the agent. A message
+   that breaks that (`diff_line`, `location_offset`, `diff_reference`, `leaked_target`,
+   `unjustified_content`) is refused, counted in the ledger and rewritten once or twice; the agent never
+   sees it. The agent then continues in the same conversation. In the stored trajectory the agent's turns
+   before the last correction are context and are not trained on; the final tree must still match exactly.
+   Records are labelled `first_try` (plan, edits) or `corrected` (plan, attempt, feedback, fix).
+6. **Store.** Every attempt is an immutable experience with the gate's verdict as an executable
    annotation; failed attempts are the negatives. The next commit's tree is the real one, never the
    agent's result, so attempts are independent and run in parallel (`--jobs`); results are stored in
    commit order.
-6. **Dataset.** splinter's own `sft-step` build over the stored attempts, packed, under the serving
+7. **Dataset.** splinter's own `sft-step` build over the stored attempts, packed, under the serving
    prompt, validated by brain's dataset parser. Names, trailers, addresses and secrets are scrubbed
    from everything stored.
 
@@ -51,9 +60,10 @@ succeeds often; the student is never told it (the records carry the serving prom
 | `missing_edit` | Each changed file got `--min-edits-per-file` edit calls; a deleted or moved file got an `rm`/`mv` naming it. |
 | `forbidden_shell` | No `git apply`/`patch`, no history-reaching git command, no here-document, redirection, `tee`, `sed -i` or interpreter write, no network, no path of the source or its clone. |
 | `outside_tree` | No shell path above or outside the attempt tree. |
-| `unread_edit` | A file that existed was shown (read, `cat`, `sed -n`) before its first edit. |
+| `unread_edit` | A file that existed was shown (read, `cat`, `sed -n`, or a search in that file with context lines) before its first edit. |
 | `unmotivated_location` | An edited or removed file was named by the plan or shown by an earlier search or listing. |
 | `leaked_target` | A name that only the diff introduces appears in no call but an edit. |
+| `unjustified_content` | Every name, number and string literal an edit introduces is in the plan, in a tool result the agent saw earlier, in its own earlier edits or in a user's correction. Otherwise the plan was under-specified: the attempt fails with this class (no plan regeneration: the plan-retry loop judges a plan before an attempt exists, and redoing a whole attempt on a new plan is a different experiment). Names compare without letter case and a dashed crate name equals its underscore spelling; strings must appear verbatim. |
 | `diff_offset_read` | A `read_file` with an explicit offset whose range covers where a hunk starts is refused unless an earlier search named the file. |
 | `diff_reference` | The agent's words never refer to the diff, the system prompt or its instructions. |
 | `tool_calls_out_of_range` | Between `--min-tool-calls` and `--max-tool-calls` calls. |
@@ -68,11 +78,22 @@ recorded in the ledger and never gated. They execute the history's code on this 
 repo-replay audit [--work DIR]            the gate checks itself (also: make samples/repo-replay/audit)
 repo-replay run REPO --state DIR --base-url URL --api-key-file FILE --model NAME --seed N
             [--from REV] [--to REV] [--max-commits N] [--styles terse,detailed] [--jobs N] ...
-repo-replay report --state DIR [--json]   bias report: pass rate by size and style, reasons, skips
+repo-replay report --state DIR [--json]   bias report: pass rate by size and style, reasons, skips,
+            [--versus CONTROL_DIR]        first_try and corrected passes; or grounded beside plan-only
 repo-replay dataset --state DIR [--serving-prompt-file FILE] [--max-block TOKENS]
+            [--min-corrections N] [--max-corrections N]   0 only is first_try, 1 and more corrected
             [--splits OUT [--train-percent 80 --eval-percent 10]]   temporal train/eval/test datasets,
                                           splits.json (boundary commits) and one trace file per attempt
 ```
+
+`--control plan-only` replays the same commits without the grounding diff (the plan and the repository
+only, `plan_only_prompt.rs`); it needs a state directory of its own, and `report --state GROUNDED
+--versus PLAN_ONLY` prints both pass rates side by side with the units only the grounded run passes
+(what the diff carries) and the units both pass (the purest records). `--thinking` and
+`--thinking-budget` turn on the model's reasoning for every request of a run.
+
+The self-review step compares the agent's own `git diff` with the task (which the record holds), never
+with the masked change (which it does not); the gate keeps flagging comparisons with the given change.
 
 `--max-commits N` takes the N most recent replayable commits. `--seed` is required: no default is
 fixed. Every number a run prints comes from the ledger (`state/ledger.jsonl`).
@@ -82,7 +103,10 @@ fixed. Every number a run prints comes from the ledger (`state/ledger.jsonl`).
 On a fixture history (root, add, edit, rename, delete, three-file change, lock file and source,
 lock file only, binary, merge, secret): the honest scripted solver passes the gate on every
 replayable commit in both styles and every other commit is skipped for the right class; each of
-eleven cheaters fails with the reason of the rule meant to catch it; the same history gives the
+cheater fails with the reason of the rule meant to catch it (including an honest edit under a plan
+that gave none of the names it needs, and supervisors that quote the wanted change, give a line
+number or speak of the diff); a correction repairs an attempt that left a file out, and its record
+trains only on the fix; a plan-only run is flagged and a state refuses a second control; the same history gives the
 same verdicts; the source is byte-for-byte untouched; every record opens with the serving prompt,
 holds no part of the grounding prompt, and holds neither the author nor the trailer.
 
