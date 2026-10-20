@@ -151,6 +151,13 @@ pub enum Reason {
     LeaksChange,
     /// The request quotes or points at the hidden tests.
     NotSelfContained,
+    /// A test that stays in the solver's tree imports a module that is
+    /// withheld, so the tests it keeps cannot run there.
+    HiddenImportedByTree,
+    /// A failing test's name is too short to say what is broken and its
+    /// assertion cannot be rendered as behaviour (see the instruction
+    /// module).
+    SymptomNotActionable,
     /// The request is a near duplicate of one admitted for the same family.
     NearDuplicate,
     /// The hidden tests catch fewer than [`MIN_HIDDEN_KILL_RATE`] of the

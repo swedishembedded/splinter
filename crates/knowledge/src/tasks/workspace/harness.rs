@@ -47,6 +47,9 @@ pub struct SuiteReport {
     pub failed: BTreeSet<String>,
     /// The first line of each test's docstring, for the tests that have one.
     pub docs: BTreeMap<String, String>,
+    /// The exception message of each failed test, where the runner prints
+    /// one per test (`unittest`); never a traceback frame.
+    pub messages: BTreeMap<String, String>,
     /// Whether the middle of the runner's output was elided at the output
     /// cap, so that the tests above are only those the head and tail show.
     pub elided: bool,
@@ -157,6 +160,7 @@ impl Harness {
             passed: report.passed,
             failed: report.failed,
             docs: report.docs,
+            messages: report.messages,
             elided: report.elided,
             verdict: report.verdict,
         }

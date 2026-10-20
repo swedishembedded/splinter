@@ -93,6 +93,10 @@ fn hidden_material(
         confine_to_workspace: true,
         ..HiddenMaterial::default()
     };
+    // The request itself is text the solver is shown by design: it may quote
+    // the value a hidden assertion compares (the one disclosure a task makes
+    // of its tests), and that is not a leak of the tests' code.
+    material.public_contents.push(task.instruction.clone());
     let Some(check) = check else {
         return Ok(material);
     };

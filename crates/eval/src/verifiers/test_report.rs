@@ -133,6 +133,10 @@ pub struct TestReport {
     pub doc_tests: BTreeSet<String>,
     /// The first line of each test's docstring, where it has one.
     pub docs: BTreeMap<String, String>,
+    /// The exception message of each failed `unittest` test (`3 != 4`, an
+    /// error the code raised), never a frame of its traceback; empty for a
+    /// runner whose failures are not read this way.
+    pub messages: BTreeMap<String, String>,
     /// Tests the runner says it ran, summed over its summaries; `None` when
     /// it printed none.
     pub declared: Option<usize>,
@@ -285,6 +289,10 @@ fn compose(name: &str, inner: &str) -> String {
 
 /// `FAIL: name (id)` or `ERROR: name (id)` of the summary the runner prints
 /// after the per-test lines.
+pub(super) fn unittest_failure_id(line: &str) -> Option<String> {
+    unittest_failure(line)
+}
+
 fn unittest_failure(line: &str) -> Option<String> {
     let rest = line
         .strip_prefix("FAIL: ")
@@ -372,6 +380,7 @@ fn read_unittest(stderr: &str, elided: bool) -> TestReport {
         }
     }
     report.passed.retain(|id| !report.failed.contains(id));
+    report.messages = super::failure_message::unittest_messages(stderr);
     match summaries.as_slice() {
         [] => {
             report.flaws.insert(Flaw::NoReport);

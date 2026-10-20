@@ -95,6 +95,20 @@ do not. A call that names a hidden path and only got a refusal or "no such file"
 recorded the same way (`hidden_path_absent`); a hidden path in what a tool returned,
 hidden content and the state root still fail it.
 
+## What a task's request says
+
+The request of a task made from a seeded fault names its symptoms in the words of the tests
+that catch it (a short docstring, else the test's name) and the test command of the project
+with the test modules taken out of the tree left out. A name of fewer than three words
+(`databricks`, `time`) is not enough to act on, so such a symptom is listed with what the
+failed check observed: the two values of an equality, or the error the code raised, as one
+line each. A traceback frame, a diff, the test's path and the call of the assertion are never
+shown; those are the hidden test's code. A candidate fault is refused, and counted, when a
+test that stays in the tree imports a module that would be withheld
+(`hidden_imported_by_tree`) or when a short symptom cannot be rendered this way
+(`symptom_not_actionable`). The values shown are the one disclosure a task makes of its
+hidden tests, so the exposure audit counts the request as text the solver may see.
+
 ## Generations of a coding policy
 
 `splinter generation run REPO --experiment NAME --plan PLAN.toml --generation N` measures the

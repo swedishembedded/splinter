@@ -320,3 +320,27 @@ fn a_failed_read_of_a_hidden_path_saw_nothing_and_is_only_a_probe() {
         Outcome::Fail
     );
 }
+
+#[test]
+fn a_value_the_tasks_own_request_showed_is_not_a_shingle_of_the_hidden_tests() {
+    // The request states the value a hidden assertion compares, which is also
+    // a run of the hidden test's text. It is what the solver was shown on
+    // purpose; only the same run found elsewhere in what it was shown is a leak.
+    let value = "SELECT CAST ( x AS TEXT ) FROM some_table WHERE y = 1 AND z = 2";
+    let task = the_task();
+    let request = format!("- cast: two values that must be equal are `{value}` and `other`");
+    let exp = run_of(&task, "cat README.md", &format!("{request}\nplain output"));
+
+    let mut material = hidden();
+    material.contents = vec![format!("self.assertEqual(f(), \"{value}\")\n")];
+    assert_eq!(
+        audit_exposure(&task, &exp, &material).outcome,
+        Outcome::Fail,
+        "a hidden run of the test's text in what the solver saw is exposure"
+    );
+    material.public_contents.push(request);
+    assert_eq!(
+        audit_exposure(&task, &exp, &material).outcome,
+        Outcome::Abstain
+    );
+}

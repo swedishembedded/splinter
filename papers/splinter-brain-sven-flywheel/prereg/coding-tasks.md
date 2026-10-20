@@ -799,6 +799,47 @@ applies. The first such run is on the 23-task subset `S1` of A9.6 and is a pipel
 the repetition-stop counts, the tool-call mix and the verified counts, it is not the confirmatory query of
 A2.3, and no result of it enters the paper.
 
+### Amendment 15, 2026-10-20, 02:10 CEST: what a task's request may say and name
+
+Made before any sqlglot task is re-admitted and before any further task is generated. It changes how the request of a
+workspace task is composed and which candidate faults are refused; it changes no verifier, no gate and no environment
+digest of a task already admitted.
+
+**A15.1 Defects found.** A diagnosis of the CE7 sqlglot teacher pass (0 passed of 112; regenerated 0 of 104, runs/audit/regen-diagnosis.md)
+found that every one of its 112 tasks is valid (the untouched tree fails the hidden checks, the reference fix passes them), and
+that the requests could not be acted on: a failing test was named by its method name alone, so a request read `databricks`,
+`time` or `cast` (2.07 words per label in the set against 5.1 in ttlcache), with the instruction that the tests in the tree must keep
+passing and listing the test command of the whole suite, which names the hidden modules (every run printed `ModuleNotFoundError`
+for them) and, in 28 tasks, withheld the base module that every in-tree dialect test imports.
+
+**A15.2 The command.** The request names the test command with the test modules taken out of the solver's tree left out of
+it (for a `unittest` command, each dotted module argument whose file is hidden); any other command is the project's own and is
+named whole.
+
+**A15.3 Modules the tree imports.** A candidate is refused (reason `hidden_imported_by_tree`) when the tests that stay in the solver's
+tree do not all run there without the hidden files: a module an in-tree test imports is never withheld, because withholding it breaks
+the tree and leaving it would show the tests.
+
+**A15.4 Symptoms a solver can act on.** A failing test whose label (its short docstring, else its name in words) has fewer than 3
+words is not listed by that label alone. It is rendered from what its failed check observed, and from nothing else: the exception's own
+message when it is an equality (`first != second`: the two values, each on one line and at most 300 characters) or an error the code under
+test raised (`Type: message`). Never shown: any traceback frame (file paths and the lines of the test that ran, which are the
+hidden test's code), the failure's diff lines, the test's file path and the call of the assertion. A failure that is neither shape
+(a bare assertion, a truthiness check, an overlong value) cannot be rendered, and the candidate is refused with the counted reason
+`symptom_not_actionable`. A label of 3 or more words is unchanged.
+
+**A15.5 The line between behaviour and code.** The shown values are the one disclosure a task makes of its hidden tests: what the code
+returned and what it was required to return. They are the literals of the test and so can repeat a run of its text. The admission check
+masks them before it looks for a quotation of the hidden tests (a request still may not quote 8 words of the hidden files beyond the
+shown values, may not name a hidden file and may not quote a changed line), and the exposure audit counts the task's own request as
+text the solver may see, so that a shown value is not a content shingle while a run of the hidden test's text found anywhere else in
+what the solver saw still fails the audit.
+
+**A15.6 Scope.** The amendment applies to tasks admitted from now on. The CE7 sqlglot tasks are re-admitted with this generator in the
+next lease; the recorded CE7 pass-1 sets stay as recorded and are reported as 0 of 112 passed, with the cause of A15.1. The CE1
+repositories are not affected: the 370 task records of the CE1 pass-1 sets were read offline against the rules: the shortest label is 4
+words, every command is `python3 -m unittest` (it names no module), so none of the 370 requests would change or be refused.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on

@@ -116,6 +116,7 @@ struct Killed {
     passing: BTreeSet<String>,
     files: BTreeSet<String>,
     docs: BTreeMap<String, String>,
+    messages: BTreeMap<String, String>,
 }
 
 impl WorkspaceGenerator {
@@ -218,9 +219,25 @@ impl WorkspaceGenerator {
         let views = self.stage_views(base, path, &mutant.text, &mutated, &killed)?;
         let env = self.environment(&views.snapshot);
         let (failing, passing) = self.reproduce(base, &env, &views, &killed)?;
+        self.tree_stands_without(base, &env, &views, &killed)?;
         let hidden = hidden_text(mutated.path(), &killed.files);
-        let text = instruction::compose(base.command(), &failing, &killed.docs);
-        admissible(&text, original, &mutant.text, &hidden, seen)?;
+        let request = instruction::compose(
+            base.command(),
+            &killed.files,
+            &failing,
+            &killed.docs,
+            &killed.messages,
+        )
+        .map_err(|_| Stop::Refuse(Reason::SymptomNotActionable))?;
+        admissible(
+            &request,
+            original,
+            &mutant.text,
+            &hidden,
+            &killed.files,
+            seen,
+        )?;
+        let text = request.text;
 
         let strength = self.hidden_strength(base, path, original, mutant, &killed)?;
         if strength.variants >= MIN_VARIANTS_TO_REFUSE
@@ -258,6 +275,43 @@ impl WorkspaceGenerator {
             hidden: views.hidden(),
             snapshot: views.snapshot,
         })
+    }
+
+    /// Refuses a task whose solver tree cannot run the tests it keeps: a test
+    /// file that stays imports a module that is withheld (a shared base class
+    /// of the tests, say), so everything that imports it fails in the tree the
+    /// solver is given, whatever it does. Withholding a module that in-tree
+    /// tests import would also give the solver the tests it must not see, so
+    /// the task is refused rather than made with that module left in.
+    fn tree_stands_without(
+        &self,
+        base: &Parent<'_>,
+        env: &WorkspaceEnvironment,
+        views: &Staged,
+        killed: &Killed,
+    ) -> Result<(), Stop> {
+        // The tests of the files that stay: those of a withheld file are not
+        // in the tree and are not the solver's to run.
+        let kept: BTreeSet<String> = killed
+            .passing
+            .iter()
+            .filter(|id| {
+                base.locate(id)
+                    .is_none_or(|file| !killed.files.contains(&file))
+            })
+            .cloned()
+            .collect();
+        if kept.is_empty() {
+            return Ok(());
+        }
+        let tree = FreshTree::lay(env, &views.archive, &self.scratch)?;
+        let call = base.harness.select(base.command(), &kept);
+        let report = self.suite(base, env, tree.path(), &call)?;
+        let ran: BTreeSet<&String> = report.ran().collect();
+        if !report.failed.is_empty() || ran != kept.iter().collect() {
+            return Err(Stop::Refuse(Reason::HiddenImportedByTree));
+        }
+        Ok(())
     }
 
     /// What the hidden tests (the test files `killed` takes out of the
@@ -353,6 +407,7 @@ impl WorkspaceGenerator {
             passing,
             files,
             docs: report.docs,
+            messages: report.messages,
         })
     }
 
@@ -538,12 +593,14 @@ fn remember(seen: &mut Seen, request: &str) {
 /// mutation changed, nothing of the hidden tests, and its symptoms are not a
 /// near duplicate of those of one admitted for the file.
 fn admissible(
-    text: &str,
+    request: &instruction::Request,
     original: &str,
     mutated: &str,
     hidden: &Privileged,
+    hidden_files: &BTreeSet<String>,
     seen: &Seen,
 ) -> Result<(), Stop> {
+    let text = request.text.as_str();
     let lowered = text.to_lowercase();
     let leaks = changed_lines(original, mutated)
         .iter()
@@ -551,7 +608,11 @@ fn admissible(
     if leaks {
         return Err(Stop::Refuse(Reason::LeaksChange));
     }
-    if check_self_contained(text, &[hidden]).is_err() {
+    // The assertion values a request shows on purpose are masked: the rest of
+    // it must not quote the hidden tests, and must not name their files.
+    if check_self_contained(&request.without_values(), &[hidden]).is_err()
+        || hidden_files.iter().any(|file| text.contains(file.as_str()))
+    {
         return Err(Stop::Refuse(Reason::NotSelfContained));
     }
     if seen.repeats(instruction::symptoms_of(text)).is_some() {
@@ -593,18 +654,31 @@ mod tests {
             .collect();
         let request = |test: &str| {
             let failing: BTreeSet<String> = [format!("t.A.{test}")].into();
-            instruction::compose(&command, &failing, &BTreeMap::new())
+            instruction::compose(
+                &command,
+                &BTreeSet::new(),
+                &failing,
+                &BTreeMap::new(),
+                &BTreeMap::new(),
+            )
+            .unwrap()
         };
-        let (first, second) = (request("test_logarithm"), request("test_round_half_even"));
+        let (first, second) = (
+            request("test_logarithm_of_one"),
+            request("test_round_half_even"),
+        );
         let hidden = Privileged {
             kind: PrivilegedKind::Other(HIDDEN_TEST.into()),
             content: String::new(),
             span: None,
         };
         let mut seen = Seen::new(DEFAULT_SHINGLE_WORDS, DEFAULT_MAX_OVERLAP);
-        let check = |text: &str, seen: &Seen| admissible(text, "x = 1\n", "x = 2\n", &hidden, seen);
+        let none = BTreeSet::new();
+        let check = |request: &instruction::Request, seen: &Seen| {
+            admissible(request, "x = 1\n", "x = 2\n", &hidden, &none, seen)
+        };
         assert!(check(&first, &seen).is_ok());
-        remember(&mut seen, &first);
+        remember(&mut seen, &first.text);
         assert!(check(&second, &seen).is_ok(), "different symptoms");
         assert!(
             matches!(

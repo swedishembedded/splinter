@@ -392,6 +392,17 @@ fn every_admitted_task_fails_on_the_baseline_passes_with_the_reverse_patch_and_h
         }
         assert!(!instruction.contains("Traceback"));
         assert!(instruction.contains("python3 -m unittest"));
+        // The command names no module of the hidden tests.
+        for hidden in check
+            .hidden_paths
+            .iter()
+            .filter_map(|p| p.strip_suffix(".py"))
+        {
+            assert!(
+                !instruction.contains(&hidden.replace('/', ".")),
+                "{hidden} in {instruction}"
+            );
+        }
     }
     // A killed mutant of `total` is described by its tests' names.
     assert!(generation.admitted.iter().any(|t| {
