@@ -4,7 +4,7 @@
 # 085. A dataset from the 27B teacher taught the host login, the scratch path and the loop tail, under a prompt it was not served with
 
 The trace audit of dataset blake3:d246dbb5 (80 packed records from the 27B teacher) found, beyond the exposure
-rule (082), four things in the records themselves:
+rule (083), four things in the records themselves:
 
 * 5 records held the host's login name (an `ls -la` owner and group) and 8 the harness's `/tmp/.tmpXXXXXX/tree`
   path (tracebacks, `pwd`). Neither is about the task; a model memorises a name and a random directory. The
