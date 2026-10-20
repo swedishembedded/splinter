@@ -16,8 +16,7 @@ use splinter_core::prompt::{CODING_AGENT_PROMPT, CODING_AGENT_PROMPT_ID};
 
 use super::WorkOptions;
 
-/// The key of the trajectory's agent `extra` that holds the profile.
-pub const SOLVE_PROFILE_KEY: &str = "solve_profile";
+pub use splinter_core::prompt::SOLVE_PROFILE_KEY;
 
 /// The profile of an episode run under `options` and the system prompt
 /// `system` it was held to: the prompt's digest (and its id when it is the

@@ -402,6 +402,13 @@ fn project_without(
     if let Some(prompt) = &request.system_prompt {
         projection = projection.with_system_prompt(prompt);
     }
+    if view == ViewName::SftStep {
+        // The prompt the runs were made under is the prompt the dataset trains
+        // under, so a model trained on it is asked under it.
+        projection = projection
+            .settled_system_prompt()
+            .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
+    }
     if let Some(max_block) = request.max_block {
         projection = within_policy_block(ctx, projection, max_block);
     }

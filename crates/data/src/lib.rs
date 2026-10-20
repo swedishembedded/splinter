@@ -71,9 +71,11 @@ mod markers;
 pub mod partition;
 mod render;
 mod replay;
+mod scrub;
 pub mod split;
 mod store;
 mod strip;
+mod system_turn;
 pub mod timeline_dataset;
 pub mod timeline_store;
 mod trajectory;
@@ -300,6 +302,10 @@ pub enum Exclusion {
     NotSelfContained,
     /// A step labelled bad.
     BadStep,
+    /// An action that repeats a call of the same trajectory whose result was
+    /// the same: the agent learned nothing from it, so it is context and not
+    /// an action to learn (the tail of a loop).
+    RepeatedAction,
     /// Left out on request because it would carry an exam family's attempt or
     /// file into the training data (`dataset build --drop-leaking`).
     ExamLeak,
@@ -482,6 +488,51 @@ impl Projection {
         self
     }
 
+    /// The same projection with the system prompt its records open with
+    /// recorded as the prompt it trains under, when it has none recorded and
+    /// they all open with the same prompt that is not the default: a dataset
+    /// of runs made under the coding-agent prompt says so, and a model trained
+    /// on it is asked under it. Refused when its records open with different
+    /// prompts, which only [`Projection::with_system_prompt`] can settle: a
+    /// model cannot be trained to answer under two.
+    pub fn settled_system_prompt(mut self) -> Result<Self, ViewError> {
+        if self.system_prompt.is_some() {
+            return Ok(self);
+        }
+        let mut opening: Vec<&str> = Vec::new();
+        for record in &self.records {
+            let messages = match &record.body {
+                RecordBody::Chat { messages, .. } | RecordBody::Rewarded { messages, .. } => {
+                    messages
+                }
+                RecordBody::Preference { prompt, .. } => prompt,
+                _ => continue,
+            };
+            if let Some(first) = messages.first().filter(|m| m.role == "system") {
+                if !opening.contains(&first.content.as_str()) {
+                    opening.push(&first.content);
+                }
+            }
+        }
+        match opening[..] {
+            [] => Ok(self),
+            [only] => {
+                if only != SYSTEM_PROMPT {
+                    self.system_prompt = Some(only.to_string());
+                }
+                Ok(self)
+            }
+            _ => Err(ViewError::Parameter {
+                name: "system prompt",
+                reason: format!(
+                    "the records open with {} different system prompts (the runs were made under \
+                     different ones); pass a system prompt to write them all under one",
+                    opening.len()
+                ),
+            }),
+        }
+    }
+
     /// The same projection thinned to at most `limit` records, kept evenly
     /// spread over it - the first and the last among them - and the rest
     /// counted as [`Exclusion::OverLimit`].
@@ -554,10 +605,10 @@ impl Projection {
 
     /// Adds a record with this projection's view and objective, a
     /// conversation starting with the system turn (see
-    /// [`under_system_prompt`]).
+    /// [`system_turn::under_system_prompt`]).
     fn push(&mut self, body: RecordBody, provenance: Provenance) {
         self.records.push(Record {
-            body: under_system_prompt(body),
+            body: system_turn::under_system_prompt(body),
             metadata: RecordMetadata {
                 experiences: provenance.experiences,
                 task: provenance.task,
@@ -576,53 +627,6 @@ impl Projection {
             Ok((body, provenance)) => self.push(body, provenance),
             Err(reason) => self.exclude(reason),
         }
-    }
-}
-
-/// `body` with [`SYSTEM_PROMPT`] as the first turn of its conversation -
-/// a chat record's messages, a rewarded trajectory's, a preference pair's
-/// prompt - the system turn every model run on a task is sent, so a record
-/// shows the policy what it sees when it answers. Other shapes are not
-/// conversations and are returned as they are.
-fn under_system_prompt(body: RecordBody) -> RecordBody {
-    let system = || render::message("system", SYSTEM_PROMPT, false);
-    match body {
-        RecordBody::Chat {
-            mut messages,
-            tools,
-        } => {
-            open_with_system(&mut messages, system);
-            RecordBody::Chat { messages, tools }
-        }
-        RecordBody::Rewarded {
-            mut messages,
-            reward,
-        } => {
-            open_with_system(&mut messages, system);
-            RecordBody::Rewarded { messages, reward }
-        }
-        RecordBody::Preference {
-            mut prompt,
-            chosen,
-            rejected,
-        } => {
-            open_with_system(&mut prompt, system);
-            RecordBody::Preference {
-                prompt,
-                chosen,
-                rejected,
-            }
-        }
-        other @ (RecordBody::Contrastive { .. } | RecordBody::Text { .. }) => other,
-    }
-}
-
-/// Puts `system()` first in `messages`, unless the view already opened the
-/// conversation with a system turn of its own (the prompt a workspace run
-/// recorded it was held under).
-fn open_with_system(messages: &mut Vec<WireMessage>, system: impl FnOnce() -> WireMessage) {
-    if messages.first().is_none_or(|m| m.role != "system") {
-        messages.insert(0, system());
     }
 }
 

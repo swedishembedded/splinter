@@ -50,11 +50,13 @@ use std::collections::HashSet;
 use atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
 use splinter_core::experience::{Environment, Experience};
+use splinter_core::prompt::{recorded_prompt, RecordedPrompt, SYSTEM_PROMPT};
 
 use crate::markers::{
     chat_tools, has_unparsed_arguments, is_compaction, is_harness_prompt, is_incomplete,
 };
 use crate::render::message;
+use crate::scrub::Scrub;
 use crate::{Exclusion, RecordBody};
 
 /// Why a trajectory cannot be rendered as training conversations; every
@@ -143,6 +145,10 @@ pub enum Unprojectable {
         /// Observation results of the steps projected.
         source_results: usize,
     },
+    /// The solve recorded a system prompt that only its digest is known by:
+    /// the record cannot open with the prompt the run was under.
+    #[error("the solve was held to a system prompt this build holds no text of")]
+    UnknownSystemPrompt,
     /// A tool schema that is neither an OpenAI function-calling entry nor
     /// a bare function schema.
     #[error("tool definition {index} is not a function schema")]
@@ -215,6 +221,10 @@ pub(crate) struct Action {
     /// Whether ATIF marks the step as copied from another trajectory, which
     /// must never be supervised.
     pub(crate) copied: bool,
+    /// Whether every call of the step repeats a call of an earlier step of the
+    /// trajectory whose result was the same: the agent had that result, and
+    /// asking again is the loop and not the work.
+    pub(crate) repeated: bool,
 }
 
 /// A trajectory as messages, none supervised, and where its actions are.
@@ -332,6 +342,8 @@ fn try_conversation(
         .steps
         .iter()
         .rposition(|s| s.source == StepOrigin::Agent);
+    let scrub = Scrub::of(trajectory);
+    let mut seen_calls: HashSet<(String, String, String)> = HashSet::new();
     for (position, step) in trajectory.steps.iter().enumerate() {
         match step.source {
             StepOrigin::System if is_compaction(step) => {
@@ -353,7 +365,7 @@ fn try_conversation(
                     }
                     let feedback = text_of(&step.message)
                         .ok_or(Unprojectable::Image { step: step.step_id })?;
-                    messages.push(message("user", &feedback, false));
+                    messages.push(message("user", &scrub.text(&feedback), false));
                 }
             }
             StepOrigin::Agent => {
@@ -381,18 +393,29 @@ fn try_conversation(
                 source_calls += calls.len();
                 source_results += step.observation.iter().flat_map(|o| &o.results).count();
                 if serialise_calls && one_run_step && calls.len() > 1 {
-                    serialise_run_step(step, &text, calls, &mut messages, &mut actions)?;
+                    serialise_run_step(step, &text, calls, &mut messages, &mut actions, &scrub)?;
                     continue;
                 }
                 let is_action = !calls.is_empty() || Some(position) == last_agent;
                 let ids: Vec<String> = calls.iter().filter_map(|c| c.id.clone()).collect();
-                let mut assistant = message("assistant", &text, false);
-                assistant.tool_calls = calls.into_iter().map(|c| scoped(step, c)).collect();
+                let asked = calls_asked(step, &calls);
+                let repeated = !asked.is_empty() && asked.iter().all(|c| seen_calls.contains(c));
+                seen_calls.extend(asked);
+                let mut assistant = message("assistant", &scrub.text(&text), false);
+                assistant.tool_calls = calls
+                    .into_iter()
+                    .map(|c| scoped(step, c))
+                    .map(|mut c| {
+                        c.function.arguments = scrub.text(&c.function.arguments);
+                        c
+                    })
+                    .collect();
                 if is_action {
                     actions.push(Action {
                         index: messages.len(),
                         step: step.step_id,
                         copied: step.is_excluded_from_sft(),
+                        repeated,
                     });
                 }
                 messages.push(assistant);
@@ -408,11 +431,25 @@ fn try_conversation(
                         }
                         None => String::new(),
                     };
-                    let mut tool = message("tool", &content, false);
+                    let mut tool = message("tool", &scrub.text(&content), false);
                     tool.tool_call_id = Some(scoped_id(step, call));
                     messages.push(tool);
                 }
             }
+        }
+    }
+    if setting == Setting::Workspace && messages.first().is_none_or(|m| m.role != "system") {
+        // The solve did not pin its prompt as a step: the profile it recorded
+        // says which one the agent was served under.
+        match recorded_prompt(trajectory.agent.extra.as_ref()) {
+            RecordedPrompt::Known(prompt) if prompt != SYSTEM_PROMPT => {
+                messages.insert(0, message("system", prompt, false));
+                for action in &mut actions {
+                    action.index += 1;
+                }
+            }
+            RecordedPrompt::Unknown(_) => return Err(Unprojectable::UnknownSystemPrompt),
+            RecordedPrompt::Known(_) | RecordedPrompt::Unrecorded => {}
         }
     }
     let calls = messages.iter().map(|m| m.tool_calls.len()).sum();
@@ -430,6 +467,29 @@ fn try_conversation(
         actions,
         tools,
     })
+}
+
+/// What each call of `step` asked and what came back: its tool, its
+/// arguments as sent and the text of the results that answered it.
+fn calls_asked(step: &TraceStep, calls: &[WireToolCall]) -> Vec<(String, String, String)> {
+    calls
+        .iter()
+        .map(|call| {
+            let result = step
+                .observation
+                .iter()
+                .flat_map(|o| &o.results)
+                .filter(|r| r.source_call_id.is_some() && r.source_call_id == call.id)
+                .filter_map(|r| r.content.as_ref().and_then(text_of))
+                .collect::<Vec<_>>()
+                .join("\n");
+            (
+                call.function.name.clone(),
+                call.function.arguments.clone(),
+                result,
+            )
+        })
+        .collect()
 }
 
 /// A call id as the record names it: scoped to its step. A model numbers the
@@ -454,6 +514,7 @@ fn serialise_run_step(
     calls: Vec<WireToolCall>,
     messages: &mut Vec<WireMessage>,
     actions: &mut Vec<Action>,
+    scrub: &Scrub,
 ) -> Result<(), Unprojectable> {
     let ids: Vec<&String> = calls.iter().filter_map(|c| c.id.as_ref()).collect();
     for result in step.observation.iter().flat_map(|o| &o.results) {
@@ -470,6 +531,7 @@ fn serialise_run_step(
             index: messages.len(),
             step: step.step_id,
             copied: step.is_excluded_from_sft(),
+            repeated: false,
         });
         messages.push(assistant);
     };
@@ -477,6 +539,9 @@ fn serialise_run_step(
         let id = call.id.clone();
         let mut assistant = message("assistant", "", false);
         assistant.tool_calls = vec![scoped(step, call)];
+        for call in &mut assistant.tool_calls {
+            call.function.arguments = scrub.text(&call.function.arguments);
+        }
         action(messages, assistant);
         for result in step
             .observation
@@ -488,13 +553,13 @@ fn serialise_run_step(
                 Some(body) => text_of(body).ok_or(Unprojectable::Image { step: step.step_id })?,
                 None => String::new(),
             };
-            let mut tool = message("tool", &content, false);
+            let mut tool = message("tool", &scrub.text(&content), false);
             tool.tool_call_id = id.as_deref().map(|id| scoped_id(step, id));
             messages.push(tool);
         }
     }
     if !text.is_empty() {
-        action(messages, message("assistant", text, false));
+        action(messages, message("assistant", &scrub.text(text), false));
     }
     Ok(())
 }

@@ -39,6 +39,50 @@ about to run the same call again, do something different (read other code, chang
 change the code). Stop when the behaviour is fixed and the tests pass, and say in one or two \
 sentences what you changed.";
 
+/// The key of a trajectory's agent `extra` that holds the solve profile: what a
+/// solver was held to besides the task, among it the digest of its system
+/// prompt.
+pub const SOLVE_PROFILE_KEY: &str = "solve_profile";
+
+/// The key of a trajectory's agent `extra` that names the directory the
+/// episode worked in.
+pub const WORKSPACE_TREE_KEY: &str = "workspace_tree";
+
+/// The system prompt a trajectory's solve profile says the run was held to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecordedPrompt {
+    /// The trajectory records no solve profile (it predates it): the run was
+    /// under the chat prompt, [`SYSTEM_PROMPT`].
+    Unrecorded,
+    /// A prompt this build holds the text of.
+    Known(&'static str),
+    /// A prompt that only its digest is known by; the record cannot be shown
+    /// the prompt the run was under.
+    Unknown(String),
+}
+
+/// The prompt `agent_extra`, the `extra` of a trajectory's agent, records.
+#[must_use]
+pub fn recorded_prompt(agent_extra: Option<&serde_json::Value>) -> RecordedPrompt {
+    let Some(recorded) = agent_extra
+        .and_then(|extra| extra.get(SOLVE_PROFILE_KEY))
+        .and_then(|profile| profile.get("system_prompt"))
+    else {
+        return RecordedPrompt::Unrecorded;
+    };
+    let digest = recorded
+        .get("digest")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    [SYSTEM_PROMPT, CODING_AGENT_PROMPT]
+        .into_iter()
+        .find(|known| crate::digest::Digest::of(known.as_bytes()).as_str() == digest)
+        .map_or_else(
+            || RecordedPrompt::Unknown(digest.to_string()),
+            RecordedPrompt::Known,
+        )
+}
+
 /// The system turn of a policy trained to be `persona`: who it is, how it
 /// speaks, and that it answers plainly. The persona is the name the plan
 /// found in the goal; a model trained under this prompt is asked under it, so
@@ -75,6 +119,32 @@ mod tests {
             "one text, single-spaced"
         );
         assert!(CODING_AGENT_PROMPT.is_ascii());
+    }
+
+    #[test]
+    fn the_prompt_a_solve_profile_records_is_known_by_its_digest() {
+        let profile = |prompt: &str| {
+            serde_json::json!({ SOLVE_PROFILE_KEY: { "system_prompt": {
+                "id": null, "digest": crate::digest::Digest::of(prompt.as_bytes()),
+            } } })
+        };
+        assert_eq!(recorded_prompt(None), RecordedPrompt::Unrecorded);
+        assert_eq!(
+            recorded_prompt(Some(&serde_json::json!({}))),
+            RecordedPrompt::Unrecorded
+        );
+        assert_eq!(
+            recorded_prompt(Some(&profile(CODING_AGENT_PROMPT))),
+            RecordedPrompt::Known(CODING_AGENT_PROMPT)
+        );
+        assert_eq!(
+            recorded_prompt(Some(&profile(SYSTEM_PROMPT))),
+            RecordedPrompt::Known(SYSTEM_PROMPT)
+        );
+        assert!(matches!(
+            recorded_prompt(Some(&profile("You are a pirate."))),
+            RecordedPrompt::Unknown(_)
+        ));
     }
 
     #[test]

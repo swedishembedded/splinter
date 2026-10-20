@@ -12,7 +12,7 @@ by hand 23 had looked at nothing hidden. Causes, all in `exposure_paths`:
   unknown; call ids are unique per step, not per run);
 * any line that was not a refusal counted as "reached": a Python or Lua traceback, a module-not-found list. A
   failure report is not what a path returned;
-* a write to `/tmp` that the sandbox refused, and a `cd` into an invented directory (`cd /home/user/project
+* a write to `/tmp` that the sandbox refused, and a `cd` into an invented directory (`cd <home>/user/project
   2>/dev/null; python3 -m unittest`, whose output is the solver's own tree), were counted as looking outside;
   a path in a here-document's data (`{"root": "/srv"}`) and `'$(pwd)'/src` (text glued to a closing quote) were
   taken for absolute paths.

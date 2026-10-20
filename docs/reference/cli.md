@@ -1154,7 +1154,7 @@ Options:
 - `--strip <all|keep:K,..|mix:F>`: What the student sees: all (only the instruction), keep:K,.. or mix:F.
 - `--mix-seed <N>`: The seed that picks which subjects keep their privileged context under `--strip mix:F` (drawn and printed when not given; a dataset built again with the same seed holds the same records)
 - `--min-strength <STRENGTH>`: The weakest decision counted: executable, formal, consistency (default) or judged.
-- `--system-prompt <TEXT>`: The system prompt every conversation opens with, in place of the default assistant's; the dataset records it.
+- `--system-prompt <TEXT>`: The system prompt every conversation opens with, in place of the one the runs were made under (the sft-step view opens a repository solve's records with the prompt its solve profile records) or the default assistant's; the dataset records it.
 - `--export-only`: Write an objective brain cannot train in the export format.
 - `--limit <N>`: Keep at most this many records, evenly spread over the projection (for voice, over the parts of the sources)
 - `--max-block <TOKENS>`: The longest record, in tokens, the training that reads the dataset fits: a longer record is left out and counted instead of stopping the training.

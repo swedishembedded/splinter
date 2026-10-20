@@ -71,11 +71,11 @@ fn two_feedback_rounds() -> Vec<TraceStep> {
     vec![
         user(1, &format!("{INSTRUCTION}\n{SECRET}")),
         call(2, "c1", "shell", json!({"cmd": "ls"}), "a.py"),
-        call(3, "c2", "edit", json!({"path": "a.py"}), "ok"),
+        call(3, "c2", "edit", json!({"path": "a.py", "edit": 1}), "ok"),
         user(4, "Check `unit` failed:\nassert 1 == 2"),
-        call(5, "c3", "edit", json!({"path": "a.py"}), "ok"),
+        call(5, "c3", "edit", json!({"path": "a.py", "edit": 2}), "ok"),
         user(6, "Check `unit` failed:\nassert 2 == 3"),
-        call(7, "c4", "edit", json!({"path": "a.py"}), "ok"),
+        call(7, "c4", "edit", json!({"path": "a.py", "edit": 3}), "ok"),
         say(8, "Done."),
     ]
 }
@@ -185,10 +185,10 @@ fn outside_a_workspace_a_second_user_turn_is_still_refused() {
 fn a_reply_that_feedback_answered_is_context_and_not_an_action() {
     let steps = vec![
         user(1, INSTRUCTION),
-        call(2, "c1", "edit", json!({"path": "a.py"}), "ok"),
+        call(2, "c1", "edit", json!({"path": "a.py", "edit": 1}), "ok"),
         say(3, "I think that is done."),
         user(4, "Check `unit` failed."),
-        call(5, "c2", "edit", json!({"path": "a.py"}), "ok"),
+        call(5, "c2", "edit", json!({"path": "a.py", "edit": 2}), "ok"),
         say(6, "Fixed."),
     ];
     let projection = step_records(vec![passed(

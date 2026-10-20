@@ -23,12 +23,25 @@ default `--min-strength` is `consistency`; `--strip` defaults to `all`
 whatever it was shown). Every conversation starts with the system turn
 every solve, `ask` and probe runs under: one short system prompt of
 Splinter's own, in place of sven's coding-agent prompt, so the policy is
-trained under the prompt it answers under. Chat views are written as
+trained under the prompt it answers under. The exception is the
+`sft-step` view of a repository solve: its records open with the prompt the
+solve's own profile records (the coding-agent prompt, `coding-agent-1`, for
+a solve made under it), the dataset's manifest records that prompt, and a
+model trained on it is asked under it. A solve whose recorded prompt this
+build holds no text of is left out; runs under two different prompts do not
+make one dataset until `--system-prompt` writes them all under one. Chat views are written as
 brain's `generic-messages-v2`, `preference` as brain's
 `generic-preference-v1` (one pair per line: the student's prompt, the
 chosen and the rejected answer), each checked by brain's own parser.
 Objectives brain cannot train (contrastive, reward, raw text) need
 `--export-only`.
+
+A workspace trajectory is cleaned of the machine that ran it: the harness's
+scratch directory is named relative to itself, the owner and group of a long
+listing and the name of a home directory become `user`. An action that repeats
+an earlier call of its trajectory with the same result is context and not an
+action to learn (counted as `repeated_action`), so the tail of a loop is
+shown to what follows and never trained.
 
 A trajectory is projected only when its source survives the projection whole.
 Results are paired to calls by id within their step; a step whose calls share

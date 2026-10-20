@@ -30,7 +30,10 @@
 //!   step label judges that step alone, and a failed attempt can hold
 //!   correct steps; with no good label it yields nothing and is counted
 //!   under why it did not pass;
-//! * never a step ATIF marks as copied context.
+//! * never a step ATIF marks as copied context;
+//! * never an action that repeats a call of the trajectory whose result was
+//!   the same ([`Exclusion::RepeatedAction`]): the tail of a loop stays in the
+//!   context of what follows and is not learned.
 //!
 //! Candidates: an experience, until its actions are reached; then each
 //! action (a bad one counts as [`Exclusion::BadStep`]).
@@ -177,6 +180,8 @@ impl SftStep {
         for action in conversation.actions.iter().filter(|a| !a.copied) {
             if entry.labelled(action.step, Label::Bad) {
                 projection.exclude(Exclusion::BadStep);
+            } else if action.repeated {
+                projection.exclude(Exclusion::RepeatedAction);
             } else if passed.is_ok()
                 || (!outcome_verified && entry.labelled(action.step, Label::Good))
             {

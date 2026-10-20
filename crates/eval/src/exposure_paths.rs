@@ -49,8 +49,7 @@ use std::collections::HashSet;
 use atif::{ToolInvocation, TraceStep};
 use serde_json::Value;
 
-/// The key of the trajectory's agent `extra` that names the episode's tree.
-pub const WORKSPACE_TREE_KEY: &str = "workspace_tree";
+pub use splinter_core::prompt::WORKSPACE_TREE_KEY;
 
 /// Directories every command reads from.
 const SYSTEM_PREFIXES: [&str; 9] = [

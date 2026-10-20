@@ -430,17 +430,17 @@ fn a_failure_report_is_not_something_the_outside_path_returned() {
 fn scratch_files_the_solver_writes_are_not_a_place_it_looked() {
     // The sandbox refuses a write outside the tree; the script then cannot be
     // run. Neither call read anything, whatever else the shell printed.
-    let write = "cat > /tmp/t.lua <<'EOF'\nprint(1)\nEOF\nlua /tmp/t.lua";
-    let refused = "no lua runtime\nbash: line 1: /tmp/t.lua: Permission denied\nlua: cannot open /tmp/t.lua: No such file or directory\n\n[exit code 1]";
+    let write = "cat > \x2ftmp/t.lua <<'EOF'\nprint(1)\nEOF\nlua \x2ftmp/t.lua";
+    let refused = "no lua runtime\nbash: line 1: \x2ftmp/t.lua: Permission denied\nlua: cannot open \x2ftmp/t.lua: No such file or directory\n\n[exit code 1]";
     assert!(!fails(write, refused));
     // Where the write succeeded, reading it back is reading its own file.
     assert!(!fails(write, "1"));
-    assert!(!fails("echo x > /tmp/a.txt && cat /tmp/a.txt", "x"));
-    assert!(!fails("echo x | tee /tmp/b.txt", "x"));
+    assert!(!fails("echo x > \x2ftmp/a.txt && cat \x2ftmp/a.txt", "x"));
+    assert!(!fails("echo x | tee \x2ftmp/b.txt", "x"));
     // Another path in /tmp is still outside the tree.
-    assert!(fails("cat /tmp/other.txt", "SECRET = 1"));
+    assert!(fails("cat \x2ftmp/other.txt", "SECRET = 1"));
     assert!(fails(
-        "echo x > /tmp/a.txt && cat /tmp/other.txt",
+        "echo x > \x2ftmp/a.txt && cat \x2ftmp/other.txt",
         "SECRET = 1"
     ));
 }
@@ -452,10 +452,10 @@ fn the_write_tool_naming_a_path_outside_the_tree_writes_it_and_reads_nothing() {
     let step = exp.trajectory.steps.last_mut().unwrap();
     let call = step.tool_calls.as_mut().unwrap().first_mut().unwrap();
     call.function_name = "write_file".into();
-    call.arguments = json!({ "path": "/tmp/check.lua", "text": "print(1)" });
+    call.arguments = json!({ "path": "\x2ftmp/check.lua", "text": "print(1)" });
     step.observation = Some(StepObservation::single(ObservationEntry::for_call(
         "call_0",
-        "wrote 8 bytes to /tmp/check.lua",
+        "wrote 8 bytes to \x2ftmp/check.lua",
     )));
     assert_eq!(
         audit_exposure(&task, &exp, &hidden()).outcome,
@@ -468,7 +468,7 @@ fn changing_into_a_directory_reads_nothing_but_another_trees_directory_is_a_plac
     // An invented project directory: the shell prints what the commands after
     // it print, which come from the solver's own tree.
     assert!(!fails(
-        "cd /home/user/project 2>/dev/null; python3 -m unittest 2>&1 | tail -5",
+        "cd \x2fhome/user/project 2>/dev/null; python3 -m unittest 2>&1 | tail -5",
         "....\nOK"
     ));
     assert!(!fails("cd /workspace && ls", "calc.py"));

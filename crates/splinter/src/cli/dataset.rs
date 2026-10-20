@@ -39,7 +39,9 @@ pub struct BuildArgs {
     /// (default) or judged.
     #[arg(long, value_parser = strength, value_name = "STRENGTH")]
     pub min_strength: Option<Strength>,
-    /// The system prompt every conversation opens with, in place of the
+    /// The system prompt every conversation opens with, in place of the one
+    /// the runs were made under (the sft-step view opens a repository
+    /// solve's records with the prompt its solve profile records) or the
     /// default assistant's; the dataset records it.
     #[arg(long, value_name = "TEXT")]
     pub system_prompt: Option<String>,
