@@ -1088,6 +1088,24 @@ control shows that the rise to about 0.74 at the lower rates is the variance of 
 view, B = 2 records per step with ceil(2R/B) steps, the monitoring split by whole family, `--keep-evaluations`, patience 2, the memorisation guard. The dataset is `blake3:d246dbb54ca3c8a3eb7b8755d5c7590b8e8a0779747a9c0cc1cab238062a2594` (80 packed records
 from the seven sets of A19.1, built by splinter c70ab627 linked against brain cd8df8266 and sven f0cfb82c, a local build; excluded: failed 196, compacted 27, over block 12).
 
+### Amendment 22, 2026-10-21, 01:30 CEST: CE8 on the bf16 base and corrected records, and a teacher pass under the solve protocol
+
+Made before any CE8 training run, before any CE8 outcome and before any trajectory of the pass of A22.3 exists.
+
+**A22.1 Base precision.** CE8 trains its LoRA on the bf16 base of the FP8 checkpoint in place of A19.2's NF4 base (native precision where the card holds it).
+Measurement, before this amendment: a 10-step bf16 training on the 16 smoke records at lr 5e-5 tracked an lr 1e-9 control within 0.03 at every step (0.480 -> 0.750 against 0.480 -> 0.755; record-to-record variance, no divergence),
+8.5 s per step at block 8938, 73.6 GB peak on one card (`runs/b27/bf16check/`). Every other value of A19.2 and A21 stands.
+
+**A22.2 The records.** The CE8 dataset is built again from the seven sets of A19.1 with the first splinter revision of origin/main that contains three corrections, named with its hash in the run record (A5.3):
+(a) the exposure audit pairs parallel tool results with their calls by call id, not by position, and judges a path by what the call did with it, so a traceback line, a refused scratch write or a non-existent invented path is not exposure (a read-only re-check of the 35 passes A13 excluded: 23 of them looked at nothing hidden; genuine probing of hidden paths stays excluded);
+(b) a record is rendered under the system prompt its solve recorded, the host's login name and the harness's scratch paths are removed from it, and the tail of identical calls that ended in a repetition stop is not a training target;
+(c) nothing else of A14 or A19 changes. The dataset of A21.2 (`blake3:d246dbb5...`) is not trained on.
+
+**A22.3 A teacher pass under the solve protocol.** A20.7 names the protocol for one new teacher pass: the 27B solves the eight CE1 development sets again with the secondary variant of A20.6 (thinking on with a 1024-token budget, temperature 0.6, top-p 0.95, top-k 20),
+the first seed of `runs/ce/protocol-seeds.txt`, one attempt per task, `--solve-deadline 3600`, concurrency 8 on one server, the splinter revision of A22.2, served by the brain build that closes a budgeted thought with the model family's early-stopping sentence (brain 2390f4207; binary `bin-brain-0cc4bf64c`, the same change before its rebase) at a context of 65536, in the set order of A11.2.
+Its passes, admitted and projected as in A22.2, form a second CE8 dataset (CE8-T), trained with the recipe of A22.1/A22.2 into a second candidate. Why thinking: an unregistered pilot on 46 HALF_A tasks (two per family, pick seed 1400606320) gave thinking off 23/44, 22/46, 22/46 and thinking 1024 26/46, 29/46 on seeds 1-2; it is labelled a pilot and is no result of this study.
+How CE8 and CE8-T are evaluated is registered by a later amendment before any of their evaluation attempts runs; neither candidate is evaluated on a CE1 development task.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
