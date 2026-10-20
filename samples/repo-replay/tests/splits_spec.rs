@@ -86,3 +86,30 @@ fn each_split_holds_only_its_commits_and_every_attempt_has_a_trace() {
         .sum::<usize>();
     assert_eq!(traces, attempts, "one trace per stored attempt");
 }
+
+#[test]
+fn a_split_with_no_passed_attempt_has_no_records_but_still_has_its_traces() {
+    let work = tempfile::tempdir().unwrap();
+    let source = work.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    fixture::build(&source).unwrap();
+    let truths = history_diffs(&source).unwrap();
+    let state = work.path().join("state");
+    let ctx = open_context(&state).unwrap();
+    let mut config = default_config(&source, &state);
+    config.styles = vec![splinter_repo_replay::plan_prompt::PlanStyle::Terse];
+    run_blocking(
+        &ctx,
+        &scripted_models(Behaviour::Junk, Specificity::NamesFiles, &truths),
+        &config,
+    )
+    .unwrap();
+    let out = work.path().join("out");
+    let settings = DatasetSettings {
+        serving_prompt: SERVING_PROMPT.to_string(),
+        max_block: None,
+    };
+    let summary = write_splits(&ctx, &state, &out, &settings, 80, 10).unwrap();
+    assert_eq!(summary["splits"]["train"]["records"], 0);
+    assert!(std::fs::read_dir(out.join("traces/train")).unwrap().count() > 0);
+}

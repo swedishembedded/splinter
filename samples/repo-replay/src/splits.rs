@@ -87,7 +87,16 @@ pub fn write_splits(
         let keep = |c: &str| split_by_commit.get(c) == Some(&split);
         match attempts_set_where(ctx, &state, split, &keep) {
             Ok(set) => {
-                let built = build_dataset(ctx, &[set], settings)?;
+                let built = match build_dataset(ctx, &[set], settings) {
+                    Ok(built) => built,
+                    // A split whose attempts all failed the gate has nothing to train on.
+                    Err(e) => {
+                        entry["records"] = json!(0);
+                        entry["note"] = json!(format!("{e:#}"));
+                        summary.insert(split.to_string(), entry);
+                        continue;
+                    }
+                };
                 let dir = out.join(split);
                 std::fs::create_dir_all(&dir)?;
                 std::fs::copy(&built.path, dir.join("dataset.jsonl"))?;
