@@ -268,6 +268,11 @@ Options:
 - `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
 - `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`.
 - `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
+- `--curriculum <STRATEGY>`: The order tasks are solved and taught in (`--budget` may end the run before all are reached): the order they were admitted in, or by learning progress (the change in a family's verified pass rate between releases, per GPU second it cost) Default: `frontier`. Values: `frontier`, `learning-progress`, `gain-ranked`.
+- `--curriculum-seed <N>`: The seed of the learning-progress draw (drawn, printed and recorded if not given)
+- `--lp-window <N>`: Releases in each of the two windows learning progress compares. Default: `2`.
+- `--lp-novelty <X>`: The novelty bonus of a family nothing has attempted, in pass-rate units; it shrinks with attempts. Default: `0.1`.
+- `--lp-explore <X>`: The share of the draw that is uniform over families, in [0, 1]: no family gets less than this share divided by the number of families. Default: `0.1`.
 - `--alpha-spending`: Spend the significance level across the releases of a lineage by a fixed schedule, so that a long run of candidates no better than their champions releases one with probability below the level.
 - `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a miss on an exam too small to see it is reported inconclusive, not as a failure.
 - `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
@@ -551,6 +556,11 @@ Options:
 - `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
 - `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`.
 - `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
+- `--curriculum <STRATEGY>`: The order tasks are solved and taught in (`--budget` may end the run before all are reached): the order they were admitted in, or by learning progress (the change in a family's verified pass rate between releases, per GPU second it cost) Default: `frontier`. Values: `frontier`, `learning-progress`, `gain-ranked`.
+- `--curriculum-seed <N>`: The seed of the learning-progress draw (drawn, printed and recorded if not given)
+- `--lp-window <N>`: Releases in each of the two windows learning progress compares. Default: `2`.
+- `--lp-novelty <X>`: The novelty bonus of a family nothing has attempted, in pass-rate units; it shrinks with attempts. Default: `0.1`.
+- `--lp-explore <X>`: The share of the draw that is uniform over families, in [0, 1]: no family gets less than this share divided by the number of families. Default: `0.1`.
 - `--alpha-spending`: Spend the significance level across the releases of a lineage by a fixed schedule, so that a long run of candidates no better than their champions releases one with probability below the level.
 - `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a miss on an exam too small to see it is reported inconclusive, not as a failure.
 - `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
@@ -1184,6 +1194,7 @@ Arguments:
 Options:
 
 - `--from <REF>`: The base to train, and an adapter on it to continue. Default: `policy:default`.
+- `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8 or nf4 [default: fp32, or bf16 when SPLINTER_BF16_BASE is set]
 - `--replay-fraction <F>`: The fraction of each earlier release's training records replayed, when training from a policy alias. Default: `0.25`.
 - `--steps <N>`: The step budget: the most steps the training may take [default: 3 passes over the examples, within bounds]
 - `--rank <R>`: LoRA rank of a new adapter. Default: `8`.
