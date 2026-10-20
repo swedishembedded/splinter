@@ -29,7 +29,8 @@ use crate::upstream_of;
 pub struct ListedModel {
     /// The id a request names.
     pub id: String,
-    /// The digest of the adapter file behind it; `None` for a base model.
+    /// The digest of the adapter file behind it (`adapter.digest` in the
+    /// listing); `None` for a base model.
     pub digest: Option<String>,
 }
 
@@ -153,7 +154,11 @@ fn parse_models(body: &str) -> anyhow::Result<Vec<ListedModel>> {
         .filter_map(|m| {
             Some(ListedModel {
                 id: m.get("id")?.as_str()?.to_string(),
-                digest: m.get("digest").and_then(|d| d.as_str()).map(String::from),
+                // brain lists an adapter's file digest under `adapter`.
+                digest: m
+                    .pointer("/adapter/digest")
+                    .and_then(|d| d.as_str())
+                    .map(String::from),
             })
         })
         .collect())
@@ -196,7 +201,7 @@ mod tests {
 
     #[test]
     fn the_listing_is_read_with_and_without_digests() {
-        let body = r#"{"data":[{"id":"a"},{"id":"b","digest":"sha256:01"}]}"#;
+        let body = r#"{"data":[{"id":"a"},{"id":"b","adapter":{"id":"b","digest":"sha256:01"}}]}"#;
         assert_eq!(
             parse_models(body).expect("parses"),
             [model("a", None), model("b", Some("sha256:01"))]
