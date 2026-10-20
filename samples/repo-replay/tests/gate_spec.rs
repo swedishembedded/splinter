@@ -282,6 +282,30 @@ fn a_search_with_context_lines_in_the_file_shows_the_file() {
 }
 
 #[test]
+fn a_search_over_a_directory_or_glob_that_prints_context_of_the_file_shows_the_file() {
+    let unread = |args: serde_json::Value, result: &str| {
+        classes(vec![call(1, "grep", args, result)]).contains(&"unread_edit".to_string())
+    };
+    let printed = "./src/ppu.rs-299-a\n./src/ppu.rs:300:b\n./src/ppu.rs-301-d";
+    // No path argument (whole tree) or an include glob: the printed lines are what counts.
+    assert!(!unread(
+        json!({"pattern": "b", "context_lines": 3}),
+        printed
+    ));
+    assert!(!unread(
+        json!({"pattern": "b", "include": "ppu.rs", "context_lines": 3}),
+        printed
+    ));
+    // Without context lines it is a list of matches, not the file.
+    assert!(unread(json!({"pattern": "b", "context_lines": 0}), printed));
+    // Context printed for another file shows nothing of this one.
+    assert!(unread(
+        json!({"pattern": "b", "context_lines": 3}),
+        "./src/other.rs-299-a\n./src/other.rs:300:b"
+    ));
+}
+
+#[test]
 fn words_inside_quotes_that_are_only_searched_for_are_not_commands() {
     let read = call(2, "read_file", json!({"path": "src/ppu.rs"}), "x");
     let shell = |cmd: &str| call(1, "shell", json!({"shell_command": cmd}), "");

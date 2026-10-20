@@ -394,22 +394,36 @@ fn shows(call: &Call, paths: &[&str], root: &[String]) -> bool {
         "read_file" => call
             .arg("path")
             .is_some_and(|p| paths.contains(&norm(p, root).as_str())),
-        // A search in that file that prints its surroundings shows the file.
+        // A search that prints the surroundings of its matches shows a file when it
+        // names that file, or (searching a directory, a glob or the whole tree) when
+        // its output holds lines of that file.
         "grep" => {
             call.args
                 .get("context_lines")
                 .and_then(serde_json::Value::as_u64)
                 .is_some_and(|n| n > 0)
-                && call
+                && !call.result.trim().is_empty()
+                && (call
                     .arg("path")
                     .is_some_and(|p| paths.contains(&norm(p, root).as_str()))
-                && !call.result.trim().is_empty()
+                    || prints_lines_of(&call.result, paths, root))
         }
         "shell" => call.command().is_some_and(|c| {
             reads(c) && paths.iter().any(|p| c.contains(p) || c.contains(base(p)))
         }),
         _ => false,
     }
+}
+
+/// Whether grep output holds numbered lines (`path:12:` match or `path-12-` context) of one of `paths`.
+fn prints_lines_of(output: &str, paths: &[&str], root: &[String]) -> bool {
+    let numbered = re(r"^(.+?)[:-]\d+[:-]");
+    output.lines().any(|line| {
+        numbered
+            .captures(line)
+            .and_then(|c| c.get(1))
+            .is_some_and(|file| paths.contains(&norm(file.as_str(), root).as_str()))
+    })
 }
 
 fn is_removal(command: &str) -> bool {
