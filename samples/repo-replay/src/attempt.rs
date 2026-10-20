@@ -59,6 +59,8 @@ pub struct AttemptSettings {
     pub deadline: Duration,
     /// Output tokens an attempt may generate.
     pub max_output_tokens: Option<u64>,
+    /// Longest a request may wait for the server's first byte and token.
+    pub first_response: Option<Duration>,
     /// The gate's bounds.
     pub gate: GateConfig,
     /// Paths of the source repository and the run's state, which the shell may not name.
@@ -178,6 +180,7 @@ pub async fn attempt(
     let mut solve = SolveOptions::new(settings.deadline);
     solve.system = Some(grounding_prompt(&commit.diff));
     solve.max_output_tokens = settings.max_output_tokens;
+    solve.first_response = settings.first_response;
     let mut options = WorkOptions::new(solve);
     options.max_tool_calls = Some(u32::try_from(settings.gate.max_tool_calls).unwrap_or(u32::MAX));
     options.max_repeated_results = Some(4);

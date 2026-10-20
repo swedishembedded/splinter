@@ -548,6 +548,7 @@ impl<'b> Meter<'b> {
             max_output_tokens,
             cancel: self.budget.cancel.clone(),
             stream_idle: None,
+            first_response: None,
             system: None,
             sampling: None,
         })

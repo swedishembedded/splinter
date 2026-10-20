@@ -93,6 +93,7 @@ pub fn default_config(source: &Path, state: &Path) -> RunConfig {
         deadline: Duration::from_secs(120),
         plan_deadline: Duration::from_secs(60),
         max_output_tokens: None,
+        first_response: None,
         checks: Vec::new(),
         check_timeout: Duration::from_secs(30),
         error_retries: 0,

@@ -81,6 +81,8 @@ pub struct RunConfig {
     pub plan_deadline: Duration,
     /// Output tokens one attempt may generate.
     pub max_output_tokens: Option<u64>,
+    /// Longest a request may wait for the server's first byte and token.
+    pub first_response: Option<Duration>,
     /// Project checks run in the attempt tree afterwards, never gated.
     pub checks: Vec<String>,
     /// Longest a project check may run.
@@ -228,6 +230,7 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         model: Arc::clone(&models.agent),
         deadline: config.deadline,
         max_output_tokens: config.max_output_tokens,
+        first_response: config.first_response,
         gate: config.gate,
         forbidden_locations: [&config.source, &parts.mirror]
             .into_iter()

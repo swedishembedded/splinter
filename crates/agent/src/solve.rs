@@ -72,6 +72,11 @@ pub struct SolveOptions {
     /// [`Model::stream_idle`]. `None` keeps sven's default. A limit past
     /// the deadline is the deadline: no silence outlasts the run.
     pub stream_idle: Option<Duration>,
+    /// The longest a request may wait for the server's first byte and its
+    /// first token: a server shared with other jobs queues requests, and sven's
+    /// default limit fails the run where waiting would serve it. `None` keeps
+    /// sven's default.
+    pub first_response: Option<Duration>,
     /// The system prompt the run is under, in place of [`SYSTEM_PROMPT`]: the
     /// one a policy was trained under, when that is a person's. `None` keeps
     /// the default.
@@ -91,6 +96,7 @@ impl SolveOptions {
             max_output_tokens: None,
             cancel: None,
             stream_idle: None,
+            first_response: None,
             system: None,
             sampling: None,
         }
@@ -138,6 +144,11 @@ impl SolveOptions {
         let mut config = Config::default();
         config.tools.max_timeout_secs = SOLVE_MAX_TIMEOUT_SECS;
         config.agent.note_repeated_results = true;
+        if let Some(wait) = self.first_response {
+            let secs = wait.as_secs().max(1);
+            config.agent.first_byte_timeout_secs = Some(secs);
+            config.agent.first_token_timeout_secs = Some(secs);
+        }
         if let Some(limit) = self.stream_idle {
             let limit = limit.min(self.deadline);
             let secs = limit.as_secs() + u64::from(limit.subsec_nanos() > 0);

@@ -116,6 +116,10 @@ struct RunArgs {
     /// Output tokens one attempt may generate.
     #[arg(long)]
     max_output_tokens: Option<u64>,
+    /// Seconds a request may wait for the server's first byte and token (a
+    /// shared server queues requests; default: sven's limit).
+    #[arg(long)]
+    first_response_secs: Option<u64>,
     /// Plans written per attempt before giving up.
     #[arg(long, default_value_t = 2)]
     plan_tries: usize,
@@ -241,6 +245,7 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.deadline = Duration::from_secs(args.attempt_secs);
     config.plan_deadline = Duration::from_secs(args.plan_secs);
     config.max_output_tokens = args.max_output_tokens;
+    config.first_response = args.first_response_secs.map(Duration::from_secs);
     config.plan_tries = args.plan_tries;
     config.min_line_tokens = args.plan_verbatim_words;
     let ctx = open_context(&args.state)?;
