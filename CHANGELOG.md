@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (repo-replay sample)
+- `samples/repo-replay` (`repo-replay audit|run|report|dataset`, `make samples/repo-replay/audit`) replays a git history commit by commit with an agent: the plan of a commit is written without the answer in it (verbatim, marker and code-density checks, a terse and a detailed style), the agent works under a grounding prompt holding the diff in a single-commit tree of the parent (no future history, refs or remote), a deterministic gate judges the tree and the trajectory (exact tree, edit per file, read before edit, located by the plan or a search, no leaked new names, no wholesale apply, bounded calls), generated and vendored paths are excluded, attempts run in parallel and are stored in order, and the dataset is built through the `sft-step` view under the serving prompt (never the grounding prompt) with names, trailers, addresses and secrets scrubbed. A bias report counts attempts by commit size, plan style and failure reason.
+
 ### Added (dependencies)
 - `make deps/tlaplus TLAPLUS_DIR=<dir>` installs the pinned TLA+ tools (tla2tools.jar v1.7.4) and a Temurin 21 aarch64 JRE, both sha256-checked, with `<dir>/bin/tlc` running TLC on that JRE.
 

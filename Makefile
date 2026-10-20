@@ -191,6 +191,14 @@ samples/tool-syntax:
 samples/tool-syntax/audit:
 	$(CARGO) run $(PROFILE) -p splinter-tool-syntax -- audit
 
+## samples/repo-replay - lists the repo-replay sample's targets; runs nothing
+samples/repo-replay:
+	@bash scripts/make-help.sh samples/repo-replay
+
+## samples/repo-replay/audit - the gate checks itself on a fixture history with scripted models (no model, no GPU, no network)
+samples/repo-replay/audit:
+	$(CARGO) run $(PROFILE) -p splinter-repo-replay -- audit
+
 # ---------------------------------------------------------------------------
 ##@ Documentation
 ## The manual under docs/, published as Markdown pages and a PDF by the pinned publisher.
@@ -349,5 +357,5 @@ help:
 	hooks hooks/install \
 	qualify qualify/list qualify/test qualify/run \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
-	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit \
+	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit samples/repo-replay samples/repo-replay/audit \
 	docs docs/build docs/check docs/pdf docs/clean _docs-publisher-pin

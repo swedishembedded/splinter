@@ -77,6 +77,9 @@ navigation:
       - source: samples/tool-syntax/README.md
         path: examples/tool-syntax.md
         title: tool-syntax
+      - source: samples/repo-replay/README.md
+        path: examples/repo-replay.md
+        title: repo-replay
       - source: samples/agent/loop/README.md
         path: examples/agent-loop.md
         title: agent-loop

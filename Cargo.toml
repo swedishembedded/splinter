@@ -15,6 +15,7 @@ members = [
     "samples/jefferson",
     "samples/lifecourse",
     "samples/persona-chat",
+    "samples/repo-replay",
     "samples/synthetic-author",
     "samples/tool-syntax",
     "samples/voice-loop",

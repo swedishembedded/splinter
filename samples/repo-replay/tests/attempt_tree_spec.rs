@@ -1,0 +1,153 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements pipelines that turn a repository's history
+// into verified training data for coding agents, for its clients. If your
+// team needs expertise in learning from your own codebase, you can procure
+// our services by sending an email to info@swedishembedded.com.
+
+//! Spec: the tree an agent works in holds the commit's parent and nothing
+//! of the future; the plan and the records never hold the answer.
+
+#![allow(clippy::unwrap_used)]
+
+use splinter_repo_replay::fixture;
+use splinter_repo_replay::git::{mirror, single_commit_repo, Git};
+use splinter_repo_replay::plan::{validate, PlanCheck, PlanRejection};
+use splinter_repo_replay::plan_prompt::PlanStyle;
+use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
+
+#[test]
+fn the_attempt_tree_is_a_single_commit_without_the_future() {
+    let work = tempfile::tempdir().unwrap();
+    let source = work.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    let ids = fixture::build(&source).unwrap();
+    let git = mirror(&source, &work.path().join("mirror.git")).unwrap();
+    let tree = work.path().join("tree");
+    std::fs::create_dir(&tree).unwrap();
+    git.export_tree(&ids[1], &tree).unwrap();
+    single_commit_repo(&tree).unwrap();
+
+    let attempt = Git::at(&tree);
+    let commits = attempt.text(&["rev-list", "--all"]).unwrap();
+    assert_eq!(
+        commits.lines().count(),
+        1,
+        "one commit and no other ref: {commits}"
+    );
+    assert_eq!(attempt.text(&["remote"]).unwrap().trim(), "", "no remote");
+    for later in &ids[2..] {
+        assert!(
+            attempt.bytes(&["cat-file", "-e", later]).is_err(),
+            "{later} must not exist in the tree"
+        );
+    }
+    assert!(
+        tree.join("shapes.py").is_file(),
+        "the parent's files are there"
+    );
+    assert!(!std::fs::read_to_string(tree.join("calc.py"))
+        .unwrap()
+        .contains("compute_total_with_tax"));
+}
+
+#[test]
+fn a_plan_must_not_carry_the_answer() {
+    let commit = "0123456789abcdef0123456789abcdef01234567";
+    let lines = vec![
+        "    result = subtotal + subtotal * rate - discount + rounding_adjustment".to_string(),
+        "def compute_total_with_tax(subtotal, rate):".to_string(),
+    ];
+    let check = PlanCheck {
+        diff_lines: &lines,
+        commit,
+        min_line_tokens: 6,
+    };
+    let good = "Please make total() include the tax rate in the price it returns, because customers see prices without tax today and that surprises them at checkout.";
+    validate(good, PlanStyle::Detailed, &check).unwrap();
+
+    let class = |plan: &str, style| validate(plan, style, &check).unwrap_err().class();
+    let copied = format!(
+        "{good} Use this: result = subtotal + subtotal * rate - discount + rounding_adjustment"
+    );
+    assert_eq!(class(&copied, PlanStyle::Detailed), "plan_verbatim_diff");
+    let marker = format!("{good}\n@@ -1,3 +1,4 @@");
+    assert_eq!(class(&marker, PlanStyle::Detailed), "plan_diff_marker");
+    let sha = format!("{good} See 0123456.");
+    assert_eq!(class(&sha, PlanStyle::Detailed), "plan_diff_marker");
+    let refers = format!("{good} Do what the diff does.");
+    assert_eq!(class(&refers, PlanStyle::Detailed), "plan_refers_to_change");
+    assert_eq!(class("Fix it.", PlanStyle::Detailed), "plan_length");
+    let dense = "Change `total` so that `price * quantity` becomes `subtotal` and then `subtotal + tax` for every `rate`.";
+    assert!(matches!(
+        validate(dense, PlanStyle::Terse, &check),
+        Err(PlanRejection::CodeDensity { .. })
+    ));
+}
+
+#[test]
+fn the_serving_prompt_is_the_one_a_solver_runs_under() {
+    assert_eq!(
+        SERVING_PROMPT,
+        splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT
+    );
+}
+
+/// A planner that answers from a queue and keeps the requests it was sent.
+struct Queued {
+    answers: std::sync::Mutex<Vec<String>>,
+    seen: std::sync::Mutex<Vec<usize>>,
+}
+
+#[async_trait::async_trait]
+impl splinter_sdk::agent::sven::model::ModelProvider for Queued {
+    fn name(&self) -> &str {
+        "queued"
+    }
+    fn model_name(&self) -> &str {
+        "planner"
+    }
+    async fn complete(
+        &self,
+        req: splinter_sdk::agent::sven::model::CompletionRequest,
+    ) -> anyhow::Result<splinter_sdk::agent::sven::model::ResponseStream> {
+        use splinter_sdk::agent::sven::model::ResponseEvent;
+        self.seen.lock().unwrap().push(req.messages.len());
+        let answer = self.answers.lock().unwrap().remove(0);
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta(answer)),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
+#[test]
+fn a_refused_plan_is_rewritten_with_the_reason_in_front_of_the_model() {
+    let good = "Please make total() include the tax rate in the price it returns, because customers see prices without tax today and that surprises them at checkout.";
+    let provider = std::sync::Arc::new(Queued {
+        answers: std::sync::Mutex::new(vec!["Fix it.".into(), good.into()]),
+        seen: std::sync::Mutex::new(Vec::new()),
+    });
+    let model = splinter_sdk::agent::solve::Model::new(provider.clone(), "queued/planner");
+    let check = PlanCheck {
+        diff_lines: &[],
+        commit: "0123456789abcdef0123456789abcdef01234567",
+        min_line_tokens: 6,
+    };
+    let plan = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(splinter_repo_replay::plan::write_plan(
+            &model,
+            PlanStyle::Detailed,
+            "Charge tax",
+            "diff --git a/x b/x\n",
+            &check,
+            2,
+            std::time::Duration::from_secs(5),
+        ))
+        .unwrap();
+    assert_eq!(plan, good);
+    // system + user, then system + user + refused plan + the reason.
+    assert_eq!(*provider.seen.lock().unwrap(), [2, 4]);
+}

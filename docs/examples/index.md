@@ -18,6 +18,7 @@ none of them is a claim that the loop makes a model generally better (see [limit
 | [adams](../../samples/adams/README.md) | Can a small model learn how Samuel Adams worked from his own papers? |
 | [synthetic-author](../../samples/synthetic-author/README.md) | Can Splinter learn beliefs it was never told, against ground truth that cannot have been seen in pretraining? |
 | [tool-syntax](../../samples/tool-syntax/README.md) | Does verified experience teach a small model to look before it acts? |
+| [repo-replay](../../samples/repo-replay/README.md) | Can a git history be replayed by an agent, commit by commit, into verified supervised data? |
 | [agent-loop](../../samples/agent/loop/README.md) | Can a local model complete a repository task unaided, and can a supervisor audit it? |
 | [health](../../samples/health/README.md) | Does a candidate risk model replace the one in place only when held-out evidence says it should? |
 | [lifecourse](../../samples/lifecourse/README.md) | Can a model read one health examination and say what is likely in fifteen years? |

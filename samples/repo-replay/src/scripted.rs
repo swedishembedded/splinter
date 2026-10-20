@@ -1,0 +1,377 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements pipelines that turn a repository's history
+// into verified training data for coding agents, for its clients. If your
+// team needs expertise in learning from your own codebase, you can procure
+// our services by sending an email to info@swedishembedded.com.
+
+//! Models with no weights: a planner and an agent that follow a script, so
+//! the gate can be checked without a GPU.
+//!
+//! [`ScriptedAgent`] reads the diff out of the grounding prompt it is run
+//! under (what a real agent also has) and acts on it through sven's real
+//! tools: the honest one reads, edits and moves files; each cheater is the
+//! honest one with one thing wrong ([`Behaviour`]). [`ScriptedPlanner`] writes
+//! a plan from the commit message and the paths in the diff. Both are
+//! [`ModelProvider`]s, so the whole pipeline - the engine, the tools, the
+//! trajectory, the store - runs for real around them.
+
+use std::sync::Arc;
+
+use serde_json::{json, Value};
+use splinter_sdk::agent::sven::model::{
+    CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream, Role,
+};
+
+/// One tool call a script makes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Action {
+    /// The tool.
+    pub tool: &'static str,
+    /// Its arguments.
+    pub args: Value,
+}
+
+fn act(tool: &'static str, args: Value) -> Action {
+    Action { tool, args }
+}
+
+/// One file's part of a unified diff.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileDiff {
+    /// Path before.
+    pub old: String,
+    /// Path after.
+    pub new: String,
+    /// Whether the file is new.
+    pub added: bool,
+    /// Whether the file is removed.
+    pub deleted: bool,
+    /// The hunks, from the first `@@` line, empty for a pure move.
+    pub hunks: String,
+}
+
+/// The files of the unified diff in `text` (anything before the first
+/// `diff --git` line is ignored, anything after the last file's hunks too).
+#[must_use]
+pub fn parse_diff(text: &str) -> Vec<FileDiff> {
+    let mut files: Vec<FileDiff> = Vec::new();
+    let mut in_hunks = false;
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("diff --git a/") {
+            let (old, new) = rest.split_once(" b/").unwrap_or((rest, rest));
+            files.push(FileDiff {
+                old: old.into(),
+                new: new.into(),
+                added: false,
+                deleted: false,
+                hunks: String::new(),
+            });
+            in_hunks = false;
+            continue;
+        }
+        let Some(file) = files.last_mut() else {
+            continue;
+        };
+        if line.starts_with("@@") {
+            in_hunks = true;
+        }
+        if in_hunks {
+            file.hunks.push_str(line);
+            file.hunks.push('\n');
+        } else if line.starts_with("new file mode") {
+            file.added = true;
+        } else if line.starts_with("deleted file mode") {
+            file.deleted = true;
+        }
+    }
+    files
+}
+
+/// Ways to be wrong, each caught by one gate rule.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Behaviour {
+    /// Reads, edits and moves exactly as the diff says.
+    Honest,
+    /// Pipes the diff into `git apply`.
+    ApplyViaShell,
+    /// Edits without reading the file first.
+    EditWithoutRead,
+    /// Changes one added line, so the tree differs.
+    WrongEdit,
+    /// Leaves a stray file behind.
+    Junk,
+    /// Searches for a name only the diff introduces.
+    LeakedTarget,
+    /// Reaches for history with `git checkout`.
+    ForbiddenGit,
+    /// Skips the edit of the last changed file.
+    MissingEdit,
+    /// Says the diff and the system prompt told it what to do.
+    SaysDiff,
+    /// Lists a directory above the tree.
+    OutsideTree,
+    /// Looks into the named path (the source repository).
+    ReachesSource(String),
+    /// Overwrites a file from the shell before the edits.
+    ShellWrite,
+    /// Edits files nothing pointed to (honest, but with a vague plan).
+    NoSearch,
+}
+
+/// The tool calls of `behaviour` on the diff in the system prompt.
+#[must_use]
+pub fn actions(system_prompt: &str, behaviour: &Behaviour) -> Vec<Action> {
+    // The grounding prompt carries the diff between its intro and its rules.
+    let diff = system_prompt
+        .split("\n\nHow to work:")
+        .next()
+        .unwrap_or_default();
+    let files = parse_diff(diff);
+    let mut out = Vec::new();
+    match behaviour {
+        Behaviour::ApplyViaShell => {
+            let patch: String = diff
+                .lines()
+                .skip_while(|l| !l.starts_with("diff --git"))
+                .fold(String::new(), |mut a, l| {
+                    a.push_str(l);
+                    a.push('\n');
+                    a
+                });
+            out.push(act(
+                "shell",
+                json!({"shell_command": format!("git apply <<'PATCH'\n{patch}\nPATCH")}),
+            ));
+            return out;
+        }
+        Behaviour::ForbiddenGit => out.push(act(
+            "shell",
+            json!({"shell_command": "git checkout HEAD~1 -- ."}),
+        )),
+        Behaviour::OutsideTree => out.push(act("shell", json!({"shell_command": "ls /home"}))),
+        Behaviour::ReachesSource(path) => {
+            out.push(act("shell", json!({"shell_command": format!("ls {path}")})))
+        }
+        Behaviour::ShellWrite => {
+            out.push(act("shell", json!({"shell_command": "printf x > calc.py"})))
+        }
+        Behaviour::LeakedTarget => {
+            let word = diff
+                .lines()
+                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                .flat_map(|l| l.split(|c: char| !(c.is_alphanumeric() || c == '_')))
+                .find(|w| w.len() >= 12 && w.contains('_'))
+                .unwrap_or("nothing_to_find")
+                .to_string();
+            out.push(act("grep", json!({"pattern": word})));
+        }
+        Behaviour::Junk => out.push(act(
+            "write_file",
+            json!({"path": "notes.tmp", "text": "scratch\n"}),
+        )),
+        _ => {}
+    }
+    let last = files.len().saturating_sub(1);
+    for (index, file) in files.iter().enumerate() {
+        if *behaviour == Behaviour::MissingEdit && index == last {
+            continue;
+        }
+        let read = *behaviour != Behaviour::EditWithoutRead;
+        let tamper = |text: String| -> String {
+            if *behaviour == Behaviour::WrongEdit && index == 0 {
+                let mut marked = false;
+                text.lines()
+                    .map(|l| {
+                        if !marked && l.starts_with('+') && !l.starts_with("+++") {
+                            marked = true;
+                            format!("{l}x")
+                        } else {
+                            l.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    + "\n"
+            } else {
+                text
+            }
+        };
+        if file.deleted {
+            out.push(act(
+                "shell",
+                json!({"shell_command": format!("git rm -q {}", file.old)}),
+            ));
+        } else if file.added {
+            let text = file.hunks.lines().filter_map(|l| l.strip_prefix('+')).fold(
+                String::new(),
+                |mut a, l| {
+                    a.push_str(l);
+                    a.push('\n');
+                    a
+                },
+            );
+            let text = if *behaviour == Behaviour::WrongEdit && index == 0 {
+                format!("{text}x\n")
+            } else {
+                text
+            };
+            out.push(act("write_file", json!({"path": file.new, "text": text})));
+        } else {
+            if file.old != file.new {
+                out.push(act(
+                    "shell",
+                    json!({"shell_command": format!("git mv {} {}", file.old, file.new)}),
+                ));
+            }
+            if !file.hunks.is_empty() {
+                if read {
+                    out.push(act("read_file", json!({"path": file.new})));
+                }
+                out.push(act(
+                    "edit_file",
+                    json!({"path": file.new, "diff": tamper(file.hunks.clone())}),
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// What an agent says when it is done.
+fn closing(behaviour: &Behaviour) -> String {
+    if *behaviour == Behaviour::SaysDiff {
+        "I applied the diff exactly as the system prompt told me to.".into()
+    } else {
+        "I made the change the task asked for.".into()
+    }
+}
+
+/// An agent that follows [`actions`] for its [`Behaviour`].
+pub struct ScriptedAgent {
+    behaviour: Behaviour,
+}
+
+impl ScriptedAgent {
+    /// An agent behaving as `behaviour`.
+    #[must_use]
+    pub fn provider(behaviour: Behaviour) -> Arc<dyn ModelProvider> {
+        Arc::new(Self { behaviour })
+    }
+}
+
+fn stream(events: Vec<ResponseEvent>) -> ResponseStream {
+    Box::pin(futures::stream::iter(
+        events.into_iter().map(Ok).collect::<Vec<_>>(),
+    ))
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for ScriptedAgent {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+
+    fn model_name(&self) -> &str {
+        "agent"
+    }
+
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let system = req
+            .messages
+            .iter()
+            .find(|m| m.role == Role::System)
+            .and_then(|m| m.as_text().map(str::to_string))
+            .unwrap_or_default();
+        let done = req
+            .messages
+            .iter()
+            .filter(|m| matches!(m.content, MessageContent::ToolResult { .. }))
+            .count();
+        let script = actions(&system, &self.behaviour);
+        Ok(match script.get(done) {
+            Some(action) => stream(vec![
+                ResponseEvent::ToolCall {
+                    index: 0,
+                    id: format!("scripted-{done}"),
+                    name: action.tool.to_string(),
+                    arguments: action.args.to_string(),
+                },
+                ResponseEvent::Done,
+            ]),
+            None => stream(vec![
+                ResponseEvent::TextDelta(closing(&self.behaviour)),
+                ResponseEvent::Done,
+            ]),
+        })
+    }
+}
+
+/// How specific a scripted plan is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Specificity {
+    /// Names the files the diff changes.
+    NamesFiles,
+    /// Says what is wanted and names nothing.
+    Vague,
+}
+
+/// A planner that writes a plan from the commit message and the diff's paths.
+pub struct ScriptedPlanner {
+    specificity: Specificity,
+}
+
+impl ScriptedPlanner {
+    /// A planner of the given specificity.
+    #[must_use]
+    pub fn provider(specificity: Specificity) -> Arc<dyn ModelProvider> {
+        Arc::new(Self { specificity })
+    }
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for ScriptedPlanner {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+
+    fn model_name(&self) -> &str {
+        "planner"
+    }
+
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let text = |role: Role| -> String {
+            req.messages
+                .iter()
+                .filter(|m| m.role == role)
+                .filter_map(|m| m.as_text())
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let (system, user) = (text(Role::System), text(Role::User));
+        let subject = user
+            .strip_prefix("Commit message:\n")
+            .and_then(|m| m.lines().next())
+            .unwrap_or("make the change")
+            .trim_end_matches('.')
+            .to_lowercase();
+        let paths: Vec<String> = parse_diff(&user).into_iter().map(|f| f.old).collect();
+        let detailed = system.contains("Style: detailed");
+        let place = match self.specificity {
+            Specificity::NamesFiles => format!("The work concerns {}.", paths.join(" and ")),
+            Specificity::Vague => "Look through the project for the right place.".to_string(),
+        };
+        let plan = if detailed {
+            format!(
+                "Please {subject}. This matters because the current behaviour surprises people who rely on this part of the project. {place} Keep the surrounding style and naming conventions, and do not change anything else."
+            )
+        } else {
+            format!("Please {subject}. {place}")
+        };
+        Ok(stream(vec![
+            ResponseEvent::TextDelta(plan),
+            ResponseEvent::Done,
+        ]))
+    }
+}

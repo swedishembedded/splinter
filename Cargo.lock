@@ -6121,6 +6121,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-repo-replay"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "futures",
+ "regex",
+ "serde",
+ "serde_json",
+ "splinter-sdk",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "splinter-sandbox"
 version = "0.2.0"
 dependencies = [
