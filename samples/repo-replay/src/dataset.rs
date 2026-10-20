@@ -47,9 +47,20 @@ pub fn attempts_set_where(
     label: &str,
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<String> {
+    attempts_set_filtered(ctx, state, label, &|e| keep(&e.commit))
+}
+
+/// [`attempts_set`] of the ledger entries `keep` accepts (by commit, by number
+/// of corrections ...), the set named `label`; none of them is an error.
+pub fn attempts_set_filtered(
+    ctx: &Context,
+    state: &Path,
+    label: &str,
+    keep: &dyn Fn(&ledger::Entry) -> bool,
+) -> Result<String> {
     let members = ledger::read(state)?
         .iter()
-        .filter(|e| keep(&e.commit))
+        .filter(|e| keep(e))
         .filter_map(|e| e.experience.as_deref())
         .map(|hex| {
             Ok(ExperienceId(Digest::from_content_hex(hex).with_context(
@@ -65,6 +76,68 @@ pub fn attempts_set_where(
         members,
     })?;
     Ok(set.to_string())
+}
+
+/// Which attempts a dataset admits by the corrections they needed: 0 only is
+/// the `first_try` record type (plan -> edits), 1 and more the `corrected`
+/// type (plan -> attempt -> feedback -> fix).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CorrectionRange {
+    /// Fewest corrections.
+    pub min: usize,
+    /// Most corrections.
+    pub max: usize,
+}
+
+impl Default for CorrectionRange {
+    fn default() -> Self {
+        Self {
+            min: 0,
+            max: usize::MAX,
+        }
+    }
+}
+
+impl CorrectionRange {
+    /// Whether `entry` needed a number of corrections in range.
+    #[must_use]
+    pub fn admits(&self, entry: &ledger::Entry) -> bool {
+        (self.min..=self.max).contains(&entry.corrections)
+    }
+}
+
+/// How one stored attempt is labelled in a dataset: its experience id, its
+/// record type, the corrections it needed and the control it ran under.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct RecordLabel {
+    /// The stored experience (a record's `metadata.experiences` names it).
+    pub experience: String,
+    /// `first_try` or `corrected`.
+    pub record_type: &'static str,
+    /// Correction messages the agent was sent.
+    pub corrections: usize,
+    /// `grounded` or `plan-only`.
+    pub control: &'static str,
+}
+
+/// The labels of the passed attempts of `state` that `range` admits, in ledger order.
+pub fn labels(state: &Path, range: CorrectionRange) -> Result<Vec<RecordLabel>> {
+    Ok(ledger::latest(&ledger::read(state)?)
+        .into_iter()
+        .filter(|e| e.outcome == ledger::Outcome::Passed && range.admits(e))
+        .filter_map(|e| {
+            Some(RecordLabel {
+                experience: e.experience.clone()?,
+                record_type: if e.corrections == 0 {
+                    "first_try"
+                } else {
+                    "corrected"
+                },
+                corrections: e.corrections,
+                control: e.control.name(),
+            })
+        })
+        .collect())
 }
 
 /// What the dataset is built with.

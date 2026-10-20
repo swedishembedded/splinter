@@ -122,6 +122,11 @@ pub enum Behaviour {
     AnnouncesThenGoesOn,
     /// Reads each file at the line where the diff's hunk starts, without searching.
     ReadAtHunk,
+    /// Skips the edit of the last changed file (like [`Behaviour::MissingEdit`]); once
+    /// the user writes to it again, makes that edit.
+    FixesAfterCorrection,
+    /// Only the last changed file's edit: what [`Behaviour::FixesAfterCorrection`] does after a correction.
+    LastFileOnly,
 }
 
 /// The edit for a file's masked hunks, built the way an agent builds it: the
@@ -285,6 +290,11 @@ pub fn actions(
     }
     // What the replay prompt asks first: the agent's own todo list, one item
     // per change, naming (in its own words) what it will write.
+    let last_only = *behaviour == Behaviour::LastFileOnly;
+    let skips_last = matches!(
+        behaviour,
+        Behaviour::MissingEdit | Behaviour::FixesAfterCorrection
+    );
     let named = diff
         .lines()
         .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
@@ -297,10 +307,12 @@ pub fn actions(
         .map(|(n, _)| json!({"id": format!("{}", n + 1), "content": format!("change {} ({named})", n + 1), "status": "pending"}))
         .chain([json!({"id": "review", "content": "review my work against the task", "status": "pending"})])
         .collect();
-    out.push(act("todo", json!({"action": "set", "todos": items})));
+    if !last_only {
+        out.push(act("todo", json!({"action": "set", "todos": items})));
+    }
     let last = files.len().saturating_sub(1);
     for (index, file) in files.iter().enumerate() {
-        if *behaviour == Behaviour::MissingEdit && index == last {
+        if (skips_last && index == last) || (last_only && index != last) {
             continue;
         }
         let read = *behaviour != Behaviour::EditWithoutRead;
@@ -372,7 +384,9 @@ pub fn actions(
         }
     }
     // And the self-review it ends with.
-    out.push(act("shell", json!({"shell_command": "git diff --stat"})));
+    if !last_only {
+        out.push(act("shell", json!({"shell_command": "git diff --stat"})));
+    }
     out
 }
 
@@ -467,7 +481,20 @@ impl ModelProvider for ScriptedAgent {
             ]));
         }
         let reads = reads_in(&req.messages);
-        let script = actions(&system, &self.behaviour, &self.truths, &reads);
+        // After the user writes again, the correction's own script starts afresh.
+        let (behaviour, done) = if self.behaviour == Behaviour::FixesAfterCorrection && users >= 2 {
+            let since = req
+                .messages
+                .iter()
+                .rev()
+                .take_while(|m| m.role != Role::User)
+                .filter(|m| matches!(m.content, MessageContent::ToolResult { .. }))
+                .count();
+            (&Behaviour::LastFileOnly, since)
+        } else {
+            (&self.behaviour, done)
+        };
+        let script = actions(&system, behaviour, &self.truths, &reads);
         Ok(match script.get(done) {
             Some(action) => stream(vec![
                 ResponseEvent::ToolCall {
@@ -567,6 +594,91 @@ impl ModelProvider for ScriptedPlanner {
         };
         Ok(stream(vec![
             ResponseEvent::TextDelta(plan),
+            ResponseEvent::Done,
+        ]))
+    }
+}
+
+/// Ways for a scripted supervisor to be wrong, each caught by one rule of
+/// [`crate::supervise::check_message`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SupervisorBehaviour {
+    /// Names the path that differs and what is needed there, in words.
+    Honest,
+    /// Quotes a line of the wanted change.
+    QuotesDiffLine,
+    /// Gives a line number.
+    GivesLineNumber,
+    /// Speaks of the diff it wanted.
+    ReferencesTheDiff,
+}
+
+/// A supervisor that reads the request of [`crate::supervisor_prompt`] and writes a message by script.
+pub struct ScriptedSupervisor {
+    behaviour: SupervisorBehaviour,
+}
+
+impl ScriptedSupervisor {
+    /// A supervisor behaving as `behaviour`.
+    #[must_use]
+    pub fn provider(behaviour: SupervisorBehaviour) -> Arc<dyn ModelProvider> {
+        Arc::new(Self { behaviour })
+    }
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for ScriptedSupervisor {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+
+    fn model_name(&self) -> &str {
+        "supervisor"
+    }
+
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        use crate::supervisor_prompt::{DIFFERENCES_HEADING, WANTED_HEADING};
+        let request = req
+            .messages
+            .iter()
+            .filter(|m| m.role == Role::User)
+            .filter_map(|m| m.as_text())
+            .next()
+            .unwrap_or_default()
+            .to_string();
+        let wanted = request
+            .split(WANTED_HEADING)
+            .nth(1)
+            .and_then(|r| r.split("\n\nWhere the engineer").next())
+            .unwrap_or_default();
+        let path = request
+            .split(DIFFERENCES_HEADING)
+            .nth(1)
+            .and_then(|r| r.lines().next())
+            .and_then(|l| l.split(':').next())
+            .unwrap_or("the project");
+        let message = match self.behaviour {
+            SupervisorBehaviour::Honest => {
+                format!("Something is still missing: please also deal with {path}, as the task describes.")
+            }
+            SupervisorBehaviour::QuotesDiffLine => {
+                let line = wanted
+                    .lines()
+                    .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                    .map(|l| l[1..].trim())
+                    .find(|l| l.chars().count() >= 12)
+                    .unwrap_or("nothing to quote here");
+                format!("Please make {path} say exactly: {line}")
+            }
+            SupervisorBehaviour::GivesLineNumber => {
+                format!("Look at line 7 of {path}, it is not right.")
+            }
+            SupervisorBehaviour::ReferencesTheDiff => {
+                format!("{path} does not match the diff I had in mind.")
+            }
+        };
+        Ok(stream(vec![
+            ResponseEvent::TextDelta(message),
             ResponseEvent::Done,
         ]))
     }

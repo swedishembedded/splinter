@@ -290,6 +290,39 @@ impl Git {
         self.bytes(&all)
     }
 
+    /// The unified diff of this repository's working tree against `HEAD`, new
+    /// files included and the agent runtime's own directory left out. It is
+    /// computed in a temporary index, so the repository's index (which the
+    /// agent may be reading with `git status`) is untouched.
+    pub fn working_diff(&self) -> Result<String> {
+        let index = tempfile::Builder::new()
+            .prefix("index-")
+            .tempfile()
+            .context("creating a temporary index")?;
+        let run = |args: &[&str]| -> Result<Vec<u8>> {
+            let out = command(&self.dir)
+                .env("GIT_INDEX_FILE", index.path())
+                .args(args)
+                .stdin(Stdio::null())
+                .output()
+                .with_context(|| format!("running git {}", args.join(" ")))?;
+            if !out.status.success() {
+                bail!(
+                    "git {} failed: {}",
+                    args.join(" "),
+                    String::from_utf8_lossy(&out.stderr).trim()
+                );
+            }
+            Ok(out.stdout)
+        };
+        run(&["read-tree", "HEAD"])?;
+        run(&["add", "-A", "--", ".", ":(exclude).sven"])?;
+        let mut args = vec!["diff", "--cached"];
+        args.extend(DIFF_OPTIONS);
+        args.extend(["--src-prefix=a/", "--dst-prefix=b/", "HEAD"]);
+        Ok(String::from_utf8_lossy(&run(&args)?).into_owned())
+    }
+
     /// The first `limit` bytes of the file `path` at `rev`, empty when it is absent.
     pub fn head_of_blob(&self, rev: &str, path: &str, limit: usize) -> String {
         let spec = format!("{rev}:{path}");

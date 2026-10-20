@@ -28,6 +28,8 @@ pub struct Budget {
     pub per_hunk: usize,
     /// The most any attempt gets.
     pub cap: usize,
+    /// Calls each correction round adds: the fix and its re-reading.
+    pub per_correction: usize,
 }
 
 impl Default for Budget {
@@ -37,6 +39,7 @@ impl Default for Budget {
             per_file: 8,
             per_hunk: 3,
             cap: 120,
+            per_correction: 12,
         }
     }
 }

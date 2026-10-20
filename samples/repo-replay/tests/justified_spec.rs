@@ -72,6 +72,7 @@ fn verdict_of(plan: &str, calls: Vec<Call>) -> Vec<(String, String)> {
             forbidden_locations: &[],
             attempt_roots: &roots,
             stopped: None,
+            guidance: &[],
         },
         &GateConfig::default(),
     )
@@ -176,4 +177,35 @@ fn unchanged_lines_and_short_words_need_no_support() {
     // Context and removed lines were read; words under four letters are not names.
     let edit = "@@\n def total(price, quantity):\n-    return price * quantity\n+    return quantity * price\n";
     assert!(reasons(PLAN, FILE, edit, vec![]).is_empty());
+}
+
+#[test]
+fn a_crate_named_with_dashes_in_a_result_supports_its_code_spelling_and_a_users_message_supports_later_edits(
+) {
+    let edit = "@@\n-    return price * quantity\n+    return acme_core_m::fee(price * quantity)\n";
+    let manifest = call(
+        2,
+        "grep",
+        json!({"pattern": "core"}),
+        "Cargo.toml:3:acme-core-m = { path = \"../acme-core-m\" }",
+    );
+    let plan = format!("{PLAN} Add the fee.");
+    assert!(reasons(&plan, FILE, edit, vec![manifest]).is_empty());
+
+    // A message the user sent supports the edits after it and not those before.
+    let guidance = vec![(1usize, "Call it acme_core_m::fee, please.".to_string())];
+    let calls = |first_edit_at: u64| {
+        vec![
+            call(1, "read_file", json!({"path": "src/calc.rs"}), FILE),
+            call(
+                first_edit_at,
+                "edit_file",
+                json!({"path": "src/calc.rs", "diff": edit}),
+                "edited",
+            ),
+        ]
+    };
+    use splinter_repo_replay::justify::unjustified;
+    assert!(unjustified(&plan, &calls(2), &guidance).is_empty());
+    assert!(!unjustified(&plan, &calls(2), &[(2usize, guidance[0].1.clone())]).is_empty());
 }

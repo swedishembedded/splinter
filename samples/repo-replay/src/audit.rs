@@ -36,7 +36,9 @@ use crate::gate::GateConfig;
 use crate::ledger::{Entry, Outcome};
 use crate::pipeline::{run, Models, RunConfig, RunReport};
 use crate::plan_prompt::PlanStyle;
-use crate::scripted::{Behaviour, ScriptedAgent, ScriptedPlanner, Specificity};
+use crate::scripted::{
+    Behaviour, ScriptedAgent, ScriptedPlanner, ScriptedSupervisor, Specificity, SupervisorBehaviour,
+};
 use crate::select::SelectConfig;
 use crate::serving_prompt::SERVING_PROMPT;
 
@@ -71,6 +73,10 @@ pub fn scripted_models(
 ) -> Models {
     Models {
         planner: Model::new(ScriptedPlanner::provider(specificity), "scripted/planner"),
+        supervisor: Model::new(
+            ScriptedSupervisor::provider(SupervisorBehaviour::Honest),
+            "scripted/supervisor",
+        ),
         agent: ScriptedAgent::provider(behaviour, truths.to_vec()),
         identity: "scripted/agent".into(),
     }
@@ -104,6 +110,7 @@ pub fn default_config(source: &Path, state: &Path) -> RunConfig {
         record: serde_json::Value::Null,
         redo_classes: Vec::new(),
         control: Control::Grounded,
+        corrections: 0,
     }
 }
 
@@ -410,6 +417,71 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
             format!("cheater that {name} fails with {class}"),
             caught,
             format!("{:?}", entry.map(|e| (&e.outcome, &e.classes))),
+        );
+    }
+
+    // Corrections: an honest supervisor repairs an attempt that left a file out and
+    // the record trains only on the fix; each supervisor that leaks is refused and counted.
+    let (parent, commit) = commit_of(&ids, "multi")?;
+    let supervised = |name: &str, kind: SupervisorBehaviour| -> Result<Vec<Entry>> {
+        let supervised_state = state(name);
+        let supervised_ctx = open_context(&supervised_state)?;
+        let mut config = default_config(&source, &supervised_state);
+        config.from = Some(parent.to_string());
+        config.to = Some(commit.to_string());
+        config.styles = vec![PlanStyle::Terse];
+        config.corrections = 3;
+        let models = Models {
+            supervisor: Model::new(ScriptedSupervisor::provider(kind), "scripted/supervisor"),
+            ..scripted_models(
+                Behaviour::FixesAfterCorrection,
+                Specificity::NamesFiles,
+                &truths,
+            )
+        };
+        let report = run_blocking(&supervised_ctx, &models, &config)?;
+        Ok(report
+            .entries
+            .into_iter()
+            .filter(|e| e.outcome != Outcome::Skipped)
+            .collect())
+    };
+    let corrected = supervised("corrected", SupervisorBehaviour::Honest)?;
+    check(
+        &mut checks,
+        "an attempt that left a file out is corrected by the supervisor and passes with one correction",
+        corrected
+            .iter()
+            .all(|e| e.outcome == Outcome::Passed && e.corrections == 1),
+        format!("{:?}", corrected.iter().map(|e| (&e.outcome, &e.classes, e.corrections)).collect::<Vec<_>>()),
+    );
+    for (name, kind, class) in [
+        (
+            "quotes a line of the wanted change",
+            SupervisorBehaviour::QuotesDiffLine,
+            "diff_line",
+        ),
+        (
+            "gives a line number",
+            SupervisorBehaviour::GivesLineNumber,
+            "location_offset",
+        ),
+        (
+            "speaks of the diff it wanted",
+            SupervisorBehaviour::ReferencesTheDiff,
+            "diff_reference",
+        ),
+    ] {
+        let entries = supervised(&format!("supervisor-{class}"), kind)?;
+        check(
+            &mut checks,
+            format!("a supervisor that {name} is refused as {class}, counted, and its message never sent"),
+            entries.iter().all(|e| {
+                e.corrections == 0
+                    && e.outcome == Outcome::Failed
+                    && e.supervisor_refusals.iter().any(|c| c == class)
+            }),
+            format!("{:?}", entries.iter().map(|e| (&e.outcome, &e.supervisor_refusals)).collect::<Vec<_>>()),
         );
     }
 

@@ -104,6 +104,8 @@ pub struct RunConfig {
     pub redo_classes: Vec<String>,
     /// What the agent is given besides the plan; one state directory holds one control.
     pub control: Control,
+    /// Correction messages a wrong attempt may be sent (0: none).
+    pub corrections: usize,
 }
 
 /// The models of a run.
@@ -111,6 +113,8 @@ pub struct RunConfig {
 pub struct Models {
     /// Writes plans.
     pub planner: Model,
+    /// Writes correction messages.
+    pub supervisor: Model,
     /// Replays commits.
     pub agent: Arc<dyn ModelProvider>,
     /// The agent's identity, recorded as the experiences' solver.
@@ -211,6 +215,7 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
             "error_retries": config.error_retries,
             "redo_classes": config.redo_classes,
             "control": config.control,
+            "corrections": config.corrections,
             "styles": config.styles,
             "select": config.select,
             "gate": config.gate,
@@ -282,6 +287,10 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
             .collect(),
         scratch: parts.scratch.clone(),
         control: config.control,
+        corrections: config.corrections,
+        supervisor: models.supervisor.clone(),
+        supervisor_tries: config.plan_tries,
+        supervisor_deadline: config.plan_deadline,
         checks: config.checks.clone(),
         check_timeout: config.check_timeout,
     };
@@ -436,6 +445,12 @@ async fn process(
                         model_seconds: outcome.stats.model_seconds,
                         max_wait_seconds: outcome.stats.max_wait_seconds,
                         detail: outcome.verdict.reasons.first().map(|r| r.detail.clone()),
+                        corrections: outcome.corrections.len(),
+                        supervisor_refusals: outcome
+                            .refused
+                            .iter()
+                            .map(|r| r.class.clone())
+                            .collect(),
                         ..base
                     },
                 }
@@ -524,6 +539,8 @@ fn store_attempt(
             "commit": commit.sha,
             "plan_style": style.name(),
             "control": control.name(),
+            "corrections": outcome.corrections.len(),
+            "record_type": if outcome.corrections.is_empty() { "first_try" } else { "corrected" },
         }),
     );
     let task = Task::new(
@@ -553,6 +570,9 @@ fn store_attempt(
         "plan_style": style.name(),
         "commit": commit.sha,
         "control": control.name(),
+        "corrections": outcome.corrections.iter().map(|c| scrubber.scrub(&c.message)).collect::<Vec<_>>(),
+        "correction_refusals": outcome.refused,
+        "supervisor_error": outcome.supervisor_error,
     });
     store.annotate(&Annotation {
         experience: id.clone(),

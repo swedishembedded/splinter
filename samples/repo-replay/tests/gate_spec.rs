@@ -69,6 +69,7 @@ fn classes_saying(calls: Vec<Call>, said: &[&str]) -> Vec<String> {
             forbidden_locations: &[],
             attempt_roots: &roots,
             stopped: None,
+            guidance: &[],
         },
         &GateConfig::default(),
     );
@@ -257,6 +258,7 @@ fn a_crate_name_the_parent_spells_with_dashes_is_not_a_name_only_the_change_has(
             forbidden_locations: &[],
             attempt_roots: &roots,
             stopped: None,
+            guidance: &[],
         },
         &GateConfig::default(),
     );

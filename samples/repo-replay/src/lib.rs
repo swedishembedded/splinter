@@ -45,6 +45,8 @@ pub mod scrub;
 pub mod select;
 pub mod serving_prompt;
 pub mod splits;
+pub mod supervise;
+pub mod supervisor_prompt;
 pub mod timed;
 pub mod trace;
 pub mod tree;

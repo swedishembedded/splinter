@@ -28,7 +28,7 @@ use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::experience::ExperienceId;
 use splinter_sdk::Context;
 
-use crate::dataset::{attempts_set_where, build_dataset, DatasetSettings};
+use crate::dataset::{attempts_set_filtered, build_dataset, CorrectionRange, DatasetSettings};
 use crate::git::Git;
 use crate::ledger;
 use crate::pipeline::layout;
@@ -60,6 +60,7 @@ pub fn write_splits(
     settings: &DatasetSettings,
     train: usize,
     eval: usize,
+    corrections: CorrectionRange,
 ) -> Result<serde_json::Value> {
     let state = state.canonicalize()?;
     let (from, to) = ledger::last_range(&state)?;
@@ -85,7 +86,9 @@ pub fn write_splits(
             "last": commits.last(),
         });
         let keep = |c: &str| split_by_commit.get(c) == Some(&split);
-        match attempts_set_where(ctx, &state, split, &keep) {
+        match attempts_set_filtered(ctx, &state, split, &|e| {
+            keep(&e.commit) && corrections.admits(e)
+        }) {
             Ok(set) => {
                 let built = match build_dataset(ctx, &[set], settings) {
                     Ok(built) => built,

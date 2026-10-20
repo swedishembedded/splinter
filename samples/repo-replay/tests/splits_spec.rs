@@ -57,7 +57,7 @@ fn each_split_holds_only_its_commits_and_every_attempt_has_a_trace() {
         serving_prompt: SERVING_PROMPT.to_string(),
         max_block: None,
     };
-    let summary = write_splits(&ctx, &state, &out, &settings, 80, 10).unwrap();
+    let summary = write_splits(&ctx, &state, &out, &settings, 80, 10, Default::default()).unwrap();
 
     assert_eq!(summary["total_commits"], ids.len());
     let splits = &summary["splits"];
@@ -109,7 +109,7 @@ fn a_split_with_no_passed_attempt_has_no_records_but_still_has_its_traces() {
         serving_prompt: SERVING_PROMPT.to_string(),
         max_block: None,
     };
-    let summary = write_splits(&ctx, &state, &out, &settings, 80, 10).unwrap();
+    let summary = write_splits(&ctx, &state, &out, &settings, 80, 10, Default::default()).unwrap();
     assert_eq!(summary["splits"]["train"]["records"], 0);
     assert!(std::fs::read_dir(out.join("traces/train")).unwrap().count() > 0);
 }

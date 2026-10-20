@@ -59,8 +59,8 @@ fn squeeze(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// The numbers of `text` that count as content.
-fn numbers(text: &str) -> Vec<String> {
+/// The numbers of `text` that count as content (two or more digits, or hexadecimal).
+pub fn numbers(text: &str) -> Vec<String> {
     re(r"\b0[xX][0-9A-Fa-f_]+\b|\b\d[\d_]*(?:\.\d+)?\b")
         .find_iter(text)
         .map(|m| m.as_str().to_lowercase())
@@ -100,6 +100,8 @@ impl Support {
     /// Adds what `text` shows.
     pub fn add(&mut self, text: &str) {
         self.words.extend(identifiers(text).map(str::to_lowercase));
+        self.words
+            .extend(dashed_names(text).into_iter().map(|n| n.to_lowercase()));
         self.words.extend(numbers(text));
         self.verbatim.push_str(&squeeze(text));
         self.verbatim.push('\n');
@@ -118,6 +120,12 @@ impl Support {
         out
     }
 
+    /// Whether `word` (a name or a number) is supported.
+    #[must_use]
+    pub fn has(&self, word: &str) -> bool {
+        self.words.contains(&word.to_lowercase())
+    }
+
     /// The strings, names and numbers of `added` (the new text of an edit)
     /// that nothing seen supports.
     #[must_use]
@@ -131,6 +139,39 @@ impl Support {
         out.extend(self.missing_words(&rest));
         out
     }
+}
+
+/// Whether `word` is spelled like a name in code (`snake_case`, `camelCase`,
+/// or with digits) and not like a word of prose.
+#[must_use]
+pub fn is_code_shaped(word: &str) -> bool {
+    word.contains('_')
+        || word.chars().any(|c| c.is_ascii_digit())
+        || word
+            .chars()
+            .zip(word.chars().skip(1))
+            .any(|(a, b)| a.is_lowercase() && b.is_uppercase())
+}
+
+/// The names and numbers of prose `text` that stand for code: words spelled
+/// like code, anything inside backticks, and numbers.
+#[must_use]
+pub fn code_names(text: &str) -> Vec<String> {
+    let ticks = re(r"`([^`\n]+)`");
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |w: &str| {
+        if !out.iter().any(|o| o == w) {
+            out.push(w.to_string());
+        }
+    };
+    for span in ticks.captures_iter(text) {
+        identifiers(&span[1]).for_each(&mut push);
+    }
+    identifiers(text)
+        .filter(|w| is_code_shaped(w))
+        .for_each(&mut push);
+    numbers(text).iter().for_each(|n| push(n));
+    out
 }
 
 /// The lines an edit call adds: the `+` lines of an `edit_file` diff, or the
@@ -150,13 +191,39 @@ pub fn added_text(call: &Call) -> Option<String> {
     }
 }
 
-/// Every piece of new content in `calls` that neither `plan` nor an earlier
-/// result supports, in order.
+/// What the run so far has told the agent: the plan, every earlier result that
+/// shows something, the content of its own edits and the user's messages.
 #[must_use]
-pub fn unjustified(plan: &str, calls: &[Call]) -> Vec<Unjustified> {
+pub fn support_of_run(plan: &str, calls: &[Call], guidance: &[(usize, String)]) -> Support {
+    let mut support = Support::of(plan);
+    for (index, call) in calls.iter().enumerate() {
+        for (_, message) in guidance.iter().filter(|(at, _)| *at == index) {
+            support.add(message);
+        }
+        if let Some(added) = added_text(call) {
+            support.add(&added);
+        }
+        if !ECHO_TOOLS.contains(&call.tool.as_str()) {
+            support.add(&call.result);
+        }
+    }
+    for (_, message) in guidance.iter().filter(|(at, _)| *at >= calls.len()) {
+        support.add(message);
+    }
+    support
+}
+
+/// Every piece of new content in `calls` that neither `plan`, an earlier
+/// result nor an earlier message of the user (`guidance`: the message and the
+/// number of calls made when it came) supports, in order.
+#[must_use]
+pub fn unjustified(plan: &str, calls: &[Call], guidance: &[(usize, String)]) -> Vec<Unjustified> {
     let mut support = Support::of(plan);
     let mut out = Vec::new();
-    for call in calls {
+    for (index, call) in calls.iter().enumerate() {
+        for (_, message) in guidance.iter().filter(|(at, _)| *at == index) {
+            support.add(message);
+        }
         if let Some(added) = added_text(call) {
             for text in support.missing(&added) {
                 out.push(Unjustified {

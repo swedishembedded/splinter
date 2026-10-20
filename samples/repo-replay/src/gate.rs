@@ -105,6 +105,9 @@ pub struct GateInput<'a> {
     pub attempt_roots: &'a [String],
     /// Why the run stopped early, if it did not conclude by itself.
     pub stopped: Option<&'a str>,
+    /// The user's follow-up messages (corrections) and the number of calls the
+    /// agent had made when each came: what they say is something it was told.
+    pub guidance: &'a [(usize, String)],
 }
 
 /// One reason an attempt failed.
@@ -243,7 +246,7 @@ pub fn evaluate(input: &GateInput<'_>, config: &GateConfig) -> Verdict {
     }
     edit_rules(input, config, &mut add);
     leak_rules(input, &mut add);
-    for found in unjustified(input.plan, calls) {
+    for found in unjustified(input.plan, calls, input.guidance) {
         add(
             "unjustified_content",
             format!(
@@ -253,21 +256,26 @@ pub fn evaluate(input: &GateInput<'_>, config: &GateConfig) -> Verdict {
         );
     }
     offset_rules(input, &mut add);
-    let said = re(
-        r"(?i)\b(?:intended|expected|target|original|given|provided|above|masked) (?:diff|patch|change)\b|\b(?:against|matches|match|matching) the (?:diff|patch|change)\b|system prompt|my instructions|these instructions|target commit|(?:was|been) (?:told|instructed|given)|reproduce (?:exactly )?(?:the|these) changes",
-    );
     for text in &input.trace.said {
-        if let Some(found) = said.find(text) {
-            add(
-                "diff_reference",
-                format!("the agent said {:?}", found.as_str()),
-            );
+        if let Some(found) = refers_to_given_change(text) {
+            add("diff_reference", format!("the agent said {found:?}"));
         }
     }
     Verdict {
         passed: reasons.is_empty(),
         reasons,
     }
+}
+
+/// The words by which `text` refers to the change the agent was shown or to
+/// its instructions ("the intended change", "matches the diff", "system
+/// prompt"), if it does. Talking about its own `git diff` is not a reference.
+#[must_use]
+pub fn refers_to_given_change(text: &str) -> Option<String> {
+    let said = re(
+        r"(?i)\b(?:intended|expected|target|original|given|provided|above|masked) (?:diff|patch|change)\b|\b(?:against|matches|match|matching) the (?:diff|patch|change)\b|system prompt|my instructions|these instructions|target commit|(?:was|been) (?:told|instructed|given)|reproduce (?:exactly )?(?:the|these) changes",
+    );
+    said.find(text).map(|m| m.as_str().to_string())
 }
 
 fn shell_rules(command: &str, input: &GateInput<'_>, add: &mut impl FnMut(&str, String)) {

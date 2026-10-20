@@ -29,7 +29,9 @@ use splinter_repo_replay::audit::{audit_and_print, default_config, open_context}
 use splinter_repo_replay::budget::Budget;
 use splinter_repo_replay::compare::Comparison;
 use splinter_repo_replay::control::Control;
-use splinter_repo_replay::dataset::{attempts_set, build_dataset, DatasetSettings};
+use splinter_repo_replay::dataset::{
+    attempts_set_filtered, build_dataset, labels, CorrectionRange, DatasetSettings,
+};
 use splinter_repo_replay::gate::GateConfig;
 use splinter_repo_replay::ledger;
 use splinter_repo_replay::pipeline::{run, Models};
@@ -182,6 +184,14 @@ struct RunArgs {
     /// Tool calls each hunk adds.
     #[arg(long, default_value_t = Budget::default().per_hunk)]
     calls_per_hunk: usize,
+    /// Tool calls each correction round adds.
+    #[arg(long, default_value_t = Budget::default().per_correction)]
+    calls_per_correction: usize,
+    /// Correction messages a wrong attempt may be sent by the supervisor (the
+    /// same model, in a user's voice; default 0: none). Records of corrected
+    /// attempts train only on what the agent did after the last correction.
+    #[arg(long, default_value_t = 0)]
+    corrections: usize,
     /// The most tool calls any attempt gets.
     #[arg(long, default_value_t = Budget::default().cap)]
     calls_cap: usize,
@@ -220,6 +230,14 @@ struct DatasetArgs {
     /// readable trace per attempt under this directory instead of one dataset.
     #[arg(long)]
     splits: Option<PathBuf>,
+    /// Admit only attempts that needed at least this many corrections (1: the
+    /// `corrected` record type only).
+    #[arg(long, default_value_t = 0)]
+    min_corrections: usize,
+    /// Admit only attempts that needed at most this many corrections (0: the
+    /// `first_try` record type only).
+    #[arg(long)]
+    max_corrections: Option<usize>,
     /// With --splits: the oldest this percent of the commits are train.
     #[arg(long, default_value_t = 80)]
     train_percent: usize,
@@ -289,6 +307,10 @@ fn run_command(args: &RunArgs) -> Result<()> {
             std::sync::Arc::clone(&provider),
             format!("openai/{}", args.model),
         ),
+        supervisor: Model::new(
+            std::sync::Arc::clone(&provider),
+            format!("openai/{}", args.model),
+        ),
         agent: provider,
         identity: format!("openai/{}", args.model),
     };
@@ -298,6 +320,7 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.max_commits = args.max_commits;
     config.styles = styles;
     config.control = control;
+    config.corrections = args.corrections;
     config.jobs = args.jobs;
     config.deadline = Duration::from_secs(args.attempt_secs);
     config.plan_deadline = Duration::from_secs(args.plan_secs);
@@ -330,6 +353,7 @@ fn run_command(args: &RunArgs) -> Result<()> {
         per_file: args.calls_per_file,
         per_hunk: args.calls_per_hunk,
         cap: args.calls_cap,
+        per_correction: args.calls_per_correction,
     };
     config.record = serde_json::json!({
         "model": args.model, "seed": args.seed, "temperature": args.temperature, "top_p": args.top_p,
@@ -366,6 +390,10 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
         None => SERVING_PROMPT.to_string(),
     };
     let ctx = open_context(&args.state)?;
+    let range = CorrectionRange {
+        min: args.min_corrections,
+        max: args.max_corrections.unwrap_or(usize::MAX),
+    };
     if let Some(out) = &args.splits {
         let settings = DatasetSettings {
             serving_prompt,
@@ -378,11 +406,12 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
             &settings,
             args.train_percent,
             args.eval_percent,
+            range,
         )?;
         println!("{}", serde_json::to_string_pretty(&summary)?);
         return Ok(());
     }
-    let set = attempts_set(&ctx, &args.state)?;
+    let set = attempts_set_filtered(&ctx, &args.state, "all", &|e| range.admits(e))?;
     let built = build_dataset(
         &ctx,
         &[set],
@@ -400,5 +429,17 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
     for (reason, count) in &built.excluded {
         println!("  excluded {reason:?}: {count}");
     }
+    let labels = labels(&args.state, range)?;
+    for kind in ["first_try", "corrected"] {
+        let of_kind = labels.iter().filter(|l| l.record_type == kind).count();
+        println!("  passed attempts of type {kind}: {of_kind}");
+    }
+    let sidecar = built.path.with_extension("labels.json");
+    std::fs::write(&sidecar, serde_json::to_vec_pretty(&labels)?)
+        .with_context(|| format!("writing {}", sidecar.display()))?;
+    println!(
+        "  labels (record type, corrections, control per experience): {}",
+        sidecar.display()
+    );
     Ok(())
 }

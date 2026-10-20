@@ -85,6 +85,12 @@ pub struct Entry {
     /// What the agent was given besides the plan.
     #[serde(default)]
     pub control: Control,
+    /// Correction messages the agent was sent: 0 is a first-try attempt.
+    #[serde(default)]
+    pub corrections: usize,
+    /// The classes of the supervisor messages that were refused (one per message).
+    #[serde(default)]
+    pub supervisor_refusals: Vec<String>,
 }
 
 impl Entry {
@@ -109,6 +115,8 @@ impl Entry {
             max_wait_seconds: 0.0,
             detail: None,
             control: Control::Grounded,
+            corrections: 0,
+            supervisor_refusals: Vec::new(),
         }
     }
 }
@@ -230,6 +238,14 @@ pub struct Bias {
     pub errors: usize,
     /// What the agents were given besides the plan.
     pub control: Control,
+    /// Passed attempts that needed no correction (record type `first_try`).
+    pub first_try_passed: usize,
+    /// Passed attempts that were corrected (record type `corrected`).
+    pub corrected_passed: usize,
+    /// Passed attempts by number of corrections.
+    pub passed_by_corrections: BTreeMap<usize, usize>,
+    /// Supervisor messages refused, by class.
+    pub supervisor_refusals: BTreeMap<String, usize>,
 }
 
 /// The bias report of `entries`.
@@ -261,6 +277,20 @@ pub fn bias(entries: &[Entry]) -> Bias {
                 }
                 report.overall.attempts += 1;
                 report.overall.passed += usize::from(e.outcome == Outcome::Passed);
+                if e.outcome == Outcome::Passed {
+                    if e.corrections == 0 {
+                        report.first_try_passed += 1;
+                    } else {
+                        report.corrected_passed += 1;
+                    }
+                    *report
+                        .passed_by_corrections
+                        .entry(e.corrections)
+                        .or_default() += 1;
+                }
+                for class in &e.supervisor_refusals {
+                    *report.supervisor_refusals.entry(class.clone()).or_default() += 1;
+                }
                 if e.outcome != Outcome::PlanRefused {
                     report.tool_calls += e.tool_calls;
                     report.verdicts += 1;
@@ -293,6 +323,22 @@ impl std::fmt::Display for Bias {
                 self.tool_calls as f64 / self.verdicts as f64,
                 self.verdicts
             )?;
+        }
+        if self.overall.passed > 0 {
+            writeln!(
+                f,
+                "passed records: first_try {} (plan -> edits), corrected {} (plan -> attempt -> feedback -> fix)",
+                self.first_try_passed, self.corrected_passed
+            )?;
+            for (n, count) in &self.passed_by_corrections {
+                writeln!(f, "  with {n} corrections: {count}")?;
+            }
+        }
+        if !self.supervisor_refusals.is_empty() {
+            writeln!(f, "supervisor messages refused:")?;
+            for (class, n) in &self.supervisor_refusals {
+                writeln!(f, "  {class:<28} {n}")?;
+            }
         }
         writeln!(f, "pass rate by commit size:")?;
         for (k, c) in &self.by_size {
