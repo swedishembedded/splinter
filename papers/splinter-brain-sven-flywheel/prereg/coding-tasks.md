@@ -977,6 +977,36 @@ generations are not fewer, and its BWT is not below -0.05. Otherwise the result 
 advantage. With three replicates no interval is claimed; the paired differences are listed. A generation that is
 Stopped or whose exam could not be measured is reported as such, with the reason.
 
+### Amendment 19, 2026-10-20, 07:32 CEST: CE8, the 27B trained on its own verified trajectories
+
+Made before any CE8 training run and before any CE8 qualification query. It fixes what A1.4 leaves open (the base the adapter trains on, the data, the view,
+the step and stopping rules, how it is served, the evaluation) and changes nothing else.
+
+**A19.1 Data.** Only trajectories of the 27B teacher (the Q8_0 GGUF server of A2.6, no adapter) on development-partition tasks, recorded by splinter 34db203f
+with sven ba4f08c7 (one agent step per model response, A12.1, A16.1) against brain servers that give every tool call its own id. The experience sets are the
+regenerated CE1 sets of A11.2, each verified under the exposure rule of A13.2: ttlcache blake3:1f4be47c753a198b747aa1d79a2eb6772890351fed0bccc058b48a5f9b94a517; tokenbucket blake3:6b19c95138ec69ba4ef7a4e08fb1bae9eb52a38d626e04f405249f5e78ec7143; graphkit blake3:46e9cb04b87fa49b8cd8fe70d530bad563a94fcf466485e89bd2975eee8e6c65; linediff blake3:93103c07039095ad827163e931e110277995c926533b222589c32280899742c7; mdrender blake3:afc508246787415cb4204c3501a3edffd4b248affc20c3b9afcc52be3c1617ea; and the regenerated iniparse and caldate sets if both are
+stored and verified when the dataset is built (their ids go into the run record, and no set stored later is added). The dataset is built by a splinter that
+contains cf3f02d2 and pins brain cd8df8266: `dataset build --view sft-step --pack --drop-leaking --min-strength executable --max-block 16384 --control
+outcome-verified`, never `--serialise-calls`; a trajectory whose context was compacted is dropped by the view and counted. The count of records, the exclusions by
+reason (failed, over block, compacted, exposed) and the per-record pairing check of A14.1 are reported.
+
+**A19.2 Base, precision, recipe.** `splinter train --from local:Qwen/Qwen3.8-27B-FP8 --base-precision nf4`, rank 16, alpha twice the rank, learning rate 2e-4, seed 1,
+all targetable linears, monitoring share 0.2 held out by whole family, held-out scoring on, and the best monitored evaluation kept (`--keep-evaluations`). A record
+in the packed view is a trajectory, so B = 2 records per step and the steps are ceil(2R/B) for the R the trainer reports (A2.7, no extra steps). The monitoring loss
+is read eight times over the budget (`--eval-every ceil(steps/8)`) and training stops after two evaluations without improvement (`--patience 2`). Memorisation
+guard: a run whose final training loss is below half its first-step value while its monitoring loss is above its minimum is reported as memorised and its adapter
+is not evaluated. Fewer than 40 verified trajectories means no run (A2.7). The step time, row tokens per second and peak VRAM are recorded (one `card --card 1 --gb
+66` job) and the loss curve is reported.
+
+**A19.3 Serving.** The adapter is installed into the adapter bank of the Q8_0 GGUF teacher server (all targetable linears, rank cap 16, brain build named in the run
+record), so base and adapter share one resident base. The adapter is trained against the NF4 weights of the FP8 checkpoint and applied to the Q8_0 weights; the
+numerics differ, and the served-against-in-process agreement of G8 is the check, not an assumption.
+
+**A19.4 Evaluation.** The base 27B and the 27B with the adapter solve the qualification halves of A8.2 (HALF_A, then HALF_B), one arm at a time on one server and one
+splinter binary, under the same solve protocol for both arms. That protocol is the one of the solve-protocol amendment (recommended sampling, bounded thinking, the
+coding-agent prompt, repetition feedback) and the arms are not started until that amendment has been pushed; if it has not been, the evaluation waits and no other
+protocol is substituted. The primary test is that of A2.3 on family outcomes; the comparison keeps the pilot label of A2.3 until its sizing is met.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
