@@ -29,7 +29,7 @@ const STARTUP_PREFIX: &str = "brain serve: ";
 const KEPT_LINES: usize = 20;
 
 /// The sequences `brain serve` decodes together when it is not told otherwise
-/// (`--qwen-max-batch`): the width a server is asked at when its launch names
+/// (`--max-batch`): the width a server is asked at when its launch names
 /// none.
 pub const DEFAULT_SERVE_SLOTS: u32 = 16;
 
@@ -72,11 +72,11 @@ pub struct Launch<'a> {
     /// The compute it may schedule, in brain's `--device` grammar; brain's
     /// own choice when `None`.
     pub device: Option<&'a str>,
-    /// Sequences it decodes together (`--qwen-max-batch`);
+    /// Sequences it decodes together (`--max-batch`);
     /// [`DEFAULT_SERVE_SLOTS`] when `None`.
     pub max_batch: Option<u32>,
     /// Host RAM, in GB, the server may swap a waiting sequence's KV cache to
-    /// when the KV pool fills (`--qwen-kv-offload-gb`); brain's default when
+    /// when the KV pool fills (`--kv-offload-gb`); brain's default when
     /// `None`.
     pub kv_offload_gb: Option<f64>,
     /// A file every line the server writes is appended to, for an operator
@@ -157,9 +157,9 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     command.arg("serve").args(["--openai", &address]);
     // Always named, so the width a caller asks at is the one the server was
     // told rather than a default it might not share.
-    command.args(["--qwen-max-batch", &launch.slots().to_string()]);
+    command.args(["--max-batch", &launch.slots().to_string()]);
     if let Some(gb) = launch.kv_offload_gb {
-        command.args(["--qwen-kv-offload-gb", &gb.to_string()]);
+        command.args(["--kv-offload-gb", &gb.to_string()]);
     }
     match launch.offer {
         Offer::Adapter(adapter) => {

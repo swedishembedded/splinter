@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `brain serve` it starts is given brain's model-agnostic serving options: `--max-batch` and `--kv-offload-gb` replace the `--qwen-` spellings (which brain still accepts with a deprecation warning). Needs a brain build with the serving policy.
+
 ### Added (repo-replay sample)
 - `samples/repo-replay` (`repo-replay audit|run|report|dataset`, `make samples/repo-replay/audit`) replays a git history commit by commit with an agent: the plan of a commit is written without the answer in it (verbatim, marker and code-density checks, a terse and a detailed style), the agent works under a grounding prompt holding the diff in a single-commit tree of the parent (no future history, refs or remote), a deterministic gate judges the tree and the trajectory (exact tree, edit per file, read before edit, located by the plan or a search, no leaked new names, no wholesale apply, bounded calls), generated and vendored paths are excluded, attempts run in parallel and are stored in order, and the dataset is built through the `sft-step` view under the serving prompt (never the grounding prompt) with names, trailers, addresses and secrets scrubbed. The diff the agent is shown is masked (no hunk offsets, unchanged lines `xxx`), a read at a hunk's line before any search is refused (`diff_offset_read`), and a commit whose diff takes over a quarter of the model's context is skipped (`diff_over_context_share`). Every git process of the sample is hermetic (no user or system configuration, no pager, explicit diff options) and the run records `git --version`. A bias report counts attempts by commit size, plan style and failure reason.
 

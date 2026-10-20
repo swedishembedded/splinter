@@ -299,6 +299,13 @@ the splinter binary is one build, for the whole of CE1 and CE4.
   memory; any such change is recorded in the run record and is the only change allowed. The
   KV precision, context length and fp32 weights are not changed.
 
+  Flag names, after brain made its serving options model-agnostic (a spelling change, not a
+  change of any value above): `--qwen-ctx` and `--qwen35-ctx` are `--ctx`, `--qwen-max-batch`
+  and `--qwen35-max-batch` are `--max-batch`, `--qwen-weights-fp32` is `--weight-format f32`,
+  `--qwen35-kv int8` is `--kv-cache int8`, `--qwen-weights` is `--checkpoint`. The prefix-cache
+  size is no longer a flag: brain sets it to the batch (16 slots at `--max-batch 16`, the
+  registered value). The older spellings still work with a deprecation warning.
+
 **A2.7 LoRA recipe and step rule.** Rank 16, alpha twice the rank, learning rate 2e-4, two
 epochs, 8 records per step, monitoring share 0.2 held out by whole family, `--max-block
 16384`, training seed 1, and the best monitored evaluation is kept (`--keep-evaluations`).

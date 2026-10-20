@@ -24,7 +24,7 @@ impl Runtime {
     ///
     /// A `brain serve` named as `remote:brain/<model>` is reached over the
     /// network, so its width is the configured one: set it to the server's
-    /// `--qwen-max-batch`. An in-process model is one resident engine behind
+    /// `--max-batch`. An in-process model is one resident engine behind
     /// a lock, and a new request on its handle cancels the one still
     /// decoding: it has no decode slots to fill, and asking it several
     /// things at once would make the requests cancel each other. A caller

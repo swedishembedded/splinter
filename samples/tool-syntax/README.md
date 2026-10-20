@@ -242,7 +242,7 @@ SEED=$(shuf -i 1-4294967295 -n 1); echo "seed $SEED"   # draw it and keep it: ep
 
 # the base model, served; the arm is named by the resident id, never the store spelling
 brain serve --openai 127.0.0.1:8801 --models-dir MODELS --backend cuda --device gpu0 \
-  --api-keys-out keys.json --qwen-weights MODELS/Qwen/Qwen3-0.6B --qwen-ctx 24576 --qwen-max-batch 4
+  --api-keys-out keys.json --checkpoint MODELS/Qwen/Qwen3-0.6B --ctx 24576 --max-batch 4
 $BIN baseline --instances 40 --seed "$SEED" --run-dir RUN/baseline --model brain/qwen3 \
   --base-url http://127.0.0.1:8801/v1 --api-key KEY --report baseline.json
 

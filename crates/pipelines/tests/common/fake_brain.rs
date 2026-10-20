@@ -44,7 +44,7 @@ pub fn request_log(scratch: &Scratch) -> PathBuf {
 const REQUEST_LOG: &str = "requests.log";
 
 /// The file the `brain` stand-in appends a line to for each request it
-/// answers: the `--qwen-max-batch` it was started with and how many requests
+/// answers: the `--max-batch` it was started with and how many requests
 /// it was answering at that moment, this one included. While the file `pause`
 /// exists in the scratch directory each request takes a second to answer, so
 /// requests asked together overlap.
@@ -171,7 +171,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with answering_lock:
             answering += 1
             with open("@SLOTS@", "a") as log:
-                log.write("%s %d\n" % (opts.get("--qwen-max-batch", "default"), answering))
+                log.write("%s %d\n" % (opts.get("--max-batch", "default"), answering))
         try:
             if os.path.exists("@PAUSE@"):
                 time.sleep(1.0)
