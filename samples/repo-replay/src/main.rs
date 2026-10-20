@@ -12,7 +12,8 @@
 //! audit     the sample checks itself: no model, no GPU, no network.
 //! run       replay a repository's commits with a served model; one stored
 //!           experience per commit attempt (positives and negatives).
-//! report    the bias report of a state directory: size, style, reasons.
+//! report    the bias report of a state directory: size, style, reasons; with
+//!           --versus, the grounded run beside its plan-only control.
 //! dataset   the supervised dataset of the passed attempts, under the serving prompt.
 //! ```
 
@@ -26,6 +27,8 @@ use splinter_sdk::model::selection::{served_model_sampled, ServedSampling};
 
 use splinter_repo_replay::audit::{audit_and_print, default_config, open_context};
 use splinter_repo_replay::budget::Budget;
+use splinter_repo_replay::compare::Comparison;
+use splinter_repo_replay::control::Control;
 use splinter_repo_replay::dataset::{attempts_set, build_dataset, DatasetSettings};
 use splinter_repo_replay::gate::GateConfig;
 use splinter_repo_replay::ledger;
@@ -63,6 +66,9 @@ enum Command {
         /// The state directory of a run.
         #[arg(long)]
         state: PathBuf,
+        /// The state directory of a plan-only control run: print its pass rates beside this state's.
+        #[arg(long)]
+        versus: Option<PathBuf>,
         /// Print JSON instead of a table.
         #[arg(long)]
         json: bool,
@@ -114,6 +120,10 @@ struct RunArgs {
     /// With --thinking: the most thinking tokens per response.
     #[arg(long)]
     thinking_budget: Option<u32>,
+    /// What the agent is given: `grounded` (the plan and the masked change) or `plan-only`
+    /// (the control: the plan and the repository only; use a state directory of its own).
+    #[arg(long, default_value = "grounded")]
+    control: String,
     /// Plan styles to attempt per commit, comma separated: terse, detailed.
     #[arg(long, value_delimiter = ',', default_value = "terse,detailed")]
     styles: Vec<String>,
@@ -222,7 +232,18 @@ fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Audit { work } => audit_and_print(work.as_deref()),
         Command::Run(args) => run_command(&args),
-        Command::Report { state, json } => {
+        Command::Report {
+            state,
+            versus: Some(control),
+            ..
+        } => {
+            print!(
+                "{}",
+                Comparison::of(&ledger::read(&state)?, &ledger::read(&control)?)
+            );
+            Ok(())
+        }
+        Command::Report { state, json, .. } => {
             let bias = ledger::bias(&ledger::read(&state)?);
             if json {
                 println!("{}", serde_json::to_string_pretty(&bias)?);
@@ -241,6 +262,8 @@ fn run_command(args: &RunArgs) -> Result<()> {
         .iter()
         .map(|s| PlanStyle::parse(s).with_context(|| format!("unknown plan style {s:?}")))
         .collect::<Result<Vec<_>>>()?;
+    let control = Control::parse(&args.control)
+        .with_context(|| format!("unknown control {:?}: grounded or plan-only", args.control))?;
     let keys: serde_json::Value = serde_json::from_slice(&std::fs::read(&args.api_key_file)?)
         .with_context(|| format!("reading {}", args.api_key_file.display()))?;
     let key = keys
@@ -274,6 +297,7 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.to.clone_from(&args.to);
     config.max_commits = args.max_commits;
     config.styles = styles;
+    config.control = control;
     config.jobs = args.jobs;
     config.deadline = Duration::from_secs(args.attempt_secs);
     config.plan_deadline = Duration::from_secs(args.plan_secs);

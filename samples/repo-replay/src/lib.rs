@@ -25,6 +25,8 @@
 pub mod attempt;
 pub mod audit;
 pub mod budget;
+pub mod compare;
+pub mod control;
 pub mod dataset;
 pub mod fixture;
 pub mod gate;
@@ -36,6 +38,7 @@ pub mod ledger;
 pub mod mask;
 pub mod pipeline;
 pub mod plan;
+pub mod plan_only_prompt;
 pub mod plan_prompt;
 pub mod scripted;
 pub mod scrub;

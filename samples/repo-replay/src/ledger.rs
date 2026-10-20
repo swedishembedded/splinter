@@ -24,6 +24,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::attempt::CheckOutcome;
+use crate::control::Control;
 use crate::plan_prompt::PlanStyle;
 
 /// How a ledger line ended.
@@ -81,6 +82,35 @@ pub struct Entry {
     pub max_wait_seconds: f64,
     /// Free text: the first reason's detail, or the infrastructure error.
     pub detail: Option<String>,
+    /// What the agent was given besides the plan.
+    #[serde(default)]
+    pub control: Control,
+}
+
+impl Entry {
+    /// An entry of `outcome` for `commit` (and `style`) with every measure zero.
+    #[must_use]
+    pub fn new(commit: &str, style: Option<PlanStyle>, outcome: Outcome) -> Self {
+        Self {
+            commit: commit.into(),
+            style,
+            outcome,
+            classes: Vec::new(),
+            changed_lines: 0,
+            files: 0,
+            tool_calls: 0,
+            seconds: 0.0,
+            experience: None,
+            checks: Vec::new(),
+            plan_words: None,
+            plan_code_percent: None,
+            requests: 0,
+            model_seconds: 0.0,
+            max_wait_seconds: 0.0,
+            detail: None,
+            control: Control::Grounded,
+        }
+    }
 }
 
 /// The ledger file of a state directory.
@@ -145,6 +175,20 @@ pub fn append(state: &Path, entry: &Entry) -> Result<()> {
     Ok(())
 }
 
+/// The entries that stand: of each (commit, style) the last line written (a
+/// redone or retried attempt supersedes the one it redoes), and each skipped
+/// commit once. Rates are counted over these, never over history.
+#[must_use]
+pub fn latest(entries: &[Entry]) -> Vec<&Entry> {
+    let mut last: BTreeMap<(&str, Option<PlanStyle>), usize> = BTreeMap::new();
+    for (n, e) in entries.iter().enumerate() {
+        last.insert((e.commit.as_str(), e.style), n);
+    }
+    let mut keep: Vec<usize> = last.into_values().collect();
+    keep.sort_unstable();
+    keep.into_iter().map(|n| &entries[n]).collect()
+}
+
 /// The size bucket of a commit, by changed lines.
 #[must_use]
 pub fn bucket(changed_lines: usize) -> &'static str {
@@ -184,13 +228,18 @@ pub struct Bias {
     pub skipped: BTreeMap<String, usize>,
     /// Infrastructure errors (excluded from every rate).
     pub errors: usize,
+    /// What the agents were given besides the plan.
+    pub control: Control,
 }
 
 /// The bias report of `entries`.
 #[must_use]
 pub fn bias(entries: &[Entry]) -> Bias {
     let mut report = Bias::default();
-    for e in entries {
+    for e in latest(entries) {
+        if e.control == Control::PlanOnly {
+            report.control = Control::PlanOnly;
+        }
         match e.outcome {
             Outcome::Skipped => {
                 for class in &e.classes {
@@ -230,6 +279,12 @@ pub fn bias(entries: &[Entry]) -> Bias {
 impl std::fmt::Display for Bias {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let rate = |c: &Counts| format!("{}/{}", c.passed, c.attempts);
+        if self.control == Control::PlanOnly {
+            writeln!(
+                f,
+                "control: plan-only (the agent was shown no change; its passes are the purest)"
+            )?;
+        }
         writeln!(f, "pass rate overall: {}", rate(&self.overall))?;
         if self.verdicts > 0 {
             writeln!(
@@ -263,24 +318,20 @@ impl std::fmt::Display for Bias {
 mod tests {
     use super::*;
 
-    fn entry(outcome: Outcome, lines: usize, style: Option<PlanStyle>, classes: &[&str]) -> Entry {
+    fn entry(
+        commit: &str,
+        outcome: Outcome,
+        lines: usize,
+        style: Option<PlanStyle>,
+        classes: &[&str],
+    ) -> Entry {
         Entry {
-            commit: "c".into(),
-            style,
-            outcome,
             classes: classes.iter().map(|c| (*c).into()).collect(),
             changed_lines: lines,
             files: 1,
             tool_calls: 1,
             seconds: 1.0,
-            experience: None,
-            checks: vec![],
-            plan_words: None,
-            plan_code_percent: None,
-            requests: 0,
-            model_seconds: 0.0,
-            max_wait_seconds: 0.0,
-            detail: None,
+            ..Entry::new(commit, style, outcome)
         }
     }
 
@@ -288,11 +339,23 @@ mod tests {
     fn the_report_counts_by_size_style_and_reason_and_leaves_errors_out_of_every_rate() {
         let terse = Some(PlanStyle::Terse);
         let entries = [
-            entry(Outcome::Passed, 5, terse, &[]),
-            entry(Outcome::Failed, 5, terse, &["tree_mismatch", "unread_edit"]),
-            entry(Outcome::Failed, 120, Some(PlanStyle::Detailed), &["junk"]),
-            entry(Outcome::Skipped, 0, None, &["merge"]),
-            entry(Outcome::Error, 5, terse, &[]),
+            entry("a", Outcome::Passed, 5, terse, &[]),
+            entry(
+                "b",
+                Outcome::Failed,
+                5,
+                terse,
+                &["tree_mismatch", "unread_edit"],
+            ),
+            entry(
+                "c",
+                Outcome::Failed,
+                120,
+                Some(PlanStyle::Detailed),
+                &["junk"],
+            ),
+            entry("d", Outcome::Skipped, 0, None, &["merge"]),
+            entry("e", Outcome::Error, 5, terse, &[]),
         ];
         let report = bias(&entries);
         assert_eq!(
@@ -319,5 +382,29 @@ mod tests {
         assert_eq!(report.reasons["unread_edit"], 1);
         assert_eq!(report.skipped["merge"], 1);
         assert_eq!(report.errors, 1);
+    }
+
+    #[test]
+    fn a_redone_attempt_replaces_the_one_it_redoes_in_every_rate() {
+        let terse = Some(PlanStyle::Terse);
+        let entries = [
+            entry("a", Outcome::Failed, 5, terse, &["diff_reference"]),
+            entry("a", Outcome::Passed, 5, terse, &[]),
+            entry("b", Outcome::Error, 5, terse, &[]),
+            entry("b", Outcome::Failed, 5, terse, &["tree_mismatch"]),
+            entry("c", Outcome::Skipped, 0, None, &["merge"]),
+            entry("c", Outcome::Skipped, 0, None, &["merge"]),
+        ];
+        let report = bias(&entries);
+        assert_eq!(
+            report.overall,
+            Counts {
+                attempts: 2,
+                passed: 1
+            }
+        );
+        assert!(!report.reasons.contains_key("diff_reference"));
+        assert_eq!(report.errors, 0);
+        assert_eq!(report.skipped["merge"], 1);
     }
 }

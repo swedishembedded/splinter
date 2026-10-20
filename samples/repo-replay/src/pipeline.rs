@@ -38,11 +38,13 @@ use splinter_sdk::vocabulary::outcome::AttemptReport;
 use splinter_sdk::Context;
 
 use crate::attempt::{attempt, AttemptOutcome, AttemptSettings, CommitPlan};
+use crate::control::Control;
 use crate::gate::GateConfig;
 use crate::git::{mirror, Git};
 use crate::grounding_prompt::grounding_prompt;
 use crate::ledger::{self, Entry, Outcome};
 use crate::plan::{changed_lines, write_plan, PlanCheck, PlanFailure};
+use crate::plan_only_prompt::plan_only_prompt;
 use crate::plan_prompt::{plan_system_prompt, PlanStyle};
 use crate::scrub::Scrubber;
 use crate::select::{prepare, SelectConfig, Selected};
@@ -100,6 +102,8 @@ pub struct RunConfig {
     /// Failed attempts whose reasons all lie in these gate classes are done again:
     /// for a rule that was wrong and has been fixed.
     pub redo_classes: Vec<String>,
+    /// What the agent is given besides the plan; one state directory holds one control.
+    pub control: Control,
 }
 
 /// The models of a run.
@@ -206,6 +210,7 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
             "plan_tries": config.plan_tries,
             "error_retries": config.error_retries,
             "redo_classes": config.redo_classes,
+            "control": config.control,
             "styles": config.styles,
             "select": config.select,
             "gate": config.gate,
@@ -235,6 +240,17 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
     }
 
     let done = ledger::read(&state)?;
+    if let Some(other) = done
+        .iter()
+        .find(|e| e.style.is_some() && e.control != config.control)
+    {
+        anyhow::bail!(
+            "{} holds {} attempts and this run is {}; use a separate --state for each control",
+            state.display(),
+            other.control.name(),
+            config.control.name()
+        );
+    }
     let mut report = RunReport {
         replayable: replayable.len(),
         ..RunReport::default()
@@ -265,6 +281,7 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
             .map(|p| p.to_string_lossy().into_owned())
             .collect(),
         scratch: parts.scratch.clone(),
+        control: config.control,
         checks: config.checks.clone(),
         check_timeout: config.check_timeout,
     };
@@ -364,67 +381,40 @@ async fn process(
             commit.changes.iter().map(|c| c.lines()).sum::<usize>(),
             commit.changes.len(),
         );
+        let base = Entry {
+            changed_lines: size.0,
+            files: size.1,
+            control: config.control,
+            ..Entry::new(&commit.sha, Some(style), Outcome::Error)
+        };
         let entry = match unit {
             Unit::Error(detail) => Entry {
-                commit: commit.sha.clone(),
-                style: Some(style),
-                outcome: Outcome::Error,
-                classes: vec![],
-                changed_lines: size.0,
-                files: size.1,
-                tool_calls: 0,
-                seconds: 0.0,
-                experience: None,
-                checks: vec![],
-                plan_words: None,
-                plan_code_percent: None,
-                requests: 0,
-                model_seconds: 0.0,
-                max_wait_seconds: 0.0,
                 detail: Some(detail),
+                ..base
             },
             Unit::Refused(failure) => Entry {
-                commit: commit.sha.clone(),
-                style: Some(style),
                 outcome: Outcome::PlanRefused,
                 classes: vec![failure.class().into()],
-                changed_lines: size.0,
-                files: size.1,
-                tool_calls: 0,
-                seconds: 0.0,
-                experience: None,
-                checks: vec![],
-                plan_words: None,
-                plan_code_percent: None,
-                requests: 0,
-                model_seconds: 0.0,
-                max_wait_seconds: 0.0,
                 detail: Some(failure.to_string()),
+                ..base
             },
             Unit::Attempted(boxed) => {
                 let (plan, outcome) = *boxed;
-                match store_attempt(ctx, models, scrubber, commit, style, &plan, &outcome) {
+                match store_attempt(
+                    ctx,
+                    models,
+                    scrubber,
+                    commit,
+                    style,
+                    config.control,
+                    &plan,
+                    &outcome,
+                ) {
                     Err(e) => Entry {
-                        commit: commit.sha.clone(),
-                        style: Some(style),
-                        outcome: Outcome::Error,
-                        classes: vec![],
-                        changed_lines: size.0,
-                        files: size.1,
-                        tool_calls: 0,
-                        seconds: 0.0,
-                        experience: None,
-                        checks: vec![],
-                        plan_words: None,
-                        plan_code_percent: None,
-                        requests: 0,
-                        model_seconds: 0.0,
-                        max_wait_seconds: 0.0,
                         detail: Some(format!("storing the attempt: {e:#}")),
+                        ..base
                     },
                     Ok(id) => Entry {
-                        commit: commit.sha.clone(),
-                        style: Some(style),
                         outcome: if outcome.verdict.passed {
                             Outcome::Passed
                         } else {
@@ -436,8 +426,6 @@ async fn process(
                             .into_iter()
                             .map(String::from)
                             .collect(),
-                        changed_lines: size.0,
-                        files: size.1,
                         tool_calls: outcome.trace.calls.len(),
                         seconds: outcome.seconds,
                         experience: Some(id.hex().to_string()),
@@ -448,6 +436,7 @@ async fn process(
                         model_seconds: outcome.stats.model_seconds,
                         max_wait_seconds: outcome.stats.max_wait_seconds,
                         detail: outcome.verdict.reasons.first().map(|r| r.detail.clone()),
+                        ..base
                     },
                 }
             }
@@ -477,22 +466,8 @@ async fn process(
 
 fn skip_entry(sha: &str, class: &str) -> Entry {
     Entry {
-        commit: sha.into(),
-        style: None,
-        outcome: Outcome::Skipped,
         classes: vec![class.into()],
-        changed_lines: 0,
-        files: 0,
-        tool_calls: 0,
-        seconds: 0.0,
-        experience: None,
-        checks: vec![],
-        plan_words: None,
-        plan_code_percent: None,
-        requests: 0,
-        model_seconds: 0.0,
-        max_wait_seconds: 0.0,
-        detail: None,
+        ..Entry::new(sha, None, Outcome::Skipped)
     }
 }
 
@@ -538,12 +513,18 @@ fn store_attempt(
     scrubber: &Scrubber,
     commit: &CommitPlan,
     style: PlanStyle,
+    control: Control,
     plan: &str,
     outcome: &AttemptOutcome,
 ) -> Result<ExperienceId> {
     let environment = Environment::new(
         Environment::WORKSPACE,
-        json!({"snapshot": commit.parent, "commit": commit.sha, "plan_style": style.name()}),
+        json!({
+            "snapshot": commit.parent,
+            "commit": commit.sha,
+            "plan_style": style.name(),
+            "control": control.name(),
+        }),
     );
     let task = Task::new(
         TASK_KIND,
@@ -554,10 +535,11 @@ fn store_attempt(
     )?;
     let mut provenance = Provenance::new(&models.identity, ctx.runtime().clock());
     provenance.generator = Some("splinter-repo-replay".into());
-    provenance.prompt_digests = vec![
-        digest(&plan_system_prompt(style)),
-        digest(&grounding_prompt(&crate::mask::MaskedDiff::default(), 0)),
-    ];
+    let replay_prompt = match control {
+        Control::Grounded => grounding_prompt(&crate::mask::MaskedDiff::default(), 0),
+        Control::PlanOnly => plan_only_prompt(0),
+    };
+    provenance.prompt_digests = vec![digest(&plan_system_prompt(style)), digest(&replay_prompt)];
     let trajectory = scrub_trajectory(&outcome.trajectory, scrubber)?;
     let final_output = outcome.final_message.as_deref().map(|m| scrubber.scrub(m));
     let experience = Experience::new(task, trajectory, final_output, provenance)?;
@@ -570,6 +552,7 @@ fn store_attempt(
         "checks": outcome.checks,
         "plan_style": style.name(),
         "commit": commit.sha,
+        "control": control.name(),
     });
     store.annotate(&Annotation {
         experience: id.clone(),

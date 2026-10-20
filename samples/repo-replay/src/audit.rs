@@ -29,6 +29,7 @@ use splinter_sdk::config::Config;
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::Context;
 
+use crate::control::Control;
 use crate::dataset::{attempts_set, build_dataset, DatasetSettings};
 use crate::fixture;
 use crate::gate::GateConfig;
@@ -102,6 +103,7 @@ pub fn default_config(source: &Path, state: &Path) -> RunConfig {
         retry_wait: Duration::from_secs(0),
         record: serde_json::Value::Null,
         redo_classes: Vec::new(),
+        control: Control::Grounded,
     }
 }
 
@@ -431,6 +433,55 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
             .entries
             .iter()
             .any(|e| e.classes.iter().any(|c| c == "unmotivated_location")),
+        "",
+    );
+
+    // The plan-only control shows the agent no change: the solver that needs
+    // the change cannot pass, and every attempt says what it was.
+    let blind_state = state("blind");
+    let blind_ctx = open_context(&blind_state)?;
+    let mut config = default_config(&source, &blind_state);
+    config.from = Some(parent.to_string());
+    config.to = Some(commit.to_string());
+    config.styles = vec![PlanStyle::Terse];
+    config.control = Control::PlanOnly;
+    let report = run_blocking(
+        &blind_ctx,
+        &scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths),
+        &config,
+    )?;
+    let judged: Vec<&Entry> = report
+        .entries
+        .iter()
+        .filter(|e| e.outcome != Outcome::Skipped)
+        .collect();
+    check(
+        &mut checks,
+        "a plan-only attempt is flagged as such and a solver that needs the change cannot pass it",
+        !judged.is_empty()
+            && judged
+                .iter()
+                .all(|e| e.control == Control::PlanOnly && e.outcome == Outcome::Failed),
+        format!(
+            "{:?}",
+            judged
+                .iter()
+                .map(|e| (&e.outcome, &e.classes))
+                .collect::<Vec<_>>()
+        ),
+    );
+    let mixed = run_blocking(
+        &ctx,
+        &scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths),
+        &RunConfig {
+            control: Control::PlanOnly,
+            ..default_config(&source, &honest_state)
+        },
+    );
+    check(
+        &mut checks,
+        "a state directory refuses a run of another control",
+        mixed.is_err(),
         "",
     );
 

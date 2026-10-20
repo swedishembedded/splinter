@@ -28,10 +28,12 @@ use splinter_sdk::agent::sven::model::ModelProvider;
 use splinter_sdk::agent::work::{WorkOptions, Worker};
 use splinter_sdk::agent::RunConclusion;
 
+use crate::control::Control;
 use crate::gate::{evaluate, GateConfig, GateInput, Verdict};
 use crate::generated::is_generated_path;
 use crate::git::{single_commit_repo, Change, Git};
 use crate::grounding_prompt::{grounding_prompt, CONTINUE_NOTICE};
+use crate::plan_only_prompt::plan_only_prompt;
 use crate::trace::Trace;
 use crate::tree::{compare, read_tree, vocabulary, Residual};
 
@@ -74,6 +76,8 @@ pub struct AttemptSettings {
     pub forbidden_locations: Vec<String>,
     /// Where attempt trees are laid out.
     pub scratch: PathBuf,
+    /// Whether the agent is shown the change.
+    pub control: Control,
     /// Project checks run in the attempt tree afterwards (`sh -c`), outcome
     /// recorded and never gated; empty runs none.
     pub checks: Vec<String>,
@@ -197,7 +201,10 @@ pub async fn attempt(
         max_tool_calls: calls,
         ..settings.gate
     };
-    solve.system = Some(grounding_prompt(&commit.masked, calls));
+    solve.system = Some(match settings.control {
+        Control::Grounded => grounding_prompt(&commit.masked, calls),
+        Control::PlanOnly => plan_only_prompt(calls),
+    });
     solve.max_output_tokens = settings.max_output_tokens;
     solve.first_response = settings.first_response;
     let mut options = WorkOptions::new(solve);
