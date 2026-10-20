@@ -51,6 +51,11 @@ pub struct RemoteModel {
     /// The seed every request carries, so a sampled answer is the one that
     /// seed draws; `None` leaves the server to draw its own and echo it.
     pub seed: Option<u64>,
+    /// The most tokens the server lets the model think in one response
+    /// before it closes the thought and goes on to the answer
+    /// (`thinking_budget`); `None` leaves the thought unbounded. Meaningful
+    /// only with `thinking`.
+    pub thinking_budget: Option<u32>,
 }
 
 impl RemoteModel {
@@ -66,6 +71,7 @@ impl RemoteModel {
             "top_k": self.top_k,
             "seed": self.seed,
             "thinking": self.thinking,
+            "thinking_budget": self.thinking_budget,
         })
     }
 }
@@ -122,12 +128,22 @@ impl RemoteModel {
             // own seeds from.
             options.insert("seed".into(), serde_json::json!(seed));
         }
+        if let (Some(budget), true) = (self.thinking_budget, self.thinking) {
+            // brain's name for the per-response thinking budget; a response
+            // that exhausts it is closed by the server and continues as the
+            // answer.
+            options.insert(THINKING_BUDGET_FIELD.into(), serde_json::json!(budget));
+        }
         if !options.is_empty() {
             config.model.driver_options = serde_json::Value::Object(options);
         }
         Ok(())
     }
 }
+
+/// The request field of brain's per-response thinking budget (it also reads
+/// `thinking_token_budget` and `max_thinking_tokens`).
+const THINKING_BUDGET_FIELD: &str = "thinking_budget";
 
 /// The provider name under which sven reaches a `brain serve` on this machine.
 const LOCAL_SERVER_PROVIDER: &str = "brain";
@@ -243,6 +259,9 @@ pub struct ServedSampling {
     pub seed: Option<u64>,
     /// Whether the model reasons before it answers.
     pub thinking: bool,
+    /// The most thinking tokens per response when it does
+    /// ([`RemoteModel::thinking_budget`]).
+    pub thinking_budget: Option<u32>,
 }
 
 /// A model served by a `brain serve` at `base_url` (its OpenAI-compatible
@@ -321,6 +340,7 @@ fn served_config(
         top_p: sampling.top_p,
         top_k: sampling.top_k,
         seed: sampling.seed,
+        thinking_budget: sampling.thinking_budget,
     };
     let mut config = sven_sdk::config::Config::default();
     remote.apply_to(&mut config)?;
@@ -532,6 +552,37 @@ mod tests {
     }
 
     #[test]
+    fn a_thinking_budget_is_sent_only_to_a_model_that_thinks_and_is_recorded() {
+        let model = |thinking, thinking_budget| RemoteModel {
+            spec: "brain/unsloth/Qwen3-8B".into(),
+            thinking,
+            thinking_budget,
+            ..RemoteModel::default()
+        };
+        let mut on = sven_sdk::config::Config::default();
+        model(true, Some(1024)).apply_to(&mut on).unwrap();
+        assert_eq!(on.model.driver_options["thinking_budget"], 1024);
+        assert_eq!(
+            on.model.driver_options["chat_template_kwargs"]["enable_thinking"],
+            true
+        );
+        // Off: the budget has nothing to bound and is not sent.
+        let mut off = sven_sdk::config::Config::default();
+        model(false, Some(1024)).apply_to(&mut off).unwrap();
+        assert!(off.model.driver_options.get("thinking_budget").is_none());
+        // Unbounded thinking sends none either.
+        let mut open = sven_sdk::config::Config::default();
+        model(true, None).apply_to(&mut open).unwrap();
+        assert!(open.model.driver_options.get("thinking_budget").is_none());
+        // The record says what was asked, off or on.
+        assert_eq!(
+            model(true, Some(1024)).sampling_record()["thinking_budget"],
+            1024
+        );
+        assert!(model(false, None).sampling_record()["thinking_budget"].is_null());
+    }
+
+    #[test]
     fn a_served_model_carries_every_sampling_setting_it_is_given() {
         let config = served_config(
             "openai/m",
@@ -543,7 +594,8 @@ mod tests {
                 top_k: Some(20),
                 // seed: the request must carry exactly this value
                 seed: Some(7),
-                thinking: false,
+                thinking: true,
+                thinking_budget: Some(1024),
             },
         )
         .unwrap();
@@ -552,7 +604,8 @@ mod tests {
         assert_eq!(options["top_k"], serde_json::json!(20));
         assert!((options["top_p"].as_f64().unwrap() - 0.8).abs() < 1e-6);
         assert_eq!(options["seed"], serde_json::json!(7));
-        assert_eq!(options["chat_template_kwargs"]["enable_thinking"], false);
+        assert_eq!(options["chat_template_kwargs"]["enable_thinking"], true);
+        assert_eq!(options["thinking_budget"], 1024);
     }
 
     #[test]

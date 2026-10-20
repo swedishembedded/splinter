@@ -68,6 +68,7 @@ fn context(test: &str) -> (Context, Reported, ModelRef) {
         served_top_p: None,
         served_top_k: None,
         served_seed: None,
+        served_thinking_budget: None,
         build: Default::default(),
     };
     let reported: Reported = Arc::default();

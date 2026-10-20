@@ -103,6 +103,7 @@ pub fn resolve_on(
                 top_p: config.served_top_p,
                 top_k: config.served_top_k,
                 seed: config.served_seed,
+                thinking_budget: config.served_thinking_budget,
             }))
         }
     }

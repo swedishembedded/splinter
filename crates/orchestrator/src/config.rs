@@ -105,6 +105,9 @@ pub struct Config {
     /// attempt is reproducible and its seed is part of its record; `None`
     /// leaves the server to draw one.
     pub served_seed: Option<u64>,
+    /// The most tokens a served model may think in one response, when
+    /// [`Config::thinking`] lets it; `None` leaves the thought unbounded.
+    pub served_thinking_budget: Option<u32>,
     /// The fewest controls a judge is measured on before its verdicts count:
     /// a judge measured on fewer is not trusted, and one measured on more is
     /// known better. A small corpus gives few controls (a task has one only
@@ -277,6 +280,7 @@ impl Config {
             served_top_p: None,
             served_top_k: None,
             served_seed: None,
+            served_thinking_budget: None,
             min_calibration_controls: var("SPLINTER_MIN_CALIBRATION_CONTROLS")
                 .and_then(|v| v.parse().ok())
                 .filter(|n| *n > 0)

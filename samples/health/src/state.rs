@@ -146,6 +146,7 @@ impl Run {
             served_top_p: None,
             served_top_k: None,
             served_seed: None,
+            served_thinking_budget: None,
             build: Default::default(),
         };
         Ok(Context::new(config, false)?)

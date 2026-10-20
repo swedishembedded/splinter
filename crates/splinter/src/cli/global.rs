@@ -102,6 +102,12 @@ pub struct Global {
     /// block. Recorded with the attempt.
     #[arg(long, global = true)]
     pub thinking: bool,
+    /// With --thinking: the most tokens the model may think in one response;
+    /// the server closes the thought there and the model goes on to its
+    /// answer. Recorded with the attempt. Unbounded when not given.
+    #[arg(long, global = true, value_name = "N", requires = "thinking",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub thinking_budget: Option<u32>,
 }
 
 fn served_top_p(text: &str) -> Result<f32, String> {

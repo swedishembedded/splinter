@@ -31,6 +31,7 @@ Every command takes these.
 - `--top-k <K>`: Sampling among the K most likely tokens (`top_k`) asked of a model reached through sven's providers; the server's own default when not given.
 - `--sampling-seed <SEED>`: The seed every request of a model reached through sven's providers carries, so that a sampled attempt is reproducible; recorded with the attempt. The server draws its own when not given.
 - `--thinking`: Let a model served on this machine reason before it answers (the request says so); without it the server is asked for no reasoning block. Recorded with the attempt.
+- `--thinking-budget <N>`: With --thinking: the most tokens the model may think in one response; the server closes the thought there and the model goes on to its answer. Recorded with the attempt. Unbounded when not given.
 
 ## Commands
 

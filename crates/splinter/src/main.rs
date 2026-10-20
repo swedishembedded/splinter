@@ -90,6 +90,7 @@ fn main() -> ExitCode {
     config.served_top_k = cli.global.top_k;
     config.served_seed = cli.global.sampling_seed;
     config.thinking |= cli.global.thinking;
+    config.served_thinking_budget = cli.global.thinking_budget;
     if let Some(seconds) = cli.global.solve_deadline {
         config.solve_deadline = std::time::Duration::from_secs(seconds);
     }

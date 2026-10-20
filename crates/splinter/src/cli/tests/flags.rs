@@ -135,9 +135,15 @@ fn the_sampling_of_a_served_model_is_global_flags_and_bounded() {
         "--sampling-seed",
         "16022413115216019911",
         "--thinking",
+        "--thinking-budget",
+        "1024",
         "status",
     ])
     .unwrap();
+    assert_eq!(cli.global.thinking_budget, Some(1024));
+    // A budget bounds thinking, so it needs it; and it is positive.
+    assert!(parse(&["--thinking-budget", "1024", "status"]).is_err());
+    assert!(parse(&["--thinking", "--thinking-budget", "0", "status"]).is_err());
     assert_eq!(
         (cli.global.top_p, cli.global.top_k, cli.global.sampling_seed),
         (Some(0.95), Some(20), Some(16_022_413_115_216_019_911))

@@ -103,7 +103,9 @@ a prompt of its own (a policy trained to be a person). Each attempt records what
 to in its trajectory's `solve_profile`: the prompt's id and digest, the longest shell call
 (1800 s), sven's note on a repeated result (on), the repetition bound and the tool-call cap,
 and how the model was asked to sample. A served model is asked to sample with `--temperature`,
-`--top-p`, `--top-k` and `--sampling-seed` on every request (`--thinking` lets it reason),
+`--top-p`, `--top-k` and `--sampling-seed` on every request (`--thinking` lets it reason, and
+`--thinking-budget N` bounds the thought of each response: the server closes it there and the
+model goes on to its answer),
 and none is sent unless given, so the server's own settings apply.
 
 The repetition stop counts a call as repeated when it has the same tool and arguments once a
