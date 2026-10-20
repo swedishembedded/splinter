@@ -48,6 +48,11 @@ use crate::run_code::RunCode;
 pub use crate::system_prompt::with_system_addendum;
 use crate::system_prompt::UnderSystemPrompt;
 
+/// The longest a shell call may run, in seconds, in a solve: sven's own
+/// ceiling, set here explicitly so that the solve's profile does not move with
+/// sven's default.
+pub const SOLVE_MAX_TIMEOUT_SECS: u64 = 1800;
+
 /// The sven mode a solve runs: the conversational agent loop.
 pub(crate) const SOLVER_MODE: &str = "agent";
 
@@ -71,6 +76,10 @@ pub struct SolveOptions {
     /// one a policy was trained under, when that is a person's. `None` keeps
     /// the default.
     pub system: Option<String>,
+    /// How the model is asked to sample (temperature, top-p, top-k, seed,
+    /// whether it reasons), as its owner declared it; kept with each attempt
+    /// of a workspace episode. `None` records nothing.
+    pub sampling: Option<serde_json::Value>,
 }
 
 impl SolveOptions {
@@ -83,6 +92,7 @@ impl SolveOptions {
             cancel: None,
             stream_idle: None,
             system: None,
+            sampling: None,
         }
     }
 
@@ -119,10 +129,15 @@ impl SolveOptions {
     /// The sven configuration an engine running these bounds is built with:
     /// sven's default, with the stream idle limit when one is set, in whole
     /// seconds rounded up (sven's unit, where zero means its default) and
-    /// capped at the deadline.
+    /// capped at the deadline. The two settings the solve profile records are
+    /// set explicitly: the longest shell call ([`SOLVE_MAX_TIMEOUT_SECS`]) and
+    /// sven's note on a repeated result, which tells the model the environment
+    /// has not changed since the first.
     #[must_use]
     pub fn engine_config(&self) -> Config {
         let mut config = Config::default();
+        config.tools.max_timeout_secs = SOLVE_MAX_TIMEOUT_SECS;
+        config.agent.note_repeated_results = true;
         if let Some(limit) = self.stream_idle {
             let limit = limit.min(self.deadline);
             let secs = limit.as_secs() + u64::from(limit.subsec_nanos() > 0);
@@ -207,6 +222,9 @@ pub struct Model {
     /// The system prompt this model answers under, when that is not the
     /// default: a policy trained to be a person has that person's.
     pub system: Option<String>,
+    /// How the model's owner declared it is asked to sample, for the record
+    /// of each attempt ([`SolveOptions::sampling`]).
+    pub sampling: Option<serde_json::Value>,
     /// How many requests the model's owner declared it decodes together
     /// (the slots of the batching server it launched); `None` leaves the
     /// width to the reference the model is asked for by. See [`Self::slots`].
@@ -222,6 +240,7 @@ impl Model {
             identity: identity.into(),
             stream_idle: None,
             system: None,
+            sampling: None,
             declared_slots: None,
         }
     }
@@ -262,7 +281,15 @@ impl Model {
     pub fn solving(&self, mut options: SolveOptions) -> SolveOptions {
         options.stream_idle = self.stream_idle;
         options.system.clone_from(&self.system);
+        options.sampling.clone_from(&self.sampling);
         options
+    }
+
+    /// This model, recorded as asked to sample as `sampling` says.
+    #[must_use]
+    pub fn with_sampling_record(mut self, sampling: serde_json::Value) -> Self {
+        self.sampling = Some(sampling);
+        self
     }
 
     /// This model, allowed `limit` of silence between two stream chunks.

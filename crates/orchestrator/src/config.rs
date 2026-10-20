@@ -96,6 +96,15 @@ pub struct Config {
     /// repeating one action for as long as the run lasts, so a served model
     /// that works as an agent wants a temperature above zero.
     pub served_temperature: Option<f32>,
+    /// Nucleus sampling (`top_p`) asked of a served model; `None` leaves the
+    /// server's.
+    pub served_top_p: Option<f32>,
+    /// `top_k` asked of a served model; `None` leaves the server's.
+    pub served_top_k: Option<u32>,
+    /// The seed every request of a served model carries, so a sampled
+    /// attempt is reproducible and its seed is part of its record; `None`
+    /// leaves the server to draw one.
+    pub served_seed: Option<u64>,
     /// The fewest controls a judge is measured on before its verdicts count:
     /// a judge measured on fewer is not trusted, and one measured on more is
     /// known better. A small corpus gives few controls (a task has one only
@@ -265,6 +274,9 @@ impl Config {
             thinking: var("SPLINTER_THINKING")
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
             served_temperature: None,
+            served_top_p: None,
+            served_top_k: None,
+            served_seed: None,
             min_calibration_controls: var("SPLINTER_MIN_CALIBRATION_CONTROLS")
                 .and_then(|v| v.parse().ok())
                 .filter(|n| *n > 0)

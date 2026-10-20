@@ -27,6 +27,10 @@ Every command takes these.
 - `--workspace-max-processes <N>`: Bound the processes and threads one project command may start. Part of the environment record, so tasks generated without it name a different environment.
 - `--runtime-dir <DIR>...`: A directory searched before the system's for the interpreters code runs in (`lua` is Lua 5.1 and no other: `make deps/lua` builds the pinned one); repeat for more.
 - `--temperature <T>`: The sampling temperature, 0 to 2, asked of a model reached through sven's providers (the provider's own default when not given). The same flag sets the pass@k sampling of a verb that measures it; when given twice, the last wins.
+- `--top-p <P>`: Nucleus sampling (`top_p`, above 0 up to 1) asked of a model reached through sven's providers; the server's own default when not given.
+- `--top-k <K>`: Sampling among the K most likely tokens (`top_k`) asked of a model reached through sven's providers; the server's own default when not given.
+- `--sampling-seed <SEED>`: The seed every request of a model reached through sven's providers carries, so that a sampled attempt is reproducible; recorded with the attempt. The server draws its own when not given.
+- `--thinking`: Let a model served on this machine reason before it answers (the request says so); without it the server is asked for no reasoning block. Recorded with the attempt.
 
 ## Commands
 

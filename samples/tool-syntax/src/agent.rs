@@ -108,6 +108,7 @@ pub async fn run_agent(
         api_key: endpoint.api_key.map(String::from),
         thinking: false,
         temperature: None,
+        ..RemoteModel::default()
     }
     .apply_to(&mut settings)?;
     let mut options = settings

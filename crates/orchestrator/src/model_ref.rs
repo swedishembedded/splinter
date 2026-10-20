@@ -100,6 +100,9 @@ pub fn resolve_on(
                 api_key,
                 thinking: config.thinking,
                 temperature: config.served_temperature,
+                top_p: config.served_top_p,
+                top_k: config.served_top_k,
+                seed: config.served_seed,
             }))
         }
     }

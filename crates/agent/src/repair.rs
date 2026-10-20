@@ -549,6 +549,7 @@ impl<'b> Meter<'b> {
             cancel: self.budget.cancel.clone(),
             stream_idle: None,
             system: None,
+            sampling: None,
         })
     }
 }

@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use sven_sdk::model::repeat::{call_identity, strip_repeat_note};
 use sven_sdk::model::{
     CompletionRequest, Message, MessageContent, ModelProvider, ResponseStream, Role,
 };
@@ -57,6 +58,11 @@ impl GuardSlot {
 
 /// The call that has come back with the same answer `bound` times in this
 /// send (the turns after the last user turn), as `name\u{1}arguments`.
+///
+/// Calls are compared by sven's identity (the same tool and arguments once a
+/// `description`, the order of keys and runs of whitespace are set aside), and
+/// results without the note sven appends to a repeated one: the note makes the
+/// second answer differ from the first, and it must not hide a repetition.
 fn repeated_call(messages: &[Message], bound: u32) -> Option<String> {
     let start = messages
         .iter()
@@ -72,7 +78,7 @@ fn repeated_call(messages: &[Message], bound: u32) -> Option<String> {
             } => {
                 asked.insert(
                     tool_call_id,
-                    format!("{}\u{1}{}", function.name, function.arguments),
+                    call_identity(&function.name, &function.arguments),
                 );
             }
             MessageContent::ToolResult {
@@ -82,7 +88,10 @@ fn repeated_call(messages: &[Message], bound: u32) -> Option<String> {
                 let Some(call) = asked.get(tool_call_id.as_str()) else {
                     continue;
                 };
-                let seen = answered.entry(format!("{call}\u{1}{content}")).or_insert(0);
+                let answer = content.to_string();
+                let seen = answered
+                    .entry(format!("{call}\u{1}{}", strip_repeat_note(&answer)))
+                    .or_insert(0);
                 *seen += 1;
                 if *seen >= bound {
                     return Some(call.clone());
@@ -122,7 +131,12 @@ impl RepetitionGuard {
             first.get_or_insert_with(|| describe(&call));
         }
         armed.repeated.store(true, Ordering::SeqCst);
-        armed.stop.cancel();
+        // The reason labels the aborted turn in the trajectory.
+        armed.stop.cancel_with(format!(
+            "repetition stop: {} returned the same result {} times",
+            describe(&call),
+            armed.bound
+        ));
         true
     }
 }

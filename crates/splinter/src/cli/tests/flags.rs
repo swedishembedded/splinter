@@ -122,3 +122,38 @@ fn train_names_the_tier_the_frozen_base_is_held_at() {
     assert_eq!(nf4.base_precision, Some(BasePrecision::Nf4));
     assert!(parse(&["train", "ds-1", "--base-precision", "fp8"]).is_err());
 }
+
+#[test]
+fn the_sampling_of_a_served_model_is_global_flags_and_bounded() {
+    let cli = parse(&[
+        "--temperature",
+        "0.6",
+        "--top-p",
+        "0.95",
+        "--top-k",
+        "20",
+        "--sampling-seed",
+        "16022413115216019911",
+        "--thinking",
+        "status",
+    ])
+    .unwrap();
+    assert_eq!(
+        (cli.global.top_p, cli.global.top_k, cli.global.sampling_seed),
+        (Some(0.95), Some(20), Some(16_022_413_115_216_019_911))
+    );
+    assert!(cli.global.thinking);
+    let none = parse(&["status"]).unwrap();
+    assert_eq!(
+        (
+            none.global.top_p,
+            none.global.top_k,
+            none.global.sampling_seed
+        ),
+        (None, None, None)
+    );
+    assert!(!none.global.thinking);
+    for bad in [["--top-p", "0"], ["--top-p", "1.5"], ["--top-k", "0"]] {
+        assert!(parse(&[bad[0], bad[1], "status"]).is_err(), "{bad:?}");
+    }
+}

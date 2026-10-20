@@ -30,9 +30,12 @@ use std::time::Duration;
 
 use splinter_agent::solve::{SolveError, SolveOptions};
 use splinter_agent::work::{
-    solve_in_workspace, Observed, WorkOptions, WorkProtocol, WorkspaceSolution, WITHHELD_TOOLS,
+    solve_in_workspace, Observed, WorkOptions, WorkProtocol, WorkspaceSolution, SOLVE_PROFILE_KEY,
+    WITHHELD_TOOLS,
 };
+use splinter_core::digest::Digest;
 use splinter_core::experience::Task;
+use splinter_core::prompt::{CODING_AGENT_PROMPT, CODING_AGENT_PROMPT_ID};
 use splinter_sandbox::host::DEFAULT_SEARCH_PATH;
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
@@ -298,6 +301,87 @@ async fn the_patch_read_back_is_the_edit_made_and_no_withheld_file_is_in_the_tre
         listing.contains("README.txt") && !listing.contains(HIDDEN_NAME),
         "the tree holds the snapshot and nothing withheld: {listing}"
     );
+}
+
+/// The text of the system turn of the last request the model was sent.
+fn system_turn(model: &Scripted) -> String {
+    let seen = model.seen.lock().unwrap();
+    let messages = &seen.last().unwrap().messages;
+    let system = messages.iter().find(|m| m.role == Role::System).unwrap();
+    system.as_text().unwrap().to_string()
+}
+
+/// One episode under `asked`; its trajectory's solve profile.
+async fn solve_under(asked: WorkOptions, model: Arc<Scripted>) -> serde_json::Value {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    let (task, archive) = (fixture.task(&environment), &fixture.archive);
+    let solved = solve_in_workspace(
+        &task,
+        &environment,
+        archive,
+        &[],
+        model,
+        asked,
+        &protocol(0),
+    )
+    .await
+    .unwrap();
+    let extra = solved.solution.trajectory.agent.extra.unwrap();
+    extra[SOLVE_PROFILE_KEY].clone()
+}
+
+#[tokio::test]
+async fn an_episode_runs_under_the_coding_agent_prompt_and_records_its_profile() {
+    let model = Scripted::new(edits_then_stops);
+    let mut asked = options();
+    asked.max_repeated_results = Some(3);
+    asked.solve.sampling = Some(serde_json::json!({"top_k": 20, "seed": 7}));
+
+    let profile = solve_under(asked, model.clone()).await;
+
+    assert_eq!(system_turn(&model), CODING_AGENT_PROMPT);
+    assert_eq!(profile["system_prompt"]["id"], CODING_AGENT_PROMPT_ID);
+    assert_eq!(
+        profile["system_prompt"]["digest"],
+        serde_json::json!(Digest::of(CODING_AGENT_PROMPT.as_bytes()))
+    );
+    assert_eq!(profile["tools"]["max_timeout_secs"], 1800);
+    assert_eq!(profile["agent"]["note_repeated_results"], true);
+    assert_eq!(profile["max_repeated_results"], 3);
+    assert_eq!(
+        profile["sampling"],
+        serde_json::json!({"top_k": 20, "seed": 7})
+    );
+}
+
+#[tokio::test]
+async fn a_prompt_the_model_brings_is_kept_and_recorded_without_the_coding_agent_id() {
+    let model = Scripted::new(edits_then_stops);
+    let mut asked = options();
+    asked.solve.system = Some("You are Maren.".into());
+
+    let profile = solve_under(asked, model.clone()).await;
+
+    assert_eq!(system_turn(&model), "You are Maren.");
+    assert!(profile["system_prompt"]["id"].is_null());
+}
+
+#[tokio::test]
+async fn a_run_that_stops_announcing_a_call_it_never_made_is_not_a_success_and_earns_no_follow_up()
+{
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    // A turn that ends on "let me ...:" with no call is not the worker ending.
+    let model = Scripted::new(|_| text("Let me look at the tests next:"));
+
+    let solved = solve(&fixture, &environment, &[], model.clone(), &protocol(2))
+        .await
+        .unwrap();
+
+    let stopped = solved.solution.conclusion == RunConclusion::StoppedWithoutConclusion;
+    assert!(stopped && solved.feedback_rounds == 0);
+    assert_eq!(model.seen.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]

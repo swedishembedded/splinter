@@ -95,6 +95,23 @@ do not. A call that names a hidden path and only got a refusal or "no such file"
 recorded the same way (`hidden_path_absent`); a hidden path in what a tool returned,
 hidden content and the state root still fail it.
 
+## How a solver is run
+
+A solver of a repository works under the coding-agent prompt (look, reproduce, change,
+verify, never repeat a call, stop when the tests pass) unless the model it is asked for brings
+a prompt of its own (a policy trained to be a person). Each attempt records what it was held
+to in its trajectory's `solve_profile`: the prompt's id and digest, the longest shell call
+(1800 s), sven's note on a repeated result (on), the repetition bound and the tool-call cap,
+and how the model was asked to sample. A served model is asked to sample with `--temperature`,
+`--top-p`, `--top-k` and `--sampling-seed` on every request (`--thinking` lets it reason),
+and none is sent unless given, so the server's own settings apply.
+
+The repetition stop counts a call as repeated when it has the same tool and arguments once a
+`description`, the order of keys and whitespace are set aside, and the same result once sven's
+note on a repeated result is removed; it is decided before the next model request and labels
+the stopped turn `repetition stop: ...`. A run that ends announcing a call it never made
+(`stopped_without_conclusion`) is not a success and is not sent another turn.
+
 ## What a task's request says
 
 The request of a task made from a seeded fault names its symptoms in the words of the tests

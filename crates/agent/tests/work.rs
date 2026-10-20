@@ -325,6 +325,39 @@ async fn the_repetition_stop_does_not_wait_for_a_slow_event_consumer() {
 }
 
 #[tokio::test]
+async fn a_call_repeated_with_only_cosmetic_differences_is_the_same_call_and_the_stop_is_labelled()
+{
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.txt"), "same").unwrap();
+    // The same read each time, but with another `description`, another key
+    // order and padded whitespace in the path argument: one call to sven's
+    // identity. sven's own note on a repeated result changes the result text,
+    // which the count must look through.
+    let model = Scripted::new(|req| {
+        let n = tool_results(req);
+        let args = if n.is_multiple_of(2) {
+            serde_json::json!({"path": "a.txt", "description": format!("look {n}")})
+        } else {
+            serde_json::json!({"description": "again", "path": "a.txt"})
+        };
+        call(&format!("c{n}"), "read_file", args)
+    });
+    let mut bounded = options();
+    bounded.max_repeated_results = Some(3);
+    let mut worker = Worker::start(dir.path(), model, bounded).unwrap();
+
+    let report = worker.send("look at a.txt").await.unwrap();
+
+    assert!(report.stopped_by_repetition);
+    assert_eq!(report.tool_calls, 3);
+    let trajectory = serde_json::to_string(&report.solution.trajectory).unwrap();
+    assert!(
+        trajectory.contains("repetition stop: read_file"),
+        "the aborted turn names the reason: {trajectory}"
+    );
+}
+
+#[tokio::test]
 async fn a_repeated_call_whose_answer_changes_is_not_a_repetition() {
     let dir = tempfile::tempdir().unwrap();
     // Write a different text, then read the file, again and again: the read

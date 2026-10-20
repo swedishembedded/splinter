@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (solve protocol)
+- Pinned to sven d5e68b75 and brain cd8df8266. A repository solve runs under the coding-agent prompt (`splinter_core::prompt::CODING_AGENT_PROMPT`, id `coding-agent-1`) and records a `solve_profile` in each trajectory (prompt id and digest, `tools.max_timeout_secs` 1800, `agent.note_repeated_results`, the repetition bound and tool cap, the sampling asked of the model). Global flags `--top-p`, `--top-k`, `--sampling-seed` and `--thinking` carry the sampling of a served model on every request. The repetition guard compares calls by sven's identity and results without sven's repeat note, and labels the stop (`repetition stop: ...`). A run that stops without concluding is not a success and earns no follow-up turn.
+
 ### Changed (workspace task requests)
 - The request of a workspace task names only the test modules that are in the solver's tree, and a failing test whose label has fewer than 3 words is listed with what its assertion observed (the two values of an equality, or the error the code raised; never a traceback frame, diff, path or call) instead of the bare label. A candidate fault whose withheld module in-tree tests import (`HiddenImportedByTree`), or whose assertion cannot be rendered (`SymptomNotActionable`), is refused with a counted reason. The exposure audit counts a task's own request as text the solver may see. `TestReport::messages` carries the exception message of each failed unittest test. Amendment 15.
 

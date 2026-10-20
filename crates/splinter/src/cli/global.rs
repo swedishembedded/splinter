@@ -82,6 +82,33 @@ pub struct Global {
     /// given twice, the last wins.
     #[arg(long, global = true, value_name = "T", value_parser = served_temperature)]
     pub temperature: Option<f32>,
+    /// Nucleus sampling (`top_p`, above 0 up to 1) asked of a model reached
+    /// through sven's providers; the server's own default when not given.
+    #[arg(long, global = true, value_name = "P", value_parser = served_top_p)]
+    pub top_p: Option<f32>,
+    /// Sampling among the K most likely tokens (`top_k`) asked of a model
+    /// reached through sven's providers; the server's own default when not
+    /// given.
+    #[arg(long, global = true, value_name = "K",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub top_k: Option<u32>,
+    /// The seed every request of a model reached through sven's providers
+    /// carries, so that a sampled attempt is reproducible; recorded with the
+    /// attempt. The server draws its own when not given.
+    #[arg(long, global = true, value_name = "SEED")]
+    pub sampling_seed: Option<u64>,
+    /// Let a model served on this machine reason before it answers (the
+    /// request says so); without it the server is asked for no reasoning
+    /// block. Recorded with the attempt.
+    #[arg(long, global = true)]
+    pub thinking: bool,
+}
+
+fn served_top_p(text: &str) -> Result<f32, String> {
+    match text.parse::<f32>() {
+        Ok(p) if p > 0.0 && p <= 1.0 => Ok(p),
+        _ => Err(format!("{text:?} is not a top-p above 0 and up to 1")),
+    }
 }
 
 fn served_temperature(text: &str) -> Result<f32, String> {

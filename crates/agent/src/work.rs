@@ -41,6 +41,7 @@ use std::time::{Duration, Instant};
 
 use splinter_core::experience::Task;
 use splinter_core::outcome::{AttemptReport, MemoryUse};
+use splinter_core::prompt::CODING_AGENT_PROMPT;
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
     Baseline, CodeResult, CommandCall, Patch, ResolvedEnvironment, SandboxError,
@@ -79,8 +80,10 @@ pub const WITHHELD_TOOLS: &[&str] = &[
 ];
 
 mod guard;
+mod profile;
 mod watch;
 use guard::{Armed, GuardSlot, RepetitionGuard};
+pub use profile::SOLVE_PROFILE_KEY;
 use watch::Watch;
 
 /// How often a running worker looks at its caller's cancel token: the
@@ -452,9 +455,10 @@ pub struct WorkspaceSolution {
 /// [`SandboxShell`]); otherwise sven's own shell runs on the host, and the
 /// environment's record says the sandbox does not isolate.
 ///
-/// After each reply that ends the worker's turn, the `visible` checks run in
-/// the tree. While one is red and `protocol.follow_ups` and the time and tool
-/// calls allow, the worker is sent one more user turn naming each failing
+/// After each reply that ends the worker's turn (a run that ends announcing a
+/// call it never made, [`RunConclusion::StoppedWithoutConclusion`], did not end
+/// its turn and is not sent another), the `visible` checks run in the tree.
+/// While one is red and `protocol.follow_ups` and the time and tool calls allow, the worker is sent one more user turn naming each failing
 /// check and the tail of its output; a reply that left the tree unchanged with
 /// no shown check red is sent one more user turn asking for the edit. That is
 /// all the worker learns from a
@@ -485,6 +489,15 @@ pub async fn solve_in_workspace(
             offered_snapshot: offered.snapshot,
         });
     }
+    // A solver of a repository works under the coding-agent prompt unless the
+    // model it is asked for brings one of its own (a policy trained to be a
+    // person); what it was held to is recorded with the attempt.
+    let system = options
+        .solve
+        .system
+        .get_or_insert_with(|| CODING_AGENT_PROMPT.to_string())
+        .clone();
+    let profile = profile::solve_profile(&options, &system);
     let scratch = tempfile::tempdir().map_err(|source| SandboxError::Io {
         path: "temporary directory".into(),
         source,
@@ -562,6 +575,7 @@ pub async fn solve_in_workspace(
         .extra
         .get_or_insert_with(|| serde_json::json!({}))
     {
+        extra.insert(SOLVE_PROFILE_KEY.into(), profile);
         extra.insert(
             splinter_eval::exposure::WORKSPACE_TREE_KEY.into(),
             serde_json::json!(tree.display().to_string()),

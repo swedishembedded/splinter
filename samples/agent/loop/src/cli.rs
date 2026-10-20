@@ -172,6 +172,9 @@ fn config(cli: &Cli) -> Result<Config> {
         workspace: Default::default(),
         thinking: cli.thinking,
         served_temperature: cli.temperature.filter(|t| (0.0..=2.0).contains(t)),
+        served_top_p: None,
+        served_top_k: None,
+        served_seed: None,
         build: Default::default(),
     })
 }

@@ -49,6 +49,9 @@ fn config() -> Config {
         workspace: Default::default(),
         thinking: false,
         served_temperature: None,
+        served_top_p: None,
+        served_top_k: None,
+        served_seed: None,
         build: Default::default(),
     }
 }

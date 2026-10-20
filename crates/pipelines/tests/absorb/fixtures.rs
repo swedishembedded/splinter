@@ -114,6 +114,9 @@ pub fn world(reply: impl Fn(&str) -> String + Send + Sync + 'static) -> anyhow::
         workspace: Default::default(),
         thinking: false,
         served_temperature: None,
+        served_top_p: None,
+        served_top_k: None,
+        served_seed: None,
         build: Default::default(),
     };
     let prompts = Arc::new(Mutex::new(Vec::new()));

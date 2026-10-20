@@ -443,3 +443,15 @@ async fn a_model_that_replies_with_nothing_gave_no_answer_and_that_is_not_an_err
     assert_eq!(solution.final_output, None);
     assert_eq!(solution.conclusion, RunConclusion::AgentError);
 }
+
+#[test]
+fn a_solve_fixes_the_shell_ceiling_and_the_repeat_note_explicitly() {
+    let config = splinter_agent::solve::SolveOptions::new(std::time::Duration::from_secs(60))
+        .engine_config();
+    assert_eq!(
+        config.tools.max_timeout_secs,
+        splinter_agent::solve::SOLVE_MAX_TIMEOUT_SECS
+    );
+    assert_eq!(splinter_agent::solve::SOLVE_MAX_TIMEOUT_SECS, 1800);
+    assert!(config.agent.note_repeated_results);
+}

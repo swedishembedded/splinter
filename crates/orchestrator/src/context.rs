@@ -351,6 +351,9 @@ impl Runtime {
             loaded.provider()
         };
         let mut model = Model::new(provider, loaded.identity());
+        if let ModelSelection::Remote(remote) = &selection {
+            model = model.with_sampling_record(remote.sampling_record());
+        }
         if local {
             model = model.with_stream_idle(LOCAL_STREAM_IDLE);
         }

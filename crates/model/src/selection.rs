@@ -27,7 +27,7 @@ pub const QUIESCE_GRACE: Duration = Duration::from_secs(60);
 
 /// A model reached over an API, named `provider/model` the way sven's
 /// configuration names it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct RemoteModel {
     /// `provider/model`, e.g. `openrouter/z-ai/glm-5.3-flash`.
     pub spec: String,
@@ -43,6 +43,31 @@ pub struct RemoteModel {
     pub thinking: bool,
     /// The sampling temperature to ask for; `None` keeps the provider's.
     pub temperature: Option<f32>,
+    /// Nucleus sampling to ask for (`top_p`); `None` leaves the server's.
+    pub top_p: Option<f32>,
+    /// The number of most likely tokens to sample among (`top_k`); `None`
+    /// leaves the server's.
+    pub top_k: Option<u32>,
+    /// The seed every request carries, so a sampled answer is the one that
+    /// seed draws; `None` leaves the server to draw its own and echo it.
+    pub seed: Option<u64>,
+}
+
+impl RemoteModel {
+    /// How this model is asked to sample, as a record an attempt keeps: what
+    /// was asked of the server, not what it did (the seed it echoes is in the
+    /// trajectory).
+    #[must_use]
+    pub fn sampling_record(&self) -> serde_json::Value {
+        serde_json::json!({
+            "model": self.spec,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "top_k": self.top_k,
+            "seed": self.seed,
+            "thinking": self.thinking,
+        })
+    }
 }
 
 impl RemoteModel {
@@ -67,20 +92,37 @@ impl RemoteModel {
         if self.temperature.is_some() {
             config.model.temperature = self.temperature;
         }
+        let mut options = config
+            .model
+            .driver_options
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
         // A model served on this machine answers like the in-process one:
         // without a reasoning block that would spend the caller's output
-        // budget before any answer or tool call is written.
-        if provider == LOCAL_SERVER_PROVIDER && !self.thinking {
-            let mut options = config
-                .model
-                .driver_options
-                .as_object()
-                .cloned()
-                .unwrap_or_default();
+        // budget before any answer or tool call is written. When it may
+        // reason, the request says so, so the answer does not depend on the
+        // server's default.
+        if provider == LOCAL_SERVER_PROVIDER {
             options.insert(
                 "chat_template_kwargs".into(),
-                serde_json::json!({ "enable_thinking": false }),
+                serde_json::json!({ "enable_thinking": self.thinking }),
             );
+        }
+        // Not in the OpenAI schema, so they ride in the driver's options with
+        // the seed; a server that does not know one refuses the request.
+        if let Some(top_p) = self.top_p {
+            options.insert("top_p".into(), serde_json::json!(top_p));
+        }
+        if let Some(top_k) = self.top_k {
+            options.insert("top_k".into(), serde_json::json!(top_k));
+        }
+        if let Some(seed) = self.seed {
+            // An unsigned 64-bit seed, the range brain draws and echoes its
+            // own seeds from.
+            options.insert("seed".into(), serde_json::json!(seed));
+        }
+        if !options.is_empty() {
             config.model.driver_options = serde_json::Value::Object(options);
         }
         Ok(())
@@ -187,6 +229,22 @@ fn probed_provider(config: &sven_sdk::config::Config) -> anyhow::Result<Box<dyn 
     })
 }
 
+/// How a served model is asked to sample: the settings a request carries.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ServedSampling {
+    /// The sampling temperature; zero asks the server to decode greedily.
+    pub temperature: Option<f32>,
+    /// Nucleus sampling (`top_p`).
+    pub top_p: Option<f32>,
+    /// Sampling among the `top_k` most likely tokens.
+    pub top_k: Option<u32>,
+    /// The seed every request carries, so a sampled answer is the one that
+    /// seed draws.
+    pub seed: Option<u64>,
+    /// Whether the model reasons before it answers.
+    pub thinking: bool,
+}
+
 /// A model served by a `brain serve` at `base_url` (its OpenAI-compatible
 /// surface, ending in `/v1`), as `model` with the API key `api_key` it
 /// printed at startup.
@@ -204,8 +262,28 @@ pub fn served_model(
     temperature: Option<f32>,
     seed: Option<u64>,
 ) -> Result<LoadedModel, PolicyError> {
+    served_model_sampled(
+        base_url,
+        api_key,
+        model,
+        &ServedSampling {
+            temperature,
+            seed,
+            ..ServedSampling::default()
+        },
+    )
+}
+
+/// [`served_model`] asked to sample as `sampling` says (temperature, top-p,
+/// top-k, seed and whether it reasons), every setting on every request.
+pub fn served_model_sampled(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    sampling: &ServedSampling,
+) -> Result<LoadedModel, PolicyError> {
     let spec = format!("openai/{model}");
-    let config = served_config(&spec, base_url, api_key, temperature, seed)?;
+    let config = served_config(&spec, base_url, api_key, sampling)?;
     let driver =
         sven_sdk::drivers::from_config(&config.model).map_err(|e| PolicyError::Remote {
             spec: spec.clone(),
@@ -220,9 +298,9 @@ pub fn served_model(
 
 /// The configuration [`served_model`] builds its driver from. Every
 /// request asks the server not to open with a reasoning block
-/// (`chat_template_kwargs.enable_thinking: false`), as an in-process
-/// generation does ([`crate::local`]), so a served answer and an
-/// in-process one are produced from the same prompt.
+/// (`chat_template_kwargs.enable_thinking: false`) unless `sampling` lets
+/// the model reason, as an in-process generation does ([`crate::local`]), so
+/// a served answer and an in-process one are produced from the same prompt.
 ///
 /// A typed call is not sent as a constrained `response_format`: the server
 /// refuses a request field it cannot honor, and treats an explicit null as
@@ -232,31 +310,32 @@ fn served_config(
     spec: &str,
     base_url: &str,
     api_key: &str,
-    temperature: Option<f32>,
-    seed: Option<u64>,
+    sampling: &ServedSampling,
 ) -> Result<sven_sdk::config::Config, PolicyError> {
     let remote = RemoteModel {
         spec: spec.to_string(),
         base_url: Some(base_url.to_string()),
         api_key: Some(api_key.to_string()),
-        thinking: false,
-        temperature: None,
+        thinking: sampling.thinking,
+        temperature: sampling.temperature,
+        top_p: sampling.top_p,
+        top_k: sampling.top_k,
+        seed: sampling.seed,
     };
     let mut config = sven_sdk::config::Config::default();
     remote.apply_to(&mut config)?;
-    if temperature.is_some() {
-        config.model.temperature = temperature;
-    }
-    let mut options = serde_json::json!({
-        "chat_template_kwargs": { "enable_thinking": false },
-        "response_format": null
-    });
-    if let Some(seed) = seed {
-        // An unsigned 64-bit seed, the range brain draws and echoes its own
-        // seeds from.
-        options["seed"] = serde_json::json!(seed);
-    }
-    config.model.driver_options = options;
+    let mut options = config
+        .model
+        .driver_options
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+    options.insert(
+        "chat_template_kwargs".into(),
+        serde_json::json!({ "enable_thinking": sampling.thinking }),
+    );
+    options.insert("response_format".into(), serde_json::Value::Null);
+    config.model.driver_options = serde_json::Value::Object(options);
     Ok(config)
 }
 
@@ -354,8 +433,16 @@ pub fn local_model_name(base: &Path) -> String {
 mod tests {
     #[test]
     fn a_served_model_is_asked_to_answer_without_a_reasoning_block_and_greedily() {
-        let config =
-            served_config("openai/m", "http://127.0.0.1:1/v1", "k", Some(0.0), None).unwrap();
+        let config = served_config(
+            "openai/m",
+            "http://127.0.0.1:1/v1",
+            "k",
+            &ServedSampling {
+                temperature: Some(0.0),
+                ..ServedSampling::default()
+            },
+        )
+        .unwrap();
         assert_eq!(
             config.model.driver_options["chat_template_kwargs"]["enable_thinking"],
             serde_json::json!(false)
@@ -373,6 +460,7 @@ mod tests {
             api_key: None,
             thinking: false,
             temperature: None,
+            ..RemoteModel::default()
         };
         remote("brain/unsloth/Qwen3.8-27B-Q8_0")
             .apply_to(&mut config)
@@ -398,11 +486,73 @@ mod tests {
         }
         .apply_to(&mut reasoning)
         .unwrap();
-        assert!(reasoning
-            .model
-            .driver_options
-            .get("chat_template_kwargs")
-            .is_none());
+        // and then the request says so rather than leave it to the server
+        assert_eq!(
+            reasoning.model.driver_options["chat_template_kwargs"]["enable_thinking"],
+            serde_json::json!(true)
+        );
+    }
+
+    #[test]
+    fn the_sampling_of_a_remote_model_rides_every_request_and_is_recorded() {
+        let model = RemoteModel {
+            spec: "brain/unsloth/Qwen3-8B".into(),
+            temperature: Some(0.6),
+            top_p: Some(0.95),
+            top_k: Some(20),
+            // seed: the request and the record must carry exactly this value
+            seed: Some(16_022_413_115_216_019_911),
+            thinking: true,
+            ..RemoteModel::default()
+        };
+        let mut config = sven_sdk::config::Config::default();
+        model.apply_to(&mut config).unwrap();
+        assert_eq!(config.model.temperature, Some(0.6));
+        let options = &config.model.driver_options;
+        assert!((options["top_p"].as_f64().unwrap() - 0.95).abs() < 1e-6);
+        assert_eq!(options["top_k"], serde_json::json!(20));
+        assert_eq!(options["seed"].as_u64(), Some(16_022_413_115_216_019_911));
+        assert_eq!(options["chat_template_kwargs"]["enable_thinking"], true);
+        // What was asked is kept with the attempt.
+        let record = model.sampling_record();
+        assert_eq!(record["top_k"], 20);
+        assert_eq!(record["seed"].as_u64(), Some(16_022_413_115_216_019_911));
+        assert_eq!(record["thinking"], true);
+        // A model not given any is asked for none: the server's own settings.
+        let mut plain = sven_sdk::config::Config::default();
+        RemoteModel {
+            spec: "brain/m".into(),
+            ..RemoteModel::default()
+        }
+        .apply_to(&mut plain)
+        .unwrap();
+        for key in ["top_p", "top_k", "seed"] {
+            assert!(plain.model.driver_options.get(key).is_none(), "{key}");
+        }
+    }
+
+    #[test]
+    fn a_served_model_carries_every_sampling_setting_it_is_given() {
+        let config = served_config(
+            "openai/m",
+            "http://127.0.0.1:1/v1",
+            "k",
+            &ServedSampling {
+                temperature: Some(0.7),
+                top_p: Some(0.8),
+                top_k: Some(20),
+                // seed: the request must carry exactly this value
+                seed: Some(7),
+                thinking: false,
+            },
+        )
+        .unwrap();
+        let options = &config.model.driver_options;
+        assert_eq!(config.model.temperature, Some(0.7));
+        assert_eq!(options["top_k"], serde_json::json!(20));
+        assert!((options["top_p"].as_f64().unwrap() - 0.8).abs() < 1e-6);
+        assert_eq!(options["seed"], serde_json::json!(7));
+        assert_eq!(options["chat_template_kwargs"]["enable_thinking"], false);
     }
 
     #[test]
@@ -430,6 +580,7 @@ mod tests {
             api_key: Some("k".into()),
             thinking: false,
             temperature: None,
+            ..RemoteModel::default()
         }
         .apply_to(&mut config)
         .unwrap();
@@ -446,6 +597,7 @@ mod tests {
             api_key: None,
             thinking: false,
             temperature,
+            ..RemoteModel::default()
         };
         let mut asked = sven_sdk::config::Config::default();
         model(Some(0.7)).apply_to(&mut asked).unwrap();
@@ -460,7 +612,13 @@ mod tests {
     fn a_served_model_is_never_sent_a_structured_output_request_its_server_would_refuse() {
         // brain's server refuses `response_format` rather than ignore it; an explicit
         // null is "absent" to it, and keeps a typed call on its prompt-described schema.
-        let config = served_config("openai/m", "http://127.0.0.1:1/v1", "k", None, None).unwrap();
+        let config = served_config(
+            "openai/m",
+            "http://127.0.0.1:1/v1",
+            "k",
+            &ServedSampling::default(),
+        )
+        .unwrap();
         let options = config.model.driver_options.as_object().unwrap();
         assert!(options
             .get("response_format")
@@ -478,8 +636,11 @@ mod tests {
             "openai/m",
             "http://127.0.0.1:1/v1",
             "k",
-            Some(0.7),
-            Some(seed),
+            &ServedSampling {
+                temperature: Some(0.7),
+                seed: Some(seed),
+                ..ServedSampling::default()
+            },
         )
         .unwrap();
         assert_eq!(config.model.driver_options["seed"].as_u64(), Some(seed));
@@ -511,6 +672,7 @@ mod tests {
             api_key: None,
             thinking: false,
             temperature: None,
+            ..RemoteModel::default()
         });
         assert_eq!(remote.identity(), "openrouter/z-ai/glm-5.3-flash");
     }
@@ -524,6 +686,7 @@ mod tests {
             api_key: None,
             thinking: false,
             temperature: None,
+            ..RemoteModel::default()
         };
         assert!(bare.apply_to(&mut config).is_err());
         let named = RemoteModel {
@@ -532,6 +695,7 @@ mod tests {
             api_key: None,
             thinking: false,
             temperature: None,
+            ..RemoteModel::default()
         };
         named.apply_to(&mut config).unwrap();
         assert_eq!(config.model.provider, "openrouter");

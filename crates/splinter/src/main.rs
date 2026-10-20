@@ -86,6 +86,10 @@ fn main() -> ExitCode {
         config.remote_concurrency = width as usize;
     }
     config.served_temperature = cli.global.temperature;
+    config.served_top_p = cli.global.top_p;
+    config.served_top_k = cli.global.top_k;
+    config.served_seed = cli.global.sampling_seed;
+    config.thinking |= cli.global.thinking;
     if let Some(seconds) = cli.global.solve_deadline {
         config.solve_deadline = std::time::Duration::from_secs(seconds);
     }
