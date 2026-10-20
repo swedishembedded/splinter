@@ -266,7 +266,7 @@ Options:
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
 - `--no-release`: Stop at the trained candidate: do not run the release gate.
 - `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
-- `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`.
+- `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`, `learning-progress`.
 - `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
 - `--curriculum <STRATEGY>`: The order tasks are solved and taught in (`--budget` may end the run before all are reached): the order they were admitted in, or by learning progress (the change in a family's verified pass rate between releases, per GPU second it cost) Default: `frontier`. Values: `frontier`, `learning-progress`, `gain-ranked`.
 - `--curriculum-seed <N>`: The seed of the learning-progress draw (drawn, printed and recorded if not given)
@@ -554,7 +554,7 @@ Options:
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
 - `--no-release`: Stop at the trained candidate: do not run the release gate.
 - `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
-- `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`.
+- `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`, `learning-progress`.
 - `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
 - `--curriculum <STRATEGY>`: The order tasks are solved and taught in (`--budget` may end the run before all are reached): the order they were admitted in, or by learning progress (the change in a family's verified pass rate between releases, per GPU second it cost) Default: `frontier`. Values: `frontier`, `learning-progress`, `gain-ranked`.
 - `--curriculum-seed <N>`: The seed of the learning-progress draw (drawn, printed and recorded if not given)
