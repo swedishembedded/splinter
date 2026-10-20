@@ -4,7 +4,10 @@
 # tool-syntax - does verified experience teach a small model to look before it acts?
 
 **Status: measured baseline, verified demonstrations, trained adapter, and a
-before/after measurement on CUDA.** @@STATUS_RESULT@@ Every number below is
+before/after measurement on CUDA.** On the frozen request the base model solves 0 of 80 episodes and the adapter
+trained on six verified demonstrations solves 80 of 80, each in the four tool
+calls of the demonstration. That is on the task the adapter was trained on, from
+one training run (see the limits). Every number below is
 from a run whose command and log are named in [Reproduce](#reproduce).
 
 ## The question
@@ -47,7 +50,7 @@ the same sampling temperature.
   and are recorded in the report.
 - An episode that never reaches a verdict is an error, excluded from both the
   numerator and the denominator - never a zero. An episode that spends the
-  family's tool-call budget (30 calls) or its 600 s is cancelled and scored on
+  family's tool-call budget (30 calls) or its 600 s is cancelled and scored on <!-- perf-number: the episode time limit, a value the sample enforces -->
   what the workspace holds, which is a failure of the model, not an error.
 - An arm is scored only against a server proved to apply promoted adapters:
   `measure --adapter-digest` refuses to run unless the server's model listing
@@ -66,22 +69,36 @@ seed `S + i` sent for episode `i`. Episodes alternate between the two twins
 | arm | answered (n) | solved | errored | solve rate, 95% interval | tool calls per answered episode |
 |---|---|---|---|---|---|
 | witness (observation-only solver, no model) | 1 | 1 | 0 | - | 3 |
-| **baseline**: the base model | 59 | 0 | 1 | 0.0 %, [0.0 %, 6.1 %] | 4.83 (median 4, max 31) |
-@@AFTER_ROWS@@
+| baseline, first replicate (other server and binary, context 12288) | 59 | 0 | 1 | 0.0 %, [0.0 %, 6.1 %] | 4.83 (median 4, max 31) | <!-- perf-number: a measured rate of the run this README reports -->
+| **before**: the base model | 80 | 0 | 0 | 0.0 %, [0.0 %, 4.6 %] | 2.54 (median 1, max 30) | <!-- perf-number: a measured rate of the run this README reports -->
+| **after**: the base plus the trained adapter | 80 | **80** | 0 | **100 %, [95.4 %, 100 %]** | 4.00 (every episode exactly 4) | <!-- perf-number: a measured rate of the run this README reports -->
 
-The interval is Wilson's. `errored` episodes never reached a verdict (here: the
-server refused a 12414-token request on a 12288-token context) and are in
+"Before" and "after" ran at the same time against one server that serves
+the base and, as a model of its own, the adapter (so the only difference is
+the model id asked for), with the same seeds (episode `i` of both arms has seed
+`3000 + i`) and 40 episodes per twin each. The interval is Wilson's. `errored` episodes never reached a verdict (only in the first
+replicate: the server refused a 12414-token request on a 12288-token context) and are in
 neither the numerator nor the denominator.
 
-**What the baseline does.** In none of its 59 answered episodes did the model
-run `./svctl` - the program that says which deployment is live - or read a
-file under `config/`. Over the arm it made 154 `shell` calls, 112 calls of the
-`tools` tool (looking for tools it already had), 11 of `task`, 3 of
-`edit_file`, 3 of `system` and 1 of `write_file`; the shell calls are guesses
-such as `echo '3 retries' | sudo tee -a /etc/hosts` (refused: no privileges)
-and `retry ...` (not a command). It acts without finding out.
+**What the base model does.** In none of the 139 answered episodes of the two
+base arms did it run `./svctl` - the program that says which deployment is
+live - or read a file under `config/` (checked on the transcripts of both arms
+that hold the counts: 80 and 59 episodes). The "before" arm made 150 `shell`
+calls, 33 of the `tools` tool (looking for tools it already had), 4 of
+`system`, 2 of `task` and 1 of `edit_file`; the shell calls are guesses such as
+`echo '3 retries' | sudo tee -a /etc/hosts` (refused: no privileges) and
+`retry ...` (not a command). It acts without finding out.
 
-@@AFTER_TEXT@@
+**What the trained model does.** In all 80 episodes it ran `./svctl status`
+first, read `config/<live deployment>.json`, wrote the change to that file and
+ran `./svctl validate`, then answered: 160 `shell`, 80 `read_file` and 80
+`write_file` calls, the demonstration's shape in its own wording. The base model
+on the same server, with the same seeds, solved none, so the behaviour is the
+adapter's; and `measure` refused to start the arm until the server's listing
+named the adapter's model id with the digest of the file that was trained
+(`sha256:147f1b91...`).
+
+@@EXTRAS@@
 
 ### The data and the training
 
@@ -109,6 +126,18 @@ the results' texts equal to the observations, and **the trainer's context token
 count equals the server's `prompt_tokens`** for the same messages and tools
 (3398 to 3715 tokens, 44 of 44 equal).
 
+The same check on what the agent really sends: the 70 requests the "after"
+arm's first 14 episodes sent (rebuilt from their transcripts) render to the
+server's `prompt_tokens` exactly (70 of 70), as do 57 of 60 requests sampled
+from the "before" arm; the other 3 are rejected by the trainer's encoder
+because the base model's turn was split into a text message and a call message
+and the template renders such a context differently with and without the
+generation prompt. One known difference between training and serving remains:
+`sven tool call` prints a shell result without the trailing newline the agent
+sees (`active deployment: production` against `active deployment: production\n`),
+so the shell observations of the training data differ from the ones the agent
+shows the model by that trailing newline; the adapter was measured as it is.
+
 Recipe (one run, `train1`): LoRA rank 16, alpha 32, all targets, fp32 base,
 no-think mode, learning rate 3e-4 with brain's warmup and decay, 4 examples per
 optimizer step, a budget of 24 steps, the held-out examples scored every 2
@@ -121,8 +150,8 @@ about 10.8 GiB, 730 row tokens per second (profile: `profile-tsyn.md`).
 | training loss (mean since last evaluation) | 1.29 | 0.95 | 0.55 | 0.50 | 0.08 | 0.24 | 0.20 | 0.14 |
 | held-out loss | 0.80 | 0.67 | 0.49 | **0.49** | 0.53 | 0.61 | 0.61 | 0.61 |
 
-Held-out loss before training 1.65 (token accuracy 77.5 %), at the exported
-step 8 0.49 (90.2 %). Past step 8 the training loss collapses (0.08) while the
+Held-out loss before training 1.65 (token accuracy 77.5 %), at the exported <!-- perf-number: a measured rate of the run this README reports -->
+step 8 0.49 (90.2 %). Past step 8 the training loss collapses (0.08) while the <!-- perf-number: a measured rate of the run this README reports -->
 held-out loss rises: the run starts to memorise, which is why the adapter of
 step 8, not the last one, is the one measured. Step 8 is chosen on the held-out
 loss, so that loss is a selected figure, not an unbiased estimate.
@@ -179,7 +208,8 @@ be on `PATH` or named by `SVEN_BIN` for `demonstrate`. The run directory must be
 short (a unix socket path holds 107 bytes), and a model drives real shell
 commands in each episode workspace, so run it where it can write nothing you
 care about. The logs of the runs reported above are in the lane's run
-directory `runs/tsyn/` (not in git): `arms/*/log.txt` and `report.json` (every
+directory `runs/tsyn/` (not in git; the reported runs used the training seed
+11 and the episode seeds 1000 and 3000 as given in each report): `arms/*/log.txt` and `report.json` (every
 episode: hidden state, outcome, tool calls, seed), `data/demonstrate.log`,
 `train1/attempt/summary.json` and `training.json`, `verify/*.verify.txt`,
 `profile-tsyn.md`; the scripts that ran them (`serve.sh`, `measure.sh`,
@@ -189,21 +219,22 @@ them.
 ```bash
 BIN=target/release/splinter-tool-syntax          # cargo build --release -p splinter-tool-syntax
 $BIN audit                                      # the catalog checks itself: no model, no GPU, no network
+SEED=$(shuf -i 1-4294967295 -n 1); echo "seed $SEED"   # draw it and keep it: episode i samples with SEED+i
 
 # the base model, served; the arm is named by the resident id, never the store spelling
 brain serve --openai 127.0.0.1:8801 --models-dir MODELS --backend cuda --device gpu0 \
   --api-keys-out keys.json --qwen-weights MODELS/Qwen/Qwen3-0.6B --qwen-ctx 24576 --qwen-max-batch 4
-$BIN baseline --instances 30 --seed 1000 --run-dir RUN/baseline --model brain/qwen3 \
+$BIN baseline --instances 40 --seed "$SEED" --run-dir RUN/baseline --model brain/qwen3 \
   --base-url http://127.0.0.1:8801/v1 --api-key KEY --report baseline.json
 
 SVEN_BIN=path/to/sven $BIN demonstrate --run-dir RUN/data \
   --prompt-from RUN/baseline/requests.json --weights MODELS/Qwen/Qwen3-0.6B
 $BIN --backend cuda --device gpu0 train --data RUN/data --base MODELS/Qwen/Qwen3-0.6B \
-  --out RUN/train --seed 11 --steps 24 --grad-accum 4 --eval-every 2 --patience 3
+  --out RUN/train --seed "$SEED" --steps 24 --grad-accum 4 --eval-every 2 --patience 3
 
 # the adapter is a model of its own on a server that also serves the base
 brain serve ... --adapter RUN/train/adapter.safetensors --adapter-targets all --adapter-rank-cap 16
-$BIN measure --arm trained --instances 30 --seed 1000 --run-dir RUN/trained \
+$BIN measure --arm trained --instances 40 --seed "$SEED" --run-dir RUN/trained \
   --model ADAPTER_ID_FROM_/v1/models --adapter-digest sha256:DIGEST_FROM_summary.json \
   --base-url http://127.0.0.1:8801/v1 --api-key KEY --report trained.json
 ```

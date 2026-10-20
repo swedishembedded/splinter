@@ -98,7 +98,9 @@ are in [Learn a repository](../guides/repositories.md#confinement).
 ## Controlled demonstrations versus general capability
 
 Every sample is a controlled measurement of one question and states what it measured. None shows that the loop
-makes a model generally better, and several state that they have not (the `tool-syntax` sample has no before and
-after number yet, and the first-run example reaches no trained candidate on its single page of material).
+makes a model generally better, and several state that they have not (the `tool-syntax` sample's adapter solves the one
+task family it was trained on in 80 of 80 episodes where the base model solves 0 of 80,
+which says nothing about any other task, and the first-run example reaches no trained
+candidate on its single page of material).
 A run can train a candidate that the gate then blocks; that is a result, not a failure of the tool.
 Learning a fact is not learning a skill, and a policy trained on a person's writing is not that person.

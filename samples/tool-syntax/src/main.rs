@@ -63,6 +63,7 @@ options for baseline:
   --adapter-digest D       measure only: refuse to run unless the server lists
                            the --model id as the adapter with digest D
   --weights DIR            demonstrate: also encode the dataset with this checkpoint
+  --request TEXT           replaces the frozen request: a probe, never a measured arm
   --hint TEXT              appended to the request for THIS arm only
   --prompt-from FILE       requests.json from a baseline run (demonstrate only)
 
@@ -154,6 +155,10 @@ struct BaselineOptions {
     /// What an arm served from an adapter must prove: the digest the server
     /// lists for the model it is asked for (baseline and measure only).
     adapter_digest: Option<String>,
+    /// Replaces the frozen request, for a probe of whether a behaviour
+    /// follows the task or only its wording. Recorded in the report; an arm
+    /// that has one is a probe, not a measured arm.
+    request: Option<String>,
     /// The arm's name in the report.
     arm: Option<String>,
     /// Episode `i` samples with seed `seed + i`. No default: a seed nobody
@@ -172,6 +177,7 @@ fn parse_baseline(args: &[String]) -> anyhow::Result<BaselineOptions> {
     let mut prompt_from = None;
     let mut weights = None;
     let mut adapter_digest = None;
+    let mut request = None;
     let mut arm = None;
     let mut seed = None;
 
@@ -194,6 +200,7 @@ fn parse_baseline(args: &[String]) -> anyhow::Result<BaselineOptions> {
             "--prompt-from" => prompt_from = Some(PathBuf::from(take(&mut i)?)),
             "--weights" => weights = Some(PathBuf::from(take(&mut i)?)),
             "--adapter-digest" => adapter_digest = Some(take(&mut i)?),
+            "--request" => request = Some(take(&mut i)?),
             "--arm" => arm = Some(take(&mut i)?),
             "--seed" => seed = Some(take(&mut i)?.parse()?),
             other => anyhow::bail!("unknown option {other:?}"),
@@ -211,6 +218,7 @@ fn parse_baseline(args: &[String]) -> anyhow::Result<BaselineOptions> {
         prompt_from,
         weights,
         adapter_digest,
+        request,
         arm,
         seed,
     })
@@ -235,7 +243,13 @@ fn measure(args: &[String], default_arm: Option<&str>) -> anyhow::Result<()> {
     let family = Family::load(&family_root()).map_err(|e| anyhow::anyhow!("{e}"))?;
 
     println!("{arm}: {} on {}", family.id(), options.model);
-    println!("request: {}", family.request().replace('\n', " "));
+    match &options.request {
+        Some(request) => println!(
+            "request OVERRIDDEN (a probe, not the frozen request): {}",
+            request.replace('\n', " ")
+        ),
+        None => println!("request: {}", family.request().replace('\n', " ")),
+    }
     println!();
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -362,7 +376,7 @@ fn measure(args: &[String], default_arm: Option<&str>) -> anyhow::Result<()> {
     if let Some(path) = options.report {
         let body = serde_json::json!({
             "family": family.id(), "arm": arm, "seed": seed, "adapter_digest": options.adapter_digest, "model": options.model.api_model(),
-            "hint": options.hint,
+            "hint": options.hint, "request_override": options.request,
             "score": {
                 "solved": score.solved, "answered": score.answered, "errored": score.errored,
                 "rate": score.rate(),
@@ -400,9 +414,10 @@ async fn one_episode(
 
     // Through the recorder when there is one, so the captured request is the
     // one the server really answered.
+    let frozen = options.request.as_deref().unwrap_or(family.request());
     let request = match &options.hint {
-        Some(hint) => format!("{}\n\n{hint}", family.request()),
-        None => family.request().to_string(),
+        Some(hint) => format!("{frozen}\n\n{hint}"),
+        None => frozen.to_string(),
     };
     let result = run_agent(
         &request,
