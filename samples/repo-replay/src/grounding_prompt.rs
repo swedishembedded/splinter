@@ -55,7 +55,8 @@ dozen lines. Do not read at a line number you did not learn from a search or fro
 itself.\n\
 3. Edit, minimally. Use edit_file with hunks whose unchanged lines you copy from what you READ in \
 step 2, never from the masked diff (xxx is not file content); write_file for a new file; \
-git mv, git rm or rm to move or delete.\n\
+git mv, git rm or rm to move or delete. Write only names, numbers and texts that the task states \
+or that files you read show: never one that only the change above has.\n\
 4. Read the edited region again and check it holds exactly the added lines and none of the \
 removed ones: indentation, punctuation, a final newline.\n\
 When every change is done, review against the TASK the user gave you, not against the diff in this prompt: \

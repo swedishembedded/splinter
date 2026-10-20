@@ -489,10 +489,12 @@ impl ModelProvider for ScriptedAgent {
 /// How specific a scripted plan is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Specificity {
-    /// Names the files the diff changes.
+    /// Names the files the diff changes and what the change introduces.
     NamesFiles,
     /// Says what is wanted and names nothing.
     Vague,
+    /// Names the files but none of the names, numbers or strings the change introduces.
+    FilesOnly,
 }
 
 /// A planner that writes a plan from the commit message and the diff's paths.
@@ -536,8 +538,24 @@ impl ModelProvider for ScriptedPlanner {
             .to_lowercase();
         let paths: Vec<String> = parse_diff(&user).into_iter().map(|f| f.old).collect();
         let detailed = system.contains("Style: detailed");
+        let introduced = {
+            let added: Vec<&str> = user
+                .lines()
+                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                .map(|l| &l[1..])
+                .collect();
+            crate::justify::Support::default().missing(&added.join("\n"))
+        };
         let place = match self.specificity {
-            Specificity::NamesFiles => format!("The work concerns {}.", paths.join(" and ")),
+            Specificity::NamesFiles if introduced.is_empty() => {
+                format!("The work concerns {}.", paths.join(" and "))
+            }
+            Specificity::NamesFiles => format!(
+                "The work concerns {}. It brings in: {}.",
+                paths.join(" and "),
+                introduced.join(", ")
+            ),
+            Specificity::FilesOnly => format!("The work concerns {}.", paths.join(" and ")),
             Specificity::Vague => "Look through the project for the right place.".to_string(),
         };
         let plan = if detailed {

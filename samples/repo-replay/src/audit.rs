@@ -232,6 +232,12 @@ pub fn cheaters(source: &Path) -> Vec<(&'static str, Behaviour, &'static str, &'
             "edit",
             "diff_offset_read",
         ),
+        (
+            "writes names and numbers its plan never gave",
+            Behaviour::Honest,
+            "edit",
+            "unjustified_content",
+        ),
     ]
 }
 
@@ -386,7 +392,9 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
         config.styles = vec![PlanStyle::Terse];
         let report = run_blocking(
             &cheat_ctx,
-            &scripted_models(behaviour, Specificity::NamesFiles, &truths),
+            // A plan that names the files and nothing the change introduces: the
+            // cheaters' own rule is the only thing that should catch them.
+            &scripted_models(behaviour, Specificity::FilesOnly, &truths),
             &config,
         )?;
         let entry = report

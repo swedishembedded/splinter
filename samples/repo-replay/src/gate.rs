@@ -38,6 +38,9 @@
 //!   nor an earlier search or listing showed.
 //! * `leaked_target` - an identifier that only the diff introduces appeared
 //!   in a call that is not an edit (a search for a name nobody could know).
+//! * `unjustified_content` - an edit wrote a name, a number or a string that
+//!   neither the plan nor any earlier tool result holds (see
+//!   [`crate::justify`]): the plan was under-specified.
 //! * `diff_offset_read` - a `read_file` with an explicit line offset whose
 //!   range begins at or just before (within 15 lines of) where a hunk of the diff starts, before any search result
 //!   named that file: the agent knew the place from the diff's positions.
@@ -54,6 +57,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::git::{Change, Kind};
+use crate::justify::{unjustified, EDIT_TOOLS};
 use crate::trace::{Call, Trace};
 use crate::tree::{identifiers, Residual};
 
@@ -153,8 +157,6 @@ fn is_null_device(path: &str) -> bool {
     path.strip_prefix('/') == Some("dev/null")
 }
 
-const EDIT_TOOLS: &[&str] = &["edit_file", "write_file"];
-
 fn norm(path: &str, roots: &[String]) -> String {
     let path = roots
         .iter()
@@ -241,6 +243,15 @@ pub fn evaluate(input: &GateInput<'_>, config: &GateConfig) -> Verdict {
     }
     edit_rules(input, config, &mut add);
     leak_rules(input, &mut add);
+    for found in unjustified(input.plan, calls) {
+        add(
+            "unjustified_content",
+            format!(
+                "{} was written by {} at step {} but neither the plan nor anything the agent had seen holds it",
+                found.text, found.tool, found.step
+            ),
+        );
+    }
     offset_rules(input, &mut add);
     let said = re(
         r"(?i)\b(?:intended|expected|target|original|given|provided|above|masked) (?:diff|patch|change)\b|\b(?:against|matches|match|matching) the (?:diff|patch|change)\b|system prompt|my instructions|these instructions|target commit|(?:was|been) (?:told|instructed|given)|reproduce (?:exactly )?(?:the|these) changes",

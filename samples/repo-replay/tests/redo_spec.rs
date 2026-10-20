@@ -60,9 +60,14 @@ fn only_attempts_that_failed_for_the_named_classes_alone_are_redone() {
         .all(|e| e.outcome == Outcome::Skipped));
 
     // Every reason named: done again, and the new verdict is the last.
-    config.redo_classes = ["junk", "unread_edit", "unmotivated_location"]
-        .map(String::from)
-        .to_vec();
+    config.redo_classes = [
+        "junk",
+        "unread_edit",
+        "unmotivated_location",
+        "unjustified_content",
+    ]
+    .map(String::from)
+    .to_vec();
     let report = run_blocking(&ctx, &honest, &config).unwrap();
     assert!(
         report.entries.iter().any(|e| e.outcome == Outcome::Passed),

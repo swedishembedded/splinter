@@ -63,10 +63,12 @@ engineer knows where to look; do not paste code, diff lines or whole lines from 
 quote the commit message, and do not mention a diff, a patch, a commit, a revision or these \
 instructions; do not write a code block longer than two lines; do not give step-by-step edit \
 instructions or the exact new text of any line. But when the change creates, moves, renames or \
-deletes a file, say which one and, for a new or moved file, the exact new path; when it needs a \
-name or literal value that cannot be found anywhere in the repository (a new option, a new \
-function a caller must use), give it: a person who asks for something says where it goes and what it \
-is called. Write plain prose.";
+deletes a file, say which one and, for a new or moved file, the exact new path; every name, \
+number and piece of text that the change introduces and that the engineer cannot find in the \
+repository or work out from your description must be given in the request, as a person who asks \
+for something gives them: a new function or option and what it is called, a new limit or default \
+and its value, an error message and its words. Leave nothing for the engineer \
+to invent. Write plain prose.";
 
 /// Examples of requests as a person writes them, for other changes. They show
 /// the manner (intent, behaviour, where in words, constraints, no code); the
