@@ -31,6 +31,7 @@
 
 pub mod matrix;
 pub mod panel;
+pub mod replay_weights;
 pub mod run;
 
 pub use matrix::{matrix_of, metrics, retention_matrix, RetentionMatrix};

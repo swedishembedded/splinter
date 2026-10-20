@@ -31,6 +31,7 @@
 
 mod common;
 
+use splinter_data::ReplayPolicy;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -452,4 +453,28 @@ fn replay_follows_the_policy_and_a_rebuild_starts_a_fresh_adapter_from_the_base(
     assert!(plan.parent.is_some());
     assert!(plan.replay_file.is_none());
     assert!(plan.regime == Regime::Sft);
+}
+
+#[test]
+fn a_learning_progress_replay_is_weighted_by_the_panels_history_and_recorded_as_such() {
+    let (scratch, ctx) = context("generations-replay-lp");
+    let (_, second) = two_generations(&ctx, &scratch, ReplayChoice::LearningProgress);
+
+    // The second generation replays the first's records, and says which signal weighted them.
+    assert!(second.plans()[0].replay_file.is_some());
+    let ledger = read_ledger(&ctx, "coding").unwrap();
+    assert_eq!(ledger[1].replay, ReplayChoice::LearningProgress);
+    match &ledger[1].replay_policy {
+        ReplayPolicy::LearningProgress { weights } => {
+            assert!(
+                !weights.is_empty(),
+                "the first generation's families are weighted"
+            );
+            assert!(
+                weights.values().all(|w| *w > 0.0 && *w <= 1.0),
+                "{weights:?}"
+            );
+        }
+        other => panic!("{other:?}"),
+    }
 }

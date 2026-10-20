@@ -81,6 +81,15 @@ pub enum ReplayPolicy {
         /// Weight by capability; a capability not named weighs zero.
         weights: BTreeMap<String, f64>,
     },
+    /// Capabilities get replay in proportion to their weight, here how fast
+    /// the incumbent's pass rate on each has been moving across releases per
+    /// unit of cost (the caller computes it). Allocated exactly as
+    /// [`ReplayPolicy::FailureTargeted`] is; kept apart so that a recorded
+    /// run says which signal weighted it.
+    LearningProgress {
+        /// Weight by capability; a capability not named weighs zero.
+        weights: BTreeMap<String, f64>,
+    },
 }
 
 /// The group a record belongs to: its metadata's `group`, or the empty
@@ -158,7 +167,8 @@ pub fn select_replay<T: AsRef<str>>(
         match policy {
             ReplayPolicy::None | ReplayPolicy::Uniform => Vec::new(),
             ReplayPolicy::CapabilityBalanced => vec![1.0; groups.len()],
-            ReplayPolicy::FailureTargeted { weights } => {
+            ReplayPolicy::FailureTargeted { weights }
+            | ReplayPolicy::LearningProgress { weights } => {
                 let w: Vec<f64> = groups
                     .iter()
                     .map(|g| weights.get(g).copied().unwrap_or(0.0).max(0.0))
@@ -325,5 +335,29 @@ mod tests {
         let few = corpus(&[("a", 3), ("b", 61)]);
         let picked = select_replay(&few, &weights(&[("a", 9.0), ("b", 1.0)]), fraction(0.5), 7);
         assert_eq!(per_group(&few, &picked), tally(&[("a", 3), ("b", 29)]));
+    }
+
+    #[test]
+    fn a_learning_progress_replay_follows_its_weights_like_any_weighted_replay() {
+        let records = corpus(&[("a", 22), ("b", 21), ("c", 21)]);
+        let weighted = |weights: &[(&str, f64)]| ReplayPolicy::LearningProgress {
+            weights: weights
+                .iter()
+                .map(|(g, w)| ((*g).to_string(), *w))
+                .collect(),
+        };
+        let picked = select_replay(
+            &records,
+            &weighted(&[("a", 3.0), ("b", 1.0)]),
+            fraction(0.125),
+            7,
+        );
+        assert_eq!(per_group(&records, &picked), tally(&[("a", 6), ("b", 2)]));
+        // No signal anywhere is nothing to weight by: balanced, not empty.
+        let picked = select_replay(&records, &weighted(&[]), fraction(0.125), 7);
+        assert_eq!(
+            per_group(&records, &picked),
+            tally(&[("a", 3), ("b", 3), ("c", 2)])
+        );
     }
 }

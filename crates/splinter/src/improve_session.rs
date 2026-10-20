@@ -182,6 +182,7 @@ fn replay_choice(replay: Option<ReplayArg>, rebuild: bool) -> ReplayChoice {
         Some(ReplayArg::None) => ReplayChoice::None,
         Some(ReplayArg::Balanced) => ReplayChoice::CapabilityBalanced,
         Some(ReplayArg::FailureTargeted) => ReplayChoice::FailureTargeted,
+        Some(ReplayArg::LearningProgress) => ReplayChoice::LearningProgress,
     }
 }
 

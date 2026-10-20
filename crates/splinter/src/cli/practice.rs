@@ -264,6 +264,10 @@ pub enum ReplayArg {
     /// Records of the capabilities the champion fails most, in proportion
     /// (`generation run` only: it measures the failures first).
     FailureTargeted,
+    /// Records of the generations whose exam pass rate is still moving
+    /// across releases, in proportion (`generation run` only: it reads the
+    /// panel's history).
+    LearningProgress,
 }
 
 impl ReplayArg {
@@ -277,6 +281,11 @@ impl ReplayArg {
             Self::FailureTargeted => Err(splinter_sdk::Error::Refused(
                 "failure-targeted replay weighs the champion's failures, which `generation run` \
                  measures first: use it there"
+                    .into(),
+            )),
+            Self::LearningProgress => Err(splinter_sdk::Error::Refused(
+                "learning-progress replay weighs how each earlier exam's pass rate moved across \
+                 releases, which `generation run` has measured: use it there"
                     .into(),
             )),
         }

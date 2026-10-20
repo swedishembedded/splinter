@@ -40,6 +40,8 @@ use splinter_eval::gate::GateConfig;
 use splinter_store::tasks::TaskSetId;
 
 use super::panel::{measure, Cell, Panel, PanelColumn, PanelRow};
+use super::replay_weights::{column_histories, replay_weights};
+use crate::curriculum::progress::Params;
 use crate::practice::{exam_canaries, practice, PracticeReport, PracticeRequest};
 use crate::release::exams;
 use crate::release::probe::Arm;
@@ -64,6 +66,10 @@ pub enum ReplayChoice {
     CapabilityBalanced,
     /// Records of the capabilities the champion fails most, in proportion.
     FailureTargeted,
+    /// Records of the generations whose exam pass rate is still moving
+    /// across releases, in proportion: the learning-progress signal of
+    /// [`crate::curriculum::progress`] over the panel measurements.
+    LearningProgress,
     /// A fresh adapter on the frozen base, trained on all the verified
     /// experience accumulated so far and the new, nothing continued.
     RebuildFromBase,
@@ -385,6 +391,41 @@ fn failure_weights(
     Ok(weights)
 }
 
+/// The replay weights the panel's competence history gives: each earlier
+/// release's training families weigh the learning progress of that release's
+/// exam, over the champions the experiment's ledger and this generation's
+/// own measurement hold.
+fn learning_progress_weights(
+    ctx: &Context,
+    experiment: &str,
+    champion: &PanelRow,
+    lineage: &[splinter_orchestrator::releases::StoredRelease],
+    panel: &Panel,
+    params: &Params,
+) -> Result<std::collections::BTreeMap<String, f64>, OrchestratorError> {
+    let ledger = read_ledger(ctx, experiment)?;
+    let mut rows: Vec<&PanelRow> = ledger
+        .iter()
+        .filter_map(|record| record.champion_row.as_ref())
+        .collect();
+    rows.push(champion);
+    let column_of: std::collections::BTreeMap<Digest, usize> = panel
+        .tasks()
+        .map(|(column, task)| (task.task.id.clone(), column))
+        .collect();
+    let by_column = replay_weights(&column_histories(&rows, &column_of), params);
+    let mut weights = std::collections::BTreeMap::new();
+    for (column, weight) in by_column {
+        let Some(release) = lineage.get(panel.columns[column].learned_at - 1) else {
+            continue;
+        };
+        for family in exams::trained_families(ctx, &release.manifest.datasets, &[])? {
+            weights.entry(family).or_insert(weight);
+        }
+    }
+    Ok(weights)
+}
+
 /// Runs one generation of `request.experiment`; see the module
 /// documentation.
 pub fn run_generation(
@@ -432,6 +473,19 @@ pub fn run_generation(
             ReplayChoice::FailureTargeted => (
                 ReplayPolicy::FailureTargeted {
                     weights: failure_weights(ctx, &before, &lineage, &panel)?,
+                },
+                false,
+            ),
+            ReplayChoice::LearningProgress => (
+                ReplayPolicy::LearningProgress {
+                    weights: learning_progress_weights(
+                        ctx,
+                        &request.experiment,
+                        &before,
+                        &lineage,
+                        &panel,
+                        &request.practice.progress,
+                    )?,
                 },
                 false,
             ),

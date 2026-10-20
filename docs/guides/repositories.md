@@ -117,10 +117,18 @@ candidate, measures both on the protected tasks and the new exam at equal settin
 candidate when a protected family falls by more than `--max-family-drop`, the mean falls by more
 than `--max-mean-drop` or it gains no more than `--min-new-gain` on the new exam, and otherwise
 releases it through the gate. Every generation, accepted or not, is in the experiment's ledger.
-`--replay none|uniform|balanced|failure-targeted` and `--rebuild` choose how the earlier
+`--replay none|uniform|balanced|failure-targeted|learning-progress` and `--rebuild` choose how the earlier
 experience is carried forward. `splinter generation matrix --experiment NAME` prints the ledger
 and the full retention matrix of the lineage: the base as generation 0 and every generation on
 every protected task, with ACC, BWT, forgetting, forward transfer and learning gain.
+
+`--replay learning-progress` weights the replay by how fast the policy's pass rate on each earlier
+generation's exam has been moving across the releases that were the champion (the panel
+measurements of the ledger and of this generation), with the learning-progress signal described
+below (`--lp-window`, `--lp-novelty`, `--lp-explore`; a panel measurement records no device time,
+so the cost divisor is neutral). Each earlier generation's training families take the weight of
+that generation's exam, and none gets less than the exploration share divided by the number of
+generations. The recorded `replay_policy` carries the weights.
 
 ## Which tasks a budget reaches first
 
