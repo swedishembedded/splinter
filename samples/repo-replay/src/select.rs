@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::attempt::CommitPlan;
 use crate::generated::{has_generated_header, is_generated_path};
 use crate::git::{Change, CommitMeta, Git, Kind};
+use crate::mask::mask_diff;
 use crate::scrub::Scrubber;
 
 /// The bounds of selection.
@@ -96,6 +97,8 @@ pub enum Skip {
     DiffOverContextShare,
     /// The diff holds a secret-shaped string.
     SecretInDiff,
+    /// A hunk's place cannot be determined from its masked form.
+    AmbiguousHunk,
     /// git could not be read for the commit.
     Unreadable,
 }
@@ -113,6 +116,7 @@ impl Skip {
             Self::MostlyGenerated => "mostly_generated",
             Self::DiffOverContextShare => "diff_over_context_share",
             Self::SecretInDiff => "secret_in_diff",
+            Self::AmbiguousHunk => "ambiguous_hunk",
             Self::Unreadable => "unreadable",
         }
     }
@@ -177,9 +181,14 @@ pub fn prepare(
         return skip(Skip::SecretInDiff);
     }
 
+    let masked = match mask_diff(&diff, &|path| git.file_at(&parent, path)) {
+        Ok(masked) => masked,
+        Err(_) => return skip(Skip::AmbiguousHunk),
+    };
     Ok(Selected::Replay(Box::new(CommitPlan {
         sha: meta.sha.clone(),
         parent,
+        masked,
         message: scrubber.scrub(&meta.message),
         changes,
         diff,

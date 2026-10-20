@@ -36,6 +36,7 @@ pub const COMMITS: &[(&str, &str)] = &[
     ("rename", "Rename util.py to helpers.py"),
     ("delete", "Remove the shapes module, nothing uses it"),
     ("multi", "Document the helpers and make clamp inclusive"),
+    ("insert", "Add a subtract function between add and total"),
     ("config", "Add the retry configuration"),
     ("lock", "Raise the retry limit and add a backoff setting"),
     ("bump", "Update the lock file"),
@@ -127,6 +128,15 @@ pub fn build(dir: &Path) -> Result<Vec<String>> {
     let lock = |version: &str| {
         format!("{{\n  \"lockfileVersion\": 3,\n  \"packages\": {{\n    \"\": {{}},\n    \"node_modules/left-pad\": {{\n      \"version\": \"{version}\",\n      \"resolved\": \"left-pad\"\n    }}\n  }}\n}}\n")
     };
+    // An insertion only: no line is removed, and the blank lines around it occur everywhere.
+    let inserted = std::fs::read_to_string(dir.join("calc.py"))?.replacen(
+        "\n\n\ndef total",
+        "\n\n\ndef sub(a, b):\n    return a - b\n\n\ndef total",
+        1,
+    );
+    write(dir, "calc.py", &inserted)?;
+    ids.push(commit(dir, COMMITS[6].1)?);
+
     // Fourteen settings, so the lock file is a minority of the commit's lines.
     let settings: String = (1..=12).map(|n| format!("SETTING_{n} = {n}\n")).collect();
     write(
@@ -135,20 +145,20 @@ pub fn build(dir: &Path) -> Result<Vec<String>> {
         &format!("RETRY_LIMIT = 3\nTIMEOUT_SECONDS = 30\n{settings}"),
     )?;
     write(dir, "package-lock.json", &lock("1.3.0"))?;
-    ids.push(commit(dir, COMMITS[6].1)?);
+    ids.push(commit(dir, COMMITS[7].1)?);
 
     write(dir, "config.py", &format!("RETRY_LIMIT = 5\nTIMEOUT_SECONDS = 30\nBACKOFF_SECONDS = 2\nBACKOFF_FACTOR = 3\n{settings}"))?;
     write(dir, "package-lock.json", &lock("1.3.1"))?;
-    ids.push(commit(dir, COMMITS[7].1)?);
+    ids.push(commit(dir, COMMITS[8].1)?);
 
     write(dir, "package-lock.json", &lock("1.3.2"))?;
-    ids.push(commit(dir, COMMITS[8].1)?);
+    ids.push(commit(dir, COMMITS[9].1)?);
 
     std::fs::write(
         dir.join("logo.png"),
         [0x89, b'P', b'N', b'G', 0, 1, 2, 3, 0xff, 0xfe],
     )?;
-    ids.push(commit(dir, COMMITS[9].1)?);
+    ids.push(commit(dir, COMMITS[10].1)?);
 
     git(dir, &["checkout", "--quiet", "-b", "side"])?;
     write(dir, "side.txt", "work done on a branch\n")?;
@@ -157,7 +167,7 @@ pub fn build(dir: &Path) -> Result<Vec<String>> {
     git(dir, &["checkout", "--quiet", "main"])?;
     git(
         dir,
-        &["merge", "--quiet", "--no-ff", "-m", COMMITS[10].1, "side"],
+        &["merge", "--quiet", "--no-ff", "-m", COMMITS[11].1, "side"],
     )?;
     ids.push(git(dir, &["rev-parse", "HEAD"])?);
 
@@ -166,6 +176,6 @@ pub fn build(dir: &Path) -> Result<Vec<String>> {
         "client.py",
         "ENDPOINT = \"https://staging.example.org\"\nAPI_TOKEN = \"abcd1234efgh5678ijkl\"\n",
     )?;
-    ids.push(commit(dir, COMMITS[11].1)?);
+    ids.push(commit(dir, COMMITS[12].1)?);
     Ok(ids)
 }

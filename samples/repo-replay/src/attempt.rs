@@ -49,6 +49,8 @@ pub struct CommitPlan {
     pub changes: Vec<Change>,
     /// The unified diff of those changes.
     pub diff: String,
+    /// The same diff as the agent sees it.
+    pub masked: crate::mask::MaskedDiff,
 }
 
 /// How an attempt is run.
@@ -195,7 +197,7 @@ pub async fn attempt(
         max_tool_calls: calls,
         ..settings.gate
     };
-    solve.system = Some(grounding_prompt(&commit.diff, calls));
+    solve.system = Some(grounding_prompt(&commit.masked, calls));
     solve.max_output_tokens = settings.max_output_tokens;
     solve.first_response = settings.first_response;
     let mut options = WorkOptions::new(solve);

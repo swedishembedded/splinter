@@ -32,6 +32,7 @@ pub mod generated;
 pub mod git;
 pub mod grounding_prompt;
 pub mod ledger;
+pub mod mask;
 pub mod pipeline;
 pub mod plan;
 pub mod plan_prompt;

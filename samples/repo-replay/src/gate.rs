@@ -41,8 +41,9 @@
 //! * `diff_offset_read` - a `read_file` with an explicit line offset whose
 //!   range begins at or just before (within 15 lines of) where a hunk of the diff starts, before any search result
 //!   named that file: the agent knew the place from the diff's positions.
-//! * `diff_reference` - the agent's words refer to the diff or its
-//!   instructions.
+//! * `diff_reference` - the agent's words refer to the change it was given
+//!   ("the intended change", "matches the diff"), the system prompt or its
+//!   instructions. Talking about its own `git diff` is not one.
 //! * `tool_calls_out_of_range` - fewer or more calls than the bounds.
 //! * `run_incomplete` - the run was stopped (budget, repetition, deadline)
 //!   or never concluded.
@@ -242,7 +243,7 @@ pub fn evaluate(input: &GateInput<'_>, config: &GateConfig) -> Verdict {
     leak_rules(input, &mut add);
     offset_rules(input, &mut add);
     let said = re(
-        r"(?i)\b(?:the|this|given|provided|above) (?:diff|patch)\b|system prompt|my instructions|these instructions|target commit|(?:was|been) (?:told|instructed|given)|reproduce (?:exactly )?(?:the|these) changes",
+        r"(?i)\b(?:intended|expected|target|original|given|provided|above|masked) (?:diff|patch|change)\b|\b(?:against|matches|match|matching) the (?:diff|patch|change)\b|system prompt|my instructions|these instructions|target commit|(?:was|been) (?:told|instructed|given)|reproduce (?:exactly )?(?:the|these) changes",
     );
     for text in &input.trace.said {
         if let Some(found) = said.find(text) {

@@ -13,7 +13,8 @@
 
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::git::{mirror, single_commit_repo, Git};
-use splinter_repo_replay::grounding_prompt::{grounding_prompt, mask_diff};
+use splinter_repo_replay::grounding_prompt::grounding_prompt;
+use splinter_repo_replay::mask::mask_diff;
 use splinter_repo_replay::plan::{validate, PlanCheck, PlanRejection};
 use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
@@ -163,7 +164,8 @@ fn a_refused_plan_is_rewritten_with_the_reason_in_front_of_the_model() {
 #[test]
 fn the_diff_the_agent_sees_has_no_offsets_and_no_unchanged_lines() {
     let diff = "diff --git a/calc.py b/calc.py\nindex 1111111..2222222 100644\n--- a/calc.py\n+++ b/calc.py\n@@ -5,7 +5,7 @@ def total(price):\n def add(a, b):\n     return a + b\n \n-def old_name(x):\n+def new_name(x):\n     return x\n \n";
-    let masked = mask_diff(diff);
+    let masked = mask_diff(diff, &|_| None).unwrap();
+    let masked = masked.as_str();
     assert!(!masked.contains("@@ -"), "{masked}");
     assert!(
         !masked.contains("def total") && !masked.contains("return a + b"),
@@ -181,19 +183,23 @@ fn the_diff_the_agent_sees_has_no_offsets_and_no_unchanged_lines() {
     ] {
         assert!(masked.contains(kept), "{kept} missing from {masked}");
     }
-    assert!(!grounding_prompt(diff, 20).contains("@@ -5"));
+    assert!(!grounding_prompt(&mask_diff(diff, &|_| None).unwrap(), 20).contains("@@ -5"));
 }
 
 #[test]
 fn the_prompts_say_where_the_repository_is_and_that_new_paths_must_be_given() {
-    assert!(grounding_prompt("", 20).contains("working directory is the repository root"));
+    assert!(grounding_prompt(&Default::default(), 20)
+        .contains("working directory is the repository root"));
     let plan = splinter_repo_replay::plan_prompt::plan_system_prompt(PlanStyle::Terse);
     assert!(plan.contains("the exact new path"), "{plan}");
 }
 
 #[test]
 fn the_replay_prompt_carries_the_per_file_procedure_and_the_budget() {
-    let prompt = grounding_prompt("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n", 37);
+    let prompt = grounding_prompt(
+        &mask_diff("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n", &|_| None).unwrap(),
+        37,
+    );
     for part in [
         "calling todo with action set",
         "Locate.",
@@ -208,4 +214,42 @@ fn the_replay_prompt_carries_the_per_file_procedure_and_the_budget() {
     assert!(!prompt.contains("{BUDGET}"));
     let plan = splinter_repo_replay::plan_prompt::plan_system_prompt(PlanStyle::Detailed);
     assert!(plan.contains("Examples of good requests"));
+}
+
+const CALC: &str = "def add(a, b):\n    return a + b\n\n\ndef total(price):\n    return price\n\n\ndef other(x):\n    return x\n";
+
+/// An insertion between the two functions: no removed line, three unchanged lines each side.
+const INSERTION: &str = "diff --git a/calc.py b/calc.py\n--- a/calc.py\n+++ b/calc.py\n@@ -2,6 +2,10 @@\n     return a + b\n \n \n+def sub(a, b):\n+    return a - b\n+\n+\n def total(price):\n     return price\n \n";
+
+#[test]
+fn an_insertion_keeps_the_unchanged_lines_that_make_its_place_unique() {
+    let parent = |path: &str| (path == "calc.py").then(|| CALC.to_string());
+    let masked = mask_diff(INSERTION, &parent).unwrap();
+    let text = masked.as_str();
+    // Blank lines alone occur everywhere; with the line that follows them the place is one.
+    assert!(text.contains(" def total(price):"), "{text}");
+    assert!(text.contains("+def sub(a, b):"), "{text}");
+    assert!(!text.contains("@@ -"), "no offsets: {text}");
+    // The shown old-side lines occur once in the file.
+    let shown: Vec<&str> = text
+        .lines()
+        .filter(|l| l.starts_with(' ') && *l != " xxx")
+        .map(|l| &l[1..])
+        .collect();
+    let file: Vec<&str> = CALC.lines().collect();
+    let count = file
+        .windows(shown.len())
+        .filter(|w| **w == shown[..])
+        .count();
+    assert_eq!(count, 1, "{shown:?}");
+}
+
+#[test]
+fn a_hunk_whose_place_cannot_be_determined_is_refused() {
+    // Both functions are the same text: an insertion between them has no unique place.
+    let twin = "def f():\n    pass\n\n\ndef f():\n    pass\n\n\n";
+    let diff = "diff --git a/t.py b/t.py\n--- a/t.py\n+++ b/t.py\n@@ -1,3 +1,4 @@\n     pass\n \n+# note\n \n";
+    let parent = |_: &str| Some(twin.to_string());
+    let refused = mask_diff(diff, &parent).unwrap_err();
+    assert_eq!(refused.path, "t.py");
 }

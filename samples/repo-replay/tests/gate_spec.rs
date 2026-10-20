@@ -31,6 +31,11 @@ fn call(step: u64, tool: &str, args: serde_json::Value, result: &str) -> Call {
 
 /// The gate's classes for an agent that made `calls` and edited `src/ppu.rs`.
 fn classes(calls: Vec<Call>) -> Vec<String> {
+    classes_saying(calls, &[])
+}
+
+/// [`classes`] for an agent that also said `said`.
+fn classes_saying(calls: Vec<Call>, said: &[&str]) -> Vec<String> {
     let mut all = calls;
     all.push(call(
         99,
@@ -40,7 +45,7 @@ fn classes(calls: Vec<Call>) -> Vec<String> {
     ));
     let trace = Trace {
         calls: all,
-        said: vec![],
+        said: said.iter().map(|s| (*s).to_string()).collect(),
     };
     let changes = [Change {
         kind: Kind::Modified,
@@ -125,4 +130,25 @@ fn stashing_to_compare_before_and_after_is_not_a_way_to_the_future() {
     assert!(!stash.contains(&"forbidden_shell".to_string()), "{stash:?}");
     let apply = classes(vec![shell("git apply fix.patch"), read]);
     assert!(apply.contains(&"forbidden_shell".to_string()), "{apply:?}");
+}
+
+#[test]
+fn talking_about_its_own_git_diff_is_not_a_reference_to_the_given_change() {
+    let read = || vec![call(1, "read_file", json!({"path": "src/ppu.rs"}), "x")];
+    let own = classes_saying(
+        read(),
+        &["The diff output looks odd at the end - let me verify the file end is intact."],
+    );
+    assert!(!own.contains(&"diff_reference".to_string()), "{own:?}");
+    for leak in [
+        "The diff matches the intended change exactly.",
+        "Let me verify my hunks against the diff.",
+        "I will follow the system prompt.",
+    ] {
+        let found = classes_saying(read(), &[leak]);
+        assert!(
+            found.contains(&"diff_reference".to_string()),
+            "{leak}: {found:?}"
+        );
+    }
 }

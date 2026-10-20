@@ -284,7 +284,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
     check(
         &mut checks,
         "honest solver passes the gate on every replayable commit, in both plan styles",
-        failed.is_empty() && attempts.len() == 2 * 7,
+        failed.is_empty() && attempts.len() == 2 * 8,
         format!("{} attempts, failures: {failed:?}", attempts.len()),
     );
     let mut skipped: Vec<String> = honest

@@ -18,7 +18,6 @@ use splinter_repo_replay::audit::{
 };
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::git::mirror;
-use splinter_repo_replay::grounding_prompt::mask_diff;
 use splinter_repo_replay::scripted::{Behaviour, Specificity};
 use splinter_repo_replay::scrub::Scrubber;
 use splinter_repo_replay::select::{prepare, Selected};
@@ -38,7 +37,7 @@ fn observe(
         .iter()
         .filter_map(
             |m| match prepare(&git, m, &scrubber, &Default::default()).unwrap() {
-                Selected::Replay(plan) => Some(mask_diff(&plan.diff)),
+                Selected::Replay(plan) => Some(plan.masked.as_str().to_string()),
                 Selected::Skipped(..) => None,
             },
         )

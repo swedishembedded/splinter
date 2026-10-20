@@ -298,6 +298,12 @@ impl Git {
             .unwrap_or_default()
     }
 
+    /// The text of the file `path` at `rev`; `None` when it is absent or not UTF-8.
+    pub fn file_at(&self, rev: &str, path: &str) -> Option<String> {
+        let spec = format!("{rev}:{path}");
+        String::from_utf8(self.bytes(&["cat-file", "blob", &spec]).ok()?).ok()
+    }
+
     /// Lays out the tree of `rev` in `dest` (which must exist), tracked files
     /// only, as `git archive` writes it.
     pub fn export_tree(&self, rev: &str, dest: &Path) -> Result<()> {

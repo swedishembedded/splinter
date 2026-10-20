@@ -124,35 +124,71 @@ pub enum Behaviour {
     ReadAtHunk,
 }
 
-/// The `+` and `-` lines of a file's hunks.
-fn changed(hunks: &str) -> Vec<&str> {
-    hunks
-        .lines()
-        .filter(|l| l.starts_with('+') || l.starts_with('-'))
-        .collect()
-}
-
-/// The unmasked version of the masked `shown` files: a scripted agent plays
-/// an agent that works out the context by reading the file, and the script
-/// has no file to read, so it is given the diffs of the history (`truths`) and
-/// takes the one whose changed lines match what the prompt shows.
-fn resolve(shown: Vec<FileDiff>, truths: &[String]) -> Vec<FileDiff> {
-    for truth in truths {
-        let files = parse_diff(truth);
-        let matched: Vec<FileDiff> = shown
-            .iter()
-            .filter_map(|s| {
-                files
-                    .iter()
-                    .find(|f| f.new == s.new && changed(&f.hunks) == changed(&s.hunks))
-                    .cloned()
-            })
-            .collect();
-        if matched.len() == shown.len() {
-            return matched;
+/// The edit for a file's masked hunks, built the way an agent builds it: the
+/// place of each hunk is found in the file it READ from the lines the masked
+/// diff shows (removed lines and anchors), and the unchanged lines around it
+/// are copied from the file, never from the masked diff. `None` when a hunk's
+/// place is not found exactly once.
+fn reconstruct(masked_hunks: &str, file: &[String]) -> Option<String> {
+    let mut edit = String::new();
+    let mut hunks: Vec<Vec<&str>> = Vec::new();
+    for line in masked_hunks.lines() {
+        if line.starts_with("@@") {
+            hunks.push(Vec::new());
+        } else if let Some(h) = hunks.last_mut() {
+            if !line.starts_with('\\') {
+                h.push(line);
+            }
         }
     }
-    shown
+    for hunk in hunks {
+        // The part of the hunk that is shown: from the first line that is not
+        // masked context to the last.
+        let shown = |l: &&str| !(*l == " xxx");
+        let first = hunk.iter().position(shown)?;
+        let last = hunk.iter().rposition(shown)?;
+        let body = &hunk[first..=last];
+        let old: Vec<&str> = body
+            .iter()
+            .filter(|l| !l.starts_with('+'))
+            .map(|l| &l[1..])
+            .collect();
+        let at = (0..file.len().checked_sub(old.len().max(1) - 1)?)
+            .filter(|&p| {
+                old.iter()
+                    .enumerate()
+                    .all(|(n, l)| file.get(p + n).map(String::as_str) == Some(*l))
+            })
+            .collect::<Vec<_>>();
+        let [p] = at[..] else { return None };
+        edit.push_str("@@\n");
+        for l in &file[p.saturating_sub(3)..p] {
+            edit.push_str(&format!(" {l}\n"));
+        }
+        for l in body {
+            edit.push_str(l);
+            edit.push('\n');
+        }
+        let end = p + old.len();
+        for l in &file[end..(end + 3).min(file.len())] {
+            edit.push_str(&format!(" {l}\n"));
+        }
+    }
+    Some(edit)
+}
+
+/// The lines of the file a `read_file` result shows (`L<n>:<text>`).
+fn lines_of_read(result: &str) -> Vec<String> {
+    result
+        .lines()
+        .filter_map(|l| {
+            let rest = l.strip_prefix('L')?;
+            let (n, text) = rest.split_once(':')?;
+            n.chars()
+                .all(|c| c.is_ascii_digit())
+                .then(|| text.to_string())
+        })
+        .collect()
 }
 
 /// A word of the first removed line (else the first unchanged one) to
@@ -182,13 +218,27 @@ fn first_hunk_start(hunks: &str) -> u64 {
 
 /// The tool calls of `behaviour` on the diff in the system prompt.
 #[must_use]
-pub fn actions(system_prompt: &str, behaviour: &Behaviour, truths: &[String]) -> Vec<Action> {
+pub fn actions(
+    system_prompt: &str,
+    behaviour: &Behaviour,
+    truths: &[String],
+    reads: &std::collections::HashMap<String, Vec<String>>,
+) -> Vec<Action> {
     // The grounding prompt carries the diff between its intro and its rules.
     let diff = system_prompt
         .split("\n\nHow to work:")
         .next()
         .unwrap_or_default();
-    let files = resolve(parse_diff(diff), truths);
+    let files = parse_diff(diff);
+    // Where the history says a file's first hunk starts: only the cheater that
+    // reads at the hunk knows it (the masked prompt gives no offsets).
+    let start_in_history = |path: &str| {
+        truths
+            .iter()
+            .flat_map(|t| parse_diff(t))
+            .find(|f| f.new == path)
+            .map_or(1, |f| first_hunk_start(&f.hunks))
+    };
     let mut out = Vec::new();
     match behaviour {
         Behaviour::ApplyViaShell => {
@@ -304,7 +354,7 @@ pub fn actions(system_prompt: &str, behaviour: &Behaviour, truths: &[String]) ->
                 match behaviour {
                     Behaviour::ReadAtHunk => out.push(act(
                         "read_file",
-                        json!({"path": file.new, "offset": first_hunk_start(&file.hunks), "limit": 20}),
+                        json!({"path": file.new, "offset": start_in_history(&file.new), "limit": 20}),
                     )),
                     Behaviour::NoSearch => out.push(act("read_file", json!({"path": file.new}))),
                     _ => {
@@ -316,7 +366,7 @@ pub fn actions(system_prompt: &str, behaviour: &Behaviour, truths: &[String]) ->
                 }
                 out.push(act(
                     "edit_file",
-                    json!({"path": file.new, "diff": tamper(file.hunks.clone())}),
+                    json!({"path": file.new, "diff": tamper(reads.get(&file.new).and_then(|f| reconstruct(&file.hunks, f)).unwrap_or_else(|| file.hunks.clone()))}),
                 ));
             }
         }
@@ -324,6 +374,38 @@ pub fn actions(system_prompt: &str, behaviour: &Behaviour, truths: &[String]) ->
     // And the self-review it ends with.
     out.push(act("shell", json!({"shell_command": "git diff --stat"})));
     out
+}
+
+/// What the conversation has shown of each file: the lines of every
+/// `read_file` result, by the path that was read.
+fn reads_in(
+    messages: &[splinter_sdk::agent::sven::model::Message],
+) -> std::collections::HashMap<String, Vec<String>> {
+    let mut paths = std::collections::HashMap::new();
+    let mut reads = std::collections::HashMap::new();
+    for m in messages {
+        match &m.content {
+            MessageContent::ToolCall {
+                tool_call_id,
+                function,
+            } if function.name == "read_file" => {
+                let args: Value = serde_json::from_str(&function.arguments).unwrap_or_default();
+                if let Some(path) = args["path"].as_str() {
+                    paths.insert(tool_call_id.clone(), path.to_string());
+                }
+            }
+            MessageContent::ToolResult {
+                tool_call_id,
+                content,
+            } => {
+                if let (Some(path), Some(text)) = (paths.get(tool_call_id), content.as_text()) {
+                    reads.insert(path.clone(), lines_of_read(text));
+                }
+            }
+            _ => {}
+        }
+    }
+    reads
 }
 
 /// What an agent says when it is done.
@@ -384,7 +466,8 @@ impl ModelProvider for ScriptedAgent {
                 ResponseEvent::Done,
             ]));
         }
-        let script = actions(&system, &self.behaviour, &self.truths);
+        let reads = reads_in(&req.messages);
+        let script = actions(&system, &self.behaviour, &self.truths, &reads);
         Ok(match script.get(done) {
             Some(action) => stream(vec![
                 ResponseEvent::ToolCall {

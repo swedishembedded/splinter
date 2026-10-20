@@ -556,7 +556,7 @@ fn store_attempt(
     provenance.generator = Some("splinter-repo-replay".into());
     provenance.prompt_digests = vec![
         digest(&plan_system_prompt(style)),
-        digest(&grounding_prompt("", 0)),
+        digest(&grounding_prompt(&crate::mask::MaskedDiff::default(), 0)),
     ];
     let trajectory = scrub_trajectory(&outcome.trajectory, scrubber)?;
     let final_output = outcome.final_message.as_deref().map(|m| scrubber.scrub(m));

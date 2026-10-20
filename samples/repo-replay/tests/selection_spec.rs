@@ -48,7 +48,7 @@ fn every_kind_of_commit_is_replayed_or_skipped_under_its_own_class() {
             ("binary", 1),
             ("merge", 1),
             ("mostly_generated", 1),
-            ("replay", 7),
+            ("replay", 8),
             ("root", 1),
             ("secret_in_diff", 1)
         ]
@@ -84,7 +84,7 @@ fn bounds_skip_what_is_too_large_or_does_not_fit_the_prompt() {
     };
     let skipped = classify(&small);
     assert!(skipped.get("oversize").is_some_and(|v| !v.is_empty()));
-    assert!(!skipped["replay"].is_empty() && skipped["replay"].len() < 7);
+    assert!(!skipped["replay"].is_empty() && skipped["replay"].len() < 8);
 
     let tight = SelectConfig {
         max_diff_tokens: 1,
@@ -93,7 +93,7 @@ fn bounds_skip_what_is_too_large_or_does_not_fit_the_prompt() {
     let budget = classify(&tight);
     assert_eq!(
         budget["diff_over_context_share"].len(),
-        8,
+        9,
         "the budget skips the seven replayable commits and the one with a secret, whose budget check comes first"
     );
     assert!(!budget.contains_key("replay"));
