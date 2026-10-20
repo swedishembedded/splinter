@@ -6059,6 +6059,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-model-check"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "splinter-orchestrator"
 version = "0.2.0"
 dependencies = [

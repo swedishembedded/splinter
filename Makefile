@@ -199,6 +199,20 @@ samples/repo-replay:
 samples/repo-replay/audit:
 	$(CARGO) run $(PROFILE) -p splinter-repo-replay -- audit
 
+## samples/model-check - lists the model-check sample's targets; runs nothing
+samples/model-check:
+	@bash scripts/make-help.sh samples/model-check
+
+## samples/model-check/audit - every TLA+ specification, Lua reference implementation and mutation checks itself; no model, no GPU, no network (LUA=<Lua 5.1 interpreter>, TLAPLUS_DIR=<make deps/tlaplus directory>)
+samples/model-check/audit:
+	test -n "$(LUA)" -a -n "$(TLAPLUS_DIR)" || { echo "samples/model-check/audit: give LUA=<interpreter> and TLAPLUS_DIR=<directory>"; exit 2; }
+	$(CARGO) run $(PROFILE) -p splinter-model-check -- audit --lua "$(LUA)" --tlaplus-dir "$(TLAPLUS_DIR)"
+
+## samples/model-check/report - the mutation-detection table of every family: what the explorer and what TLC find in each mutant; no model, no GPU, no network (LUA=, TLAPLUS_DIR= as for the audit)
+samples/model-check/report:
+	test -n "$(LUA)" -a -n "$(TLAPLUS_DIR)" || { echo "samples/model-check/report: give LUA=<interpreter> and TLAPLUS_DIR=<directory>"; exit 2; }
+	$(CARGO) run $(PROFILE) -p splinter-model-check -- report --lua "$(LUA)" --tlaplus-dir "$(TLAPLUS_DIR)"
+
 # ---------------------------------------------------------------------------
 ##@ Documentation
 ## The manual under docs/, published as Markdown pages and a PDF by the pinned publisher.
@@ -357,5 +371,5 @@ help:
 	hooks hooks/install \
 	qualify qualify/list qualify/test qualify/run \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
-	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit samples/repo-replay samples/repo-replay/audit \
+	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit samples/repo-replay samples/repo-replay/audit samples/model-check samples/model-check/audit samples/model-check/report \
 	docs docs/build docs/check docs/pdf docs/clean _docs-publisher-pin

@@ -80,6 +80,9 @@ navigation:
       - source: samples/repo-replay/README.md
         path: examples/repo-replay.md
         title: repo-replay
+      - source: samples/model-check/README.md
+        path: examples/model-check.md
+        title: model-check
       - source: samples/agent/loop/README.md
         path: examples/agent-loop.md
         title: agent-loop

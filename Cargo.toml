@@ -13,6 +13,7 @@ members = [
     "samples/agent/loop",
     "samples/health",
     "samples/jefferson",
+    "samples/model-check",
     "samples/lifecourse",
     "samples/persona-chat",
     "samples/repo-replay",

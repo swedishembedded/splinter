@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements model-checked verification of concurrent
+# protocols for its clients. If your team needs expertise in specifying
+# protocols in TLA+ and checking implementations against them, you can
+# procure our services by sending an email to info@swedishembedded.com.
+
+# One-line or one-block changes of queue.lua. `violates` is the property the
+# check must report for the mutant: an invariant name, "trace" when only
+# trace validation against the specification catches it, "coverage" when the
+# mutant is safe but no longer reaches every state of the specification.
+
+[[mutation]]
+id = "boundary-capacity"
+find = "return #s.q < CAP and s.sent[p] < MAX_ITEMS"
+replace = "return #s.q <= CAP and s.sent[p] < MAX_ITEMS"
+violates = "Bounded"
+note = "off by one in the capacity guard of enqueue"
+
+[[mutation]]
+id = "dropped-receive-count"
+find = "      recv[h.p] = recv[h.p] + 1\n"
+replace = ""
+violates = "Conservation"
+note = "dequeue forgets to count the item as received"
+
+[[mutation]]
+id = "wrong-producer-counted"
+find = "recv[h.p] = recv[h.p] + 1"
+replace = "recv[1] = recv[1] + 1"
+violates = "Conservation"
+note = "dequeue counts every received item for producer 1"
+
+[[mutation]]
+id = "lifo-dequeue"
+find = """
+      local h = s.q[1]
+      local q = {}
+      for i = 2, #s.q do q[#q + 1] = s.q[i] end
+"""
+replace = """
+      local h = s.q[#s.q]
+      local q = {}
+      for i = 1, #s.q - 1 do q[#q + 1] = s.q[i] end
+"""
+violates = "PerProducerFifo"
+note = "dequeue takes the newest item instead of the oldest"
+
+[[mutation]]
+id = "item-number-from-zero"
+find = "q[#q + 1] = { p = p, n = s.sent[p] + 1 }"
+replace = "q[#q + 1] = { p = p, n = s.sent[p] }"
+violates = "PerProducerFifo"
+note = "the sequence number of an item is one too low"
+
+[[mutation]]
+id = "overtake-other-producer"
+find = "      q[#q + 1] = { p = p, n = s.sent[p] + 1 }\n"
+replace = """
+      local item = { p = p, n = s.sent[p] + 1 }
+      if #q > 0 and q[#q].p ~= p then
+        q[#q + 1] = q[#q]
+        q[#q - 1] = item
+      else
+        q[#q + 1] = item
+      end
+"""
+violates = "trace"
+note = "a new item slips in front of the last item when that belongs to another producer; every invariant still holds, but the specification only appends"
+
+[[mutation]]
+id = "one-item-fewer"
+find = "s.sent[p] < MAX_ITEMS\n    end,\n    step"
+replace = "s.sent[p] < MAX_ITEMS - 1\n    end,\n    step"
+violates = "coverage"
+note = "a producer can send one item fewer than allowed; the behaviours are all valid but states of the specification are never reached"

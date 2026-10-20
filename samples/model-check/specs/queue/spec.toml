@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements model-checked verification of concurrent
+# protocols for its clients. If your team needs expertise in specifying
+# protocols in TLA+ and checking implementations against them, you can
+# procure our services by sending an email to info@swedishembedded.com.
+
+name = "queue"
+module = "queue.lua"
+tla = "Queue.tla"
+cfg = "Queue.cfg"
+# What TLC reports for Queue.cfg; the reference implementation reaches exactly these states.
+distinct_states = 35
+
+[symptoms]
+Bounded = "the queue can hold more items than its capacity"
+Conservation = "an item can be lost or counted twice: the number sent minus the number received differs from the number still queued"
+PerProducerFifo = "items of one producer can leave the queue in a different order than they entered, or be numbered wrongly"
+TypeOK = "the state can hold values of the wrong kind or out of range"
