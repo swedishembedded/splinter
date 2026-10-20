@@ -1069,6 +1069,18 @@ named with it in their run record (A4.5), and the `stopped_without_conclusion` c
 count per seed, repetition stops, thinking-budget hits, tool-call mix and mean agent steps; for a comparison, the primary test of
 A2.3 on the family outcomes. Pilot labelling (A2.3) is unchanged.
 
+### Amendment 21, 2026-10-20, 10:17 CEST: the learning rate of the CE8 training
+
+Made before any CE8 training run and before any CE8 outcome exists. It changes the one value of A19.2 that a smoke measured to be unstable and nothing else of A19.
+
+**A21.1 Measurement.** A 10-step NF4 training of the 27B on the same 16 records with the same seed, at five learning rates (`runs/b27/lrsweep/<lr>.err`, step losses): at 1e-9, a control in which the adapter does not move,
+the loss at step 10 is 0.744 (record-to-record variance, 0.473 at step 1); at 2e-5 it is 0.741; at 5e-5 0.750; at 1e-4 0.826; at 2e-4, the value of A2.7 and A19.2, 4.786. The loss at 2e-4 diverges; the
+control shows that the rise to about 0.74 at the lower rates is the variance of the records and not training. No rate was chosen for its result on any task.
+
+**A21.2 Value.** The CE8 learning rate is 5e-5 (A2.7's 2e-4 is the registered value for the 8B recipe and is unchanged there). Every other setting of A19.2 stands: the recipe, the packed
+view, B = 2 records per step with ceil(2R/B) steps, the monitoring split by whole family, `--keep-evaluations`, patience 2, the memorisation guard. The dataset is `blake3:d246dbb54ca3c8a3eb7b8755d5c7590b8e8a0779747a9c0cc1cab238062a2594` (80 packed records
+from the seven sets of A19.1, built by splinter c70ab627 linked against brain cd8df8266 and sven f0cfb82c, a local build; excluded: failed 196, compacted 27, over block 12).
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
