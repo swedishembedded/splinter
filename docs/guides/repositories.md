@@ -78,8 +78,8 @@ like a secret (key, token, password, auth socket), even when an allowlist
 names one. Without a kernel that can do this (Landlock ABI 4) the command is
 refused, never run open. `--allow-workspace-network` opens the network,
 `--allow-unconfined-workspace` the filesystem on a kernel that cannot confine,
-and `--workspace-max-processes N` bounds the processes and threads of a
-command, and `--workspace-env NAME=VALUE` gives every command a variable (for
+`--workspace-max-processes N` bounds the processes and threads of a
+command, `--workspace-memory-gib N` the address space of each of its processes (32 GiB by default), and `--workspace-env NAME=VALUE` gives every command a variable (for
 example `PYTHONDONTWRITEBYTECODE=1`, so a Python project leaves no bytecode in the tree
 the solver reads); each is part of the environment record, so a task generated without
 it names another environment. The solver's shell says where it works: every command

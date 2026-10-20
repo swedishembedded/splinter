@@ -79,6 +79,13 @@ pub struct Global {
     /// environment than tasks generated without it.
     #[arg(long, global = true, value_name = "NAME=VALUE", value_parser = workspace_variable)]
     pub workspace_env: Vec<(String, String)>,
+    /// Bound the address space of each process of a project command, in GiB
+    /// (32 when not given). A command that maps more fails to allocate. Part
+    /// of the environment record, so tasks generated with a bound name a
+    /// different environment from those without.
+    #[arg(long, global = true, value_name = "GIB",
+        value_parser = clap::value_parser!(u64).range(1..=1024))]
+    pub workspace_memory_gib: Option<u64>,
     /// A directory searched before the system's for the interpreters code
     /// runs in (`lua` is Lua 5.1 and no other: `make deps/lua` builds the
     /// pinned one); repeat for more.

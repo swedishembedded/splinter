@@ -170,6 +170,10 @@ pub struct WorkspaceSettings {
     /// environment's snapshot, so a task generated with one names another
     /// environment than a task generated without it.
     pub env: BTreeMap<String, String>,
+    /// The address space, in bytes, one process of a workspace command may
+    /// map (`RLIMIT_AS`); `None` keeps the default of 32 GiB. Part of the
+    /// environment's snapshot.
+    pub memory_bytes: Option<u64>,
     /// Directories searched before the system's for the interpreters code
     /// runs in: where a pinned build of a language (Lua 5.1, built from its
     /// verified source) is put first. Empty is the system's search path.
@@ -189,6 +193,7 @@ impl Default for WorkspaceSettings {
             allow_network: false,
             max_processes: None,
             env: BTreeMap::new(),
+            memory_bytes: None,
             runtime_dirs: Vec::new(),
         }
     }
@@ -313,6 +318,7 @@ impl Config {
                 allow_network: false,
                 max_processes: None,
                 env: BTreeMap::new(),
+                memory_bytes: None,
                 runtime_dirs: Vec::new(),
             },
             build: BuildInfo {

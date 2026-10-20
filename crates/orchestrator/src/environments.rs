@@ -55,12 +55,17 @@ pub const WORKSPACE_FILE_SIZE_BYTES: u64 = 1024 * 1024 * 1024;
 /// What a workspace's commands run under: [`Limits::default`] raised to the
 /// size of a project's own test suite and its report, with each output
 /// stream kept up to `output_cap_bytes`.
+///
+/// `memory_bytes` bounds the address space of each process of a command;
+/// `None` keeps [`WORKSPACE_MEMORY_BYTES`]. The bound is part of the
+/// environment record, so only a run that names one changes the record of
+/// the tasks it makes.
 #[must_use]
-pub fn workspace_limits(output_cap_bytes: u64) -> Limits {
+pub fn workspace_limits(output_cap_bytes: u64, memory_bytes: Option<u64>) -> Limits {
     Limits {
         wall_time_ms: WORKSPACE_WALL_TIME_MS,
         cpu_seconds: WORKSPACE_CPU_SECONDS,
-        memory_bytes: WORKSPACE_MEMORY_BYTES,
+        memory_bytes: memory_bytes.unwrap_or(WORKSPACE_MEMORY_BYTES),
         file_size_bytes: WORKSPACE_FILE_SIZE_BYTES,
         output_cap_bytes,
         ..Limits::default()
@@ -201,7 +206,7 @@ impl Environments {
                 settings.docker_env.clone(),
                 image,
                 &self.workspace_calls,
-                workspace_limits(settings.output_cap_bytes),
+                workspace_limits(settings.output_cap_bytes, settings.memory_bytes),
             )));
         }
         // Cargo builds offline from the cargo home it is given and leaves no
@@ -233,7 +238,7 @@ impl Environments {
                 &self.workspace_calls,
                 cargo,
                 &allowed,
-                workspace_limits(settings.output_cap_bytes),
+                workspace_limits(settings.output_cap_bytes, settings.memory_bytes),
             )
             .allow_unconfined(settings.allow_unconfined)
             .allow_network(settings.allow_network)
@@ -288,5 +293,25 @@ impl Environments {
         Ok(ResolvedEnvironment::Workspace(
             self.workspace()?.environment(snapshot),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_named_memory_bound_changes_the_limits_and_none_keeps_the_recorded_default() {
+        let default = workspace_limits(1 << 20, None);
+        assert_eq!(default.memory_bytes, WORKSPACE_MEMORY_BYTES);
+        let bounded = workspace_limits(1 << 20, Some(8 << 30));
+        assert_eq!(bounded.memory_bytes, 8 << 30);
+        assert_eq!(
+            Limits {
+                memory_bytes: WORKSPACE_MEMORY_BYTES,
+                ..bounded
+            },
+            default
+        );
     }
 }
