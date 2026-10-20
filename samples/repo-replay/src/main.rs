@@ -120,6 +120,9 @@ struct RunArgs {
     /// shared server queues requests; default: sven's limit).
     #[arg(long)]
     first_response_secs: Option<u64>,
+    /// Times an attempt that stopped announcing a call it did not make is told to go on.
+    #[arg(long, default_value_t = 2)]
+    follow_ups: usize,
     /// Plans written per attempt before giving up.
     #[arg(long, default_value_t = 2)]
     plan_tries: usize,
@@ -245,6 +248,7 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.deadline = Duration::from_secs(args.attempt_secs);
     config.plan_deadline = Duration::from_secs(args.plan_secs);
     config.max_output_tokens = args.max_output_tokens;
+    config.follow_ups = args.follow_ups;
     config.first_response = args.first_response_secs.map(Duration::from_secs);
     config.plan_tries = args.plan_tries;
     config.min_line_tokens = args.plan_verbatim_words;

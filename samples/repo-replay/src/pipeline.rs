@@ -83,6 +83,8 @@ pub struct RunConfig {
     pub max_output_tokens: Option<u64>,
     /// Longest a request may wait for the server's first byte and token.
     pub first_response: Option<Duration>,
+    /// Times an attempt that stopped announcing an unmade call is told to go on.
+    pub follow_ups: usize,
     /// Project checks run in the attempt tree afterwards, never gated.
     pub checks: Vec<String>,
     /// Longest a project check may run.
@@ -231,6 +233,7 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         deadline: config.deadline,
         max_output_tokens: config.max_output_tokens,
         first_response: config.first_response,
+        follow_ups: config.follow_ups,
         gate: config.gate,
         forbidden_locations: [&config.source, &parts.mirror]
             .into_iter()

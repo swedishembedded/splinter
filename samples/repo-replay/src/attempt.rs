@@ -26,11 +26,12 @@ use splinter_sdk::agent::solve::SolveOptions;
 use splinter_sdk::agent::sven::atif::Trajectory;
 use splinter_sdk::agent::sven::model::ModelProvider;
 use splinter_sdk::agent::work::{WorkOptions, Worker};
+use splinter_sdk::agent::RunConclusion;
 
 use crate::gate::{evaluate, GateConfig, GateInput, Verdict};
 use crate::generated::is_generated_path;
 use crate::git::{single_commit_repo, Change, Git};
-use crate::grounding_prompt::grounding_prompt;
+use crate::grounding_prompt::{grounding_prompt, CONTINUE_NOTICE};
 use crate::trace::Trace;
 use crate::tree::{compare, read_tree, vocabulary, Residual};
 
@@ -61,6 +62,8 @@ pub struct AttemptSettings {
     pub max_output_tokens: Option<u64>,
     /// Longest a request may wait for the server's first byte and token.
     pub first_response: Option<Duration>,
+    /// Times an attempt that stopped announcing an unmade call is told to go on.
+    pub follow_ups: usize,
     /// The gate's bounds.
     pub gate: GateConfig,
     /// Paths of the source repository and the run's state, which the shell may not name.
@@ -187,10 +190,36 @@ pub async fn attempt(
     let mut worker = Worker::start(&tree_dir, Arc::clone(&settings.model), options)
         .map_err(|e| anyhow::anyhow!("starting the agent: {e}"))?;
     let started = Instant::now();
-    let report = worker
+    let mut report = worker
         .send(plan)
         .await
         .map_err(|e| anyhow::anyhow!("the agent run failed: {e}"))?;
+    // A turn that ends announcing a call it never made is not a finished
+    // attempt: say so, a bounded number of times, within what is left of the
+    // time and the tool calls.
+    let mut calls_used = report.tool_calls;
+    for _ in 0..settings.follow_ups {
+        let announced = report.solution.conclusion == RunConclusion::StoppedWithoutConclusion
+            && !report.stopped_by_tool_cap
+            && !report.stopped_by_repetition;
+        let left = settings.deadline.saturating_sub(started.elapsed());
+        if !announced || left.is_zero() {
+            break;
+        }
+        let bounds = worker.options_mut();
+        bounds.solve.deadline = left;
+        bounds.max_tool_calls = Some(
+            u32::try_from(settings.gate.max_tool_calls)
+                .unwrap_or(u32::MAX)
+                .saturating_sub(calls_used),
+        );
+        report = worker
+            .send(CONTINUE_NOTICE)
+            .await
+            .map_err(|e| anyhow::anyhow!("the agent run failed: {e}"))?;
+        calls_used += report.tool_calls;
+    }
+    report.tool_calls = calls_used;
     let seconds = started.elapsed().as_secs_f64();
 
     let checks = settings
@@ -216,7 +245,7 @@ pub async fn attempt(
             "a call kept returning the same answer: {}",
             report.repeated_call.clone().unwrap_or_default()
         ))
-    } else if report.solution.conclusion != splinter_sdk::agent::RunConclusion::Success {
+    } else if report.solution.conclusion != RunConclusion::Success {
         Some(format!("the run ended as {:?}", report.solution.conclusion))
     } else {
         None

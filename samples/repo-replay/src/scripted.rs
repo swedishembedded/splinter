@@ -118,6 +118,8 @@ pub enum Behaviour {
     ShellWrite,
     /// Edits files nothing pointed to (honest, but with a vague plan).
     NoSearch,
+    /// Ends its first turn announcing a call it does not make, then works honestly once told to go on.
+    AnnouncesThenGoesOn,
     /// Reads each file at the line where the diff's hunk starts, without searching.
     ReadAtHunk,
 }
@@ -358,6 +360,13 @@ impl ModelProvider for ScriptedAgent {
             .iter()
             .filter(|m| matches!(m.content, MessageContent::ToolResult { .. }))
             .count();
+        let users = req.messages.iter().filter(|m| m.role == Role::User).count();
+        if self.behaviour == Behaviour::AnnouncesThenGoesOn && users < 2 {
+            return Ok(stream(vec![
+                ResponseEvent::TextDelta("Now let me look at the files:".into()),
+                ResponseEvent::Done,
+            ]));
+        }
         let script = actions(&system, &self.behaviour, &self.truths);
         Ok(match script.get(done) {
             Some(action) => stream(vec![
