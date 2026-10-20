@@ -72,6 +72,9 @@ succeeds often; the student is never told it (the records carry the serving prom
 Project checks given with `--check` run in the attempt tree after the edits; their outcome is
 recorded in the ledger and never gated. They execute the history's code on this machine.
 
+An attempt's tree is removed when the attempt ends. A killed run cannot, so every attempt holds a
+lock on a marker in its directory and the next run removes the directories nobody holds.
+
 ## Commands
 
 ```text

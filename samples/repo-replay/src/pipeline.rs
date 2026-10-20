@@ -197,6 +197,14 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         .canonicalize()
         .context("resolving the state directory")?;
     let parts = layout(&state);
+    // A killed run leaves its attempt trees (thousands of files each) behind.
+    let swept = crate::scratch::sweep(&parts.scratch).context("sweeping stale attempt trees")?;
+    if swept > 0 {
+        eprintln!(
+            "removed {swept} stale attempt directories from {}",
+            parts.scratch.display()
+        );
+    }
     let git = mirror(&config.source, &parts.mirror)?;
     ledger::note_run(
         &state,

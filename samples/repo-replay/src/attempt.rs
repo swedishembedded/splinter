@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::scratch::Claim;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::solve::{Model, SolveOptions};
@@ -292,11 +293,9 @@ pub async fn attempt(
     commit: &CommitPlan,
     plan: &str,
 ) -> Result<AttemptOutcome> {
-    std::fs::create_dir_all(&settings.scratch)?;
-    let scratch = tempfile::Builder::new()
-        .prefix("attempt-")
-        .tempdir_in(&settings.scratch)
-        .context("creating the attempt directory")?;
+    // Dropped when this function returns, i.e. before the verdict is stored.
+    let scratch =
+        Claim::create(&settings.scratch, "attempt-").context("creating the attempt directory")?;
     let tree_dir = scratch.path().join("tree");
     std::fs::create_dir(&tree_dir)?;
     git.export_tree(&commit.parent, &tree_dir)?;
@@ -312,11 +311,12 @@ pub async fn attempt(
     let parent_words = vocabulary(&parent_tree);
     let parent_paths: std::collections::HashSet<String> = parent_tree.keys().cloned().collect();
     let target_tree = {
-        let dir = tempfile::Builder::new()
-            .prefix("target-")
-            .tempdir_in(&settings.scratch)?;
-        git.export_tree(&commit.sha, dir.path())?;
-        read_tree(dir.path())?
+        // In a subdirectory: the claim's directory also holds its marker file.
+        let claim = Claim::create(&settings.scratch, "target-")?;
+        let dir = claim.path().join("tree");
+        std::fs::create_dir(&dir)?;
+        git.export_tree(&commit.sha, &dir)?;
+        read_tree(&dir)?
     };
     // Where the tree now differs from the commit's.
     let residual_now = || -> Result<Vec<Residual>> {
