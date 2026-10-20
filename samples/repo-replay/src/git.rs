@@ -85,17 +85,63 @@ pub struct CommitMeta {
     pub message: String,
 }
 
-fn command(dir: &Path) -> Command {
+/// Options that replace every setting of the reader's git configuration the
+/// output depends on: path quoting, diff prefixes, colour, pager, line-ending
+/// conversion, rename limits.
+const EXPLICIT_CONFIG: &[&str] = &[
+    "core.quotepath=off",
+    "core.pager=cat",
+    "core.autocrlf=false",
+    "diff.noprefix=false",
+    "diff.mnemonicPrefix=false",
+    "diff.renameLimit=1000",
+    "color.ui=never",
+];
+
+/// The one way a `git` process is started here: no user or system
+/// configuration, no prompt, no pager, no external diff driver, the
+/// configuration the output depends on given as options. Two machines with
+/// different `~/.gitconfig` files read the same commits and the same diffs.
+pub fn hermetic() -> Command {
     let mut c = Command::new("git");
-    // The run is configured by flags and the state it was given, not by the
-    // reader's `~/.gitconfig` (a signing key, a pager, an `autocrlf`).
     c.env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_TERMINAL_PROMPT", "0")
-        .arg("-C")
-        .arg(dir);
+        .env("GIT_PAGER", "cat")
+        .env("PAGER", "cat")
+        .env_remove("GIT_EXTERNAL_DIFF")
+        .env_remove("GIT_DIFF_OPTS")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE");
+    for option in EXPLICIT_CONFIG {
+        c.arg("-c").arg(option);
+    }
     c
 }
+
+fn command(dir: &Path) -> Command {
+    let mut c = hermetic();
+    c.arg("-C").arg(dir);
+    c
+}
+
+/// The `git --version` line of the binary in use, recorded with each run.
+pub fn version() -> Result<String> {
+    let out = hermetic()
+        .arg("--version")
+        .output()
+        .context("running git --version")?;
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Options every diff-producing command gets.
+const DIFF_OPTIONS: &[&str] = &[
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--diff-algorithm=myers",
+    "-M",
+];
 
 impl Git {
     /// The repository at `dir`.
@@ -181,10 +227,12 @@ impl Git {
             "-z",
             "--raw",
             "--no-commit-id",
+            "--no-ext-diff",
+            "--no-textconv",
             parent,
             commit,
         ])?;
-        let numstat = self.bytes(&["diff", "--numstat", "-M", "-z", parent, commit])?;
+        let numstat = self.diff_bytes(&["--numstat", "-z", parent, commit])?;
         let stats = parse_numstat(&numstat);
         let mut fields = raw
             .split(|b| *b == 0)
@@ -229,18 +277,17 @@ impl Git {
     /// The unified diff of `paths` between `parent` and `commit`, as a person
     /// reads it (renames detected, no colour).
     pub fn diff(&self, parent: &str, commit: &str, paths: &[String]) -> Result<String> {
-        let mut args = vec![
-            "diff",
-            "--no-color",
-            "-M",
-            "--src-prefix=a/",
-            "--dst-prefix=b/",
-            parent,
-            commit,
-            "--",
-        ];
+        let mut args = vec!["--src-prefix=a/", "--dst-prefix=b/", parent, commit, "--"];
         args.extend(paths.iter().map(String::as_str));
-        self.text(&args)
+        Ok(String::from_utf8_lossy(&self.diff_bytes(&args)?).into_owned())
+    }
+
+    /// `git diff` with [`DIFF_OPTIONS`] and then `args`.
+    pub fn diff_bytes(&self, args: &[&str]) -> Result<Vec<u8>> {
+        let mut all = vec!["diff"];
+        all.extend(DIFF_OPTIONS);
+        all.extend(args);
+        self.bytes(&all)
     }
 
     /// The first `limit` bytes of the file `path` at `rev`, empty when it is absent.
@@ -318,9 +365,7 @@ pub fn mirror(source: &Path, dest: &Path) -> Result<Git> {
     if dest.join("HEAD").exists() {
         return Ok(Git::at(dest));
     }
-    let out = Command::new("git")
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+    let out = hermetic()
         .args(["clone", "--bare", "--no-hardlinks", "--quiet"])
         .arg(source)
         .arg(dest)

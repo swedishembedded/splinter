@@ -46,11 +46,9 @@ pub const COMMITS: &[(&str, &str)] = &[
 ];
 
 fn git(dir: &Path, args: &[&str]) -> Result<String> {
-    let out = Command::new("git")
+    let out = crate::git::hermetic()
         .arg("-C")
         .arg(dir)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
         .env("GIT_AUTHOR_NAME", AUTHOR)
         .env("GIT_AUTHOR_EMAIL", AUTHOR_EMAIL)
         .env("GIT_COMMITTER_NAME", AUTHOR)

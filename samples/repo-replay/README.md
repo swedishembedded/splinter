@@ -22,7 +22,10 @@ succeeds often; the student is never told it (the records carry the serving prom
    `--max-diff-context-percent`) of the served model's context (`--context-tokens`, else what the server
    reports; tokens estimated at one per three characters) are skipped, each counted under its own class
    (`diff_over_context_share` for the last). The source
-   repository is cloned bare into the state directory and only the clone is read.
+   repository is cloned bare into the state directory and only the clone is read. Every `git`
+   process is started through one helper that ignores user and system configuration, never prompts or
+   pages, and passes what the output depends on as options; `git --version` is recorded per run in
+   `runs.jsonl` beside the ledger.
 2. **Plan.** A model writes the task as the user would (a terse and a detailed style), from the
    commit message and the diff. A plan that repeats a diff line of `--plan-verbatim-words` words or
    more, carries a diff marker or the commit id, speaks of "the diff", is outside its style's length

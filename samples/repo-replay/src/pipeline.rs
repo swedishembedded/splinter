@@ -175,6 +175,7 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         .context("resolving the state directory")?;
     let parts = layout(&state);
     let git = mirror(&config.source, &parts.mirror)?;
+    ledger::note_run(&state, &crate::git::version()?, &config.source)?;
     let chain = git.first_parent_chain(config.from.as_deref(), config.to.as_deref())?;
     let scrubber = Scrubber::new(people(&chain).iter().map(String::as_str));
 

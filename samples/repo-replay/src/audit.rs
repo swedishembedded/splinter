@@ -54,15 +54,9 @@ pub fn history_diffs(source: &Path) -> Result<Vec<String>> {
         .iter()
         .filter(|c| c.parents.len() == 1)
         .map(|c| {
-            git.text(&[
-                "diff",
-                "--no-color",
-                "-M",
-                "--src-prefix=a/",
-                "--dst-prefix=b/",
-                &c.parents[0],
-                &c.sha,
-            ])
+            let bytes =
+                git.diff_bytes(&["--src-prefix=a/", "--dst-prefix=b/", &c.parents[0], &c.sha])?;
+            Ok(String::from_utf8_lossy(&bytes).into_owned())
         })
         .collect()
 }

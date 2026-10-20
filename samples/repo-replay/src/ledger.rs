@@ -77,6 +77,21 @@ pub fn path(state: &Path) -> std::path::PathBuf {
     state.join("ledger.jsonl")
 }
 
+/// Writes one line to the state directory's run log: the tools a run was
+/// made with (`git --version`), so a verdict can be traced to the git that
+/// produced the commits and diffs it rests on.
+pub fn note_run(state: &Path, git_version: &str, source: &Path) -> Result<()> {
+    let file = state.join("runs.jsonl");
+    let mut out = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&file)?;
+    let line =
+        serde_json::json!({"git_version": git_version, "source": source.display().to_string()});
+    writeln!(out, "{line}")?;
+    Ok(())
+}
+
 /// Every entry written so far, in order.
 pub fn read(state: &Path) -> Result<Vec<Entry>> {
     let file = path(state);
