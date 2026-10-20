@@ -36,20 +36,12 @@ fn observe(
     let scrubber = Scrubber::new([fixture::AUTHOR, fixture::AUTHOR_EMAIL]);
     let diffs = chain
         .iter()
-        .filter_map(|m| {
-            match prepare(
-                &git,
-                &work.join("scratch"),
-                m,
-                &scrubber,
-                &Default::default(),
-            )
-            .unwrap()
-            {
+        .filter_map(
+            |m| match prepare(&git, m, &scrubber, &Default::default()).unwrap() {
                 Selected::Replay(plan) => Some(mask_diff(&plan.diff)),
                 Selected::Skipped(..) => None,
-            }
-        })
+            },
+        )
         .collect();
     let truths = history_diffs(source).unwrap();
     let state = work.join("state");

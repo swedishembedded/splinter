@@ -150,6 +150,12 @@ struct RunArgs {
     /// this machine. Repeatable.
     #[arg(long = "check")]
     checks: Vec<String>,
+    /// Passes after the first that retry attempts lost to the server or the disk.
+    #[arg(long, default_value_t = 3)]
+    error_retries: usize,
+    /// Seconds to wait before a retry pass.
+    #[arg(long, default_value_t = 120)]
+    retry_wait_secs: u64,
     /// Seconds a project check may run.
     #[arg(long, default_value_t = 60)]
     check_secs: u64,
@@ -258,6 +264,8 @@ fn run_command(args: &RunArgs) -> Result<()> {
     };
     config.checks.clone_from(&args.checks);
     config.check_timeout = Duration::from_secs(args.check_secs);
+    config.error_retries = args.error_retries;
+    config.retry_wait = Duration::from_secs(args.retry_wait_secs);
 
     let report = ctx.runtime().block_on(run(&ctx, &models, &config))?;
     let passed = report

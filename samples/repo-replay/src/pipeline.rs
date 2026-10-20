@@ -85,6 +85,10 @@ pub struct RunConfig {
     pub checks: Vec<String>,
     /// Longest a project check may run.
     pub check_timeout: Duration,
+    /// Passes that retry the attempts lost to the model or the disk, after the first.
+    pub error_retries: usize,
+    /// How long to wait before a retry pass.
+    pub retry_wait: Duration,
 }
 
 /// The models of a run.
@@ -189,9 +193,14 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
     let mut replayable = Vec::new();
     let mut skips = Vec::new();
     for meta in &chain {
-        match prepare(&git, &parts.scratch, meta, &scrubber, &config.select)? {
-            Selected::Replay(plan) => replayable.push(*plan),
-            Selected::Skipped(meta, why) => skips.push((meta.sha, why)),
+        match prepare(&git, meta, &scrubber, &config.select) {
+            Ok(Selected::Replay(plan)) => replayable.push(*plan),
+            Ok(Selected::Skipped(meta, why)) => skips.push((meta.sha, why)),
+            // One commit git cannot be read for must not stop a run of a thousand.
+            Err(e) => {
+                eprintln!("skipping {}: {e:#}", meta.sha);
+                skips.push((meta.sha.clone(), crate::select::Skip::Unreadable));
+            }
         }
     }
     if let Some(max) = config.max_commits {
@@ -231,20 +240,75 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         check_timeout: config.check_timeout,
     };
 
-    let units: Vec<(&CommitPlan, PlanStyle)> = replayable
-        .iter()
-        .flat_map(|c| config.styles.iter().map(move |s| (c, *s)))
-        .filter(|(c, s)| {
-            !done.iter().any(|e| {
-                e.commit == c.sha
-                    && e.style == Some(*s)
-                    && matches!(e.outcome, Outcome::Passed | Outcome::Failed)
+    for pass in 0..=config.error_retries {
+        let done = ledger::read(&state)?;
+        let verdict_of = |c: &CommitPlan, s: PlanStyle| {
+            done.iter()
+                .rfind(|e| e.commit == c.sha && e.style == Some(s))
+                .map(|e| e.outcome)
+        };
+        // The first pass does everything without a verdict; a retry pass
+        // only what failed for want of infrastructure.
+        let units: Vec<(&CommitPlan, PlanStyle)> = replayable
+            .iter()
+            .flat_map(|c| config.styles.iter().map(move |s| (c, *s)))
+            .filter(|(c, s)| {
+                let last = verdict_of(c, *s);
+                let settled = done.iter().any(|e| {
+                    e.commit == c.sha
+                        && e.style == Some(*s)
+                        && matches!(e.outcome, Outcome::Passed | Outcome::Failed)
+                });
+                !settled && (pass == 0 || last == Some(Outcome::Error))
             })
-        })
-        .collect();
+            .collect();
+        if units.is_empty() {
+            break;
+        }
+        let total = units.len();
+        eprintln!("pass {pass}: {total} attempts");
+        let errors = process(
+            ctx,
+            models,
+            config,
+            &git,
+            &settings,
+            &scrubber,
+            &state,
+            &units,
+            &mut report,
+        )
+        .await?;
+        if errors == 0 || pass == config.error_retries {
+            break;
+        }
+        eprintln!(
+            "{errors} attempts failed for want of the model or the disk; retrying them in {:?}",
+            config.retry_wait
+        );
+        tokio::time::sleep(config.retry_wait).await;
+    }
 
+    Ok(report)
+}
+
+/// Runs `units` (at most `config.jobs` at once, results taken in order),
+/// appending each outcome to the ledger and logging a progress line. Returns
+/// how many ended as infrastructure errors.
+#[allow(clippy::too_many_arguments)]
+async fn process(
+    ctx: &Context,
+    models: &Models,
+    config: &RunConfig,
+    git: &Git,
+    settings: &AttemptSettings,
+    scrubber: &Scrubber,
+    state: &Path,
+    units: &[(&CommitPlan, PlanStyle)],
+    report: &mut RunReport,
+) -> Result<usize> {
     let mut results = futures::stream::iter(units.iter().map(|(commit, style)| {
-        let (git, settings) = (&git, &settings);
+        let (git, settings) = (git, settings);
         async move {
             (
                 *commit,
@@ -254,6 +318,8 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         }
     }))
     .buffered(config.jobs.max(1));
+    let mut errors = 0;
+    let mut finished = 0;
 
     while let Some((commit, style, unit)) = results.next().await {
         let size = (
@@ -291,37 +357,68 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
             },
             Unit::Attempted(boxed) => {
                 let (plan, outcome) = *boxed;
-                let id = store_attempt(ctx, models, &scrubber, commit, style, &plan, &outcome)?;
-                Entry {
-                    commit: commit.sha.clone(),
-                    style: Some(style),
-                    outcome: if outcome.verdict.passed {
-                        Outcome::Passed
-                    } else {
-                        Outcome::Failed
+                match store_attempt(ctx, models, scrubber, commit, style, &plan, &outcome) {
+                    Err(e) => Entry {
+                        commit: commit.sha.clone(),
+                        style: Some(style),
+                        outcome: Outcome::Error,
+                        classes: vec![],
+                        changed_lines: size.0,
+                        files: size.1,
+                        tool_calls: 0,
+                        seconds: 0.0,
+                        experience: None,
+                        checks: vec![],
+                        plan_words: None,
+                        detail: Some(format!("storing the attempt: {e:#}")),
                     },
-                    classes: outcome
-                        .verdict
-                        .classes()
-                        .into_iter()
-                        .map(String::from)
-                        .collect(),
-                    changed_lines: size.0,
-                    files: size.1,
-                    tool_calls: outcome.trace.calls.len(),
-                    seconds: outcome.seconds,
-                    experience: Some(id.hex().to_string()),
-                    checks: outcome.checks.clone(),
-                    plan_words: Some(plan.split_whitespace().count()),
-                    detail: outcome.verdict.reasons.first().map(|r| r.detail.clone()),
+                    Ok(id) => Entry {
+                        commit: commit.sha.clone(),
+                        style: Some(style),
+                        outcome: if outcome.verdict.passed {
+                            Outcome::Passed
+                        } else {
+                            Outcome::Failed
+                        },
+                        classes: outcome
+                            .verdict
+                            .classes()
+                            .into_iter()
+                            .map(String::from)
+                            .collect(),
+                        changed_lines: size.0,
+                        files: size.1,
+                        tool_calls: outcome.trace.calls.len(),
+                        seconds: outcome.seconds,
+                        experience: Some(id.hex().to_string()),
+                        checks: outcome.checks.clone(),
+                        plan_words: Some(plan.split_whitespace().count()),
+                        detail: outcome.verdict.reasons.first().map(|r| r.detail.clone()),
+                    },
                 }
             }
         };
-        ledger::append(&state, &entry)?;
+        ledger::append(state, &entry)?;
+        errors += usize::from(entry.outcome == Outcome::Error);
+        finished += 1;
+        eprintln!(
+            "[{finished}/{}] {} {} {:?} {:?} calls {} {:.0}s{}",
+            units.len(),
+            &entry.commit[..10],
+            entry.style.map_or("-", PlanStyle::name),
+            entry.outcome,
+            entry.classes,
+            entry.tool_calls,
+            entry.seconds,
+            entry
+                .detail
+                .as_deref()
+                .filter(|_| entry.outcome == Outcome::Error)
+                .map_or(String::new(), |d| format!(" ({d})")),
+        );
         report.entries.push(entry);
     }
-
-    Ok(report)
+    Ok(errors)
 }
 
 fn skip_entry(sha: &str, class: &str) -> Entry {

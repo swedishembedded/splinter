@@ -28,8 +28,7 @@ fn classify(config: &SelectConfig) -> BTreeMap<&'static str, Vec<Selected>> {
     let scrubber = Scrubber::new([fixture::AUTHOR, fixture::AUTHOR_EMAIL]);
     let mut out: BTreeMap<&'static str, Vec<Selected>> = BTreeMap::new();
     for meta in &chain {
-        let selected =
-            prepare(&git, &work.path().join("scratch"), meta, &scrubber, config).unwrap();
+        let selected = prepare(&git, meta, &scrubber, config).unwrap();
         let class = match &selected {
             Selected::Replay(_) => "replay",
             Selected::Skipped(_, why) => why.class(),

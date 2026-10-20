@@ -12,8 +12,6 @@
 //! the same repository and bounds give the same list. Every commit that is
 //! not replayed is counted under one [`Skip`] class.
 
-use std::path::Path;
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +19,6 @@ use crate::attempt::CommitPlan;
 use crate::generated::{has_generated_header, is_generated_path};
 use crate::git::{Change, CommitMeta, Git, Kind};
 use crate::scrub::Scrubber;
-use crate::tree::{read_tree, vocabulary};
 
 /// The bounds of selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,6 +96,8 @@ pub enum Skip {
     DiffOverContextShare,
     /// The diff holds a secret-shaped string.
     SecretInDiff,
+    /// git could not be read for the commit.
+    Unreadable,
 }
 
 impl Skip {
@@ -114,6 +113,7 @@ impl Skip {
             Self::MostlyGenerated => "mostly_generated",
             Self::DiffOverContextShare => "diff_over_context_share",
             Self::SecretInDiff => "secret_in_diff",
+            Self::Unreadable => "unreadable",
         }
     }
 }
@@ -130,7 +130,6 @@ pub enum Selected {
 /// Looks at `meta`: its changes, its diff and both trees.
 pub fn prepare(
     git: &Git,
-    scratch: &Path,
     meta: &CommitMeta,
     scrubber: &Scrubber,
     config: &SelectConfig,
@@ -178,22 +177,11 @@ pub fn prepare(
         return skip(Skip::SecretInDiff);
     }
 
-    std::fs::create_dir_all(scratch)?;
-    let read = |rev: &str| -> Result<_> {
-        let dir = tempfile::Builder::new()
-            .prefix("tree-")
-            .tempdir_in(scratch)?;
-        git.export_tree(rev, dir.path())?;
-        read_tree(dir.path())
-    };
-    let parent_tree = read(&parent)?;
     Ok(Selected::Replay(Box::new(CommitPlan {
         sha: meta.sha.clone(),
         parent,
         message: scrubber.scrub(&meta.message),
         changes,
         diff,
-        target_tree: read(&meta.sha)?,
-        parent_words: vocabulary(&parent_tree),
     })))
 }

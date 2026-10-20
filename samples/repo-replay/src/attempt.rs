@@ -32,7 +32,7 @@ use crate::generated::is_generated_path;
 use crate::git::{single_commit_repo, Change, Git};
 use crate::grounding_prompt::grounding_prompt;
 use crate::trace::Trace;
-use crate::tree::{compare, read_tree, Residual, Tree};
+use crate::tree::{compare, read_tree, vocabulary, Residual};
 
 /// Everything known about one replayable commit, computed once and shared by
 /// its attempts.
@@ -48,10 +48,6 @@ pub struct CommitPlan {
     pub changes: Vec<Change>,
     /// The unified diff of those changes.
     pub diff: String,
-    /// The commit's tree (what the attempt must end as).
-    pub target_tree: Tree,
-    /// Words of the parent's text files.
-    pub parent_words: std::collections::HashSet<String>,
 }
 
 /// How an attempt is run.
@@ -176,6 +172,9 @@ pub async fn attempt(
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
 
+    // What the parent's code already says, read before the agent touches the tree.
+    let parent_words = vocabulary(&read_tree(&tree_dir)?);
+
     let mut solve = SolveOptions::new(settings.deadline);
     solve.system = Some(grounding_prompt(&commit.diff));
     solve.max_output_tokens = settings.max_output_tokens;
@@ -197,7 +196,14 @@ pub async fn attempt(
         .map(|c| run_check(&tree_dir, c, settings.check_timeout))
         .collect();
     let actual = read_tree(&tree_dir)?;
-    let residual = compare(&commit.target_tree, &actual, &|p| is_generated_path(p));
+    let target_tree = {
+        let dir = tempfile::Builder::new()
+            .prefix("target-")
+            .tempdir_in(&settings.scratch)?;
+        git.export_tree(&commit.sha, dir.path())?;
+        read_tree(dir.path())?
+    };
+    let residual = compare(&target_tree, &actual, &|p| is_generated_path(p));
     let trajectory = report.solution.trajectory.clone();
     let trace = Trace::of(&trajectory);
     let stopped = if report.stopped_by_tool_cap {
@@ -217,7 +223,7 @@ pub async fn attempt(
         &GateInput {
             changes: &commit.changes,
             plan,
-            parent_words: &commit.parent_words,
+            parent_words: &parent_words,
             diff: &commit.diff,
             added_text: &added_text,
             trace: &trace,
