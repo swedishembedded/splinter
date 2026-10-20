@@ -840,6 +840,22 @@ next lease; the recorded CE7 pass-1 sets stay as recorded and are reported as 0 
 repositories are not affected: the 370 task records of the CE1 pass-1 sets were read offline against the rules: the shortest label is 4
 words, every command is `python3 -m unittest` (it names no module), so none of the 370 requests would change or be refused.
 
+### Amendment 16, 2026-10-20, 03:40 CEST: the recording build changes (compaction, per-call bound), servers on brain 3c5bf0b1a
+
+Made before any set is recorded with the new build. It replaces the recording build of A12.1 for every
+regenerated set started after the two-task check below and changes no other parameter.
+
+**A16.1 Recording build.** Splinter 34db203f linked against sven ba4f08c7 and brain 87dfd94b0. Against the build
+of A12.1 the sven revisions change what a recorded run does in three ways: a compaction of the conversation keeps
+the task message, the compaction trigger uses the serving layer's own token count, and a shell call is bounded by
+`tools.max_timeout_secs` (300 s by default), so no call runs unbounded. Every regenerated set started after the
+check records with this build; a set already running finishes on the build it started with (A4.5) and its
+build is named in its run record. The two-task check of A12.1 is repeated on this build before its first set.
+
+**A16.2 Servers.** The 27B teacher servers run brain 3c5bf0b1a (batched decode on tensor cores, flash prefill
+default; flags of A2.6 and A4.7 unchanged), switched only between two sets (A4.5); the set boundaries and the
+build of each set are recorded in `runs/ce/STATUS.md`.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
