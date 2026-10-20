@@ -18,7 +18,10 @@ succeeds often; the student is never told it (the records carry the serving prom
 
 1. **Select.** Merges, root commits, binary files, submodules and symlinks, oversize commits, commits
    that are mostly generated or vendored (lock files, `vendor/`, `*.min.js`, a `@generated` header)
-   and commits whose diff holds a secret are skipped, each counted under its own class. The source
+   commits whose diff holds a secret, and commits whose diff takes more than a share (default a quarter,
+   `--max-diff-context-percent`) of the served model's context (`--context-tokens`, else what the server
+   reports; tokens estimated at one per three characters) are skipped, each counted under its own class
+   (`diff_over_context_share` for the last). The source
    repository is cloned bare into the state directory and only the clone is read.
 2. **Plan.** A model writes the task as the user would (a terse and a detailed style), from the
    commit message and the diff. A plan that repeats a diff line of `--plan-verbatim-words` words or
@@ -26,7 +29,8 @@ succeeds often; the student is never told it (the records carry the serving prom
    bounds or is mostly code is refused.
 3. **Replay.** The agent (sven's coding tools, in process) works in a fresh single-commit repository
    holding the commit's parent: no later history, no refs, no remote. System prompt: the grounding
-   prompt with the diff. First user message: the plan.
+   prompt with the diff, masked: hunk offsets are removed, every unchanged line is `xxx`, paths and
+   removed and added lines are exact, so the agent has to find each place by searching and reading. First user message: the plan.
 4. **Gate.** Deterministic, on the final tree and the recorded trajectory (rules below).
 5. **Store.** Every attempt is an immutable experience with the gate's verdict as an executable
    annotation; failed attempts are the negatives. The next commit's tree is the real one, never the
@@ -47,6 +51,7 @@ succeeds often; the student is never told it (the records carry the serving prom
 | `unread_edit` | A file that existed was shown (read, `cat`, `sed -n`) before its first edit. |
 | `unmotivated_location` | An edited or removed file was named by the plan or shown by an earlier search or listing. |
 | `leaked_target` | A name that only the diff introduces appears in no call but an edit. |
+| `diff_offset_read` | A `read_file` with an explicit offset whose range covers where a hunk starts is refused unless an earlier search named the file. |
 | `diff_reference` | The agent's words never refer to the diff, the system prompt or its instructions. |
 | `tool_calls_out_of_range` | Between `--min-tool-calls` and `--max-tool-calls` calls. |
 | `run_incomplete` | The run concluded by itself (no cap, repetition stop or deadline). |
@@ -105,8 +110,6 @@ attempts.
 
 The failure is the gate doing its job: the agent edited the file named in the diff's header, which the
 terse plan did not name and no search had shown. The two passes produced two records through splinter's
-dataset build (the failed attempt is counted as an exclusion). A pattern the gate does not catch: the
-agent's first read of a file used the line offset of the diff's hunk, so the agent's reads are
-located by the diff even when the file is named by the plan. Wall times were dominated by the shared
+dataset build (the failed attempt is counted as an exclusion). In the passed attempts the agent's first read used the line offset of the diff's hunk; that run predates the masking of the diff and the `diff_offset_read` rule, which close it. Wall times were dominated by the shared
 server's queue and are not a property of the method. The ledger and log of the run are kept outside
 the repository with the command that produced them.

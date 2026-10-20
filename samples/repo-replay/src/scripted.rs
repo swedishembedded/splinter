@@ -118,17 +118,75 @@ pub enum Behaviour {
     ShellWrite,
     /// Edits files nothing pointed to (honest, but with a vague plan).
     NoSearch,
+    /// Reads each file at the line where the diff's hunk starts, without searching.
+    ReadAtHunk,
+}
+
+/// The `+` and `-` lines of a file's hunks.
+fn changed(hunks: &str) -> Vec<&str> {
+    hunks
+        .lines()
+        .filter(|l| l.starts_with('+') || l.starts_with('-'))
+        .collect()
+}
+
+/// The unmasked version of the masked `shown` files: a scripted agent plays
+/// an agent that works out the context by reading the file, and the script
+/// has no file to read, so it is given the diffs of the history (`truths`) and
+/// takes the one whose changed lines match what the prompt shows.
+fn resolve(shown: Vec<FileDiff>, truths: &[String]) -> Vec<FileDiff> {
+    for truth in truths {
+        let files = parse_diff(truth);
+        let matched: Vec<FileDiff> = shown
+            .iter()
+            .filter_map(|s| {
+                files
+                    .iter()
+                    .find(|f| f.new == s.new && changed(&f.hunks) == changed(&s.hunks))
+                    .cloned()
+            })
+            .collect();
+        if matched.len() == shown.len() {
+            return matched;
+        }
+    }
+    shown
+}
+
+/// A word of the first removed line (else the first unchanged one) to
+/// search for: the longest identifier in it.
+fn anchor(hunks: &str) -> String {
+    let line = hunks
+        .lines()
+        .find(|l| l.starts_with('-') && !l.starts_with("---"))
+        .or_else(|| hunks.lines().find(|l| l.starts_with(' ')))
+        .unwrap_or_default();
+    line.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .max_by_key(|w| w.len())
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// Where the first hunk starts in the original file.
+fn first_hunk_start(hunks: &str) -> u64 {
+    hunks
+        .lines()
+        .next()
+        .and_then(|l| l.strip_prefix("@@ -"))
+        .and_then(|l| l.split([',', ' ']).next())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(1)
 }
 
 /// The tool calls of `behaviour` on the diff in the system prompt.
 #[must_use]
-pub fn actions(system_prompt: &str, behaviour: &Behaviour) -> Vec<Action> {
+pub fn actions(system_prompt: &str, behaviour: &Behaviour, truths: &[String]) -> Vec<Action> {
     // The grounding prompt carries the diff between its intro and its rules.
     let diff = system_prompt
         .split("\n\nHow to work:")
         .next()
         .unwrap_or_default();
-    let files = parse_diff(diff);
+    let files = resolve(parse_diff(diff), truths);
     let mut out = Vec::new();
     match behaviour {
         Behaviour::ApplyViaShell => {
@@ -226,8 +284,18 @@ pub fn actions(system_prompt: &str, behaviour: &Behaviour) -> Vec<Action> {
                 ));
             }
             if !file.hunks.is_empty() {
-                if read {
-                    out.push(act("read_file", json!({"path": file.new})));
+                match behaviour {
+                    Behaviour::ReadAtHunk => out.push(act(
+                        "read_file",
+                        json!({"path": file.new, "offset": first_hunk_start(&file.hunks), "limit": 20}),
+                    )),
+                    Behaviour::NoSearch => out.push(act("read_file", json!({"path": file.new}))),
+                    _ => {
+                        out.push(act("grep", json!({"pattern": anchor(&file.hunks)})));
+                        if read {
+                            out.push(act("read_file", json!({"path": file.new})));
+                        }
+                    }
                 }
                 out.push(act(
                     "edit_file",
@@ -251,13 +319,14 @@ fn closing(behaviour: &Behaviour) -> String {
 /// An agent that follows [`actions`] for its [`Behaviour`].
 pub struct ScriptedAgent {
     behaviour: Behaviour,
+    truths: Vec<String>,
 }
 
 impl ScriptedAgent {
     /// An agent behaving as `behaviour`.
     #[must_use]
-    pub fn provider(behaviour: Behaviour) -> Arc<dyn ModelProvider> {
-        Arc::new(Self { behaviour })
+    pub fn provider(behaviour: Behaviour, truths: Vec<String>) -> Arc<dyn ModelProvider> {
+        Arc::new(Self { behaviour, truths })
     }
 }
 
@@ -289,7 +358,7 @@ impl ModelProvider for ScriptedAgent {
             .iter()
             .filter(|m| matches!(m.content, MessageContent::ToolResult { .. }))
             .count();
-        let script = actions(&system, &self.behaviour);
+        let script = actions(&system, &self.behaviour, &self.truths);
         Ok(match script.get(done) {
             Some(action) => stream(vec![
                 ResponseEvent::ToolCall {

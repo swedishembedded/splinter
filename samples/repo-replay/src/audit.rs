@@ -46,12 +46,37 @@ pub fn open_context(state: &Path) -> Result<Context> {
     Ok(Context::new(config, false)?)
 }
 
+/// The full diff of every commit of the fixture against its first parent.
+pub fn history_diffs(source: &Path) -> Result<Vec<String>> {
+    let git = crate::git::Git::at(source);
+    let chain = git.first_parent_chain(None, None)?;
+    chain
+        .iter()
+        .filter(|c| c.parents.len() == 1)
+        .map(|c| {
+            git.text(&[
+                "diff",
+                "--no-color",
+                "-M",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
+                &c.parents[0],
+                &c.sha,
+            ])
+        })
+        .collect()
+}
+
 /// Scripted models: a planner of `specificity` and an agent behaving as `behaviour`.
 #[must_use]
-pub fn scripted_models(behaviour: Behaviour, specificity: Specificity) -> Models {
+pub fn scripted_models(
+    behaviour: Behaviour,
+    specificity: Specificity,
+    truths: &[String],
+) -> Models {
     Models {
         planner: Model::new(ScriptedPlanner::provider(specificity), "scripted/planner"),
-        agent: ScriptedAgent::provider(behaviour),
+        agent: ScriptedAgent::provider(behaviour, truths.to_vec()),
         identity: "scripted/agent".into(),
     }
 }
@@ -200,6 +225,12 @@ pub fn cheaters(source: &Path) -> Vec<(&'static str, Behaviour, &'static str, &'
             "edit",
             "forbidden_shell",
         ),
+        (
+            "reads at the line a hunk starts at",
+            Behaviour::ReadAtHunk,
+            "edit",
+            "diff_offset_read",
+        ),
     ]
 }
 
@@ -219,6 +250,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
     std::fs::create_dir_all(&source)?;
     let ids = fixture::build(&source)?;
     let digest_before = directory_digest(&source)?;
+    let truths = history_diffs(&source)?;
     let state = |name: &str| -> PathBuf { work.join(name) };
 
     // The honest solver, whole history, both plan styles, parallel attempts.
@@ -227,7 +259,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
     let config = default_config(&source, &honest_state);
     let honest = run_blocking(
         &ctx,
-        &scripted_models(Behaviour::Honest, Specificity::NamesFiles),
+        &scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths),
         &config,
     )?;
     let attempts: Vec<&Entry> = honest
@@ -332,7 +364,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
     let again_ctx = open_context(&again_state)?;
     let again = run_blocking(
         &again_ctx,
-        &scripted_models(Behaviour::Honest, Specificity::NamesFiles),
+        &scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths),
         &default_config(&source, &again_state),
     )?;
     check(
@@ -353,7 +385,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
         config.styles = vec![PlanStyle::Terse];
         let report = run_blocking(
             &cheat_ctx,
-            &scripted_models(behaviour, Specificity::NamesFiles),
+            &scripted_models(behaviour, Specificity::NamesFiles, &truths),
             &config,
         )?;
         let entry = report
@@ -380,7 +412,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
     config.styles = vec![PlanStyle::Terse];
     let report = run_blocking(
         &vague_ctx,
-        &scripted_models(Behaviour::NoSearch, Specificity::Vague),
+        &scripted_models(Behaviour::NoSearch, Specificity::Vague, &truths),
         &config,
     )?;
     check(

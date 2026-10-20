@@ -30,7 +30,9 @@ use splinter_repo_replay::gate::GateConfig;
 use splinter_repo_replay::ledger;
 use splinter_repo_replay::pipeline::{run, Models};
 use splinter_repo_replay::plan_prompt::PlanStyle;
-use splinter_repo_replay::select::SelectConfig;
+use splinter_repo_replay::select::{
+    SelectConfig, DEFAULT_CONTEXT_SHARE_PERCENT, DEFAULT_CONTEXT_TOKENS,
+};
 use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
 
 #[derive(Parser, Debug)]
@@ -125,9 +127,14 @@ struct RunArgs {
     /// Most changed files of a replayable commit.
     #[arg(long, default_value_t = SelectConfig::default().max_files)]
     max_files: usize,
-    /// Largest diff, in tokens, the replay prompt may carry.
-    #[arg(long, default_value_t = SelectConfig::default().max_diff_tokens)]
-    max_diff_tokens: usize,
+    /// The served model's context in tokens (default: what the server reports,
+    /// else 32768).
+    #[arg(long)]
+    context_tokens: Option<usize>,
+    /// The share of the context, in percent, a commit's diff may take; larger
+    /// commits are skipped as `diff_over_context_share`.
+    #[arg(long, default_value_t = DEFAULT_CONTEXT_SHARE_PERCENT)]
+    max_diff_context_percent: usize,
     /// Edit calls a changed file needs.
     #[arg(long, default_value_t = GateConfig::default().min_edits_per_file)]
     min_edits_per_file: usize,
@@ -219,12 +226,20 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.max_output_tokens = args.max_output_tokens;
     config.plan_tries = args.plan_tries;
     config.min_line_tokens = args.plan_verbatim_words;
+    let ctx = open_context(&args.state)?;
+    let served_context = match args.context_tokens {
+        Some(tokens) => tokens,
+        None => ctx
+            .runtime()
+            .block_on(models.agent.probe_context_window())
+            .map_or(DEFAULT_CONTEXT_TOKENS, |t| t as usize),
+    };
     config.select = SelectConfig {
         max_changed_lines: args.max_changed_lines,
         max_files: args.max_files,
-        max_diff_tokens: args.max_diff_tokens,
         ..SelectConfig::default()
-    };
+    }
+    .with_context_share(served_context, args.max_diff_context_percent);
     config.gate = GateConfig {
         min_edits_per_file: args.min_edits_per_file,
         min_tool_calls: args.min_tool_calls,
@@ -233,7 +248,6 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.checks.clone_from(&args.checks);
     config.check_timeout = Duration::from_secs(args.check_secs);
 
-    let ctx = open_context(&args.state)?;
     let report = ctx.runtime().block_on(run(&ctx, &models, &config))?;
     let passed = report
         .entries

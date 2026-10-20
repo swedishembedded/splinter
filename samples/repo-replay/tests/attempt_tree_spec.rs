@@ -13,6 +13,7 @@
 
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::git::{mirror, single_commit_repo, Git};
+use splinter_repo_replay::grounding_prompt::{grounding_prompt, mask_diff};
 use splinter_repo_replay::plan::{validate, PlanCheck, PlanRejection};
 use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
@@ -150,4 +151,28 @@ fn a_refused_plan_is_rewritten_with_the_reason_in_front_of_the_model() {
     assert_eq!(plan, good);
     // system + user, then system + user + refused plan + the reason.
     assert_eq!(*provider.seen.lock().unwrap(), [2, 4]);
+}
+
+#[test]
+fn the_diff_the_agent_sees_has_no_offsets_and_no_unchanged_lines() {
+    let diff = "diff --git a/calc.py b/calc.py\nindex 1111111..2222222 100644\n--- a/calc.py\n+++ b/calc.py\n@@ -5,7 +5,7 @@ def total(price):\n def add(a, b):\n     return a + b\n \n-def old_name(x):\n+def new_name(x):\n     return x\n \n";
+    let masked = mask_diff(diff);
+    assert!(!masked.contains("@@ -"), "{masked}");
+    assert!(
+        !masked.contains("def total") && !masked.contains("return a + b"),
+        "{masked}"
+    );
+    assert!(!masked.contains("index "), "{masked}");
+    for kept in [
+        "diff --git a/calc.py b/calc.py",
+        "--- a/calc.py",
+        "+++ b/calc.py",
+        "@@ @@",
+        "-def old_name(x):",
+        "+def new_name(x):",
+        " xxx",
+    ] {
+        assert!(masked.contains(kept), "{kept} missing from {masked}");
+    }
+    assert!(!grounding_prompt(diff).contains("@@ -5"));
 }

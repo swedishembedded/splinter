@@ -30,12 +30,42 @@ pub struct SelectConfig {
     pub max_changed_lines: usize,
     /// Most changed files of a replayable commit.
     pub max_files: usize,
-    /// Largest diff, in tokens (four characters each), a replay's system
-    /// prompt may carry: the diff is in the context of every turn.
+    /// Largest diff, in tokens ([`estimate_tokens`]), a replay's system
+    /// prompt may carry: the diff is in the context of every turn. Set from
+    /// the served model's context with [`SelectConfig::with_context_share`].
     pub max_diff_tokens: usize,
     /// Share of changed lines, in percent, above which generated content
     /// makes a commit not worth replaying.
     pub max_generated_percent: usize,
+}
+
+/// The context assumed when a caller does not know the model's: the
+/// smallest window the 27B is served with here.
+pub const DEFAULT_CONTEXT_TOKENS: usize = 32768;
+
+/// The share of the model's context the diff may take, in percent.
+pub const DEFAULT_CONTEXT_SHARE_PERCENT: usize = 25;
+
+/// Tokens of `text` as a conservative estimate: one token per three
+/// characters. English prose and code run at about four characters per token
+/// on the tokenizers of the models served here, so this overcounts by about a
+/// third and skips a commit rather than overflowing a context. A served model
+/// exposes no tokenizer through its API; a local one's could replace this.
+#[must_use]
+pub fn estimate_tokens(text: &str) -> usize {
+    text.len().div_ceil(3)
+}
+
+impl SelectConfig {
+    /// This configuration with the diff limited to `percent` of a model's
+    /// `context_tokens`.
+    #[must_use]
+    pub fn with_context_share(self, context_tokens: usize, percent: usize) -> Self {
+        Self {
+            max_diff_tokens: context_tokens * percent / 100,
+            ..self
+        }
+    }
 }
 
 impl Default for SelectConfig {
@@ -43,7 +73,7 @@ impl Default for SelectConfig {
         Self {
             max_changed_lines: 400,
             max_files: 12,
-            max_diff_tokens: 6000,
+            max_diff_tokens: DEFAULT_CONTEXT_TOKENS * DEFAULT_CONTEXT_SHARE_PERCENT / 100,
             max_generated_percent: 50,
         }
     }
@@ -65,8 +95,8 @@ pub enum Skip {
     Oversize,
     /// Mostly generated or vendored content, or nothing else.
     MostlyGenerated,
-    /// The diff does not fit the replay prompt's budget.
-    OverContextBudget,
+    /// The diff takes more than its share of the model's context.
+    DiffOverContextShare,
     /// The diff holds a secret-shaped string.
     SecretInDiff,
 }
@@ -82,7 +112,7 @@ impl Skip {
             Self::SpecialEntry => "special_entry",
             Self::Oversize => "oversize",
             Self::MostlyGenerated => "mostly_generated",
-            Self::OverContextBudget => "over_context_budget",
+            Self::DiffOverContextShare => "diff_over_context_share",
             Self::SecretInDiff => "secret_in_diff",
         }
     }
@@ -141,8 +171,8 @@ pub fn prepare(
         .flat_map(|c| std::iter::once(c.path.clone()).chain(c.old_path.clone()))
         .collect();
     let diff = git.diff(&parent, &meta.sha, &paths)?;
-    if diff.len() / 4 > config.max_diff_tokens {
-        return skip(Skip::OverContextBudget);
+    if estimate_tokens(&diff) > config.max_diff_tokens {
+        return skip(Skip::DiffOverContextShare);
     }
     if scrubber.finds_secret(&diff) {
         return skip(Skip::SecretInDiff);

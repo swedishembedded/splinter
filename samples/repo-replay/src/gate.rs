@@ -38,6 +38,9 @@
 //!   nor an earlier search or listing showed.
 //! * `leaked_target` - an identifier that only the diff introduces appeared
 //!   in a call that is not an edit (a search for a name nobody could know).
+//! * `diff_offset_read` - a `read_file` with an explicit line offset whose
+//!   range covers where a hunk of the diff starts, before any search result
+//!   named that file: the agent knew the place from the diff's positions.
 //! * `diff_reference` - the agent's words refer to the diff or its
 //!   instructions.
 //! * `tool_calls_out_of_range` - fewer or more calls than the bounds.
@@ -82,6 +85,8 @@ pub struct GateInput<'a> {
     pub plan: &'a str,
     /// Identifier-shaped words the parent tree already contains.
     pub parent_words: &'a HashSet<String>,
+    /// The commit's diff as git wrote it (unmasked): where its hunks start.
+    pub diff: &'a str,
     /// The text of the diff's added lines.
     pub added_text: &'a str,
     /// What the agent did.
@@ -231,6 +236,7 @@ pub fn evaluate(input: &GateInput<'_>, config: &GateConfig) -> Verdict {
     }
     edit_rules(input, config, &mut add);
     leak_rules(input, &mut add);
+    offset_rules(input, &mut add);
     let said = re(
         r"(?i)\b(?:the|this|given|provided|above) (?:diff|patch)\b|system prompt|my instructions|these instructions|target commit|(?:was|been) (?:told|instructed|given)|reproduce (?:exactly )?(?:the|these) changes",
     );
@@ -509,6 +515,67 @@ fn leak_rules(input: &GateInput<'_>, add: &mut impl FnMut(&str, String)) {
                     "{word} appears only in the change but was used in a {} call at step {}",
                     call.tool, call.step
                 ),
+            );
+        }
+    }
+}
+
+/// The files and original line numbers where the hunks of `diff` start.
+fn hunk_starts(diff: &str) -> Vec<(String, u64)> {
+    let header = re(r"^diff --git a/(.+) b/(.+)$");
+    let hunk = re(r"^@@ -(\d+)");
+    let mut out = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    for line in diff.lines() {
+        if let Some(c) = header.captures(line) {
+            names = vec![c[1].to_string(), c[2].to_string()];
+        } else if let Some(c) = hunk.captures(line) {
+            let start = c[1].parse().unwrap_or(0);
+            out.extend(names.iter().map(|n| (n.clone(), start)));
+        }
+    }
+    out
+}
+
+/// A read at the place the diff says, before a search found the file.
+fn offset_rules(input: &GateInput<'_>, add: &mut impl FnMut(&str, String)) {
+    let hunks = hunk_starts(input.diff);
+    let calls = &input.trace.calls;
+    for (index, call) in calls.iter().enumerate() {
+        if call.tool != "read_file" {
+            continue;
+        }
+        let Some(offset) = call
+            .args
+            .get("offset")
+            .and_then(serde_json::Value::as_u64)
+            .filter(|o| *o > 1)
+        else {
+            continue;
+        };
+        let limit = call
+            .args
+            .get("limit")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(200);
+        let Some(path) = call.arg("path").map(|p| norm(p, input.attempt_roots)) else {
+            continue;
+        };
+        let covers = hunks
+            .iter()
+            .any(|(p, start)| *p == path && offset <= *start && *start < offset + limit);
+        let searched = calls[..index].iter().any(|c| {
+            let search = match c.tool.as_str() {
+                "find_file" | "grep" => true,
+                "shell" => c.command().is_some_and(lists),
+                _ => false,
+            };
+            search && mentions(&c.result, &path)
+        });
+        if covers && !searched {
+            add(
+                "diff_offset_read",
+                format!("{path} was read from line {offset} at step {}, where a hunk starts, before any search named it", call.step),
             );
         }
     }

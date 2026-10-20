@@ -218,6 +218,7 @@ pub async fn attempt(
             changes: &commit.changes,
             plan,
             parent_words: &commit.parent_words,
+            diff: &commit.diff,
             added_text: &added_text,
             trace: &trace,
             residual: &residual,

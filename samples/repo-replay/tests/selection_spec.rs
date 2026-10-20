@@ -93,13 +93,22 @@ fn bounds_skip_what_is_too_large_or_does_not_fit_the_prompt() {
     };
     let budget = classify(&tight);
     assert_eq!(
-        budget["over_context_budget"].len(),
+        budget["diff_over_context_share"].len(),
         8,
         "the budget skips the seven replayable commits and the one with a secret, whose budget check comes first"
     );
     assert!(!budget.contains_key("replay"));
     assert!(matches!(
-        budget["over_context_budget"][0],
-        Selected::Skipped(_, Skip::OverContextBudget)
+        budget["diff_over_context_share"][0],
+        Selected::Skipped(_, Skip::DiffOverContextShare)
     ));
+}
+
+#[test]
+fn the_diff_may_take_a_quarter_of_the_context_unless_told_otherwise() {
+    assert_eq!(SelectConfig::default().max_diff_tokens, 32768 / 4);
+    let wide = SelectConfig::default().with_context_share(100_000, 10);
+    assert_eq!(wide.max_diff_tokens, 10_000);
+    // The estimate is conservative: three characters a token.
+    assert_eq!(splinter_repo_replay::select::estimate_tokens("abcdefg"), 3);
 }
