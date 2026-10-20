@@ -178,3 +178,134 @@ fn comparing_work_with_the_change_it_was_shown_is_a_reference_but_comparing_with
         );
     }
 }
+
+#[test]
+fn an_interpreter_reading_a_file_is_not_writing_one() {
+    let read = call(2, "read_file", json!({"path": "src/ppu.rs"}), "x");
+    let shell = |cmd: &str| call(1, "shell", json!({"shell_command": cmd}), "");
+    let checks = classes(vec![
+        shell("python3 -c \"import yaml; d=yaml.safe_load(open('board.yaml')); print(d)\""),
+        read.clone(),
+    ]);
+    assert!(
+        !checks.contains(&"forbidden_shell".to_string()),
+        "{checks:?}"
+    );
+    for write in [
+        "python3 -c \"open('out.txt','w').write('x')\"",
+        "python3 -c \"import pathlib; pathlib.Path('a').write_text('x')\"",
+        "node -e \"require('fs').writeFileSync('a','x')\"",
+    ] {
+        let found = classes(vec![shell(write), read.clone()]);
+        assert!(
+            found.contains(&"forbidden_shell".to_string()),
+            "{write}: {found:?}"
+        );
+    }
+}
+
+#[test]
+fn a_crate_name_the_parent_spells_with_dashes_is_not_a_name_only_the_change_has() {
+    // The parent's manifest says `acme-core-m`; the change spells it `acme_core_m` in code.
+    let parent = splinter_repo_replay::tree::vocabulary(
+        &[(
+            "Cargo.toml".to_string(),
+            splinter_repo_replay::tree::Entry::File {
+                bytes: b"acme-core-m = { path = \"../acme-core-m\" }\n".to_vec(),
+                executable: false,
+            },
+        )]
+        .into_iter()
+        .collect(),
+    );
+    let trace = Trace {
+        calls: vec![
+            call(1, "read_file", json!({"path": "src/ppu.rs"}), "x"),
+            call(
+                2,
+                "shell",
+                json!({"shell_command": "grep -n acme_core_m Cargo.toml"}),
+                "",
+            ),
+            call(
+                3,
+                "edit_file",
+                json!({"path": "src/ppu.rs", "diff": "@@\n-b\n+use acme_core_m;\n"}),
+                "ok",
+            ),
+        ],
+        said: vec![],
+    };
+    let changes = [Change {
+        kind: Kind::Modified,
+        path: "src/ppu.rs".into(),
+        old_path: None,
+        added: Some(1),
+        removed: Some(1),
+        special: false,
+    }];
+    let roots = ["/work/tree".to_string()];
+    let verdict = evaluate(
+        &GateInput {
+            changes: &changes,
+            plan: "Please change src/ppu.rs so that b links the cortex-m crate.",
+            parent_words: &parent,
+            diff: DIFF,
+            added_text: "use acme_core_m;",
+            trace: &trace,
+            residual: &[],
+            forbidden_locations: &[],
+            attempt_roots: &roots,
+            stopped: None,
+        },
+        &GateConfig::default(),
+    );
+    assert!(!verdict.has("leaked_target"), "{:?}", verdict.reasons);
+}
+
+#[test]
+fn a_search_with_context_lines_in_the_file_shows_the_file() {
+    let grep = |context: serde_json::Value| {
+        call(
+            1,
+            "grep",
+            json!({"path": "src/ppu.rs", "pattern": "b", "context_lines": context}),
+            "src/ppu.rs-299-a\nsrc/ppu.rs:300:b\nsrc/ppu.rs-301-d",
+        )
+    };
+    let with = classes(vec![grep(json!(15))]);
+    assert!(!with.contains(&"unread_edit".to_string()), "{with:?}");
+    let without = classes(vec![grep(json!(0))]);
+    assert!(without.contains(&"unread_edit".to_string()), "{without:?}");
+}
+
+#[test]
+fn words_inside_quotes_that_are_only_searched_for_are_not_commands() {
+    let read = call(2, "read_file", json!({"path": "src/ppu.rs"}), "x");
+    let shell = |cmd: &str| call(1, "shell", json!({"shell_command": cmd}), "");
+    for searching in [
+        "grep -n 'x << 9\\|y' src/ppu.rs",
+        "grep -rn \"curl\\|patch\" src",
+        "grep -n tee src/ppu.rs | head",
+        "grep -rn patch src/",
+    ] {
+        let found = classes(vec![shell(searching), read.clone()]);
+        assert!(
+            !found.contains(&"forbidden_shell".to_string()),
+            "{searching}: {found:?}"
+        );
+    }
+    for doing in [
+        "cat <<'EOF' > a.txt\nx\nEOF",
+        "patch -p1 < fix.diff",
+        "echo x | tee out.txt",
+        "curl https://example.org",
+        "bash -c \"cat <<EOF\nx\nEOF\"",
+    ] {
+        let found = classes(vec![shell(doing), read.clone()]);
+        assert!(
+            found.contains(&"forbidden_shell".to_string()),
+            "{doing}: {found:?}"
+        );
+    }
+}

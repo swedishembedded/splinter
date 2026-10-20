@@ -33,7 +33,7 @@
 //! * `outside_tree` - a shell command naming a path above or outside the
 //!   attempt tree.
 //! * `unread_edit` - a file that existed was edited before any call showed
-//!   its content.
+//!   its content (a read, or a search in that file with context lines).
 //! * `unmotivated_location` - a file was edited that neither the plan named
 //!   nor an earlier search or listing showed.
 //! * `leaked_target` - an identifier that only the diff introduces appeared
@@ -59,7 +59,7 @@ use serde::{Deserialize, Serialize};
 use crate::git::{Change, Kind};
 use crate::justify::{unjustified, EDIT_TOOLS};
 use crate::trace::{Call, Trace};
-use crate::tree::{identifiers, Residual};
+use crate::tree::{dashed_names, identifiers, Residual};
 
 /// The bounds of the process rules.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -271,29 +271,61 @@ pub fn evaluate(input: &GateInput<'_>, config: &GateConfig) -> Verdict {
 }
 
 fn shell_rules(command: &str, input: &GateInput<'_>, add: &mut impl FnMut(&str, String)) {
-    let forbidden: [(&str, Regex); 8] = [
-        ("git apply", re(r"\bgit\s+(?:-\S+\s+)*(?:apply|am)\b")),
-        ("patch", re(r"(?:^|[;&|(]\s*|\s)(?:\S*/)?patch(?:\s|$)")),
+    // What the command runs, with the text of quoted arguments taken out: a
+    // grep pattern naming `patch` or `<<` is not that command. A command that
+    // hands a quoted script to a shell or interpreter is read as written.
+    let quoted = re(r#""[^"]*"|'[^']*'"#);
+    let runs_a_script =
+        re(r"\b(?:(?:ba|z|da)?sh|eval|python3?|node|ruby|perl)\b\s+(?:-\w+\s+)*-[ce]\b")
+            .is_match(command);
+    let visible = if runs_a_script {
+        command.to_string()
+    } else {
+        quoted.replace_all(command, " ").into_owned()
+    };
+    let command_start = r"(?:^|[;&|(]\s*|\bxargs\s+|\bsudo\s+)(?:\S*/)?";
+    // (name, pattern, whether it is read on the visible text or the command as written)
+    let forbidden: [(&str, Regex, bool); 8] = [
+        (
+            "git apply",
+            re(r"\bgit\s+(?:-\S+\s+)*(?:apply|am)\b"),
+            false,
+        ),
+        ("patch", re(&format!(r"{command_start}patch(?:\s|$)")), true),
         (
             "a git command that changes or fetches files or history",
             re(
                 r"\bgit\s+(?:-\S+\s+)*(?:checkout|switch|restore|fetch|pull|clone|merge|rebase|cherry-pick|reset|remote|worktree|format-patch|revert|bundle|submodule)\b",
             ),
+            false,
         ),
         (
             "an in-place edit",
             re(r"\b(?:sed|perl|ruby)\b[^|;&]*\s-[a-zA-Z]*i|\bawk\b.*-i\s*inplace"),
+            false,
         ),
-        ("a here-document", re(r"<<")),
-        ("tee", re(r"\btee\b")),
+        ("a here-document", re(r"<<"), true),
+        ("tee", re(&format!(r"{command_start}tee\b")), true),
         (
             "an interpreter writing a file",
-            re(r"\b(?:python3?|node|ruby|perl)\b\s+-[ce]\b.*(?:write|open\s*\()"),
+            re(
+                r#"\b(?:python3?|node|ruby|perl)\b\s+-[ce]\b.*(?:write|open\s*\([^)]*,\s*['"][^'"]*[wax+]|mode\s*=\s*['"][^'"]*[wax+])"#,
+            ),
+            false,
         ),
-        ("the network", re(r"\b(?:curl|wget|ssh|scp|nc)\b")),
+        (
+            "the network",
+            re(&format!(r"{command_start}(?:curl|wget|ssh|scp|nc)\b")),
+            true,
+        ),
     ];
-    for (name, pattern) in &forbidden {
-        if pattern.is_match(command) {
+    for (name, pattern, on_visible) in &forbidden {
+        let text = if *on_visible {
+            visible.as_str()
+        } else {
+            command
+        };
+        if pattern.is_match(text) {
             add("forbidden_shell", format!("{name}: {command}"));
         }
     }
@@ -349,6 +381,17 @@ fn shows(call: &Call, paths: &[&str], root: &[String]) -> bool {
         "read_file" => call
             .arg("path")
             .is_some_and(|p| paths.contains(&norm(p, root).as_str())),
+        // A search in that file that prints its surroundings shows the file.
+        "grep" => {
+            call.args
+                .get("context_lines")
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|n| n > 0)
+                && call
+                    .arg("path")
+                    .is_some_and(|p| paths.contains(&norm(p, root).as_str()))
+                && !call.result.trim().is_empty()
+        }
         "shell" => call.command().is_some_and(|c| {
             reads(c) && paths.iter().any(|p| c.contains(p) || c.contains(base(p)))
         }),
@@ -504,8 +547,13 @@ fn edit_rules(input: &GateInput<'_>, config: &GateConfig, add: &mut impl FnMut(&
 }
 
 fn leak_rules(input: &GateInput<'_>, add: &mut impl FnMut(&str, String)) {
-    let plan_words: HashSet<&str> = identifiers(input.plan).collect();
+    let plan_names = dashed_names(input.plan);
+    let plan_words: HashSet<&str> = identifiers(input.plan)
+        .chain(plan_names.iter().map(String::as_str))
+        .collect();
+    let added_names = dashed_names(input.added_text);
     let only_diff: HashSet<&str> = identifiers(input.added_text)
+        .chain(added_names.iter().map(String::as_str))
         .filter(|w| !input.parent_words.contains(*w) && !plan_words.contains(w))
         .collect();
     if only_diff.is_empty() {

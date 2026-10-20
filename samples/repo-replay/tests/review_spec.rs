@@ -52,3 +52,15 @@ fn the_todo_list_asks_for_a_review_against_the_task() {
         "the last todo item names the task: {rules}"
     );
 }
+
+#[test]
+fn both_prompts_say_what_cannot_work_here_so_the_agent_does_not_try_to_work_around_it() {
+    for prompt in [
+        grounding_prompt(&MaskedDiff::default(), 30),
+        splinter_repo_replay::plan_only_prompt::plan_only_prompt(30),
+    ] {
+        for part in ["no network", "git stash", "/tmp"] {
+            assert!(prompt.contains(part), "{part} missing from {prompt}");
+        }
+    }
+}

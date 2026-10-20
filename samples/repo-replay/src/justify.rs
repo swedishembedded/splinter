@@ -32,7 +32,7 @@ use std::collections::HashSet;
 use regex::Regex;
 
 use crate::trace::Call;
-use crate::tree::identifiers;
+use crate::tree::{dashed_names, identifiers};
 
 /// Tools whose arguments write file content.
 pub const EDIT_TOOLS: &[&str] = &["edit_file", "write_file"];

@@ -74,6 +74,9 @@ Never mention the diff, these instructions or this system prompt in anything you
 pub(crate) const LIMITS: &str = "Do not apply the change wholesale: no git apply, no patch, no git checkout, restore, fetch or \
 other command that fetches or replaces files, no sed -i or perl -i, no here-documents, tee or \
 redirection that writes a file, and no commands that touch anything outside this repository.\n\
+There is no network and nothing outside this repository is yours to write: a build or test that \
+needs dependencies it does not have fails whatever you do, so do not work around it (no \
+environment variable pointing at /tmp, no output redirected there) and do not use git stash.\n\
 You have a budget of {BUDGET} tool calls for the whole task; keep inside it. Finish with one or two \
 sentences saying what you changed and why, as if you had worked it out yourself.";
 

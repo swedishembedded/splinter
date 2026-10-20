@@ -192,6 +192,7 @@ pub fn vocabulary(tree: &Tree) -> std::collections::HashSet<String> {
         if let Entry::File { bytes, .. } = entry {
             if let Ok(text) = std::str::from_utf8(bytes) {
                 words.extend(identifiers(text).map(String::from));
+                words.extend(dashed_names(text));
             }
         }
     }
@@ -203,4 +204,18 @@ pub fn vocabulary(tree: &Tree) -> std::collections::HashSet<String> {
 pub fn identifiers(text: &str) -> impl Iterator<Item = &str> {
     text.split(|c: char| !(c.is_alphanumeric() || c == '_'))
         .filter(|w| w.chars().count() >= 4 && !w.starts_with(|c: char| c.is_ascii_digit()))
+}
+
+/// The names of `text` written with hyphens (`acme-core-m`, a crate or
+/// package name), spelled as code spells them (`acme_core_m`): a manifest
+/// says the one and the code that uses it the other, and they are one name.
+#[must_use]
+pub fn dashed_names(text: &str) -> Vec<String> {
+    let dashed = regex::Regex::new(r"[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)+")
+        .unwrap_or_else(|_| unreachable!("a fixed pattern"));
+    dashed
+        .find_iter(text)
+        .map(|m| m.as_str().replace('-', "_"))
+        .filter(|n| n.chars().count() >= 4)
+        .collect()
 }
