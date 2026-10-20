@@ -1007,6 +1007,68 @@ splinter binary, under the same solve protocol for both arms. That protocol is t
 coding-agent prompt, repetition feedback) and the arms are not started until that amendment has been pushed; if it has not been, the evaluation waits and no other
 protocol is substituted. The primary test is that of A2.3 on family outcomes; the comparison keeps the pilot label of A2.3 until its sizing is met.
 
+### Amendment 20, 2026-10-20, 08:56 CEST: the solve protocol of the arms: recommended sampling, bounded thinking, a coding-agent prompt, repetition feedback
+
+Made before any arm is run under it. It applies to every evaluation arm (the untrained 8B and every adapter, and
+the 27B where it is an arm) started after the revisions named in A20.5 are in use, and replaces A2.2's greedy
+one-attempt decoding and "thinking off" for them. Results of arms run before it (CE1 pass 1, the greedy S1
+pilots) stand as results of the protocol they ran under and are never pooled with arms of this one. It
+does not change the tasks, partitions, verifiers, the exposure rule (A13.2), the training recipe (A2.7, A14.2) or
+the teacher passes recorded for training data (A12, A16), except where A20.7 says.
+
+**A20.1 Sampling.** Each arm samples with the model family's recommended settings instead of greedy decoding:
+with thinking off, temperature 0.7, top-p 0.8, top-k 20; with thinking on, temperature 0.6, top-p 0.95,
+top-k 20. The primary measure of an arm is pass@1 averaged over k registered seeds (k and the seed list
+k = 3, seeds 16022413115216019911, 3017204225152849161, 16861570844197835729, each drawn from /dev/urandom as a u64 on 2026-10-20 (command in runs/ce/protocol-seeds.txt), no fixed literal; a family-clustered sign test on the per-family mean of the three, fixed here before any arm runs; the seed of an attempt is part of its record).
+A per-task outcome is the fraction of the k attempts verified, a family's outcome is the mean over its tasks as in
+A2.5, and the primary test and its uncertainty are computed on those family outcomes. The request carries the seed (splinter's served_config) and brain echoes the seed it used, which is recorded; measured on brain 3c5bf0b1a, the same seed twice gave the same 8-token reply. A2.2's reason for greedy decoding (no seedable sampling) no longer holds
+when brain f2eab2a43 is the server build; if a server cannot seed, the arm is not run.
+
+**A20.2 Thinking, bounded.** Thinking is allowed, with a server-enforced budget of 1024 thinking
+tokens per model response (splinter `--thinking --thinking-budget 1024`, sent as brain's `thinking_budget`; a response that exhausts it is closed by the server and
+continues in the answer, and the number of such responses is reported per arm). The budget is the same for both arms of a
+comparison; changing it is an amendment. Thinking text is part of the recorded trajectory and is not training data
+for an arm that did not produce it.
+
+**A20.3 The coding-agent system prompt.** `solve` gives the solver a coding-agent system prompt in place of the
+generic chat prompt ("answer directly and concisely, using a tool when one is offered"). The prompt is part of the splinter
+revision named in A20.5 (`crates/core/src/prompt.rs`, id `coding-agent-1`, recorded with its digest in every trajectory's solve profile) and is the same for every solver, base or adapter. Its content, fixed here:
+  You are a software engineer working in a git repository through tools. You are given a report of behaviour
+  that is wrong. Work in this order. First look: list and search the repository and read the code and the tests that
+  concern the report before you change anything. Then reproduce the symptom from the report with a short command
+  or test and read what it prints. Then change the code (edit the source, not the tests the report relies on).
+  Then run the repository's tests and the reproduction again and read the results; if they fail, read the failure
+  and fix the cause. Never repeat a call whose result you have already seen: if you are about to run the same call again, do
+  something different (read other code, change the call, or change the code). Stop when the behaviour is
+  fixed and the tests pass, and say in one or two sentences what you changed.
+Changing the prompt is an amendment; the arms and the training records of a given comparison use one prompt text (a record
+trained under another prompt is rendered again under this one before training).
+
+**A20.4 Repetition feedback.** The harness (sven d5e68b75) appends a note to the result of a call that is identical to an earlier call of the run and returns the same result,
+saying the result is unchanged and a different action is needed (`agent.note_repeated_results`, switched on by `solve`); a shell call is bounded by
+the ceiling of 1800 s, and a stop from outside carries its label. The run still stops at the repetition bound the build records in the solve profile of each trajectory. The repetition stop and its count remain
+reported per arm; a stop remains a failure of the attempt.
+
+**A20.5 Builds and serving.** Splinter 68ba6a8c4 linked against sven d5e68b75 (>= 8b10610c, B10: a run that ends in the
+middle of a thought concludes `stopped_without_conclusion`, not `success`, which changes the follow-up rounds and is
+registered solve behaviour) and brain cd8df8266. The 8B is served with `--qwen-ctx 40960` (A2.6's 32768 replaced), all other A2.6 / A5.1
+flags unchanged. The 27B teacher server flags are those of A4.7 on brain f2eab2a43; the 8B server is brain f2eab2a43 as well. Both arms of a comparison use one server
+instance, one splinter binary and one prompt, as before (A2.2, A4.5).
+
+**A20.6 Variants and the primary arm.** Two registered variants, run for both arms of a comparison: thinking off (temperature 0.7, top-p 0.8, top-k 20) is the
+primary arm, and thinking on with a 1024-token budget (temperature 0.6, top-p 0.95, top-k 20) is a secondary arm reported beside it; neither replaces the other
+and the primary test is on the primary arm. The runs use the arm script `runs/verifier/arm-seeds.sh` with the seeds of `runs/ce/protocol-seeds.txt`
+(`--sampling-seed`), the 8B base arm first on HALF_A of A8.2. A training record is rendered under the same system prompt
+(`dataset build --system-prompt`), so an adapter is trained again under this protocol before its arm is run; an adapter trained under another prompt is not an arm of it.
+
+**A20.7 Recording passes.** The teacher passes recorded for training data (A12.1, A16.1) keep their greedy settings and
+their build unless a later amendment names this protocol for them; sets recorded under the sven revision of A20.5 are
+named with it in their run record (A4.5), and the `stopped_without_conclusion` count is reported per set.
+
+**A20.8 What is reported.** Per arm: pass@1 mean over the seeds with its family-clustered interval, the verified
+count per seed, repetition stops, thinking-budget hits, tool-call mix and mean agent steps; for a comparison, the primary test of
+A2.3 on the family outcomes. Pilot labelling (A2.3) is unchanged.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
