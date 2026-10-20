@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use splinter_agent::work::WorkProtocol;
 use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
+use splinter_core::prompt::CodingPrompt;
 use splinter_knowledge::capture::{capture_tree, DirtyPolicy, TreeRequest};
 use splinter_knowledge::tasks::workspace::{
     RepositoryProfile, WorkspaceError, WorkspaceGenerator, WorkspacePlan,
@@ -216,6 +217,7 @@ fn generator(
         mutants_per_file: request
             .mutants_per_file
             .unwrap_or(defaults.mutants_per_file),
+        instruction: request.instruction.unwrap_or(defaults.instruction),
         ..defaults
     })
     .map_err(|e| refused("the task generator", &e))
@@ -417,6 +419,7 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
                 follow_ups: agentic.follow_ups,
                 max_tool_calls: agentic.max_tool_calls,
                 max_repeated_results: agentic.max_repeated_results,
+                prompt: CodingPrompt::default(),
             },
             deadline: st.practice.deadline,
             harness: None,
@@ -461,6 +464,7 @@ fn teach_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
                 follow_ups: agentic.follow_ups,
                 max_tool_calls: agentic.max_tool_calls,
                 max_repeated_results: agentic.max_repeated_results,
+                prompt: CodingPrompt::default(),
             },
             deadline: st.practice.deadline,
             cancel: run.cancel_token(),

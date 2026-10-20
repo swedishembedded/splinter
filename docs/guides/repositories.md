@@ -113,7 +113,12 @@ path in what a tool returned, hidden content and the state root still fail it.
 
 A solver of a repository works under the coding-agent prompt (look, reproduce, change,
 verify, never repeat a call, stop when the tests pass) unless the model it is asked for brings
-a prompt of its own (a policy trained to be a person). Each attempt records what it was held
+a prompt of its own (a policy trained to be a person). `coding-agent-1` is the default.
+`--coding-prompt coding-agent-2` selects the second: it says the tests that name the symptoms
+are hidden and the visible suite proves nothing, asks for a direct call of the function the
+report names (`python3 -c`, `lua -e`) instead of a test run, forbids grepping the report's
+words and searching outside the repository, and says to change a crashing script instead of
+running it again. The flag applies to every repository solve of the run, the teacher's included. Each attempt records what it was held
 to in its trajectory's `solve_profile`: the prompt's id and digest, the longest shell call
 (1800 s), sven's note on a repeated result (on), the repetition bound and the tool-call cap,
 and how the model was asked to sample. A served model is asked to sample with `--temperature`,
@@ -141,6 +146,15 @@ test that stays in the tree imports a module that would be withheld
 (`hidden_imported_by_tree`) or when a short symptom cannot be rendered this way
 (`symptom_not_actionable`). The values shown are the one disclosure a task makes of its
 hidden tests, so the exposure audit counts the request as text the solver may see.
+
+`practice --instruction-version 2` words the request of the tasks it generates afresh: it also
+lists the source files by directory (never a test, never a withheld file; at most 30 names,
+the rest counted), says that each symptom line is the name of a hidden test written as words,
+that the hidden tests are run on the final tree and the tests in the tree prove nothing about
+them, and that one fault causes all the symptoms. The generator seeds one fault per task, so a
+list of symptoms is one fault seen through several tests, and a test's name can describe less
+than it checks. Version 1, the default, words the request as before; a task already stored
+keeps its request and so its address.
 
 ## Generations of a coding policy
 

@@ -16,6 +16,7 @@ use splinter_sdk::canaries::CANARY_COUNT;
 use splinter_sdk::curriculum::progress::Params as ProgressParams;
 use splinter_sdk::curriculum::repository_teacher::RepositoryTeacher;
 use splinter_sdk::curriculum::schedule::Strategy;
+use splinter_sdk::knowledge::tasks::workspace::InstructionVersion;
 use splinter_sdk::practice::{
     DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS, DEFAULT_MAX_TOOL_CALLS,
 };
@@ -51,6 +52,12 @@ pub struct PracticeArgs {
     /// The most faults seeded in one file.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize))]
     pub mutants_per_file: Option<usize>,
+    /// How the requests of the tasks generated are worded: 1, the original,
+    /// or 2, which adds the source layout and says the symptoms are hidden
+    /// tests' names. A task already stored keeps its request. Original when
+    /// not given.
+    #[arg(long, value_name = "N", value_parser = instruction_version)]
+    pub instruction_version: Option<InstructionVersion>,
     /// How many families (a family is the file a fault was seeded in) to
     /// reserve for the exam before any attempt is made at any task: their
     /// tasks are set apart and never solved or trained on, in this run or a
@@ -290,4 +297,11 @@ impl ReplayArg {
             )),
         }
     }
+}
+
+fn instruction_version(text: &str) -> Result<InstructionVersion, String> {
+    text.parse::<u8>()
+        .ok()
+        .and_then(InstructionVersion::from_number)
+        .ok_or_else(|| format!("{text:?} is not an instruction version (1 or 2)"))
 }

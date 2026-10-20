@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Args};
 use splinter_sdk::config::{DEFAULT_REMOTE_CONCURRENCY, DEFAULT_SOLVE_DEADLINE};
+use splinter_sdk::vocabulary::prompt::CodingPrompt;
 
 /// Flags every command takes, meaning the same everywhere.
 #[derive(Clone, Debug, Default, Args)]
@@ -115,6 +116,19 @@ pub struct Global {
     #[arg(long, global = true, value_name = "N", requires = "thinking",
         value_parser = clap::value_parser!(u32).range(1..))]
     pub thinking_budget: Option<u32>,
+    /// The coding-agent system prompt a solver of a repository works under:
+    /// `coding-agent-1` or `coding-agent-2`. The registered protocol's prompt
+    /// when not given; the prompt's id and digest are recorded with each
+    /// attempt.
+    #[arg(long, global = true, value_name = "ID", value_parser = coding_prompt)]
+    pub coding_prompt: Option<CodingPrompt>,
+}
+
+fn coding_prompt(id: &str) -> Result<CodingPrompt, String> {
+    CodingPrompt::from_id(id).ok_or_else(|| {
+        let known: Vec<&str> = CodingPrompt::ALL.iter().map(|p| p.id()).collect();
+        format!("{id:?} is not a coding-agent prompt ({})", known.join(", "))
+    })
 }
 
 fn served_top_p(text: &str) -> Result<f32, String> {

@@ -37,12 +37,23 @@
 //! before it looks for a quotation of the hidden tests, and the exposure
 //! audit counts the request as text the solver may see.
 //!
+//! # Wording versions
+//!
+//! [`InstructionVersion::V1`] is the original wording and stays byte-identical:
+//! an address must not change for a task already stored. [`InstructionVersion::V2`]
+//! (chosen by the generator's plan) adds what two trace audits showed solvers
+//! lacked: where the source is (the package directories and their source
+//! files, never the tests), that each symptom line is the name of a hidden
+//! test written as words, and that the hidden tests are what is run on the
+//! final tree, so the tests in the tree prove nothing about them.
+//!
 //! The test command the request names is the one the solver can run: a
 //! module the tests of this task live in is not in the tree, so it is left
 //! out of the command.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::profile::is_test_path;
 #[cfg(test)]
 use crate::tasks::dedup::Seen;
 use splinter_core::selfcontained::MIN_QUOTED_WORDS;
@@ -55,6 +66,41 @@ pub const MIN_SYMPTOM_WORDS: usize = 3;
 
 /// The most characters of one value an assertion's message may show.
 pub const MAX_VALUE_CHARS: usize = 300;
+
+/// The most source files a V2 request lists; the rest are counted.
+const MAX_LISTED_SOURCES: usize = 30;
+
+/// How the request for a fault is worded.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub enum InstructionVersion {
+    /// The original wording: the symptoms, the order to fix them in and the
+    /// command that runs the tests in the tree.
+    #[default]
+    V1,
+    /// V1 plus the source layout, what a symptom line is, and how the hidden
+    /// tests are run.
+    V2,
+}
+
+impl InstructionVersion {
+    /// The version numbered `number` (`1` or `2`).
+    #[must_use]
+    pub fn from_number(number: u8) -> Option<Self> {
+        match number {
+            1 => Some(Self::V1),
+            2 => Some(Self::V2),
+            _ => None,
+        }
+    }
+}
+
+/// The wording a request is composed in, and the source layout V2 states.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Wording<'a> {
+    pub(super) version: InstructionVersion,
+    /// The project's source files (not its tests), as paths from the root.
+    pub(super) sources: &'a [String],
+}
 
 /// A request, and the values of the hidden checks it shows on purpose.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -90,7 +136,24 @@ pub(super) struct Unactionable {
 /// taken out of the solver's tree, `docs` the first docstring line of the
 /// tests that have one and `messages` the exception message of each failed
 /// test.
+#[cfg(test)]
 pub(super) fn compose(
+    test_command: &[String],
+    hidden: &BTreeSet<String>,
+    failing: &BTreeSet<String>,
+    docs: &BTreeMap<String, String>,
+    messages: &BTreeMap<String, String>,
+) -> Result<Request, Unactionable> {
+    let wording = Wording {
+        version: InstructionVersion::V1,
+        sources: &[],
+    };
+    compose_as(&wording, test_command, hidden, failing, docs, messages)
+}
+
+/// [`compose`] in the given `wording`.
+pub(super) fn compose_as(
+    wording: &Wording<'_>,
     test_command: &[String],
     hidden: &BTreeSet<String>,
     failing: &BTreeSet<String>,
@@ -131,15 +194,78 @@ pub(super) fn compose(
             symptoms.len() - MAX_SYMPTOMS
         ));
     }
-    let text = format!(
-        "Some behaviour of this repository is broken. The tests that check it are not in the \
-         tree you were given; they fail on it, and each names a symptom:\n\n{}\n\nFind the cause \
-         in the repository's code and fix it so that this behaviour works again. The tests that \
-         are in the tree must keep passing and are not to be edited; they are run with `{}`.",
-        listed.join("\n"),
-        visible_command(test_command, hidden).join(" ")
-    );
+    let command = visible_command(test_command, hidden).join(" ");
+    let text = match wording.version {
+        InstructionVersion::V1 => format!(
+            "Some behaviour of this repository is broken. The tests that check it are not in the \
+             tree you were given; they fail on it, and each names a symptom:\n\n{}\n\nFind the cause \
+             in the repository's code and fix it so that this behaviour works again. The tests that \
+             are in the tree must keep passing and are not to be edited; they are run with `{command}`.",
+            listed.join("\n"),
+        ),
+        InstructionVersion::V2 => {
+            let layout = source_layout(wording.sources, hidden);
+            format!(
+                "Some behaviour of this repository is broken. {layout}Each line below is the name \
+                 of one hidden failing test, written as words:\n\n{}\n\nThese tests are not in the \
+                 tree you were given; they are run on your final tree and fail on it now. The tests \
+                 that are in the tree pass before and after your change and prove nothing about \
+                 these symptoms (they are run with `{command}` and are not to be edited), so \
+                 reproduce a symptom by calling the code directly, not by searching for these \
+                 words. One fault in the source files causes all of them, and a test's name may \
+                 describe only part of what it checks. Find the cause and fix it so that this \
+                 behaviour works again.",
+                listed.join("\n"),
+            )
+        }
+    };
     Ok(Request { text, shown })
+}
+
+/// The sentence that says where the code is: the directories of the source
+/// files and the files in each, at most [`MAX_LISTED_SOURCES`] (the rest are
+/// counted). Empty when the project has no source file to name. Files of the
+/// hidden tests are never named.
+fn source_layout(sources: &[String], hidden: &BTreeSet<String>) -> String {
+    let mut by_directory: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut count = 0;
+    for path in sources
+        .iter()
+        .filter(|p| !hidden.contains(*p) && !is_test_path(p))
+    {
+        let (directory, file) = path.rsplit_once('/').unwrap_or((".", path));
+        by_directory.entry(directory).or_default().push(file);
+        count += 1;
+    }
+    if count == 0 {
+        return String::new();
+    }
+    let mut left = MAX_LISTED_SOURCES;
+    let mut parts = Vec::new();
+    for (directory, files) in &mut by_directory {
+        files.sort_unstable();
+        files.truncate(left);
+        left -= files.len();
+        if files.is_empty() {
+            break;
+        }
+        let place = if *directory == "." {
+            "the repository root".to_string()
+        } else {
+            format!("`{directory}/`")
+        };
+        parts.push(format!("{place}: {}", files.join(", ")));
+    }
+    let unlisted = count - (MAX_LISTED_SOURCES - left);
+    let more = if unlisted > 0 {
+        format!("; and {unlisted} more source files")
+    } else {
+        String::new()
+    };
+    format!(
+        "The source files are, by directory: {}{more}. ",
+        parts.join("; ")
+    )
 }
 
 /// `command` without the test modules the solver was not given: for a
@@ -236,12 +362,17 @@ fn split_inequality(text: &str) -> Option<(&str, &str)> {
 /// would overlap almost completely when whole requests are compared. A text
 /// that is not a request is returned whole.
 pub(super) fn symptoms_of(request: &str) -> &str {
-    const OPENS: &str = "each names a symptom:\n\n";
-    const CLOSES: &str = "\n\nFind the cause";
-    let Some((_, after)) = request.split_once(OPENS) else {
-        return request;
-    };
-    after.split_once(CLOSES).map_or(after, |(list, _)| list)
+    // (the line before the list, the line after it) of each wording version.
+    const FRAMES: [(&str, &str); 2] = [
+        ("each names a symptom:\n\n", "\n\nFind the cause"),
+        ("written as words:\n\n", "\n\nThese tests are not in the"),
+    ];
+    for (opens, closes) in FRAMES {
+        if let Some((_, after)) = request.split_once(opens) {
+            return after.split_once(closes).map_or(after, |(list, _)| list);
+        }
+    }
+    request
 }
 
 /// What one failing test says, in words: its docstring when it has a short
@@ -281,6 +412,130 @@ mod tests {
             .map(String::from)
             .chain(modules.iter().map(|m| (*m).to_string()))
             .collect()
+    }
+
+    fn failing(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|n| format!("t.A.{n}")).collect()
+    }
+
+    fn v2<'a>(sources: &'a [String]) -> Wording<'a> {
+        Wording {
+            version: InstructionVersion::V2,
+            sources,
+        }
+    }
+
+    /// An address must not change for state that is already stored: the
+    /// original wording is pinned whole.
+    #[test]
+    fn the_original_wording_is_unchanged() {
+        let (hidden, docs, messages) = none();
+        let request = compose(
+            &command(&["tests.test_a"]),
+            &hidden,
+            &failing(&["test_empty_list_sums_to_zero"]),
+            &docs,
+            &messages,
+        )
+        .unwrap();
+        assert_eq!(
+            request.text,
+            "Some behaviour of this repository is broken. The tests that check it are not in the \
+             tree you were given; they fail on it, and each names a symptom:\n\n- empty list sums \
+             to zero\n\nFind the cause in the repository's code and fix it so that this behaviour \
+             works again. The tests that are in the tree must keep passing and are not to be \
+             edited; they are run with `python3 -m unittest tests.test_a`."
+        );
+    }
+
+    #[test]
+    fn the_second_wording_states_the_layout_what_a_symptom_is_and_how_the_tests_run() {
+        let (_, docs, messages) = none();
+        let hidden: BTreeSet<String> = ["ttlcache/secret.py", "tests/test_hidden.py"]
+            .map(String::from)
+            .into();
+        let sources: Vec<String> = [
+            "ttlcache/cache.py",
+            "ttlcache/stats.py",
+            "ttlcache/secret.py",
+            "tests/test_a.py",
+            "setup.py",
+        ]
+        .map(String::from)
+        .into();
+        let request = compose_as(
+            &v2(&sources),
+            &command(&["tests.test_a", "tests.test_hidden"]),
+            &hidden,
+            &failing(&["test_empty_list_sums_to_zero"]),
+            &docs,
+            &messages,
+        )
+        .unwrap();
+        let text = &request.text;
+        assert!(
+            text.contains("`ttlcache/`: cache.py, stats.py"),
+            "the package directory and its source files: {text}"
+        );
+        assert!(text.contains("the repository root: setup.py"), "{text}");
+        assert!(
+            !text.contains("secret"),
+            "a hidden file is never named: {text}"
+        );
+        assert!(
+            !text.contains("test_a.py"),
+            "a test file is not source: {text}"
+        );
+        assert!(
+            text.contains("name of one hidden failing test, written as words"),
+            "{text}"
+        );
+        assert!(text.contains("- empty list sums to zero"), "{text}");
+        assert!(
+            text.contains("`python3 -m unittest tests.test_a`"),
+            "{text}"
+        );
+        assert!(text.contains("prove nothing"), "{text}");
+        assert!(text.contains("not by searching for these words"), "{text}");
+        assert!(
+            text.contains("One fault in the source files causes all of them"),
+            "{text}"
+        );
+        assert_eq!(symptoms_of(text), "- empty list sums to zero");
+    }
+
+    #[test]
+    fn the_listed_sources_are_bounded_and_the_rest_counted() {
+        let (hidden, docs, messages) = none();
+        let sources: Vec<String> = (0..MAX_LISTED_SOURCES + 7)
+            .map(|n| format!("pkg/m{n:03}.py"))
+            .collect();
+        let request = compose_as(
+            &v2(&sources),
+            &command(&[]),
+            &hidden,
+            &failing(&["test_empty_list_sums_to_zero"]),
+            &docs,
+            &messages,
+        )
+        .unwrap();
+        assert_eq!(request.text.matches(".py").count(), MAX_LISTED_SOURCES);
+        assert!(
+            request.text.contains("and 7 more source files"),
+            "{}",
+            request.text
+        );
+        // No source to name: no layout sentence.
+        let bare = compose_as(
+            &v2(&[]),
+            &command(&[]),
+            &hidden,
+            &failing(&["test_empty_list_sums_to_zero"]),
+            &docs,
+            &messages,
+        )
+        .unwrap();
+        assert!(!bare.text.contains("source files are"), "{}", bare.text);
     }
 
     #[test]

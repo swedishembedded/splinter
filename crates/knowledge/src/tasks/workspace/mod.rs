@@ -68,6 +68,7 @@ pub use fixtures::Fixture;
 pub use harbor::{discover, Discovered, HarborTask, Oracle, SplinterMeta, SPLINTER_SCHEMA};
 pub use harness::{Harness, SuiteReport};
 pub use held::Held;
+pub use instruction::InstructionVersion;
 pub use profile::{
     Qualified, RepositoryProfile, BASELINE_RUNS, CARGO_TEST, UNITTEST, UNITTEST_DISCOVER,
 };
@@ -261,6 +262,10 @@ pub struct WorkspacePlan {
     pub shingle_words: usize,
     /// The overlap at which two requests of one family are near duplicates.
     pub max_overlap: f64,
+    /// How the requests of the tasks admitted are worded. A task's address
+    /// covers its request, so the original wording stays the default: a new
+    /// wording applies only to tasks generated under a plan that names it.
+    pub instruction: InstructionVersion,
 }
 
 impl Default for WorkspacePlan {
@@ -272,6 +277,7 @@ impl Default for WorkspacePlan {
             min_time_budget: DEFAULT_MIN_TIME_BUDGET,
             shingle_words: super::DEFAULT_SHINGLE_WORDS,
             max_overlap: super::DEFAULT_MAX_OVERLAP,
+            instruction: InstructionVersion::default(),
         }
     }
 }

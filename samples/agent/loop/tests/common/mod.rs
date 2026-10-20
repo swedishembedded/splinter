@@ -230,6 +230,7 @@ impl Fixture {
             default_budget: None,
             remote_concurrency: 1,
             solve_deadline: splinter_sdk::config::DEFAULT_SOLVE_DEADLINE,
+            coding_prompt: Default::default(),
             min_calibration_controls: 1,
             workspace: Default::default(),
             thinking: false,

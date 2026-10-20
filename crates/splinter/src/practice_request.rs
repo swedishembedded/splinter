@@ -35,6 +35,7 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
         allow_dirty: args.allow_dirty,
         max_tasks: args.max_tasks,
         mutants_per_file: args.mutants_per_file,
+        instruction: args.instruction_version,
         exam_families: args.exam_families,
         exam_seed: args.exam_seed,
         canaries: args.canaries,

@@ -221,7 +221,12 @@ impl WorkspaceGenerator {
         let (failing, passing) = self.reproduce(base, &env, &views, &killed)?;
         self.tree_stands_without(base, &env, &views, &killed)?;
         let hidden = hidden_text(mutated.path(), &killed.files);
-        let request = instruction::compose(
+        let wording = instruction::Wording {
+            version: self.plan.instruction,
+            sources: &base.qualified.profile.files_under_test,
+        };
+        let request = instruction::compose_as(
+            &wording,
             base.command(),
             &killed.files,
             &failing,

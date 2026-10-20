@@ -33,6 +33,7 @@ Every command takes these.
 - `--sampling-seed <SEED>`: The seed every request of a model reached through sven's providers carries, so that a sampled attempt is reproducible; recorded with the attempt. The server draws its own when not given.
 - `--thinking`: Let a model served on this machine reason before it answers (the request says so); without it the server is asked for no reasoning block. Recorded with the attempt.
 - `--thinking-budget <N>`: With --thinking: the most tokens the model may think in one response; the server closes the thought there and the model goes on to its answer. Recorded with the attempt. Unbounded when not given.
+- `--coding-prompt <ID>`: The coding-agent system prompt a solver of a repository works under: `coding-agent-1` or `coding-agent-2`. The registered protocol's prompt when not given; the prompt's id and digest are recorded with each attempt.
 
 ## Commands
 
@@ -260,6 +261,7 @@ Options:
 - `--file <PATH>...`: A file, relative to the repository, that tasks may change; repeat for more. Without any, every source file of the project the rules recognise (a Python project with a tests directory, a Cargo project)
 - `--max-tasks <N>`: The most tasks one run admits.
 - `--mutants-per-file <N>`: The most faults seeded in one file.
+- `--instruction-version <N>`: How the requests of the tasks generated are worded: 1, the original, or 2, which adds the source layout and says the symptoms are hidden tests' names. A task already stored keeps its request. Original when not given.
 - `--exam-families <N>`: How many families (a family is the file a fault was seeded in) to reserve for the exam before any attempt is made at any task: their tasks are set apart and never solved or trained on, in this run or a later one; 0 reserves none [default: a quarter of the families]
 - `--canaries <N>`: The most canaries (exam tasks no honest change can pass) the release gate hands the candidate; a pass on one refuses it; 0 hands none [default: 20]
 - `--exam-seed <N>`: The seed the exam families are chosen by when this run reserves the first: drawn and printed [default], then kept with the families, so every later run reads it back and naming another is refused.
@@ -548,6 +550,7 @@ Options:
 - `--file <PATH>...`: A file, relative to the repository, that tasks may change; repeat for more. Without any, every source file of the project the rules recognise (a Python project with a tests directory, a Cargo project)
 - `--max-tasks <N>`: The most tasks one run admits.
 - `--mutants-per-file <N>`: The most faults seeded in one file.
+- `--instruction-version <N>`: How the requests of the tasks generated are worded: 1, the original, or 2, which adds the source layout and says the symptoms are hidden tests' names. A task already stored keeps its request. Original when not given.
 - `--exam-families <N>`: How many families (a family is the file a fault was seeded in) to reserve for the exam before any attempt is made at any task: their tasks are set apart and never solved or trained on, in this run or a later one; 0 reserves none [default: a quarter of the families]
 - `--canaries <N>`: The most canaries (exam tasks no honest change can pass) the release gate hands the candidate; a pass on one refuses it; 0 hands none [default: 20]
 - `--exam-seed <N>`: The seed the exam families are chosen by when this run reserves the first: drawn and printed [default], then kept with the families, so every later run reads it back and naming another is refused.

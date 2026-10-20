@@ -12,18 +12,18 @@
 
 use serde_json::{json, Value};
 use splinter_core::digest::Digest;
-use splinter_core::prompt::{CODING_AGENT_PROMPT, CODING_AGENT_PROMPT_ID};
+use splinter_core::prompt::CodingPrompt;
 
 use super::WorkOptions;
 
 pub use splinter_core::prompt::SOLVE_PROFILE_KEY;
 
 /// The profile of an episode run under `options` and the system prompt
-/// `system` it was held to: the prompt's digest (and its id when it is the
-/// coding-agent prompt), the tool and agent settings the solve fixes, the
+/// `system` it was held to: the prompt's digest (and its id when it is a
+/// registered coding-agent prompt), the tool and agent settings the solve fixes, the
 /// bounds that stop a run, and how the model was asked to sample.
 pub(super) fn solve_profile(options: &WorkOptions, system: &str) -> Value {
-    let prompt_id = (system == CODING_AGENT_PROMPT).then_some(CODING_AGENT_PROMPT_ID);
+    let prompt_id = CodingPrompt::of_text(system).map(CodingPrompt::id);
     json!({
         "system_prompt": {
             "id": prompt_id,

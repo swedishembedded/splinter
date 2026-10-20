@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use splinter_core::build::BuildInfo;
+use splinter_core::prompt::CodingPrompt;
 use splinter_knowledge::capture::DEFAULT_ENV_ALLOWLIST;
 use splinter_store::StateRoot;
 
@@ -84,6 +85,10 @@ pub struct Config {
     /// stuck episode, not a measure of the solver: under a loaded server it
     /// must leave room for the queue, or a task is failed for the load.
     pub solve_deadline: Duration,
+    /// The coding-agent system prompt a solver of a repository works under
+    /// (see [`CodingPrompt`]); the registered protocol's prompt unless a run
+    /// asks for another, and recorded in each attempt's solve profile.
+    pub coding_prompt: CodingPrompt,
     /// Let local models reason before they answer, and a model served by
     /// brain on this machine too. Off by default: a model whose template
     /// opens a reasoning block is asked with it closed, so agent work,
@@ -293,6 +298,7 @@ impl Config {
                 .unwrap_or(DEFAULT_MIN_CALIBRATION_CONTROLS),
             remote_concurrency: DEFAULT_REMOTE_CONCURRENCY,
             solve_deadline: DEFAULT_SOLVE_DEADLINE,
+            coding_prompt: CodingPrompt::default(),
             workspace: WorkspaceSettings {
                 docker: var("SPLINTER_DOCKER").map(PathBuf::from),
                 image: var("SPLINTER_WORKSPACE_IMAGE"),

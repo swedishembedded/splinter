@@ -32,6 +32,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 use splinter_agent::work::WorkProtocol;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::prompt::CodingPrompt;
 use splinter_eval::intervention::{decide, ArmResult, Pricing, Verdict};
 use splinter_store::experiences::SetId;
 use splinter_store::tasks::TaskSetId;
@@ -83,6 +84,7 @@ impl From<ProtocolSpec> for WorkProtocol {
             follow_ups: spec.follow_ups,
             max_tool_calls: spec.max_tool_calls,
             max_repeated_results: spec.max_repeated_results,
+            prompt: CodingPrompt::default(),
         }
     }
 }

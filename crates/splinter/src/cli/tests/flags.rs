@@ -185,3 +185,13 @@ fn a_project_variable_is_name_equals_value_and_not_one_the_sandbox_sets() {
         assert!(parse(&["--workspace-env", bad, "status"]).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn the_coding_prompt_is_a_global_flag_naming_a_registered_version() {
+    use splinter_sdk::vocabulary::prompt::CodingPrompt;
+    let chosen = parse(&["--coding-prompt", "coding-agent-2", "status"]).unwrap();
+    assert_eq!(chosen.global.coding_prompt, Some(CodingPrompt::V2));
+    // Not given: the registered protocol's prompt stays the default.
+    assert_eq!(parse(&["status"]).unwrap().global.coding_prompt, None);
+    assert!(parse(&["--coding-prompt", "coding-agent-9", "status"]).is_err());
+}

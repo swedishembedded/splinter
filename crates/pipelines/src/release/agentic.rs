@@ -171,6 +171,7 @@ fn attempt_at(
         follow_ups: config.follow_ups,
         max_tool_calls: config.max_tool_calls,
         max_repeated_results: config.max_repeated_results,
+        prompt: ctx.config().coding_prompt,
     };
     let solved = ctx.block_on(solve_attempt(
         task, &env, &inputs, &model, options, &protocol,

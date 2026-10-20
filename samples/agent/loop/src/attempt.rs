@@ -252,6 +252,7 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
         follow_ups: contract.limits.follow_ups,
         max_tool_calls: Some(contract.limits.max_tool_calls),
         max_repeated_results: Some(contract.limits.max_repeated_results).filter(|n| *n > 0),
+        ..WorkProtocol::default()
     };
     let shown: Vec<CommandCall> = contract
         .acceptance

@@ -74,13 +74,87 @@ pub fn recorded_prompt(agent_extra: Option<&serde_json::Value>) -> RecordedPromp
         .get("digest")
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default();
-    [SYSTEM_PROMPT, CODING_AGENT_PROMPT]
+    [SYSTEM_PROMPT, CODING_AGENT_PROMPT, CODING_AGENT_2_PROMPT]
         .into_iter()
         .find(|known| crate::digest::Digest::of(known.as_bytes()).as_str() == digest)
         .map_or_else(
             || RecordedPrompt::Unknown(digest.to_string()),
             RecordedPrompt::Known,
         )
+}
+
+/// The identity of [`CODING_AGENT_2_PROMPT`].
+pub const CODING_AGENT_2_PROMPT_ID: &str = "coding-agent-2";
+
+/// The second coding-agent prompt, written from the failures of two trace
+/// audits of coding-agent-1 runs. The tests that name the symptoms are hidden,
+/// so the visible suite is green before any edit and proves nothing; the
+/// prompt therefore asks for a direct call of the named function instead of a
+/// test run, forbids reading the report as a string to grep and forbids
+/// leaving the repository, and answers the commonest dead ends (a crashing
+/// script run again unchanged, a fix prototyped in a scratch file, a second
+/// change to code that was right) in its own words. Short on purpose: the
+/// model reads it on every turn.
+pub const CODING_AGENT_2_PROMPT: &str = "You are a software engineer working in a git repository \
+through tools. The working directory is the repository root: stay in it and never search or cd \
+elsewhere (no `find /`, no `/tmp`). You are given a report of behaviour that is wrong. The tests \
+that check it are hidden and are not in the repository, so the repository's own tests pass before \
+and after your change and prove nothing about the report. Work in this order. First list the \
+top-level files and read the source files the report concerns. Never grep for the report's words \
+as if they were text in the code. Then reproduce one symptom with a direct call of the function it \
+names, for example `python3 -c \"...\"` or `lua -e \"...\"`, and compare what it prints with what the \
+report says it should do. Then read that function, name the wrong line, and fix it in the source \
+file with edit_file; change only what the report points at, not the tests, not code that already \
+behaves as stated, not a scratch copy. Then run the same call again and read what it prints. When \
+a script or command of yours crashes, read the error and change the script or the code; never run \
+it again unchanged, and never repeat any call whose result you have already seen. Stop and say in \
+one or two sentences what you changed only after the reproduction shows the corrected behaviour.";
+
+/// The registered coding-agent prompts, by version. The default is the one
+/// the registered protocol names; a later version is chosen explicitly
+/// (`--coding-prompt`) until a protocol amendment makes it the default.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CodingPrompt {
+    /// [`CODING_AGENT_PROMPT`], `coding-agent-1`.
+    #[default]
+    V1,
+    /// [`CODING_AGENT_2_PROMPT`], `coding-agent-2`.
+    V2,
+}
+
+impl CodingPrompt {
+    /// Every registered version.
+    pub const ALL: [Self; 2] = [Self::V1, Self::V2];
+
+    /// The id a record names the prompt by.
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::V1 => CODING_AGENT_PROMPT_ID,
+            Self::V2 => CODING_AGENT_2_PROMPT_ID,
+        }
+    }
+
+    /// The prompt text.
+    #[must_use]
+    pub const fn text(self) -> &'static str {
+        match self {
+            Self::V1 => CODING_AGENT_PROMPT,
+            Self::V2 => CODING_AGENT_2_PROMPT,
+        }
+    }
+
+    /// The version with id `id`.
+    #[must_use]
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|version| version.id() == id)
+    }
+
+    /// The version whose text is exactly `text`.
+    #[must_use]
+    pub fn of_text(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|version| version.text() == text)
+    }
 }
 
 /// The system turn of a policy trained to be `persona`: who it is, how it
@@ -101,6 +175,9 @@ pub fn persona_prompt(persona: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const CODING_AGENT_1_DIGEST: &str =
+        "blake3:6ccba04c14244832e2649163a87b948bc6553e06ec21727693000e0acb70c9c5";
 
     #[test]
     fn the_coding_agent_prompt_is_the_registered_text_and_not_the_chat_prompt() {
@@ -141,10 +218,53 @@ mod tests {
             recorded_prompt(Some(&profile(SYSTEM_PROMPT))),
             RecordedPrompt::Known(SYSTEM_PROMPT)
         );
+        assert_eq!(
+            recorded_prompt(Some(&profile(CODING_AGENT_2_PROMPT))),
+            RecordedPrompt::Known(CODING_AGENT_2_PROMPT),
+            "a record solved under coding-agent-2 is rendered under it"
+        );
         assert!(matches!(
             recorded_prompt(Some(&profile("You are a pirate."))),
             RecordedPrompt::Unknown(_)
         ));
+    }
+
+    #[test]
+    fn coding_agent_1_is_frozen_and_coding_agent_2_is_its_own_registered_text() {
+        // The registered digest of coding-agent-1 (Amendment 20): a change to
+        // its bytes is a new id, never an edit.
+        assert_eq!(
+            crate::digest::Digest::of(CODING_AGENT_PROMPT.as_bytes()).to_string(),
+            CODING_AGENT_1_DIGEST
+        );
+        assert_eq!(CodingPrompt::default(), CodingPrompt::V1);
+        assert_ne!(CODING_AGENT_2_PROMPT_ID, CODING_AGENT_PROMPT_ID);
+        assert_ne!(CODING_AGENT_2_PROMPT, CODING_AGENT_PROMPT);
+        assert!(CODING_AGENT_2_PROMPT.is_ascii());
+        assert!(!CODING_AGENT_2_PROMPT.contains("  "), "single-spaced");
+        for part in [
+            "hidden",
+            "prove nothing",
+            "Never grep for the report's words",
+            "python3 -c",
+            "lua -e",
+            "name the wrong line",
+            "never run it again unchanged",
+            "only after the reproduction shows the corrected behaviour",
+            "no `find /`",
+        ] {
+            assert!(CODING_AGENT_2_PROMPT.contains(part), "{part}");
+        }
+    }
+
+    #[test]
+    fn a_prompt_version_is_found_by_its_id_and_by_its_text() {
+        for version in CodingPrompt::ALL {
+            assert_eq!(CodingPrompt::from_id(version.id()), Some(version));
+            assert_eq!(CodingPrompt::of_text(version.text()), Some(version));
+        }
+        assert_eq!(CodingPrompt::from_id("coding-agent-9"), None);
+        assert_eq!(CodingPrompt::of_text("You are a clerk."), None);
     }
 
     #[test]

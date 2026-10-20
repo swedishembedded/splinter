@@ -57,6 +57,7 @@ use crate::learn::PolicyUsed;
 use crate::tasks::remaining;
 use crate::workspace_solve::{attempt_seed, solve_attempt, solve_harness_attempt, WorkspaceInputs};
 use splinter_core::model_ref::ModelRef;
+use splinter_core::prompt::CodingPrompt;
 use splinter_orchestrator::concurrency::fan_out_each;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -170,6 +171,7 @@ pub fn harness_protocol() -> WorkProtocol {
         follow_ups: config.follow_ups,
         max_tool_calls: config.max_tool_calls,
         max_repeated_results: config.max_repeated_results,
+        prompt: CodingPrompt::default(),
     }
 }
 
@@ -331,6 +333,11 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         }
     }
     let task_wall = ctx.config().solve_deadline;
+    // The run's coding-agent prompt applies to every episode in a workspace.
+    let work = WorkProtocol {
+        prompt: ctx.config().coding_prompt,
+        ..request.work
+    };
     let total = plans.len() * request.attempts;
     let mut finished = 0usize;
     let mut so_far = members.clone();
@@ -340,7 +347,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         |(plan, attempt, model)| {
             let (plans, store, label) = (&plans, &store, &label);
             async move {
-                let outcome = attempt_once(&plans[plan], &model, request, task_wall).await;
+                let outcome = attempt_once(&plans[plan], &model, request, &work, task_wall).await;
                 let recorded = record_attempt(
                     outcome,
                     &Recording {
@@ -631,6 +638,7 @@ async fn attempt_once(
     planned: &Planned<'_>,
     model: &Model,
     request: &SolveRequest<'_>,
+    work: &WorkProtocol,
     task_wall: Duration,
 ) -> Attempted {
     if request.cancel.is_cancelled() {
@@ -656,7 +664,7 @@ async fn attempt_once(
             Some(harness) => {
                 solve_harness_attempt(task, env, inputs, harness, model, options).await
             }
-            None => solve_attempt(task, env, inputs, model, options, &request.work).await,
+            None => solve_attempt(task, env, inputs, model, options, work).await,
         };
         return Attempted::Solved(solved.map(Box::new));
     }

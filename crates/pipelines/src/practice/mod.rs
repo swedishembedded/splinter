@@ -80,6 +80,7 @@ use serde::Serialize;
 use splinter_core::rng::Seed;
 use splinter_data::ReplayPolicy;
 use splinter_eval::gate::{AgenticConfig, GatePlan, DEFAULT_PROBE_ATTEMPTS};
+use splinter_knowledge::tasks::workspace::InstructionVersion;
 
 use crate::experiment::ExperimentPlan;
 
@@ -131,6 +132,10 @@ pub struct PracticeRequest {
     /// The most faults seeded in one file; the generator's default when
     /// `None`.
     pub mutants_per_file: Option<usize>,
+    /// How the requests of the tasks this run generates are worded; the
+    /// original wording when `None`. It only shapes tasks made now: a task
+    /// already stored keeps its request and so its address.
+    pub instruction: Option<InstructionVersion>,
     /// How many families are reserved for the exam: `None` is a quarter of
     /// the families of the run's tasks, rounded down; `Some(0)` none.
     pub exam_families: Option<usize>,

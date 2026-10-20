@@ -41,7 +41,7 @@ use std::time::{Duration, Instant};
 
 use splinter_core::experience::Task;
 use splinter_core::outcome::{AttemptReport, MemoryUse};
-use splinter_core::prompt::CODING_AGENT_PROMPT;
+use splinter_core::prompt::CodingPrompt;
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{
     Baseline, CodeResult, CommandCall, Patch, ResolvedEnvironment, SandboxError,
@@ -424,6 +424,9 @@ pub struct WorkProtocol {
     /// before it is stopped as going nowhere; see
     /// [`WorkOptions::max_repeated_results`].
     pub max_repeated_results: Option<u32>,
+    /// The coding-agent prompt the worker is held to when the model brings
+    /// none of its own.
+    pub prompt: CodingPrompt,
 }
 
 /// What an episode on a workspace produced.
@@ -495,7 +498,7 @@ pub async fn solve_in_workspace(
     let system = options
         .solve
         .system
-        .get_or_insert_with(|| CODING_AGENT_PROMPT.to_string())
+        .get_or_insert_with(|| protocol.prompt.text().to_string())
         .clone();
     let profile = profile::solve_profile(&options, &system);
     let scratch = tempfile::tempdir().map_err(|source| SandboxError::Io {
