@@ -23,16 +23,20 @@
 //!   is allowed to see ([`HiddenMaterial::public_contents`]);
 //! * a tool call or output holds one of the **forbidden strings**, such as
 //!   the path of the state root;
-//! * for a workspace task, a tool call names an **absolute path outside the
-//!   episode's tree** ([`crate::exposure_paths`]) and that call's own output
-//!   shows something came back (`outside_workspace`).
+//! * for a workspace task, a tool call **reads** an absolute path outside the
+//!   episode's tree and that call's own output shows something came back
+//!   (`outside_workspace`), or **searches the whole filesystem** from `/`
+//!   (`outside_workspace_search`, whatever it returned).
 //!
-//! A call that named such a path and was refused by the sandbox
-//! (`outside_workspace_denied`) or found nothing there
-//! (`outside_workspace_absent`) is a recorded **probe**, not exposure: it is
+//! A read that was refused by the sandbox (`outside_workspace_denied`) or
+//! found nothing there (`outside_workspace_absent`, which includes an output
+//! that is only a failure report), a write to a scratch file
+//! (`outside_workspace_write`) and a change of directory
+//! (`outside_workspace_cd`) are recorded **probes**, not exposure: they are
 //! listed under `outside_probes` in the evidence (of an abstention as well as
-//! of a fail) so a caller can count and filter by it, and it does not fail
-//! the audit.
+//! of a fail) so a caller can count and filter by it, and they do not fail
+//! the audit. [`crate::exposure_paths`] says how a call's paths and results
+//! are read.
 //!
 //! A clean trajectory is an **abstention**, not a pass: not having seen the
 //! material does not make an answer right. The audit is a
@@ -57,8 +61,9 @@ use crate::verifiers::{Finding, Verifier, VerifyError};
 /// The producer name an exposure audit's annotations carry.
 pub const EXPOSURE_PRODUCER: &str = "splinter-lab/exposure";
 
-/// The audit's version.
-pub const VERSION: &str = "1";
+/// The audit's version: 2 reads parallel results by call id and tells a
+/// read of a path from a write, a directory change and a failure report.
+pub const VERSION: &str = "2";
 
 /// How many consecutive tokens make a shingle. Long enough that boilerplate
 /// every file shares (imports, a header) rarely fills one; short enough that

@@ -69,3 +69,4 @@ in the same commit.
 | [081](081-the-repo-replay-gate-called-honest-work-forbidden-or-unread-in-five-ways-seen-in-real-traces.md) | The repo-replay gate called honest work forbidden or unread in five ways seen in real traces |
 | [082](082-a-test-run-spent-most-of-its-time-forking-on-a-144-core-node-and-creating-files-on-lustre.md) | A test run spent most of its time forking on a 144-core node and creating files on Lustre |
 | [083](083-a-killed-repo-replay-run-left-its-attempt-trees-behind-and-filled-the-inode-quota.md) | A killed repo-replay run left its attempt trees behind and filled the inode quota |
+| [084](084-the-exposure-audit-paired-parallel-results-by-position-and-excluded-passes-that-looked-nowhere.md) | The exposure audit paired parallel results by position and excluded passes that looked nowhere |
