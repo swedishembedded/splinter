@@ -414,10 +414,8 @@ async fn process(
                     models,
                     scrubber,
                     commit,
-                    style,
-                    config.control,
-                    &plan,
-                    &outcome,
+                    (style, config.control),
+                    (&plan, &outcome),
                 ) {
                     Err(e) => Entry {
                         detail: Some(format!("storing the attempt: {e:#}")),
@@ -527,10 +525,8 @@ fn store_attempt(
     models: &Models,
     scrubber: &Scrubber,
     commit: &CommitPlan,
-    style: PlanStyle,
-    control: Control,
-    plan: &str,
-    outcome: &AttemptOutcome,
+    (style, control): (PlanStyle, Control),
+    (plan, outcome): (&str, &AttemptOutcome),
 ) -> Result<ExperienceId> {
     let environment = Environment::new(
         Environment::WORKSPACE,
