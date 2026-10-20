@@ -3,12 +3,13 @@
 
 # tool-syntax - does verified experience teach a small model to look before it acts?
 
-**Status: measured baseline, verified demonstrations, trained adapter, and a
-before/after measurement on CUDA.** On the frozen request the base model solves 0 of 80 episodes and the adapter
-trained on six verified demonstrations solves 80 of 80, each in the four tool
-calls of the demonstration. That is on the task the adapter was trained on, from
-one training run (see the limits). Every number below is
-from a run whose command and log are named in [Reproduce](#reproduce).
+**Status: measured baseline, verified demonstrations, trained adapters, and a
+before/after measurement on CUDA.** On the frozen request the base model solves
+0 of 80 episodes and the adapter trained on six verified demonstrations solves
+80 of 80, each in the four tool calls of the demonstration; a second training
+seed solves 39 of 40. That is on the task the adapters were trained on (see the
+limits). Every number below is from a run whose command and log are named in
+[Reproduce](#reproduce).
 
 ## The question
 
@@ -72,13 +73,14 @@ seed `S + i` sent for episode `i`. Episodes alternate between the two twins
 | baseline, first replicate (other server and binary, context 12288) | 59 | 0 | 1 | 0.0 %, [0.0 %, 6.1 %] | 4.83 (median 4, max 31) | <!-- perf-number: a measured rate of the run this README reports -->
 | **before**: the base model | 80 | 0 | 0 | 0.0 %, [0.0 %, 4.6 %] | 2.54 (median 1, max 30) | <!-- perf-number: a measured rate of the run this README reports -->
 | **after**: the base plus the trained adapter | 80 | **80** | 0 | **100 %, [95.4 %, 100 %]** | 4.00 (every episode exactly 4) | <!-- perf-number: a measured rate of the run this README reports -->
+| after, second training seed (12; 40 other episodes, seed 5000) | 40 | 39 | 0 | 97.5 %, [87.1 %, 99.6 %] | 4.20 (median 4, max 9) | <!-- perf-number: a measured rate of the run this README reports -->
 
 "Before" and "after" ran at the same time against one server that serves
 the base and, as a model of its own, the adapter (so the only difference is
 the model id asked for), with the same seeds (episode `i` of both arms has seed
-`3000 + i`) and 40 episodes per twin each. The interval is Wilson's. `errored` episodes never reached a verdict (only in the first
-replicate: the server refused a 12414-token request on a 12288-token context) and are in
-neither the numerator nor the denominator.
+`3000 + i`) and 40 episodes per twin each. The interval is Wilson's. `errored` episodes never reached a verdict (only in
+the first replicate: the server refused a 12414-token request on a 12288-token
+context) and are in neither the numerator nor the denominator.
 
 **What the base model does.** In none of the 139 answered episodes of the two
 base arms did it run `./svctl` - the program that says which deployment is
@@ -98,7 +100,18 @@ adapter's; and `measure` refused to start the arm until the server's listing
 named the adapter's model id with the digest of the file that was trained
 (`sha256:147f1b91...`).
 
-@@EXTRAS@@
+**A second training seed, and a probe of the wording.** The same recipe with
+seed 12 (selected step 10, held-out loss 1.65 to 0.45, token accuracy 77.5 % to
+90.4 %) gave an adapter that solves 39 of 40 frozen-request episodes (the table;
+the miss is a production episode that read the file, tried an `svctl` command
+that does not exist, validated, and never wrote the change). To see whether the
+behaviour follows the task or only the request's exact words, the same server
+was also asked with the request replaced (`--request`, a probe, not a measured
+arm) by *"Set the upload service's retry attempts to 3 on whichever deployment
+this machine is serving. Leave every other deployment exactly as it is."*: the
+seed-12 adapter solves 40 of 40 (Wilson 95 per cent interval 0.912 to 1.000) and
+the base model 0 of 40 (0.000 to 0.088), 40 episodes each with seed `5000 + i`.
+<!-- perf-number: measured rates and token accuracies of the runs this README reports -->
 
 ### The data and the training
 
@@ -138,7 +151,7 @@ sees (`active deployment: production` against `active deployment: production\n`)
 so the shell observations of the training data differ from the ones the agent
 shows the model by that trailing newline; the adapter was measured as it is.
 
-Recipe (one run, `train1`): LoRA rank 16, alpha 32, all targets, fp32 base,
+Recipe (run `train1`; `train2` is the same recipe with seed 12): LoRA rank 16, alpha 32, all targets, fp32 base,
 no-think mode, learning rate 3e-4 with brain's warmup and decay, 4 examples per
 optimizer step, a budget of 24 steps, the held-out examples scored every 2
 steps, stop after 3 evaluations without improvement, the best evaluation
@@ -163,8 +176,8 @@ loss, so that loss is a selected figure, not an unbiased estimate.
   demonstration differs between train and held-out. This measures whether the
   behaviour can be taught at all on this task, not that it transfers to another
   task, other tools or other files.
-- **One training run, one seed, one recipe.** No second seed, so the effect of
-  the draw is unknown.
+- **Two training seeds, one recipe.** Both adapters were measured (80 of 80 and
+  39 of 40); a different recipe, base model or amount of data was not tried.
 - **Small n.** The intervals above are the uncertainty about the rate, not about
   anything else, and the episodes of one arm are not independent of the
   server's state.
@@ -208,13 +221,19 @@ be on `PATH` or named by `SVEN_BIN` for `demonstrate`. The run directory must be
 short (a unix socket path holds 107 bytes), and a model drives real shell
 commands in each episode workspace, so run it where it can write nothing you
 care about. The logs of the runs reported above are in the lane's run
-directory `runs/tsyn/` (not in git; the reported runs used the training seed
-11 and the episode seeds 1000 and 3000 as given in each report): `arms/*/log.txt` and `report.json` (every
+directory `runs/tsyn/` (not in git; the reported runs used the training seeds
+11 and 12 and the episode seeds 1000, 3000 and 5000 as given in each report): `arms/*/log.txt` and `report.json` (every
 episode: hidden state, outcome, tool calls, seed), `data/demonstrate.log`,
-`train1/attempt/summary.json` and `training.json`, `verify/*.verify.txt`,
+`train1/attempt/` and `train2/attempt/` (`summary.json`, `training.json`), `verify/*.verify.txt`,
 `profile-tsyn.md`; the scripts that ran them (`serve.sh`, `measure.sh`,
-`pipeline.sh`, `sandbox.py`, `verify_records.py`, `summarise.py`) sit beside
+`pipeline.sh`, `pipeline2.sh`, `sandbox.py`, `verify_records.py`, `summarise.py`) sit beside
 them.
+
+The reported runs used the binary built against brain 83e2f44a3 (the trainer) and
+sven f0cfb82c, a `brain serve` of the shared release build, and the sven binary
+of f0cfb82c for `demonstrate`; the repository's lock has since moved to a later
+brain, which the sample builds against unchanged but which the numbers above
+were not re-run on.
 
 ```bash
 BIN=target/release/splinter-tool-syntax          # cargo build --release -p splinter-tool-syntax
