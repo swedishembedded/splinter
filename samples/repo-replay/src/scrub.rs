@@ -20,17 +20,53 @@
 //! ([`Scrubber::finds_secret`]): replacing text inside an edit would make the
 //! reproduced tree differ from the commit.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 /// The text that takes a scrubbed span's place.
 pub const REDACTED: &str = "[redacted]";
 
 /// Replaces people and secrets in text.
+/// What a [`Scrubber`] removed, by kind, as occurrences. Counts only: what was
+/// removed is not kept anywhere.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScrubCounts {
+    /// Trailer lines (`Signed-off-by:` ...).
+    pub trailers: usize,
+    /// Author names and any e-mail address.
+    pub people: usize,
+    /// Secret-shaped strings.
+    pub secrets: usize,
+}
+
+impl ScrubCounts {
+    /// These counts and `other`'s together.
+    #[must_use]
+    pub fn plus(self, other: Self) -> Self {
+        Self {
+            trailers: self.trailers + other.trailers,
+            people: self.people + other.people,
+            secrets: self.secrets + other.secrets,
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct Tally {
+    trailers: AtomicUsize,
+    people: AtomicUsize,
+    secrets: AtomicUsize,
+}
+
 #[derive(Clone, Debug)]
 pub struct Scrubber {
     names: Vec<String>,
     patterns: Vec<Regex>,
     trailer: Regex,
+    tally: Arc<Tally>,
 }
 
 /// Secret shapes: a cloud access key id, a token with a well-known prefix, a
@@ -75,21 +111,55 @@ impl Scrubber {
             names,
             patterns,
             trailer,
+            tally: Arc::default(),
         }
     }
 
-    /// `text` without trailers, names, addresses and secrets.
+    /// This scrubber with counts of its own, starting at zero: what an
+    /// attempt had removed is what the attempt's clone counted.
+    #[must_use]
+    pub fn counting(&self) -> Self {
+        Self {
+            tally: Arc::default(),
+            ..self.clone()
+        }
+    }
+
+    /// What this scrubber has removed so far.
+    #[must_use]
+    pub fn counts(&self) -> ScrubCounts {
+        let read = |n: &AtomicUsize| n.load(Ordering::Relaxed);
+        ScrubCounts {
+            trailers: read(&self.tally.trailers),
+            people: read(&self.tally.people),
+            secrets: read(&self.tally.secrets),
+        }
+    }
+
+    /// `text` without the trailer lines, e-mail addresses, secrets and names, counted.
     #[must_use]
     pub fn scrub(&self, text: &str) -> String {
+        let add = |counter: &AtomicUsize, n: usize| counter.fetch_add(n, Ordering::Relaxed);
+        add(&self.tally.trailers, self.trailer.find_iter(text).count());
         let mut out = self.trailer.replace_all(text, "").into_owned();
-        for pattern in &self.patterns {
+        for (at, pattern) in self.patterns.iter().enumerate() {
+            // The first pattern is the e-mail address, the rest are secrets.
+            let counter = if at == 0 {
+                &self.tally.people
+            } else {
+                &self.tally.secrets
+            };
+            add(counter, pattern.find_iter(&out).count());
             out = pattern.replace_all(&out, REDACTED).into_owned();
         }
         for name in &self.names {
             out = if name.contains(char::is_whitespace) || name.contains('@') {
+                add(&self.tally.people, out.matches(name.as_str()).count());
                 out.replace(name.as_str(), REDACTED)
             } else {
-                replace_standalone(&out, name)
+                let (replaced, n) = replace_standalone(&out, name);
+                add(&self.tally.people, n);
+                replaced
             };
         }
         out
@@ -106,9 +176,10 @@ impl Scrubber {
 /// part of a longer word or a path or identifier (`acme-engine`, `crates/acme`,
 /// `acme_core`): an author's handle that is also the project's name must not
 /// rewrite the project's own file names.
-fn replace_standalone(text: &str, name: &str) -> String {
+fn replace_standalone(text: &str, name: &str) -> (String, usize) {
     let joins = |c: char| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | '\\');
     let mut out = String::with_capacity(text.len());
+    let mut replaced = 0;
     let mut rest = text;
     while let Some(at) = rest.find(name) {
         let before = rest[..at]
@@ -126,11 +197,12 @@ fn replace_standalone(text: &str, name: &str) -> String {
             out.push_str(name);
         } else {
             out.push_str(REDACTED);
+            replaced += 1;
         }
         rest = tail;
     }
     out.push_str(rest);
-    out
+    (out, replaced)
 }
 
 #[cfg(test)]
@@ -150,6 +222,22 @@ mod tests {
         assert!(out.contains("Fix parser"));
         assert!(s.finds_secret("token: abcdefghijkl"));
         assert!(!s.finds_secret("mail ada@example.org"));
+    }
+
+    #[test]
+    fn what_was_removed_is_counted_by_kind_and_a_counting_clone_starts_at_zero() {
+        let s = Scrubber::new(["Ada Lovelace", "ada@example.org"]);
+        let text = "Ada Lovelace wrote it\nSigned-off-by: Ada Lovelace <ada@example.org>\nAKIAABCDEFGHIJKLMNOP and mail bob@example.org";
+        let mine = s.counting();
+        assert!(!mine.scrub(text).contains("AKIA"));
+        let counts = mine.counts();
+        assert_eq!(counts.trailers, 1);
+        assert_eq!(counts.secrets, 1);
+        // Two names in the text (one inside the removed trailer is not counted) and an address.
+        assert_eq!(counts.people, 2);
+        assert_eq!(s.counts(), ScrubCounts::default());
+        assert_eq!(mine.scrub("nothing to remove"), "nothing to remove");
+        assert_eq!(mine.counts(), counts);
     }
 
     #[test]

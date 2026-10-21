@@ -46,7 +46,7 @@ use crate::gate::GateConfig;
 use crate::git::{mirror, Git};
 use crate::ledger::{self, Entry, Outcome};
 use crate::plan::{changed_lines, PlanCheck, PlanFailure};
-use crate::scrub::Scrubber;
+use crate::scrub::{ScrubCounts, Scrubber};
 use crate::select::{prepare, SelectConfig, Selected};
 use crate::style::PlanStyle;
 
@@ -432,7 +432,8 @@ async fn process(
                         detail: Some(format!("storing the attempt: {e:#}")),
                         ..base
                     },
-                    Ok(id) => Entry {
+                    Ok((id, scrubbed)) => Entry {
+                        scrubbed,
                         outcome: if outcome.verdict.passed {
                             Outcome::Passed
                         } else {
@@ -537,7 +538,8 @@ fn store_attempt(
     commit: &CommitPlan,
     (style, control): (PlanStyle, Control),
     (plan, outcome): (&str, &AttemptOutcome),
-) -> Result<ExperienceId> {
+) -> Result<(ExperienceId, ScrubCounts)> {
+    let scrubber = &scrubber.counting();
     let environment = Environment::new(
         Environment::WORKSPACE,
         json!({
@@ -599,5 +601,5 @@ fn store_attempt(
             ..AttemptReport::default()
         }),
     })?;
-    Ok(id)
+    Ok((id, scrubber.counts()))
 }

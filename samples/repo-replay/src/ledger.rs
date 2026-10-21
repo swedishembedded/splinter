@@ -24,6 +24,7 @@ use splinter_sdk::store::jsonl;
 
 use crate::attempt::CheckOutcome;
 use crate::control::Control;
+use crate::scrub::ScrubCounts;
 use crate::style::PlanStyle;
 
 /// How a ledger line ended.
@@ -90,6 +91,9 @@ pub struct Entry {
     /// The classes of the supervisor messages that were refused (one per message).
     #[serde(default)]
     pub supervisor_refusals: Vec<String>,
+    /// What was scrubbed from the stored attempt (counts only).
+    #[serde(default)]
+    pub scrubbed: ScrubCounts,
 }
 
 impl Entry {
@@ -116,6 +120,7 @@ impl Entry {
             control: Control::Grounded,
             corrections: 0,
             supervisor_refusals: Vec::new(),
+            scrubbed: ScrubCounts::default(),
         }
     }
 }
