@@ -77,31 +77,48 @@ def qual_metrics():
     return m
 
 
-def traj_metrics():
-    """The trajectory-capture findings: values a log printed on a `TJ key=value ...` line, read from
-    data/measurements.json."""
+def prefixed_metrics(prefix):
+    """The values of every run in data/measurements.json whose metric prefix starts with `prefix`,
+    keyed `<metric prefix>.<name>`."""
     m = {}
     for run in load_measurements().values():
-        if run["metric_prefix"].startswith("tj."):
+        if run["metric_prefix"].startswith(prefix):
             m.update({f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()})
     return m
+
+
+def traj_metrics():
+    """The trajectory-capture findings: values a log printed on a `TJ key=value ...` line."""
+    return prefixed_metrics("tj.")
 
 
 def ce4_metrics():
-    m = {}
-    for run in load_measurements().values():
-        if run["metric_prefix"].startswith("ce4."):
-            m.update({f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()})
-    return m
+    return prefixed_metrics("ce4.")
 
 
 def ce1_metrics():
-    """CE1 pass 1: the counts of every finished development set, read from data/measurements.json."""
-    m = {}
-    for run in load_measurements().values():
-        if run["metric_prefix"].startswith("ce1."):
-            m.update({f"{run['metric_prefix']}.{k}": v for k, v in run["metrics"].items()})
-    return m
+    """CE1 pass 1: the counts of every finished development set."""
+    return prefixed_metrics("ce1.")
+
+
+def ce8_metrics():
+    """CE8 training runs: the loss curve's ends, the monitoring evaluations and the guard's verdict."""
+    return prefixed_metrics("ce8.")
+
+
+def ce8_train_metrics(text):
+    """The CE8 trainer's output: `step N loss L ...` lines, `step N lr R train T eval E` evaluation
+    lines and the run record's base score. The memorisation guard of the registration: memorised when
+    the final training loss is below half the first step's while the final monitoring loss is above
+    its minimum."""
+    steps = [(int(a), b) for a, b in re.findall(r"^step\s+(\d+)\s+loss ([\d.]+)", text, re.M)]
+    evals = [(int(a), b) for a, b in re.findall(r"^step\s+(\d+)\s+lr \S+\s+train [\d.]+\s+eval ([\d.]+)", text, re.M)]
+    base = re.search(r'"base_score": \{\s*"loss": ([\d.]+)', text).group(1)
+    best = min(evals, key=lambda e: float(e[1]))
+    memorised = float(steps[-1][1]) < float(steps[0][1]) / 2 and float(evals[-1][1]) > float(best[1])
+    return {"steps_run": steps[-1][0], "loss_first": steps[0][1], "loss_last": steps[-1][1],
+            "eval_best": best[1], "eval_best_step": best[0], "eval_last": evals[-1][1],
+            "base_monitor": f"{float(base):.4f}", "memorised": "yes" if memorised else "no"}
 
 
 def ce4_compare_metrics(compare):
@@ -139,6 +156,8 @@ def parse_log(prefix, text):
         return ce1_summary_metrics(json.loads(text))
     if prefix.startswith("ce4."):
         return ce4_compare_metrics(json.loads(text))
+    if prefix.startswith("ce8."):
+        return ce8_train_metrics(text)
     if prefix.startswith("tj."):
         line = next(l for l in text.splitlines() if l.startswith("TJ "))
         return {k: int(v) for k, v in (kv.split("=") for kv in line.split()[1:])}
@@ -239,6 +258,7 @@ def metrics():
     m.update(traj_metrics())
     m.update(ce1_metrics())
     m.update(ce4_metrics())
+    m.update(ce8_metrics())
     return m
 
 

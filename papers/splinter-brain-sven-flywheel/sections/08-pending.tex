@@ -51,7 +51,7 @@ learning a repository from learning the protocol. The headline counts as reprodu
 both repositories pass the primary test independently.\cl{PR13}
 \item[CE8, 27B self-improvement.] A LoRA adapter on the bf16 base of the 27B model trained on its
 own verified, exposure-clean trajectories of the development sets (rank 16, alpha 32, learning
-rate $5\times10^{-5}$, two records per step, $\lceil 2R/2\rceil$ steps for the $R$ records the trainer
+rate $5\times10^{-5}$, $B=2$ records per step, $\lceil 2R/B\rceil$ steps for the $R$ records the trainer
 reports, a held-out monitoring share of 0.2 by whole family read eight times over the budget,
 stopping after two evaluations without improvement), held to a memorisation guard
 (a run whose final training loss is below half its first-step value while its monitoring loss is
@@ -97,6 +97,18 @@ empty until its run exists; a cell is never filled with an estimate.}\label{tab:
 \end{table}
 
 \paragraph{CE4, the first confirmatory pilot: not shown.} The registered query could be run only on a subset (\cref{app:deviations}), under the protocol in force before the solve protocol of \cref{sec:protocol} (greedy decoding, one attempt per task): one task of each of the 23 families of the first qualification half, solved once by each arm with both served by Brain on the same build and tier. The adapter was trained on the verified, exposure-clean trajectories of the teacher's first pass, projected one tool call per turn. Of the 23 tasks, 21 are paired; the untrained 8B resolves one and the adapter none, so the sign test has a single discordant family against the adapter and does not support the claim; the comparison is a pilot by the registered rule and is reported as \emph{not shown}.\cl{M47,PR24} It is a weak test: with the untrained model near zero there is almost no room for a gain, and the adapter's attempts mostly end at the harness's repetition stop. The step count (47) is not the registered rule's (29 for the 114 training records the trainer reports), and the controls, the second qualification half, retention and the serve-agreement sample were not run.
+
+\paragraph{CE8: trained, stopped by its guard, not evaluated.} The registered CE8 training ran
+and stopped early at step 51: its training loss fell from 0.1476 at the first
+step to 0.0221 at the last, and its best monitoring loss, 0.0839 at step 27 against 0.1101 for the
+base, rose to 0.0867 by the last evaluation, so the registered guard calls it memorised.\cl{M48}
+The one further run the registration allowed, on a one-pass budget, behaves the same way at a
+smaller scale: best monitoring loss 0.0829 at step 30, 0.0832 at its last evaluation, training loss
+0.1476 to 0.0282, memorised by the same rule.\cl{M49} Neither adapter is evaluated, and no claim
+about CE8 follows from either. The guard reads a single step's training loss on two records and any
+rise at the last evaluation, so it fires on noise of this size; the registration keeps it as
+written, and the lower monitoring loss than the base's is a training-side quantity, not evidence of
+a gain on any task.
 
 \paragraph{What a failure would show.} An adapter that does not win (for CE4, one distilled from the teacher's verified trajectories), a gain that a different
 repository's adapter or unverified trajectories match, a retention loss beyond the margin, or
