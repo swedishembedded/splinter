@@ -1106,6 +1106,22 @@ the first seed of `runs/ce/protocol-seeds.txt`, one attempt per task, `--solve-d
 Its passes, admitted and projected as in A22.2, form a second CE8 dataset (CE8-T), trained with the recipe of A22.1/A22.2 into a second candidate. Why thinking: an unregistered pilot on 46 HALF_A tasks (two per family, pick seed 1400606320) gave thinking off 23/44, 22/46, 22/46 and thinking 1024 26/46, 29/46 on seeds 1-2; it is labelled a pilot and is no result of this study.
 How CE8 and CE8-T are evaluated is registered by a later amendment before any of their evaluation attempts runs; neither candidate is evaluated on a CE1 development task.
 
+### Amendment 23, 2026-10-21, 13:05 CEST: the CE8 training after the gradient fix: learning rate, stopping rules, invalid runs
+
+Made before any valid CE8 training run and before any CE8 or CE8-T evaluation attempt. It corrects the basis of A21 and A22.1 and restates A19.2's stopping rules; no value is chosen from any task outcome.
+
+**A23.1 The defect and what it invalidates.** From brain f3c83d307 (2026-10-19) to 8ad0ab962 the 27B's chunked MLP backward added into a buffer that was never cleared: the LoRA gradient norm read 1.3e5-2.8e5 instead of about 1, and clipping scaled the true gradient by about 4e-6. Every 27B training before 8ad0ab962 ran on that gradient. Therefore:
+(a) A21.1's learning-rate sweep and A22.1's bf16 check measured a broken gradient and are no basis for any value; their numbers stand only as a record of the defect;
+(b) the CE8 run `ce8/logs/train-a22-bf16-r2.*` (lr 5e-5) trained on the broken gradient and is invalid; it also ran with splinter's default stopping values (evaluation every 5 steps, patience 4, 80 steps) in place of A19.2's;
+(c) the run `ce8/logs/invalid-lr2e-4-train-a22-bf16.*` used lr 2e-4 by a script error and is invalid.
+No candidate of these runs is evaluated or reported as a result.
+
+**A23.2 Diagnostic and the learning rate.** A 40-step bf16 training of the 27B on the 80 records of the A22.2 dataset (64 trained, 16 monitored; rank 16, alpha 32, 2 records per step, seed 1), at the two rates registered so far (5e-5 of A21.2, 2e-4 of A2.7/A19.2), on brain f6c52a39b (`runs/b27/ce8diag/summary.md`): grad-norm median/p90/max 1.35/5.3/13.7 at 5e-5 and 1.18/3.2/8.5 at 2e-4; training loss 0.745 -> 0.127 and 0.745 -> 0.119; neither diverges. Rule fixed before reading it: keep the registered rate unless the diagnostic shows it unstable. Both are stable, so **A21.2's 5e-5 stands**. The monitored losses (0.095 and 0.107 at step 40) were not used to choose and are not a result.
+
+**A23.3 Build.** CE8 trains with splinter 3330c206c (the revision of A22.2) linked against brain 77e510fbf (contains 8ad0ab962, the best-copy spill 741b96c5a and f6c52a39b, which computes a one-sequence batch only up to its last supervised position: loss and gradients equal those of the full row by test) and sven 3e1f6b4d, a local build named with these hashes in the run record.
+
+**A23.4 Stopping rules, passed explicitly.** For the R records the trainer reports and B = 2: steps ceil(2R/B), `--eval-every` ceil(steps/8), `--patience 2`, `--keep-evaluations`. For the A22.2 dataset (`blake3:75b4734dc80d0dec909549aa55b8c3f677837c86d3a0b7cb998c7787e5035cb0`, R = 65) that is 65 steps with an evaluation every 9 steps. The run script passes these values and writes them into the run record. Every other value of A19.2, A21.2 and A22 stands, including the memorisation guard; CE8-T (A22.3) is trained the same way with its own R.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
