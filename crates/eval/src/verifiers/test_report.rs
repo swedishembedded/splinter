@@ -288,7 +288,7 @@ fn compose(name: &str, inner: &str) -> String {
 }
 
 /// `FAIL: name (id)` or `ERROR: name (id)` of the summary the runner prints
-/// after the per-test lines.
+/// after the per-test lines, with a failed sub-case's parameters dropped.
 pub(super) fn unittest_failure_id(line: &str) -> Option<String> {
     unittest_failure(line)
 }
@@ -297,6 +297,10 @@ fn unittest_failure(line: &str) -> Option<String> {
     let rest = line
         .strip_prefix("FAIL: ")
         .or_else(|| line.strip_prefix("ERROR: "))?;
+    // A failed sub-case is headed `name (id) (param=value)` or `name (id)
+    // [message]`: the test is the part up to the id's closing bracket (an id
+    // holds none), whichever sub-case failed.
+    let rest = rest.find(')').map_or(rest, |at| &rest[..=at]);
     let (name, inner, _) = unittest_header(rest)?;
     Some(compose(name, inner))
 }
@@ -607,6 +611,18 @@ mod tests {
         assert_eq!((seen.run, seen.failed, seen.missing), (3, 1, 1), "{seen:?}");
         assert!(!seen.flaws.contains(&Flaw::Inconsistent), "{seen:?}");
         assert!(seen.flaws.contains(&Flaw::TestFailed));
+    }
+
+    #[test]
+    fn a_test_whose_sub_case_failed_is_one_failed_test_named_by_its_id_alone() {
+        let stderr =
+            "test_a (m.T.test_a) ... \n  test_a (m.T.test_a) (dialect='sqlite') ... FAIL\n\
+            test_b (m.T.test_b) ... ok\n\n======\nFAIL: test_a (m.T.test_a) (dialect='sqlite')\n\
+            ------\nAssertionError: 1 != 2\n\nRan 2 tests in 0.001s\n\nFAILED (failures=1)\n";
+        let report = TestRunner::Unittest.read(&result("", stderr));
+        let ids = |set: &BTreeSet<String>| set.iter().cloned().collect::<Vec<_>>();
+        assert_eq!(ids(&report.failed), ["m.T.test_a"]);
+        assert_eq!(ids(&report.passed), ["m.T.test_b"]);
     }
 
     const CARGO_GOOD: &str = "\nrunning 2 tests\ntest tests::a ... ok\ntest tests::b ... ok\n\n\
