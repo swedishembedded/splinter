@@ -1106,7 +1106,7 @@ the first seed of `runs/ce/protocol-seeds.txt`, one attempt per task, `--solve-d
 Its passes, admitted and projected as in A22.2, form a second CE8 dataset (CE8-T), trained with the recipe of A22.1/A22.2 into a second candidate. Why thinking: an unregistered pilot on 46 HALF_A tasks (two per family, pick seed 1400606320) gave thinking off 23/44, 22/46, 22/46 and thinking 1024 26/46, 29/46 on seeds 1-2; it is labelled a pilot and is no result of this study.
 How CE8 and CE8-T are evaluated is registered by a later amendment before any of their evaluation attempts runs; neither candidate is evaluated on a CE1 development task.
 
-### Amendment 23, 2026-10-21, 13:05 CEST: the CE8 training after the gradient fix: learning rate, stopping rules, invalid runs
+### Amendment 23, 2026-10-21, 12:53 CEST: the CE8 training after the gradient fix: learning rate, stopping rules, invalid runs
 
 Made before any valid CE8 training run and before any CE8 or CE8-T evaluation attempt. It corrects the basis of A21 and A22.1 and restates A19.2's stopping rules; no value is chosen from any task outcome.
 
@@ -1122,7 +1122,7 @@ No candidate of these runs is evaluated or reported as a result.
 
 **A23.4 Stopping rules, passed explicitly.** For the R records the trainer reports and B = 2: steps ceil(2R/B), `--eval-every` ceil(steps/8), `--patience 2`, `--keep-evaluations`. For the A22.2 dataset (`blake3:75b4734dc80d0dec909549aa55b8c3f677837c86d3a0b7cb998c7787e5035cb0`, R = 65) that is 65 steps with an evaluation every 9 steps. The run script passes these values and writes them into the run record. Every other value of A19.2, A21.2 and A22 stands, including the memorisation guard; CE8-T (A22.3) is trained the same way with its own R.
 
-### Amendment 24, 2026-10-21, 13:20 CEST: how CE8 and CE8-T are evaluated, with a negative control
+### Amendment 24, 2026-10-21, 12:55 CEST: how CE8 and CE8-T are evaluated, with a negative control
 
 Made before any CE8 or CE8-T candidate has been trained under A23 and before any of their evaluation attempts. It is the amendment A22.3 asks for.
 
