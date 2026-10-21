@@ -40,6 +40,7 @@ pub mod pipeline;
 pub mod plan;
 pub mod plan_only_prompt;
 pub mod plan_prompt;
+pub mod regate;
 pub mod scratch;
 pub mod scripted;
 pub mod scrub;

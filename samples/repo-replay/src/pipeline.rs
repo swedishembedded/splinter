@@ -170,7 +170,7 @@ fn people(chain: &[crate::git::CommitMeta]) -> Vec<String> {
         .collect()
 }
 
-fn producer() -> Producer {
+pub(crate) fn producer() -> Producer {
     Producer {
         name: "repo-replay/gate".into(),
         version: "1".into(),

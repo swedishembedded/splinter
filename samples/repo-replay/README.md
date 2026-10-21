@@ -83,6 +83,8 @@ repo-replay run REPO --state DIR --base-url URL --api-key-file FILE --model NAME
             [--from REV] [--to REV] [--max-commits N] [--styles terse,detailed] [--jobs N] ...
 repo-replay report --state DIR [--json]   bias report: pass rate by size and style, reasons, skips,
             [--versus CONTROL_DIR]        first_try and corrected passes; or grounded beside plan-only
+repo-replay regate REPO --state DIR [--write]   judge the passed attempts again with the current gate, no
+            model; report only unless --write (new ledger line + failing verdict; try it on a copy first)
 repo-replay dataset --state DIR [--serving-prompt-file FILE] [--max-block TOKENS]
             [--min-corrections N] [--max-corrections N]   0 only is first_try, 1 and more corrected
             [--splits OUT [--train-percent 80 --eval-percent 10]]   temporal train/eval/test datasets,

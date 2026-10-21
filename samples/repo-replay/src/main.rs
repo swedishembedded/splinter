@@ -36,6 +36,7 @@ use splinter_repo_replay::gate::GateConfig;
 use splinter_repo_replay::ledger;
 use splinter_repo_replay::pipeline::{run, Models};
 use splinter_repo_replay::plan_prompt::PlanStyle;
+use splinter_repo_replay::regate::{regate, RegateConfig};
 use splinter_repo_replay::select::{
     SelectConfig, DEFAULT_CONTEXT_SHARE_PERCENT, DEFAULT_CONTEXT_TOKENS,
 };
@@ -75,8 +76,53 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Judge the passed attempts of a state directory again with the current gate (no model).
+    Regate(RegateArgs),
     /// Build the dataset of the passed attempts of a state directory.
     Dataset(DatasetArgs),
+}
+
+#[derive(Args, Debug)]
+struct RegateArgs {
+    /// The state directory of a run (work on a copy of it to try the rule first).
+    #[arg(long)]
+    state: PathBuf,
+    /// The repository the state was made from.
+    repository: PathBuf,
+    /// Record the new verdicts: a ledger line and a failing verdict per attempt that now fails
+    /// (default: report only, nothing is written).
+    #[arg(long)]
+    write: bool,
+    /// Most changed lines of a replayable commit (as in the run).
+    #[arg(long, default_value_t = SelectConfig::default().max_changed_lines)]
+    max_changed_lines: usize,
+    /// Most changed files of a replayable commit (as in the run).
+    #[arg(long, default_value_t = SelectConfig::default().max_files)]
+    max_files: usize,
+    /// The served model's context in tokens (as in the run; sets the diff size bound).
+    #[arg(long, default_value_t = DEFAULT_CONTEXT_TOKENS)]
+    context_tokens: usize,
+    /// The share of the context, in percent, a commit's diff may take (as in the run).
+    #[arg(long, default_value_t = DEFAULT_CONTEXT_SHARE_PERCENT)]
+    max_diff_context_percent: usize,
+    /// Edit calls a changed file needs.
+    #[arg(long, default_value_t = GateConfig::default().min_edits_per_file)]
+    min_edits_per_file: usize,
+    /// Fewest tool calls an attempt may make.
+    #[arg(long, default_value_t = GateConfig::default().min_tool_calls)]
+    min_tool_calls: usize,
+    /// Tool calls every attempt gets, before the size of the commit adds to it.
+    #[arg(long, default_value_t = Budget::default().base)]
+    calls_base: usize,
+    /// Tool calls each changed file adds.
+    #[arg(long, default_value_t = Budget::default().per_file)]
+    calls_per_file: usize,
+    /// Tool calls each hunk adds.
+    #[arg(long, default_value_t = Budget::default().per_hunk)]
+    calls_per_hunk: usize,
+    /// The most tool calls any attempt gets.
+    #[arg(long, default_value_t = Budget::default().cap)]
+    calls_cap: usize,
 }
 
 #[derive(Args, Debug)]
@@ -270,6 +316,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Regate(args) => regate_command(&args),
         Command::Dataset(args) => dataset_command(&args),
     }
 }
@@ -378,6 +425,59 @@ fn run_command(args: &RunArgs) -> Result<()> {
         report.entries.len()
     );
     print!("{}", ledger::bias(&ledger::read(&args.state)?));
+    Ok(())
+}
+
+fn regate_command(args: &RegateArgs) -> Result<()> {
+    let ctx = open_context(&args.state)?;
+    let report = regate(
+        &ctx,
+        &RegateConfig {
+            source: args.repository.clone(),
+            state: args.state.clone(),
+            select: SelectConfig {
+                max_changed_lines: args.max_changed_lines,
+                max_files: args.max_files,
+                ..SelectConfig::default()
+            }
+            .with_context_share(args.context_tokens, args.max_diff_context_percent),
+            gate: GateConfig {
+                min_edits_per_file: args.min_edits_per_file,
+                min_tool_calls: args.min_tool_calls,
+                max_tool_calls: GateConfig::default().max_tool_calls,
+            },
+            budget: Budget {
+                base: args.calls_base,
+                per_file: args.calls_per_file,
+                per_hunk: args.calls_per_hunk,
+                cap: args.calls_cap,
+                per_correction: Budget::default().per_correction,
+            },
+            write: args.write,
+        },
+    )?;
+    println!(
+        "passed attempts judged again: {}; still pass: {}; now fail: {}; corrected (not judged): {}; unreadable: {}",
+        report.examined,
+        report.kept(),
+        report.failed.len(),
+        report.not_judged_corrected,
+        report.unreadable.len()
+    );
+    for (class, n) in report.by_class() {
+        println!("  {class}: {n}");
+    }
+    for (commit, why) in &report.unreadable {
+        println!("  unreadable {commit}: {why}");
+    }
+    println!(
+        "{}",
+        if args.write {
+            "verdicts recorded in the ledger and the store"
+        } else {
+            "report only: nothing was written (--write records the verdicts)"
+        }
+    );
     Ok(())
 }
 
