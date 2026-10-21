@@ -14,7 +14,8 @@
 //!
 //! * **checkers**: the tests its fail-to-pass commands must be seen to run
 //!   (the commands themselves when none are named);
-//! * **footprint**: the distinct paths its check withholds, protects or pins;
+//! * **footprint**: the distinct files its reference patch changes (none when
+//!   the task carries no reference);
 //! * **instruction length**: characters of the request the solver sees.
 //!
 //! A task's stratum is how many of the three exceed their cutoff, so it is
@@ -28,14 +29,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::verifiers::workspace::{Phase, WorkspaceCheck};
 use crate::verifiers::VerifyError;
-use splinter_core::experience::Task;
+use splinter_core::experience::{PrivilegedKind, Task};
 
 /// How big a task is on each part of the proxy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskSize {
     /// Tests the fail-to-pass commands must run.
     pub checkers: usize,
-    /// Distinct paths the check withholds, protects or pins.
+    /// Distinct files the reference patch changes.
     pub footprint: usize,
     /// Characters in the instruction.
     pub instruction_chars: usize,
@@ -44,35 +45,31 @@ pub struct TaskSize {
 impl TaskSize {
     /// The size of `task`; `None` when it carries no workspace check.
     pub fn of_task(task: &Task) -> Result<Option<Self>, VerifyError> {
-        Ok(WorkspaceCheck::of_task(task)?
-            .map(|(_, check)| Self::of_check(&check, task.instruction.chars().count())))
-    }
-
-    /// The size of a task with `check` and an instruction of
-    /// `instruction_chars` characters.
-    #[must_use]
-    pub fn of_check(check: &WorkspaceCheck, instruction_chars: usize) -> Self {
+        let Some((_, check)) = WorkspaceCheck::of_task(task)? else {
+            return Ok(None);
+        };
         let named: usize = check
             .expectations
             .iter()
             .filter(|e| e.phase == Phase::FailToPass)
             .map(|e| e.tests.len())
             .sum();
-        let paths: BTreeSet<&String> = check
-            .hidden_paths
+        let files: BTreeSet<&str> = task
+            .privileged
             .iter()
-            .chain(&check.protected)
-            .chain(&check.pinned)
+            .filter(|p| p.kind == PrivilegedKind::Reference)
+            .flat_map(|p| p.content.lines())
+            .filter_map(|line| line.strip_prefix("diff --git a/")?.split(" b/").next())
             .collect();
-        Self {
+        Ok(Some(Self {
             checkers: if named > 0 {
                 named
             } else {
                 check.fail_to_pass.len()
             },
-            footprint: paths.len(),
-            instruction_chars,
-        }
+            footprint: files.len(),
+            instruction_chars: task.instruction.chars().count(),
+        }))
     }
 }
 
@@ -81,7 +78,7 @@ impl TaskSize {
 pub struct StratumCutoffs {
     /// Checkers above this count are above.
     pub checkers: usize,
-    /// A footprint above this many paths is above.
+    /// A footprint above this many files is above.
     pub footprint: usize,
     /// An instruction longer than this many characters is above.
     pub instruction_chars: usize,

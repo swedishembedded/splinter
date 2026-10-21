@@ -23,7 +23,9 @@ use common::gate::{gate_context, Brain};
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
-use splinter_core::experience::{Environment, Experience, Provenance, Task};
+use splinter_core::experience::{
+    Environment, Experience, Privileged, PrivilegedKind, Provenance, Task,
+};
 use splinter_core::rng::Seed;
 use splinter_eval::exposure::EXPOSURE_PRODUCER;
 use splinter_eval::strata::StratumCutoffs;
@@ -217,8 +219,8 @@ fn two_arms_are_paired_by_task_a_family_counts_once_and_exposed_or_unrun_attempt
     );
 }
 
-/// A workspace task whose check pins `paths` and whose instruction is
-/// `chars` characters long.
+/// A workspace task whose reference patch changes `paths` files and whose
+/// instruction is `chars` characters long.
 fn sized_task(family: &str, paths: usize, chars: usize) -> Task {
     let check = WorkspaceCheck {
         fail_to_pass: vec![CommandCall {
@@ -231,14 +233,24 @@ fn sized_task(family: &str, paths: usize, chars: usize) -> Task {
         hidden_paths: Vec::new(),
         hidden_strength: None,
         expectations: Vec::new(),
-        pinned: (0..paths).map(|n| format!("p{n}.py")).collect(),
+        pinned: Vec::new(),
     };
+    let reference = (0..paths)
+        .map(|n| format!("diff --git a/p{n}.py b/p{n}.py\n--- a/p{n}.py\n+++ b/p{n}.py\n"))
+        .collect::<String>();
     Task::new(
         "workspace-change",
         Vec::new(),
         Environment::closed_book(),
         "x".repeat(chars),
-        vec![check.as_check().unwrap()],
+        vec![
+            check.as_check().unwrap(),
+            Privileged {
+                kind: PrivilegedKind::Reference,
+                content: reference,
+                span: None,
+            },
+        ],
     )
     .unwrap()
     .with_concepts([family])

@@ -1128,7 +1128,7 @@ Options:
 
 - `--interval-seed <N>`: The seed the intervals are resampled with (drawn and printed when not given; the same sets and seed give the same intervals)
 - `--stratum-checkers <N>`: Tests a task's fail-to-pass commands run: more is above.
-- `--stratum-footprint <N>`: Paths a task's check withholds, protects or pins: more is above.
+- `--stratum-footprint <N>`: Files a task's reference patch changes: more is above.
 - `--stratum-instruction-chars <N>`: Characters of a task's instruction: more is above.
 
 ### splinter dataset

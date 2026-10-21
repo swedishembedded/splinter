@@ -582,7 +582,7 @@ pub struct StrataArgs {
     /// Tests a task's fail-to-pass commands run: more is above.
     #[arg(long, value_name = "N", requires_all = ["stratum_footprint", "stratum_instruction_chars"])]
     pub stratum_checkers: Option<usize>,
-    /// Paths a task's check withholds, protects or pins: more is above.
+    /// Files a task's reference patch changes: more is above.
     #[arg(long, value_name = "N", requires_all = ["stratum_checkers", "stratum_instruction_chars"])]
     pub stratum_footprint: Option<usize>,
     /// Characters of a task's instruction: more is above.
