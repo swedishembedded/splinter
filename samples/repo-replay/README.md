@@ -177,23 +177,42 @@ attempts, with no model and no device.
 
 ## Results
 
-**One pilot run, five attempts: it shows the pipeline works end to end against a served 27B model, not
-how well the method works.** Repository: a local copy of a research repository's history. Model: the
-27B Q8_0 GGUF served by brain on a card shared with other jobs, one session, seed 20261020, no
-reasoning block, terse and detailed plans, `--max-commits 3 --max-changed-lines 40 --max-files 2`.
-Selection looked at 39 first-parent commits: 28 were oversize and 8 more went unselected because
-`--max-commits` keeps the three most recent replayable ones. That left three commits and six planned
-attempts.
+**One small demonstration on a public history, to show that the pipeline produces a dataset a trainer
+accepts; it says nothing about how well training on it would work.**
 
-| outcome | attempts |
+Repository: splinter's own history (a bare scratch clone), the 59 first-parent commits up to
+`378be432b`. Model: Qwen3.8-27B (Q8_0 GGUF) served by brain, seed 20261021, sampling temperature 0.7,
+top-p 0.8, top-k 20, no reasoning block; terse and detailed plans, `--max-commits 12`, two jobs. The
+run used a binary built at splinter `5aed5ef9f` and the dataset a later one (`f21dbf61d`), both with sven
+`3e1f6b4d` and brain `dff565152`; the harness document digest is `blake3:789259c6...`.
+
+The first pass looked back over the whole history (1,167 first-parent commits) for the 12 newest replayable
+ones: 754 commits were oversize, 34 mostly generated, 18 held a secret, 7 binary, 4 had an ambiguous
+hunk, 1 was the root. The 12 are all within the last 54 commits; the second pass bounded the range to the
+59 commits the splits are cut over (`--from` 59 commits back) and asked again for the two refused plans.
+
+| outcome (12 commits, 24 attempts) | attempts |
 |---|---|
-| passed the gate | 2 (one commit, both plan styles; 4 and 3 tool calls) |
-| failed the gate | 1 (`unmotivated_location`) |
-| infrastructure error (server silent past the request limit), in no rate | 2 |
-| not run (the run was stopped when requests passed two minutes) | 1 |
+| passed the gate (all `first_try`, no correction was asked) | 8 (4 terse, 4 detailed) |
+| failed the gate | 16 (reasons, an attempt can have several: `unjustified_content` 12, `tree_mismatch` 5, `unread_edit` 4, `diff_reference` 2, `outside_tree` 2, and one each of `diff_offset_read`, `forbidden_shell`, `run_incomplete`, `tool_calls_out_of_range`, `unmotivated_location`) |
+| plan refused, infrastructure errors | 0 (two plans were refused in the first pass and written again in the second) |
 
-The failure is the gate doing its job: the agent edited the file named in the diff's header, which the
-terse plan did not name and no search had shown. The two passes produced two records through splinter's
-dataset build (the failed attempt is counted as an exclusion). In the passed attempts the agent's first read used the line offset of the diff's hunk; that run predates the masking of the diff and the `diff_offset_read` rule, which close it. Wall times were dominated by the shared
-server's queue and are not a property of the method. The ledger and log of the run are kept outside
-the repository with the command that produced them.
+Passing by size of the commit: 1-10 changed lines 5 of 8, 11-50 lines 3 of 12, 51-200 lines 0 of 4. The
+gate fails most attempts for writing a name, number or text that neither the plan nor anything the
+agent had read holds (`unjustified_content`): the replayed agent is held to the plan it was given.
+
+`repo-replay dataset --state demo-state --splits OUT --train-percent 60 --eval-percent 20
+--tokenizer-dir Qwen3.8-27B-FP8 --max-block 32768` then built:
+
+| split | commits of the range | attempts | records | tokens per record (min / median / max) |
+|---|---|---|---|---|
+| train | 35 | 16 | 3 | 7,369 / 7,697 / 9,647 |
+| eval | 12 | 4 | 3 | 6,030 / 6,101 / 6,359 |
+| test | 12 | 4 | 2 | 5,575 / 5,818 / 5,818 |
+
+The split has its content address (`split_digest` in `splits.json`), no pair of records of different
+splits repeats a target change, no record is over `--max-block`, every record opens with the serving
+prompt, and `dataset-manifest.json` reports that brain's supervised regime takes each split's dataset
+(19, 13 and 25 supervised turns). The scrubber removed 37 people (names and addresses), 3 secrets and
+0 trailers from the 24 stored attempts. Eight records are too few to train anything; the point is the
+shape of the output. The ledger, the splits and the manifest of the run are kept outside the repository.

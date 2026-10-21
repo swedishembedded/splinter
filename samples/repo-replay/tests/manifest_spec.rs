@@ -75,6 +75,9 @@ fn the_manifest_names_where_the_dataset_comes_from() {
     assert_eq!(from["revisions"]["sven"], "2222222");
     assert_eq!(from["revisions"]["brain"], "3333333");
     assert_eq!(from["source"], "source");
+    // The range is the last run's (this fixture run names none).
+    assert!(from["from"].is_null() && from["to"].is_null());
+    assert_eq!(from["runs"], 1);
     assert!(from["git_version"]
         .as_str()
         .unwrap()

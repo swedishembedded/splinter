@@ -88,6 +88,7 @@ fn compose(ctx: &Context, s: &Sources<'_>) -> Result<Value> {
 fn provenance(ctx: &Context, s: &Sources<'_>) -> Result<Value> {
     let runs: Vec<Value> = splinter_sdk::store::jsonl::read(&s.state.join("runs.jsonl"))?;
     let first = runs.first().cloned().unwrap_or(Value::Null);
+    // The range the splits were cut over is the last run's.
     let last = runs.last().cloned().unwrap_or(Value::Null);
     let caller = &last["settings"]["caller"];
     // The documents the models were told, pinned by digest on each stored attempt.
@@ -110,7 +111,7 @@ fn provenance(ctx: &Context, s: &Sources<'_>) -> Result<Value> {
     Ok(json!({
         "source": Path::new(first["source"].as_str().unwrap_or_default()).file_name()
             .map(|n| n.to_string_lossy().into_owned()),
-        "from": first["from"],
+        "from": last["from"],
         "to": last["to"],
         "runs": runs.len(),
         "git_version": first["git_version"],
@@ -187,7 +188,7 @@ fn token_lengths(ctx: &Context, file: &Path, max_block: Option<usize>) -> Result
     };
     Ok(json!({
         "counter": if counter.is_some() { "tokenizer of the policy base" } else { "characters (no tokenizer at the policy base)" },
-        "policy_base": ctx.config().policy_base,
+        "policy_base": ctx.config().policy_base.file_name().map(|n| n.to_string_lossy().into_owned()),
         "records": lengths.len(),
         "min": lengths.first(),
         "p50": nearest_rank(50),
