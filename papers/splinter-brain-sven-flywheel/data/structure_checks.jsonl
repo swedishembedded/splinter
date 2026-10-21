@@ -358,3 +358,8 @@
 {"id": "PS09.3", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "per_family: Option<usize>", "pin": "splinter_l9"}
 {"id": "PS09.4", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "    Compare \\{", "pin": "splinter_l9"}
 {"id": "PS09.5", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "pub stratum_checkers: Option<usize>", "pin": "splinter_l9"}
+{"id": "OP04.1", "repo": "splinter", "path": "crates/pipelines/src/practice/stages.rs", "kind": "regex", "pattern": "canaries: exam_canaries\\(", "pin": "splinter_l9"}
+{"id": "OP04.2", "repo": "splinter", "path": "crates/pipelines/src/canaries.rs", "kind": "regex", "pattern": "pub const CANARY_COUNT: usize = 20;", "pin": "splinter_l9"}
+{"id": "OP05.1", "repo": "splinter", "path": "crates/eval/src/verifiers/workspace.rs", "kind": "regex", "pattern": "observation\\.as_ref\\(\\)\\.is_none_or\\(Observation::proven\\)", "pin": "splinter_l9"}
+{"id": "OP05.2", "repo": "splinter", "path": "crates/eval/src/verifiers/test_report.rs", "kind": "regex", "pattern": "every expected test reported as run and passed", "pin": "splinter_l9"}
+{"id": "OP05.3", "repo": "splinter", "path": "crates/eval/src/verifiers/test_report.rs", "kind": "regex", "pattern": "Readers exist for `python3 -m unittest` \\(verbose\\) and `cargo test`", "pin": "splinter_l9"}

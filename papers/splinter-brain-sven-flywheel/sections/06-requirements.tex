@@ -46,12 +46,16 @@ earlier round for this reason.
 \paragraph{The verifier must prove that the tests ran.} The workspace verifier passes a patch
 only if every fail-to-pass and pass-to-pass command exits with status 0.\cl{OP02} That does not
 prove that the intended tests ran, so a suite that exits zero without running them would pass.
-A check that the named tests were executed and passed is planned; the coding-task experiments
-register conformance measurements for the verifier before they count (\cref{sec:protocol}).
+At the current head a command that carries a test expectation passes only when the runner's own
+report shows every expected test run and passed, with readers for \code{python3 -m unittest} and
+\code{cargo test}; a command without an expectation is still judged by its exit status.\cl{OP05} The
+coding-task experiments register conformance measurements for the verifier before they count
+(\cref{sec:protocol}).
 
-\paragraph{The gate must carry canaries.} A gate with an empty canary set skips that check. The
-release gate called from \code{practice} is built without canary tasks,\cl{OP03} so a release
-from \code{practice} does not yet carry that evidence; adding canaries is planned.
+\paragraph{The gate must carry canaries.} A gate with an empty canary set skips that check. At the
+revision the paper's architecture claims are pinned to, the release gate called from \code{practice}
+was built without canary tasks;\cl{OP03} at the current head it is handed up to 20 canaries made from
+the exam the run reserved, so a release from \code{practice} carries that evidence.\cl{OP04}
 
 \subsection{Trajectory and training requirements of repository tasks}\label{sec:audit}
 
