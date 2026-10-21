@@ -6,8 +6,7 @@
 // team needs expertise in learning from your own codebase, you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! The replay driven by sven harness documents (`harness/replay.yaml`,
-//! `harness/replay-plan-only.yaml`).
+//! The replay driven by a sven harness document (`harness/replay.yaml`).
 //!
 //! Every prompt, the plan's retry on refusal, the agent's tool allowance and
 //! repetition stop, the follow-up for a turn that ends announcing a call it
@@ -34,12 +33,8 @@ use crate::plan::{PlanCheck, PlanFailure};
 use crate::style::PlanStyle;
 use crate::supervise::{Correction, Refused};
 
-/// The documents the sample ships: the plan stage and the grounded work, and
-/// the work of the plan-only control (a sven agent task cannot carry its own
-/// system prompt, so the control is a document of its own).
+/// The document the sample ships: the plan stage and the work of both controls.
 pub const DEFAULT_DOCUMENT: &str = include_str!("../harness/replay.yaml");
-/// The plan-only control's document.
-pub const DEFAULT_PLAN_ONLY_DOCUMENT: &str = include_str!("../harness/replay-plan-only.yaml");
 
 /// Seconds to wait for a first response when the caller names no limit
 /// (the document needs a number; a local model is silent through its prefill).
@@ -73,10 +68,8 @@ pub struct Decoding {
 /// The harness documents and what their gates need.
 #[derive(Clone, Debug)]
 pub struct HarnessConfig {
-    /// The text of the document with the plan stage and the grounded work.
+    /// The text of the harness document.
     pub document: String,
-    /// The text of the document with the work of the plan-only control.
-    pub plan_only_document: String,
     /// The `repo-replay` executable the documents' gates run.
     pub check_bin: std::path::PathBuf,
     /// Sampling stated to the documents.
@@ -155,7 +148,6 @@ impl HarnessConfig {
         };
         Self {
             document: DEFAULT_DOCUMENT.to_string(),
-            plan_only_document: DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
             check_bin,
             decoding,
         }
@@ -267,6 +259,7 @@ pub async fn write_plan(
         ("min_line_words", json!(check.min_line_tokens)),
         ("plan_retries", json!(tries.saturating_sub(1))),
         ("masked_diff", json!("")),
+        ("control", json!("grounded")),
         ("calls_limit", json!(PLAN_GATE_CALLS)),
     ] {
         inputs.insert(key.into(), value);
@@ -321,9 +314,10 @@ pub async fn work(config: &HarnessConfig, setup: WorkSetup<'_>) -> Result<Worked
         .tree
         .canonicalize()
         .unwrap_or(setup.tree.to_path_buf());
-    let (document, grounded) = match setup.control {
-        Control::Grounded => (&config.document, true),
-        Control::PlanOnly => (&config.plan_only_document, false),
+    let (control, masked) = match setup.control {
+        Control::Grounded => ("grounded", setup.masked.as_str()),
+        // The control is shown no change: the document's plan-only variant has no hole for it.
+        Control::PlanOnly => ("plan_only", ""),
     };
     let mut stage_inputs = vec![
         ("plan", json!(setup.plan)),
@@ -345,18 +339,17 @@ pub async fn work(config: &HarnessConfig, setup: WorkSetup<'_>) -> Result<Worked
         ("workspace", json!(tree)),
         ("case_dir", json!(setup.case_dir)),
     ];
-    if grounded {
-        stage_inputs.extend([
-            ("stage", json!("work")),
-            ("style", json!("")),
-            ("message", json!("")),
-            ("commit", json!("")),
-            ("diff_file", json!("")),
-            ("min_line_words", json!(0)),
-            ("plan_retries", json!(0)),
-            ("masked_diff", json!(setup.masked.as_str())),
-        ]);
-    }
+    stage_inputs.extend([
+        ("stage", json!("work")),
+        ("control", json!(control)),
+        ("style", json!("")),
+        ("message", json!("")),
+        ("commit", json!("")),
+        ("diff_file", json!("")),
+        ("min_line_words", json!(0)),
+        ("plan_retries", json!(0)),
+        ("masked_diff", json!(masked)),
+    ]);
     for (key, value) in stage_inputs {
         inputs.insert(key.into(), value);
     }
@@ -366,7 +359,7 @@ pub async fn work(config: &HarnessConfig, setup: WorkSetup<'_>) -> Result<Worked
         setup.supervisor,
     )?;
     let harness = engine
-        .load_harness_from_str(document)
+        .load_harness_from_str(&config.document)
         .context("loading the harness document")?;
     let mut run = harness.start(Value::Object(inputs))?.in_workspace(&tree)?;
     let outcome = run
@@ -415,19 +408,12 @@ pub async fn work(config: &HarnessConfig, setup: WorkSetup<'_>) -> Result<Worked
         _ => None,
     };
     let stopped = match (stop.as_deref(), &outcome.result) {
-        (Some("tool_cap"), _) => Some("the tool-call cap stopped the run".to_string()),
-        (Some("repetition"), _) => Some("a call kept returning the same answer".to_string()),
-        (Some("output_truncated"), _) => {
-            Some("a reply was cut off at the output limit".to_string())
-        }
         (_, Some(Err(failure))) => Some(format!("{}: {}", failure.code, failure.message)),
         _ if outcome.conclusion != RunConclusion::Success => {
             Some(format!("the run ended as {:?}", outcome.conclusion))
         }
-        (Some("stopped_without_conclusion"), _) => {
-            Some("the run ended as StoppedWithoutConclusion".to_string())
-        }
-        _ => None,
+        (Some(stop), _) => crate::case::stopped_reason(stop),
+        (None, _) => None,
     };
     Ok(Worked {
         trajectory,

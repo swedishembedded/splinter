@@ -6,21 +6,22 @@
 #![allow(dead_code, clippy::unwrap_used)]
 
 use serde_yaml::Value;
-use splinter_repo_replay::harness::{DEFAULT_DOCUMENT, DEFAULT_PLAN_ONLY_DOCUMENT};
+use splinter_repo_replay::harness::DEFAULT_DOCUMENT;
 
-/// The grounded document, parsed.
-pub fn grounded() -> Value {
+/// The harness document, parsed.
+pub fn document() -> Value {
     serde_yaml::from_str(DEFAULT_DOCUMENT).unwrap()
 }
 
-/// The plan-only document, parsed.
-pub fn plan_only() -> Value {
-    serde_yaml::from_str(DEFAULT_PLAN_ONLY_DOCUMENT).unwrap()
-}
-
-/// The system prompt of the agent in `document`.
-pub fn agent_system(document: &Value) -> String {
-    document["agent"]["system"].as_str().unwrap().to_string()
+/// The system prompt template of the agent for `control` (`plan_only` or `grounded`).
+pub fn agent_system(control: &str) -> String {
+    let variants = document()["agent"]["system"].clone();
+    let variants = variants.as_sequence().unwrap().clone();
+    let wanted = variants.iter().find(|v| match v.get("when") {
+        Some(when) => when["value"].as_str() == Some(control),
+        None => control == "grounded",
+    });
+    wanted.unwrap()["text"].as_str().unwrap().to_string()
 }
 
 /// The task named `name` in `document`.
@@ -35,7 +36,7 @@ pub fn task<'a>(document: &'a Value, name: &str) -> &'a Value {
 
 /// The system prompt of the plan task of `style`.
 pub fn plan_system(style: &str) -> String {
-    task(&grounded(), &format!("plan_{style}"))["system"]
+    task(&document(), &format!("plan_{style}"))["system"]
         .as_str()
         .unwrap()
         .to_string()

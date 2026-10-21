@@ -13,11 +13,11 @@
 
 mod support;
 
-use support::{agent_system, grounded, plan_only, plan_system, task};
+use support::{agent_system, document, plan_system, task};
 
 /// The rules the grounded prompt gives after the diff.
 fn rules() -> String {
-    agent_system(&grounded())
+    agent_system("grounded")
         .split("How to work:")
         .nth(1)
         .unwrap_or_default()
@@ -54,7 +54,7 @@ fn the_todo_list_asks_for_a_review_against_the_task() {
 
 #[test]
 fn both_prompts_say_what_cannot_work_here_so_the_agent_does_not_try_to_work_around_it() {
-    for prompt in [agent_system(&grounded()), agent_system(&plan_only())] {
+    for prompt in [agent_system("grounded"), agent_system("plan_only")] {
         for part in ["no network", "git stash", "/tmp"] {
             assert!(prompt.contains(part), "{part} missing from {prompt}");
         }
@@ -63,14 +63,14 @@ fn both_prompts_say_what_cannot_work_here_so_the_agent_does_not_try_to_work_arou
 
 #[test]
 fn the_prompts_say_where_the_repository_is_and_that_new_paths_must_be_given() {
-    assert!(agent_system(&grounded()).contains("working directory is the repository root"));
-    assert!(agent_system(&plan_only()).contains("working directory is the repository root"));
+    assert!(agent_system("grounded").contains("working directory is the repository root"));
+    assert!(agent_system("plan_only").contains("working directory is the repository root"));
     assert!(plan_system("terse").contains("the exact new path"));
 }
 
 #[test]
 fn the_replay_prompt_carries_the_per_file_procedure_and_the_budget() {
-    let prompt = agent_system(&grounded());
+    let prompt = agent_system("grounded");
     for part in [
         "calling todo with action set",
         "Locate.",
@@ -88,13 +88,13 @@ fn the_replay_prompt_carries_the_per_file_procedure_and_the_budget() {
 
 #[test]
 fn the_plan_only_prompt_shows_no_change() {
-    let prompt = agent_system(&plan_only());
+    let prompt = agent_system("plan_only");
     assert!(!prompt.contains("masked_diff") && !prompt.contains("The change:"));
 }
 
 #[test]
 fn the_supervisor_speaks_as_the_user_and_is_shown_the_change_for_its_eyes_only() {
-    let doc = grounded();
+    let doc = document();
     let author = &task(&doc, "work")["corrections"]["author"];
     let system = author["system"].as_str().unwrap();
     assert!(system.contains("You play the user who gave an engineer a task"));

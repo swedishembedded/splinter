@@ -154,6 +154,22 @@ impl Case {
     }
 }
 
+/// Why a turn that ended with the stop status `stop` was not a finished
+/// attempt; `None` for a turn that concluded by itself.
+#[must_use]
+pub fn stopped_reason(stop: &str) -> Option<String> {
+    match stop {
+        "concluded" | "" => None,
+        "tool_cap" => Some("the tool-call cap stopped the run".to_string()),
+        "repetition" => Some("a call kept returning the same answer".to_string()),
+        "output_truncated" => Some("a reply was cut off at the output limit".to_string()),
+        "stopped_without_conclusion" => {
+            Some("the run ended as StoppedWithoutConclusion".to_string())
+        }
+        other => Some(format!("the run ended as {other}")),
+    }
+}
+
 /// The corrections in `trajectory` (user turns the supervisor wrote), each with
 /// the number of tool calls made before it.
 #[must_use]
@@ -224,12 +240,18 @@ fn read_trajectory(file: &Path) -> Result<Trajectory> {
 /// [`EXIT_CORRECTABLE`], [`EXIT_FAILED`]) and what to print: for a failure,
 /// the evidence the supervisor is shown (the agent's changes and where its
 /// tree differs).
-pub fn check(dir: &Path, workspace: &Path, trajectory: &Path) -> Result<(i32, String)> {
+pub fn check(dir: &Path, workspace: &Path, trajectory: &Path, stop: &str) -> Result<(i32, String)> {
     let case = Case::read(dir)?;
     let trajectory = read_trajectory(trajectory)?;
     let trace = Trace::of(&trajectory);
     let residual = case.residual(dir, workspace)?;
-    let verdict = case.judge(&trace, &residual, None, &guidance_of(&trajectory));
+    let stopped = stopped_reason(stop);
+    let verdict = case.judge(
+        &trace,
+        &residual,
+        stopped.as_deref(),
+        &guidance_of(&trajectory),
+    );
     if verdict.passed {
         return Ok((0, String::new()));
     }

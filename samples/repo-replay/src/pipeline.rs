@@ -554,12 +554,8 @@ fn store_attempt(
     )?;
     let mut provenance = Provenance::new(&models.identity, ctx.runtime().clock());
     provenance.generator = Some("splinter-repo-replay".into());
-    // The prompts are the harness documents: their digests pin what the models were told.
-    let replay_document = match control {
-        Control::Grounded => &harness.document,
-        Control::PlanOnly => &harness.plan_only_document,
-    };
-    provenance.prompt_digests = vec![digest(&harness.document), digest(replay_document)];
+    // The prompts are the harness document: its digest pins what the models were told.
+    provenance.prompt_digests = vec![digest(&harness.document)];
     let trajectory = scrub_trajectory(&outcome.trajectory, scrubber)?;
     let final_output = outcome.final_message.as_deref().map(|m| scrubber.scrub(m));
     let experience = Experience::new(task, trajectory, final_output, provenance)?;

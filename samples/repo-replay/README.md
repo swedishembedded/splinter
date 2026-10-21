@@ -92,7 +92,7 @@ repo-replay dataset --state DIR [--serving-prompt-file FILE] [--max-block TOKENS
 ```
 
 `--control plan-only` replays the same commits without the grounding diff (the plan and the repository
-only, `harness/replay-plan-only.yaml`); it needs a state directory of its own, and `report --state GROUNDED
+only, `harness/replay.yaml`); it needs a state directory of its own, and `report --state GROUNDED
 --versus PLAN_ONLY` prints both pass rates side by side with the units only the grounded run passes
 (what the diff carries) and the units both pass (the purest records). `--thinking` and
 `--thinking-budget` turn on the model's reasoning for every request of a run.
@@ -106,9 +106,9 @@ fixed. Every number a run prints comes from the ledger (`state/ledger.jsonl`).
 ## Harness v2
 
 The plan and the work run through sven's workflow language, and nothing else runs them. Every
-prompt lives only in `harness/replay.yaml` (the plan stage and the grounded work) and
-`harness/replay-plan-only.yaml` (the control's work): edit them and rerun, no build; `--harness-file`
-and `--harness-plan-only-file` name edited copies. The documents declare the planner's refusal
+prompt lives only in `harness/replay.yaml` (the plan stage and the work of both controls: the
+agent's system prompt is chosen by the `control` input): edit it and rerun, no build;
+`--harness-file` names an edited copy. The documents declare the planner's refusal
 retry (the gate `check-plan`), the tool allowance, the repetition stop, the follow-up for a turn
 that ends announcing a call it did not make, and the supervisor corrections: the gate `check`
 judges the tree and the calls so far (exit 0 passed, 1 a correction can repair it, 2 it cannot),
@@ -124,9 +124,8 @@ runs the whole pipeline through the documents. `tests/prompts_spec.rs` and `test
 read the documents; the system prompts and user turns the models receive are the documents' text.
 The serving prompt of the dataset (`serving_prompt.rs`) is not a replay prompt and stays in Rust.
 
-Known differences of what sven reports: the refusals of supervisor messages are counted without the
-last one when the rewrites ran out; the gate `check` cannot know why a run stopped, so a correction
-is only earned by a turn that concluded. The sample needs sven at or after 5e2aea0a; Cargo.lock
+The gate `check` is told how the agent's last turn ended (`--stopped`), so a correction is earned only
+by a turn that concluded. The sample needs sven at or after 3e1f6b4d; Cargo.lock
 still pins the published revision, so build it with `make deps/local`.
 
 ## What the audit proves

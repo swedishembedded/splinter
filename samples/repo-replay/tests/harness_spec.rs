@@ -162,11 +162,11 @@ fn the_planner_is_asked_what_the_document_says() {
 
 #[test]
 fn the_agent_is_told_what_the_document_of_its_control_says() {
-    for (control, document) in [
-        (Control::Grounded, support::grounded()),
-        (Control::PlanOnly, support::plan_only()),
+    for (control, variant) in [
+        (Control::Grounded, "grounded"),
+        (Control::PlanOnly, "plan_only"),
     ] {
-        let template = support::agent_system(&document);
+        let template = support::agent_system(variant);
         let (before, after) = around_holes(&template);
         let seen = requests(control, 0);
         assert!(!seen.agent.is_empty());
@@ -187,7 +187,7 @@ fn the_supervisor_is_asked_what_the_document_says() {
         !seen.supervisor.is_empty(),
         "the scripted run needed a correction"
     );
-    let document = support::grounded();
+    let document = support::document();
     let author = &support::task(&document, "work")["corrections"]["author"];
     let system = author["system"].as_str().unwrap();
     let (before, after) = around_holes(author["task"].as_str().unwrap());

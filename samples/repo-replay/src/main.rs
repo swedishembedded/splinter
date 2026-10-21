@@ -119,6 +119,9 @@ struct CheckArgs {
     /// The trajectory of the run so far (a file of sven's ATIF export).
     #[arg(long)]
     trajectory: PathBuf,
+    /// How the agent's last turn ended (sven's stop status: concluded, tool_cap, repetition ...).
+    #[arg(long)]
+    stopped: String,
 }
 
 #[derive(Args, Debug)]
@@ -293,12 +296,9 @@ struct RunArgs {
     #[arg(long = "check")]
     checks: Vec<String>,
     /// The harness document with the plan stage and the grounded work (default: the one the
-    /// sample ships, `harness/replay.yaml`): edit a copy, no build needed.
+    /// sample ships, `harness/replay.yaml`, both controls): edit a copy, no build needed.
     #[arg(long)]
     harness_file: Option<PathBuf>,
-    /// The harness document of the plan-only control (default: the one the sample ships).
-    #[arg(long)]
-    harness_plan_only_file: Option<PathBuf>,
     /// Passes after the first that retry attempts lost to the server or the disk.
     #[arg(long, default_value_t = 3)]
     error_retries: usize,
@@ -371,8 +371,12 @@ fn main() -> Result<()> {
         }
         Command::CheckPlan(args) => check_plan_command(&args),
         Command::Check(args) => {
-            let (status, evidence) =
-                check(&std::env::current_dir()?, &args.workspace, &args.trajectory)?;
+            let (status, evidence) = check(
+                &std::env::current_dir()?,
+                &args.workspace,
+                &args.trajectory,
+                &args.stopped,
+            )?;
             print!("{evidence}");
             std::process::exit(status);
         }
@@ -456,10 +460,6 @@ fn run_command(args: &RunArgs) -> Result<()> {
     harness.check_bin = std::env::current_exe().context("finding this executable")?;
     if let Some(file) = &args.harness_file {
         harness.document =
-            std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
-    }
-    if let Some(file) = &args.harness_plan_only_file {
-        harness.plan_only_document =
             std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
     }
     config.harness = harness;
