@@ -103,6 +103,27 @@ with the masked change (which it does not); the gate keeps flagging comparisons 
 `--max-commits N` takes the N most recent replayable commits. `--seed` is required: no default is
 fixed. Every number a run prints comes from the ledger (`state/ledger.jsonl`).
 
+## Harness v2
+
+`--driver harness` runs the plan and the work through sven's workflow language instead of the
+Rust loops. The prompts live in `harness/replay.yaml` (plan stage and grounded work) and
+`harness/replay-plan-only.yaml` (the control's work; a sven agent task cannot carry its own system
+prompt, so the control is a document of its own): edit them and rerun, no build. `--harness-file`
+and `--harness-plan-only-file` name edited copies. The document declares the planner's refusal
+retry (the gate `repo-replay check-plan` reads the plan on standard input), the tool allowance,
+the repetition stop and the follow-up for a turn that ends announcing a call it did not make.
+Rust keeps what is specific to replay: mining and selection, the masking, the trees, the gate that
+judges the finished tree, the ledger, the dataset, the scrub and the audit. The audit runs the
+honest solver and every cheater through the document as well and requires the Rust path's verdicts;
+`tests/harness_spec.rs` requires every system prompt and first user turn to equal what the Rust
+path sends.
+
+Kept on the Rust path until the language can express them (the step falls back by itself): plan
+tries and follow-ups other than 2 (literals in the document), a thinking budget (cannot be left
+unset), supervisor corrections (the check gate's output is capped at 16 KiB, the supervisor's view
+of the agent's changes is larger), and the judging of the tree. The sample needs sven at or after
+95f668d3; Cargo.lock still pins the published revision, so build it with `make deps/local`.
+
 ## What the audit proves
 
 On a fixture history (root, add, edit, rename, delete, three-file change, lock file and source,

@@ -83,6 +83,8 @@ pub struct AttemptSettings {
     pub control: Control,
     /// Correction messages a wrong attempt may be sent (0: none).
     pub corrections: usize,
+    /// The harness document that runs the work, when the run uses one.
+    pub harness: Option<crate::harness::HarnessConfig>,
     /// Writes the corrections.
     pub supervisor: Model,
     /// Times the supervisor may rewrite a refused message.
@@ -346,18 +348,9 @@ pub async fn attempt(
     });
     solve.max_output_tokens = settings.max_output_tokens;
     solve.first_response = settings.first_response;
-    let mut options = WorkOptions::new(solve);
-    options.max_repeated_results = Some(4);
     let stats = Arc::new(std::sync::Mutex::new(crate::timed::Stats::default()));
     let model = crate::timed::Timed::wrap(Arc::clone(&settings.model), Arc::clone(&stats));
-    let mut worker = Worker::start(&tree_dir, model, options)
-        .map_err(|e| anyhow::anyhow!("starting the agent: {e}"))?;
-    let mut round = Round {
-        settings,
-        started: Instant::now(),
-        calls_used: 0,
-        sent: Vec::new(),
-    };
+    let started = Instant::now();
     let added_text = crate::plan::changed_lines(&commit.diff).join("\n");
     let judge = |trace: &Trace,
                  residual: &[Residual],
@@ -389,6 +382,56 @@ pub async fn attempt(
         )
     };
 
+    // The harness document runs the work when it can express the settings;
+    // the judging below is the same either way.
+    if let Some(config) = settings
+        .harness
+        .as_ref()
+        .filter(|h| h.drives_work(settings.follow_ups, settings.corrections))
+    {
+        let worked = crate::harness::work(
+            config,
+            Arc::clone(&model),
+            &tree_dir,
+            (settings.control, plan, &commit.masked),
+            calls,
+            (settings.first_response, settings.deadline),
+        )
+        .await?;
+        let seconds = started.elapsed().as_secs_f64();
+        let checks = settings
+            .checks
+            .iter()
+            .map(|c| run_check(&tree_dir, c, settings.check_timeout))
+            .collect();
+        let residual = residual_now()?;
+        let trace = Trace::of(&worked.trajectory);
+        let verdict = judge(&trace, &residual, worked.stopped.as_deref(), &[]);
+        return Ok(AttemptOutcome {
+            verdict,
+            trajectory: worked.trajectory,
+            final_message: trace.said.last().cloned(),
+            trace,
+            residual,
+            checks,
+            stats: stats.lock().map(|s| s.clone()).unwrap_or_default(),
+            seconds,
+            corrections: Vec::new(),
+            refused: Vec::new(),
+            supervisor_error: None,
+        });
+    }
+
+    let mut options = WorkOptions::new(solve);
+    options.max_repeated_results = Some(4);
+    let mut worker = Worker::start(&tree_dir, model, options)
+        .map_err(|e| anyhow::anyhow!("starting the agent: {e}"))?;
+    let mut round = Round {
+        settings,
+        started,
+        calls_used: 0,
+        sent: Vec::new(),
+    };
     let mut report = round
         .send(
             &mut worker,

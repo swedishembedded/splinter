@@ -33,8 +33,12 @@ use splinter_repo_replay::dataset::{
     attempts_set_filtered, build_dataset, labels, CorrectionRange, DatasetSettings,
 };
 use splinter_repo_replay::gate::GateConfig;
+use splinter_repo_replay::harness::{
+    Decoding, HarnessConfig, DEFAULT_DOCUMENT, DEFAULT_PLAN_ONLY_DOCUMENT,
+};
 use splinter_repo_replay::ledger;
 use splinter_repo_replay::pipeline::{run, Models};
+use splinter_repo_replay::plan::{changed_lines, validate, PlanCheck};
 use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::regate::{regate, RegateConfig};
 use splinter_repo_replay::select::{
@@ -76,10 +80,29 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// The plan gate of the harness document: reads a plan on standard input, exits 0 when it
+    /// may be used, else prints why and exits 1.
+    CheckPlan(CheckPlanArgs),
     /// Judge the passed attempts of a state directory again with the current gate (no model).
     Regate(RegateArgs),
     /// Build the dataset of the passed attempts of a state directory.
     Dataset(DatasetArgs),
+}
+
+#[derive(Args, Debug)]
+struct CheckPlanArgs {
+    /// The plan style: terse or detailed.
+    #[arg(long)]
+    style: String,
+    /// The commit the plan is for; a plan must not carry it.
+    #[arg(long)]
+    commit: String,
+    /// The commit's diff.
+    #[arg(long)]
+    diff_file: PathBuf,
+    /// A diff line of this many words may not be repeated in the plan.
+    #[arg(long)]
+    min_line_words: usize,
 }
 
 #[derive(Args, Debug)]
@@ -246,6 +269,17 @@ struct RunArgs {
     /// this machine. Repeatable.
     #[arg(long = "check")]
     checks: Vec<String>,
+    /// Who drives the plan and the work: `rust` (the reference) or `harness` (the sven harness
+    /// document, see --harness-file). Settings the document cannot express yet (plan tries or
+    /// follow-ups other than 2, corrections, a thinking budget) keep that step on the Rust path.
+    #[arg(long, default_value = "rust")]
+    driver: String,
+    /// The harness document for --driver harness (default: the one the sample ships).
+    #[arg(long)]
+    harness_file: Option<PathBuf>,
+    /// The harness document of the plan-only control (default: the one the sample ships).
+    #[arg(long)]
+    harness_plan_only_file: Option<PathBuf>,
     /// Passes after the first that retry attempts lost to the server or the disk.
     #[arg(long, default_value_t = 3)]
     error_retries: usize,
@@ -316,6 +350,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::CheckPlan(args) => check_plan_command(&args),
         Command::Regate(args) => regate_command(&args),
         Command::Dataset(args) => dataset_command(&args),
     }
@@ -376,6 +411,31 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.first_response = args.first_response_secs.map(Duration::from_secs);
     config.plan_tries = args.plan_tries;
     config.min_line_tokens = args.plan_verbatim_words;
+    config.harness = match args.driver.as_str() {
+        "rust" => None,
+        "harness" => Some(HarnessConfig {
+            document: match &args.harness_file {
+                Some(file) => std::fs::read_to_string(file)
+                    .with_context(|| format!("reading {}", file.display()))?,
+                None => DEFAULT_DOCUMENT.to_string(),
+            },
+            plan_only_document: match &args.harness_plan_only_file {
+                Some(file) => std::fs::read_to_string(file)
+                    .with_context(|| format!("reading {}", file.display()))?,
+                None => DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
+            },
+            check_bin: std::env::current_exe().context("finding this executable")?,
+            decoding: Decoding {
+                temperature: f64::from(args.temperature),
+                top_p: f64::from(args.top_p),
+                top_k: u64::from(args.top_k),
+                seed: args.seed,
+                thinking: args.thinking,
+            },
+            thinking_budget: args.thinking_budget,
+        }),
+        other => anyhow::bail!("unknown driver {other:?}: rust or harness"),
+    };
     let ctx = open_context(&args.state)?;
     let served_context = match args.context_tokens {
         Some(tokens) => tokens,
@@ -425,6 +485,28 @@ fn run_command(args: &RunArgs) -> Result<()> {
         report.entries.len()
     );
     print!("{}", ledger::bias(&ledger::read(&args.state)?));
+    Ok(())
+}
+
+fn check_plan_command(args: &CheckPlanArgs) -> Result<()> {
+    use std::io::Read;
+    let style = PlanStyle::parse(&args.style)
+        .with_context(|| format!("unknown plan style {:?}", args.style))?;
+    let diff = std::fs::read_to_string(&args.diff_file)
+        .with_context(|| format!("reading {}", args.diff_file.display()))?;
+    let mut plan = String::new();
+    std::io::stdin().read_to_string(&mut plan)?;
+    let lines = changed_lines(&diff);
+    let check = PlanCheck {
+        diff_lines: &lines,
+        commit: &args.commit,
+        min_line_tokens: args.min_line_words,
+    };
+    if let Err(rejection) = validate(&plan, style, &check) {
+        // The refusal is what the planner is told; no newline, no decoration.
+        print!("{rejection}");
+        std::process::exit(1);
+    }
     Ok(())
 }
 

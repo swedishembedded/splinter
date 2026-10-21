@@ -33,6 +33,7 @@ pub mod gate;
 pub mod generated;
 pub mod git;
 pub mod grounding_prompt;
+pub mod harness;
 pub mod justify;
 pub mod ledger;
 pub mod mask;

@@ -20,7 +20,11 @@ use splinter_repo_replay::audit::audit;
 #[test]
 fn the_gate_passes_honest_work_and_catches_every_cheat() {
     let work = tempfile::tempdir().unwrap();
-    let checks = audit(work.path()).unwrap();
+    let checks = audit(
+        work.path(),
+        std::path::Path::new(env!("CARGO_BIN_EXE_repo-replay")),
+    )
+    .unwrap();
     let failed: Vec<String> = checks
         .iter()
         .filter(|c| !c.ok)

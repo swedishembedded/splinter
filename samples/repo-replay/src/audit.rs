@@ -111,6 +111,7 @@ pub fn default_config(source: &Path, state: &Path) -> RunConfig {
         redo_classes: Vec::new(),
         control: Control::Grounded,
         corrections: 0,
+        harness: None,
     }
 }
 
@@ -260,7 +261,8 @@ fn commit_of<'a>(ids: &'a [String], label: &str) -> Result<(&'a str, &'a str)> {
 }
 
 /// Runs the audit in `work` (a directory that exists; its content is left behind for inspection).
-pub fn audit(work: &Path) -> Result<Vec<Check>> {
+/// `check_bin` is the `repo-replay` executable the harness document's gates run.
+pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
     let mut checks = Vec::new();
     let source = work.join("source");
     std::fs::create_dir_all(&source)?;
@@ -390,6 +392,40 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
         "",
     );
 
+    // The harness document drives the plan and the work: the same verdicts as the Rust path.
+    let via_harness = |config: RunConfig| RunConfig {
+        harness: Some(crate::harness::HarnessConfig {
+            document: crate::harness::DEFAULT_DOCUMENT.to_string(),
+            plan_only_document: crate::harness::DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
+            check_bin: check_bin.to_path_buf(),
+            decoding: crate::harness::Decoding {
+                temperature: 0.7,
+                top_p: 0.8,
+                top_k: 20,
+                // The scripted models ignore the seed; the clock only fills the field.
+                seed: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| u64::from(d.subsec_nanos())),
+                thinking: false,
+            },
+            thinking_budget: None,
+        }),
+        ..config
+    };
+    let harness_state = state("harness-honest");
+    let harness_ctx = open_context(&harness_state)?;
+    let harnessed = run_blocking(
+        &harness_ctx,
+        &scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths),
+        &via_harness(default_config(&source, &harness_state)),
+    )?;
+    check(
+        &mut checks,
+        "the harness document gives the Rust path's verdicts for the honest solver, in both plan styles",
+        verdicts(&honest.entries) == verdicts(&harnessed.entries),
+        format!("{:?}", verdicts(&harnessed.entries)),
+    );
+
     // Each cheater fails with the reason of its rule, on its commit.
     for (index, (name, behaviour, label, class)) in cheaters(&source).into_iter().enumerate() {
         let (parent, commit) = commit_of(&ids, label)?;
@@ -403,7 +439,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
             &cheat_ctx,
             // A plan that names the files and nothing the change introduces: the
             // cheaters' own rule is the only thing that should catch them.
-            &scripted_models(behaviour, Specificity::FilesOnly, &truths),
+            &scripted_models(behaviour.clone(), Specificity::FilesOnly, &truths),
             &config,
         )?;
         let entry = report
@@ -417,6 +453,22 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
             format!("cheater that {name} fails with {class}"),
             caught,
             format!("{:?}", entry.map(|e| (&e.outcome, &e.classes))),
+        );
+        let harness_cheat_state = state(&format!("cheat-harness-{index}"));
+        let harness_cheat_ctx = open_context(&harness_cheat_state)?;
+        let harness_report = run_blocking(
+            &harness_cheat_ctx,
+            &scripted_models(behaviour, Specificity::FilesOnly, &truths),
+            &via_harness(RunConfig {
+                state: harness_cheat_state.clone(),
+                ..config.clone()
+            }),
+        )?;
+        check(
+            &mut checks,
+            format!("through the harness document the cheater that {name} fails the same way"),
+            verdicts(&report.entries) == verdicts(&harness_report.entries),
+            format!("{:?}", verdicts(&harness_report.entries)),
         );
     }
 
@@ -572,7 +624,7 @@ pub fn audit_and_print(keep: Option<&Path>) -> Result<()> {
     let temporary = tempfile::tempdir()?;
     let work = keep.unwrap_or_else(|| temporary.path());
     std::fs::create_dir_all(work)?;
-    let checks = audit(work)?;
+    let checks = audit(work, &std::env::current_exe()?)?;
     for c in &checks {
         println!(
             "{} {}{}",

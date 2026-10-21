@@ -106,6 +106,8 @@ pub struct RunConfig {
     pub control: Control,
     /// Correction messages a wrong attempt may be sent (0: none).
     pub corrections: usize,
+    /// The harness document that runs the plan and the work where it can; `None`: the Rust path throughout.
+    pub harness: Option<crate::harness::HarnessConfig>,
 }
 
 /// The models of a run.
@@ -296,6 +298,7 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         scratch: parts.scratch.clone(),
         control: config.control,
         corrections: config.corrections,
+        harness: config.harness.clone(),
         supervisor: models.supervisor.clone(),
         supervisor_tries: config.plan_tries,
         supervisor_deadline: config.plan_deadline,
@@ -506,17 +509,37 @@ async fn work_unit(
         commit: &commit.sha,
         min_line_tokens: config.min_line_tokens,
     };
-    let plan = match write_plan(
-        &models.planner,
-        style,
-        &commit.message,
-        &commit.diff,
-        &check,
-        config.plan_tries,
-        config.plan_deadline,
-    )
-    .await
+    let planned = match config
+        .harness
+        .as_ref()
+        .filter(|h| h.drives_plan(config.plan_tries))
     {
+        Some(harness) => {
+            crate::harness::write_plan(
+                harness,
+                Arc::clone(&models.planner.provider),
+                style,
+                (&commit.message, &commit.diff),
+                &check,
+                config.first_response,
+                config.plan_deadline,
+            )
+            .await
+        }
+        None => {
+            write_plan(
+                &models.planner,
+                style,
+                &commit.message,
+                &commit.diff,
+                &check,
+                config.plan_tries,
+                config.plan_deadline,
+            )
+            .await
+        }
+    };
+    let plan = match planned {
         Ok(plan) => plan,
         Err(PlanFailure::Model(e)) => return Unit::Error(format!("planning: {e}")),
         Err(refused) => return Unit::Refused(refused),
