@@ -9,7 +9,7 @@
 //! Spec: a killed run must not leave attempt trees behind. A run removes the
 //! trees of attempts that no process holds any more when it starts, never the
 //! tree of a live attempt, and every attempt removes its own trees when it
-//! ends.
+//! ends. (The claim and the sweep themselves are specified in splinter-sandbox.)
 
 #![allow(clippy::unwrap_used)]
 
@@ -20,8 +20,8 @@ use splinter_repo_replay::audit::{
     default_config, history_diffs, open_context, run_blocking, scripted_models,
 };
 use splinter_repo_replay::fixture;
-use splinter_repo_replay::scratch::{Claim, LIVE_FILE};
 use splinter_repo_replay::scripted::{Behaviour, Specificity};
+use splinter_sdk::sandbox::scratch::{Claim, LIVE_FILE};
 
 fn leftovers(scratch: &Path) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(scratch)
@@ -111,14 +111,4 @@ fn a_finished_run_leaves_no_attempt_tree() {
         .unwrap();
         assert_eq!(leftovers(&state.join("scratch")), Vec::<String>::new());
     }
-}
-
-#[test]
-fn a_claim_removes_its_tree_when_dropped() {
-    let work = tempfile::tempdir().unwrap();
-    let claim = Claim::create(work.path(), "attempt-").unwrap();
-    leave_tree(claim.path());
-    let path = claim.path().to_path_buf();
-    drop(claim);
-    assert!(!path.exists());
 }

@@ -33,18 +33,18 @@ use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::experience::ExperienceId;
 use splinter_sdk::Context;
 
-use crate::attempt::CommitPlan;
+use crate::attempt::{CommitPlan, TARGET_PREFIX};
 use crate::budget::{hunks_of, Budget};
 use crate::gate::{evaluate, GateConfig, GateInput, Verdict};
 use crate::git::{mirror, Git};
 use crate::ledger::{self, Entry, Outcome};
 use crate::pipeline::{layout, producer};
 use crate::plan::changed_lines;
-use crate::scratch::Claim;
 use crate::scrub::Scrubber;
 use crate::select::{prepare, SelectConfig, Selected};
 use crate::trace::Trace;
 use crate::tree::{read_tree, vocabulary};
+use splinter_sdk::sandbox::scratch::Claim;
 
 /// What to re-gate and with which gate.
 #[derive(Clone, Debug)]
@@ -248,7 +248,7 @@ fn read_commit(
     let Selected::Replay(plan) = prepare(git, meta, scrubber, &config.select)? else {
         anyhow::bail!("skipped by selection");
     };
-    let claim = Claim::create(scratch_root, "target-")?;
+    let claim = Claim::create(scratch_root, TARGET_PREFIX)?;
     let tree = claim.path().join("tree");
     std::fs::create_dir(&tree)?;
     git.export_tree(&plan.parent, &tree)?;

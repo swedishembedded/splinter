@@ -9,7 +9,7 @@ returned, but a run killed by a lease end or a restart never returned: fifteen s
 (about 45 thousand files) piled up on a drive with a 500 000-file quota.
 
 A directory name cannot tell a dead attempt from a live one of another process, so each attempt
-now holds an advisory file lock on `.live` inside its directory (`scratch::Claim`); the kernel
+now holds an advisory file lock on `.live` inside its directory (`splinter_sandbox::scratch::Claim`); the kernel
 releases it when the holder dies. A run sweeps at its start every `attempt-*` and `target-*`
 directory whose lock it can take. Directories without a marker (left by a binary from before this
 change) are removed when older than ten minutes. The target tree of the gate comparison lives in

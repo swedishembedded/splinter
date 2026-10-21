@@ -16,6 +16,8 @@
 //! * [`limits`] - what one code call may use, with its defaults.
 //! * [`runtime`] - the registry of runtimes (`python3`, `lua`, `node`,
 //!   `sh`) and what a runtime resolves to: version and executable digest.
+//! * [`scratch`] - scratch directories claimed by a process, and the sweep of
+//!   the ones a killed process left behind.
 //! * [`backend`] - the [`Sandbox`] seam, a code call and its result.
 //! * [`host`] - [`ProcessSandbox`]: the runtime run directly, bounded but
 //!   not isolated (`isolation: "none"`).
@@ -46,6 +48,7 @@ pub mod limits;
 pub mod namespace;
 pub mod process;
 pub mod runtime;
+pub mod scratch;
 pub mod seccomp;
 pub mod workspace;
 pub mod workspace_host;

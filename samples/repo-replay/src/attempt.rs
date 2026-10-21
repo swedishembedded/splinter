@@ -21,7 +21,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::scratch::Claim;
+use splinter_sdk::sandbox::scratch::Claim;
+
+/// Names of the scratch directories of an attempt's tree and of the target tree
+/// it is compared with; a run sweeps the ones a killed run left.
+pub const ATTEMPT_PREFIX: &str = "attempt-";
+/// See [`ATTEMPT_PREFIX`].
+pub const TARGET_PREFIX: &str = "target-";
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::solve::Model;
@@ -210,8 +216,8 @@ pub async fn attempt(
     plan: &str,
 ) -> Result<AttemptOutcome> {
     // Dropped when this function returns, i.e. before the verdict is stored.
-    let scratch =
-        Claim::create(&settings.scratch, "attempt-").context("creating the attempt directory")?;
+    let scratch = Claim::create(&settings.scratch, ATTEMPT_PREFIX)
+        .context("creating the attempt directory")?;
     let tree_dir = scratch.path().join("tree");
     std::fs::create_dir(&tree_dir)?;
     git.export_tree(&commit.parent, &tree_dir)?;
@@ -226,7 +232,7 @@ pub async fn attempt(
     // tree and what the judging reads. The parent's code is read before the
     // agent touches the tree.
     let parent_tree = read_tree(&tree_dir)?;
-    let case_dir = Claim::create(&settings.scratch, "target-")?;
+    let case_dir = Claim::create(&settings.scratch, TARGET_PREFIX)?;
     // The tree is in a subdirectory: the claim's directory also holds its marker file.
     let target_dir = Case::target_dir(case_dir.path());
     std::fs::create_dir(&target_dir)?;

@@ -27,6 +27,7 @@ use serde_json::json;
 use splinter_sdk::agent::solve::Model;
 use splinter_sdk::agent::sven::atif::Trajectory;
 use splinter_sdk::agent::sven::model::ModelProvider;
+use splinter_sdk::sandbox::scratch;
 use splinter_sdk::vocabulary::annotation::{
     Annotation, AnnotationBody, Outcome as Judged, Producer, Strength,
 };
@@ -37,7 +38,9 @@ use splinter_sdk::vocabulary::experience::{
 use splinter_sdk::vocabulary::outcome::AttemptReport;
 use splinter_sdk::Context;
 
-use crate::attempt::{attempt, AttemptOutcome, AttemptSettings, CommitPlan};
+use crate::attempt::{
+    attempt, AttemptOutcome, AttemptSettings, CommitPlan, ATTEMPT_PREFIX, TARGET_PREFIX,
+};
 use crate::control::Control;
 use crate::gate::GateConfig;
 use crate::git::{mirror, Git};
@@ -198,7 +201,8 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         .context("resolving the state directory")?;
     let parts = layout(&state);
     // A killed run leaves its attempt trees (thousands of files each) behind.
-    let swept = crate::scratch::sweep(&parts.scratch).context("sweeping stale attempt trees")?;
+    let swept = scratch::sweep(&parts.scratch, &[ATTEMPT_PREFIX, TARGET_PREFIX])
+        .context("sweeping stale attempt trees")?;
     if swept > 0 {
         eprintln!(
             "removed {swept} stale attempt directories from {}",

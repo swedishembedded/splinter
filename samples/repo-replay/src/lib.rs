@@ -40,7 +40,6 @@ pub mod mask;
 pub mod pipeline;
 pub mod plan;
 pub mod regate;
-pub mod scratch;
 pub mod scripted;
 pub mod scrub;
 pub mod select;
