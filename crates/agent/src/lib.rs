@@ -42,6 +42,9 @@
 //!   observer of every event, and suspend and resume; and
 //!   [`work::solve_in_workspace`], a whole episode on a task that changes a
 //!   repository, ending in the patch read back from git.
+//! * [`timed`] - a model provider that counts its requests and how long each
+//!   waited for its first stream item, so a run that took long can be told
+//!   from one that did a lot.
 
 #![warn(missing_docs)]
 
@@ -68,6 +71,7 @@ pub mod skill_planner;
 pub mod solve;
 mod system_prompt;
 pub mod teach;
+pub mod timed;
 pub mod tool_turn;
 pub mod typed;
 pub mod voice;

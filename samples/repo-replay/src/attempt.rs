@@ -127,7 +127,7 @@ pub struct AttemptOutcome {
     /// The agent's last words.
     pub final_message: Option<String>,
     /// What the requests of the attempt waited and took.
-    pub stats: crate::timed::Stats,
+    pub stats: splinter_sdk::agent::timed::Stats,
     /// The correction messages the agent was sent, in order.
     pub corrections: Vec<Correction>,
     /// Supervisor messages that were refused, over all rounds.
@@ -255,8 +255,11 @@ pub async fn attempt(
     };
     case.write(case_dir.path())?;
 
-    let stats = Arc::new(std::sync::Mutex::new(crate::timed::Stats::default()));
-    let model = crate::timed::Timed::wrap(Arc::clone(&settings.model), Arc::clone(&stats));
+    let stats = Arc::new(std::sync::Mutex::new(
+        splinter_sdk::agent::timed::Stats::default(),
+    ));
+    let model =
+        splinter_sdk::agent::timed::Timed::wrap(Arc::clone(&settings.model), Arc::clone(&stats));
     let started = Instant::now();
     let worked = crate::harness::work(
         &settings.harness,

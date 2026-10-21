@@ -12,54 +12,13 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::sync::{Arc, Mutex};
-
 use splinter_repo_replay::audit::{
     default_config, history_diffs, open_context, run_blocking, scripted_models,
 };
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::ledger::{self, Outcome};
-use splinter_repo_replay::scripted::{Behaviour, ScriptedAgent, Specificity};
+use splinter_repo_replay::scripted::{Behaviour, Specificity};
 use splinter_repo_replay::style::PlanStyle;
-use splinter_repo_replay::timed::{Stats, Timed};
-use splinter_sdk::agent::sven::model::{CompletionRequest, ModelProvider};
-
-/// Waits before it answers, as a busy server does.
-struct Slow(Arc<dyn ModelProvider>);
-
-#[async_trait::async_trait]
-impl ModelProvider for Slow {
-    fn name(&self) -> &str {
-        "slow"
-    }
-    fn model_name(&self) -> &str {
-        "slow"
-    }
-    async fn complete(
-        &self,
-        req: CompletionRequest,
-    ) -> anyhow::Result<splinter_sdk::agent::sven::model::ResponseStream> {
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        self.0.complete(req).await
-    }
-}
-
-#[test]
-fn the_wait_for_the_server_is_measured_per_request() {
-    let stats = Arc::new(Mutex::new(Stats::default()));
-    let timed = Timed::wrap(
-        Arc::new(Slow(ScriptedAgent::provider(Behaviour::Honest, vec![]))),
-        Arc::clone(&stats),
-    );
-    tokio::runtime::Runtime::new().unwrap().block_on(async {
-        use futures::StreamExt;
-        let mut stream = timed.complete(CompletionRequest::default()).await.unwrap();
-        while stream.next().await.is_some() {}
-    });
-    let seen = stats.lock().unwrap().clone();
-    assert_eq!(seen.requests, 1);
-    assert!(seen.max_wait_seconds >= 0.3, "{seen:?}");
-}
 
 fn run(behaviour: Behaviour, commit: usize) -> Vec<ledger::Entry> {
     let work = tempfile::tempdir().unwrap();

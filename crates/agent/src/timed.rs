@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
-// Swedish Embedded AB implements pipelines that turn a repository's history
-// into verified training data for coding agents, for its clients. If your
-// team needs expertise in learning from your own codebase, you can procure
-// our services by sending an email to info@swedishembedded.com.
+// Swedish Embedded AB implements agent solvers whose every run is replayable
+// evidence, for its clients. If your team needs expertise in agent
+// environments or learning from agent experience, you can procure our
+// services by sending an email to info@swedishembedded.com.
 
 //! Telling what a busy server did to an attempt from what the agent did.
 //!
@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use futures::StreamExt;
-use splinter_sdk::agent::sven::model::{CompletionRequest, ModelProvider, ResponseStream};
+use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseStream};
 
 /// What the requests of one attempt cost in waiting.
 #[derive(Clone, Debug, Default, PartialEq)]

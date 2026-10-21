@@ -47,6 +47,5 @@ pub mod select;
 pub mod splits;
 pub mod style;
 pub mod supervise;
-pub mod timed;
 pub mod trace;
 pub mod tree;
