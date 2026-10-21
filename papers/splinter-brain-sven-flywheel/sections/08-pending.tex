@@ -58,7 +58,9 @@ stopping after two evaluations without improvement), held to a memorisation guar
 above its minimum is not evaluated), served through the adapter bank of the 8-bit teacher server,
 and compared with the 27B base on the qualification halves under the solve protocol of
 \cref{sec:protocol}. A second candidate, CE8-T, is trained the same way on a teacher pass recorded
-with a 1024-token thinking budget. A shuffled-instruction control, CE8-S, keeps format, tools and
+with a 1024-token thinking budget and held to a guard on its kept checkpoint instead of its last step: it is
+memorised, and not evaluated, if the kept evaluation's monitoring loss is not below the base's on the same
+records, or if its training loss (the mean over that evaluation's window) is below half its monitoring loss. A shuffled-instruction control, CE8-S, keeps format, tools and
 token count and breaks the pairing of trajectory and task; learning is claimed only if CE8 beats
 both the base and CE8-S on the primary test. CE8 is a separate comparison and does not enter the
 headline.\cl{PR16,PR34,PR36,PR37,PR38,PR39}
