@@ -109,20 +109,27 @@ fixed. Every number a run prints comes from the ledger (`state/ledger.jsonl`).
 Rust loops. The prompts live in `harness/replay.yaml` (plan stage and grounded work) and
 `harness/replay-plan-only.yaml` (the control's work; a sven agent task cannot carry its own system
 prompt, so the control is a document of its own): edit them and rerun, no build. `--harness-file`
-and `--harness-plan-only-file` name edited copies. The document declares the planner's refusal
-retry (the gate `repo-replay check-plan` reads the plan on standard input), the tool allowance,
-the repetition stop and the follow-up for a turn that ends announcing a call it did not make.
-Rust keeps what is specific to replay: mining and selection, the masking, the trees, the gate that
-judges the finished tree, the ledger, the dataset, the scrub and the audit. The audit runs the
-honest solver and every cheater through the document as well and requires the Rust path's verdicts;
-`tests/harness_spec.rs` requires every system prompt and first user turn to equal what the Rust
-path sends.
+and `--harness-plan-only-file` name edited copies. The documents declare the planner's refusal
+retry (the gate `check-plan`), the tool allowance, the repetition stop, the follow-up for a turn
+that ends announcing a call it did not make, and the supervisor corrections: the gate `check`
+judges the tree and the calls so far (exit 0 passed, 1 a correction can repair it, 2 it cannot),
+the supervisor writes in a user's voice, the gate `message_ok` refuses a message that holds the
+change. Sampling, thinking, the reply limit (default 16384 tokens: sven's own 4096 is spent
+entirely on reasoning by a thinking model) and the call budgets are inputs of the documents.
 
-Kept on the Rust path until the language can express them (the step falls back by itself): plan
-tries and follow-ups other than 2 (literals in the document), a thinking budget (cannot be left
-unset), supervisor corrections (the check gate's output is capped at 16 KiB, the supervisor's view
-of the agent's changes is larger), and the judging of the tree. The sample needs sven at or after
-95f668d3; Cargo.lock still pins the published revision, so build it with `make deps/local`.
+Rust keeps what is specific to replay: mining and selection, the masking, laying the trees, the
+rules of the gate (`repo-replay check`, `check-message`, `check-plan` expose them to the documents
+over the hidden side of the attempt, `case.rs`, which lies outside the agent's tree), the ledger,
+the dataset, the scrub and the audit. The audit runs the honest solver, every cheater and the
+supervisors through the documents as well and requires the Rust path's verdicts;
+`tests/harness_spec.rs` requires every system prompt and user turn, the supervisor's included, to
+equal what the Rust path sends. Differences from the Rust path: the supervisor is shown the wanted
+change before the agent's changes (the Rust path now orders it the same way); the refusals of
+supervisor messages are counted by sven without the last one when the rewrites ran out; the gate
+`check` cannot know why a run stopped, so a correction is only earned by a turn that concluded.
+
+The sample needs sven at or after 5e2aea0a; Cargo.lock still pins the published revision, so build
+it with `make deps/local`.
 
 ## What the audit proves
 

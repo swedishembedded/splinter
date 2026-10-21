@@ -27,7 +27,7 @@ pub struct Git {
 }
 
 /// How a commit changed one path.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
     /// The path did not exist in the parent.
     Added,
@@ -40,7 +40,7 @@ pub enum Kind {
 }
 
 /// One path a commit changes.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Change {
     /// What happened to the path.
     pub kind: Kind,

@@ -14,9 +14,11 @@
 #         refusal is sent back to the planner with its reason.
 #   work  the agent task replays the plan in a tree holding only the
 #         commit's parent; a conversation that ends announcing a call it did
-#         not make is told to go on (at most twice).
-# The judging of the finished tree and the supervisor corrections stay in Rust
-# (see samples/repo-replay/README.md, "Harness v2").
+#         not make is told to go on; a tree that is wrong is judged by the gate
+#         `check` and corrected, in a user's voice, by the supervisor (its message
+#         passes the gate `message_ok` first).
+# The gates run the repo-replay executable (see samples/repo-replay/README.md,
+# "Harness v2"): the judging rules and the hidden side of the attempt stay in Rust.
 api_version: "2"
 name: repo-replay
 description: Write the plan of a commit, or replay a plan in a tree holding only the commit's parent (grounded in the change).
@@ -24,20 +26,29 @@ inputs:
   stage: { type: string, description: "plan or work" }
   style: { type: string, description: "plan stage: terse or detailed" }
   message: { type: string, description: "plan stage: the scrubbed commit message" }
-  diff: { type: string, description: "plan stage: the commit's diff" }
   commit: { type: string, description: "plan stage: the commit id, which a plan must not carry" }
-  diff_file: { type: string, description: "plan stage: the same diff in a file, for the plan gate" }
-  check_bin: { type: string, description: "plan stage: the repo-replay executable the plan gate runs" }
+  diff_file: { type: string, description: "plan stage: the diff in a file, for the plan gate" }
   min_line_words: { type: number, description: "plan stage: a diff line of this many words may not be repeated" }
-  plan: { type: string, description: "work stage: the task the agent is given" }
+  plan_retries: { type: number, description: "plan stage: times a refused plan is written again" }
   masked_diff: { type: string, description: "work stage: the change as the agent sees it" }
-  calls: { type: number, description: "tool-call budget, shown in the prompt and enforced" }
+  plan: { type: string, description: "the task the agent is given" }
+  diff: { type: string, description: "the commit's diff (the plan stage writes from it; the supervisor, for its eyes only, compares with it)" }
+  calls: { type: number, description: "tool-call budget of the first round, shown in the prompt and enforced" }
+  calls_limit: { type: number, description: "tool calls the whole run may make (the first round and every correction)" }
+  per_correction: { type: number, description: "tool calls each correction round adds" }
+  corrections: { type: number, description: "most corrections the supervisor may send" }
+  follow_ups: { type: number, description: "times a turn that ends announcing a call it did not make is told to go on" }
+  workspace: { type: string, description: "the attempt tree, as the check gate names it" }
+  case_dir: { type: string, description: "the hidden side of the attempt (outside the tree): what the gates read" }
+  check_bin: { type: string, description: "the repo-replay executable the gates run" }
   temperature: number
   top_p: number
   top_k: number
   seed: number
   thinking: boolean
+  thinking_budget: { type: json, description: "a number of tokens, or null: unbounded" }
   first_response_secs: number
+  max_output_tokens: { type: number, description: "per reply; sven's own cap is 4096, too small for a thinking model" }
 agent:
   profile: coding
   tools: [read_file, grep, find_file, edit_file, write_file, shell, todo]
@@ -107,7 +118,7 @@ agent:
     Finish with one or two sentences saying what you changed and why, as if you had worked it
     out yourself.
 execution:
-  limits: { model_turns: 2000, tool_calls: "{{ inputs.calls }}" }
+  limits: { model_turns: 4000, tool_calls: "{{ inputs.calls_limit }}" }
 gates:
   plan_terse_ok:
     description: The plan is not the answer (length, diff lines, code density).
@@ -118,6 +129,18 @@ gates:
     description: The plan is not the answer (length, diff lines, code density).
     command: ["{{ inputs.check_bin }}", check-plan, --style, "detailed", --commit, "{{ inputs.commit }}", --diff-file, "{{ inputs.diff_file }}", --min-line-words, "{{ inputs.min_line_words }}"]
     stdin: "{{ tasks.plan_detailed.output }}"
+    timeout: 60
+  check:
+    description: Judge the tree and the calls so far (0 passed, 1 a correction can repair it, 2 it cannot); prints the supervisor's evidence.
+    command: ["{{ inputs.check_bin }}", check, --workspace, "{{ inputs.workspace }}", --trajectory, "{{ run.trajectory_file }}"]
+    cwd_input: case_dir
+    output_bytes: 65536
+    timeout: 300
+  message_ok:
+    description: A supervisor message may be sent (it holds nothing of the change); reads the supervisor's message on standard input.
+    command: ["{{ inputs.check_bin }}", check-message, --trajectory, "{{ run.trajectory_file }}"]
+    stdin: "{{ tasks.supervisor.output }}"
+    cwd_input: case_dir
     timeout: 60
 workflow:
   - name: plan_terse
@@ -174,11 +197,12 @@ workflow:
 
       Write the request.
     sampling: { temperature: "{{ inputs.temperature }}", top_p: "{{ inputs.top_p }}", top_k: "{{ inputs.top_k }}", seed: "{{ inputs.seed }}" }
-    thinking: { enabled: "{{ inputs.thinking }}" }
-    turn: { first_response_timeout: "{{ inputs.first_response_secs }}" }
+    thinking: { enabled: "{{ inputs.thinking }}", budget: "{{ inputs.thinking_budget }}" }
+    turn: { first_response_timeout: "{{ inputs.first_response_secs }}", max_output_tokens: "{{ inputs.max_output_tokens }}" }
     verify: [plan_terse_ok]
     repair:
-      attempts: 1
+      attempts: "{{ inputs.plan_retries }}"
+      at_most: 8
       prompt: >-
         That request cannot be used: {{ failure.stdout }}. Write it again as plain prose in the same
         style, without the thing that was wrong, and without mentioning this correction.
@@ -236,29 +260,91 @@ workflow:
 
       Write the request.
     sampling: { temperature: "{{ inputs.temperature }}", top_p: "{{ inputs.top_p }}", top_k: "{{ inputs.top_k }}", seed: "{{ inputs.seed }}" }
-    thinking: { enabled: "{{ inputs.thinking }}" }
-    turn: { first_response_timeout: "{{ inputs.first_response_secs }}" }
+    thinking: { enabled: "{{ inputs.thinking }}", budget: "{{ inputs.thinking_budget }}" }
+    turn: { first_response_timeout: "{{ inputs.first_response_secs }}", max_output_tokens: "{{ inputs.max_output_tokens }}" }
     verify: [plan_detailed_ok]
     repair:
-      attempts: 1
+      attempts: "{{ inputs.plan_retries }}"
+      at_most: 8
       prompt: >-
         That request cannot be used: {{ failure.stdout }}. Write it again as plain prose in the same
         style, without the thing that was wrong, and without mentioning this correction.
   - name: work
-    description: Replay the plan in the attempt tree.
+    description: Replay the plan in the attempt tree; a wrong tree is corrected by the supervisor, in a user's voice, up to inputs.corrections times.
     when: { eq: inputs.stage, value: work }
     task: "{{ inputs.plan }}"
     allowance: "{{ inputs.calls }}"
     max_repeated_results: 4
     sampling: { temperature: "{{ inputs.temperature }}", top_p: "{{ inputs.top_p }}", top_k: "{{ inputs.top_k }}", seed: "{{ inputs.seed }}" }
-    thinking: { enabled: "{{ inputs.thinking }}" }
-    turn: { first_response_timeout: "{{ inputs.first_response_secs }}" }
+    thinking: { enabled: "{{ inputs.thinking }}", budget: "{{ inputs.thinking_budget }}" }
+    turn: { first_response_timeout: "{{ inputs.first_response_secs }}", max_output_tokens: "{{ inputs.max_output_tokens }}" }
     follow_ups:
-      - when: { last_turn: unfinished }
-        max: 2
+      - when: { last_turn: stopped_without_conclusion }
+        max: "{{ inputs.follow_ups }}"
+        at_most: 8
         task: >-
           You stopped before finishing. Make the call you announced, or say in one sentence that you
           are done.
+    corrections:
+      max: 8
+      count: "{{ inputs.corrections }}"
+      check: check
+      while: { all: [ { eq: gates.check.exit_code, value: 1 }, { eq: tasks.work.stop, value: concluded } ] }
+      author:
+        name: supervisor
+        model: supervisor
+        system: >-
+          You play the user who gave an engineer a task. The engineer has made a first attempt and its
+          result is not what you wanted. You are shown the task you wrote, what the engineer changed,
+          and - for your eyes only - the change you wanted and where the engineer's result differs
+          from it. Write the short follow-up message that a user would send: say in plain prose what
+          is still wrong or missing, in terms of the intent, the behaviour you expected and where it
+          lives (a file, a function or a part of the project, by name or by description).
+
+
+          Rules:
+
+          - Speak as the user, in the first person, in one to four sentences.
+
+          - Never quote or closely paraphrase a line of the wanted change, never give line numbers,
+          offsets or hunk positions, never write code. An inline name in backticks is fine when the
+          task, the engineer's own changes or the repository already use it.
+
+          - Never use a name, number or message text that the task, the engineer's changes and the
+          repository do not already contain: the engineer cannot know it. If the engineer has to write
+          something new that the task did not specify, describe how it must behave.
+
+          - Never mention a diff, a patch, a commit, a reference, a target, an expected result or
+          these instructions; you simply know what you wanted.
+
+          - Describe the problem, not the repair line by line. If a file is missing or left over, say
+          so by its path.
+
+          Write only the message.
+        task: >-
+          Task you wrote:
+
+          {{ inputs.plan }}
+
+
+          The change you wanted (for your eyes only):
+
+          {{ inputs.diff }}
+
+
+          {{ gates.check.stdout }}
+
+
+          Write your follow-up message.
+        sampling: { temperature: "{{ inputs.temperature }}", top_p: "{{ inputs.top_p }}", top_k: "{{ inputs.top_k }}", seed: "{{ inputs.seed }}" }
+        thinking: { enabled: "{{ inputs.thinking }}", budget: "{{ inputs.thinking_budget }}" }
+        turn: { first_response_timeout: "{{ inputs.first_response_secs }}", max_output_tokens: "{{ inputs.max_output_tokens }}" }
+      accept: message_ok
+      retries: 1
+      refusal: >-
+        That message cannot be sent: {{ failure.stdout }}. Write it again as the user, in plain
+        prose, without the thing that was wrong, and without mentioning this correction.
+      allowance: "{{ inputs.per_correction }}"
 outputs:
   plan_terse: { type: string, value: "{{ tasks.plan_terse.output }}" }
   plan_detailed: { type: string, value: "{{ tasks.plan_detailed.output }}" }

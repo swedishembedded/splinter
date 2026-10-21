@@ -29,16 +29,16 @@ use splinter_sdk::agent::sven::model::ModelProvider;
 use splinter_sdk::agent::work::{WorkOptions, WorkReport, Worker};
 use splinter_sdk::agent::RunConclusion;
 
+use crate::case::{describe, Case, CORRECTABLE, MAX_AGENT_CHANGES};
 use crate::control::Control;
-use crate::gate::{evaluate, GateConfig, GateInput, Verdict};
-use crate::generated::is_generated_path;
+use crate::gate::{GateConfig, Verdict};
 use crate::git::{single_commit_repo, Change, Git};
 use crate::grounding_prompt::{grounding_prompt, CONTINUE_NOTICE};
 use crate::plan_only_prompt::plan_only_prompt;
 use crate::supervise::{write_correction, Correction, MessageContext, Refused};
 use crate::supervisor_prompt::supervisor_request;
 use crate::trace::Trace;
-use crate::tree::{compare, read_tree, vocabulary, Residual};
+use crate::tree::{read_tree, vocabulary, Residual};
 
 /// Everything known about one replayable commit, computed once and shared by
 /// its attempts.
@@ -184,12 +184,6 @@ fn run_check(dir: &Path, command: &str, timeout: Duration) -> CheckOutcome {
     }
 }
 
-/// The gate classes a correction can repair: a wrong or incomplete tree.
-const CORRECTABLE: &[&str] = &["tree_mismatch", "junk", "missing_edit"];
-
-/// Longest agent diff shown to the supervisor, in characters.
-const MAX_AGENT_CHANGES: usize = 24_000;
-
 fn failed(e: impl std::fmt::Display) -> anyhow::Error {
     anyhow::anyhow!("the agent run failed: {e}")
 }
@@ -308,40 +302,37 @@ pub async fn attempt(
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
 
-    // What the parent's code already says, read before the agent touches the tree.
+    // The hidden side of the attempt, outside the agent's tree: the commit's
+    // tree and what the judging reads. The parent's code is read before the
+    // agent touches the tree.
     let parent_tree = read_tree(&tree_dir)?;
-    let parent_words = vocabulary(&parent_tree);
-    let parent_paths: std::collections::HashSet<String> = parent_tree.keys().cloned().collect();
-    let target_tree = {
-        // In a subdirectory: the claim's directory also holds its marker file.
-        let claim = Claim::create(&settings.scratch, "target-")?;
-        let dir = claim.path().join("tree");
-        std::fs::create_dir(&dir)?;
-        git.export_tree(&commit.sha, &dir)?;
-        read_tree(&dir)?
-    };
-    // Where the tree now differs from the commit's.
-    let residual_now = || -> Result<Vec<Residual>> {
-        let mut residual = compare(&target_tree, &read_tree(&tree_dir)?, &|p| {
-            is_generated_path(p)
-        });
-        for r in &mut residual {
-            if let Residual::Extra { path } = r {
-                if parent_paths.contains(path.as_str()) {
-                    *r = Residual::Stale {
-                        path: std::mem::take(path),
-                    };
-                }
-            }
-        }
-        Ok(residual)
-    };
-
-    let mut solve = SolveOptions::new(settings.deadline);
+    let case_dir = Claim::create(&settings.scratch, "target-")?;
+    // The tree is in a subdirectory: the claim's directory also holds its marker file.
+    let target_dir = Case::target_dir(case_dir.path());
+    std::fs::create_dir(&target_dir)?;
+    git.export_tree(&commit.sha, &target_dir)?;
     // The budget follows the commit's size; the gate and the agent's own cap agree.
     let calls = settings
         .budget
         .calls(commit.changes.len(), crate::budget::hunks_of(&commit.diff));
+    let parent_words_set = vocabulary(&parent_tree);
+    let case = Case {
+        plan: plan.to_string(),
+        diff: commit.diff.clone(),
+        changes: commit.changes.clone(),
+        parent_words: parent_words_set.iter().cloned().collect(),
+        parent_paths: parent_tree.keys().cloned().collect(),
+        forbidden_locations: settings.forbidden_locations.clone(),
+        attempt_roots: roots,
+        gate: settings.gate,
+        calls,
+        per_correction: settings.budget.per_correction,
+    };
+    case.write(case_dir.path())?;
+    // Where the tree now differs from the commit's.
+    let residual_now = || case.residual(case_dir.path(), &tree_dir);
+
+    let mut solve = SolveOptions::new(settings.deadline);
     solve.system = Some(match settings.control {
         Control::Grounded => grounding_prompt(&commit.masked, calls),
         Control::PlanOnly => plan_only_prompt(calls),
@@ -351,7 +342,6 @@ pub async fn attempt(
     let stats = Arc::new(std::sync::Mutex::new(crate::timed::Stats::default()));
     let model = crate::timed::Timed::wrap(Arc::clone(&settings.model), Arc::clone(&stats));
     let started = Instant::now();
-    let added_text = crate::plan::changed_lines(&commit.diff).join("\n");
     let judge = |trace: &Trace,
                  residual: &[Residual],
                  stopped: Option<&str>,
@@ -360,42 +350,31 @@ pub async fn attempt(
             .iter()
             .map(|c| (c.calls_before, c.message.clone()))
             .collect();
-        let gate = GateConfig {
-            max_tool_calls: calls + corrections.len() * settings.budget.per_correction,
-            ..settings.gate
-        };
-        evaluate(
-            &GateInput {
-                changes: &commit.changes,
-                plan,
-                parent_words: &parent_words,
-                diff: &commit.diff,
-                added_text: &added_text,
-                trace,
-                residual,
-                forbidden_locations: &settings.forbidden_locations,
-                attempt_roots: &roots,
-                stopped,
-                guidance: &guidance,
-            },
-            &gate,
-        )
+        case.judge(trace, residual, stopped, &guidance)
     };
 
-    // The harness document runs the work when it can express the settings;
+    // The harness document runs the work, the follow-ups and the corrections;
     // the judging below is the same either way.
-    if let Some(config) = settings
-        .harness
-        .as_ref()
-        .filter(|h| h.drives_work(settings.follow_ups, settings.corrections))
-    {
+    if let Some(config) = &settings.harness {
         let worked = crate::harness::work(
             config,
-            Arc::clone(&model),
-            &tree_dir,
-            (settings.control, plan, &commit.masked),
-            calls,
-            (settings.first_response, settings.deadline),
+            crate::harness::WorkSetup {
+                agent: Arc::clone(&model),
+                supervisor: Arc::clone(&settings.supervisor.provider),
+                tree: &tree_dir,
+                case_dir: case_dir.path(),
+                control: settings.control,
+                plan,
+                masked: &commit.masked,
+                diff: &commit.diff,
+                calls,
+                per_correction: settings.budget.per_correction,
+                follow_ups: settings.follow_ups,
+                corrections: settings.corrections,
+                first_response: settings.first_response,
+                max_output_tokens: settings.max_output_tokens,
+                deadline: settings.deadline,
+            },
         )
         .await?;
         let seconds = started.elapsed().as_secs_f64();
@@ -405,20 +384,28 @@ pub async fn attempt(
             .map(|c| run_check(&tree_dir, c, settings.check_timeout))
             .collect();
         let residual = residual_now()?;
-        let trace = Trace::of(&worked.trajectory);
-        let verdict = judge(&trace, &residual, worked.stopped.as_deref(), &[]);
+        let mut trajectory = worked.trajectory;
+        let sent = crate::case::user_turns_are_corrections(&trajectory);
+        mark_context_before_last_correction(&mut trajectory, &sent);
+        let trace = Trace::of(&trajectory);
+        let verdict = judge(
+            &trace,
+            &residual,
+            worked.stopped.as_deref(),
+            &worked.corrections,
+        );
         return Ok(AttemptOutcome {
             verdict,
-            trajectory: worked.trajectory,
+            trajectory,
             final_message: trace.said.last().cloned(),
             trace,
             residual,
             checks,
             stats: stats.lock().map(|s| s.clone()).unwrap_or_default(),
             seconds,
-            corrections: Vec::new(),
-            refused: Vec::new(),
-            supervisor_error: None,
+            corrections: worked.corrections,
+            refused: worked.refused,
+            supervisor_error: worked.supervisor_error,
         });
     }
 
@@ -466,7 +453,7 @@ pub async fn attempt(
             .map(|c| (c.calls_before, c.message.clone()))
             .collect();
         let support = crate::justify::support_of_run(plan, &trace.calls, &guidance);
-        let ctx = MessageContext::new(plan, &commit.diff, &parent_words, &support);
+        let ctx = MessageContext::new(plan, &commit.diff, &parent_words_set, &support);
         match write_correction(
             &settings.supervisor,
             &request,
@@ -518,21 +505,4 @@ pub async fn attempt(
         refused,
         supervisor_error,
     })
-}
-
-/// One line telling the supervisor how a path of the agent's tree differs.
-fn describe(residual: &Residual) -> String {
-    match residual {
-        Residual::Missing { path } => format!("{path}: the engineer's tree lacks this file"),
-        Residual::Extra { path } => {
-            format!("{path}: exists, and the wanted change has no such file")
-        }
-        Residual::Stale { path } => {
-            format!("{path}: still present, and the wanted change removes it")
-        }
-        Residual::Differs {
-            path,
-            first_difference,
-        } => format!("{path}: first difference: {first_difference}"),
-    }
 }

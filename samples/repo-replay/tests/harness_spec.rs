@@ -72,7 +72,7 @@ impl ModelProvider for Recording {
 type Asked = Vec<(String, String)>;
 
 /// Runs the fixture history and returns, sorted, what was asked of the planner and of the agent.
-fn requests(control: Control, harness: bool) -> (Asked, Asked) {
+fn requests(control: Control, harness: bool, corrections: usize) -> (Asked, Asked, Asked) {
     let work = tempfile::tempdir().unwrap();
     let source = work.path().join("source");
     std::fs::create_dir(&source).unwrap();
@@ -80,8 +80,14 @@ fn requests(control: Control, harness: bool) -> (Asked, Asked) {
     let truths = history_diffs(&source).unwrap();
     let state = work.path().join("state");
     let ctx = open_context(&state).unwrap();
-    let scripted = scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths);
-    let (planner_seen, agent_seen) = (Arc::default(), Arc::default());
+    let behaviour = if corrections > 0 {
+        Behaviour::FixesAfterCorrection
+    } else {
+        Behaviour::Honest
+    };
+    let scripted = scripted_models(behaviour.clone(), Specificity::NamesFiles, &truths);
+    let (planner_seen, agent_seen, supervisor_seen) =
+        (Arc::default(), Arc::default(), Arc::default());
     let models = Models {
         planner: Model::new(
             Arc::new(Recording {
@@ -94,10 +100,18 @@ fn requests(control: Control, harness: bool) -> (Asked, Asked) {
             inner: scripted.agent,
             seen: Arc::clone(&agent_seen),
         }),
-        ..scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths)
+        supervisor: Model::new(
+            Arc::new(Recording {
+                inner: Arc::clone(&scripted.supervisor.provider),
+                seen: Arc::clone(&supervisor_seen),
+            }),
+            "scripted/supervisor",
+        ),
+        ..scripted_models(behaviour, Specificity::NamesFiles, &truths)
     };
     let config = RunConfig {
         control,
+        corrections,
         harness: harness.then(|| HarnessConfig {
             document: DEFAULT_DOCUMENT.to_string(),
             plan_only_document: DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
@@ -108,8 +122,8 @@ fn requests(control: Control, harness: bool) -> (Asked, Asked) {
                 top_k: 20,
                 seed: 1, // seed: the scripted models ignore it
                 thinking: false,
+                thinking_budget: None,
             },
-            thinking_budget: None,
         }),
         ..default_config(&source, &state)
     };
@@ -119,14 +133,18 @@ fn requests(control: Control, harness: bool) -> (Asked, Asked) {
         all.sort();
         all
     };
-    (sorted(planner_seen), sorted(agent_seen))
+    (
+        sorted(planner_seen),
+        sorted(agent_seen),
+        sorted(supervisor_seen),
+    )
 }
 
 #[test]
 fn the_document_shows_the_models_what_the_rust_path_shows_them() {
     for control in [Control::Grounded, Control::PlanOnly] {
-        let (rust_planner, rust_agent) = requests(control, false);
-        let (document_planner, document_agent) = requests(control, true);
+        let (rust_planner, rust_agent, _) = requests(control, false, 0);
+        let (document_planner, document_agent, _) = requests(control, true, 0);
         assert!(!rust_planner.is_empty() && !rust_agent.is_empty());
         assert_eq!(
             rust_planner, document_planner,
@@ -148,4 +166,16 @@ fn the_document_shows_the_models_what_the_rust_path_shows_them() {
             "agent prompts, {control:?}"
         );
     }
+}
+
+#[test]
+fn the_supervisor_is_asked_what_the_rust_path_asks_it_and_the_agent_is_told_the_same() {
+    let (_, rust_agent, rust_supervisor) = requests(Control::Grounded, false, 3);
+    let (_, document_agent, document_supervisor) = requests(Control::Grounded, true, 3);
+    assert!(
+        !rust_supervisor.is_empty(),
+        "the scripted run needed a correction"
+    );
+    assert_eq!(rust_supervisor, document_supervisor, "supervisor prompts");
+    assert_eq!(rust_agent.len(), document_agent.len(), "agent requests");
 }

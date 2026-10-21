@@ -25,6 +25,7 @@
 pub mod attempt;
 pub mod audit;
 pub mod budget;
+pub mod case;
 pub mod compare;
 pub mod control;
 pub mod dataset;

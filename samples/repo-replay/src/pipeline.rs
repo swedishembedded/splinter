@@ -509,20 +509,15 @@ async fn work_unit(
         commit: &commit.sha,
         min_line_tokens: config.min_line_tokens,
     };
-    let planned = match config
-        .harness
-        .as_ref()
-        .filter(|h| h.drives_plan(config.plan_tries))
-    {
+    let planned = match &config.harness {
         Some(harness) => {
             crate::harness::write_plan(
                 harness,
                 Arc::clone(&models.planner.provider),
                 style,
                 (&commit.message, &commit.diff),
-                &check,
-                config.first_response,
-                config.plan_deadline,
+                (&check, config.plan_tries),
+                (config.first_response, config.plan_deadline),
             )
             .await
         }

@@ -407,8 +407,8 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map_or(0, |d| u64::from(d.subsec_nanos())),
                 thinking: false,
+                thinking_budget: None,
             },
-            thinking_budget: None,
         }),
         ..config
     };
@@ -424,6 +424,35 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
         "the harness document gives the Rust path's verdicts for the honest solver, in both plan styles",
         verdicts(&honest.entries) == verdicts(&harnessed.entries),
         format!("{:?}", verdicts(&harnessed.entries)),
+    );
+
+    // What the harness path stores is the agent's conversation and nothing of the others.
+    let harness_set = attempts_set(&harness_ctx, &harness_state)?;
+    let harness_built = build_dataset(
+        &harness_ctx,
+        std::slice::from_ref(&harness_set),
+        &DatasetSettings {
+            serving_prompt: SERVING_PROMPT.to_string(),
+            max_block: None,
+        },
+    )?;
+    let harness_text = std::fs::read_to_string(&harness_built.path)?;
+    let hidden = [
+        "The change:",
+        "How to work:",
+        "make exactly that change",
+        "You play the user who gave",
+    ]
+    .iter()
+    .any(|m| harness_text.contains(m));
+    check(
+        &mut checks,
+        "the dataset of harness attempts opens with the serving prompt and holds no grounding or supervisor prompt",
+        !hidden
+            && harness_text
+                .lines()
+                .all(|l| l.contains(SERVING_PROMPT.lines().next().unwrap_or_default())),
+        format!("{} bytes", harness_text.len()),
     );
 
     // Each cheater fails with the reason of its rule, on its commit.
@@ -475,7 +504,7 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
     // Corrections: an honest supervisor repairs an attempt that left a file out and
     // the record trains only on the fix; each supervisor that leaks is refused and counted.
     let (parent, commit) = commit_of(&ids, "multi")?;
-    let supervised = |name: &str, kind: SupervisorBehaviour| -> Result<Vec<Entry>> {
+    let supervised = |name: &str, kind: SupervisorBehaviour, harness: bool| -> Result<Vec<Entry>> {
         let supervised_state = state(name);
         let supervised_ctx = open_context(&supervised_state)?;
         let mut config = default_config(&source, &supervised_state);
@@ -483,6 +512,7 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
         config.to = Some(commit.to_string());
         config.styles = vec![PlanStyle::Terse];
         config.corrections = 3;
+        let config = if harness { via_harness(config) } else { config };
         let models = Models {
             supervisor: Model::new(ScriptedSupervisor::provider(kind), "scripted/supervisor"),
             ..scripted_models(
@@ -498,7 +528,27 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
             .filter(|e| e.outcome != Outcome::Skipped)
             .collect())
     };
-    let corrected = supervised("corrected", SupervisorBehaviour::Honest)?;
+    // The classes of refused messages, once each: sven reports the refusals it sent back for a
+    // rewrite, not the last one when the rewrites ran out, so the count differs by one.
+    let summary = |entries: &[Entry]| -> Vec<(Outcome, Vec<String>, usize, Vec<String>)> {
+        entries
+            .iter()
+            .map(|e| {
+                let mut refusals = e.supervisor_refusals.clone();
+                refusals.sort();
+                refusals.dedup();
+                (e.outcome, e.classes.clone(), e.corrections, refusals)
+            })
+            .collect()
+    };
+    let corrected = supervised("corrected", SupervisorBehaviour::Honest, false)?;
+    let corrected_via_harness = supervised("corrected-harness", SupervisorBehaviour::Honest, true)?;
+    check(
+        &mut checks,
+        "through the harness document the supervisor corrects the same attempt the same way",
+        summary(&corrected) == summary(&corrected_via_harness),
+        format!("{:?}", summary(&corrected_via_harness)),
+    );
     check(
         &mut checks,
         "an attempt that left a file out is corrected by the supervisor and passes with one correction",
@@ -524,7 +574,14 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
             "diff_reference",
         ),
     ] {
-        let entries = supervised(&format!("supervisor-{class}"), kind)?;
+        let entries = supervised(&format!("supervisor-{class}"), kind, false)?;
+        let via = supervised(&format!("supervisor-harness-{class}"), kind, true)?;
+        check(
+            &mut checks,
+            format!("through the harness document a supervisor that {name} is refused and counted the same way"),
+            summary(&entries) == summary(&via),
+            format!("{:?}", summary(&via)),
+        );
         check(
             &mut checks,
             format!("a supervisor that {name} is refused as {class}, counted, and its message never sent"),

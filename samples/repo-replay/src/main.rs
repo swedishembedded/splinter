@@ -27,6 +27,7 @@ use splinter_sdk::model::selection::{served_model_sampled, ServedSampling};
 
 use splinter_repo_replay::audit::{audit_and_print, default_config, open_context};
 use splinter_repo_replay::budget::Budget;
+use splinter_repo_replay::case::{check, check_correction};
 use splinter_repo_replay::compare::Comparison;
 use splinter_repo_replay::control::Control;
 use splinter_repo_replay::dataset::{
@@ -83,6 +84,13 @@ enum Command {
     /// The plan gate of the harness document: reads a plan on standard input, exits 0 when it
     /// may be used, else prints why and exits 1.
     CheckPlan(CheckPlanArgs),
+    /// The check gate of the harness document, run in the hidden case directory: judges the
+    /// tree and the calls so far. Exits 0 when it passes, 1 when a correction can repair it,
+    /// 2 when none can; a failure prints the evidence the supervisor is shown.
+    Check(CheckArgs),
+    /// The accept gate of the harness document, run in the hidden case directory: reads a
+    /// supervisor's message on standard input, exits 0 when it may be sent, else prints why.
+    CheckMessage(CheckMessageArgs),
     /// Judge the passed attempts of a state directory again with the current gate (no model).
     Regate(RegateArgs),
     /// Build the dataset of the passed attempts of a state directory.
@@ -103,6 +111,23 @@ struct CheckPlanArgs {
     /// A diff line of this many words may not be repeated in the plan.
     #[arg(long)]
     min_line_words: usize,
+}
+
+#[derive(Args, Debug)]
+struct CheckArgs {
+    /// The attempt tree.
+    #[arg(long)]
+    workspace: PathBuf,
+    /// The trajectory of the run so far (a file of sven's ATIF export).
+    #[arg(long)]
+    trajectory: PathBuf,
+}
+
+#[derive(Args, Debug)]
+struct CheckMessageArgs {
+    /// The trajectory of the run so far.
+    #[arg(long)]
+    trajectory: PathBuf,
 }
 
 #[derive(Args, Debug)]
@@ -351,6 +376,21 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::CheckPlan(args) => check_plan_command(&args),
+        Command::Check(args) => {
+            let (status, evidence) =
+                check(&std::env::current_dir()?, &args.workspace, &args.trajectory)?;
+            print!("{evidence}");
+            std::process::exit(status);
+        }
+        Command::CheckMessage(args) => {
+            use std::io::Read;
+            let mut message = String::new();
+            std::io::stdin().read_to_string(&mut message)?;
+            let (ok, why) =
+                check_correction(&std::env::current_dir()?, &args.trajectory, &message)?;
+            print!("{why}");
+            std::process::exit(i32::from(!ok));
+        }
         Command::Regate(args) => regate_command(&args),
         Command::Dataset(args) => dataset_command(&args),
     }
@@ -431,8 +471,8 @@ fn run_command(args: &RunArgs) -> Result<()> {
                 top_k: u64::from(args.top_k),
                 seed: args.seed,
                 thinking: args.thinking,
+                thinking_budget: args.thinking_budget,
             },
-            thinking_budget: args.thinking_budget,
         }),
         other => anyhow::bail!("unknown driver {other:?}: rust or harness"),
     };

@@ -52,9 +52,9 @@ pub fn supervisor_request(
     differences: &[String],
 ) -> String {
     format!(
-        "Task you wrote:\n{plan}\n\nWhat the engineer changed:\n{agent_changes}\n\n\
-         The change you wanted (for your eyes only):\n{wanted_change}\n\n\
-         Where the engineer's result differs from it:\n{}\n\nWrite your follow-up message.",
+        "Task you wrote:\n{plan}\n\n{WANTED_HEADING}{wanted_change}\n\n\
+         {AGENT_CHANGES_HEADING}{agent_changes}\n\n\
+         {DIFFERENCES_HEADING}{}\n\nWrite your follow-up message.",
         differences.join("\n")
     )
 }
@@ -68,6 +68,8 @@ pub fn supervisor_refusal_notice(reason: &str) -> String {
     )
 }
 
+/// Heading of the agent-changes section of [`supervisor_request`].
+pub const AGENT_CHANGES_HEADING: &str = "What the engineer changed:\n";
 /// The headings of [`supervisor_request`], for the scripted supervisor to read it back.
 pub const WANTED_HEADING: &str = "The change you wanted (for your eyes only):\n";
 /// Heading of the differences section of [`supervisor_request`].
