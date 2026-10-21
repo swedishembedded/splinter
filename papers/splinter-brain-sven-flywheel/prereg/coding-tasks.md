@@ -1122,6 +1122,34 @@ No candidate of these runs is evaluated or reported as a result.
 
 **A23.4 Stopping rules, passed explicitly.** For the R records the trainer reports and B = 2: steps ceil(2R/B), `--eval-every` ceil(steps/8), `--patience 2`, `--keep-evaluations`. For the A22.2 dataset (`blake3:75b4734dc80d0dec909549aa55b8c3f677837c86d3a0b7cb998c7787e5035cb0`, R = 65) that is 65 steps with an evaluation every 9 steps. The run script passes these values and writes them into the run record. Every other value of A19.2, A21.2 and A22 stands, including the memorisation guard; CE8-T (A22.3) is trained the same way with its own R.
 
+### Amendment 24, 2026-10-21, 13:20 CEST: how CE8 and CE8-T are evaluated, with a negative control
+
+Made before any CE8 or CE8-T candidate has been trained under A23 and before any of their evaluation attempts. It is the amendment A22.3 asks for.
+
+**A24.1 Arms.** Four arms solve the same tasks under the same protocol: the base 27B; CE8 (A22.2 records, A23 training); CE8-T (A22.3 records, A23 training), if its teacher pass is complete; and **CE8-S, the negative control**: the shuffled control of A4.3 (`--control shuffled --control-seed N`, N drawn from /dev/urandom and recorded before the build) on the experiences of the CE8 dataset, trained with the CE8 recipe and the same number of steps and evaluations as CE8. CE8-S keeps format, tools and token count and breaks the pairing of each trajectory with its task.
+
+**A24.2 Tasks and order.** HALF_A of A8.2, then HALF_B, under A8.2's rules for an incomplete second half. The 46 tasks of the unregistered pilot of A22.3 belong to HALF_A and stay in it: excluding them would split families. Their pilot outcomes are base-only and are not used. No CE1 development task is solved by any arm.
+
+**A24.3 Protocol and test.** The solve protocol of A20, with A20.6's primary variant (thinking off) for the primary test and thinking 1024 as the secondary variant, for every arm, including CE8-T, whose records were recorded under thinking. k = 3 with the seeds of A20.1, pass@1 averaged over them, and the family-clustered sign test on per-family means.
+- **Primary comparison:** CE8 against the base.
+- **Secondary:** CE8-T against the base, and CE8 against CE8-T.
+- **Learning claim (Gate B):** made only if CE8 beats the base on the primary test and also beats CE8-S on the same test. If CE8-S is not run, Gate B is not claimed. A2.3's pilot label holds until the sizing is met.
+
+**A24.4 Serving and G8.** All adapters sit in the adapter bank of one Q8_0 GGUF server, each with its own model id (A19.3), with one brain build and one splinter binary for every arm, named in the run record. A8.1's precedent allows two servers of that build, one per card, each with every adapter in its bank. Before any arm runs:
+- the server build must serve a bank adapter with a thinking budget; this is checked on one task, and if it fails no arm runs;
+- G8 (A2.9) must pass for CE8 on one task per HALF_A family (23 tasks, stable hash of (SEED_EXAM, task)), solved in process on the bf16 base with the adapter against the served adapter, at A2.9's 75% threshold.
+
+The bf16-trained adapter on Q8_0 weights replaces A19.3's NF4 wording. If G8 fails, the arms are not run on that server build.
+
+**A24.5 Difficulty strata, report only.** Each HALF_A/HALF_B task gets a stratum from its task record alone, before any arm runs:
+- the strata are by checker count, file footprint and instruction length;
+- the cutoffs are terciles over the half's tasks, with ties to the lower stratum;
+- the computation is splinter eval's report-only stratum code, named with its hash.
+
+Per-stratum pass rates are reported beside the sign test and carry no test of their own.
+
+**A24.6 Not this lease.** About 56 server-hours are needed for HALF_A alone over three trained arms and the base at k = 3. Every arm resumes from its recorded attempts (`solve --resume`), and nothing is compared before a half is complete in every arm.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
