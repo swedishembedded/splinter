@@ -145,9 +145,7 @@ fn directory_digest(dir: &Path) -> Result<Digest, OrchestratorError> {
 /// The commit and dirtiness of the git checkout `dir` is in, when it is in one.
 fn checkout(dir: &Path) -> (Option<String>, Option<bool>) {
     let git = |args: &[&str]| {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(dir)
+        splinter_knowledge::capture::git::read_only(dir)
             .args(args)
             .output()
             .ok()

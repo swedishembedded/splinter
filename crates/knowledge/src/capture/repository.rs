@@ -10,7 +10,7 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
+use std::process::Output;
 
 use splinter_core::clock::Clock;
 use splinter_core::source::{CapturedSource, Origin, PartContent, Revision, SkipReason, Skipped};
@@ -21,19 +21,6 @@ use super::{io, is_text, read_capped, text_media_type, utf8, CaptureError};
 /// at any depth: version control state, build output and installed
 /// dependencies. They are not listed as skipped.
 pub const IGNORED_NAMES: &[&str] = &[".git", "target", "node_modules"];
-
-/// Variables that point git at a repository other than the one in the
-/// working directory (a hook, for one, sets them); removed so git reads the
-/// captured tree's own state.
-const GIT_LOCATION_VARIABLES: &[&str] = &[
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_INDEX_FILE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_COMMON_DIR",
-    "GIT_NAMESPACE",
-];
 
 /// Captures the directory tree at `path`: every regular UTF-8 text file
 /// under it is a part named by its `/`-separated path relative to `path`.
@@ -139,17 +126,7 @@ impl Walk {
 /// Runs `git args` in `dir`, isolated from any repository the caller's
 /// environment points at.
 pub(super) fn git(dir: &Path, args: &[&str]) -> std::io::Result<Output> {
-    let mut command = Command::new("git");
-    command
-        .current_dir(dir)
-        .args(args)
-        .stdin(Stdio::null())
-        // Read-only: never take the index lock to refresh it.
-        .env("GIT_OPTIONAL_LOCKS", "0");
-    for variable in GIT_LOCATION_VARIABLES {
-        command.env_remove(variable);
-    }
-    command.output()
+    super::git::read_only(dir).args(args).output()
 }
 
 fn git_failure(dir: &Path, args: &[&str], output: &Output) -> CaptureError {

@@ -26,6 +26,7 @@
 
 mod atif_keys;
 mod command;
+pub mod git;
 mod html;
 mod repository;
 mod session;
