@@ -126,7 +126,7 @@ pub struct Worked {
 
 impl HarnessConfig {
     /// The shipped documents, run with the `repo-replay` executable found beside
-    /// this process (this process itself when it is one; a test binary finds the
+    /// this process (this process itself when it is not a test binary; a test binary finds the
     /// one cargo built for it; none found, the gates fail closed). `decoding` is what the documents state to the models.
     pub fn shipped(decoding: Decoding) -> Self {
         let me = std::env::current_exe().unwrap_or_default();
@@ -135,7 +135,13 @@ impl HarnessConfig {
         } else {
             "repo-replay"
         };
-        let check_bin = if me.file_name().is_some_and(|n| n == name) {
+        // A test binary sits in cargo's `deps` directory; anything else is the
+        // sample's own executable, whatever name it was copied to.
+        let is_test_binary = me
+            .parent()
+            .and_then(|dir| dir.file_name())
+            .is_some_and(|n| n == "deps");
+        let check_bin = if !is_test_binary && me.is_file() {
             me
         } else {
             me.ancestors()
