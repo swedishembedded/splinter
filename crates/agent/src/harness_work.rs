@@ -30,6 +30,7 @@ use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{ResolvedEnvironment, SandboxError, WorkspaceEnvironment};
 use sven_sdk::model::ModelProvider;
 use sven_sdk::tool::Tool;
+use sven_sdk::{ApprovalPolicy, EngineBuilder, Harness, HarnessOutcome, HarnessRun, RunOptions};
 
 use crate::solve::{Solution, SolveError};
 use crate::work::{engine, WorkOptions, WorkReport, WorkspaceSolution};
@@ -38,6 +39,63 @@ use crate::workspace_shell::SandboxShell;
 /// The name of the input a harness may declare to receive the task's
 /// instruction.
 pub const TASK_INPUT: &str = "task";
+
+/// `builder` with the confinement of a harness run in `tree`: the shell is
+/// the sandbox's (`env`'s), not sven's, so what a command can read is the
+/// tree and `episode`'s scratch directory and nothing else of the disk; sven's
+/// file tools resolve inside the tree; tool calls need no approval. `episode`
+/// is a directory outside the tree that goes when the episode does (see
+/// [`SandboxShell::for_episode`]).
+///
+/// # Errors
+///
+/// The episode's directories or the link to the harness's state cannot be
+/// made.
+pub fn confined(
+    builder: EngineBuilder,
+    env: &WorkspaceEnvironment,
+    tree: &std::path::Path,
+    episode: &std::path::Path,
+) -> Result<EngineBuilder, SandboxError> {
+    let shell: Arc<dyn Tool> = Arc::new(SandboxShell::for_episode(
+        env.clone(),
+        tree.to_path_buf(),
+        episode,
+    )?);
+    Ok(builder
+        .tool(shell)
+        .project_root(tree)
+        .approvals(ApprovalPolicy::Auto))
+}
+
+/// A harness run that has ended: the run, to read its trajectory, the
+/// corrections it sent and the messages its gates refused, and its outcome.
+pub struct InTreeRun {
+    /// The run, after it executed.
+    pub run: HarnessRun,
+    /// How it ended.
+    pub outcome: HarnessOutcome,
+}
+
+/// Runs `harness` (a document compiled on an engine built with [`confined`])
+/// with `inputs` in `tree`: its file tools, search, shell and gates are rooted
+/// there. The tree is the caller's to lay out before and to read after. A run
+/// stopped by a bound, or ending in the document's own `fail`, is an outcome,
+/// whatever tree it left.
+///
+/// # Errors
+///
+/// [`SolveError::Engine`] when the run cannot start or the tree is not usable.
+pub async fn run_harness_in_tree(
+    harness: &Harness,
+    tree: &std::path::Path,
+    inputs: serde_json::Value,
+    options: RunOptions,
+) -> Result<InTreeRun, SolveError> {
+    let mut run = harness.start(inputs)?.in_workspace(tree)?;
+    let outcome = run.execute(options).await?;
+    Ok(InTreeRun { run, outcome })
+}
 
 /// Runs `harness` (a sven harness document) on a fresh copy of the snapshot
 /// `task` records, laid out from `archive`, on `model`.
@@ -74,12 +132,12 @@ pub async fn solve_harness_in_workspace(
     let tree = scratch.path().join("tree");
     let baseline = env.materialize(archive, &tree)?;
 
-    let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::for_episode(
+    let shell: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::for_episode(
         env.clone(),
         tree.clone(),
         scratch.path(),
     )?)];
-    let engine = engine(&tree, model, &options, &confined, false)?;
+    let engine = engine(&tree, model, &options, &shell, false)?;
     let harness = engine.load_harness_from_str(harness)?;
     let declares_task = harness
         .plan()
@@ -91,9 +149,8 @@ pub async fn solve_harness_in_workspace(
     } else {
         json!({})
     };
-    let mut run = harness.start(inputs)?;
-
-    let outcome = run.execute(options.solve.run_options()).await?;
+    let InTreeRun { run, outcome } =
+        run_harness_in_tree(&harness, &tree, inputs, options.solve.run_options()).await?;
 
     let patch = {
         let (env, tree) = (env.clone(), tree.clone());

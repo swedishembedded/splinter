@@ -22,7 +22,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
-use splinter_agent::harness_work::solve_harness_in_workspace;
+use splinter_agent::harness_work::{confined, run_harness_in_tree, solve_harness_in_workspace};
 use splinter_agent::solve::{SolveError, SolveOptions};
 use splinter_agent::work::{WorkOptions, WorkspaceSolution};
 use splinter_core::experience::Task;
@@ -33,7 +33,7 @@ use splinter_sandbox::{
 use sven_sdk::model::{
     CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream,
 };
-use sven_sdk::RunConclusion;
+use sven_sdk::{ApprovalPolicy, Engine, RunConclusion, RunOptions, Toolset};
 
 /// A model that answers from a script over the request it is sent.
 struct Scripted {
@@ -288,4 +288,60 @@ async fn a_document_that_does_not_compile_is_an_engine_error_not_a_solution() {
     let broken = "api_version: \"1\"\nname: broken\nentry: nowhere\nsteps: {}\n";
     let result = solve(&fixture, &environment, broken, model).await;
     assert!(matches!(result, Err(SolveError::Engine(_))), "{result:?}");
+}
+
+/// Reads a file that lies beside the tree, not in it, with the shell.
+const SHELLER: &str = r#"
+api_version: "1"
+name: sheller
+capabilities: [ExecuteShell]
+limits: { max_steps: 20, max_model_turns: 6, max_tool_calls: 6 }
+entry: work
+steps:
+  work: { agent: { prompt: "Print ../secret.txt.", tools: [shell], store_as: note, then: done } }
+  done: { return: { value: { finished: true } } }
+"#;
+
+fn reads_beside_the_tree(req: &CompletionRequest) -> Vec<ResponseEvent> {
+    match tool_results(req) {
+        0 => call(
+            "c0",
+            "shell",
+            serde_json::json!({"description": "print", "shell_command": "cat ../secret.txt"}),
+        ),
+        _ => text("done"),
+    }
+}
+
+#[tokio::test]
+async fn a_harness_run_in_a_tree_gets_no_answer_from_a_file_beside_the_tree() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    let attempt = fixture.root.path().join("attempt");
+    std::fs::create_dir_all(&attempt).unwrap();
+    std::fs::write(attempt.join("secret.txt"), "the hidden diff\n").unwrap();
+    let tree = attempt.join("tree");
+    environment.materialize(&fixture.archive, &tree).unwrap();
+    let episode = fixture.root.path().join("attempt").join("episode");
+
+    let builder = Engine::builder()
+        .model_provider(Scripted::new(reads_beside_the_tree) as Arc<dyn ModelProvider>)
+        .toolset(Toolset::coding())
+        .approvals(ApprovalPolicy::Auto);
+    let engine = confined(builder, &environment, &tree, &episode)
+        .unwrap()
+        .build()
+        .unwrap();
+    let harness = engine.load_harness_from_str(SHELLER).unwrap();
+    let ran = run_harness_in_tree(&harness, &tree, serde_json::json!({}), RunOptions::new())
+        .await
+        .unwrap();
+
+    assert_eq!(ran.outcome.conclusion, RunConclusion::Success);
+    let trajectory = serde_json::to_string(&ran.run.trajectory().unwrap()).unwrap();
+    assert!(trajectory.contains("cat ../secret.txt"), "the shell ran");
+    assert!(
+        !trajectory.contains("the hidden diff"),
+        "the shell printed a file beside the tree"
+    );
 }
