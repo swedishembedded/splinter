@@ -53,6 +53,8 @@
 //!   a split that tests on voices and questions never trained on.
 //! * [`terms`] - the terms data came under, combined most-restrictively
 //!   over sources and carried to datasets and releases.
+//! * [`tool_calls`] - the calls of a trajectory, each with the output it
+//!   returned.
 //!
 //! This crate performs no I/O (the fan-out runs the work it is handed and does none). It knows no store, no model and no agent
 //! runtime: it is the language they share, and the invariants every record
@@ -88,4 +90,5 @@ pub mod speech_lesson;
 pub mod spoken;
 pub mod teaching;
 pub mod terms;
+pub mod tool_calls;
 pub mod training;

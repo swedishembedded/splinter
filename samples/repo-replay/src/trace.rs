@@ -13,7 +13,8 @@
 //! never from anything the agent reports about itself.
 
 use serde_json::Value;
-use splinter_sdk::agent::sven::atif::{MessageBody, StepOrigin, Trajectory};
+use splinter_sdk::agent::sven::atif::{StepOrigin, Trajectory};
+use splinter_sdk::vocabulary::tool_calls::{body_text, tool_calls};
 
 /// One tool call and what it returned.
 #[derive(Clone, Debug, PartialEq)]
@@ -67,44 +68,26 @@ pub struct Trace {
     pub said: Vec<String>,
 }
 
-fn text_of(body: &MessageBody) -> String {
-    match body {
-        MessageBody::Text(t) => t.clone(),
-        MessageBody::Segments(_) => String::new(),
-    }
-}
-
 impl Trace {
     /// The trace of `trajectory`.
     #[must_use]
     pub fn of(trajectory: &Trajectory) -> Self {
-        let mut trace = Self::default();
-        for step in trajectory
+        let said = trajectory
             .steps
             .iter()
             .filter(|s| s.source == StepOrigin::Agent)
-        {
-            let said = text_of(&step.message);
-            if !said.trim().is_empty() {
-                trace.said.push(said);
-            }
-            for call in step.tool_calls.iter().flatten() {
-                let result = step
-                    .observation
-                    .iter()
-                    .flat_map(|o| &o.results)
-                    .find(|r| r.source_call_id.as_deref() == Some(&call.tool_call_id))
-                    .and_then(|r| r.content.as_ref())
-                    .map(text_of)
-                    .unwrap_or_default();
-                trace.calls.push(Call {
-                    step: step.step_id,
-                    tool: call.function_name.clone(),
-                    args: call.arguments.clone(),
-                    result,
-                });
-            }
-        }
-        trace
+            .map(|s| body_text(&s.message))
+            .filter(|said| !said.trim().is_empty())
+            .collect();
+        let calls = tool_calls(trajectory)
+            .into_iter()
+            .map(|call| Call {
+                step: call.step,
+                tool: call.tool,
+                args: call.arguments,
+                result: call.output,
+            })
+            .collect();
+        Self { calls, said }
     }
 }

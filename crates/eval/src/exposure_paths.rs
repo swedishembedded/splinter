@@ -48,6 +48,7 @@ use std::collections::HashSet;
 
 use atif::{ToolInvocation, TraceStep};
 use serde_json::Value;
+use splinter_core::tool_calls::outputs_by_call;
 
 pub use splinter_core::prompt::WORKSPACE_TREE_KEY;
 
@@ -426,22 +427,6 @@ fn reach_of(output: &str) -> Reach {
     }
 }
 
-/// The text of one observation result.
-fn text_of(result: &atif::ObservationEntry) -> String {
-    match result.content.as_ref() {
-        None => String::new(),
-        Some(atif::MessageBody::Text(t)) => t.clone(),
-        Some(atif::MessageBody::Segments(segments)) => segments
-            .iter()
-            .filter_map(|s| match s {
-                atif::ContentSegment::Text { text } => Some(text.as_str()),
-                atif::ContentSegment::Image { .. } => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-    }
-}
-
 /// Whether `output` says the access failed (refused, or no such path) and
 /// returned nothing else: a call with such a result read nothing.
 pub(crate) fn returned_only_a_failure(output: &str) -> bool {
@@ -460,44 +445,6 @@ fn is_exit_code_line(line: &str) -> bool {
             let digits = code.strip_prefix('-').unwrap_or(code);
             !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
         })
-}
-
-/// The output each call of `step` returned. Results arrive in the order the
-/// calls finished, so they are paired by the call id each names (a call
-/// whose result is missing returned nothing). A step whose results do not
-/// name its calls (an id is shared or unknown) is paired by position when
-/// the counts agree; else the whole step's output stands for every call,
-/// which is the most that can be said of it.
-pub(crate) fn outputs_by_call(step: &TraceStep) -> Vec<String> {
-    let calls = step.tool_calls.as_deref().unwrap_or_default();
-    let results: Vec<&atif::ObservationEntry> =
-        step.observation.iter().flat_map(|o| &o.results).collect();
-    let ids: HashSet<&str> = calls.iter().map(|c| c.tool_call_id.as_str()).collect();
-    let named_by_id = ids.len() == calls.len()
-        && results.iter().all(|r| {
-            r.source_call_id
-                .as_deref()
-                .is_some_and(|id| ids.contains(id))
-        });
-    if named_by_id {
-        return calls
-            .iter()
-            .map(|call| {
-                results
-                    .iter()
-                    .filter(|r| r.source_call_id.as_deref() == Some(call.tool_call_id.as_str()))
-                    .map(|r| text_of(r))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
-            .collect();
-    }
-    let texts: Vec<String> = results.into_iter().map(text_of).collect();
-    if texts.len() == calls.len() {
-        texts
-    } else {
-        vec![texts.join("\n"); calls.len()]
-    }
 }
 
 /// The calls, with the count of paths in each and what came of them (what

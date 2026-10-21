@@ -49,14 +49,15 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
-use atif::{ContentSegment, MessageBody, StepOrigin, TraceStep};
+use atif::{StepOrigin, TraceStep};
 use serde_json::json;
 use splinter_core::annotation::{Producer, Strength};
 use splinter_core::experience::{Experience, Task};
 
 pub use crate::exposure_paths::WORKSPACE_TREE_KEY;
-use crate::exposure_paths::{outputs_by_call, outside_workspace, returned_only_a_failure};
+use crate::exposure_paths::{outside_workspace, returned_only_a_failure};
 use crate::verifiers::{Finding, Verifier, VerifyError};
+use splinter_core::tool_calls::{body_text, outputs_by_call};
 
 /// The producer name an exposure audit's annotations carry.
 pub const EXPOSURE_PRODUCER: &str = "splinter-lab/exposure";
@@ -139,7 +140,7 @@ fn seen(exp: &Experience) -> Vec<Seen> {
                 texts.push(Seen {
                     step: step.step_id,
                     place: Place::ToolOutput,
-                    text: text_of(content),
+                    text: body_text(content),
                     result: None,
                 });
             }
@@ -155,22 +156,8 @@ fn shown(step: &TraceStep) -> Seen {
     Seen {
         step: step.step_id,
         place: Place::Shown,
-        text: text_of(&step.message),
+        text: body_text(&step.message),
         result: None,
-    }
-}
-
-fn text_of(body: &MessageBody) -> String {
-    match body {
-        MessageBody::Text(text) => text.clone(),
-        MessageBody::Segments(segments) => segments
-            .iter()
-            .filter_map(|segment| match segment {
-                ContentSegment::Text { text } => Some(text.as_str()),
-                ContentSegment::Image { .. } => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
     }
 }
 
