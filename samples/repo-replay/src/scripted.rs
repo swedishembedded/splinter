@@ -114,6 +114,8 @@ pub enum Behaviour {
     OutsideTree,
     /// Looks into the named path (the source repository).
     ReachesSource(String),
+    /// Prints the file(s) the shell expression names (a path or a glob) with `cat`.
+    ReadsPath(String),
     /// Overwrites a file from the shell before the edits.
     ShellWrite,
     /// Edits files nothing pointed to (honest, but with a vague plan).
@@ -269,6 +271,10 @@ pub fn actions(
         Behaviour::ReachesSource(path) => {
             out.push(act("shell", json!({"shell_command": format!("ls {path}")})))
         }
+        Behaviour::ReadsPath(expression) => out.push(act(
+            "shell",
+            json!({"shell_command": format!("cat {expression}")}),
+        )),
         Behaviour::ShellWrite => {
             out.push(act("shell", json!({"shell_command": "printf x > calc.py"})))
         }

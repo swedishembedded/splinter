@@ -28,6 +28,7 @@ use splinter_sdk::agent::solve::Model;
 use splinter_sdk::agent::sven::atif::Trajectory;
 use splinter_sdk::agent::sven::model::ModelProvider;
 use splinter_sdk::sandbox::scratch;
+use splinter_sdk::sandbox::workspace::TreeSnapshot;
 use splinter_sdk::vocabulary::annotation::{
     Annotation, AnnotationBody, Outcome as Judged, Producer, Strength,
 };
@@ -304,6 +305,11 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         supervisor: models.supervisor.clone(),
         checks: config.checks.clone(),
         check_timeout: config.check_timeout,
+        environment: ctx.environments().workspace()?.environment(TreeSnapshot {
+            // Trees are laid out by the sample; only the sandbox is used.
+            digest: Digest::of(b"repo-replay"),
+            tree_id: String::new(),
+        }),
     };
 
     for pass in 0..=config.error_retries {

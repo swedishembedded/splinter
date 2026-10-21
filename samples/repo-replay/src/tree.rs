@@ -30,7 +30,7 @@ pub enum Entry {
 }
 
 /// A tree: repository-relative path (`/`-separated) to what it holds. The
-/// `.git` directory is not part of a tree.
+/// `.git` directory and the harness's `.sven` link are not part of a tree.
 pub type Tree = BTreeMap<String, Entry>;
 
 /// Reads the tree under `root`.
@@ -49,6 +49,11 @@ fn walk(root: &Path, dir: &Path, tree: &mut Tree) -> Result<()> {
             continue;
         }
         let meta = fs::symlink_metadata(&path)?;
+        // The harness keeps its state outside the tree and leaves a link to it
+        // here (`SandboxShell::for_episode`): not part of the repository.
+        if dir == root && name == ".sven" && meta.file_type().is_symlink() {
+            continue;
+        }
         let rel = path
             .strip_prefix(root)
             .with_context(|| format!("{} is outside {}", path.display(), root.display()))?

@@ -22,6 +22,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use splinter_sdk::sandbox::scratch::Claim;
+use splinter_sdk::sandbox::WorkspaceEnvironment;
 
 /// Names of the scratch directories of an attempt's tree and of the target tree
 /// it is compared with; a run sweeps the ones a killed run left.
@@ -94,6 +95,9 @@ pub struct AttemptSettings {
     pub checks: Vec<String>,
     /// Longest a check may run.
     pub check_timeout: Duration,
+    /// The workspace the agent's shell is confined by: it sees the attempt tree
+    /// and its own scratch directory and nothing else of the disk.
+    pub environment: WorkspaceEnvironment,
 }
 
 /// The outcome of one project check.
@@ -267,6 +271,8 @@ pub async fn attempt(
             agent: model,
             supervisor: Arc::clone(&settings.supervisor.provider),
             tree: &tree_dir,
+            episode: &scratch.path().join("episode"),
+            environment: &settings.environment,
             case_dir: case_dir.path(),
             control: settings.control,
             plan,

@@ -23,9 +23,11 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 use serde_json::{json, Value};
+use splinter_sdk::agent::harness_work::{confined, run_harness_in_tree, InTreeRun};
 use splinter_sdk::agent::sven::atif::{MessageBody, StepOrigin, Trajectory};
 use splinter_sdk::agent::sven::model::ModelProvider;
-use splinter_sdk::agent::sven::{Engine, RunConclusion, RunOptions, Toolset};
+use splinter_sdk::agent::sven::{Engine, EngineBuilder, RunConclusion, RunOptions, Toolset};
+use splinter_sdk::sandbox::WorkspaceEnvironment;
 
 use crate::control::Control;
 use crate::mask::MaskedDiff;
@@ -84,6 +86,10 @@ pub struct WorkSetup<'a> {
     pub supervisor: Arc<dyn ModelProvider>,
     /// The attempt tree.
     pub tree: &'a Path,
+    /// A directory outside the tree for the shell's scratch space and the harness's state.
+    pub episode: &'a Path,
+    /// The workspace whose sandbox confines the agent's shell to the tree.
+    pub environment: &'a WorkspaceEnvironment,
     /// The hidden side of the attempt.
     pub case_dir: &'a Path,
     /// What the agent is shown besides the plan.
@@ -159,20 +165,18 @@ impl HarnessConfig {
         }
     }
 
-    fn engine(
+    fn engine_builder(
         &self,
         planner: Arc<dyn ModelProvider>,
         agent: Arc<dyn ModelProvider>,
         supervisor: Arc<dyn ModelProvider>,
-    ) -> Result<Engine> {
+    ) -> EngineBuilder {
         Engine::builder()
             .model_provider(Arc::clone(&agent))
             .model_role("planner", planner)
             .model_role("agent", agent)
             .model_role("supervisor", supervisor)
             .toolset(Toolset::coding())
-            .build()
-            .context("building the harness engine")
     }
 
     /// The inputs both documents take; `first_response` and `max_output_tokens` default as documented.
@@ -271,8 +275,9 @@ pub async fn write_plan(
         inputs.insert(key.into(), value);
     }
     let engine = config
-        .engine(Arc::clone(&planner), Arc::clone(&planner), planner)
-        .map_err(|e| model(format!("{e:#}")))?;
+        .engine_builder(Arc::clone(&planner), Arc::clone(&planner), planner)
+        .build()
+        .map_err(|e| model(format!("building the harness engine: {e}")))?;
     let harness = engine
         .load_harness_from_str(&config.document)
         .map_err(|e| model(format!("loading the harness document: {e}")))?;
@@ -359,19 +364,32 @@ pub async fn work(config: &HarnessConfig, setup: WorkSetup<'_>) -> Result<Worked
     for (key, value) in stage_inputs {
         inputs.insert(key.into(), value);
     }
-    let engine = config.engine(
-        Arc::clone(&setup.agent),
-        Arc::clone(&setup.agent),
-        setup.supervisor,
-    )?;
+    // The agent's shell is the sandbox's: it sees the tree and its scratch
+    // directory, not the source repository, the mirror or the case directory.
+    let engine = confined(
+        config.engine_builder(
+            Arc::clone(&setup.agent),
+            Arc::clone(&setup.agent),
+            setup.supervisor,
+        ),
+        setup.environment,
+        &tree,
+        setup.episode,
+    )
+    .context("confining the agent's shell")?
+    .build()
+    .context("building the harness engine")?;
     let harness = engine
         .load_harness_from_str(&config.document)
         .context("loading the harness document")?;
-    let mut run = harness.start(Value::Object(inputs))?.in_workspace(&tree)?;
-    let outcome = run
-        .execute(RunOptions::new().deadline(setup.deadline))
-        .await
-        .map_err(|e| anyhow::anyhow!("the agent run failed: {e}"))?;
+    let InTreeRun { run, outcome } = run_harness_in_tree(
+        &harness,
+        &tree,
+        Value::Object(inputs),
+        RunOptions::new().deadline(setup.deadline),
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("the agent run failed: {e}"))?;
     let mut trajectory = run
         .trajectory()
         .context("the harness run left no trajectory")?;
