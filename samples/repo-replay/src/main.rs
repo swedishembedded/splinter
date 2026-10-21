@@ -25,7 +25,9 @@ use clap::{Args, Parser, Subcommand};
 use splinter_sdk::agent::solve::Model;
 use splinter_sdk::model::selection::{served_model_sampled, ServedSampling};
 
-use splinter_repo_replay::audit::{audit_and_print, default_config, open_context};
+use splinter_repo_replay::audit::{
+    audit_and_print, default_config, open_context, open_context_for,
+};
 use splinter_repo_replay::budget::Budget;
 use splinter_repo_replay::case::{check, check_correction};
 use splinter_repo_replay::compare::Comparison;
@@ -44,6 +46,7 @@ use splinter_repo_replay::select::{
 };
 use splinter_repo_replay::splits::{write_splits, Overlaps, SplitOptions};
 use splinter_repo_replay::style::PlanStyle;
+use splinter_sdk::vocabulary::build::BuildInfo;
 use splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT;
 
 #[derive(Parser, Debug)]
@@ -325,6 +328,11 @@ struct DatasetArgs {
     /// Records longer than this many tokens are left out and counted.
     #[arg(long)]
     max_block: Option<usize>,
+    /// The directory of the model the dataset is for (its tokenizer and chat
+    /// template): `--max-block` and the manifest's token lengths are counted
+    /// with it; without it they are estimated from characters.
+    #[arg(long)]
+    tokenizer_dir: Option<PathBuf>,
     /// Write temporal train, eval and test datasets, `splits.json` and one
     /// readable trace per attempt under this directory instead of one dataset.
     #[arg(long)]
@@ -603,7 +611,7 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
             .to_string(),
         None => CODING_AGENT_PROMPT.to_string(),
     };
-    let ctx = open_context(&args.state)?;
+    let ctx = open_context_for(&args.state, args.tokenizer_dir.as_deref())?;
     let range = CorrectionRange {
         min: args.min_corrections,
         max: args.max_corrections.unwrap_or(usize::MAX),
@@ -628,6 +636,7 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
                     Overlaps::Refuse
                 },
             },
+            &build_info(),
         )?;
         println!("{}", serde_json::to_string_pretty(&summary)?);
         return Ok(());
@@ -663,4 +672,15 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
         sidecar.display()
     );
     Ok(())
+}
+
+/// What this binary was built from: the commits its lock names, its own commit
+/// when it was built in a git checkout, and its digest.
+fn build_info() -> BuildInfo {
+    BuildInfo::embedded(
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock")),
+        option_env!("SPLINTER_GIT_REV"),
+        option_env!("SPLINTER_GIT_DIRTY"),
+        None,
+    )
 }

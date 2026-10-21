@@ -17,7 +17,7 @@
 //!   holds only the parent.
 //! * [`gate`], [`trace`] - the deterministic judgement.
 //! * [`pipeline`], [`ledger`] - the run, its bookkeeping and the bias report.
-//! * [`dataset`], [`scrub`] - what leaves the run.
+//! * [`dataset`], [`manifest`], [`scrub`] - what leaves the run.
 //! * [`fixture`], [`scripted`], [`audit`] - the sample checking itself with no model.
 
 #![warn(missing_docs)]
@@ -36,6 +36,7 @@ pub mod git;
 pub mod harness;
 pub mod justify;
 pub mod ledger;
+pub mod manifest;
 pub mod mask;
 pub mod pipeline;
 pub mod plan;

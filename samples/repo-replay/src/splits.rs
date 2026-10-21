@@ -37,6 +37,7 @@ use splinter_sdk::data::partition::Unit;
 use splinter_sdk::data::split::{
     content_overlaps, temporal_bands, DataSplit, Member, Overlap, OverlapRule, Part,
 };
+use splinter_sdk::vocabulary::build::BuildInfo;
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::experience::ExperienceId;
 use splinter_sdk::Context;
@@ -44,6 +45,7 @@ use splinter_sdk::Context;
 use crate::dataset::{attempts_set_filtered, build_dataset, CorrectionRange, DatasetSettings};
 use crate::git::{CommitMeta, Git};
 use crate::ledger::{self, Outcome};
+use crate::manifest;
 use crate::pipeline::layout;
 use crate::trace::Trace;
 
@@ -51,7 +53,7 @@ use crate::trace::Trace;
 pub const SPLITS: [&str; 3] = ["train", "eval", "test"];
 
 /// The name a part goes by in this sample's output.
-fn split_name(part: Part) -> &'static str {
+pub(crate) fn split_name(part: Part) -> &'static str {
     match part {
         Part::Train => "train",
         Part::Validation => "eval",
@@ -234,6 +236,7 @@ pub fn write_splits(
     out: &Path,
     settings: &DatasetSettings,
     options: &SplitOptions,
+    build: &BuildInfo,
 ) -> Result<serde_json::Value> {
     let state = state.canonicalize()?;
     let (from, to) = ledger::last_range(&state)?;
@@ -387,6 +390,22 @@ pub fn write_splits(
     std::fs::write(
         out.join("splits.json"),
         serde_json::to_vec_pretty(&summary)?,
+    )?;
+    let owned_parts: BTreeMap<String, Part> = part_of
+        .iter()
+        .map(|(id, p)| ((*id).to_owned(), *p))
+        .collect();
+    manifest::write(
+        ctx,
+        &manifest::Sources {
+            state: &state,
+            out,
+            entries: &entries,
+            part_of: &owned_parts,
+            summary: &summary,
+            build,
+            settings,
+        },
     )?;
     Ok(summary)
 }

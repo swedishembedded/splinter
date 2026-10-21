@@ -20,6 +20,7 @@ use splinter_repo_replay::scripted::{Behaviour, Specificity};
 use splinter_repo_replay::splits::{
     band_edges, target_features, write_splits, Overlaps, SplitOptions,
 };
+use splinter_sdk::vocabulary::build::BuildInfo;
 use splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT;
 
 /// The split of each of `total` commits, oldest first, by the percentages.
@@ -90,7 +91,15 @@ fn each_split_holds_only_its_commits_and_every_attempt_has_a_trace() {
         serving_prompt: CODING_AGENT_PROMPT.to_string(),
         max_block: None,
     };
-    let summary = write_splits(&ctx, &state, &out, &settings, &SplitOptions::default()).unwrap();
+    let summary = write_splits(
+        &ctx,
+        &state,
+        &out,
+        &settings,
+        &SplitOptions::default(),
+        &BuildInfo::default(),
+    )
+    .unwrap();
 
     assert_eq!(summary["total_commits"], ids.len());
     let splits = &summary["splits"];
@@ -142,7 +151,15 @@ fn a_split_with_no_passed_attempt_has_no_records_but_still_has_its_traces() {
         serving_prompt: CODING_AGENT_PROMPT.to_string(),
         max_block: None,
     };
-    let summary = write_splits(&ctx, &state, &out, &settings, &SplitOptions::default()).unwrap();
+    let summary = write_splits(
+        &ctx,
+        &state,
+        &out,
+        &settings,
+        &SplitOptions::default(),
+        &BuildInfo::default(),
+    )
+    .unwrap();
     assert_eq!(summary["splits"]["train"]["records"], 0);
     assert!(std::fs::read_dir(out.join("traces/train")).unwrap().count() > 0);
 }
@@ -181,7 +198,14 @@ fn a_test_commit_that_reverts_a_training_commit_is_refused_until_the_overlap_is_
     let (ctx, state) = state_with_a_revert(work.path());
     let out = work.path().join("out");
 
-    let refused = write_splits(&ctx, &state, &out, &settings(), &SplitOptions::default());
+    let refused = write_splits(
+        &ctx,
+        &state,
+        &out,
+        &settings(),
+        &SplitOptions::default(),
+        &BuildInfo::default(),
+    );
     let message = format!("{:#}", refused.unwrap_err());
     assert!(message.contains("duplicate"), "{message}");
 
@@ -189,7 +213,15 @@ fn a_test_commit_that_reverts_a_training_commit_is_refused_until_the_overlap_is_
         overlaps: Overlaps::Drop,
         ..SplitOptions::default()
     };
-    let summary = write_splits(&ctx, &state, &out, &settings(), &options).unwrap();
+    let summary = write_splits(
+        &ctx,
+        &state,
+        &out,
+        &settings(),
+        &options,
+        &BuildInfo::default(),
+    )
+    .unwrap();
     assert_eq!(summary["excluded"]["content_overlap"], 1);
     assert_eq!(summary["overlaps"].as_array().unwrap().len(), 1);
     // The held-out side of the pair stays: the revert is in the test split.
@@ -220,6 +252,7 @@ fn the_split_has_a_content_address_that_does_not_change_when_it_is_written_again
             &work.path().join(dir),
             &settings(),
             &SplitOptions::default(),
+            &BuildInfo::default(),
         )
         .unwrap()
     };

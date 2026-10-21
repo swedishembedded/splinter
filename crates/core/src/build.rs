@@ -58,6 +58,33 @@ pub struct BuildInfo {
 }
 
 impl BuildInfo {
+    /// The build of the running process, from what the binary embedded at
+    /// build time: the `lock` it was built with (which names sven and brain),
+    /// splinter's own commit and the dirty flag as the build script printed
+    /// them (`"true"`/`"false"`), and the SHA-256 of the executable. Whatever
+    /// cannot be established stays absent.
+    #[must_use]
+    pub fn embedded(
+        lock: &str,
+        splinter: Option<&str>,
+        dirty: Option<&str>,
+        gpu_contexts: Option<u32>,
+    ) -> Self {
+        Self {
+            revisions: Revisions {
+                splinter: splinter.map(str::to_owned),
+                sven: locked_revision(lock, "sven-sdk").map(str::to_owned),
+                brain: locked_revision(lock, "brain").map(str::to_owned),
+            },
+            dirty: dirty.and_then(|v| v.parse().ok()),
+            binary_digest: std::env::current_exe().ok().and_then(|exe| {
+                let file = std::fs::File::open(exe).ok()?;
+                Digest::sha256_of_reader(std::io::BufReader::new(file)).ok()
+            }),
+            gpu_contexts,
+        }
+    }
+
     /// Whether nothing is known.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -107,6 +134,20 @@ source = \"git+https://example.org/brain#abc123\"\n\n\
         // No source, and not in the lock at all.
         assert_eq!(locked_revision(LOCK, "local"), None);
         assert_eq!(locked_revision(LOCK, "missing"), None);
+    }
+
+    #[test]
+    fn an_embedded_build_names_the_locked_commits_the_flag_and_the_executable() {
+        let build = BuildInfo::embedded(LOCK, Some("1234abc"), Some("false"), Some(2));
+        assert_eq!(build.revisions.splinter.as_deref(), Some("1234abc"));
+        assert_eq!(build.revisions.sven.as_deref(), Some("def456"));
+        assert_eq!(build.revisions.brain.as_deref(), Some("abc123"));
+        assert_eq!(build.dirty, Some(false));
+        assert!(build.binary_digest.is_some());
+        assert_eq!(build.gpu_contexts, Some(2));
+        let unknown = BuildInfo::embedded("", None, Some("maybe"), None);
+        assert_eq!(unknown.revisions, Revisions::default());
+        assert_eq!(unknown.dirty, None);
     }
 
     #[test]

@@ -29,7 +29,6 @@ use serde::{Deserialize, Serialize};
 /// The text that takes a scrubbed span's place.
 pub const REDACTED: &str = "[redacted]";
 
-/// Replaces people and secrets in text.
 /// What a [`Scrubber`] removed, by kind, as occurrences. Counts only: what was
 /// removed is not kept anywhere.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,6 +60,7 @@ struct Tally {
     secrets: AtomicUsize,
 }
 
+/// Replaces people and secrets in text.
 #[derive(Clone, Debug)]
 pub struct Scrubber {
     names: Vec<String>,

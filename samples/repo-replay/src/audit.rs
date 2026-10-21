@@ -44,8 +44,17 @@ use splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT;
 
 /// A splinter context over `state` (its store lives in `state/splinter`).
 pub fn open_context(state: &Path) -> Result<Context> {
+    open_context_for(state, None)
+}
+
+/// [`open_context`] for a dataset to be trained on the model in `policy_base`
+/// (its tokenizer and chat template count the records), when one is named.
+pub fn open_context_for(state: &Path, policy_base: Option<&Path>) -> Result<Context> {
     let mut config = Config::from_env();
     config.state_root = StateRoot::new(state.join("splinter"));
+    if let Some(dir) = policy_base {
+        config.policy_base = dir.to_path_buf();
+    }
     Ok(Context::new(config, false)?)
 }
 

@@ -10,10 +10,7 @@
 //! and release names it. The commits are embedded at build time (see
 //! `build.rs`) and read from the lock the build used; nothing here runs git.
 
-use std::path::Path;
-
-use splinter_sdk::vocabulary::build::{locked_revision, BuildInfo, Revisions};
-use splinter_sdk::vocabulary::digest::Digest;
+use splinter_sdk::vocabulary::build::BuildInfo;
 
 /// The lock this binary was built with.
 const LOCK: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock"));
@@ -22,23 +19,12 @@ const LOCK: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Carg
 /// `gpu_contexts` as the configuration read them from the lease wrapper.
 /// Whatever cannot be established stays absent.
 pub fn current(gpu_contexts: Option<u32>) -> BuildInfo {
-    BuildInfo {
-        revisions: Revisions {
-            splinter: option_env!("SPLINTER_GIT_REV").map(str::to_owned),
-            sven: locked_revision(LOCK, "sven-sdk").map(str::to_owned),
-            brain: locked_revision(LOCK, "brain").map(str::to_owned),
-        },
-        dirty: option_env!("SPLINTER_GIT_DIRTY").and_then(|v| v.parse().ok()),
-        binary_digest: std::env::current_exe()
-            .ok()
-            .and_then(|exe| digest_of_file(&exe)),
+    BuildInfo::embedded(
+        LOCK,
+        option_env!("SPLINTER_GIT_REV"),
+        option_env!("SPLINTER_GIT_DIRTY"),
         gpu_contexts,
-    }
-}
-
-fn digest_of_file(path: &Path) -> Option<Digest> {
-    let file = std::fs::File::open(path).ok()?;
-    Digest::sha256_of_reader(std::io::BufReader::new(file)).ok()
+    )
 }
 
 #[cfg(test)]
