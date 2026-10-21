@@ -14,10 +14,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Control {
-    /// The agent is shown the masked change ([`crate::grounding_prompt`]).
+    /// The agent is shown the masked change (`harness/replay.yaml`).
     #[default]
     Grounded,
-    /// The agent gets the plan and the repository only ([`crate::plan_only_prompt`]).
+    /// The agent gets the plan and the repository only (`harness/replay-plan-only.yaml`).
     PlanOnly,
 }
 

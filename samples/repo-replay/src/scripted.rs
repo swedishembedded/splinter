@@ -613,7 +613,7 @@ pub enum SupervisorBehaviour {
     ReferencesTheDiff,
 }
 
-/// A supervisor that reads the request of [`crate::supervisor_prompt`] and writes a message by script.
+/// A supervisor that reads the request of the supervisor task in `harness/replay.yaml` and writes a message by script.
 pub struct ScriptedSupervisor {
     behaviour: SupervisorBehaviour,
 }
@@ -637,7 +637,9 @@ impl ModelProvider for ScriptedSupervisor {
     }
 
     async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
-        use crate::supervisor_prompt::{DIFFERENCES_HEADING, WANTED_HEADING};
+        use crate::case::DIFFERENCES_HEADING;
+        // The heading the document puts before the wanted change.
+        const WANTED_HEADING: &str = "The change you wanted (for your eyes only):\n";
         let request = req
             .messages
             .iter()

@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::attempt::CheckOutcome;
 use crate::control::Control;
-use crate::plan_prompt::PlanStyle;
+use crate::style::PlanStyle;
 
 /// How a ledger line ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

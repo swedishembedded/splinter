@@ -16,14 +16,9 @@
 //! or more repeated verbatim, and a bound on code density (the share of the
 //! plan that is a code block or inline code).
 
-use std::time::Duration;
-
+use crate::style::PlanStyle;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use splinter_sdk::agent::chat::{reply, ChatOptions, Turn};
-use splinter_sdk::agent::solve::Model;
-
-use crate::plan_prompt::{plan_refusal_notice, plan_request, plan_system_prompt, PlanStyle};
 
 /// What a plan is checked against.
 #[derive(Clone, Debug)]
@@ -209,39 +204,6 @@ pub fn changed_lines(diff: &str) -> Vec<String> {
         .filter_map(|l| l.strip_prefix('+').or_else(|| l.strip_prefix('-')))
         .map(str::to_string)
         .collect()
-}
-
-/// Asks `model` for the plan of a change, up to `tries` times, until one
-/// passes [`validate`]. Returns the accepted plan, or the last rejection (or
-/// the model's failure) as the reason there is none.
-pub async fn write_plan(
-    model: &Model,
-    style: PlanStyle,
-    message: &str,
-    diff: &str,
-    check: &PlanCheck<'_>,
-    tries: usize,
-    deadline: Duration,
-) -> Result<String, PlanFailure> {
-    let planner = model.clone().with_system(plan_system_prompt(style));
-    let mut turns = vec![Turn::user(plan_request(message, diff))];
-    let mut last = None;
-    for _ in 0..tries.max(1) {
-        let plan = reply(&planner, &turns, &ChatOptions::new(deadline))
-            .await
-            .map_err(|e| PlanFailure::Model(e.to_string()))?;
-        match validate(&plan, style, check) {
-            Ok(()) => return Ok(plan),
-            Err(rejection) => {
-                turns.push(Turn::assistant(plan));
-                turns.push(Turn::user(plan_refusal_notice(&rejection.to_string())));
-                last = Some(rejection);
-            }
-        }
-    }
-    Err(PlanFailure::Rejected(
-        last.unwrap_or_else(|| unreachable!("at least one try ran")),
-    ))
 }
 
 /// Why no plan was had.

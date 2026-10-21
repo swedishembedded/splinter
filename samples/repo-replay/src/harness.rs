@@ -31,7 +31,7 @@ use splinter_sdk::agent::sven::{Engine, RunConclusion, RunOptions, Toolset};
 use crate::control::Control;
 use crate::mask::MaskedDiff;
 use crate::plan::{PlanCheck, PlanFailure};
-use crate::plan_prompt::PlanStyle;
+use crate::style::PlanStyle;
 use crate::supervise::{Correction, Refused};
 
 /// The documents the sample ships: the plan stage and the grounded work, and
@@ -132,6 +132,35 @@ pub struct Worked {
 }
 
 impl HarnessConfig {
+    /// The shipped documents, run with the `repo-replay` executable found beside
+    /// this process (this process itself when it is one; a test binary finds the
+    /// one cargo built for it; none found, the gates fail closed). `decoding` is what the documents state to the models.
+    pub fn shipped(decoding: Decoding) -> Self {
+        let me = std::env::current_exe().unwrap_or_default();
+        let name = if cfg!(windows) {
+            "repo-replay.exe"
+        } else {
+            "repo-replay"
+        };
+        let check_bin = if me.file_name().is_some_and(|n| n == name) {
+            me
+        } else {
+            me.ancestors()
+                .skip(1)
+                .take(3)
+                .map(|dir| dir.join(name))
+                .find(|candidate| candidate.is_file())
+                // Not found: the gates fail closed and say so.
+                .unwrap_or_else(|| name.into())
+        };
+        Self {
+            document: DEFAULT_DOCUMENT.to_string(),
+            plan_only_document: DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
+            check_bin,
+            decoding,
+        }
+    }
+
     fn engine(
         &self,
         planner: Arc<dyn ModelProvider>,

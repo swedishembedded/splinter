@@ -13,11 +13,10 @@
 
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::git::{mirror, single_commit_repo, Git};
-use splinter_repo_replay::grounding_prompt::grounding_prompt;
 use splinter_repo_replay::mask::mask_diff;
 use splinter_repo_replay::plan::{validate, PlanCheck, PlanRejection};
-use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
+use splinter_repo_replay::style::PlanStyle;
 
 #[test]
 fn the_attempt_tree_is_a_single_commit_without_the_future() {
@@ -103,64 +102,6 @@ fn the_serving_prompt_is_the_one_a_solver_runs_under() {
     );
 }
 
-/// A planner that answers from a queue and keeps the requests it was sent.
-struct Queued {
-    answers: std::sync::Mutex<Vec<String>>,
-    seen: std::sync::Mutex<Vec<usize>>,
-}
-
-#[async_trait::async_trait]
-impl splinter_sdk::agent::sven::model::ModelProvider for Queued {
-    fn name(&self) -> &str {
-        "queued"
-    }
-    fn model_name(&self) -> &str {
-        "planner"
-    }
-    async fn complete(
-        &self,
-        req: splinter_sdk::agent::sven::model::CompletionRequest,
-    ) -> anyhow::Result<splinter_sdk::agent::sven::model::ResponseStream> {
-        use splinter_sdk::agent::sven::model::ResponseEvent;
-        self.seen.lock().unwrap().push(req.messages.len());
-        let answer = self.answers.lock().unwrap().remove(0);
-        Ok(Box::pin(futures::stream::iter(vec![
-            Ok(ResponseEvent::TextDelta(answer)),
-            Ok(ResponseEvent::Done),
-        ])))
-    }
-}
-
-#[test]
-fn a_refused_plan_is_rewritten_with_the_reason_in_front_of_the_model() {
-    let good = "Please make total() include the tax rate in the price it returns, because customers see prices without tax today and that surprises them at checkout.";
-    let provider = std::sync::Arc::new(Queued {
-        answers: std::sync::Mutex::new(vec!["Fix it.".into(), good.into()]),
-        seen: std::sync::Mutex::new(Vec::new()),
-    });
-    let model = splinter_sdk::agent::solve::Model::new(provider.clone(), "queued/planner");
-    let check = PlanCheck {
-        diff_lines: &[],
-        commit: "0123456789abcdef0123456789abcdef01234567",
-        min_line_tokens: 6,
-    };
-    let plan = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(splinter_repo_replay::plan::write_plan(
-            &model,
-            PlanStyle::Detailed,
-            "Charge tax",
-            "diff --git a/x b/x\n",
-            &check,
-            2,
-            std::time::Duration::from_secs(5),
-        ))
-        .unwrap();
-    assert_eq!(plan, good);
-    // system + user, then system + user + refused plan + the reason.
-    assert_eq!(*provider.seen.lock().unwrap(), [2, 4]);
-}
-
 #[test]
 fn the_diff_the_agent_sees_has_no_offsets_and_no_unchanged_lines() {
     let diff = "diff --git a/calc.py b/calc.py\nindex 1111111..2222222 100644\n--- a/calc.py\n+++ b/calc.py\n@@ -5,7 +5,7 @@ def total(price):\n def add(a, b):\n     return a + b\n \n-def old_name(x):\n+def new_name(x):\n     return x\n \n";
@@ -183,37 +124,6 @@ fn the_diff_the_agent_sees_has_no_offsets_and_no_unchanged_lines() {
     ] {
         assert!(masked.contains(kept), "{kept} missing from {masked}");
     }
-    assert!(!grounding_prompt(&mask_diff(diff, &|_| None).unwrap(), 20).contains("@@ -5"));
-}
-
-#[test]
-fn the_prompts_say_where_the_repository_is_and_that_new_paths_must_be_given() {
-    assert!(grounding_prompt(&Default::default(), 20)
-        .contains("working directory is the repository root"));
-    let plan = splinter_repo_replay::plan_prompt::plan_system_prompt(PlanStyle::Terse);
-    assert!(plan.contains("the exact new path"), "{plan}");
-}
-
-#[test]
-fn the_replay_prompt_carries_the_per_file_procedure_and_the_budget() {
-    let prompt = grounding_prompt(
-        &mask_diff("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\n", &|_| None).unwrap(),
-        37,
-    );
-    for part in [
-        "calling todo with action set",
-        "Locate.",
-        "Read the region.",
-        "Edit, minimally.",
-        "Read the edited region again",
-        "git diff --stat",
-        "budget of 37 tool calls",
-    ] {
-        assert!(prompt.contains(part), "{part} missing");
-    }
-    assert!(!prompt.contains("{BUDGET}"));
-    let plan = splinter_repo_replay::plan_prompt::plan_system_prompt(PlanStyle::Detailed);
-    assert!(plan.contains("Examples of good requests"));
 }
 
 const CALC: &str = "def add(a, b):\n    return a + b\n\n\ndef total(price):\n    return price\n\n\ndef other(x):\n    return x\n";

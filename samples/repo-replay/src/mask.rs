@@ -21,7 +21,7 @@
 //! Offsets are never shown, so finding the place still takes a search and a
 //! read.
 
-/// A diff that went through [`mask_diff`]: the only form [`crate::grounding_prompt`]
+/// A diff that went through [`mask_diff`]: the only form the grounded harness document
 /// accepts, so no caller can hand the agent offsets or a bare unmasked diff.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MaskedDiff(String);

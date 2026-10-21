@@ -11,9 +11,9 @@
 //!
 //! * [`git`], [`tree`], [`select`], [`generated`] - reading the history and
 //!   choosing the commits that can be replayed.
-//! * [`plan_prompt`], [`plan`] - the task of a commit, written without the
+//! * [`style`], [`plan`] - the task of a commit, written without the
 //!   answer in it.
-//! * [`grounding_prompt`], [`attempt`] - the replay: an agent in a tree that
+//! * [`harness`], [`attempt`] - the replay: an agent in a tree that
 //!   holds only the parent.
 //! * [`gate`], [`trace`] - the deterministic judgement.
 //! * [`pipeline`], [`ledger`] - the run, its bookkeeping and the bias report.
@@ -33,15 +33,12 @@ pub mod fixture;
 pub mod gate;
 pub mod generated;
 pub mod git;
-pub mod grounding_prompt;
 pub mod harness;
 pub mod justify;
 pub mod ledger;
 pub mod mask;
 pub mod pipeline;
 pub mod plan;
-pub mod plan_only_prompt;
-pub mod plan_prompt;
 pub mod regate;
 pub mod scratch;
 pub mod scripted;
@@ -49,8 +46,8 @@ pub mod scrub;
 pub mod select;
 pub mod serving_prompt;
 pub mod splits;
+pub mod style;
 pub mod supervise;
-pub mod supervisor_prompt;
 pub mod timed;
 pub mod trace;
 pub mod tree;

@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::ledger::{bias, latest, Counts, Entry, Outcome};
-use crate::plan_prompt::PlanStyle;
+use crate::style::PlanStyle;
 
 /// The comparison of two ledgers.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

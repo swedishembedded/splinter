@@ -27,17 +27,13 @@
 //!   holds (the agent cannot know it; [`crate::justify`]).
 
 use std::collections::HashSet;
-use std::time::Duration;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use splinter_sdk::agent::chat::{reply, ChatOptions, Turn};
-use splinter_sdk::agent::solve::Model;
 
 use crate::gate::refers_to_given_change;
 use crate::justify::{code_names, Support};
 use crate::plan::changed_lines;
-use crate::supervisor_prompt::{supervisor_refusal_notice, SUPERVISOR_PROMPT};
 use crate::tree::{identifiers, numbers};
 
 /// What a message is checked against.
@@ -224,58 +220,4 @@ pub struct Correction {
     pub message: String,
     /// Tool calls the agent had made when it arrived.
     pub calls_before: usize,
-}
-
-/// Why no message could be had.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NoMessage {
-    /// Every message refused.
-    pub refused: Vec<Refused>,
-    /// The model's failure, if it could not be reached.
-    pub model_error: Option<String>,
-}
-
-/// Asks `model` for a correction until one passes [`check_message`], at most
-/// `tries` times; each refusal is put in front of it with its reason. Returns
-/// the accepted message and the refusals that came before it.
-pub async fn write_correction(
-    model: &Model,
-    request: &str,
-    ctx: &MessageContext<'_>,
-    tries: usize,
-    deadline: Duration,
-) -> Result<(String, Vec<Refused>), NoMessage> {
-    let supervisor = model.clone().with_system(SUPERVISOR_PROMPT.to_string());
-    let mut turns = vec![Turn::user(request.to_string())];
-    let mut refused = Vec::new();
-    for _ in 0..tries.max(1) {
-        let message = match reply(&supervisor, &turns, &ChatOptions::new(deadline)).await {
-            Ok(m) => m.trim().to_string(),
-            Err(e) => {
-                return Err(NoMessage {
-                    refused,
-                    model_error: Some(e.to_string()),
-                })
-            }
-        };
-        match check_message(&message, ctx) {
-            Ok(()) if !message.is_empty() => return Ok((message, refused)),
-            Ok(()) => {
-                refused.push(Refused {
-                    class: "empty".into(),
-                    detail: "the supervisor wrote nothing".into(),
-                });
-                turns.push(Turn::user(supervisor_refusal_notice("it is empty")));
-            }
-            Err(why) => {
-                refused.push(Refused::from(&why));
-                turns.push(Turn::assistant(message));
-                turns.push(Turn::user(supervisor_refusal_notice(&why.to_string())));
-            }
-        }
-    }
-    Err(NoMessage {
-        refused,
-        model_error: None,
-    })
 }

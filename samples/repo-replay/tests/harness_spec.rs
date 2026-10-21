@@ -6,12 +6,13 @@
 // team needs expertise in learning from your own codebase, you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! Spec: the harness document drives the replay and the models see exactly
-//! what the Rust path shows them. Every prompt of the document (the plan
-//! writer's and the agent's system prompts, the user turns) is compared with
-//! what the Rust path sent for the same commits, request by request.
+//! Spec: the harness documents drive the replay and the models are told what
+//! the documents say: the system prompts and the user turns are the documents'
+//! text with the run's inputs in the holes, and nothing else.
 
 #![allow(clippy::unwrap_used)]
+
+mod support;
 
 use std::sync::{Arc, Mutex};
 
@@ -20,10 +21,7 @@ use splinter_repo_replay::audit::{
 };
 use splinter_repo_replay::control::Control;
 use splinter_repo_replay::fixture;
-use splinter_repo_replay::harness::{
-    Decoding, HarnessConfig, DEFAULT_DOCUMENT, DEFAULT_PLAN_ONLY_DOCUMENT,
-};
-use splinter_repo_replay::pipeline::{Models, RunConfig};
+use splinter_repo_replay::pipeline::Models;
 use splinter_repo_replay::scripted::{Behaviour, Specificity};
 use splinter_sdk::agent::solve::Model;
 use splinter_sdk::agent::sven::model::{
@@ -71,8 +69,14 @@ impl ModelProvider for Recording {
 /// The system and the first user message of each request, sorted.
 type Asked = Vec<(String, String)>;
 
-/// Runs the fixture history and returns, sorted, what was asked of the planner and of the agent.
-fn requests(control: Control, harness: bool, corrections: usize) -> (Asked, Asked, Asked) {
+struct Seen {
+    planner: Asked,
+    agent: Asked,
+    supervisor: Asked,
+}
+
+/// Runs the fixture history and returns, sorted, what each model was asked.
+fn requests(control: Control, corrections: usize) -> Seen {
     let work = tempfile::tempdir().unwrap();
     let source = work.path().join("source");
     std::fs::create_dir(&source).unwrap();
@@ -109,75 +113,92 @@ fn requests(control: Control, harness: bool, corrections: usize) -> (Asked, Aske
         ),
         ..scripted_models(behaviour, Specificity::NamesFiles, &truths)
     };
-    let config = RunConfig {
-        control,
-        corrections,
-        harness: harness.then(|| HarnessConfig {
-            document: DEFAULT_DOCUMENT.to_string(),
-            plan_only_document: DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
-            check_bin: env!("CARGO_BIN_EXE_repo-replay").into(),
-            decoding: Decoding {
-                temperature: 0.7,
-                top_p: 0.8,
-                top_k: 20,
-                seed: 1, // seed: the scripted models ignore it
-                thinking: false,
-                thinking_budget: None,
-            },
-        }),
-        ..default_config(&source, &state)
-    };
+    let mut config = default_config(&source, &state);
+    config.control = control;
+    config.corrections = corrections;
     run_blocking(&ctx, &models, &config).unwrap();
-    let sorted = |seen: Arc<Mutex<Vec<(String, String)>>>| {
+    let sorted = |seen: Arc<Mutex<Asked>>| {
         let mut all = seen.lock().unwrap().clone();
         all.sort();
         all
     };
-    (
-        sorted(planner_seen),
-        sorted(agent_seen),
-        sorted(supervisor_seen),
-    )
+    Seen {
+        planner: sorted(planner_seen),
+        agent: sorted(agent_seen),
+        supervisor: sorted(supervisor_seen),
+    }
+}
+
+/// The text of `template` before its first hole and after its last one.
+fn around_holes(template: &str) -> (String, String) {
+    let first = template.find("{{").unwrap();
+    let last = template.rfind("}}").unwrap() + 2;
+    (template[..first].to_string(), template[last..].to_string())
 }
 
 #[test]
-fn the_document_shows_the_models_what_the_rust_path_shows_them() {
-    for control in [Control::Grounded, Control::PlanOnly] {
-        let (rust_planner, rust_agent, _) = requests(control, false, 0);
-        let (document_planner, document_agent, _) = requests(control, true, 0);
-        assert!(!rust_planner.is_empty() && !rust_agent.is_empty());
-        assert_eq!(
-            rust_planner, document_planner,
-            "planner prompts, {control:?}"
+fn the_planner_is_asked_what_the_document_says() {
+    let seen = requests(Control::Grounded, 0);
+    assert!(!seen.planner.is_empty());
+    for style in ["terse", "detailed"] {
+        let system = support::plan_system(style);
+        let asked: Vec<_> = seen.planner.iter().filter(|(s, _)| *s == system).collect();
+        assert!(
+            !asked.is_empty(),
+            "{style}: no request carried the document's system prompt"
         );
-        // The agent's first turn of every attempt: system prompt and task.
-        let first_turns = |all: &[(String, String)]| {
-            let mut firsts: Vec<(String, String)> = all
-                .iter()
-                .filter(|(_, user)| !user.starts_with("You stopped before finishing"))
-                .cloned()
-                .collect();
-            firsts.dedup();
-            firsts
-        };
-        assert_eq!(
-            first_turns(&rust_agent),
-            first_turns(&document_agent),
-            "agent prompts, {control:?}"
-        );
+        for (_, user) in asked {
+            assert!(
+                user.starts_with("Commit message:\n") && user.ends_with("\n\nWrite the request."),
+                "{user}"
+            );
+        }
+    }
+    // Nothing else was said to the planner as a system prompt.
+    assert!(seen.planner.iter().all(|(s, _)| {
+        s == &support::plan_system("terse") || s == &support::plan_system("detailed")
+    }));
+}
+
+#[test]
+fn the_agent_is_told_what_the_document_of_its_control_says() {
+    for (control, document) in [
+        (Control::Grounded, support::grounded()),
+        (Control::PlanOnly, support::plan_only()),
+    ] {
+        let template = support::agent_system(&document);
+        let (before, after) = around_holes(&template);
+        let seen = requests(control, 0);
+        assert!(!seen.agent.is_empty());
+        for (system, _) in &seen.agent {
+            assert!(system.starts_with(&before), "{control:?}: {system}");
+            assert!(system.ends_with(&after), "{control:?}: {system}");
+            assert!(!system.contains("{{"), "a hole stayed open: {system}");
+        }
+        let grounded = matches!(control, Control::Grounded);
+        assert_eq!(seen.agent[0].0.contains("The change:"), grounded);
     }
 }
 
 #[test]
-fn the_supervisor_is_asked_what_the_rust_path_asks_it_and_the_agent_is_told_the_same() {
-    let (_, rust_agent, rust_supervisor) = requests(Control::Grounded, false, 3);
-    let (_, document_agent, document_supervisor) = requests(Control::Grounded, true, 3);
+fn the_supervisor_is_asked_what_the_document_says() {
+    let seen = requests(Control::Grounded, 3);
     assert!(
-        !rust_supervisor.is_empty(),
+        !seen.supervisor.is_empty(),
         "the scripted run needed a correction"
     );
-    assert_eq!(rust_supervisor, document_supervisor, "supervisor prompts");
-    assert_eq!(rust_agent.len(), document_agent.len(), "agent requests");
+    let document = support::grounded();
+    let author = &support::task(&document, "work")["corrections"]["author"];
+    let system = author["system"].as_str().unwrap();
+    let (before, after) = around_holes(author["task"].as_str().unwrap());
+    for (asked_system, user) in &seen.supervisor {
+        assert_eq!(asked_system, system);
+        assert!(
+            user.starts_with(&before) && user.ends_with(&after),
+            "{user}"
+        );
+        assert!(user.contains("What the engineer changed:"), "{user}");
+    }
 }
 
 /// A planner that writes a plan too short to be one until it has been refused
@@ -215,7 +236,7 @@ impl ModelProvider for StubbornPlanner {
 }
 
 /// The outcome and classes of every attempt of the fixture history under a planner that refuses first.
-fn under_a_stubborn_planner(harness: bool, always: bool) -> Vec<(String, Vec<String>)> {
+fn under_a_stubborn_planner(always: bool) -> Vec<(String, Vec<String>)> {
     let work = tempfile::tempdir().unwrap();
     let source = work.path().join("source");
     std::fs::create_dir(&source).unwrap();
@@ -234,23 +255,7 @@ fn under_a_stubborn_planner(harness: bool, always: bool) -> Vec<(String, Vec<Str
         ),
         ..scripted
     };
-    let config = RunConfig {
-        harness: harness.then(|| HarnessConfig {
-            document: DEFAULT_DOCUMENT.to_string(),
-            plan_only_document: DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
-            check_bin: env!("CARGO_BIN_EXE_repo-replay").into(),
-            decoding: Decoding {
-                temperature: 0.7,
-                top_p: 0.8,
-                top_k: 20,
-                seed: 1, // seed: the scripted models ignore it
-                thinking: false,
-                thinking_budget: None,
-            },
-        }),
-        ..default_config(&source, &state)
-    };
-    let report = run_blocking(&ctx, &models, &config).unwrap();
+    let report = run_blocking(&ctx, &models, &default_config(&source, &state)).unwrap();
     report
         .entries
         .into_iter()
@@ -260,11 +265,23 @@ fn under_a_stubborn_planner(harness: bool, always: bool) -> Vec<(String, Vec<Str
 }
 
 #[test]
-fn a_refused_plan_is_written_again_and_a_plan_refused_twice_ends_the_attempt_as_on_the_rust_path() {
-    for always in [false, true] {
-        let rust = under_a_stubborn_planner(false, always);
-        let document = under_a_stubborn_planner(true, always);
-        assert!(!rust.is_empty());
-        assert_eq!(rust, document, "always refusing: {always}");
-    }
+fn a_refused_plan_is_written_again() {
+    let outcomes = under_a_stubborn_planner(false);
+    assert!(!outcomes.is_empty());
+    assert!(
+        outcomes.iter().all(|(o, c)| o == "Passed" && c.is_empty()),
+        "{outcomes:?}"
+    );
+}
+
+#[test]
+fn a_plan_refused_twice_ends_the_attempt_as_refused_with_the_rule_that_refused_it() {
+    let outcomes = under_a_stubborn_planner(true);
+    assert!(!outcomes.is_empty());
+    assert!(
+        outcomes
+            .iter()
+            .all(|(o, c)| o == "PlanRefused" && c == &["plan_length".to_string()]),
+        "{outcomes:?}"
+    );
 }

@@ -35,12 +35,12 @@ use crate::fixture;
 use crate::gate::GateConfig;
 use crate::ledger::{Entry, Outcome};
 use crate::pipeline::{run, Models, RunConfig, RunReport};
-use crate::plan_prompt::PlanStyle;
 use crate::scripted::{
     Behaviour, ScriptedAgent, ScriptedPlanner, ScriptedSupervisor, Specificity, SupervisorBehaviour,
 };
 use crate::select::SelectConfig;
 use crate::serving_prompt::SERVING_PROMPT;
+use crate::style::PlanStyle;
 
 /// A splinter context over `state` (its store lives in `state/splinter`).
 pub fn open_context(state: &Path) -> Result<Context> {
@@ -111,7 +111,17 @@ pub fn default_config(source: &Path, state: &Path) -> RunConfig {
         redo_classes: Vec::new(),
         control: Control::Grounded,
         corrections: 0,
-        harness: None,
+        harness: crate::harness::HarnessConfig::shipped(crate::harness::Decoding {
+            temperature: 0.7,
+            top_p: 0.8,
+            top_k: 20,
+            // The scripted models ignore the seed; the clock only fills the field.
+            seed: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| u64::from(d.subsec_nanos())),
+            thinking: false,
+            thinking_budget: None,
+        }),
     }
 }
 
@@ -261,8 +271,7 @@ fn commit_of<'a>(ids: &'a [String], label: &str) -> Result<(&'a str, &'a str)> {
 }
 
 /// Runs the audit in `work` (a directory that exists; its content is left behind for inspection).
-/// `check_bin` is the `repo-replay` executable the harness document's gates run.
-pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
+pub fn audit(work: &Path) -> Result<Vec<Check>> {
     let mut checks = Vec::new();
     let source = work.join("source");
     std::fs::create_dir_all(&source)?;
@@ -358,9 +367,14 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
         all_serving && !lines.is_empty(),
         format!("{} records", lines.len()),
     );
-    let leaked = ["The change:", "How to work:", "make exactly that change"]
-        .iter()
-        .any(|m| text.contains(m));
+    let leaked = [
+        "The change:",
+        "How to work:",
+        "make exactly that change",
+        "You play the user who gave",
+    ]
+    .iter()
+    .any(|m| text.contains(m));
     check(
         &mut checks,
         "the grounding prompt is in no record",
@@ -392,69 +406,6 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
         "",
     );
 
-    // The harness document drives the plan and the work: the same verdicts as the Rust path.
-    let via_harness = |config: RunConfig| RunConfig {
-        harness: Some(crate::harness::HarnessConfig {
-            document: crate::harness::DEFAULT_DOCUMENT.to_string(),
-            plan_only_document: crate::harness::DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
-            check_bin: check_bin.to_path_buf(),
-            decoding: crate::harness::Decoding {
-                temperature: 0.7,
-                top_p: 0.8,
-                top_k: 20,
-                // The scripted models ignore the seed; the clock only fills the field.
-                seed: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_or(0, |d| u64::from(d.subsec_nanos())),
-                thinking: false,
-                thinking_budget: None,
-            },
-        }),
-        ..config
-    };
-    let harness_state = state("harness-honest");
-    let harness_ctx = open_context(&harness_state)?;
-    let harnessed = run_blocking(
-        &harness_ctx,
-        &scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths),
-        &via_harness(default_config(&source, &harness_state)),
-    )?;
-    check(
-        &mut checks,
-        "the harness document gives the Rust path's verdicts for the honest solver, in both plan styles",
-        verdicts(&honest.entries) == verdicts(&harnessed.entries),
-        format!("{:?}", verdicts(&harnessed.entries)),
-    );
-
-    // What the harness path stores is the agent's conversation and nothing of the others.
-    let harness_set = attempts_set(&harness_ctx, &harness_state)?;
-    let harness_built = build_dataset(
-        &harness_ctx,
-        std::slice::from_ref(&harness_set),
-        &DatasetSettings {
-            serving_prompt: SERVING_PROMPT.to_string(),
-            max_block: None,
-        },
-    )?;
-    let harness_text = std::fs::read_to_string(&harness_built.path)?;
-    let hidden = [
-        "The change:",
-        "How to work:",
-        "make exactly that change",
-        "You play the user who gave",
-    ]
-    .iter()
-    .any(|m| harness_text.contains(m));
-    check(
-        &mut checks,
-        "the dataset of harness attempts opens with the serving prompt and holds no grounding or supervisor prompt",
-        !hidden
-            && harness_text
-                .lines()
-                .all(|l| l.contains(SERVING_PROMPT.lines().next().unwrap_or_default())),
-        format!("{} bytes", harness_text.len()),
-    );
-
     // Each cheater fails with the reason of its rule, on its commit.
     for (index, (name, behaviour, label, class)) in cheaters(&source).into_iter().enumerate() {
         let (parent, commit) = commit_of(&ids, label)?;
@@ -468,7 +419,7 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
             &cheat_ctx,
             // A plan that names the files and nothing the change introduces: the
             // cheaters' own rule is the only thing that should catch them.
-            &scripted_models(behaviour.clone(), Specificity::FilesOnly, &truths),
+            &scripted_models(behaviour, Specificity::FilesOnly, &truths),
             &config,
         )?;
         let entry = report
@@ -483,28 +434,12 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
             caught,
             format!("{:?}", entry.map(|e| (&e.outcome, &e.classes))),
         );
-        let harness_cheat_state = state(&format!("cheat-harness-{index}"));
-        let harness_cheat_ctx = open_context(&harness_cheat_state)?;
-        let harness_report = run_blocking(
-            &harness_cheat_ctx,
-            &scripted_models(behaviour, Specificity::FilesOnly, &truths),
-            &via_harness(RunConfig {
-                state: harness_cheat_state.clone(),
-                ..config.clone()
-            }),
-        )?;
-        check(
-            &mut checks,
-            format!("through the harness document the cheater that {name} fails the same way"),
-            verdicts(&report.entries) == verdicts(&harness_report.entries),
-            format!("{:?}", verdicts(&harness_report.entries)),
-        );
     }
 
     // Corrections: an honest supervisor repairs an attempt that left a file out and
     // the record trains only on the fix; each supervisor that leaks is refused and counted.
     let (parent, commit) = commit_of(&ids, "multi")?;
-    let supervised = |name: &str, kind: SupervisorBehaviour, harness: bool| -> Result<Vec<Entry>> {
+    let supervised = |name: &str, kind: SupervisorBehaviour| -> Result<Vec<Entry>> {
         let supervised_state = state(name);
         let supervised_ctx = open_context(&supervised_state)?;
         let mut config = default_config(&source, &supervised_state);
@@ -512,7 +447,6 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
         config.to = Some(commit.to_string());
         config.styles = vec![PlanStyle::Terse];
         config.corrections = 3;
-        let config = if harness { via_harness(config) } else { config };
         let models = Models {
             supervisor: Model::new(ScriptedSupervisor::provider(kind), "scripted/supervisor"),
             ..scripted_models(
@@ -528,27 +462,7 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
             .filter(|e| e.outcome != Outcome::Skipped)
             .collect())
     };
-    // The classes of refused messages, once each: sven reports the refusals it sent back for a
-    // rewrite, not the last one when the rewrites ran out, so the count differs by one.
-    let summary = |entries: &[Entry]| -> Vec<(Outcome, Vec<String>, usize, Vec<String>)> {
-        entries
-            .iter()
-            .map(|e| {
-                let mut refusals = e.supervisor_refusals.clone();
-                refusals.sort();
-                refusals.dedup();
-                (e.outcome, e.classes.clone(), e.corrections, refusals)
-            })
-            .collect()
-    };
-    let corrected = supervised("corrected", SupervisorBehaviour::Honest, false)?;
-    let corrected_via_harness = supervised("corrected-harness", SupervisorBehaviour::Honest, true)?;
-    check(
-        &mut checks,
-        "through the harness document the supervisor corrects the same attempt the same way",
-        summary(&corrected) == summary(&corrected_via_harness),
-        format!("{:?}", summary(&corrected_via_harness)),
-    );
+    let corrected = supervised("corrected", SupervisorBehaviour::Honest)?;
     check(
         &mut checks,
         "an attempt that left a file out is corrected by the supervisor and passes with one correction",
@@ -574,14 +488,7 @@ pub fn audit(work: &Path, check_bin: &Path) -> Result<Vec<Check>> {
             "diff_reference",
         ),
     ] {
-        let entries = supervised(&format!("supervisor-{class}"), kind, false)?;
-        let via = supervised(&format!("supervisor-harness-{class}"), kind, true)?;
-        check(
-            &mut checks,
-            format!("through the harness document a supervisor that {name} is refused and counted the same way"),
-            summary(&entries) == summary(&via),
-            format!("{:?}", summary(&via)),
-        );
+        let entries = supervised(&format!("supervisor-{class}"), kind)?;
         check(
             &mut checks,
             format!("a supervisor that {name} is refused as {class}, counted, and its message never sent"),
@@ -681,7 +588,7 @@ pub fn audit_and_print(keep: Option<&Path>) -> Result<()> {
     let temporary = tempfile::tempdir()?;
     let work = keep.unwrap_or_else(|| temporary.path());
     std::fs::create_dir_all(work)?;
-    let checks = audit(work, &std::env::current_exe()?)?;
+    let checks = audit(work)?;
     for c in &checks {
         println!(
             "{} {}{}",

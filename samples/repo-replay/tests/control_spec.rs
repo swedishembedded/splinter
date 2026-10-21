@@ -25,8 +25,8 @@ use splinter_repo_replay::fixture;
 use splinter_repo_replay::git::Git;
 use splinter_repo_replay::ledger::{self, Outcome};
 use splinter_repo_replay::pipeline::Models;
-use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::scripted::{Behaviour, Specificity};
+use splinter_repo_replay::style::PlanStyle;
 use splinter_sdk::agent::sven::model::{
     CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream, Role,
 };

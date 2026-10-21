@@ -16,8 +16,8 @@ use splinter_repo_replay::audit::{
 };
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::ledger::{self, Outcome};
-use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::scripted::{Behaviour, Specificity};
+use splinter_repo_replay::style::PlanStyle;
 
 #[test]
 fn only_attempts_that_failed_for_the_named_classes_alone_are_redone() {

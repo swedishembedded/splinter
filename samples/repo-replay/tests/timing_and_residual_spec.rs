@@ -19,8 +19,8 @@ use splinter_repo_replay::audit::{
 };
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::ledger::{self, Outcome};
-use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::scripted::{Behaviour, ScriptedAgent, Specificity};
+use splinter_repo_replay::style::PlanStyle;
 use splinter_repo_replay::timed::{Stats, Timed};
 use splinter_sdk::agent::sven::model::{CompletionRequest, ModelProvider};
 

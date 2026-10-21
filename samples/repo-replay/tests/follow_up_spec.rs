@@ -17,8 +17,8 @@ use splinter_repo_replay::audit::{
 };
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::ledger::Outcome;
-use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::scripted::{Behaviour, Specificity};
+use splinter_repo_replay::style::PlanStyle;
 
 fn outcome_with(follow_ups: usize) -> (Outcome, Vec<String>) {
     let work = tempfile::tempdir().unwrap();

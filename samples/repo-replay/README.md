@@ -36,7 +36,7 @@ succeeds often; the student is never told it (the records carry the serving prom
    removed and added lines are exact, so the agent has to find each place by searching and reading. First user message: the plan.
 4. **Gate.** Deterministic, on the final tree and the recorded trajectory (rules below).
 5. **Correct (optional, `--corrections N`).** When an attempt ends with a wrong tree and nothing else
-   is wrong with it, a supervisor (the same model, in `supervisor_prompt.rs`) sees the task, the agent's
+   is wrong with it, a supervisor (the same model, prompt in `harness/replay.yaml`) sees the task, the agent's
    changes and the wanted change, and writes a follow-up message as the user would: intent, behaviour
    and place in words, no diff line, no line number, no name or number nobody gave the agent. A message
    that breaks that (`diff_line`, `location_offset`, `diff_reference`, `leaked_target`,
@@ -92,7 +92,7 @@ repo-replay dataset --state DIR [--serving-prompt-file FILE] [--max-block TOKENS
 ```
 
 `--control plan-only` replays the same commits without the grounding diff (the plan and the repository
-only, `plan_only_prompt.rs`); it needs a state directory of its own, and `report --state GROUNDED
+only, `harness/replay-plan-only.yaml`); it needs a state directory of its own, and `report --state GROUNDED
 --versus PLAN_ONLY` prints both pass rates side by side with the units only the grounded run passes
 (what the diff carries) and the units both pass (the purest records). `--thinking` and
 `--thinking-budget` turn on the model's reasoning for every request of a run.
@@ -105,10 +105,9 @@ fixed. Every number a run prints comes from the ledger (`state/ledger.jsonl`).
 
 ## Harness v2
 
-`--driver harness` runs the plan and the work through sven's workflow language instead of the
-Rust loops. The prompts live in `harness/replay.yaml` (plan stage and grounded work) and
-`harness/replay-plan-only.yaml` (the control's work; a sven agent task cannot carry its own system
-prompt, so the control is a document of its own): edit them and rerun, no build. `--harness-file`
+The plan and the work run through sven's workflow language, and nothing else runs them. Every
+prompt lives only in `harness/replay.yaml` (the plan stage and the grounded work) and
+`harness/replay-plan-only.yaml` (the control's work): edit them and rerun, no build; `--harness-file`
 and `--harness-plan-only-file` name edited copies. The documents declare the planner's refusal
 retry (the gate `check-plan`), the tool allowance, the repetition stop, the follow-up for a turn
 that ends announcing a call it did not make, and the supervisor corrections: the gate `check`
@@ -118,18 +117,17 @@ change. Sampling, thinking, the reply limit (default 16384 tokens: sven's own 40
 entirely on reasoning by a thinking model) and the call budgets are inputs of the documents.
 
 Rust keeps what is specific to replay: mining and selection, the masking, laying the trees, the
-rules of the gate (`repo-replay check`, `check-message`, `check-plan` expose them to the documents
-over the hidden side of the attempt, `case.rs`, which lies outside the agent's tree), the ledger,
-the dataset, the scrub and the audit. The audit runs the honest solver, every cheater and the
-supervisors through the documents as well and requires the Rust path's verdicts;
-`tests/harness_spec.rs` requires every system prompt and user turn, the supervisor's included, to
-equal what the Rust path sends. Differences from the Rust path: the supervisor is shown the wanted
-change before the agent's changes (the Rust path now orders it the same way); the refusals of
-supervisor messages are counted by sven without the last one when the rewrites ran out; the gate
-`check` cannot know why a run stopped, so a correction is only earned by a turn that concluded.
+rules of the gate (`repo-replay check`, `check-message` and `check-plan` expose them to the
+documents over the hidden side of the attempt, `case.rs`, which lies outside the agent's tree),
+the ledger, `regate`, the dataset and splits, the scrub, and the audit with scripted models, which
+runs the whole pipeline through the documents. `tests/prompts_spec.rs` and `tests/harness_spec.rs`
+read the documents; the system prompts and user turns the models receive are the documents' text.
+The serving prompt of the dataset (`serving_prompt.rs`) is not a replay prompt and stays in Rust.
 
-The sample needs sven at or after 5e2aea0a; Cargo.lock still pins the published revision, so build
-it with `make deps/local`.
+Known differences of what sven reports: the refusals of supervisor messages are counted without the
+last one when the rewrites ran out; the gate `check` cannot know why a run stopped, so a correction
+is only earned by a turn that concluded. The sample needs sven at or after 5e2aea0a; Cargo.lock
+still pins the published revision, so build it with `make deps/local`.
 
 ## What the audit proves
 

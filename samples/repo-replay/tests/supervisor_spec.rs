@@ -28,11 +28,11 @@ use splinter_repo_replay::fixture;
 use splinter_repo_replay::justify::Support;
 use splinter_repo_replay::ledger::{self, Entry, Outcome};
 use splinter_repo_replay::pipeline::Models;
-use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::scripted::{
     Behaviour, ScriptedSupervisor, Specificity, SupervisorBehaviour,
 };
 use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
+use splinter_repo_replay::style::PlanStyle;
 use splinter_repo_replay::supervise::{check_message, MessageContext};
 
 const DIFF: &str = "diff --git a/src/calc.rs b/src/calc.rs\n--- a/src/calc.rs\n+++ b/src/calc.rs\n@@ -3,3 +3,4 @@\n fn total(price: u32) -> u32 {\n-    price\n+    apply_surcharge(price, 4096)\n }\n";

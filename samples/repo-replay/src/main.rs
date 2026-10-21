@@ -34,19 +34,17 @@ use splinter_repo_replay::dataset::{
     attempts_set_filtered, build_dataset, labels, CorrectionRange, DatasetSettings,
 };
 use splinter_repo_replay::gate::GateConfig;
-use splinter_repo_replay::harness::{
-    Decoding, HarnessConfig, DEFAULT_DOCUMENT, DEFAULT_PLAN_ONLY_DOCUMENT,
-};
+use splinter_repo_replay::harness::{Decoding, HarnessConfig};
 use splinter_repo_replay::ledger;
 use splinter_repo_replay::pipeline::{run, Models};
 use splinter_repo_replay::plan::{changed_lines, validate, PlanCheck};
-use splinter_repo_replay::plan_prompt::PlanStyle;
 use splinter_repo_replay::regate::{regate, RegateConfig};
 use splinter_repo_replay::select::{
     SelectConfig, DEFAULT_CONTEXT_SHARE_PERCENT, DEFAULT_CONTEXT_TOKENS,
 };
 use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
 use splinter_repo_replay::splits::write_splits;
+use splinter_repo_replay::style::PlanStyle;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -294,12 +292,8 @@ struct RunArgs {
     /// this machine. Repeatable.
     #[arg(long = "check")]
     checks: Vec<String>,
-    /// Who drives the plan and the work: `rust` (the reference) or `harness` (the sven harness
-    /// document, see --harness-file). Settings the document cannot express yet (plan tries or
-    /// follow-ups other than 2, corrections, a thinking budget) keep that step on the Rust path.
-    #[arg(long, default_value = "rust")]
-    driver: String,
-    /// The harness document for --driver harness (default: the one the sample ships).
+    /// The harness document with the plan stage and the grounded work (default: the one the
+    /// sample ships, `harness/replay.yaml`): edit a copy, no build needed.
     #[arg(long)]
     harness_file: Option<PathBuf>,
     /// The harness document of the plan-only control (default: the one the sample ships).
@@ -451,31 +445,24 @@ fn run_command(args: &RunArgs) -> Result<()> {
     config.first_response = args.first_response_secs.map(Duration::from_secs);
     config.plan_tries = args.plan_tries;
     config.min_line_tokens = args.plan_verbatim_words;
-    config.harness = match args.driver.as_str() {
-        "rust" => None,
-        "harness" => Some(HarnessConfig {
-            document: match &args.harness_file {
-                Some(file) => std::fs::read_to_string(file)
-                    .with_context(|| format!("reading {}", file.display()))?,
-                None => DEFAULT_DOCUMENT.to_string(),
-            },
-            plan_only_document: match &args.harness_plan_only_file {
-                Some(file) => std::fs::read_to_string(file)
-                    .with_context(|| format!("reading {}", file.display()))?,
-                None => DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
-            },
-            check_bin: std::env::current_exe().context("finding this executable")?,
-            decoding: Decoding {
-                temperature: f64::from(args.temperature),
-                top_p: f64::from(args.top_p),
-                top_k: u64::from(args.top_k),
-                seed: args.seed,
-                thinking: args.thinking,
-                thinking_budget: args.thinking_budget,
-            },
-        }),
-        other => anyhow::bail!("unknown driver {other:?}: rust or harness"),
-    };
+    let mut harness = HarnessConfig::shipped(Decoding {
+        temperature: f64::from(args.temperature),
+        top_p: f64::from(args.top_p),
+        top_k: u64::from(args.top_k),
+        seed: args.seed,
+        thinking: args.thinking,
+        thinking_budget: args.thinking_budget,
+    });
+    harness.check_bin = std::env::current_exe().context("finding this executable")?;
+    if let Some(file) = &args.harness_file {
+        harness.document =
+            std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+    }
+    if let Some(file) = &args.harness_plan_only_file {
+        harness.plan_only_document =
+            std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+    }
+    config.harness = harness;
     let ctx = open_context(&args.state)?;
     let served_context = match args.context_tokens {
         Some(tokens) => tokens,

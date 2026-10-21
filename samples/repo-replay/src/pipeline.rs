@@ -41,13 +41,11 @@ use crate::attempt::{attempt, AttemptOutcome, AttemptSettings, CommitPlan};
 use crate::control::Control;
 use crate::gate::GateConfig;
 use crate::git::{mirror, Git};
-use crate::grounding_prompt::grounding_prompt;
 use crate::ledger::{self, Entry, Outcome};
-use crate::plan::{changed_lines, write_plan, PlanCheck, PlanFailure};
-use crate::plan_only_prompt::plan_only_prompt;
-use crate::plan_prompt::{plan_system_prompt, PlanStyle};
+use crate::plan::{changed_lines, PlanCheck, PlanFailure};
 use crate::scrub::Scrubber;
 use crate::select::{prepare, SelectConfig, Selected};
+use crate::style::PlanStyle;
 
 /// The task kind every experience of this sample carries.
 pub const TASK_KIND: &str = "repo-replay";
@@ -106,8 +104,8 @@ pub struct RunConfig {
     pub control: Control,
     /// Correction messages a wrong attempt may be sent (0: none).
     pub corrections: usize,
-    /// The harness document that runs the plan and the work where it can; `None`: the Rust path throughout.
-    pub harness: Option<crate::harness::HarnessConfig>,
+    /// The harness documents that run the plan and the work.
+    pub harness: crate::harness::HarnessConfig,
 }
 
 /// The models of a run.
@@ -300,8 +298,6 @@ pub async fn run(ctx: &Context, models: &Models, config: &RunConfig) -> Result<R
         corrections: config.corrections,
         harness: config.harness.clone(),
         supervisor: models.supervisor.clone(),
-        supervisor_tries: config.plan_tries,
-        supervisor_deadline: config.plan_deadline,
         checks: config.checks.clone(),
         check_timeout: config.check_timeout,
     };
@@ -422,7 +418,7 @@ async fn process(
                 let (plan, outcome) = *boxed;
                 match store_attempt(
                     ctx,
-                    models,
+                    (models, &config.harness),
                     scrubber,
                     commit,
                     (style, config.control),
@@ -509,31 +505,15 @@ async fn work_unit(
         commit: &commit.sha,
         min_line_tokens: config.min_line_tokens,
     };
-    let planned = match &config.harness {
-        Some(harness) => {
-            crate::harness::write_plan(
-                harness,
-                Arc::clone(&models.planner.provider),
-                style,
-                (&commit.message, &commit.diff),
-                (&check, config.plan_tries),
-                (config.first_response, config.plan_deadline),
-            )
-            .await
-        }
-        None => {
-            write_plan(
-                &models.planner,
-                style,
-                &commit.message,
-                &commit.diff,
-                &check,
-                config.plan_tries,
-                config.plan_deadline,
-            )
-            .await
-        }
-    };
+    let planned = crate::harness::write_plan(
+        &config.harness,
+        Arc::clone(&models.planner.provider),
+        style,
+        (&commit.message, &commit.diff),
+        (&check, config.plan_tries),
+        (config.first_response, config.plan_deadline),
+    )
+    .await;
     let plan = match planned {
         Ok(plan) => plan,
         Err(PlanFailure::Model(e)) => return Unit::Error(format!("planning: {e}")),
@@ -548,7 +528,7 @@ async fn work_unit(
 /// Stores the attempt as an experience of the plan, with the gate's verdict.
 fn store_attempt(
     ctx: &Context,
-    models: &Models,
+    (models, harness): (&Models, &crate::harness::HarnessConfig),
     scrubber: &Scrubber,
     commit: &CommitPlan,
     (style, control): (PlanStyle, Control),
@@ -574,11 +554,12 @@ fn store_attempt(
     )?;
     let mut provenance = Provenance::new(&models.identity, ctx.runtime().clock());
     provenance.generator = Some("splinter-repo-replay".into());
-    let replay_prompt = match control {
-        Control::Grounded => grounding_prompt(&crate::mask::MaskedDiff::default(), 0),
-        Control::PlanOnly => plan_only_prompt(0),
+    // The prompts are the harness documents: their digests pin what the models were told.
+    let replay_document = match control {
+        Control::Grounded => &harness.document,
+        Control::PlanOnly => &harness.plan_only_document,
     };
-    provenance.prompt_digests = vec![digest(&plan_system_prompt(style)), digest(&replay_prompt)];
+    provenance.prompt_digests = vec![digest(&harness.document), digest(replay_document)];
     let trajectory = scrub_trajectory(&outcome.trajectory, scrubber)?;
     let final_output = outcome.final_message.as_deref().map(|m| scrubber.scrub(m));
     let experience = Experience::new(task, trajectory, final_output, provenance)?;

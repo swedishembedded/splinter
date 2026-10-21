@@ -39,7 +39,7 @@ fn each_split_holds_only_its_commits_and_every_attempt_has_a_trace() {
     let state = work.path().join("state");
     let ctx = open_context(&state).unwrap();
     let mut config = default_config(&source, &state);
-    config.styles = vec![splinter_repo_replay::plan_prompt::PlanStyle::Terse];
+    config.styles = vec![splinter_repo_replay::style::PlanStyle::Terse];
     let report = run_blocking(
         &ctx,
         &scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths),
@@ -97,7 +97,7 @@ fn a_split_with_no_passed_attempt_has_no_records_but_still_has_its_traces() {
     let state = work.path().join("state");
     let ctx = open_context(&state).unwrap();
     let mut config = default_config(&source, &state);
-    config.styles = vec![splinter_repo_replay::plan_prompt::PlanStyle::Terse];
+    config.styles = vec![splinter_repo_replay::style::PlanStyle::Terse];
     run_blocking(
         &ctx,
         &scripted_models(Behaviour::Junk, Specificity::NamesFiles, &truths),

@@ -26,7 +26,6 @@ use crate::gate::{evaluate, GateConfig, GateInput, Verdict};
 use crate::generated::is_generated_path;
 use crate::git::{Change, Git};
 use crate::supervise::{check_message, MessageContext};
-use crate::supervisor_prompt::{AGENT_CHANGES_HEADING, DIFFERENCES_HEADING};
 use crate::trace::Trace;
 use crate::tree::{compare, read_tree, Residual};
 
@@ -35,6 +34,11 @@ pub const CORRECTABLE: &[&str] = &["tree_mismatch", "junk", "missing_edit"];
 
 /// Longest agent diff shown to the supervisor, in characters.
 pub const MAX_AGENT_CHANGES: usize = 24_000;
+
+/// Heading of the agent's changes in what `check` prints for the supervisor.
+pub const AGENT_CHANGES_HEADING: &str = "What the engineer changed:\n";
+/// Heading of the differences in what `check` prints for the supervisor.
+pub const DIFFERENCES_HEADING: &str = "Where the engineer's result differs from it:\n";
 
 const FILE: &str = "case.json";
 const TARGET: &str = "tree";
