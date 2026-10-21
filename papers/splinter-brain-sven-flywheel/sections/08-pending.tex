@@ -50,7 +50,10 @@ bounded running time, no part of the pipeline tuned on it), with the cross cells
 learning a repository from learning the protocol. The headline counts as reproduced only if
 both repositories pass the primary test independently.\cl{PR13}
 \item[CE8, 27B self-improvement.] A LoRA adapter on the bf16 base of the 27B model trained on its
-own verified, exposure-clean trajectories of the development sets, held to a memorisation guard
+own verified, exposure-clean trajectories of the development sets (rank 16, alpha 32, learning
+rate $5\times10^{-5}$, two records per step, $\lceil 2R/2\rceil$ steps for the $R$ records the trainer
+reports, a held-out monitoring share of 0.2 by whole family read eight times over the budget,
+stopping after two evaluations without improvement), held to a memorisation guard
 (a run whose final training loss is below half its first-step value while its monitoring loss is
 above its minimum is not evaluated), served through the adapter bank of the 8-bit teacher server,
 and compared with the 27B base on the qualification halves under the solve protocol of
@@ -58,7 +61,7 @@ and compared with the 27B base on the qualification halves under the solve proto
 with a 1024-token thinking budget. A shuffled-instruction control, CE8-S, keeps format, tools and
 token count and breaks the pairing of trajectory and task; learning is claimed only if CE8 beats
 both the base and CE8-S on the primary test. CE8 is a separate comparison and does not enter the
-headline.\cl{PR16,PR34,PR37,PR39}
+headline.\cl{PR16,PR34,PR36,PR37,PR38,PR39}
 \end{description}
 
 \paragraph{Changes that bear on the evidence.} Four of the dated changes of
