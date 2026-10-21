@@ -17,7 +17,8 @@ pub enum Control {
     /// The agent is shown the masked change (`harness/replay.yaml`).
     #[default]
     Grounded,
-    /// The agent gets the plan and the repository only (`harness/replay-plan-only.yaml`).
+    /// The agent gets the plan and the repository only (`--control plan-only`, the `control`
+    /// input of `harness/replay.yaml`).
     PlanOnly,
 }
 
