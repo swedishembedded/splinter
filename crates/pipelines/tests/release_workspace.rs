@@ -319,7 +319,15 @@ fn a_candidate_that_loses_or_ties_is_not_released_and_the_run_says_why() {
     )
     .unwrap();
     assert_eq!(tied.release, None);
-    let improvement = tied.gate.improvement.measured.as_ref().unwrap();
+    // An improvement check that measured nothing says why in its reason (no
+    // task graded for both models, usually an attempt the environment could not
+    // carry out): the failure must name it.
+    let improvement = tied.gate.improvement.measured.as_ref().unwrap_or_else(|| {
+        panic!(
+            "the tied candidate's improvement was not measured: {:#?}",
+            tied.gate.improvement
+        )
+    });
     assert_eq!(improvement.sign_test.discordant, 0);
     assert!(
         tied.gate
