@@ -365,6 +365,40 @@
    "splinter": "3330c206c",
    "brain": "77e510fbf",
    "command": "splinter train blake3:75b4734d... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 33 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 5 --patience 2 --keep-evaluations (runs/ce8/train.sh; log runs/ce8/logs/train-a25-r4.json)"
+  },
+  "ce8t-r1-train": {
+   "log": "ce8/train-ce8t-r1.log",
+   "sha256": "cf77b4bb263b9a69de29eedf6e7d44a504eff532e6830fb39fdd6bc63e6922e2",
+   "metric_prefix": "ce8.t1",
+   "metrics": {
+    "records": 113,
+    "steps_run": 57,
+    "kept_step": 48,
+    "kept_monitor": "0.1738",
+    "kept_train": "0.1331",
+    "base_monitor": "0.1799",
+    "verdict": "not memorised"
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter train blake3:8da1371b... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 57 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 8 --patience 2 --keep-evaluations (runs/ce8/ce8t.sh)"
+  },
+  "ce8ts-r1-train": {
+   "log": "ce8/train-ce8ts-r1.log",
+   "sha256": "d50448a6caca9aadd5c9f614ba920f6bc5a36015e05e8f226700ce5f47c10cf9",
+   "metric_prefix": "ce8.ts1",
+   "metrics": {
+    "records": 113,
+    "steps_run": 57,
+    "kept_step": 57,
+    "kept_monitor": "0.2315",
+    "kept_train": "0.1616",
+    "base_monitor": "0.2635",
+    "verdict": "not memorised"
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter train blake3:7e0aa54f... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 57 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 8 --patience 2 --keep-evaluations (runs/ce8/ce8t.sh)"
   }
  }
 }

@@ -114,6 +114,14 @@ def ce8_train_metrics(text):
     steps = [(int(a), b) for a, b in re.findall(r"^step\s+(\d+)\s+loss ([\d.]+)", text, re.M)]
     evals = [(int(a), b) for a, b in re.findall(r"^step\s+(\d+)\s+lr \S+\s+train [\d.]+\s+eval ([\d.]+)", text, re.M)]
     base = re.search(r'"base_score": \{\s*"loss": ([\d.]+)', text).group(1)
+    record = json.loads(text[text.index("{"):])
+    if "memorisation" in record:
+        # a run judged by the training record's own verdict (the guard on the kept evaluation)
+        m = record["memorisation"]
+        return {"records": record["records"], "steps_run": steps[-1][0],
+                "kept_step": m["kept_step"], "kept_monitor": f"{m['monitor_loss']:.4f}",
+                "kept_train": f"{m['train_loss']:.4f}", "base_monitor": f"{m['base_loss']:.4f}",
+                "verdict": m["verdict"].replace("_", " ")}
     best = min(evals, key=lambda e: float(e[1]))
     memorised = float(steps[-1][1]) < float(steps[0][1]) / 2 and float(evals[-1][1]) > float(best[1])
     return {"steps_run": steps[-1][0], "loss_first": steps[0][1], "loss_last": steps[-1][1],
