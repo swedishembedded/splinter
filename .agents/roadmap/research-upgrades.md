@@ -121,3 +121,19 @@ missing: test strength, canaries, coverage, power.
 - [ ] RS-P14 (S, U6) Run the student-recipe sweep: rank 16, 64, 256; learning rate from the
   ten-times-full-fine-tune rule; bf16 against 4-bit base; three seeds; record the decision in
   the experiment file defaults. Uses RS-B2.
+- [ ] RS-P15 (M) A rescue arm of GEN1 data construction, from the Terminal-RSI comparison (2026-10-21).
+  - A procedural runbook made only from other tasks' verified traces (never from the target's own reference or diff,
+    which on a seeded-fault task is the answer itself), given to the teacher for the tasks it failed, then a fresh native
+    execution graded by the protected verifier; the runbook is stripped from the record and only generated tokens are
+    trained.
+  - Rescue only the residue of a teacher pass under the solve protocol (recommended sampling, bounded thinking, the
+    coding-agent prompt): the audit predicts that pass converts most no-edit and tool-cap failures by itself.
+  - An ablation of data construction against the same budget without rescue, stated in the paper before any generation;
+    acceptance by the generations rule (two of three paired replicates on verified held-out gain per GPU hour).
+- [ ] RS-P16 (S) Train-vs-serve log-probability gap, a precondition of any on-policy work.
+  - Teacher-forced log-probabilities of the same recorded trajectories from the in-process trainer and from the served
+    model on the same weights (Q8_0 GGUF vs the bf16 base, and an adapter in the bank vs in process), at the same
+    positions: mean and max |dlogprob| and top-1 agreement, cold prefill vs prefix-resumed (the resume drift found in
+    lease 8 is a lower bound to beat).
+  - Acceptance: the gap is stated per configuration; an RL arm is not started while the gap exceeds a bound fixed in
+    advance from these numbers.
