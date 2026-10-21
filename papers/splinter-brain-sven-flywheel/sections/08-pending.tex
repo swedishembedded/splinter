@@ -62,7 +62,11 @@ with a 1024-token thinking budget and held to a guard on its kept checkpoint ins
 memorised, and not evaluated, if the kept evaluation's monitoring loss is not below the base's on the same
 records, or if its training loss (the mean over that evaluation's window) is below half its monitoring loss. A shuffled-instruction control, CE8-S, keeps format, tools and
 token count and breaks the pairing of trajectory and task; learning is claimed only if CE8 beats
-both the base and CE8-S on the primary test. CE8 is a separate comparison and does not enter the
+both the base and CE8-S on the primary test. CE8-T is trained on one pass over its records
+($\lceil R/2\rceil$ steps for the $R$ records the trainer reports, read from a one-step sizing run of the same
+recipe) and has its own shuffled control, CE8-T-S, built from the CE8-T experiences with a drawn seed and
+trained on the same steps and evaluations; learning is claimed for CE8-T only if it beats both the base and
+CE8-T-S. CE8 is a separate comparison and does not enter the
 headline.\cl{PR16,PR34,PR36,PR37,PR38,PR39}
 \end{description}
 
