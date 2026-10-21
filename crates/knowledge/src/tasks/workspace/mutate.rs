@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use splinter_core::clock::Clock;
 use splinter_core::digest::{canonical_json, Digest};
-use splinter_core::experience::{Privileged, PrivilegedKind};
+use splinter_core::experience::Privileged;
 use splinter_core::selfcontained::check_self_contained;
 use splinter_eval::verifiers::mutation::{mutants, Mutant};
 use splinter_eval::verifiers::test_report::{TestExpectation, Verdict};
@@ -55,6 +55,9 @@ use super::{
     TIMEOUT_EXIT, VARIANTS_PER_TASK, VARIANT_WINDOW_LINES,
 };
 use crate::tasks::dedup::Seen;
+use withheld::Withheld;
+
+mod withheld;
 
 /// The privileged kind of the hidden tests' text, as the self-containment
 /// rule reads it.
@@ -609,93 +612,6 @@ fn protected(base: &Parent<'_>, hidden: &BTreeSet<String>) -> Vec<String> {
     files.into_iter().collect()
 }
 
-/// The tests the solver's tree lacks.
-struct Withheld {
-    /// Test files taken out whole: every test in them is hidden.
-    files: BTreeSet<String>,
-    /// Test files that stay in the tree without the failing cases (the ids)
-    /// named here, because tests that stay import them.
-    cases: BTreeMap<String, BTreeSet<String>>,
-}
-
-impl Withheld {
-    /// Every test file that kills the mutant, whole.
-    fn files(killed: &Killed) -> Self {
-        Self {
-            files: killed.files.clone(),
-            cases: BTreeMap::new(),
-        }
-    }
-
-    /// Only the failing cases of the files that kill the mutant.
-    fn cases(base: &Parent<'_>, killed: &Killed) -> Self {
-        let mut cases: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-        for id in &killed.failing {
-            if let Some(file) = base.locate(id) {
-                cases.entry(file).or_default().insert(id.clone());
-            }
-        }
-        Self {
-            files: BTreeSet::new(),
-            cases,
-        }
-    }
-
-    /// Whether the solver's tree lacks the test `id`.
-    fn hides(&self, base: &Parent<'_>, id: &str) -> bool {
-        base.locate(id).is_some_and(|file| {
-            self.files.contains(&file) || self.cases.get(&file).is_some_and(|ids| ids.contains(id))
-        })
-    }
-
-    /// The text of the tests the solver's tree lacks: the files of `hidden`
-    /// whole, and of the others the lines that `solver` no longer has.
-    fn text(&self, hidden: &Path, solver: &Path, files: &BTreeSet<String>) -> Privileged {
-        let read = |tree: &Path, file: &String| {
-            std::fs::read(tree.join(file))
-                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-                .ok()
-        };
-        let content: String = files
-            .iter()
-            .filter_map(|file| {
-                let original = read(hidden, file)?;
-                match read(solver, file) {
-                    Some(kept) => Some(lines_missing(&original, &kept)),
-                    None => Some(original),
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        Privileged {
-            kind: PrivilegedKind::Other(HIDDEN_TEST.into()),
-            content,
-            span: None,
-        }
-    }
-}
-
-/// The lines of `original` that `kept` (a copy of it with some definitions
-/// removed) has no occurrence left for, in order: what a reader of `kept`
-/// cannot see.
-fn lines_missing(original: &str, kept: &str) -> String {
-    let mut left: BTreeMap<&str, usize> = BTreeMap::new();
-    for line in kept.lines() {
-        *left.entry(line).or_default() += 1;
-    }
-    original
-        .lines()
-        .filter(|line| match left.get_mut(line) {
-            Some(count) if *count > 0 => {
-                *count -= 1;
-                false
-            }
-            _ => true,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// Records an admitted request for the near-duplicate rule: what it says is
 /// broken, not the sentence and test command every request shares.
 fn remember(seen: &mut Seen, request: &str) {
@@ -757,6 +673,7 @@ fn write(path: &Path, text: &str) -> Result<(), WorkspaceError> {
 mod tests {
     use super::*;
     use crate::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
+    use splinter_core::experience::PrivilegedKind;
 
     #[test]
     fn a_second_fault_is_not_a_near_duplicate_of_the_first_because_of_a_long_test_command() {
