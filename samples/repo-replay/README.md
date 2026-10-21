@@ -87,8 +87,11 @@ repo-replay regate REPO --state DIR [--write]   judge the passed attempts again 
             model; report only unless --write (new ledger line + failing verdict; try it on a copy first)
 repo-replay dataset --state DIR [--serving-prompt-file FILE] [--max-block TOKENS]
             [--min-corrections N] [--max-corrections N]   0 only is first_try, 1 and more corrected
-            [--splits OUT [--train-percent 80 --eval-percent 10]]   temporal train/eval/test datasets,
-                                          splits.json (boundary commits) and one trace file per attempt
+            [--tokenizer-dir MODEL_DIR]   count record lengths (and --max-block) with that model's tokenizer
+            [--splits OUT [--train-percent 80 --eval-percent 10] [--drop-overlaps]]
+                                          temporal train/eval/test datasets, splits.json (boundary
+                                          commits, split digest), dataset-manifest.json and one trace
+                                          file per attempt
 ```
 
 `--control plan-only` replays the same commits without the grounding diff (the plan and the repository
@@ -125,8 +128,7 @@ read the documents; the system prompts and user turns the models receive are the
 The serving prompt of the dataset is splinter's own coding-agent prompt (`splinter_sdk::vocabulary::prompt`), not a replay prompt.
 
 The gate `check` is told how the agent's last turn ended (`--stopped`), so a correction is earned only
-by a turn that concluded. The sample needs sven at or after 3e1f6b4d; Cargo.lock
-still pins the published revision, so build it with `make deps/local`.
+by a turn that concluded. The sample needs sven at or after 3e1f6b4d, which Cargo.lock pins.
 
 ## What the audit proves
 
@@ -139,6 +141,29 @@ number or speak of the diff); a correction repairs an attempt that left a file o
 trains only on the fix; a plan-only run is flagged and a state refuses a second control; the same history gives the
 same verdicts; the source is byte-for-byte untouched; every record opens with the serving prompt,
 holds no part of the grounding prompt, and holds neither the author nor the trailer.
+
+## Suitable for training
+
+The dataset this sample builds is meant to be trained on; training and evaluating an adapter on it is
+a later step and is not part of this sample. What makes the data suitable, and where it is checked:
+
+| criterion | checked by |
+|---|---|
+| every record's tree is exactly the commit's (the gate compares trees) | the gate, per attempt; `audit` |
+| no record holds the grounding prompt or any part of the change the agent was not shown | `audit` searches every record |
+| no author, address or trailer, and no secret, in any record; a commit whose diff holds a secret is skipped | the scrubber; `audit`; the manifest counts what was removed |
+| every record opens with the serving prompt | `audit`; the manifest's trainer preflight |
+| train, eval and test are a cut by time over the whole range; both plan styles of a commit are in one split | splinter's `temporal_bands` (verified when built), `split_digest` in `splits.json` |
+| no record of an earlier split repeats a later one's target change (a change and its revert, a copy) | `content_overlaps` over the changed lines; the build fails with the pairs unless `--drop-overlaps` leaves the training-side record out |
+| brain trains the dataset, by the supervised regime, and its records fit the block | `dataset-manifest.json`: `trainable`, the examples, token lengths counted with `--tokenizer-dir`'s tokenizer against `--max-block`, what was left out by reason |
+
+`dataset-manifest.json` (beside `splits.json`) states: the source name and revision range, the
+splinter, sven and brain revisions and the binary's digest, the digests of the harness documents,
+the model, seed and sampling; records per split by type (`first_try`, `corrected`) and plan style;
+token lengths (minimum, median, 90th percentile, maximum, and which counter measured them); the
+commits skipped and the attempts that failed, by reason; the supervisor messages refused; and the
+scrub totals (trailers, people, secrets) as counts. It is computed from the ledger and the stored
+attempts, with no model and no device.
 
 ## Limits
 
