@@ -176,8 +176,14 @@ attempts, with no model and no device.
   agent understood the change: a plan that names the file and a diff small enough to copy make the
   task easy, which the bias report shows by size and style.
 * Project checks are recorded, not gated, and run only when asked for.
-* The shell is not a sandbox: the gate refuses attempts that name paths outside the tree, it does
-  not stop them.
+* The agent's shell is the sandbox's (Landlock on the process sandbox): it sees the attempt tree and
+  its scratch directory (`$HOME`, `$TMPDIR`), so the source repository, the mirror and the case
+  directory cannot be read from it, and the gate still refuses attempts that name such paths. What it
+  changes for a run: `git` works inside the tree, `/tmp` and the cargo registry are not readable
+  from the agent's shell (the project checks the host runs are not affected), and the gate commands
+  run on the host, so the case directory is readable by them only. The sandbox needs a kernel with
+  Landlock; without it the shell refuses to run. The file tools (read, edit, search) resolve inside
+  the tree as before.
 * Generated paths are excluded, not regenerated.
 
 ## Results
