@@ -27,7 +27,7 @@ use splinter_repo_replay::pipeline::{Models, RunConfig};
 use splinter_repo_replay::scripted::{Behaviour, Specificity};
 use splinter_sdk::agent::solve::Model;
 use splinter_sdk::agent::sven::model::{
-    CompletionRequest, MessageContent, ModelProvider, ResponseStream, Role,
+    CompletionRequest, MessageContent, ModelProvider, ResponseEvent, ResponseStream, Role,
 };
 
 /// A provider that notes the system message and the first user message of
@@ -178,4 +178,93 @@ fn the_supervisor_is_asked_what_the_rust_path_asks_it_and_the_agent_is_told_the_
     );
     assert_eq!(rust_supervisor, document_supervisor, "supervisor prompts");
     assert_eq!(rust_agent.len(), document_agent.len(), "agent requests");
+}
+
+/// A planner that writes a plan too short to be one until it has been refused
+/// (`always`: never writes a good one).
+struct StubbornPlanner {
+    inner: Arc<dyn ModelProvider>,
+    always: bool,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for StubbornPlanner {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn model_name(&self) -> &str {
+        self.inner.model_name()
+    }
+
+    async fn complete(&self, request: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let refused_before = request
+            .messages
+            .iter()
+            .filter(|m| m.role == Role::User)
+            .count()
+            > 1;
+        if self.always || !refused_before {
+            return Ok(Box::pin(futures::stream::iter(vec![
+                Ok(ResponseEvent::TextDelta("Do it.".into())),
+                Ok(ResponseEvent::Done),
+            ])));
+        }
+        self.inner.complete(request).await
+    }
+}
+
+/// The outcome and classes of every attempt of the fixture history under a planner that refuses first.
+fn under_a_stubborn_planner(harness: bool, always: bool) -> Vec<(String, Vec<String>)> {
+    let work = tempfile::tempdir().unwrap();
+    let source = work.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    fixture::build(&source).unwrap();
+    let truths = history_diffs(&source).unwrap();
+    let state = work.path().join("state");
+    let ctx = open_context(&state).unwrap();
+    let scripted = scripted_models(Behaviour::Honest, Specificity::NamesFiles, &truths);
+    let models = Models {
+        planner: Model::new(
+            Arc::new(StubbornPlanner {
+                inner: Arc::clone(&scripted.planner.provider),
+                always,
+            }),
+            "scripted/planner",
+        ),
+        ..scripted
+    };
+    let config = RunConfig {
+        harness: harness.then(|| HarnessConfig {
+            document: DEFAULT_DOCUMENT.to_string(),
+            plan_only_document: DEFAULT_PLAN_ONLY_DOCUMENT.to_string(),
+            check_bin: env!("CARGO_BIN_EXE_repo-replay").into(),
+            decoding: Decoding {
+                temperature: 0.7,
+                top_p: 0.8,
+                top_k: 20,
+                seed: 1, // seed: the scripted models ignore it
+                thinking: false,
+                thinking_budget: None,
+            },
+        }),
+        ..default_config(&source, &state)
+    };
+    let report = run_blocking(&ctx, &models, &config).unwrap();
+    report
+        .entries
+        .into_iter()
+        .filter(|e| e.outcome != splinter_repo_replay::ledger::Outcome::Skipped)
+        .map(|e| (format!("{:?}", e.outcome), e.classes))
+        .collect()
+}
+
+#[test]
+fn a_refused_plan_is_written_again_and_a_plan_refused_twice_ends_the_attempt_as_on_the_rust_path() {
+    for always in [false, true] {
+        let rust = under_a_stubborn_planner(false, always);
+        let document = under_a_stubborn_planner(true, always);
+        assert!(!rust.is_empty());
+        assert_eq!(rust, document, "always refusing: {always}");
+    }
 }

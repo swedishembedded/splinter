@@ -44,6 +44,11 @@ pub const DEFAULT_PLAN_ONLY_DOCUMENT: &str = include_str!("../harness/replay-pla
 /// Seconds to wait for a first response when the caller names no limit
 /// (the document needs a number; a local model is silent through its prefill).
 const DEFAULT_FIRST_RESPONSE_SECS: u64 = 600;
+/// Runs of a gate one correction round can cost: the check, and the message gate
+/// twice (the first message and its rewrite).
+const GATE_CALLS_PER_CORRECTION: usize = 3;
+/// Runs of the plan gate: the plan and its rewrites (at most 8, the document's bound).
+const PLAN_GATE_CALLS: usize = 9;
 /// Tokens one reply may take when the caller names no limit: sven's own cap
 /// (4096) is spent entirely on reasoning by a thinking model.
 const DEFAULT_MAX_OUTPUT_TOKENS: u64 = 16_384;
@@ -233,6 +238,7 @@ pub async fn write_plan(
         ("min_line_words", json!(check.min_line_tokens)),
         ("plan_retries", json!(tries.saturating_sub(1))),
         ("masked_diff", json!("")),
+        ("calls_limit", json!(PLAN_GATE_CALLS)),
     ] {
         inputs.insert(key.into(), value);
     }
@@ -296,7 +302,13 @@ pub async fn work(config: &HarnessConfig, setup: WorkSetup<'_>) -> Result<Worked
         ("calls", json!(setup.calls)),
         (
             "calls_limit",
-            json!(setup.calls + setup.corrections * setup.per_correction),
+            // The gates are tool calls of the run too: the first check, and a check and up
+            // to two vetting runs of the supervisor's message per correction.
+            json!(
+                setup.calls
+                    + setup.corrections * (setup.per_correction + GATE_CALLS_PER_CORRECTION)
+                    + 1
+            ),
         ),
         ("per_correction", json!(setup.per_correction)),
         ("corrections", json!(setup.corrections)),
