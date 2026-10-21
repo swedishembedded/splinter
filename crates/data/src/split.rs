@@ -22,8 +22,17 @@
 //!   (a seeded share of them validate), later units test. A group with
 //!   members on both sides is left out and counted, because keeping it would
 //!   put one group in two parts.
+//! - [`temporal_bands`]: the same cut in three bands by position: the
+//!   oldest train, the next validate, the newest test; every group is in one
+//!   band.
 //! - [`leave_one_source_out`]: one whole source is the test; no other unit
 //!   shares a group with it.
+//!
+//! Records that share no group can still share content (a change and its
+//! revert, a cherry-pick, a copy): [`content_overlaps`] finds such pairs
+//! across parts from the features the caller extracts, and
+//! [`DataSplit::verify_no_overlap`] refuses a split that has any until
+//! [`DataSplit::without_overlaps`] leaves them out.
 //!
 //! The gates fail with counts, never with the identities involved:
 //! [`verify_disjoint`] (a group in more than one part), the checks a split of
@@ -93,6 +102,14 @@ pub enum SplitKind {
         /// The calendar time of the cutoff.
         cutoff: f64,
     },
+    /// Training at or before `train_until`, validation after it up to
+    /// `validation_until`, testing after that.
+    TemporalBands {
+        /// The last calendar time of training.
+        train_until: f64,
+        /// The last calendar time of validation.
+        validation_until: f64,
+    },
     /// One source held out whole.
     LeaveOneSourceOut {
         /// The held-out source.
@@ -146,6 +163,12 @@ pub enum LeakageError {
     WrongSideOfCutoff {
         /// How many units are on the wrong side.
         units: usize,
+    },
+    /// Records of different parts repeat each other's content.
+    #[error("{pairs} pair(s) of records in different parts duplicate or nearly duplicate each other's content")]
+    ContentOverlap {
+        /// How many pairs.
+        pairs: usize,
     },
     /// Records are written to a part their split does not assign them to.
     #[error("{units} record(s) are written to a part their split does not assign them to")]
@@ -330,6 +353,16 @@ impl DataSplit {
         };
         match &self.kind {
             SplitKind::ParticipantExclusive { .. } => {}
+            SplitKind::TemporalBands {
+                train_until,
+                validation_until,
+            } => {
+                let units =
+                    wrong(&|part, m| band_of(m.at, *train_until, *validation_until) != part);
+                if units > 0 {
+                    return Err(LeakageError::WrongSideOfCutoff { units });
+                }
+            }
             SplitKind::LeaveOneSourceOut { held_out } => {
                 let units = wrong(&|part, m| (part == Part::Test) != (&m.source == held_out));
                 if units > 0 {
@@ -344,6 +377,38 @@ impl DataSplit {
             }
         }
         Ok(())
+    }
+
+    /// Refuses a split in which records of different parts overlap in
+    /// content under `rule`; the pairs are [`content_overlaps`].
+    pub fn verify_no_overlap(
+        &self,
+        features: &BTreeMap<String, BTreeSet<String>>,
+        rule: &OverlapRule,
+    ) -> Result<(), LeakageError> {
+        match content_overlaps(self, features, rule).len() {
+            0 => Ok(()),
+            pairs => Err(LeakageError::ContentOverlap { pairs }),
+        }
+    }
+
+    /// This split without the record of each of `overlaps` that is nearer the
+    /// training side (the held-out record is the one that stays), counted
+    /// under `content_overlap`.
+    #[must_use]
+    pub fn without_overlaps(&self, overlaps: &[Overlap]) -> DataSplit {
+        let dropped: HashSet<&str> = overlaps.iter().map(|o| o.a.as_str()).collect();
+        let mut split = self.clone();
+        for ids in split.parts.values_mut() {
+            ids.retain(|id| !dropped.contains(id.as_str()));
+        }
+        if !dropped.is_empty() {
+            *split
+                .excluded
+                .entry("content_overlap".to_owned())
+                .or_default() += dropped.len();
+        }
+        split
     }
 
     /// Certifies that the statistics `ledger` describes were fitted on
@@ -544,6 +609,174 @@ pub fn temporal_split(
         },
         members,
     )
+}
+
+/// The band a unit dated `at` is in.
+fn band_of(at: f64, train_until: f64, validation_until: f64) -> Part {
+    if at <= train_until {
+        Part::Train
+    } else if at <= validation_until {
+        Part::Validation
+    } else {
+        Part::Test
+    }
+}
+
+/// A temporal split in three bands: units dated at or before `train_until`
+/// train, those after it and at or before `validation_until` validate, later
+/// ones test. A group with members in more than one band is left out and
+/// counted, because keeping it would put one group in two parts. A band may
+/// be empty.
+///
+/// # Errors
+///
+/// The boundaries are not finite or not in order, or the split fails its own
+/// verification.
+pub fn temporal_bands(
+    members: &[Member],
+    train_until: f64,
+    validation_until: f64,
+    seed: u64,
+    dataset: &Digest,
+) -> Result<DataSplit, SplitError> {
+    if !train_until.is_finite() || !validation_until.is_finite() || train_until >= validation_until
+    {
+        return Err(SplitError::Spec(format!(
+            "the boundaries {train_until} and {validation_until} must be finite and in order"
+        )));
+    }
+    let band = |m: &Member| band_of(m.at, train_until, validation_until);
+    let mut bands: HashMap<&str, HashSet<Part>> = HashMap::new();
+    for m in members {
+        bands
+            .entry(m.unit.group.as_str())
+            .or_default()
+            .insert(band(m));
+    }
+    let straddling: HashSet<&str> = bands
+        .into_iter()
+        .filter(|(_, parts)| parts.len() > 1)
+        .map(|(group, _)| group)
+        .collect();
+    let mut parts: BTreeMap<Part, Vec<String>> =
+        Part::ALL.iter().map(|p| (*p, Vec::new())).collect();
+    let mut left_out = 0;
+    for m in members {
+        if straddling.contains(m.unit.group.as_str()) {
+            left_out += 1;
+        } else if let Some(ids) = parts.get_mut(&band(m)) {
+            ids.push(m.unit.id.clone());
+        }
+    }
+    for ids in parts.values_mut() {
+        ids.sort();
+    }
+    let excluded = BTreeMap::from([("straddles_cutoff".to_owned(), left_out)])
+        .into_iter()
+        .filter(|(_, n)| *n > 0)
+        .collect();
+    verified(
+        DataSplit {
+            kind: SplitKind::TemporalBands {
+                train_until,
+                validation_until,
+            },
+            seed,
+            dataset: dataset.clone(),
+            parts,
+            excluded,
+        },
+        members,
+    )
+}
+
+/// How alike two records of different parts must be to count as repeating
+/// each other.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OverlapRule {
+    /// The Jaccard similarity of two records' features at or above which they
+    /// overlap: 1.0 is an exact duplicate.
+    pub min_similarity: f64,
+    /// A record with fewer features than this is too small to be compared
+    /// (a handful of common lines would match anything).
+    pub min_features: usize,
+}
+
+/// Two records of different parts whose content overlaps.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Overlap {
+    /// The record of the part nearer the training side (train, then
+    /// validation).
+    pub a: String,
+    /// The record of the part further from it.
+    pub b: String,
+    /// The part of `a`.
+    pub part_a: Part,
+    /// The part of `b`.
+    pub part_b: Part,
+    /// Their Jaccard similarity.
+    pub similarity: f64,
+}
+
+/// The pairs of records in different parts of `split` whose `features` (what
+/// the caller extracts from the record's content, normalised so that a change
+/// and its revert or copy share features) are at least as alike as `rule`
+/// says. A record with no entry in `features` is not compared. The result is
+/// ordered by record ids.
+#[must_use]
+pub fn content_overlaps(
+    split: &DataSplit,
+    features: &BTreeMap<String, BTreeSet<String>>,
+    rule: &OverlapRule,
+) -> Vec<Overlap> {
+    let part_of = split.part_of();
+    let comparable: Vec<(&str, &BTreeSet<String>)> = features
+        .iter()
+        .filter(|(id, set)| part_of.contains_key(id.as_str()) && set.len() >= rule.min_features)
+        .map(|(id, set)| (id.as_str(), set))
+        .collect();
+    // Only records that share a feature can be alike: index them by it.
+    let mut by_feature: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (at, (_, set)) in comparable.iter().enumerate() {
+        for feature in *set {
+            by_feature.entry(feature.as_str()).or_default().push(at);
+        }
+    }
+    let mut shared: BTreeMap<(usize, usize), usize> = BTreeMap::new();
+    for holders in by_feature.values() {
+        for (i, a) in holders.iter().enumerate() {
+            for b in &holders[i + 1..] {
+                *shared.entry((*a, *b)).or_default() += 1;
+            }
+        }
+    }
+    let mut found = Vec::new();
+    for ((i, j), common) in shared {
+        let (id_i, set_i) = comparable[i];
+        let (id_j, set_j) = comparable[j];
+        let (part_i, part_j) = (part_of[id_i], part_of[id_j]);
+        if part_i == part_j {
+            continue;
+        }
+        let similarity = common as f64 / (set_i.len() + set_j.len() - common) as f64;
+        if similarity < rule.min_similarity {
+            continue;
+        }
+        let ((a, part_a), (b, part_b)) = if part_i < part_j {
+            ((id_i, part_i), (id_j, part_j))
+        } else {
+            ((id_j, part_j), (id_i, part_i))
+        };
+        found.push(Overlap {
+            a: a.to_owned(),
+            b: b.to_owned(),
+            part_a,
+            part_b,
+            similarity,
+        });
+    }
+    found.sort_by(|x, y| (&x.a, &x.b).cmp(&(&y.a, &y.b)));
+    found
 }
 
 /// The external split: every member of `held_out` is the test, the others
