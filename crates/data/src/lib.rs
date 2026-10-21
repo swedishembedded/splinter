@@ -56,7 +56,9 @@
 //! pinned by digest before anything trains. [`split`] adds the temporal and
 //! leave-one-source-out splits and the leakage gates a split passes: no group
 //! in two parts, a held-out source held out whole, nothing after a cutoff in
-//! training, nothing fitted outside the training units. [`timeline_dataset`]
+//! training, nothing fitted outside the training units; [`overlap`] finds
+//! records of different parts that repeat each other's content.
+//! [`timeline_dataset`]
 //! projects longitudinal episodes (kept by `splinter-store`) into
 //! participant-safe `timeline-v1` records at a prediction point and writes
 //! them, and the parts of a split, with manifests.
@@ -68,6 +70,7 @@ mod dataset;
 pub mod frozen;
 pub mod holdout;
 mod markers;
+pub mod overlap;
 pub mod partition;
 mod render;
 mod replay;
