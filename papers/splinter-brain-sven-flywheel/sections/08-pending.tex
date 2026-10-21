@@ -66,7 +66,16 @@ both the base and CE8-S on the primary test. CE8-T is trained on one pass over i
 ($\lceil R/2\rceil$ steps for the $R$ records the trainer reports, read from a one-step sizing run of the same
 recipe) and has its own shuffled control, CE8-T-S, built from the CE8-T experiences with a drawn seed and
 trained on the same steps and evaluations; learning is claimed for CE8-T only if it beats both the base and
-CE8-T-S. CE8 is a separate comparison and does not enter the
+CE8-T-S. Before any arm runs, the served adapter must pass G8 for the 27B, which compares the adapter as served
+with the adapter as trained by teacher-forced log-probabilities, because the 27B has no in-process agent path to
+compare verdicts on: on the held-out records of the CE8-T training, the per-token log-probabilities of the
+recorded assistant tokens are taken from the in-process trainer (bf16 base with the adapter) and from the
+evaluation server (Q8\_0 base with the adapter in its bank), and the same pair is taken for the base without
+the adapter. G8 passes when (i) the mean absolute log-probability difference between served and in-process with
+the adapter is at most 1.25 times that of the base, (ii) their top-1 token agreement with the adapter is at most
+2 points below the base's, and (iii) the served adapter gives the held-out records a higher mean log-probability
+than the served base. One brain build and one splinter binary serve every arm of the evaluation and are named in
+its record. CE8 is a separate comparison and does not enter the
 headline.\cl{PR16,PR34,PR36,PR37,PR38,PR39}
 \end{description}
 
