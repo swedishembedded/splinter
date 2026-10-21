@@ -83,13 +83,14 @@ pub struct Mutant {
 }
 
 /// Up to `max` mutants of `source`, distinct and all different from it.
-/// The operators take turns, each in source order, so a cap keeps a mix.
+/// The operators take turns, each in source order, so a cap keeps a mix. None
+/// changes a whole-line comment (`#` or `//`): no test can tell it.
 #[must_use]
 pub fn mutants(source: &str, max: usize) -> Vec<Mutant> {
     let mut per_operator = [
-        flip_comparisons(source),
-        off_by_one(source),
-        swap_booleans(source),
+        outside_comments(source, flip_comparisons(source)),
+        outside_comments(source, off_by_one(source)),
+        outside_comments(source, swap_booleans(source)),
         delete_lines(source),
     ]
     .map(Vec::into_iter);
@@ -126,6 +127,41 @@ fn mutant(
         line: source[..start].matches('\n').count() + 1,
         text: format!("{}{with}{}", &source[..start], &source[end..]),
     }
+}
+
+/// Whether `line` is a whole-line comment (`#` or `//`): the text no
+/// program reads, so a change in it can never be caught.
+fn is_comment_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with('#') || trimmed.starts_with("//")
+}
+
+/// The byte ranges of the whole-line comments of `source`, in order.
+fn comment_lines(source: &str) -> Vec<std::ops::Range<usize>> {
+    let mut start = 0;
+    let mut ranges = Vec::new();
+    for line in source.split_inclusive('\n') {
+        if is_comment_line(line) {
+            ranges.push(start..start + line.len());
+        }
+        start += line.len();
+    }
+    ranges
+}
+
+/// `mutants` without the ones made inside a whole-line comment.
+fn outside_comments(source: &str, mutants: Vec<Mutant>) -> Vec<Mutant> {
+    let comments = comment_lines(source);
+    let line_starts: Vec<usize> = std::iter::once(0)
+        .chain(source.match_indices('\n').map(|(at, _)| at + 1))
+        .collect();
+    mutants
+        .into_iter()
+        .filter(|m| {
+            let at = line_starts.get(m.line - 1).copied().unwrap_or(0);
+            !comments.iter().any(|range| range.contains(&at))
+        })
+        .collect()
 }
 
 fn is_word_byte(b: u8) -> bool {
@@ -247,8 +283,7 @@ fn delete_lines(source: &str) -> Vec<Mutant> {
     let mut start = 0;
     for line in source.split_inclusive('\n') {
         let content = line.trim_end_matches(['\n', '\r']);
-        let trimmed = content.trim();
-        if !trimmed.is_empty() && !trimmed.starts_with('#') && !trimmed.starts_with("//") {
+        if !content.trim().is_empty() && !is_comment_line(content) {
             out.push(mutant(
                 source,
                 MutationOperator::DeleteLine,

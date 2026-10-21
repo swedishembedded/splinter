@@ -147,3 +147,18 @@ fn the_verifier_grades_with_admitted_tests_only() {
     );
     assert_eq!(outcome, Outcome::Abstain, "no admitted oracle, no verdict");
 }
+
+#[test]
+fn a_comment_line_is_never_mutated_because_its_mutants_are_equivalent_by_construction() {
+    let source = "# retry 3 times if x < y is true\n// or 4 times when a == b\nlimit = 3  # code\nif limit < 4:\n    pass\n";
+    let changed_lines: Vec<usize> = mutants(source, 64)
+        .iter()
+        .filter(|m| m.operator != MutationOperator::DeleteLine)
+        .map(|m| m.line)
+        .collect();
+    assert!(!changed_lines.is_empty(), "the code lines are mutated");
+    assert!(
+        changed_lines.iter().all(|line| *line >= 3),
+        "only lines 3 and 4 are code: {changed_lines:?}"
+    );
+}
