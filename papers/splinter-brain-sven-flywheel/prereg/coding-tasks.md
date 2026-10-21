@@ -1168,6 +1168,31 @@ Its final training loss is below half its first-step value while its final monit
 
 The guard of A19.2 is applied to it as written. If it fires, CE8 is not evaluated, no further budget is tried, and the paper reports both runs. CE8-S (A24.1) is trained with exactly this run's steps and evaluations, and so is CE8-T (A22.3), with ceil(R/B) for its own R. The CE8-S run started under the 65-step budget was stopped by the integrator after its base load, before any step (`ce8/logs/stopped/`).
 
+### Amendment 26, 2026-10-21, 19:40 CEST: CE7 is admitted again with the corrected generator, the memory of each admission bounded
+
+Made before any sqlglot task of the admission below exists and before any sqlglot task has been solved. It changes how the A6 admission is run and nothing of its parameters, the partition rule or the primary test.
+
+**A26.1 Why.** A check of the generator on admission group 0 alone (lease 8, `runs/gen/ce7-readout.md`; a check, not an admission: its 44 tasks are not used) found two defects that change which faults are admitted:
+- mutants inside whole-line comments, which no test can catch, were counted as equivalent (17 of 63);
+- the unittest reader read a failed sub-case as a second, invented test, so 9 genuine kills were refused as broken builds.
+
+Both are fixed with tests (splinter 71593f2a8, e7bea6aee).
+
+The check also confirmed the earlier behaviour changes since A15:
+- per-case hiding of the failing cases in a test file the suite imports (1c6310e28);
+- a bound on each process's and the whole command's memory, with every descendant killed on timeout (d3f05e371, 859ee64bc).
+
+Five admitted tasks checked by hand were sound.
+
+**A26.2 The admission.** The ten parallel groups of A6.3, with the files, suite, mutants per file, test-output cap, process limit, exam seed and three reserved families per group of A6, run into a new state root `g-ce7c`. The build is splinter origin/main at or after e7bea6aee, named with its hash in the run record. Each command runs under `--workspace-memory-gib 12`, which bounds every process and the whole command at 12 GiB so that ten groups fit the job's memory beside a 27B server. A fault refused at the bound is counted as a limit, never admitted. The admissions of A6 and A15 (states `g-ce` and `g-ce7b`) are not used. As before, the count of admitted tasks is a measured outcome, and nothing is added or removed after the partition is made.
+
+**A26.3 Unchanged.** These are left as they are:
+- a fault whose failing test cannot be rendered as an actionable symptom is still refused whole (A15);
+- the output cap stays at 1 MiB;
+- a family is still a file.
+
+The report-only difficulty strata of A24.5 apply to CE7 with terciles over the qualification partition's tasks, computed from the task records before any arm runs.
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
