@@ -6,6 +6,7 @@
 
 use clap::Args;
 use splinter_sdk::learn::DEFAULT_REHEARSAL_SHARE;
+use splinter_sdk::measure::memorisation::MEMORISATION_GAP_RATIO;
 use splinter_sdk::model::train::BasePrecision;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{
@@ -34,6 +35,13 @@ fn monitor_share(text: &str) -> Result<f64, String> {
         Err(format!(
             "{text:?} is not a share in (0, {MAX_MONITOR_SHARE}]"
         ))
+    }
+}
+
+fn memorisation_ratio(text: &str) -> Result<f32, String> {
+    match text.parse::<f32>() {
+        Ok(ratio) if ratio.is_finite() && ratio > 0.0 => Ok(ratio),
+        _ => Err(format!("{text:?} is not a positive ratio")),
     }
 }
 
@@ -191,6 +199,13 @@ pub struct TrainArgs {
     /// How the training is watched.
     #[command(flatten)]
     pub monitoring: MonitoringArgs,
+    /// The training-loss to monitoring-loss ratio below which the kept
+    /// evaluation counts as memorised; reported only, the run is unchanged.
+    #[arg(long, value_name = "RATIO", value_parser = memorisation_ratio, help = format!(
+        "The ratio of training loss to monitoring loss at the kept evaluation below which the \
+         run is reported as memorised [default: {MEMORISATION_GAP_RATIO}]"
+    ))]
+    pub memorisation_ratio: Option<f32>,
 }
 
 /// `rehearse`.

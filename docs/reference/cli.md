@@ -1224,6 +1224,7 @@ Options:
 - `--patience <N>`: Evaluations without improvement before the training stops; 0 runs the whole budget (the best evaluation is carried either way) [default: 4]
 - `--monitor-share <SHARE>`: The share of the training families set aside as the monitoring records, in (0, 0.5]: whole families, never the held-out ones the gate and the exam decide on [default: 0.1]
 - `--keep-evaluations`: Keep the adapter of every evaluation with the candidate, so a step can be chosen on the dev suite (`select`) instead of the monitoring loss.
+- `--memorisation-ratio <RATIO>`: The ratio of training loss to monitoring loss at the kept evaluation below which the run is reported as memorised [default: 0.5]
 
 ### splinter rehearse
 

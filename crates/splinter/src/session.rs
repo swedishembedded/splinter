@@ -60,6 +60,7 @@ use crate::learn_output;
 use crate::output::{self, emit, shell_words};
 use crate::practice_request::practice_request;
 use crate::tasks_session;
+use crate::train_output::Trained;
 
 /// How an invocation ended; see the crate documentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -590,7 +591,7 @@ impl Session {
                 let candidate = record(ctx, "train", &request, |run| {
                     train_recorded(ctx, run, &request, self.splinter.trainer())
                 })?;
-                emit(json, &candidate);
+                emit(json, &Trained::new(candidate, args.memorisation_ratio));
             }
             Command::Rehearse(args) => {
                 let arguments =

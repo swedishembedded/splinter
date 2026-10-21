@@ -73,6 +73,7 @@ mod exposure_paths;
 pub mod frontier;
 pub mod gate;
 pub mod intervention;
+pub mod memorisation;
 pub mod metric_gate;
 pub mod overlap;
 pub mod paired;

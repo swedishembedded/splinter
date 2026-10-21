@@ -7,11 +7,52 @@
 
 use std::fmt::Write as _;
 
+use serde::Serialize;
+use splinter_sdk::measure::memorisation::{judge, Memorisation, MEMORISATION_GAP_RATIO};
 use splinter_sdk::rehearsal::Rehearsed;
+use splinter_sdk::runs::Recorded;
 use splinter_sdk::train::Candidate;
 use splinter_sdk::vocabulary::training::{Selection, TrainingCurve};
 
 use crate::output::Report;
+
+/// What `train` reports: the candidate and, beside its fields, the
+/// memorisation verdict of its curve (`memorisation`). The verdict is
+/// reported only; it never stops or alters the run.
+#[derive(Serialize)]
+pub struct Trained {
+    #[serde(flatten)]
+    candidate: Recorded<Candidate>,
+    memorisation: Memorisation,
+}
+
+impl Trained {
+    /// `candidate` judged at `ratio` (the default when `None`) on the kept
+    /// evaluation of its curve against the base score. A candidate with no
+    /// curve (the preference regime) is not judged.
+    pub fn new(candidate: Recorded<Candidate>, ratio: Option<f32>) -> Self {
+        let ratio = ratio.unwrap_or(MEMORISATION_GAP_RATIO);
+        let base_loss = candidate.report.base_score.and_then(|s| s.loss);
+        let memorisation = match &candidate.report.curve {
+            Some(curve) => judge(curve, base_loss, ratio),
+            None => judge(
+                &TrainingCurve::unmonitored(candidate.report.steps, candidate.report.steps),
+                base_loss,
+                ratio,
+            ),
+        };
+        Self {
+            candidate,
+            memorisation,
+        }
+    }
+}
+
+impl Report for Trained {
+    fn human(&self) -> String {
+        format!("{}{}\n", self.candidate.human(), self.memorisation.line())
+    }
+}
 
 fn loss(value: Option<f32>) -> String {
     value.map_or("not measured".into(), |v| format!("{v:.4}"))

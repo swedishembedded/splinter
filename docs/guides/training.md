@@ -67,6 +67,17 @@ and warns when the gap at the carried step is more than a quarter of the
 monitoring loss, when the monitoring loss rose after the step carried, or
 when it was still falling at the end of the budget; the release gate and the
 exam repeat those warnings beside their verdicts.
+`train` also judges the run for memorisation and records the verdict in the
+candidate's JSON as `memorisation` (the verdict `memorised`, `not_memorised`
+or `not_judged`, the reason, and the numbers it used), printing one line:
+`memorisation: memorised|not memorised|not judged (<reason>): kept step S,
+monitor M vs base B, train T`. It is judged on the kept evaluation (the
+lowest monitoring loss, not the last step) and is memorised when that
+monitoring loss is not below the base model's loss on the same records, or
+when the training loss there is below `--memorisation-ratio` (default 0.5)
+times the monitoring loss. A run with no monitoring evaluations or no base
+score is not judged. The verdict is reported only: it never stops or alters
+the run.
 `--keep-evaluations` also keeps the adapter of every evaluation with the
 candidate, and `splinter select CANDIDATE --exam-set DEV-SUITE` puts each of
 them to the dev suite (the families `learn --dev-families` reserves apart from
