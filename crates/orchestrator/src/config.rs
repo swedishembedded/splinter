@@ -174,6 +174,12 @@ pub struct WorkspaceSettings {
     /// map (`RLIMIT_AS`); `None` keeps the default of 32 GiB. Part of the
     /// environment's snapshot.
     pub memory_bytes: Option<u64>,
+    /// The most memory, in bytes, the processes of one workspace command may
+    /// hold together; `None` keeps the default of 24 GiB (or the figure of
+    /// `memory_bytes` when that is named) and `Some(0)` names no bound, the
+    /// environment of the tasks stored before the bound existed. Part of the
+    /// environment's snapshot when set.
+    pub tree_memory_bytes: Option<u64>,
     /// Directories searched before the system's for the interpreters code
     /// runs in: where a pinned build of a language (Lua 5.1, built from its
     /// verified source) is put first. Empty is the system's search path.
@@ -194,6 +200,7 @@ impl Default for WorkspaceSettings {
             max_processes: None,
             env: BTreeMap::new(),
             memory_bytes: None,
+            tree_memory_bytes: None,
             runtime_dirs: Vec::new(),
         }
     }
@@ -319,6 +326,7 @@ impl Config {
                 max_processes: None,
                 env: BTreeMap::new(),
                 memory_bytes: None,
+                tree_memory_bytes: None,
                 runtime_dirs: Vec::new(),
             },
             build: BuildInfo {

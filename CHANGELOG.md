@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `--workspace-tree-memory-gib N` names the bound on the memory of a whole project command (24 GiB when not given); `0` names none and offers the environment of the tasks stored before the bound, which `solve` otherwise refuses.
 - A model solving in process (`local:...`, `policy:...`) samples as `--temperature`, `--top-p`, `--top-k`, `--sampling-seed` and `--thinking` say, as a served model does; without them it keeps the agent sampling. Its `Sampling` has an optional nucleus cut (`top_p`). The thinking budget still applies to served models only.
 - The orchestrator's async runtime has 4 worker threads instead of one per core: on a 144-core node every subprocess a run spawned copied 144 thread stacks.
 - The `generations` and `release_workspace` integration tests of `splinter-pipelines` run in a third to a half of the time (one shared two-generation run for the specs that read the same ledger, replay policies as separate tests, one mutant per file).

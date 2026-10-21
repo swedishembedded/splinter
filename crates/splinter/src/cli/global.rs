@@ -86,6 +86,13 @@ pub struct Global {
     #[arg(long, global = true, value_name = "GIB",
         value_parser = clap::value_parser!(u64).range(1..=1024))]
     pub workspace_memory_gib: Option<u64>,
+    /// Bound the memory the processes of one project command hold together,
+    /// in GiB (24 when not given); 0 names no bound, which offers the
+    /// environment of the tasks stored before the bound existed (they are
+    /// refused otherwise). Part of the environment record.
+    #[arg(long, global = true, value_name = "GIB",
+        value_parser = clap::value_parser!(u64).range(0..=1024))]
+    pub workspace_tree_memory_gib: Option<u64>,
     /// A directory searched before the system's for the interpreters code
     /// runs in (`lua` is Lua 5.1 and no other: `make deps/lua` builds the
     /// pinned one); repeat for more.

@@ -81,12 +81,23 @@ pub fn workspace_limits(output_cap_bytes: u64, memory_bytes: Option<u64>) -> Lim
 }
 
 /// [`workspace_limits`] for the process sandbox, which also bounds the memory
-/// of the whole command: by `memory_bytes` when one is named (so one figure
+/// of the whole command: by `tree_memory` when one is named (`Some(0)` names
+/// none, which is the environment identity of every task made before the
+/// bound existed), else by `memory_bytes` when one is named (so one figure
 /// bounds each process and their sum), else by [`WORKSPACE_TREE_MEMORY_BYTES`].
 #[must_use]
-pub fn process_workspace_limits(output_cap_bytes: u64, memory_bytes: Option<u64>) -> Limits {
+pub fn process_workspace_limits(
+    output_cap_bytes: u64,
+    memory_bytes: Option<u64>,
+    tree_memory: Option<u64>,
+) -> Limits {
+    let tree_memory_bytes = match tree_memory {
+        Some(0) => None,
+        Some(bytes) => Some(bytes),
+        None => Some(memory_bytes.unwrap_or(WORKSPACE_TREE_MEMORY_BYTES)),
+    };
     Limits {
-        tree_memory_bytes: Some(memory_bytes.unwrap_or(WORKSPACE_TREE_MEMORY_BYTES)),
+        tree_memory_bytes,
         ..workspace_limits(output_cap_bytes, memory_bytes)
     }
 }
@@ -257,7 +268,11 @@ impl Environments {
                 &self.workspace_calls,
                 cargo,
                 &allowed,
-                process_workspace_limits(settings.output_cap_bytes, settings.memory_bytes),
+                process_workspace_limits(
+                    settings.output_cap_bytes,
+                    settings.memory_bytes,
+                    settings.tree_memory_bytes,
+                ),
             )
             .allow_unconfined(settings.allow_unconfined)
             .allow_network(settings.allow_network)
@@ -336,13 +351,25 @@ mod tests {
 
     #[test]
     fn the_process_sandbox_also_bounds_the_whole_command() {
-        let default = process_workspace_limits(1 << 20, None);
+        let default = process_workspace_limits(1 << 20, None, None);
         assert_eq!(default.tree_memory_bytes, Some(WORKSPACE_TREE_MEMORY_BYTES));
         assert_eq!(default.memory_bytes, WORKSPACE_MEMORY_BYTES);
-        let named = process_workspace_limits(1 << 20, Some(8 << 30));
+        let named = process_workspace_limits(1 << 20, Some(8 << 30), None);
         assert_eq!(named.tree_memory_bytes, Some(8 << 30));
         assert_eq!(named.memory_bytes, 8 << 30);
         // A container has its own memory limit and records no such bound.
         assert_eq!(workspace_limits(1 << 20, None).tree_memory_bytes, None);
+    }
+
+    /// Tasks stored before the whole-command bound name an environment without
+    /// it; a run that names no bound (`Some(0)`) offers exactly that one, so
+    /// those tasks can still be solved, and a figure names its own bound.
+    #[test]
+    fn no_whole_command_bound_offers_the_environment_of_tasks_made_before_it() {
+        let before = process_workspace_limits(1 << 20, None, Some(0));
+        assert_eq!(before, workspace_limits(1 << 20, None));
+        let named = process_workspace_limits(1 << 20, None, Some(4 << 30));
+        assert_eq!(named.tree_memory_bytes, Some(4 << 30));
+        assert_eq!(named.memory_bytes, WORKSPACE_MEMORY_BYTES);
     }
 }

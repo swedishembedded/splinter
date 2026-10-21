@@ -106,6 +106,7 @@ fn main() -> ExitCode {
     config.workspace.max_processes = cli.global.workspace_max_processes;
     config.workspace.env = cli.global.workspace_env.iter().cloned().collect();
     config.workspace.memory_bytes = cli.global.workspace_memory_gib.map(|gib| gib << 30);
+    config.workspace.tree_memory_bytes = cli.global.workspace_tree_memory_gib.map(|gib| gib << 30);
     config
         .workspace
         .runtime_dirs
