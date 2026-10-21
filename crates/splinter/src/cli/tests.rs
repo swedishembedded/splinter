@@ -181,7 +181,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
 
     assert!(matches!(
         command(&["experiences", "compare", "ab12", "cd34", "--interval-seed", "9"]),
-        Command::Experiences(ExperiencesCommand::Compare { ref candidate, ref baseline, interval_seed: Some(_) })
+        Command::Experiences(ExperiencesCommand::Compare { ref candidate, ref baseline, interval_seed: Some(_), .. })
             if candidate == "ab12" && baseline == "cd34"
     ));
     assert!(parse(&["experiences", "compare", "ab12"]).is_err());

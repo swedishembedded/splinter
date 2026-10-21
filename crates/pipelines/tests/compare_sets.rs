@@ -26,8 +26,11 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_core::rng::Seed;
 use splinter_eval::exposure::EXPOSURE_PRODUCER;
+use splinter_eval::strata::StratumCutoffs;
+use splinter_eval::verifiers::workspace::WorkspaceCheck;
 use splinter_orchestrator::Context;
 use splinter_pipelines::compare::compare;
+use splinter_sandbox::CommandCall;
 use splinter_store::experiences::{ExperienceSet, SetId};
 
 fn task(family: &str, n: usize) -> Task {
@@ -167,7 +170,7 @@ fn two_arms_are_paired_by_task_a_family_counts_once_and_exposed_or_unrun_attempt
 
     // seed: the interval seed only draws the bootstrap; the asserted counts, p-value and agreement do not depend on it, and a fixed one keeps the interval output reproducible.
     let seed = Seed::new(5);
-    let cmp = compare(&ctx, &candidate, &baseline, seed).unwrap();
+    let cmp = compare(&ctx, &candidate, &baseline, seed, None).unwrap();
     // Five tasks; a2 (exposed) and b2 (never graded) have no verdict in
     // both arms, so three are paired: a win, a tie and a loss.
     assert_eq!((cmp.tasks, cmp.paired, cmp.unpaired), (5, 3, 2));
@@ -207,9 +210,83 @@ fn two_arms_are_paired_by_task_a_family_counts_once_and_exposed_or_unrun_attempt
     assert_eq!((c.wins, c.losses, c.ties), (0, 1, 0));
 
     // The same sets and seed give the same report, and it is plain data.
-    let again = compare(&ctx, &candidate, &baseline, seed).unwrap();
+    let again = compare(&ctx, &candidate, &baseline, seed, None).unwrap();
     assert_eq!(
         serde_json::to_string(&cmp).unwrap(),
         serde_json::to_string(&again).unwrap()
     );
+}
+
+/// A workspace task whose check pins `paths` and whose instruction is
+/// `chars` characters long.
+fn sized_task(family: &str, paths: usize, chars: usize) -> Task {
+    let check = WorkspaceCheck {
+        fail_to_pass: vec![CommandCall {
+            argv: vec!["true".into()],
+            stdin: None,
+        }],
+        pass_to_pass: Vec::new(),
+        hidden: None,
+        protected: Vec::new(),
+        hidden_paths: Vec::new(),
+        hidden_strength: None,
+        expectations: Vec::new(),
+        pinned: (0..paths).map(|n| format!("p{n}.py")).collect(),
+    };
+    Task::new(
+        "workspace-change",
+        Vec::new(),
+        Environment::closed_book(),
+        "x".repeat(chars),
+        vec![check.as_check().unwrap()],
+    )
+    .unwrap()
+    .with_concepts([family])
+    .unwrap()
+}
+
+#[test]
+fn paired_tasks_are_reported_by_difficulty_stratum_next_to_the_family_test() {
+    let (_scratch, ctx) = gate_context("compare-strata", Brain::Honest);
+    let small = sized_task("a.py", 1, 10);
+    let large = sized_task("b.py", 5, 900);
+    let no_check = task("c.py", 1);
+    use Graded::{Fail, Pass};
+    let candidate = arm(
+        &ctx,
+        "candidate",
+        &[(&small, Pass), (&large, Pass), (&no_check, Pass)],
+    );
+    let baseline = arm(
+        &ctx,
+        "baseline",
+        &[(&small, Pass), (&large, Fail), (&no_check, Fail)],
+    );
+    let cutoffs = StratumCutoffs {
+        checkers: 1,
+        footprint: 3,
+        instruction_chars: 500,
+    };
+    // seed: only draws the bootstrap intervals; the asserted counts do not depend on it.
+    let seed = Seed::new(5);
+
+    assert!(compare(&ctx, &candidate, &baseline, seed, None)
+        .unwrap()
+        .strata
+        .is_none());
+
+    let cmp = compare(&ctx, &candidate, &baseline, seed, Some(cutoffs)).unwrap();
+    let strata = cmp.strata.unwrap();
+    assert_eq!(strata.cutoffs, cutoffs);
+    // One checker is not above a cutoff of one; the large task is above on
+    // footprint and length; the task with no check has no stratum.
+    let lines: Vec<_> = strata
+        .lines
+        .iter()
+        .map(|l| (l.stratum, l.paired, l.wins, l.losses, l.ties))
+        .collect();
+    assert_eq!(lines, [(0, 1, 0, 0, 1), (2, 1, 1, 0, 0)]);
+    assert_eq!(strata.unstratified, 1);
+    // The family test is unchanged by the strata.
+    assert_eq!(cmp.sign_test.discordant, 2);
 }

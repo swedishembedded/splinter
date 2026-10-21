@@ -5,7 +5,7 @@
 //! and canaries, the results matrix, and the experiment plan.
 
 use super::{command, parse, Command};
-use crate::cli::{EvalArgs, EvalCommand, ExperimentCommand, TasksCommand};
+use crate::cli::{EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand, TasksCommand};
 use splinter_sdk::vocabulary::model_ref::POLICY_DEFAULT;
 
 #[test]
@@ -108,4 +108,40 @@ fn an_experiment_plan_is_checked_against_a_catalog() {
         })
     ));
     assert!(parse(&["experiment", "check"]).is_err());
+}
+
+#[test]
+fn compare_takes_the_difficulty_cutoffs_together_or_not_at_all() {
+    let Command::Experiences(ExperiencesCommand::Compare { strata, .. }) = command(&[
+        "experiences",
+        "compare",
+        "ab12",
+        "cd34",
+        "--stratum-checkers",
+        "2",
+        "--stratum-footprint",
+        "3",
+        "--stratum-instruction-chars",
+        "500",
+    ]) else {
+        panic!("not a compare");
+    };
+    assert_eq!(
+        strata
+            .cutoffs()
+            .map(|c| (c.checkers, c.footprint, c.instruction_chars)),
+        Some((2, 3, 500))
+    );
+    assert!(
+        parse(&[
+            "experiences",
+            "compare",
+            "ab12",
+            "cd34",
+            "--stratum-checkers",
+            "2"
+        ])
+        .is_err(),
+        "the cutoffs come together"
+    );
 }

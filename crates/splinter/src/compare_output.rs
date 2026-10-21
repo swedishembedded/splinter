@@ -65,6 +65,30 @@ impl Report for SetComparison {
             self.sign_test.discordant,
             self.sign_test.p_value,
         );
+        if let Some(strata) = &self.strata {
+            let c = &strata.cutoffs;
+            let _ = writeln!(
+                out,
+                "strata (report only; above: checkers > {}, footprint > {}, instruction > {} chars; \
+                 {} paired without a check):",
+                c.checkers, c.footprint, c.instruction_chars, strata.unstratified,
+            );
+            for l in &strata.lines {
+                let _ = writeln!(
+                    out,
+                    "  stratum {}: {} paired, candidate {}/{}, baseline {}/{}, {} won, {} lost, {} tied",
+                    l.stratum,
+                    l.paired,
+                    l.candidate_right,
+                    l.paired,
+                    l.baseline_right,
+                    l.paired,
+                    l.wins,
+                    l.losses,
+                    l.ties,
+                );
+            }
+        }
         let _ = writeln!(
             out,
             "verdict agreement on paired tasks: {}",

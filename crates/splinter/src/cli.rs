@@ -16,6 +16,7 @@ use splinter_sdk::datasets::{parse_strength, parse_strip, StripPolicy, ViewName}
 use splinter_sdk::eval::SuiteChoice;
 use splinter_sdk::learn::parse_budget;
 use splinter_sdk::lineage::Direction;
+use splinter_sdk::measure::strata::StratumCutoffs;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::annotation::Strength;
@@ -565,7 +566,40 @@ pub enum ExperiencesCommand {
         /// not given; the same sets and seed give the same intervals).
         #[arg(long, value_name = "N")]
         interval_seed: Option<Seed>,
+        /// Report the paired tasks by difficulty stratum, next to the family
+        /// test: a task's stratum is how many of checkers, footprint and
+        /// instruction length exceed their cutoffs (a value equal to its
+        /// cutoff counts as not above). Report only; no threshold. Needs all
+        /// three cutoffs.
+        #[command(flatten)]
+        strata: StrataArgs,
     },
+}
+
+/// The cutoffs of the difficulty strata, all or none.
+#[derive(Debug, Clone, Copy, Args)]
+pub struct StrataArgs {
+    /// Tests a task's fail-to-pass commands run: more is above.
+    #[arg(long, value_name = "N", requires_all = ["stratum_footprint", "stratum_instruction_chars"])]
+    pub stratum_checkers: Option<usize>,
+    /// Paths a task's check withholds, protects or pins: more is above.
+    #[arg(long, value_name = "N", requires_all = ["stratum_checkers", "stratum_instruction_chars"])]
+    pub stratum_footprint: Option<usize>,
+    /// Characters of a task's instruction: more is above.
+    #[arg(long, value_name = "N", requires_all = ["stratum_checkers", "stratum_footprint"])]
+    pub stratum_instruction_chars: Option<usize>,
+}
+
+impl StrataArgs {
+    /// The cutoffs, when given.
+    #[must_use]
+    pub fn cutoffs(&self) -> Option<StratumCutoffs> {
+        Some(StratumCutoffs {
+            checkers: self.stratum_checkers?,
+            footprint: self.stratum_footprint?,
+            instruction_chars: self.stratum_instruction_chars?,
+        })
+    }
 }
 
 /// `dataset ...`.

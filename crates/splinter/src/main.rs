@@ -25,6 +25,7 @@ mod baseline_report;
 mod build_info;
 mod cli;
 mod compare_output;
+mod compare_session;
 mod consolidate_output;
 mod continual_output;
 mod curriculum_output;

@@ -14,7 +14,6 @@ use serde_json::json;
 use splinter_sdk::agent::CancelToken;
 use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::canaries;
-use splinter_sdk::compare::compare;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{
@@ -54,6 +53,7 @@ use crate::cli::{
     ExperiencesCommand, ExperimentCommand, Global, JudgeCommand, ReleaseCommand, RetrieveArgs,
     RunsCommand, SourceCommand, StateCommand,
 };
+use crate::compare_session;
 use crate::exam_session;
 use crate::harness_session;
 use crate::learn_output;
@@ -471,24 +471,15 @@ impl Session {
                 candidate,
                 baseline,
                 interval_seed,
-            }) => {
-                let (candidate, baseline) =
-                    (resolve_set(ctx, &candidate)?, resolve_set(ctx, &baseline)?);
-                let arguments = json!({
-                    "candidate": candidate,
-                    "baseline": baseline,
-                    "interval_seed": interval_seed,
-                });
-                let compared = record(ctx, "experiences compare", &arguments, |run| {
-                    compare(
-                        ctx,
-                        &candidate,
-                        &baseline,
-                        run.seed("interval-seed", interval_seed)?,
-                    )
-                })?;
-                emit(json, &compared);
-            }
+                strata,
+            }) => compare_session::compare_sets(
+                ctx,
+                json,
+                &candidate,
+                &baseline,
+                interval_seed,
+                strata.cutoffs(),
+            )?,
             Command::Dataset(DatasetCommand::Build(args)) => {
                 let BuildArgs {
                     sets,

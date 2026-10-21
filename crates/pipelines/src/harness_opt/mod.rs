@@ -231,7 +231,7 @@ impl CandidateEnvironment<String> for HarnessEnvironment<'_, '_> {
         let document = candidate.clone();
         self.scope.spawn(move || {
             let compared = run_arm(ctx, request, &document).and_then(|set| {
-                let comparison = compare(ctx, &set, &baseline_set, request.interval_seed)?;
+                let comparison = compare(ctx, &set, &baseline_set, request.interval_seed, None)?;
                 Ok((set, comparison))
             });
             let _ = done.send(compared);

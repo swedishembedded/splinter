@@ -25,6 +25,10 @@
 //! is unpaired. A task is in one family, its first declared concept, and a
 //! family is one unit of evidence ([`by_cluster`]): the sign test is the one
 //! the release gate applies, over those units.
+//!
+//! Given [`StratumCutoffs`], the paired tasks are also counted by difficulty
+//! stratum (see [`splinter_eval::strata`]): a report next to the family
+//! test that decides nothing.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -37,6 +41,7 @@ use splinter_core::rng::Seed;
 use splinter_eval::competence::{competence, outcome_of, Attempt, Competence};
 use splinter_eval::paired::{by_cluster, PairedOutcome};
 use splinter_eval::significance::{SignTest, Significance};
+use splinter_eval::strata::{Strata, StratumCutoffs, TaskSize};
 use splinter_model::stats::BrainSignificance;
 use splinter_store::decision::decide;
 use splinter_store::experiences::SetId;
@@ -122,6 +127,9 @@ pub struct SetComparison {
     /// The one-sided sign test over those units: the chance of at least this
     /// many candidate wins if the candidate were no better.
     pub sign_test: SignTest,
+    /// The paired tasks by difficulty stratum; `None` without cutoffs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strata: Option<Strata>,
     /// The share of paired tasks on which both arms reached the same
     /// verdict; `None` with no paired task.
     pub agreement: Option<f64>,
@@ -137,6 +145,8 @@ enum Ending {
 /// One arm's attempts at one task, classified.
 struct Classified {
     family: String,
+    /// The task's size, when its record carries a workspace check.
+    size: Option<TaskSize>,
     endings: Vec<Ending>,
 }
 
@@ -153,9 +163,10 @@ pub fn compare(
     candidate: &SetId,
     baseline: &SetId,
     interval_seed: Seed,
+    strata: Option<StratumCutoffs>,
 ) -> Result<SetComparison, OrchestratorError> {
-    let candidate_arm = read_arm(ctx, candidate)?;
-    let baseline_arm = read_arm(ctx, baseline)?;
+    let candidate_arm = read_arm(ctx, candidate, strata.is_some())?;
+    let baseline_arm = read_arm(ctx, baseline, strata.is_some())?;
 
     let tasks: BTreeSet<&Digest> = candidate_arm
         .by_task
@@ -163,6 +174,7 @@ pub fn compare(
         .chain(baseline_arm.by_task.keys())
         .collect();
     let mut outcomes = Vec::with_capacity(tasks.len());
+    let mut sizes: BTreeMap<String, Option<TaskSize>> = BTreeMap::new();
     for task in &tasks {
         let verdict = |arm: &Arm| arm.by_task.get(*task).and_then(|c| majority(&c.endings));
         let family = candidate_arm
@@ -170,6 +182,13 @@ pub fn compare(
             .get(*task)
             .or_else(|| baseline_arm.by_task.get(*task))
             .map(|c| c.family.clone());
+        sizes.insert(
+            task.to_string(),
+            [&candidate_arm, &baseline_arm]
+                .iter()
+                .find_map(|arm| arm.by_task.get(*task))
+                .and_then(|c| c.size),
+        );
         outcomes.push(PairedOutcome {
             item: task.to_string(),
             candidate: verdict(&candidate_arm),
@@ -185,6 +204,14 @@ pub fn compare(
         ties: units.iter().filter(|u| u.0 == u.1).count(),
     };
     let sign_test = BrainSignificance.sign_test(&units);
+    let strata = strata.map(|cutoffs| {
+        Strata::of(
+            cutoffs,
+            outcomes
+                .iter()
+                .map(|outcome| (sizes[&outcome.item], outcome.paired())),
+        )
+    });
     let paired: Vec<(bool, bool)> = outcomes.iter().filter_map(PairedOutcome::paired).collect();
     let agreement = (!paired.is_empty())
         .then(|| paired.iter().filter(|(c, b)| c == b).count() as f64 / paired.len() as f64);
@@ -201,11 +228,12 @@ pub fn compare(
         families: family_lines(&outcomes),
         clusters,
         sign_test,
+        strata,
         agreement,
     })
 }
 
-fn read_arm(ctx: &Context, set: &SetId) -> Result<Arm, OrchestratorError> {
+fn read_arm(ctx: &Context, set: &SetId, with_sizes: bool) -> Result<Arm, OrchestratorError> {
     let store = ctx.experiences();
     let members = store.get_set(set)?.members;
     let mut arm = Arm {
@@ -217,6 +245,11 @@ fn read_arm(ctx: &Context, set: &SetId) -> Result<Arm, OrchestratorError> {
         let experience = store.get(&id)?;
         let notes = store.annotations(&id)?.annotations;
         let family = family_of(&experience);
+        let size = if with_sizes {
+            TaskSize::of_task(&experience.to_task())?
+        } else {
+            None
+        };
         let (ending, measured) = classify(&experience, &notes)?;
         if let Some(outcome) = measured {
             arm.measured.push(Attempt {
@@ -228,6 +261,7 @@ fn read_arm(ctx: &Context, set: &SetId) -> Result<Arm, OrchestratorError> {
             .entry(experience.task.id.clone())
             .or_insert_with(|| Classified {
                 family,
+                size,
                 endings: Vec::new(),
             })
             .endings
