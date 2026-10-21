@@ -58,6 +58,7 @@ pub const AGENT_SAMPLING: Sampling = Sampling {
     max_new_tokens: 512,
     temperature: 0.2,
     top_k: 20,
+    top_p: None,
     // Agent work wants the answer, not a reasoning preamble it cannot use as
     // tool input; a run that wants the reasoning asks for it.
     thinking: false,

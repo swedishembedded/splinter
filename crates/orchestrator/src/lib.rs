@@ -43,6 +43,7 @@ pub mod environments;
 pub mod error;
 pub mod generation;
 pub mod ids;
+mod local_sampling;
 pub mod model_ref;
 pub mod pipeline;
 mod release_manifest;

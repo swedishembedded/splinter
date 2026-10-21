@@ -78,3 +78,4 @@ in the same commit.
 | [090](090-mutants-made-inside-whole-line-comments-were-equivalent-by-construction-and-cost-a-suite-run-each.md) | Mutants made inside whole-line comments were equivalent by construction and cost a suite run each |
 | [091](091-a-failed-sub-case-was-read-as-a-second-test-and-the-fault-was-refused-as-a-broken-build.md) | A failed sub-case was read as a second test and the fault was refused as a broken build |
 | [092](092-the-replayed-agents-shell-could-read-the-hidden-diff-and-only-the-gate-noticed-afterwards.md) | The replayed agent's shell could read the hidden diff, and only the gate noticed afterwards |
+| [093](093-an-in-process-model-ignored-the-sampling-flags-so-the-served-and-in-process-arms-of-a-check-did-not-share-a-protocol.md) | An in-process model ignored the sampling flags, so the served and in-process arms of a check did not share a protocol |

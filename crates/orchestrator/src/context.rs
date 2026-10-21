@@ -44,7 +44,6 @@ use serde::Serialize;
 use splinter_agent::solve::Model;
 use splinter_core::clock::{Clock, SystemClock};
 use splinter_data::DatasetStore;
-use splinter_model::local::AGENT_SAMPLING;
 use splinter_model::{LoadedModel, ModelSelection, Residency, Sampling};
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::claims::ClaimStore;
@@ -349,16 +348,16 @@ impl Runtime {
                 detail: format!("{e:#}"),
             })?;
         // Local models answer without reasoning unless the configuration lets
-        // them reason (see [`Config::thinking`]).
-        let provider = if local && self.config().thinking {
-            loaded
-                .resampled(Sampling {
-                    thinking: true,
-                    ..AGENT_SAMPLING
-                })
-                .unwrap_or_else(|| loaded.provider())
-        } else {
-            loaded.provider()
+        // them reason (see [`Config::thinking`]), and sample as the
+        // configuration asks (see [`crate::local_sampling`]).
+        let provider = match local
+            .then(|| crate::local_sampling::local_sampling(self.config()))
+            .flatten()
+        {
+            Some(sampling) => loaded
+                .resampled(sampling)
+                .unwrap_or_else(|| loaded.provider()),
+            None => loaded.provider(),
         };
         let mut model = Model::new(provider, loaded.identity());
         if let ModelSelection::Remote(remote) = &selection {

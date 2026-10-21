@@ -28,6 +28,10 @@ pub struct Sampling {
     pub temperature: f32,
     /// Only the `top_k` most likely tokens are sampled from.
     pub top_k: u32,
+    /// Nucleus sampling: only the smallest set of tokens whose probability
+    /// reaches `top_p` is sampled from. `None` leaves brain's default (all).
+    #[serde(default)]
+    pub top_p: Option<f32>,
     /// Whether the model may reason before it answers. Off, a model whose
     /// template opens a reasoning block is asked with the block closed, so
     /// the reply is the answer and comes at once; on, it reasons first and
@@ -56,6 +60,10 @@ pub(super) fn chat_request(req: &CompletionRequest, sampling: &Sampling) -> Chat
         .temperature(sampling.temperature)
         .top_k(sampling.top_k)
         .thinking(sampling.thinking);
+    let request = match sampling.top_p {
+        Some(top_p) => request.top_p(top_p),
+        None => request,
+    };
     match sampling.seed {
         Some(seed) => request.seed(seed),
         None => request,
@@ -286,6 +294,24 @@ mod tests {
         assert_ne!(seeded(7), seeded(8));
         let unseeded = format!("{:?}", chat_request(&req, &SAMPLING));
         assert!(unseeded.contains("seed: None"), "{unseeded}");
+    }
+
+    /// A nucleus cut named in the sampling reaches brain's request; without
+    /// one the request leaves brain's default.
+    #[test]
+    fn the_request_carries_the_nucleus_cut() {
+        let req = CompletionRequest {
+            messages: vec![user("q")],
+            ..CompletionRequest::default()
+        };
+        let cut = Sampling {
+            top_p: Some(0.8),
+            ..SAMPLING
+        };
+        let with = format!("{:?}", chat_request(&req, &cut));
+        assert!(with.contains("top_p: Some(0.8)"), "{with}");
+        let without = format!("{:?}", chat_request(&req, &SAMPLING));
+        assert!(without.contains("top_p: None"), "{without}");
     }
 
     #[test]
