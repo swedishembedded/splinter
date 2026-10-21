@@ -353,3 +353,8 @@
 {"id": "GN03.1", "repo": "splinter", "path": "crates/pipelines/tests/generations.rs", "pattern": "fn a_candidate_that_loses_protected_families_is_rejected_before_the_gate_and_the_alias_stays", "kind": "regex", "min": 1, "pin": "splinter_acquisition"}
 {"id": "GN04.1", "repo": "splinter", "path": "crates/pipelines/tests/generations.rs", "pattern": "fn replay_follows_the_policy_and_a_rebuild_starts_a_fresh_adapter_from_the_base", "kind": "regex", "min": 1, "pin": "splinter_acquisition"}
 {"id": "LU01.1", "repo": "splinter", "path": "crates/sandbox/tests/runtime_registry.rs", "pattern": "fn the_lua_runtime_is_lua_5_1_and_an_interpreter_that_reports_another_version_is_refused", "kind": "regex", "min": 1, "pin": "splinter_acquisition"}
+{"id": "PS09.1", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "    Pick \\{", "pin": "splinter_l9"}
+{"id": "PS09.2", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "family_share: Option<f64>", "pin": "splinter_l9"}
+{"id": "PS09.3", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "per_family: Option<usize>", "pin": "splinter_l9"}
+{"id": "PS09.4", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "    Compare \\{", "pin": "splinter_l9"}
+{"id": "PS09.5", "repo": "splinter", "path": "crates/splinter/src/cli.rs", "kind": "regex", "pattern": "pub stratum_checkers: Option<usize>", "pin": "splinter_l9"}
