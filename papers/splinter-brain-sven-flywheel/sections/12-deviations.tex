@@ -1,0 +1,57 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Deviations from the registration}\label{app:deviations}
+
+The protocol of \cref{sec:protocol,sec:pending} is the registration as it stands. It was
+fixed in \code{prereg/coding-tasks.md} before any coding-task run and changed only by dated
+amendments appended to that file, each pushed before the outcome it could affect; the file is
+never rewritten, so every row below can be checked against its git history.
+\Cref{tab:deviations,tab:deviations2} list every change. ``No.'' is the amendment's number in that file; ``Before'' names the earliest outcome the change preceded.
+
+\begin{table}[p]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}p{0.14\linewidth}p{0.55\linewidth}p{0.25\linewidth}@{}}
+\toprule
+Date (no.) & Change & Before \\
+\midrule
+10-16 (1) & CE4's student trains on the 27B teacher's verified trajectories, not its own (the untrained 8B almost never edited a file); CE8 registered as the 27B counterpart; one harness profile pinned for all arms.\cl{PR14,PR15,PR16} & any run \\
+10-16 (2) & Run parameters: arms, exam seed, 46 qualification and 34 development families, serving flags, the LoRA recipe.\cl{PR17} & any run \\
+10-17 (3) & The first teacher run is withdrawn: its shell had no filesystem confinement and the agent read task sources outside its tree. Every workspace command is confined by the kernel; a call naming a path outside the tree marks the episode exposed; a solve is bounded at one hour; the second repository is named. The withdrawn run's 34 conclusions labelled cancelled were the harness's own bounds, not external cancels (29 repeated-answer stops, five tool-call caps), and the solve report now names the bound.\cl{PR18,TJ01,TJ02} & any training run or query \\
+10-18 (4) & Placement of the passes, the definition of a cancelled conclusion, the controls as built, faster builds allowed only between development sets, an unreachable solver counted as an infrastructure error; one set lost to a server failure is solved again.\cl{PR19} & any dataset \\
+10-19 (5) & The 8B arms on brain's default tensor-core tier; evidence admitted only when the hidden checks passed it; every dataset tied to the build that made it.\cl{PR20} & any dataset \\
+10-19 (6) & Admission of the replication repository fixed (modules, suite, mutants, reserved families).\cl{PR21} & its admission \\
+10-19 (7) & The teacher's second pass dropped; step count from the trainer's record count; the controls that run named.\cl{PR22} & the training dataset \\
+10-19 (8) & Arms run in parallel on two servers of one build; the qualification partition solved in two halves.\cl{PR23} & any 8B arm \\
+10-19 (9) & Runs exported as one step are projected one call per turn; the confirmatory 8B query restricted to a pilot subset.\cl{PR24} & any 8B verdict \\
+10-19 (10) & The replication repository's teacher pass and dataset fixed; training on it deferred.\cl{PR25} & its first solve \\
+10-19 (11, 12) & The first pass's single-step trajectories excluded; the development pass regenerated with a build recording true turns, checked on two tasks first.\cl{PR26,PR27} & any dataset from it \\
+\bottomrule
+\end{tabular}
+\caption{Changes to the registered protocol, in the order they were made (amendments 1 to 12).}\label{tab:deviations}
+\end{table}
+
+\begin{table}[p]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}p{0.14\linewidth}p{0.55\linewidth}p{0.25\linewidth}@{}}
+\toprule
+Date (no.) & Change & Before \\
+\midrule
+10-19 (13) & The exposure audit judges a probe outside the tree by that call's own result.\cl{PR28} & any dataset under it \\
+10-20 (14) & The build that makes the corrected records, the step rule, a pipeline check on a subset.\cl{PR29} & any dataset from it \\
+10-20 (15) & What a workspace task's request may say and name.\cl{PR30} & re-admission \\
+10-20 (16) & The recording build changed (compaction keeps the task, a 300 s shell bound); teacher servers moved to a faster build between sets.\cl{PR31} & the regenerated passes \\
+10-20 (17, 18) & Two ablation arms of the generations experiment: a learning-progress curriculum in the bandit framing of a self-evolving curriculum~\citep{sec2025} and a learning-progress replay.\cl{PR32,PR33,CT30} & any generation \\
+10-20 (19) & CE8 fixed: the regenerated, exposure-audited development sets as data, the step rule with held-out scoring and a memorisation guard, serving through the adapter bank, the qualification halves.\cl{PR34} & any CE8 run \\
+10-20 (20) & The solve protocol: recommended sampling over three drawn seeds, an optional 1024-token thinking budget (off is primary), a coding-agent prompt, a repetition note.\cl{PR35} & any arm under it \\
+10-20 (21) & CE8's learning rate lowered to $5\times10^{-5}$ after a sweep (later found to have measured a broken gradient, amendment 23).\cl{PR36} & any CE8 outcome \\
+10-21 (22) & CE8 on the bf16 base; its records rebuilt (exposure by call id, the recorded prompt); a teacher pass under thinking whose passes form CE8-T.\cl{PR37} & any CE8 training run \\
+10-21 (23) & A defect in brain's backward pass had scaled every 27B training gradient by about $4\times10^{-6}$; the sweep and the bf16 check behind the two rows above measured it and are no basis; the rate is kept by a stability rule fixed before a new diagnostic; the stopping rules passed explicitly.\cl{PR38} & any valid CE8 run \\
+10-21 (24) & A shuffled-instruction negative control, CE8-S; learning is claimed only if CE8 beats the base and CE8-S.\cl{PR39} & any CE8 evaluation \\
+10-21 (25) & The CE8 run trips the memorisation guard and is not evaluated; exactly one further run on a one-pass budget, the guard unchanged, no later retry.\cl{PR40} & any evaluation \\
+\bottomrule
+\end{tabular}
+\caption{Changes to the registered protocol, continued (amendments 13 to 25).}\label{tab:deviations2}
+\end{table}
