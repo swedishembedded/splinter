@@ -16,9 +16,13 @@ practice gate has no canaries. The mechanisms of corpus expansion beyond the fir
 (variants, retention queue, rehearsal, claims) are described from the code and none was
 evaluated for the value it adds.
 
-\paragraph{The coding-task experiment.} It is not measured. Everything said about it in
-\cref{sec:protocol,sec:pending,sec:replicate} is a registered rule or a statement about code; the
-sign-test table is a design calculation. The registration fixes one model size for the first
+\paragraph{The coding-task experiment.} Its claim is not measured. What has run is the
+teacher's first pass, an underpowered pilot of the headline that does not show it, and two CE8
+training runs that the registered memorisation guard stopped before evaluation
+(\cref{sec:pending}); everything else said about it in \cref{sec:protocol,sec:pending,sec:replicate}
+is a registered rule or a statement about code, and the sign-test table is a design calculation.
+The guard as registered reads one step's training loss and any rise at the last evaluation, so it
+can stop a run on noise; it was kept unchanged.\cl{M48,M49} The registration fixes one model size for the first
 training result (Qwen3-8B, because training, saving and serving an adapter work end to end for
 it), trained on a stronger teacher's verified trajectories because the untrained 8B produced
 too few edits to supply its own (so a gain is distillation from the teacher, not
