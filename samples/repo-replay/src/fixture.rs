@@ -179,3 +179,10 @@ pub fn build(dir: &Path) -> Result<Vec<String>> {
     ids.push(commit(dir, COMMITS[12].1)?);
     Ok(ids)
 }
+
+/// Reverts commit `id` on the current branch and returns the new commit's id:
+/// a change whose content is the earlier one run backwards.
+pub fn revert(dir: &Path, id: &str) -> Result<String> {
+    git(dir, &["revert", "--no-edit", id])?;
+    git(dir, &["rev-parse", "HEAD"])
+}

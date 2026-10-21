@@ -42,7 +42,7 @@ use splinter_repo_replay::regate::{regate, RegateConfig};
 use splinter_repo_replay::select::{
     SelectConfig, DEFAULT_CONTEXT_SHARE_PERCENT, DEFAULT_CONTEXT_TOKENS,
 };
-use splinter_repo_replay::splits::write_splits;
+use splinter_repo_replay::splits::{write_splits, Overlaps, SplitOptions};
 use splinter_repo_replay::style::PlanStyle;
 use splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT;
 
@@ -343,6 +343,11 @@ struct DatasetArgs {
     /// With --splits: the next this percent of the commits are eval, the rest test.
     #[arg(long, default_value_t = 10)]
     eval_percent: usize,
+    /// With --splits: leave out the training-side record of every pair of passed
+    /// attempts in different splits whose target changes repeat each other (a
+    /// change and its revert); without it such a pair fails the build.
+    #[arg(long)]
+    drop_overlaps: bool,
 }
 
 fn main() -> Result<()> {
@@ -613,9 +618,16 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
             &args.state,
             out,
             &settings,
-            args.train_percent,
-            args.eval_percent,
-            range,
+            &SplitOptions {
+                train_percent: args.train_percent,
+                eval_percent: args.eval_percent,
+                corrections: range,
+                overlaps: if args.drop_overlaps {
+                    Overlaps::Drop
+                } else {
+                    Overlaps::Refuse
+                },
+            },
         )?;
         println!("{}", serde_json::to_string_pretty(&summary)?);
         return Ok(());
