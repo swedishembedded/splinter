@@ -16,12 +16,11 @@
 //! are missing) is stated and not guessed.
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::io::Write;
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use splinter_sdk::store::jsonl;
 
 use crate::attempt::CheckOutcome;
 use crate::control::Control;
@@ -127,6 +126,11 @@ pub fn path(state: &Path) -> std::path::PathBuf {
     state.join("ledger.jsonl")
 }
 
+/// The run log of a state directory: one line per run, see [`note_run`].
+fn runs_path(state: &Path) -> std::path::PathBuf {
+    state.join("runs.jsonl")
+}
+
 /// Writes one line to the state directory's run log: the tools a run was
 /// made with (`git --version`), so a verdict can be traced to the git that
 /// produced the commits and diffs it rests on.
@@ -138,48 +142,32 @@ pub fn note_run(
     to: Option<&str>,
     settings: &serde_json::Value,
 ) -> Result<()> {
-    let file = state.join("runs.jsonl");
-    let mut out = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&file)?;
     let line = serde_json::json!({"git_version": git_version, "source": source.display().to_string(), "from": from, "to": to, "settings": settings});
-    writeln!(out, "{line}")?;
+    jsonl::Log::open(&runs_path(state))?.append(&line)?;
     Ok(())
 }
 
 /// The `(from, to)` range of the last run noted in `state`.
 pub fn last_range(state: &Path) -> Result<(Option<String>, Option<String>)> {
-    let file = state.join("runs.jsonl");
-    let text = fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
-    let last: serde_json::Value =
-        serde_json::from_str(text.lines().last().context("runs.jsonl is empty")?)?;
+    let file = runs_path(state);
+    let runs = jsonl::read::<serde_json::Value>(&file)?;
+    let last = runs
+        .last()
+        .with_context(|| format!("{} holds no run", file.display()))?;
     let get = |k: &str| last[k].as_str().map(String::from);
     Ok((get("from"), get("to")))
 }
 
-/// Every entry written so far, in order.
+/// Every entry written so far, in order. A last line cut short by a kill is
+/// not an entry.
 pub fn read(state: &Path) -> Result<Vec<Entry>> {
-    let file = path(state);
-    if !file.exists() {
-        return Ok(Vec::new());
-    }
-    fs::read_to_string(&file)
-        .with_context(|| format!("reading {}", file.display()))?
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).with_context(|| format!("unreadable ledger line {l:?}")))
-        .collect()
+    Ok(jsonl::read(&path(state))?)
 }
 
-/// Appends `entry`.
+/// Appends `entry` as one whole line; a line a kill left cut short is
+/// removed first.
 pub fn append(state: &Path, entry: &Entry) -> Result<()> {
-    let file = path(state);
-    let mut out = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&file)?;
-    writeln!(out, "{}", serde_json::to_string(entry)?)?;
+    jsonl::Log::open(&path(state))?.append(entry)?;
     Ok(())
 }
 
