@@ -17,8 +17,8 @@ use splinter_repo_replay::audit::{
 use splinter_repo_replay::dataset::DatasetSettings;
 use splinter_repo_replay::fixture;
 use splinter_repo_replay::scripted::{Behaviour, Specificity};
-use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
 use splinter_repo_replay::splits::{split_of, write_splits};
+use splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT;
 
 #[test]
 fn the_cut_is_by_position_oldest_first() {
@@ -54,7 +54,7 @@ fn each_split_holds_only_its_commits_and_every_attempt_has_a_trace() {
 
     let out = work.path().join("out");
     let settings = DatasetSettings {
-        serving_prompt: SERVING_PROMPT.to_string(),
+        serving_prompt: CODING_AGENT_PROMPT.to_string(),
         max_block: None,
     };
     let summary = write_splits(&ctx, &state, &out, &settings, 80, 10, Default::default()).unwrap();
@@ -106,7 +106,7 @@ fn a_split_with_no_passed_attempt_has_no_records_but_still_has_its_traces() {
     .unwrap();
     let out = work.path().join("out");
     let settings = DatasetSettings {
-        serving_prompt: SERVING_PROMPT.to_string(),
+        serving_prompt: CODING_AGENT_PROMPT.to_string(),
         max_block: None,
     };
     let summary = write_splits(&ctx, &state, &out, &settings, 80, 10, Default::default()).unwrap();

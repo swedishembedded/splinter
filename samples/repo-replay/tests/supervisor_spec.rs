@@ -31,9 +31,9 @@ use splinter_repo_replay::pipeline::Models;
 use splinter_repo_replay::scripted::{
     Behaviour, ScriptedSupervisor, Specificity, SupervisorBehaviour,
 };
-use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
 use splinter_repo_replay::style::PlanStyle;
 use splinter_repo_replay::supervise::{check_message, MessageContext};
+use splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT;
 
 const DIFF: &str = "diff --git a/src/calc.rs b/src/calc.rs\n--- a/src/calc.rs\n+++ b/src/calc.rs\n@@ -3,3 +3,4 @@\n fn total(price: u32) -> u32 {\n-    price\n+    apply_surcharge(price, 4096)\n }\n";
 
@@ -149,7 +149,7 @@ fn a_corrected_attempt_passes_with_the_correction_counted_and_only_the_fix_train
         &run.ctx,
         &[set],
         &DatasetSettings {
-            serving_prompt: SERVING_PROMPT.to_string(),
+            serving_prompt: CODING_AGENT_PROMPT.to_string(),
             max_block: None,
         },
     )

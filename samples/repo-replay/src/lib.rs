@@ -17,7 +17,7 @@
 //!   holds only the parent.
 //! * [`gate`], [`trace`] - the deterministic judgement.
 //! * [`pipeline`], [`ledger`] - the run, its bookkeeping and the bias report.
-//! * [`dataset`], [`serving_prompt`], [`scrub`] - what leaves the run.
+//! * [`dataset`], [`scrub`] - what leaves the run.
 //! * [`fixture`], [`scripted`], [`audit`] - the sample checking itself with no model.
 
 #![warn(missing_docs)]
@@ -44,7 +44,6 @@ pub mod scratch;
 pub mod scripted;
 pub mod scrub;
 pub mod select;
-pub mod serving_prompt;
 pub mod splits;
 pub mod style;
 pub mod supervise;

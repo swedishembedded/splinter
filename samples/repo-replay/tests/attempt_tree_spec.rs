@@ -15,7 +15,6 @@ use splinter_repo_replay::fixture;
 use splinter_repo_replay::git::{mirror, single_commit_repo, Git};
 use splinter_repo_replay::mask::mask_diff;
 use splinter_repo_replay::plan::{validate, PlanCheck, PlanRejection};
-use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
 use splinter_repo_replay::style::PlanStyle;
 
 #[test]
@@ -92,14 +91,6 @@ fn a_plan_must_not_carry_the_answer() {
     // A long span quoted from a changed line is the answer quoted.
     let quoted = "Make total return `result = subtotal + subtotal * rate - discount + rounding_adjustment` for every caller of the function, please do so now.";
     assert_eq!(class(quoted, PlanStyle::Terse), "plan_verbatim_diff");
-}
-
-#[test]
-fn the_serving_prompt_is_the_one_a_solver_runs_under() {
-    assert_eq!(
-        SERVING_PROMPT,
-        splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT
-    );
 }
 
 #[test]

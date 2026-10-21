@@ -39,8 +39,8 @@ use crate::scripted::{
     Behaviour, ScriptedAgent, ScriptedPlanner, ScriptedSupervisor, Specificity, SupervisorBehaviour,
 };
 use crate::select::SelectConfig;
-use crate::serving_prompt::SERVING_PROMPT;
 use crate::style::PlanStyle;
+use splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT;
 
 /// A splinter context over `state` (its store lives in `state/splinter`).
 pub fn open_context(state: &Path) -> Result<Context> {
@@ -349,7 +349,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
         &ctx,
         std::slice::from_ref(&set),
         &DatasetSettings {
-            serving_prompt: SERVING_PROMPT.to_string(),
+            serving_prompt: CODING_AGENT_PROMPT.to_string(),
             max_block: None,
         },
     )?;
@@ -359,7 +359,7 @@ pub fn audit(work: &Path) -> Result<Vec<Check>> {
         .map(serde_json::from_str)
         .collect::<Result<_, _>>()?;
     let all_serving = lines.iter().all(|l| {
-        l["messages"][0]["content"] == SERVING_PROMPT && l["messages"][0]["role"] == "system"
+        l["messages"][0]["content"] == CODING_AGENT_PROMPT && l["messages"][0]["role"] == "system"
     });
     check(
         &mut checks,

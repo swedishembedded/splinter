@@ -42,9 +42,9 @@ use splinter_repo_replay::regate::{regate, RegateConfig};
 use splinter_repo_replay::select::{
     SelectConfig, DEFAULT_CONTEXT_SHARE_PERCENT, DEFAULT_CONTEXT_TOKENS,
 };
-use splinter_repo_replay::serving_prompt::SERVING_PROMPT;
 use splinter_repo_replay::splits::write_splits;
 use splinter_repo_replay::style::PlanStyle;
+use splinter_sdk::vocabulary::prompt::CODING_AGENT_PROMPT;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -596,7 +596,7 @@ fn dataset_command(args: &DatasetArgs) -> Result<()> {
             .with_context(|| format!("reading {}", file.display()))?
             .trim_end()
             .to_string(),
-        None => SERVING_PROMPT.to_string(),
+        None => CODING_AGENT_PROMPT.to_string(),
     };
     let ctx = open_context(&args.state)?;
     let range = CorrectionRange {

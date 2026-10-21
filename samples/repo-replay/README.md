@@ -122,7 +122,7 @@ documents over the hidden side of the attempt, `case.rs`, which lies outside the
 the ledger, `regate`, the dataset and splits, the scrub, and the audit with scripted models, which
 runs the whole pipeline through the documents. `tests/prompts_spec.rs` and `tests/harness_spec.rs`
 read the documents; the system prompts and user turns the models receive are the documents' text.
-The serving prompt of the dataset (`serving_prompt.rs`) is not a replay prompt and stays in Rust.
+The serving prompt of the dataset is splinter's own coding-agent prompt (`splinter_sdk::vocabulary::prompt`), not a replay prompt.
 
 The gate `check` is told how the agent's last turn ended (`--stopped`), so a correction is earned only
 by a turn that concluded. The sample needs sven at or after 3e1f6b4d; Cargo.lock
