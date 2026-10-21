@@ -1150,6 +1150,24 @@ Per-stratum pass rates are reported beside the sign test and carry no test of th
 
 **A24.6 Not this lease.** About 56 server-hours are needed for HALF_A alone over three trained arms and the base at k = 3. Every arm resumes from its recorded attempts (`solve --resume`), and nothing is compared before a half is complete in every arm.
 
+### Amendment 25, 2026-10-21, 13:21 CEST: the CE8 run of A23 is memorised; one run on a one-pass budget, the guard unchanged
+
+Made after the CE8 run of A23 and before any evaluation attempt of any CE8, CE8-S or CE8-T candidate. No task outcome of any of them exists.
+
+**A25.1 The run of A23 and its guard.** The run (`ce8/logs/train-a22-bf16-r3.*`, 65 steps, evaluation every 9, patience 2, R = 65) ran without fault on the build of A23.3:
+- it stopped at step 51 after two evaluations without improvement and kept step 27;
+- monitoring losses at steps 9, 18, 27, 36, 45 and 51 were 0.0955, 0.0868, 0.0839, 0.0971, 0.0871 and 0.0867, against 0.1101 for the base;
+- the training loss fell from 0.1476 at step 1 to 0.0221 at step 51 (means of the first and last nine steps: 0.108 and 0.039).
+
+Its final training loss is below half its first-step value while its final monitoring loss is above its minimum, so by A19.2's guard it is **reported as memorised and its adapter is not evaluated**. The guard is not changed by this amendment.
+
+**A25.2 One more CE8 run, and only one.** The monitoring minimum fell at step 27, 54 records, about 0.83 of one pass over R = 65. This is a training-side quantity of the monitoring split, read before any task outcome exists. One new CE8 run is trained on the dataset, build and recipe of A23, with these changes only:
+- steps ceil(R/B) = 33, one pass in place of A19.2's two;
+- `--eval-every` ceil(33/8) = 5;
+- `--patience 2`.
+
+The guard of A19.2 is applied to it as written. If it fires, CE8 is not evaluated, no further budget is tried, and the paper reports both runs. CE8-S (A24.1) is trained with exactly this run's steps and evaluations, and so is CE8-T (A22.3), with ceil(R/B) for its own R. The CE8-S run started under the 65-step budget was stopped by the integrator after its base load, before any step (`ce8/logs/stopped/`).
+
 ## Provenance
 
 The common definitions restate, without change of substance, the protocol fixed on
