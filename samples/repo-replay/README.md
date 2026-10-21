@@ -157,6 +157,11 @@ a later step and is not part of this sample. What makes the data suitable, and w
 | no record of an earlier split repeats a later one's target change (a change and its revert, a copy) | `content_overlaps` over the changed lines; the build fails with the pairs unless `--drop-overlaps` leaves the training-side record out |
 | brain trains the dataset, by the supervised regime, and its records fit the block | `dataset-manifest.json`: `trainable`, the examples, token lengths counted with `--tokenizer-dir`'s tokenizer against `--max-block`, what was left out by reason |
 
+Secrets are found by splinter's `knowledge::redact` and replaced by `[REDACTED:<kind>]` (before that the
+sample's own patterns left `[redacted]`). This affects new runs only: a stored state is never scrubbed
+again, so a state started earlier keeps its old markers, and `redact` recognises more shapes than the
+old patterns did, so more commits whose diff holds a secret are skipped.
+
 `dataset-manifest.json` (beside `splits.json`) states: the source name and revision range, the
 splinter, sven and brain revisions and the binary's digest, the digests of the harness documents,
 the model, seed and sampling; records per split by type (`first_try`, `corrected`) and plan style;

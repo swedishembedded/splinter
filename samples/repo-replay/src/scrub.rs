@@ -10,8 +10,9 @@
 //!
 //! What is scrubbed: the commit's author names and addresses (known from the
 //! history), any e-mail address, trailer lines (`Signed-off-by:`,
-//! `Co-authored-by:`, `Reviewed-by:` ...), and secret-shaped strings (cloud
-//! keys, tokens, private-key blocks, `password=` assignments). The same
+//! `Co-authored-by:`, `Reviewed-by:` ...), and secrets, which splinter's
+//! `knowledge::redact` recognises (private-key blocks, credentials assigned to
+//! a secret name, tokens by their shape) and replaces with `[REDACTED:<kind>]`. The same
 //! [`Scrubber`] is applied to every string of a stored trajectory, so a name
 //! that appears in a tool result and in a later edit is replaced the same way
 //! in both and the record stays self-consistent.
@@ -25,6 +26,7 @@ use std::sync::Arc;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use splinter_sdk::knowledge::redact::redact;
 
 /// The text that takes a scrubbed span's place.
 pub const REDACTED: &str = "[redacted]";
@@ -64,21 +66,10 @@ struct Tally {
 #[derive(Clone, Debug)]
 pub struct Scrubber {
     names: Vec<String>,
-    patterns: Vec<Regex>,
+    email: Regex,
     trailer: Regex,
     tally: Arc<Tally>,
 }
-
-/// Secret shapes: a cloud access key id, a token with a well-known prefix, a
-/// PEM private-key header, a `secret = value` style assignment.
-const SECRET_PATTERNS: &[&str] = &[
-    r"AKIA[0-9A-Z]{16}",
-    r"gh[pousr]_[A-Za-z0-9]{30,}",
-    r"xox[abprs]-[A-Za-z0-9-]{10,}",
-    r"sk-[A-Za-z0-9]{24,}",
-    r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
-    r#"(?i)(?:password|passwd|secret|api[_-]?key|token)\w*\s*[:=]\s*["']?[^\s"']{8,}"#,
-];
 
 impl Scrubber {
     /// A scrubber for text from a history whose authors are `names` and
@@ -94,22 +85,15 @@ impl Scrubber {
         // Longest first, so "Ada Lovelace" goes before "Ada".
         names.sort_by_key(|n| std::cmp::Reverse(n.len()));
         names.dedup();
-        let mut patterns = vec![
-            Regex::new(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-                .unwrap_or_else(|_| unreachable!("a fixed pattern")),
-        ];
-        patterns.extend(
-            SECRET_PATTERNS
-                .iter()
-                .map(|p| Regex::new(p).unwrap_or_else(|_| unreachable!("a fixed pattern"))),
-        );
+        let email = Regex::new(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+            .unwrap_or_else(|_| unreachable!("a fixed pattern"));
         let trailer = Regex::new(
             r"(?im)^(?:signed-off-by|co-authored-by|reviewed-by|acked-by|tested-by|reported-by|suggested-by|cc):.*\n?",
         )
         .unwrap_or_else(|_| unreachable!("a fixed pattern"));
         Self {
             names,
-            patterns,
+            email,
             trailer,
             tally: Arc::default(),
         }
@@ -142,16 +126,14 @@ impl Scrubber {
         let add = |counter: &AtomicUsize, n: usize| counter.fetch_add(n, Ordering::Relaxed);
         add(&self.tally.trailers, self.trailer.find_iter(text).count());
         let mut out = self.trailer.replace_all(text, "").into_owned();
-        for (at, pattern) in self.patterns.iter().enumerate() {
-            // The first pattern is the e-mail address, the rest are secrets.
-            let counter = if at == 0 {
-                &self.tally.people
-            } else {
-                &self.tally.secrets
-            };
-            add(counter, pattern.find_iter(&out).count());
-            out = pattern.replace_all(&out, REDACTED).into_owned();
-        }
+        let redacted = redact(&out);
+        add(
+            &self.tally.secrets,
+            redacted.found.iter().map(|(_, n)| *n as usize).sum(),
+        );
+        out = redacted.text;
+        add(&self.tally.people, self.email.find_iter(&out).count());
+        out = self.email.replace_all(&out, REDACTED).into_owned();
         for name in &self.names {
             out = if name.contains(char::is_whitespace) || name.contains('@') {
                 add(&self.tally.people, out.matches(name.as_str()).count());
@@ -168,7 +150,7 @@ impl Scrubber {
     /// Whether `text` holds a secret-shaped string (not a name or address).
     #[must_use]
     pub fn finds_secret(&self, text: &str) -> bool {
-        self.patterns.iter().skip(1).any(|p| p.is_match(text))
+        !redact(text).found.is_empty()
     }
 }
 
@@ -222,6 +204,18 @@ mod tests {
         assert!(out.contains("Fix parser"));
         assert!(s.finds_secret("token: abcdefghijkl"));
         assert!(!s.finds_secret("mail ada@example.org"));
+    }
+
+    #[test]
+    fn a_secret_is_replaced_by_the_redaction_marker_of_its_kind_and_scrubbing_again_changes_nothing(
+    ) {
+        let s = Scrubber::new(["Ada Lovelace"]);
+        let out = s.scrub("key AKIAABCDEFGHIJKLMNOP and password = hunter2hunter2");
+        assert!(out.contains("[REDACTED:token]"), "{out}");
+        assert!(out.contains("[REDACTED:credential]"), "{out}");
+        assert_eq!(s.scrub(&out), out);
+        assert!(s.finds_secret("API_TOKEN = \"abcd1234efgh5678ijkl\""));
+        assert!(!s.finds_secret("max_tokens=4096"));
     }
 
     #[test]
