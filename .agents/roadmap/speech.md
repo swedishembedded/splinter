@@ -1,5 +1,7 @@
 # Speech roadmap: a persona you can talk to, then a persona that hears and speaks natively
 
+Scope: speech for personas: the cascade voice loop (`samples/voice-loop`) and the speech-native model after it.
+
 Goal: talk to a Samuel Adams or Thomas Jefferson persona and have it talk
 back. The first loop is a cascade (recognise, answer in text, speak), which is
 the reference and the source of spoken training examples. The target is a

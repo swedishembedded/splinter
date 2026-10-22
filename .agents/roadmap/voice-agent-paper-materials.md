@@ -1,7 +1,11 @@
+<!--
 SPDX-License-Identifier: CC-BY-4.0
 Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+-->
 
-Learning-Voice-Agent: Materials Inventory and Gaps
+# Learning voice agent paper: materials inventory and gaps
+
+Scope: the materials inventory and evidence gaps of the learning voice agent paper (`papers/learning-voice-agent`).
 
 ## 1. Methodology to Formalize
 

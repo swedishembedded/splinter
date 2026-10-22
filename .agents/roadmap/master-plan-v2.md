@@ -5,6 +5,8 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Master plan v2: real coding-task competence first (2026-10-16, evening)
 
+Scope: the executable order of the work that puts real coding-task competence first.
+
 This plan merges the user's course-correction plan (input:
 `~/project/shared/containers/runs/plan-2026-10-16/correction-plan-input.md`, Phases 0-7, gates
 G0-G15, experiments E0-E14) with the grounded `master-plan.md` (v1) into one executable order.

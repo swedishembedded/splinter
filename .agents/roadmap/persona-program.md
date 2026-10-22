@@ -5,6 +5,8 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Persona program: learn to think, act and write like a person
 
+Scope: the persona program (learn to think, act and write like a person): its goal and the index and order of its work.
+
 Goal: `splinter "Learn to think and act like Thomas Jefferson from ./jefferson"`
 (optionally with a base model and an adapter name) produces an adapter that
 decides, acts through tools and writes as that person would on situations and

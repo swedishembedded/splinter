@@ -1,5 +1,7 @@
 # Splinter roadmap
 
+Scope: the end state of the `splinter` command, intent by intent, and the SDK surfaces of sven and brain it rests on.
+
 The end state and the phases that get there. Update this file in the same
 commit that finishes or changes an item.
 

@@ -5,6 +5,8 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Persona program: seed policy and build health
 
+Scope: the persona program's seed policy and build health.
+
 Work items PP-01 to PP-09 of the persona program (index and order in
 `persona-program.md`, findings in `persona-findings.md`).
 

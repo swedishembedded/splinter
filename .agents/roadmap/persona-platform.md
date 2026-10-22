@@ -5,6 +5,8 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Persona program: named adapters, orchestration, tooling and shared code
 
+Scope: persona work on named adapters, orchestration, tooling and shared code.
+
 Work items PP-28 to PP-39 of the persona program (index and order in
 `persona-program.md`, findings in `persona-findings.md`).
 

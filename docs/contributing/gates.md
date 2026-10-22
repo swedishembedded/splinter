@@ -23,6 +23,7 @@ enforces and why.
 | `no-machine-paths` | No absolute machine paths |
 | `no-perf-numbers` | No unreviewed performance numbers in READMEs, comments or strings; mark a reviewed one with `perf-number: reason` |
 | `repo-scope` | Splinter names only sven and brain |
+| `roadmap-index` | Every roadmap ledger states its scope, and the generated roadmap index matches the ledgers |
 | `scripts` | Every script works and is used |
 | `seed-literals` | Random choices take a seed the run states |
 | `test-skips` | No test skips itself silently |

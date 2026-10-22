@@ -1,5 +1,7 @@
 # research-to-stack - splinter share
 
+Scope: Splinter's share of the research-to-stack upgrades: true training sources, exams strong enough to see an effect, and rollouts spent where they teach.
+
 **Status: planned. Nothing below has been started.** Update this file in the same commit that
 finishes or changes an item. Evidence and citations are in the cross-project research note;
 item ids U1-U15 refer to it. Brain items RS-B1..B5 and sven items RS-S1..S5 are named by id.

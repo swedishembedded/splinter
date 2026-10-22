@@ -5,6 +5,8 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Campaign audit: self-improving platform (Splinter + Brain + Sven), 2026-10-16 15:10 CEST
 
+Scope: a read-only audit, dated 2026-10-16, of the Splinter, brain and sven campaign and the defects it found.
+
 This is an independent, read-only audit. Nothing was edited, built or run on the GPU; the only
 command run was `make -C papers/splinter-brain-sven-flywheel verify`. The Slurm lease ends at
 16:48 CEST, about 1 h 35 min after this audit was written.

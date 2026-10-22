@@ -5,6 +5,8 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Persona program: findings ledger
 
+Scope: defects and risks found by reading the persona pipeline end to end.
+
 Defects and risks found by reading the persona pipeline end to end (synthetic
 author, persona chat, `learn`, the model adapter, the paper's data) and, where
 the code alone could not settle a question, by recounting the study's own

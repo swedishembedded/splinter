@@ -127,7 +127,7 @@ GATE_TARGETS := $(addprefix check/gates/,$(GATE_NAMES))
 
 ## check/gates - default: every text gate below (hygiene, headers, paths, file sizes,
 ##   citations, manifests, lock sources, repo scope, environment reads, seed literals,
-##   crate layering, history, make target naming)
+##   crate layering, history, make target naming, roadmap index)
 check/gates: check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS)
 
 ## check/gates/text-hygiene - ASCII punctuation, whitespace, line endings, parseable files
@@ -220,6 +220,7 @@ samples/model-check/report:
 # ---------------------------------------------------------------------------
 ##@ Documentation
 ## The manual under docs/, published as Markdown pages and a PDF by the pinned publisher.
+## The contributor notes under .agents/ are not published; their roadmap index is generated.
 
 NODE ?= node
 DOCS_PUBLISHER ?= tools/docs-publisher/docs-publisher.mjs
@@ -256,6 +257,18 @@ docs/pdf: docs/build
 ## docs/clean - remove the generated documentation (build/docs and the PDF)
 docs/clean:
 	rm -rf $(DOCS_OUT) $(DOCS_PDF)
+
+## agents - lists the contributor-notes targets; writes nothing
+agents:
+	@bash scripts/make-help.sh agents
+
+## agents/roadmap - lists the roadmap targets; writes nothing
+agents/roadmap:
+	@bash scripts/make-help.sh agents/roadmap
+
+## agents/roadmap/index - write .agents/roadmap/index.md from the ledgers beside it (check/gates/roadmap-index fails on drift)
+agents/roadmap/index:
+	python3 -I scripts/gates/roadmap-index.py
 
 # ---------------------------------------------------------------------------
 ##@ Lease kit
@@ -456,4 +469,5 @@ help:
 	qualify qualify/list qualify/test qualify/run \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
 	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit samples/repo-replay samples/repo-replay/audit samples/model-check samples/model-check/audit samples/model-check/report \
-	docs docs/build docs/check docs/pdf docs/clean _docs-publisher-pin
+	docs docs/build docs/check docs/pdf docs/clean _docs-publisher-pin \
+	agents agents/roadmap agents/roadmap/index

@@ -1,5 +1,7 @@
 # Fast continuous learning roadmap
 
+Scope: Splinter's share of fast continuous learning: learning from experience at four speeds under one promotion policy.
+
 **Status: planned. Nothing below has been started.** Update this file in the same commit
 that finishes or changes an item. The grounded analysis behind it (literature check, tiers,
 latency budget, evaluation protocol) is the planning section "Fast continuous learning" of

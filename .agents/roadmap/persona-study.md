@@ -5,6 +5,8 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Persona program: the study, the records and the real authors
 
+Scope: the persona study, its records and the real authors it is run on.
+
 Work items PP-10 to PP-27 of the persona program (index and order in
 `persona-program.md`, findings in `persona-findings.md`, seeds in
 `persona-seeds-and-health.md`). Items PP-10 to PP-15 change what the next runs

@@ -1,5 +1,7 @@
 # The flywheel - roadmap
 
+Scope: the unattended generate, execute, verify, learn, evaluate and promote loop over sven and brain, and what it still lacks.
+
 The loop generate -> execute -> verify -> learn -> evaluate -> promote, run
 unattended, repeatedly, with every generation regression-protected, over sven
 (agent execution) and brain (training, inference). Splinter stays the single place

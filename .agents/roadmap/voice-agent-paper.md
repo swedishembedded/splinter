@@ -1,5 +1,7 @@
 # Roadmap: what the voice agent paper still has to prove
 
+Scope: the claims the learning voice agent paper (`papers/learning-voice-agent`) still has to prove, each with its gate.
+
 The paper `papers/learning-voice-agent` contains only what is proven by a stored
 run (`data/runs/*.json`, listed in `data/runs.csv`). Everything below is a claim
 the paper does not make yet. Each item says what finishing it needs, how it is

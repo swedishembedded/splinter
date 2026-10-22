@@ -5,7 +5,9 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Capability inventory and discrepancy report (package P0-INV), 2026-10-16
 
-Scope: the crates, CLI verbs and SDK entries of splinter, sven and brain that the target
+Scope: the capability inventory and discrepancy report, dated 2026-10-16, of what the coding-task plan could touch in Splinter, sven and brain.
+
+It covers the crates, CLI verbs and SDK entries of splinter, sven and brain that the target
 pipeline (master plan v2, phases 1-4: real-task benchmark, retention and anchors, failure
 taxonomy, training contract) could touch. Sven and brain were read, never changed.
 

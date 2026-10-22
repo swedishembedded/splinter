@@ -1,5 +1,7 @@
 # Autonomous acquisition, intervention selection and generations - roadmap
 
+Scope: autonomous acquisition of a capability from documentation (`learn "<objective>" --source`), the choice of an intervention by measured gain and cost (`improve`), and gains kept across generations (`generations`).
+
 Gate C (a capability the policy lacks is acquired from documentation with no manual edits) and
 Gate D (gains that survive three generations). What is built, what each measures, and what a
 GPU run must still show. Update this file in the same commit that finishes or changes an item.

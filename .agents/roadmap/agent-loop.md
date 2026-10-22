@@ -1,5 +1,7 @@
 # Agent loop and residual-survival research roadmap
 
+Scope: the supervised coding-agent loop sample (`samples/agent/loop`) and the residual-survival studies it carries out.
+
 Working roadmap for the supervised coding-agent loop (`samples/agent/loop`)
 and the pre-registered survival experiments it is asked to carry out. Update
 this file in the same commit that finishes or changes an item. The paper that

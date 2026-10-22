@@ -1,5 +1,7 @@
 # Learning a repository from executable tasks
 
+Scope: learning a git repository from executable tasks (`practice`), from snapshot to gated release.
+
 Outcome: at any time a person runs one verb on a git repository. Splinter derives
 executable tasks from it, drops what it already holds (same snapshot, near-duplicates of
 earlier tasks, earlier generations), solves them with sven agents, keeps what hidden checks

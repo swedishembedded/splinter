@@ -109,6 +109,13 @@ repos:
         files: (^|/)Makefile$
         pass_filenames: false
 
+      - id: roadmap-index
+        name: the roadmap index is generated from the ledgers
+        entry: bash scripts/gates/check-roadmap-index.sh
+        language: system
+        files: ^(\.agents/roadmap/|scripts/gates/(check-)?roadmap-index)
+        pass_filenames: false
+
       - id: rustfmt
         name: rustfmt
         entry: rustfmt --edition 2021

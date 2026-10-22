@@ -5,6 +5,8 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 # Master plan: the remaining work of the brain + sven + splinter campaign (2026-10-16, 17:00 CEST)
 
+Scope: the remaining work of the Splinter, brain and sven campaign as planned on 2026-10-16; `master-plan-v2.md` decides where the two disagree.
+
 Written on node n592 (GH200, lease job 3935373, 16:20 to 00:20 CEST) at brain `21d4e13c`,
 sven `ebd169a2`, splinter `d4c1ac3` (local main; `origin/main` has since moved to `59499d9`,
 seven synthetic-author and docs commits, none of which touch the files this plan names).
