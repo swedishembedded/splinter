@@ -4,8 +4,8 @@
 # Splinter's crate layering: the authoritative tier of every workspace crate.
 # scripts/gates/check-architecture.sh enforces it against `cargo metadata` in
 # `make check`; scripts/gates/test-architecture.py is the gate's own
-# specification. AGENTS.md explains the layers; when the two disagree, this
-# file wins.
+# specification. .agents/rules/architecture.md explains the layers; when the
+# two disagree, this file wins.
 #
 # Rules:
 #   - A crate may depend (as a normal or build dependency) only on crates in a

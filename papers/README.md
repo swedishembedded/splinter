@@ -10,7 +10,7 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 Each paper has one question, stated as its scope in the introduction. A new
 verified finding goes into the paper whose scope it falls in, in the same change
-that produces it (see "Research papers" in `AGENTS.md`). A paper is a draft until it
+that produces it (see `.agents/rules/papers.md`). A paper is a draft until it
 holds validated results only; `splinter-brain-sven-flywheel` is a draft (`status.txt`), and
 `make -C papers/splinter-brain-sven-flywheel final` fails until it is final. A finding that fits no
 scope below starts a new paper directory with its own scope; it is not squeezed into

@@ -40,7 +40,7 @@ RUST_SOURCES = $(wildcard $(shell git ls-files --cached --others --exclude-stand
 # targets. The first `name =` after [package] is the package name.
 CRATE_PACKAGES := $(shell sed -sn '/^\[package\]/,/^name *=/s/^name *= *"\(.*\)"/\1/p' crates/*/Cargo.toml samples/*/Cargo.toml samples/*/*/Cargo.toml)
 
-# MAKE TARGETS (rule: AGENTS.md, "Make targets"). A target is
+# MAKE TARGETS (rule: .agents/rules/make-targets.md). A target is
 # `make <concept>/<subconcept>/.../<action>`: concept first, verb last, one
 # segment per directory level, and every prefix is itself a target so
 # `make <TAB>` descends one level at a time. Where a set follows from the tree
