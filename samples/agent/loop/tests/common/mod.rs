@@ -217,8 +217,6 @@ impl Fixture {
             model_store: self.home.path().join("models"),
             policy_base: self.home.path().join("models/policy"),
             policy_context_tokens: None,
-            openrouter_api_key: None,
-            brain_api_key: None,
             allow_remote: false,
             command_env: Default::default(),
             working_dir: self.home.path().to_path_buf(),

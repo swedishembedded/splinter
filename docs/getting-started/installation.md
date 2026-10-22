@@ -23,8 +23,9 @@ with the fix for each failure, and exits 1 on a failure.
 ## Fetch the policy model
 
 The policy model comes from brain's model store, which `brain pull Qwen/Qwen3-0.6B` fills. The
-default store is `~/.local/share/brain/models`; `BRAIN_MODELS_DIR` names another and
-`BRAIN_QWEN_WEIGHTS` names another checkpoint as the policy's base. See
+store is the one brain itself uses (`~/.local/share/brain/models`); `--models-dir` names another
+and `--policy-base` names another checkpoint as the policy's base. A larger chat model pulled
+beside it (`brain pull Qwen/Qwen3-8B`) becomes the assistant that teaches and judges. See
 [configuration](configuration.md).
 
 ## Build against local sven and brain checkouts

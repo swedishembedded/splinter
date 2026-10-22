@@ -350,18 +350,17 @@ def load_facts(out):
 class Splinter:
     """The `splinter` binary on one state root."""
 
-    def __init__(self, binary, state, log, env, context):
-        self.binary, self.state, self.log, self.env = binary, state, log, env
+    def __init__(self, binary, state, log, machine, context):
+        self.binary, self.state, self.log, self.machine = binary, state, log, machine
         self.context = context
 
     def run(self, *args, ok=(0,)):
-        command = [self.binary, "--state", str(self.state), "--json",
+        command = [self.binary, "--state", str(self.state), "--json", *self.machine,
                    "--policy-context-tokens", str(self.context), *map(str, args)]
         with open(self.log, "a") as log:
             log.write("$ " + " ".join(command) + "\n")
             log.flush()
-            done = subprocess.run(command, stdout=subprocess.PIPE, stderr=log,
-                                  env=self.env, text=True)
+            done = subprocess.run(command, stdout=subprocess.PIPE, stderr=log, text=True)
         if done.returncode not in ok:
             raise SystemExit(f"{' '.join(command)} exited {done.returncode}; see {self.log}")
         try:
@@ -405,11 +404,10 @@ class Cycle:
         self.log = self.out / f"splinter-{tag}.log"
         self.rows = []
         self.updates = args.updates
-        env = dict(os.environ)
-        env["BRAIN_QWEN_WEIGHTS"] = args.policy_weights
+        machine = ["--policy-base", args.policy_weights]
         if args.brain:
-            env["SPLINTER_BRAIN_BIN"] = args.brain
-        self.splinter = Splinter(args.splinter, self.state, self.log, env, args.policy_context)
+            machine += ["--brain-bin", args.brain]
+        self.splinter = Splinter(args.splinter, self.state, self.log, machine, args.policy_context)
         role = f"local:{args.helper}@{args.helper_context}"
         # No judge: a model does not grade its own work, and a judge of another
         # size is no part of what this sample measures.

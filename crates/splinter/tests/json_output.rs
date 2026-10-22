@@ -38,7 +38,6 @@ fn splinter(state: &Path, args: &[&str]) -> (i32, Value) {
         .arg("--state")
         .arg(state)
         .args(args)
-        .env_remove("SPLINTER_ALLOW_REMOTE")
         .output()
         .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();

@@ -44,9 +44,9 @@ order:
 Where no container is configured, the commands the agent works with run on
 the host, bounded but not isolated, and every environment record says
 `isolation: none`; naming a docker client and a digest-pinned image
-(`SPLINTER_DOCKER`, `SPLINTER_WORKSPACE_IMAGE`) runs them in a container with
-no network instead. `SPLINTER_CARGO_HOME` gives the commands a
-cargo home to build offline from, and `SPLINTER_WORKSPACE_SCRATCH` says where
+(`--docker`, `--workspace-image`) runs them in a container with
+no network instead. `--cargo-home` gives the commands a
+cargo home to build offline from, and `--workspace-scratch` says where
 trees are laid out. An attempt whose trajectory shows the hidden tests,
 and an attempt the harness could not carry out, are set aside and counted in the
 gate's report; neither is in a denominator. A release moves the alias and

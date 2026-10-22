@@ -380,7 +380,7 @@ pub fn learn(
     let budget = match (request.budget, &ctx.config().default_budget) {
         (Some(named), _) => Some(named),
         (None, Some(text)) => Some(parse_budget(text).map_err(|e| {
-            OrchestratorError::Refused(format!("SPLINTER_BUDGET is not usable: {e}"))
+            OrchestratorError::Refused(format!("--default-budget is not usable: {e}"))
         })?),
         (None, None) => None,
     };

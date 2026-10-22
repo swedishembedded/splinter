@@ -126,8 +126,6 @@ impl Run {
             model_store: unused.join("models"),
             policy_base: unused.join("policy"),
             policy_context_tokens: None,
-            openrouter_api_key: None,
-            brain_api_key: None,
             allow_remote: false,
             command_env: BTreeMap::new(),
             working_dir: self.dir.clone(),

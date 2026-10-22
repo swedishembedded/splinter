@@ -226,6 +226,35 @@ the released adapter answers the same questions from plain `brain serve`.
    - The intake agent run with a served model over the sample's variables,
      scored against the hand mapping (`lifecourse intake --base-url`).
 
+## First run with no configuration
+
+Every setting is a global flag; `Config::from_env` reads only the home
+directory, `PATH` and the variables commands are handed through. With no
+assistant named, roles that help the policy are played by the strongest chat
+model in the store that fits the largest card (`roles::discovered_assistant`),
+and `doctor` warns when the policy is left to play them.
+
+Measured on 2026-10-22, a fresh home, nothing in the environment, 2x24 GiB
+cards, the store holding Qwen3-0.6B, -8B and -14B:
+
+- `splinter doctor` picks `local:Qwen/Qwen3-14B@4096` for teacher, generator,
+  planner, judge and router, with no warning.
+- The README sentence ("Learn what we can do with brain command line
+  options") is read as `learn 'cmd:brain --help'` (0.90) and asked back
+  before a command is run; with the 0.6B reader it was taken for a path.
+- That `learn` with `--budget 15m` planned recall, explain and teacher tasks
+  and stopped after 8 minutes with no task: the stage budgets reserved the
+  rest before the task stage had any.
+
+Open:
+
+- [ ] Budget shares that leave the task stage something when a cold load and
+      planning take most of a short budget, or a refusal that names the
+      budget a run needs instead of "budget spent".
+- [ ] A persistent configuration file for the global flags.
+- [ ] `splinter-agent`'s harness editor and tests still write `api_version:
+      "1"` harness documents, which the local sven no longer accepts.
+
 ## Build health (local sven and brain)
 
 - The committed `Cargo.lock` pins revisions of the dependencies that the

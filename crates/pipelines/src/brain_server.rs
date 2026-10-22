@@ -61,7 +61,7 @@ pub struct Launch<'a> {
     pub work: &'a Path,
     /// Brain's model store, scanned at startup when it exists.
     pub models: &'a Path,
-    /// The base checkpoint, as `BRAIN_QWEN_WEIGHTS`.
+    /// The base checkpoint, as `--checkpoint`.
     pub base: &'a Path,
     /// How the candidate is offered.
     pub offer: Offer<'a>,
@@ -175,7 +175,14 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     if !matches!(launch.offer, Offer::Nothing) {
         command.args(["--adapter-targets", "all"]);
     }
+    // The checkpoint by flag, and a runtime directory of its own: the
+    // connection record it publishes there is found by no client of the
+    // user's, which would otherwise take this private server for theirs.
     command
+        .arg("--checkpoint")
+        .arg(launch.base)
+        .arg("--runtime-dir")
+        .arg(launch.work)
         .arg("--api-keys-out")
         .arg(&keys)
         .arg("--ready-file")
@@ -186,7 +193,6 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
         command.arg("--models-dir").arg(launch.models);
     }
     let mut child = command
-        .env("BRAIN_QWEN_WEIGHTS", launch.base)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

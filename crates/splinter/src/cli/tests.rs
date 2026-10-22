@@ -657,7 +657,7 @@ fn learn_can_distill_and_tune_the_training_it_runs() {
     let Command::Learn(plain) = command(&["learn", "docs"]) else {
         panic!("learn");
     };
-    assert!(!plain.distill && !plain.bf16_base);
+    assert!(!plain.distill);
     assert_eq!(
         (plain.steps, plain.rank, plain.optimiser.lr),
         (None, None, None)
@@ -673,11 +673,10 @@ fn learn_can_distill_and_tune_the_training_it_runs() {
         "16",
         "--lr",
         "0.0002",
-        "--bf16-base",
     ]) else {
         panic!("learn --distill");
     };
-    assert!(tuned.distill && tuned.bf16_base);
+    assert!(tuned.distill);
     assert_eq!((tuned.steps, tuned.rank), (Some(300), Some(16)));
     assert_eq!(tuned.optimiser.lr, Some(0.0002));
     assert!(

@@ -75,9 +75,8 @@ cp -r "$fixture" "$repo" || fail "missing artifact: the fixture could not be cop
     && git -c user.name=turn -c user.email=turn@example.invalid commit -q -m fixture) \
     || fail "missing artifact: the fixture repository could not be made"
 state=$scratch/state
-export BRAIN_MODELS_DIR=$models
-export SPLINTER_BRAIN_BIN=$brain
-"$splinter" --json --state "$state" "${device[@]}" practice "$repo" --max-tasks 6 --steps 20 \
+"$splinter" --json --state "$state" --models-dir "$models" --brain-bin "$brain" "${device[@]}" \
+    practice "$repo" --max-tasks 6 --steps 20 \
     >"$scratch/practice.json" 2>"$scratch/practice.err" \
     || { tail -20 "$scratch/practice.err" >&2; fail "splinter practice did not complete"; }
 check practice "$scratch/practice.json" || exit 1
@@ -105,7 +104,8 @@ python3 -c 'import json,sys; json.dump({"adapter": sys.argv[1], "digest": sys.ar
     "$adapter" "$digest" "$manifest" || fail "missing artifact: the adapter manifest could not be written"
 port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 "$brain" "${device[@]}" serve --openai "$port" --models-dir "$models" --adapter-manifest "$manifest" \
-    --api-keys-out "$scratch/keys.json" --ready-file "$scratch/ready" >"$scratch/brain.log" 2>&1 &
+    --runtime-dir "$scratch/run" --api-keys-out "$scratch/keys.json" --ready-file "$scratch/ready" \
+    >"$scratch/brain.log" 2>&1 &
 server=$!
 for _ in $(seq 1 240); do
     [ -e "$scratch/ready" ] && break
@@ -132,7 +132,7 @@ work=$home/repo
 mkdir -p "$work"
 secret=4217
 printf 'The magic number is %s.\n' "$secret" >"$work/hello.txt"
-(cd "$work" && HOME="$home" XDG_CONFIG_HOME="$home" SVEN_DISABLE_BRAIN_AUTODETECT=1 "$sven" --config "$scratch/sven.yaml" \
+(cd "$work" && HOME="$home" XDG_CONFIG_HOME="$home" XDG_RUNTIME_DIR="$home" "$sven" --config "$scratch/sven.yaml" \
     -H "Use the read_file tool to read hello.txt, then tell me the magic number it contains.") \
     >"$scratch/task.out" 2>"$scratch/task.err" \
     || { tail -20 "$scratch/task.err" >&2; fail "missing artifact: sven did not complete a task through the served candidate"; }

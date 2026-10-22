@@ -273,10 +273,6 @@ pub struct LearnArgs {
     /// How the training is watched.
     #[command(flatten)]
     pub monitoring: MonitoringArgs,
-    /// Hold the frozen base at bf16, half the bytes of fp32: what a 7B
-    /// base needs to train on one 24 GiB card.
-    #[arg(long)]
-    pub bf16_base: bool,
     /// How the frontier is measured.
     #[command(flatten)]
     pub pass_at_k: PassAtKArgs,

@@ -58,6 +58,40 @@ use splinter_sdk::Config;
 use cli::{Cli, Command};
 use session::Session;
 
+/// The global flags that say where things are on this machine and which
+/// models play which part: each replaces the default `Config::from_env` found.
+fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
+    if let Some(state) = &global.state {
+        config.state_root = StateRoot::new(state);
+    }
+    if let Some(dir) = &global.models_dir {
+        config.model_store.clone_from(dir);
+        config.policy_base = dir.join(splinter_sdk::config::DEFAULT_POLICY_MODEL);
+    }
+    if let Some(base) = &global.policy_base {
+        config.policy_base = splinter_sdk::model_ref::checkpoint_path(config, base);
+    }
+    if let Some(binary) = &global.brain_bin {
+        config.brain_binary = Some(binary.clone());
+    }
+    config.assistant_model.clone_from(&global.assistant_model);
+    config.judge_model.clone_from(&global.judge_model);
+    config.front_door_model.clone_from(&global.front_door_model);
+    config.default_budget.clone_from(&global.default_budget);
+    config.bf16_base = global.bf16_base;
+    if let Some(n) = global.min_calibration_controls {
+        config.min_calibration_controls = usize::try_from(n).unwrap_or(usize::MAX);
+    }
+    config.allow_remote = global.allow_remote;
+    config.workspace.docker.clone_from(&global.docker);
+    config.workspace.image.clone_from(&global.workspace_image);
+    config
+        .workspace
+        .scratch_root
+        .clone_from(&global.workspace_scratch);
+    config.workspace.cargo_home.clone_from(&global.cargo_home);
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     if cli.sentence.is_some() && cli.command.is_some() {
@@ -79,9 +113,7 @@ fn main() -> ExitCode {
         return session::Exit::Failed.into();
     }
     let mut config = Config::from_env();
-    if let Some(state) = &cli.global.state {
-        config.state_root = StateRoot::new(state);
-    }
+    apply_machine_flags(&mut config, &cli.global);
     config.policy_context_tokens = cli.global.policy_context_tokens;
     if let Some(width) = cli.global.remote_concurrency {
         config.remote_concurrency = width as usize;
@@ -111,7 +143,7 @@ fn main() -> ExitCode {
         .workspace
         .runtime_dirs
         .clone_from(&cli.global.runtime_dir);
-    config.build = build_info::current(config.build.gpu_contexts);
+    config.build = build_info::current(cli.global.gpu_contexts);
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,
         Err(e) => {

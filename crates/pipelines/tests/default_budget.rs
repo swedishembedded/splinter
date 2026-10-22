@@ -8,7 +8,7 @@
 
 //! Spec: a learning run with no budget on a large corpus has no end, and a
 //! sentence cannot carry one. The configuration may name a default budget
-//! (`SPLINTER_BUDGET`); a run that names none runs under it, one that names its
+//! (`--default-budget`); a run that names none runs under it, one that names its
 //! own runs under that, and a value that is not a duration is refused by name.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
@@ -103,7 +103,7 @@ fn a_default_that_is_not_a_duration_is_refused_by_name() {
         .unwrap_err()
         .to_string();
     assert!(
-        error.contains("SPLINTER_BUDGET") && error.contains("soon"),
+        error.contains("--default-budget") && error.contains("soon"),
         "{error}"
     );
 }

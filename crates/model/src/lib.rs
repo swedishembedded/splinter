@@ -59,6 +59,7 @@ pub mod seed;
 pub mod selection;
 pub mod speech;
 pub mod stats;
+pub mod store;
 pub mod timeline;
 pub mod tokens;
 pub mod train;

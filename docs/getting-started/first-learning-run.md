@@ -51,7 +51,10 @@ not ready: fix the failed checks above
 Failure modes:
 
 - `FAIL role:...`: the model the role would get is not on disk. Fetch the checkpoint with `brain pull`, or name the
-  store with `BRAIN_MODELS_DIR` or the checkpoint with `BRAIN_QWEN_WEIGHTS` (see [configuration](configuration.md)).
+  store with `--models-dir` or the checkpoint with `--policy-base` (see [configuration](configuration.md)).
+- `warn role:...`: the policy would play a role that helps it learn (teacher, generator, planner, judge, router).
+  The run can start, and rarely trains anything: pull a larger chat model (`brain pull Qwen/Qwen3-8B`), which
+  Splinter then picks as the assistant, or name one with `--assistant-model`.
 - `warn gpu`: no card has room for the policy's weights right now, or none was found. Brain would run the model on the CPU
   backend without a word, which is too slow for a real run.
 - `FAIL free-space`: less than 1 GiB is free under the state root (a warning under 10 GiB).
@@ -244,7 +247,8 @@ grounded in, with those bytes quoted. See [provenance](../concepts/provenance.md
 
 | You see | Meaning | Do |
 |---|---|---|
-| `FAIL role:...` from `doctor` | The role's model is not on disk | `brain pull`, or set `BRAIN_MODELS_DIR` or `BRAIN_QWEN_WEIGHTS` |
+| `FAIL role:...` from `doctor` | The role's model is not on disk | `brain pull`, or name `--models-dir` or `--policy-base` |
+| `warn role:...` from `doctor` | The policy would teach, judge or write tasks for itself | `brain pull` a larger chat model, or name `--assistant-model` |
 | `no plan was made` | The planner chose kinds the sources cannot support | Name `--kinds` |
 | Every proposed task rejected | The writer model is too weak for the admission rules | Name `--generator` and `--teacher`; see [configuration](configuration.md) |
 | `no candidate was trained` | No task was both failed sometimes and solved with a verified answer | More material, or a teacher that can solve what the policy cannot |

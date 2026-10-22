@@ -14,10 +14,24 @@ Every command takes these.
 - `--device <DEVICE>`: Which compute may be scheduled: `gpu`, `gpu1`, `gpu0,gpu1`, `cpu0-7`, `vulkan`, ... in brain's grammar. Without it, every device the machine has.
 - `--backend <BACKEND>`: How the hardware is driven: wgpu, vulkan, cuda or cpu. Without it brain picks, which on a CUDA host is not CUDA.
 - `--vram-budget <VRAM_BUDGET>`: The VRAM, in GiB, this process was granted: every card it budgets from is capped at it, so a run on a share of a card sizes its model, KV pool and context to the share. Without it the whole card is budgeted.
-- `--state <DIR>`: The state root (default: $SPLINTER_STATE, else ~/.splinter)
+- `--state <DIR>`: The state root (default: ~/.splinter)
+- `--models-dir <DIR>`: brain's model store, where `local:<org>/<model>` names a checkpoint (default: the store `brain pull` fills)
+- `--policy-base <CHECKPOINT>`: The checkpoint the policy trains and `policy:default` serves: a path, or a name in the model store (default: Qwen/Qwen3-0.6B)
+- `--brain-bin <PATH>`: The `brain` executable a release is checked to serve on (default: the first `brain` on PATH)
+- `--assistant-model <REF>`: The model that plans a learning run, writes its tasks, teaches what the policy cannot answer and judges, when the command names none for a role (default: the strongest chat model in the model store that fits a card, else the policy)
+- `--judge-model <REF>`: The model that judges answers in place of the assistant, so the judge is another model than the one that wrote what it grades.
+- `--front-door-model <REF>`: The model that reads a sentence (`splinter "learn ..."`) in place of the assistant.
+- `--default-budget <DURATION>`: How long a learning run may take when its command names no --budget, a sentence's run included (`6h`, `40m`); unbounded when not given.
+- `--min-calibration-controls <N>`: The fewest controls a judge is measured on before its verdicts count [default: 16]
+- `--docker <PATH>`: A docker client: with --workspace-image, a project's commands run in a container with no network.
+- `--workspace-image <IMAGE>`: The image, pinned by digest (`name@sha256:...`), a project's commands run in under --docker.
+- `--workspace-scratch <DIR>`: Where trees are laid out for repository tasks (default: under the state root)
+- `--cargo-home <DIR>`: A cargo home the commands of a Cargo project build offline from.
+- `--bf16-base`: Hold the frozen base the policy trains at bf16, half the bytes of fp32: what a 7B base needs to train on one 24 GiB card. A fact about this machine, so it applies to every command that trains, a sentence's run included.
+- `--gpu-contexts <N>`: The foreign GPU contexts that existed when this command started, as the GPU lease counted them; recorded with the run.
 - `--json`: Print machine-readable JSON on stdout instead of text.
 - `-v, --verbose`: Report more as work goes (each stage's full summary)
-- `--allow-remote`: Permit models reached over the network (remote:...); without it, and without SPLINTER_ALLOW_REMOTE=1, every model runs locally.
+- `--allow-remote`: Permit models reached over the network (remote:...); without it every model runs locally.
 - `--policy-context-tokens <TOKENS>`: Limit the policy model's context to this many tokens (default: the largest its checkpoint supports); for a policy too large for the card at that size. Another model is limited by its reference, `local:<checkpoint>@<tokens>`.
 - `--remote-concurrency <N>`: How many requests to a model reached over an API may be in flight at once [default: 4]
 - `--solve-deadline <SECONDS>`: How many seconds one task's solve may take on the wall clock [default: 300]
@@ -239,7 +253,6 @@ Options:
 - `--patience <N>`: Evaluations without improvement before the training stops; 0 runs the whole budget (the best evaluation is carried either way) [default: 4]
 - `--monitor-share <SHARE>`: The share of the training families set aside as the monitoring records, in (0, 0.5]: whole families, never the held-out ones the gate and the exam decide on [default: 0.1]
 - `--keep-evaluations`: Keep the adapter of every evaluation with the candidate, so a step can be chosen on the dev suite (`select`) instead of the monitoring loss.
-- `--bf16-base`: Hold the frozen base at bf16, half the bytes of fp32: what a 7B base needs to train on one 24 GiB card.
 - `--k <N>`: Attempts per task when measuring pass@k. Default: `4`.
 - `--temperature <T>`: The policy's sampling temperature for its pass@k attempts [default for a local model: 0.8; a remote model samples as its server does unless this is given]
 - `--top-k <N>`: The policy's top-k cut for its pass@k attempts [default for a local model: 20]
@@ -298,7 +311,6 @@ Options:
 - `--patience <N>`: Evaluations without improvement before the training stops; 0 runs the whole budget (the best evaluation is carried either way) [default: 4]
 - `--monitor-share <SHARE>`: The share of the training families set aside as the monitoring records, in (0, 0.5]: whole families, never the held-out ones the gate and the exam decide on [default: 0.1]
 - `--keep-evaluations`: Keep the adapter of every evaluation with the candidate, so a step can be chosen on the dev suite (`select`) instead of the monitoring loss.
-- `--bf16-base`: Hold the frozen base at bf16, half the bytes of fp32.
 - `--plan <FILE>`: An experiment plan (`experiment check`) this run is one generation of: the repository must be a family the plan trains in `--generation`, and a sealed family is always refused. The catalog is the catalog.toml beside the plan.
 - `--generation <N>`: The generation of the plan, counted from 1.
 - `--test-command <PROGRAM ARG...>...`: The command that runs the project's whole test suite in the root of its tree, as a program and its arguments (everything after this flag, so it comes last). Without it the rules give one: `python3 -m unittest` for a Python project, `cargo test --offline` for a Cargo project.
@@ -462,7 +474,6 @@ Options:
 - `--lr <LR>`: The peak learning rate [default: 0.0002]
 - `--alpha <A>`: The LoRA alpha, the update scaled by alpha / rank [default: 2 x the rank]
 - `--weight-decay <WD>`: The AdamW weight decay on the adapter's matrices [default: 0]
-- `--bf16-base`: Hold the frozen base at bf16, half the bytes of fp32.
 - `--continue-from-release`: Continue the current release on the claims not yet absorbed, with a replay of earlier releases' records, instead of training again from the base on every live claim. An ablation: the default makes supersession and forgetting exact.
 - `--replay-fraction <F>`: With --continue-from-release, the fraction of each earlier release's records replayed. Default: `0.25`.
 - `--subjects <FILE>...`: Files (JSON Lines of {"id", "terms"}) saying what the facts the sessions are known to be about (`extra.absorb_subject` of their trajectory) look like in a statement; the report then says whether the claims cover them.
@@ -587,7 +598,6 @@ Options:
 - `--patience <N>`: Evaluations without improvement before the training stops; 0 runs the whole budget (the best evaluation is carried either way) [default: 4]
 - `--monitor-share <SHARE>`: The share of the training families set aside as the monitoring records, in (0, 0.5]: whole families, never the held-out ones the gate and the exam decide on [default: 0.1]
 - `--keep-evaluations`: Keep the adapter of every evaluation with the candidate, so a step can be chosen on the dev suite (`select`) instead of the monitoring loss.
-- `--bf16-base`: Hold the frozen base at bf16, half the bytes of fp32.
 - `--plan <FILE>`: An experiment plan (`experiment check`) this run is one generation of: the repository must be a family the plan trains in `--generation`, and a sealed family is always refused. The catalog is the catalog.toml beside the plan.
 - `--generation <N>`: The generation of the plan, counted from 1.
 - `--test-command <PROGRAM ARG...>...`: The command that runs the project's whole test suite in the root of its tree, as a program and its arguments (everything after this flag, so it comes last). Without it the rules give one: `python3 -m unittest` for a Python project, `cargo test --offline` for a Cargo project.
@@ -1208,7 +1218,7 @@ Arguments:
 Options:
 
 - `--from <REF>`: The base to train, and an adapter on it to continue. Default: `policy:default`.
-- `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8 or nf4 [default: fp32, or bf16 when SPLINTER_BF16_BASE is set]
+- `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8 or nf4 [default: fp32]
 - `--replay-fraction <F>`: The fraction of each earlier release's training records replayed, when training from a policy alias. Default: `0.25`.
 - `--steps <N>`: The step budget: the most steps the training may take [default: 3 passes over the examples, within bounds]
 - `--rank <R>`: LoRA rank of a new adapter. Default: `8`.

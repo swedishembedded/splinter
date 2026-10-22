@@ -201,5 +201,5 @@ a command (`cmd:`) and using a remote model are never done on a guess.
 A sentence naming a person to think like and a directory of their writing is
 read as a `learn` of the directory; a path the model copied wrongly is
 replaced, by code, by the one path the sentence names that exists, and never
-by a guess. `SPLINTER_FRONT_DOOR_MODEL` names a model for reading sentences
-other than the policy, since a larger model reads them better.
+by a guess. Sentences are read by the assistant when there is one, since a
+larger model reads them better; `--front-door-model` names another.

@@ -32,8 +32,6 @@ fn config() -> Config {
         model_store: PathBuf::from("/models"),
         policy_base: PathBuf::from("/models/Qwen/Qwen3-0.6B"),
         policy_context_tokens: None,
-        openrouter_api_key: Some("or-key".into()),
-        brain_api_key: Some("brain-key".into()),
         allow_remote: false,
         command_env: BTreeMap::new(),
         working_dir: PathBuf::from("."),
@@ -150,16 +148,14 @@ fn a_remote_model_is_refused_without_the_network_opt_in() {
         panic!("a remote reference resolves to a remote model");
     };
     assert_eq!(model.spec, "openrouter/z-ai/glm");
-    assert_eq!(
-        model.api_key.as_deref(),
-        Some("or-key"),
-        "the key follows the provider"
-    );
+    // Splinter holds no key: sven uses the one stored for the provider
+    // (`sven auth set openrouter`), or a running brain server's own.
+    assert_eq!(model.api_key, None, "the key is sven's to find");
     let brain = parse("remote:brain/qwen3").unwrap();
     let ModelSelection::Remote(model) = resolve(&brain, &config(), true, None).unwrap() else {
         panic!("remote");
     };
-    assert_eq!(model.api_key.as_deref(), Some("brain-key"));
+    assert_eq!(model.api_key, None);
     // The configuration's own opt-in counts the same as the flag.
     let opted_in = Config {
         allow_remote: true,

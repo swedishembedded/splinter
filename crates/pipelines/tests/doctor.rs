@@ -132,3 +132,45 @@ mod gpu {
         );
     }
 }
+
+/// A policy left to plan, write, teach, judge and read sentences for itself
+/// can start a run but rarely trains anything: each such role is a warning
+/// that names the way out, and naming a stronger model clears it.
+#[test]
+fn a_policy_left_to_teach_itself_is_a_warning_naming_the_way_out() {
+    let (scratch, ctx) = scratch_context("doctor-weak", Scripted::new(|_| String::new()), false);
+    std::fs::create_dir_all(&common::config(&scratch).policy_base).unwrap();
+    let report = doctor(&ctx);
+    for role in ["teacher", "generator", "planner", "judge", "router"] {
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == format!("role:{role}"))
+            .unwrap();
+        assert_eq!(check.verdict, Verdict::Warn, "{check:?}");
+        assert!(
+            check.fix.as_deref().unwrap().contains("--assistant-model"),
+            "{check:?}"
+        );
+    }
+    assert_eq!(verdict(&report, "role:policy"), Verdict::Ok);
+    assert_eq!(
+        verdict(&report, "role:critic"),
+        Verdict::Ok,
+        "the critic is the policy by design"
+    );
+    assert!(report.ready(), "a warning does not stop a run");
+
+    let helper = scratch.0.join("helper");
+    std::fs::create_dir_all(&helper).unwrap();
+    let mut config = common::config(&scratch);
+    config.assistant_model = Some(format!("local:{}", helper.display()));
+    let ctx = splinter_orchestrator::Context::new(config, false).unwrap();
+    let report = doctor(&ctx);
+    assert_eq!(
+        verdict(&report, "role:teacher"),
+        Verdict::Ok,
+        "{:?}",
+        report.checks
+    );
+}

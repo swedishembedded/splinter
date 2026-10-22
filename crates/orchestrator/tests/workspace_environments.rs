@@ -55,8 +55,6 @@ fn runtime(scratch: &Scratch, workspace: WorkspaceSettings) -> Runtime {
         model_store: scratch.0.join("models"),
         policy_base: scratch.0.join("models/base"),
         policy_context_tokens: None,
-        openrouter_api_key: None,
-        brain_api_key: None,
         allow_remote: false,
         command_env: BTreeMap::new(),
         working_dir: scratch.0.clone(),

@@ -41,8 +41,8 @@ splinter-adams materials --resources RESOURCES --out ./materials
 splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl --freeze samples/adams/anchor-skills.jsonl
 
 # 3. Splinter does the rest, under the roles the configuration names.
-SPLINTER_ASSISTANT_MODEL=local:Qwen/Qwen3-8B SPLINTER_BF16_BASE=1 SPLINTER_BUDGET=8h \
-  splinter "Learn to think like Samuel Adams based on the materials he has written in directory ./materials"
+splinter --assistant-model local:Qwen/Qwen3-8B --bf16-base --default-budget 8h \
+  "Learn to think like Samuel Adams based on the materials he has written in directory ./materials"
 
 # 4. The independent check: the frozen questions, asked of the base and of the
 #    adapter Splinter released, under the prompt Splinter trained it under.
@@ -150,15 +150,15 @@ splinter-adams report --before RUN/base-exam.jsonl --after RUN/tuned-exam.jsonl
 Splinter trains a policy to be NAME under, for an adapter a `learn` produced)
 or `--system TEXT` says otherwise.
 
-The helper stages need a model served by `brain serve` and its key in
-`BRAIN_API_KEY`; they resume where they stopped and record, rather than hide, a
+The helper stages need a model served by `brain serve --api-key-file KEY`
+and the same file as their `--api-key-file KEY`; they resume where they stopped and record, rather than hide, a
 bundle or a principle the helper failed on. The order that has the fewest
 surprises:
 
 ```bash
-splinter-adams principles --resources RESOURCES --model HELPER [--url http://127.0.0.1:8788/v1] [--limit N]
-splinter-adams transfer   --resources RESOURCES --model HELPER --scenarios-per-principle 3 [--limit N]
-splinter-adams briefings  --resources RESOURCES --model HELPER --of exam      # then --of train
+splinter-adams principles --resources RESOURCES --model HELPER --api-key-file KEY [--url http://127.0.0.1:8788/v1] [--limit N]
+splinter-adams transfer   --resources RESOURCES --model HELPER --api-key-file KEY --scenarios-per-principle 3 [--limit N]
+splinter-adams briefings  --resources RESOURCES --model HELPER --api-key-file KEY --of exam      # then --of train
 splinter-adams build-data --resources RESOURCES
 splinter-adams pin --file RESOURCES/datasets/benchmark.jsonl                   # once, before any arm is scored
 splinter-adams constant-baseline --resources RESOURCES --out RUN/constant.jsonl

@@ -87,7 +87,8 @@ pub type RoleOverrides = BTreeMap<Role, ModelRef>;
 /// The configured models a role falls back on.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Fallbacks {
-    /// The assistant model: plays the roles that help the policy learn.
+    /// The assistant model: plays the roles that help the policy learn, and
+    /// reads sentences when no front door is named.
     pub assistant: Option<ModelRef>,
     /// The model the configuration names for reading sentences.
     pub front_door: Option<ModelRef>,
@@ -120,7 +121,11 @@ impl ModelAssignments {
         let planner = pick(Role::Planner, assistant, &generator);
         let judge = pick(Role::Judge, fallbacks.judge.as_ref().or(assistant), &policy);
         let critic = pick(Role::Critic, None, &policy);
-        let router = pick(Role::Router, fallbacks.front_door.as_ref(), &policy);
+        let router = pick(
+            Role::Router,
+            fallbacks.front_door.as_ref().or(assistant),
+            &policy,
+        );
         Self(BTreeMap::from([
             (Role::Policy, policy),
             (Role::Teacher, teacher),

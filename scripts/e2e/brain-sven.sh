@@ -49,7 +49,8 @@ trap cleanup EXIT
 port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 
 "$brain" serve --device cpu --openai "$port" --models-dir "$models" \
-    --api-keys-out "$scratch/keys.json" --ready-file "$scratch/ready" >"$scratch/brain.log" 2>&1 &
+    --runtime-dir "$scratch/run" --api-keys-out "$scratch/keys.json" --ready-file "$scratch/ready" \
+    >"$scratch/brain.log" 2>&1 &
 server=$!
 
 for _ in $(seq 1 240); do
@@ -73,7 +74,7 @@ repo=$home/repo
 mkdir -p "$repo"
 printf 'The magic number is %s.\n' "$secret" >"$repo/hello.txt"
 run_sven() {
-    (cd "$repo" && HOME="$home" XDG_CONFIG_HOME="$home" SVEN_DISABLE_BRAIN_AUTODETECT=1 "$sven" --config "$scratch/sven.yaml" "$@")
+    (cd "$repo" && HOME="$home" XDG_CONFIG_HOME="$home" XDG_RUNTIME_DIR="$home" "$sven" --config "$scratch/sven.yaml" "$@")
 }
 
 echo "== sven doctor provider"

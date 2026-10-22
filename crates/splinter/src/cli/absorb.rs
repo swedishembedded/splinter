@@ -192,9 +192,6 @@ pub struct AbsorbArgs {
     /// The learning rate, alpha and weight decay of the training.
     #[command(flatten)]
     pub optimiser: super::OptimiserArgs,
-    /// Hold the frozen base at bf16, half the bytes of fp32.
-    #[arg(long)]
-    pub bf16_base: bool,
     /// Continue the current release on the claims not yet absorbed, with a
     /// replay of earlier releases' records, instead of training again from
     /// the base on every live claim. An ablation: the default makes

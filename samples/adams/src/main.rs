@@ -429,12 +429,11 @@ fn report_command(args: &[String]) -> anyhow::Result<()> {
 }
 
 /// Ask the helper served at `--url` for principles; the key comes from the
-/// `BRAIN_API_KEY` variable, never from the command line.
+/// file `--api-key-file` names, never from the command line.
 fn principles_command(args: &[String]) -> anyhow::Result<()> {
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
     let documents = read_documents(&resources)?;
-    let key = std::env::var("BRAIN_API_KEY")
-        .map_err(|_| anyhow::anyhow!("BRAIN_API_KEY is not set: the key `brain serve` printed"))?;
+    let key = helper_key(args)?;
     let url = flag(args, "--url").unwrap_or_else(|| "http://127.0.0.1:8788/v1".to_string());
     let model = need(args, "--model")?;
     let served = helper::Served {
@@ -456,8 +455,7 @@ fn principles_command(args: &[String]) -> anyhow::Result<()> {
 fn transfer_command(args: &[String]) -> anyhow::Result<()> {
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
     let documents = read_documents(&resources)?;
-    let key = std::env::var("BRAIN_API_KEY")
-        .map_err(|_| anyhow::anyhow!("BRAIN_API_KEY is not set: the key `brain serve` printed"))?;
+    let key = helper_key(args)?;
     let url = flag(args, "--url").unwrap_or_else(|| "http://127.0.0.1:8788/v1".to_string());
     let model = need(args, "--model")?;
     let served = helper::Served {
@@ -567,10 +565,20 @@ fn transfer_exam_command(args: &[String]) -> anyhow::Result<()> {
     )
 }
 
-/// Where the helper is served, from `--url`, `--model` and `BRAIN_API_KEY`.
+/// The key of the helper's server: the one word in the file `--api-key-file`
+/// names (`brain serve --api-key-file` takes the same file).
+fn helper_key(args: &[String]) -> anyhow::Result<String> {
+    let file = need(args, "--api-key-file")?;
+    let text = std::fs::read_to_string(&file)
+        .map_err(|e| anyhow::anyhow!("--api-key-file {file}: {e}"))?;
+    let key = text.trim();
+    anyhow::ensure!(!key.is_empty(), "--api-key-file {file} holds no key");
+    Ok(key.to_string())
+}
+
+/// Where the helper is served, from `--url`, `--model` and `--api-key-file`.
 fn served_helper(args: &[String]) -> anyhow::Result<(String, String, String)> {
-    let key = std::env::var("BRAIN_API_KEY")
-        .map_err(|_| anyhow::anyhow!("BRAIN_API_KEY is not set: the key `brain serve` printed"))?;
+    let key = helper_key(args)?;
     let url = flag(args, "--url").unwrap_or_else(|| "http://127.0.0.1:8788/v1".to_string());
     Ok((url, key, need(args, "--model")?))
 }

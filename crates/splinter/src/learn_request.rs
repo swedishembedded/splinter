@@ -43,7 +43,6 @@ pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
     request.steps = args.steps;
     request.rank = args.rank;
     request.tuning = args.optimiser.applied_to(Tuning {
-        bf16_base: args.bf16_base,
         records_per_step: args.records_per_step,
         eval_every: args.monitoring.eval_every,
         patience: args.monitoring.patience,
@@ -104,7 +103,6 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
         steps: args.steps,
         rank: args.rank,
         tuning: args.optimiser.applied_to(Tuning {
-            bf16_base: args.bf16_base,
             records_per_step: args.records_per_step,
             eval_every: args.monitoring.eval_every,
             patience: args.monitoring.patience,
@@ -244,11 +242,9 @@ mod tests {
             "32",
             "--weight-decay",
             "0.01",
-            "--bf16-base",
         ]);
         assert!(r.distill);
         assert_eq!((r.steps, r.rank), (Some(300), Some(16)));
-        assert!(r.tuning.bf16_base);
         assert_eq!(r.tuning.learning_rate, Some(0.0002));
         assert_eq!(
             (r.tuning.alpha, r.tuning.weight_decay),

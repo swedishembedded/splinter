@@ -4,7 +4,7 @@
 # Storage reference
 
 Where Splinter keeps what it knows, how to keep it small, and how to back it up and recover it. The state
-root is `~/.splinter` by default (`--state DIR` or `SPLINTER_STATE` change it); see
+root is `~/.splinter` by default (`--state DIR` changes it); see
 [configuration](../getting-started/configuration.md).
 
 ## Runs

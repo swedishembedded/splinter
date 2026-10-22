@@ -41,7 +41,6 @@ fn splinter(state: &std::path::Path, args: &[&str]) -> Output {
         .arg("--state")
         .arg(state)
         .args(args)
-        .env_remove("SPLINTER_ALLOW_REMOTE")
         .output()
         .unwrap()
 }

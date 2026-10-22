@@ -78,15 +78,15 @@ program's behavior or by the project's own samples; where a limit has a flag or 
 
 ## External teachers and judges
 
-A `remote:` model is refused unless `--allow-remote` or `SPLINTER_ALLOW_REMOTE=1` is given; that is the
+A `remote:` model is refused unless `--allow-remote` is given; that is the
 only way Splinter uses the network. A teacher's answers are training data and never a measurement of the
 policy. A strong teacher raises what the policy can learn and also makes the result depend on a model
 Splinter does not control. A judge must be another model than the teacher, the generator and the policy.
 
 ## Security of agent-generated code
 
-Splinter runs code that a small model wrote. Where no container is configured (`SPLINTER_DOCKER` and a
-digest-pinned `SPLINTER_WORKSPACE_IMAGE`), the commands an agent works with run on the host,
+Splinter runs code that a small model wrote. Where no container is configured (`--docker` and a
+digest-pinned `--workspace-image`), the commands an agent works with run on the host,
 bounded but not isolated, and every environment record says `isolation: none`.
 
 On the host the kernel confines a command to read-only system access, its own tree and a private directory,

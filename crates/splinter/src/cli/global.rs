@@ -16,17 +16,77 @@ pub struct Global {
     /// Which hardware models run on.
     #[command(flatten)]
     pub device: splinter_sdk::device::DeviceFlags,
-    /// The state root (default: $SPLINTER_STATE, else ~/.splinter).
+    /// The state root (default: ~/.splinter).
     #[arg(long, global = true, value_name = "DIR")]
     pub state: Option<PathBuf>,
+    /// brain's model store, where `local:<org>/<model>` names a checkpoint
+    /// (default: the store `brain pull` fills).
+    #[arg(long, global = true, value_name = "DIR")]
+    pub models_dir: Option<PathBuf>,
+    /// The checkpoint the policy trains and `policy:default` serves: a path,
+    /// or a name in the model store (default: Qwen/Qwen3-0.6B).
+    #[arg(long, global = true, value_name = "CHECKPOINT")]
+    pub policy_base: Option<String>,
+    /// The `brain` executable a release is checked to serve on (default: the
+    /// first `brain` on PATH).
+    #[arg(long, global = true, value_name = "PATH")]
+    pub brain_bin: Option<PathBuf>,
+    /// The model that plans a learning run, writes its tasks, teaches what the
+    /// policy cannot answer and judges, when the command names none for a
+    /// role (default: the strongest chat model in the model store that fits a
+    /// card, else the policy).
+    #[arg(long, global = true, value_name = "REF")]
+    pub assistant_model: Option<String>,
+    /// The model that judges answers in place of the assistant, so the judge
+    /// is another model than the one that wrote what it grades.
+    #[arg(long, global = true, value_name = "REF")]
+    pub judge_model: Option<String>,
+    /// The model that reads a sentence (`splinter "learn ..."`) in place of
+    /// the assistant.
+    #[arg(long, global = true, value_name = "REF")]
+    pub front_door_model: Option<String>,
+    /// How long a learning run may take when its command names no --budget,
+    /// a sentence's run included (`6h`, `40m`); unbounded when not given.
+    #[arg(long, global = true, value_name = "DURATION")]
+    pub default_budget: Option<String>,
+    /// The fewest controls a judge is measured on before its verdicts count.
+    #[arg(long, global = true, value_name = "N", value_parser = clap::value_parser!(u64).range(1..),
+        help = format!("The fewest controls a judge is measured on before its verdicts count \
+                        [default: {}]", splinter_sdk::config::DEFAULT_MIN_CALIBRATION_CONTROLS))]
+    pub min_calibration_controls: Option<u64>,
+    /// A docker client: with --workspace-image, a project's commands run in a
+    /// container with no network.
+    #[arg(long, global = true, value_name = "PATH", requires = "workspace_image")]
+    pub docker: Option<PathBuf>,
+    /// The image, pinned by digest (`name@sha256:...`), a project's commands
+    /// run in under --docker.
+    #[arg(long, global = true, value_name = "IMAGE", requires = "docker")]
+    pub workspace_image: Option<String>,
+    /// Where trees are laid out for repository tasks (default: under the
+    /// state root).
+    #[arg(long, global = true, value_name = "DIR")]
+    pub workspace_scratch: Option<PathBuf>,
+    /// A cargo home the commands of a Cargo project build offline from.
+    #[arg(long, global = true, value_name = "DIR")]
+    pub cargo_home: Option<PathBuf>,
+    /// Hold the frozen base the policy trains at bf16, half the bytes of
+    /// fp32: what a 7B base needs to train on one 24 GiB card. A fact about
+    /// this machine, so it applies to every command that trains, a sentence's
+    /// run included.
+    #[arg(long, global = true)]
+    pub bf16_base: bool,
+    /// The foreign GPU contexts that existed when this command started, as
+    /// the GPU lease counted them; recorded with the run.
+    #[arg(long, global = true, value_name = "N")]
+    pub gpu_contexts: Option<u32>,
     /// Print machine-readable JSON on stdout instead of text.
     #[arg(long, global = true)]
     pub json: bool,
     /// Report more as work goes (each stage's full summary).
     #[arg(short, long, global = true, action = ArgAction::Count)]
     pub verbose: u8,
-    /// Permit models reached over the network (remote:...); without it, and
-    /// without SPLINTER_ALLOW_REMOTE=1, every model runs locally.
+    /// Permit models reached over the network (remote:...); without it every
+    /// model runs locally.
     #[arg(long, global = true)]
     pub allow_remote: bool,
     /// Limit the policy model's context to this many tokens (default: the

@@ -10,8 +10,9 @@
 //! runs it.
 //!
 //! `brain serve --openai 127.0.0.1:<port> --adapter <candidate>` is started
-//! with the policy's base checkpoint as its Qwen3 (`BRAIN_QWEN_WEIGHTS`)
-//! and brain's model store (`--models-dir`, when it exists). Before it
+//! with the policy's base checkpoint as its Qwen3 (`--checkpoint`) and
+//! brain's model store (`--models-dir`, when it exists), in a runtime
+//! directory of its own so no client of the user's finds it. Before it
 //! binds, brain binds the adapter to the base and prints `brain serve:
 //! <model> adapter=<id> digest=sha256:<hex>`; that digest must be the
 //! candidate adapter's. Once
@@ -132,7 +133,7 @@ pub fn check(
 }
 
 /// Why a check with no `brain` binary is not measured.
-const NO_BINARY: &str = "no brain binary: none on PATH and SPLINTER_BRAIN_BIN is not set";
+const NO_BINARY: &str = "no brain binary: none on PATH and no --brain-bin";
 
 /// A fresh directory for one check's keys, ready marker and manifest.
 fn scratch(ctx: &Context) -> Result<std::path::PathBuf, OrchestratorError> {

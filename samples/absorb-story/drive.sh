@@ -15,9 +15,9 @@
 #
 # Usage: drive.sh <claim-dir> <out-dir> <story-bin> <splinter-bin> <storyline>...
 #
-# The environment names the models and the driver setup, as for `splinter`
-# itself: BRAIN_QWEN_WEIGHTS, SPLINTER_BF16_BASE, SPLINTER_BRAIN_BIN, and the
-# library paths a container without the vendor runtime hook needs.
+# The models and the driver setup are the story binary's own flags; the
+# environment carries only the library paths a container without the vendor
+# runtime hook needs.
 
 set -uo pipefail
 

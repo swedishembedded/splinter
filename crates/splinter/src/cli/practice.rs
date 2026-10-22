@@ -160,9 +160,6 @@ pub struct PracticeArgs {
     /// How the training is watched.
     #[command(flatten)]
     pub monitoring: MonitoringArgs,
-    /// Hold the frozen base at bf16, half the bytes of fp32.
-    #[arg(long)]
-    pub bf16_base: bool,
     /// An experiment plan (`experiment check`) this run is one generation of:
     /// the repository must be a family the plan trains in `--generation`, and
     /// a sealed family is always refused. The catalog is the catalog.toml

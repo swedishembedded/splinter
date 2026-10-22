@@ -48,7 +48,7 @@ say which checkpoint it is - and the release's adapter, as the serve check
 does:
 
 ```bash
-BRAIN_QWEN_WEIGHTS=<base checkpoint> brain serve --openai --adapter-manifest <state>/serving/<alias>.json
+brain serve --openai --checkpoint <base checkpoint> --adapter-manifest <state>/serving/<alias>.json
 ```
 
 brain serves the adapter on that one Qwen3 base, as the model
@@ -60,7 +60,7 @@ manifest the release store rewrites whenever the alias moves (a release, a
 rollback) instead of an adapter file:
 
 ```bash
-BRAIN_QWEN_WEIGHTS=<base checkpoint> brain serve --openai --adapter-manifest <state>/serving/default.json
+brain serve --openai --checkpoint <base checkpoint> --adapter-manifest <state>/serving/default.json
 ```
 
 The manifest names the adapter the alias points at and its digest, and is

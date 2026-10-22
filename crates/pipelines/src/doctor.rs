@@ -154,7 +154,7 @@ fn state_writable(root: &Path, anchor: &Path) -> Check {
                 anchor.display(),
                 root.display()
             ),
-            "choose a writable directory with --state or SPLINTER_STATE",
+            "choose a writable directory with --state",
         ),
     }
 }
@@ -198,6 +198,15 @@ fn missing_weights(selection: &ModelSelection) -> Option<PathBuf> {
         .cloned()
 }
 
+/// The roles a model plays to help the policy learn: played by the policy
+/// itself, they hold the run to what the policy already does.
+fn helps_the_policy(role: Role) -> bool {
+    matches!(
+        role,
+        Role::Teacher | Role::Generator | Role::Planner | Role::Judge | Role::Router
+    )
+}
+
 /// Whether the model each role would get resolves to weights or an endpoint
 /// that exists, without loading any of them.
 fn roles_resolve(ctx: &Context) -> Vec<Check> {
@@ -219,6 +228,19 @@ fn roles_resolve(ctx: &Context) -> Vec<Check> {
             let reference = assignments.get(role);
             match ctx.selection(reference) {
                 Ok(selection) => match missing_weights(&selection) {
+                    None if helps_the_policy(role) && *reference == ModelRef::policy_default() => {
+                        Check::problem(
+                            Verdict::Warn,
+                            name,
+                            format!(
+                                "the policy plays the {role} too ({}): a model rarely teaches, \
+                                 judges or writes tasks above its own level",
+                                selection.identity()
+                            ),
+                            "pull a larger chat model (`brain pull Qwen/Qwen3-8B`) for Splinter \
+                             to pick, or name one with --assistant-model",
+                        )
+                    }
                     None => Check::ok(name, format!("{reference} is {}", selection.identity())),
                     Some(path) => Check::problem(
                         Verdict::Fail,

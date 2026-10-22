@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! Splinter's configuration, resolved from the environment in one place.
+//! Splinter's configuration: settings as values, with defaults that need no
+//! setting.
 //!
-//! Everything below this module takes its settings as values; nothing else
-//! in Splinter reads the environment. A test or a second campaign builds a
-//! [`Config`] directly and never touches process state.
+//! [`Config::from_env`] reads only what the environment says about the
+//! machine and the user: the home directory, `PATH` (where `brain` is), and
+//! the variables a captured command or a docker client is handed through.
+//! No setting is read from it: every choice is a flag of the command line,
+//! which fills in this value. Nothing else in Splinter reads the
+//! environment; a test or a second campaign builds a [`Config`] directly and
+//! never touches process state.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -41,10 +46,6 @@ pub struct Config {
     /// checkpoint supports. Set by `--policy-context-tokens` when that does
     /// not fit the card.
     pub policy_context_tokens: Option<u32>,
-    /// Key for models reached through OpenRouter.
-    pub openrouter_api_key: Option<String>,
-    /// Key for any other OpenAI-compatible endpoint (a served brain, say).
-    pub brain_api_key: Option<String>,
     /// Whether models reached over the network may be used without
     /// `--allow-remote`: the configuration's one network opt-in.
     pub allow_remote: bool,
@@ -66,6 +67,8 @@ pub struct Config {
     /// The model reference of a stronger model than the policy that plans a
     /// learning run, writes its tasks and teaches what the policy cannot
     /// answer, when the command names none of them. Parsed where it is used.
+    /// `None` takes the strongest chat model in the model store that fits a
+    /// card (see `roles::discovered_assistant`).
     pub assistant_model: Option<String>,
     /// A model reference that judges answers in place of the assistant: the
     /// judge is another model than the one that wrote what it grades.
@@ -230,109 +233,59 @@ pub const DOCKER_CLIENT_ENV: &[&str] = &[
 pub const DEFAULT_MIN_CALIBRATION_CONTROLS: usize = 16;
 
 impl Config {
-    /// The configuration this process runs with:
+    /// The configuration this process runs with before its command line
+    /// names anything: every setting at its default, and the facts of this
+    /// machine and user it needs:
     ///
-    /// * `SPLINTER_STATE`, else `$HOME/.splinter`;
-    /// * `BRAIN_MODELS_DIR`, else `$HOME/.local/share/brain/models`, as
-    ///   brain's model store;
-    /// * `BRAIN_QWEN_WEIGHTS`, else [`DEFAULT_POLICY_MODEL`] in that store,
-    ///   as the policy's base;
-    /// * `AGENT_OPENROUTER_KEY` and `BRAIN_API_KEY`;
-    /// * `SPLINTER_ALLOW_REMOTE` set to `1` or `true` as the network
-    ///   opt-in;
+    /// * `$HOME`, under which the state root (`~/.splinter`) lives;
+    /// * brain's model store, as brain resolves it, with the policy's base
+    ///   [`DEFAULT_POLICY_MODEL`] in it;
+    /// * the first `brain` executable on `PATH`, the binary a release must
+    ///   serve on;
     /// * the capture allowlist's variables, and the current directory, for
     ///   command sources;
-    /// * `SPLINTER_BRAIN_BIN`, else the first `brain` executable on `PATH`,
-    ///   as the binary a release must serve on;
-    /// * `SPLINTER_FRONT_DOOR_MODEL`, a model reference that reads
-    ///   sentences instead of the policy;
-    /// * `SPLINTER_ASSISTANT_MODEL`, a model reference that plans, writes
-    ///   tasks and teaches in place of the policy;
-    /// * `SPLINTER_JUDGE_MODEL`, a model reference that judges in place of the
-    ///   assistant;
-    /// * `SPLINTER_BF16_BASE` set to `1` or `true` to train with the base
-    ///   held at bf16;
-    /// * `SPLINTER_MIN_CALIBRATION_CONTROLS`, the fewest controls a judge is
-    ///   measured on before its verdicts count;
-    /// * `SPLINTER_BUDGET`, how long a learning run may take when its command
-    ///   names no `--budget`;
-    /// * `SPLINTER_DOCKER` and `SPLINTER_WORKSPACE_IMAGE`, the docker client
-    ///   and the digest-pinned image a workspace's commands run in, with the
-    ///   [`DOCKER_CLIENT_ENV`] variables the client needs;
-    /// * `SPLINTER_WORKSPACE_SCRATCH`, where workspace trees are laid out;
-    /// * `SPLINTER_CARGO_HOME`, the cargo home workspace commands build with;
-    /// * `SPLINTER_GPU_CONTEXTS`, the foreign GPU contexts the lease wrapper
-    ///   counted before starting the command (a number; anything else is no count).
+    /// * the [`DOCKER_CLIENT_ENV`] variables a docker client needs.
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
         let home = PathBuf::from(var("HOME").unwrap_or_else(|| ".".into()));
-        let model_store = var("BRAIN_MODELS_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| default_model_store(&home));
+        let model_store = splinter_model::store::default_dir()
+            .unwrap_or_else(|| home.join(".local/share/brain/models"));
         Self {
-            state_root: var("SPLINTER_STATE")
-                .map(StateRoot::new)
-                .unwrap_or_else(|| StateRoot::under_home(&home)),
-            policy_base: var("BRAIN_QWEN_WEIGHTS")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| model_store.join(DEFAULT_POLICY_MODEL)),
+            state_root: StateRoot::under_home(&home),
+            policy_base: model_store.join(DEFAULT_POLICY_MODEL),
             policy_context_tokens: None,
             model_store,
-            openrouter_api_key: var("AGENT_OPENROUTER_KEY"),
-            brain_api_key: var("BRAIN_API_KEY"),
-            allow_remote: var("SPLINTER_ALLOW_REMOTE")
-                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
+            allow_remote: false,
             command_env: DEFAULT_ENV_ALLOWLIST
                 .iter()
                 .filter_map(|name| var(name).map(|value| (name.to_string(), value)))
                 .collect(),
             working_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            brain_binary: var("SPLINTER_BRAIN_BIN")
-                .map(PathBuf::from)
-                .or_else(|| var("PATH").and_then(|path| find_executable(&path, "brain"))),
-            front_door_model: var("SPLINTER_FRONT_DOOR_MODEL"),
-            assistant_model: var("SPLINTER_ASSISTANT_MODEL"),
-            judge_model: var("SPLINTER_JUDGE_MODEL"),
-            bf16_base: var("SPLINTER_BF16_BASE")
-                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
-            default_budget: var("SPLINTER_BUDGET"),
-            thinking: var("SPLINTER_THINKING")
-                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
+            brain_binary: var("PATH").and_then(|path| find_executable(&path, "brain")),
+            front_door_model: None,
+            assistant_model: None,
+            judge_model: None,
+            bf16_base: false,
+            default_budget: None,
+            thinking: false,
             served_temperature: None,
             served_top_p: None,
             served_top_k: None,
             served_seed: None,
             served_thinking_budget: None,
-            min_calibration_controls: var("SPLINTER_MIN_CALIBRATION_CONTROLS")
-                .and_then(|v| v.parse().ok())
-                .filter(|n| *n > 0)
-                .unwrap_or(DEFAULT_MIN_CALIBRATION_CONTROLS),
+            min_calibration_controls: DEFAULT_MIN_CALIBRATION_CONTROLS,
             remote_concurrency: DEFAULT_REMOTE_CONCURRENCY,
             solve_deadline: DEFAULT_SOLVE_DEADLINE,
             coding_prompt: CodingPrompt::default(),
             workspace: WorkspaceSettings {
-                docker: var("SPLINTER_DOCKER").map(PathBuf::from),
-                image: var("SPLINTER_WORKSPACE_IMAGE"),
                 docker_env: DOCKER_CLIENT_ENV
                     .iter()
                     .filter_map(|name| var(name).map(|value| (name.to_string(), value)))
                     .collect(),
-                scratch_root: var("SPLINTER_WORKSPACE_SCRATCH").map(PathBuf::from),
-                cargo_home: var("SPLINTER_CARGO_HOME").map(PathBuf::from),
-                output_cap_bytes: WORKSPACE_OUTPUT_CAP_BYTES,
-                allow_unconfined: false,
-                allow_network: false,
-                max_processes: None,
-                env: BTreeMap::new(),
-                memory_bytes: None,
-                tree_memory_bytes: None,
-                runtime_dirs: Vec::new(),
+                ..WorkspaceSettings::default()
             },
-            build: BuildInfo {
-                gpu_contexts: var("SPLINTER_GPU_CONTEXTS").and_then(|v| v.trim().parse().ok()),
-                ..BuildInfo::default()
-            },
+            build: BuildInfo::default(),
         }
     }
 }
@@ -356,9 +309,4 @@ fn is_executable(path: &Path) -> bool {
     {
         path.is_file()
     }
-}
-
-/// brain's model store for a user whose home directory is `home`.
-fn default_model_store(home: &Path) -> PathBuf {
-    home.join(".local/share/brain/models")
 }

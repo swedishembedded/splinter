@@ -37,8 +37,6 @@ fn context(test: &str) -> (Context, Reported) {
         model_store: root.join("models"),
         policy_base: root.join("models/base"),
         policy_context_tokens: None,
-        openrouter_api_key: None,
-        brain_api_key: None,
         allow_remote: false,
         command_env: BTreeMap::new(),
         working_dir: root,

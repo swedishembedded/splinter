@@ -152,7 +152,7 @@ pub struct TrainArgs {
     /// its optimizer stay fp32. NF4 is a `qwen35` (27B) tier.
     #[arg(long, value_name = "TIER", value_parser = clap::value_parser!(BasePrecision),
         help = "How the frozen base is held while the adapter trains: fp32, bf16, int8 or nf4 \
-                [default: fp32, or bf16 when SPLINTER_BF16_BASE is set]")]
+                [default: fp32]")]
     pub base_precision: Option<BasePrecision>,
     /// The fraction of each earlier release's training records replayed,
     /// when training from a policy alias.

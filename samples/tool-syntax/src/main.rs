@@ -54,7 +54,7 @@ options for baseline:
   --run-dir DIR            where episodes are materialised (default: a temp dir)
   --model ID               resident manifest id (default brain/qwen3)
   --base-url URL           the served endpoint (default: sven's own configuration)
-  --api-key KEY            key for that endpoint (default: BRAIN_API_KEY)
+  --api-key KEY            key for that endpoint
   --backend cuda --device gpuN
                            where train runs (every command takes them)
   --report FILE.json       write the machine-readable result here
@@ -171,7 +171,7 @@ fn parse_baseline(args: &[String]) -> anyhow::Result<BaselineOptions> {
     let mut run_dir = std::env::temp_dir().join(format!("tool-syntax-{}", std::process::id()));
     let mut model = ServedModel::qwen3();
     let mut base_url = None;
-    let mut api_key = std::env::var("BRAIN_API_KEY").ok();
+    let mut api_key = None;
     let mut report = None;
     let mut hint = None;
     let mut prompt_from = None;

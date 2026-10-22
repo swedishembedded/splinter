@@ -89,15 +89,12 @@ pub fn resolve_on(
                     reference: reference.to_string(),
                 });
             }
-            let api_key = if provider == "openrouter" {
-                config.openrouter_api_key.clone()
-            } else {
-                config.brain_api_key.clone()
-            };
+            // sven finds the key: the one stored for the provider with
+            // `sven auth set`, or a running brain server's own.
             Ok(ModelSelection::Remote(RemoteModel {
                 spec: format!("{provider}/{name}"),
                 base_url: None,
-                api_key,
+                api_key: None,
                 thinking: config.thinking,
                 temperature: config.served_temperature,
                 top_p: config.served_top_p,

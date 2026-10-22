@@ -97,8 +97,6 @@ pub fn world(reply: impl Fn(&str) -> String + Send + Sync + 'static) -> anyhow::
         model_store: dir.path().join("models"),
         policy_base: dir.path().join("models/base"),
         policy_context_tokens: None,
-        openrouter_api_key: None,
-        brain_api_key: None,
         allow_remote: false,
         command_env: BTreeMap::new(),
         working_dir: dir.path().to_path_buf(),

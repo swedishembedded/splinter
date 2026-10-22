@@ -111,7 +111,7 @@ pub enum RefError {
     /// A remote model without the network opt-in.
     #[error(
         "{reference} is reached over the network; that is refused unless --allow-remote is \
-         given or SPLINTER_ALLOW_REMOTE=1 is set (every other model runs locally)"
+         given (every other model runs locally)"
     )]
     RemoteNotAllowed {
         /// The reference.

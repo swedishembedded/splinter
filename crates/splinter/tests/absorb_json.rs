@@ -19,7 +19,6 @@ fn splinter(state: &Path, args: &[&str]) -> Result<(i32, Value), Box<dyn std::er
         .arg("--state")
         .arg(state)
         .args(args)
-        .env_remove("SPLINTER_ALLOW_REMOTE")
         .output()?;
     let stdout = String::from_utf8(output.stdout)?;
     let json = serde_json::from_str(&stdout)

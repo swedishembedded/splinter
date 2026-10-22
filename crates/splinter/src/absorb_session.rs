@@ -197,7 +197,6 @@ fn absorb_request(args: AbsorbArgs) -> AbsorbRequest {
         steps: args.steps,
         rank: args.rank,
         tuning: args.optimiser.applied_to(Tuning {
-            bf16_base: args.bf16_base,
             ..Tuning::default()
         }),
         continue_from_release: args.continue_from_release,

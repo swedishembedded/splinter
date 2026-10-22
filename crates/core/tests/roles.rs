@@ -52,10 +52,18 @@ fn the_assistant_plays_the_roles_that_ask_for_one() {
     };
     let assignments = assigned(&[], &fallbacks);
     let assistant = model("local:/models/assistant");
-    for role in [Role::Teacher, Role::Generator, Role::Planner, Role::Judge] {
+    // A sentence is read by the stronger model too: a small policy reads
+    // one worse than the model that plans the run it asks for.
+    for role in [
+        Role::Teacher,
+        Role::Generator,
+        Role::Planner,
+        Role::Judge,
+        Role::Router,
+    ] {
         assert_eq!(assignments.get(role), &assistant, "{role}");
     }
-    for role in [Role::Policy, Role::Critic, Role::Router] {
+    for role in [Role::Policy, Role::Critic] {
         assert_eq!(assignments.get(role), &ModelRef::policy_default(), "{role}");
     }
 }

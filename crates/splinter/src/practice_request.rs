@@ -58,7 +58,6 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
         steps: args.steps,
         rank: args.rank,
         tuning: args.optimiser.applied_to(Tuning {
-            bf16_base: args.bf16_base,
             records_per_step: args.records_per_step,
             eval_every: args.monitoring.eval_every,
             patience: args.monitoring.patience,

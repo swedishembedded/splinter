@@ -98,7 +98,9 @@ if ("--adapter" in opts or "--adapter-manifest" in opts) and opts.get("--adapter
 
 # A consolidated checkpoint is served with no adapter: the weights file of
 # the base is the card, and nothing is announced.
-weights = os.environ.get("BRAIN_QWEN_WEIGHTS", "")
+# brain reads no checkpoint from the environment: the launch names it.
+assert "--checkpoint" in opts, args
+weights = opts["--checkpoint"]
 if os.path.isdir(weights):
     weights = os.path.join(weights, "model.safetensors")
 if "--adapter-manifest" in opts:

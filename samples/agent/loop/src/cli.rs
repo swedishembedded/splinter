@@ -41,7 +41,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     home: Option<PathBuf>,
     /// Brain's model store, where `local:<org>/<model>` names a checkpoint
-    /// (default: `$BRAIN_MODELS_DIR`, else `<home>/.local/share/brain/models`).
+    /// (default: the store `brain pull` fills).
     #[arg(long, global = true)]
     models_dir: Option<PathBuf>,
     /// Let a model served by brain reason before it answers (default: it is
@@ -148,15 +148,13 @@ fn config(cli: &Cli) -> Result<Config> {
     let model_store = cli
         .models_dir
         .clone()
-        .or_else(|| std::env::var_os("BRAIN_MODELS_DIR").map(PathBuf::from))
+        .or_else(splinter_sdk::model::store::default_dir)
         .unwrap_or_else(|| home.join(".local/share/brain/models"));
     Ok(Config {
         state_root: StateRoot::under_home(&home),
         policy_base: model_store.join("Qwen/Qwen3-0.6B"),
         model_store,
         policy_context_tokens: None,
-        openrouter_api_key: std::env::var("AGENT_OPENROUTER_KEY").ok(),
-        brain_api_key: std::env::var("BRAIN_API_KEY").ok(),
         allow_remote: false,
         command_env: std::collections::BTreeMap::new(),
         working_dir: home,
