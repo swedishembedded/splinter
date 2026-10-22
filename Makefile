@@ -86,6 +86,10 @@ TEST_CRATE_TARGETS := $(addprefix test/crate/,$(CRATE_PACKAGES))
 $(TEST_CRATE_TARGETS): test/crate/%:
 	$(CARGO) test $(PROFILE) -p $*
 
+## test/package - the spec of the release publishing script against a scratch repository and a fake gh (bats; no build, seconds)
+test/package:
+	bats scripts/package/publish-deb.bats
+
 ## test/families - the repository task families: baselines pass identically five times, conventions hold, faults are caught (no model, no GPU, minutes)
 test/families:
 	python3 scripts/tasks/families.py check
@@ -305,6 +309,85 @@ lease/worktree/remove:
 		--worktrees $(LEASE_ROOT)/worktrees --targets $(LEASE_ROOT)/targets
 
 # ---------------------------------------------------------------------------
+##@ Package and release
+## The Debian package of the splinter command line, and the release flow:
+## release/{patch,minor,major} bump and tag locally, release/publish is the one
+## step that pushes and uploads. package and release only list.
+
+# Read from Cargo.toml on every parse, so the sub-make after a version bump sees
+# the new version.
+VERSION := $(shell sed -n '/^\[workspace.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)
+# The git remote whose GitHub repository receives the release.
+RELEASE_REMOTE ?= origin
+RELEASE_DEB = target/debian/splinter_$(VERSION)_$(shell dpkg --print-architecture 2>/dev/null).deb
+RELEASE_NOTES = target/release-notes-v$(VERSION).md
+
+## package - lists the package targets; builds nothing
+package:
+	@bash scripts/make-help.sh package
+
+## package/deb - default: package/deb/release (output in target/debian/)
+package/deb: package/deb/release
+
+## package/deb/release - Debian package of the release build of the splinter binary
+package/deb/release: build/crate/splinter
+	bash scripts/package/build-deb.sh
+
+## package/deb/publish - sign the release package and attach it to the GitHub release of v<version> (created if missing; an earlier upload is replaced); needs gh, a GnuPG key and the tag on GitHub (RELEASE_REMOTE, default origin)
+package/deb/publish: release/notes
+	bash scripts/package/publish-deb.sh --check --version $(VERSION) --remote $(RELEASE_REMOTE)
+	$(MAKE) package/deb/release
+	bash scripts/package/publish-deb.sh --version $(VERSION) --remote $(RELEASE_REMOTE) --notes-file $(RELEASE_NOTES) $(RELEASE_DEB)
+
+## release - lists the release targets; does nothing (a release bumps, tags and publishes)
+release:
+	@bash scripts/make-help.sh release
+
+# Everything a bump needs, checked before any file is touched.
+_release/preflight:
+	@command -v bump2version >/dev/null 2>&1 || \
+		{ echo "error: bump2version not found - install it with 'pip install bump2version'"; exit 1; }
+	@[ -z "$$(git status --porcelain --untracked-files=no)" ] || \
+		{ echo "error: uncommitted changes (see git status); a release commit holds only the bump"; exit 1; }
+	@grep -q '^## \[Unreleased\]$$' CHANGELOG.md || \
+		{ echo "error: CHANGELOG.md has no '## [Unreleased]' section to release"; exit 1; }
+
+## release/patch - bump the patch version, date the CHANGELOG section, commit and tag v<version> (local only; release/publish pushes)
+release/patch: _release/preflight
+	bump2version --no-commit --no-tag patch
+	$(MAKE) _release/finalize
+
+## release/minor - bump the minor version, date the CHANGELOG section, commit and tag v<version> (local only)
+release/minor: _release/preflight
+	bump2version --no-commit --no-tag minor
+	$(MAKE) _release/finalize
+
+## release/major - bump the major version, date the CHANGELOG section, commit and tag v<version> (local only)
+release/major: _release/preflight
+	bump2version --no-commit --no-tag major
+	$(MAKE) _release/finalize
+
+# A sub-make, so VERSION is the bumped one. The Unreleased entries become the
+# version's section under a fresh, empty Unreleased heading; the lock follows the
+# workspace version; the tag is made last, on the commit that holds all of it.
+_release/finalize:
+	$(CARGO) update --workspace
+	sed -i 's/^## \[Unreleased\]$$/## [Unreleased]\n\n## [$(VERSION)] - '"$$(date -u +%F)"'/' CHANGELOG.md
+	git commit -m "chore: release v$(VERSION)" -- .bumpversion.cfg Cargo.toml Cargo.lock CHANGELOG.md
+	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
+
+## release/notes - write the CHANGELOG section of v<version> to target/release-notes-v<version>.md (the GitHub release body)
+release/notes:
+	mkdir -p target
+	awk -v head="## [$(VERSION)]" 'index($$0, "## [") == 1 { if (on) exit; on = index($$0, head) == 1; next } on' CHANGELOG.md >$(RELEASE_NOTES)
+	@[ -s $(RELEASE_NOTES) ] || { echo "error: CHANGELOG.md has no section for $(VERSION)"; exit 1; }
+
+## release/publish - push HEAD and the tag v<version> to RELEASE_REMOTE, then package/deb/publish
+release/publish:
+	git push $(RELEASE_REMOTE) HEAD "v$(VERSION)"
+	$(MAKE) package/deb/publish
+
+# ---------------------------------------------------------------------------
 ##@ Dependencies and tooling
 ## Local sven/brain checkouts, git hooks, formatting.
 
@@ -364,7 +447,8 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families fmt \
+.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/package fmt \
+	package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
 	deps deps/local deps/lua deps/tlaplus deps/lock \

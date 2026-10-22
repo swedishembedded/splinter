@@ -350,6 +350,9 @@ make build test      # release profile throughout
 make check           # every gate: hygiene, headers, scope, layering, env reads, perf numbers,
                      # scripts, make targets, fmt, clippy -D warnings, lock sources, history
 make help            # every target as a tree by section; `make <TAB>` descends level by level
+make release/minor   # (or patch, major) bump, date the CHANGELOG section, commit and tag, locally
+make release/publish # push HEAD and the tag, then package/deb/publish: the signed .deb
+                     # (and .asc) on the tag's GitHub release, replacing an earlier upload
 ```
 
 Never run `cargo fmt --all`: it follows the local path overrides into the

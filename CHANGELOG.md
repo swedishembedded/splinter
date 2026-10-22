@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (packaging and release)
+- `make package/deb` builds a Debian package of the `splinter` binary (`target/debian/splinter_<version>_<arch>.deb`, Depends from dpkg-shlibdeps). `make package/deb/publish` signs it (detached `.asc`, `gpg --verify`) and attaches both to the GitHub release of `v<version>`, creating the release from the tag with its CHANGELOG section as the body, and replacing an earlier upload; it checks gh, the login, the tag (checked out, clean, on GitHub at the same commit) and the signing key before building, and says what to do when one is missing. `make release/{patch,minor,major}` bump, date the Unreleased section, commit and tag locally; `make release/publish` pushes HEAD and the tag to `RELEASE_REMOTE` (default `origin`) and publishes. `make test/package` is the publishing script's spec.
+
 ### Changed
 
 - `--workspace-tree-memory-gib N` names the bound on the memory of a whole project command (24 GiB when not given); `0` names none and offers the environment of the tasks stored before the bound, which `solve` otherwise refuses.
