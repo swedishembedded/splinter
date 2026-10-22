@@ -1,359 +1,127 @@
 # AGENTS.md - Splinter
 
-Splinter is the end-to-end learning system built on top of **sven** (agent
-execution) and **brain** (inference and training). You tell it, in plain
-language, what to learn - a document, a command-line tool, a task - and it
-acquires that capability, measures that it did, and releases a better
-version of its own model. The released model is then deployable without
-Splinter: on plain `brain serve`, or through sven talking to brain.
+Splinter is the end-to-end learning system built on **sven** (agent execution)
+and **brain** (inference and training). You tell it, in plain language, what to
+learn - a document, a command-line tool, a repository, a person's sessions - and
+it acquires that capability, measures that it did, and releases a better
+version of its own model. A release is deployable without Splinter: on plain
+`brain serve`, or through sven talking to brain.
+
+This file routes you to the file that owns a subject. It holds rules and
+locations, not status: what is done, open or measured lives in the roadmap
+ledgers (`.agents/roadmap/index.md`). `make check/gates/agents-md` holds it to
+a line budget and checks that every path it names exists.
 
 ## Repository scope
 
 **In scope** - the learning campaign and nothing it can get from its
-dependencies:
-- Turning a request ("learn this document", "learn this tool") into tasks,
-  sources and a campaign; the controller that runs it.
-- Knowledge intake: sources, sections, facts and probes, with provenance.
-- Deciding which experience qualifies as training material, and curating
-  versioned datasets from it.
-- Sample design and measurement: verifiers the policy cannot reach,
-  held-out, retention and anchor suites, release gates.
-- Releases: immutable adapters or full checkpoints with manifests, the
-  default alias, lineage from an answer back to its sources.
-- Owning the embedded runtime's resources (one resident base, phases).
+dependencies: turning a request into sources, tasks and a recorded run;
+knowledge intake with provenance; deciding which experience qualifies as
+training material and curating versioned datasets; verifiers the policy cannot
+reach, held-out, retention and anchor suites and the release gate; immutable
+releases, aliases and lineage; owning the embedded runtime's resources.
 
-**Out of scope** - use the dependency, or fix it there:
-- Running agents, tools, sessions, delegation, trajectories: **sven**.
-- Model computation - inference, training algorithms, evaluation arithmetic,
-  checkpoints, adapter formats, serving: **brain**.
-- Anything that re-implements either of those locally.
+**Out of scope** - use the dependency, or fix it there: running agents, tools,
+sessions and trajectories is **sven**'s; model computation (inference,
+training algorithms, evaluation arithmetic, checkpoints, adapters, serving) is
+**brain**'s. Nothing here re-implements either. Neither sven nor brain depends on Splinter.
+The ownership table and the boundary rule are in `.agents/rules/architecture.md`.
 
 **Naming other projects.** Splinter depends on sven and brain, so it names
 them. It names no other project: describe an orchestrator or host
-generically. `make check` enforces this (`check-repo-scope`).
+generically. `make check/gates/repo-scope` enforces this.
 
-## Ownership - what belongs where
+## Where things are
 
-| System | Owns | Must not own |
-|---|---|---|
-| **sven** | Running agents: tools, sessions, delegation, permissions, the authoritative trajectory of what an agent did | What to learn, training, release decisions |
-| **brain** | Model computation: inference, training algorithms, evaluation arithmetic, checkpoints, adapters, serving | Which experiences qualify, campaign scheduling, release authority |
-| **Splinter** | The learning campaign: intent, task acquisition, evidence admission, dataset curation, run scheduling, lineage, release decisions | Re-implementations of anything sven or brain provide |
-
-Neither sven nor brain depends on Splinter. Splinter consumes sven through its
-public SDK (`sven-sdk`), and holds sven's trajectory format (`atif`, which
-`sven-sdk` re-exports) in its vocabulary; an import of any other sven crate is a
-gap in that SDK, tracked in `.agents/roadmap/splinter.md`, not a licence to
-reach further in.
-
-Brain is different: `splinter-model` may use any object or crate of brain's
-repository. It instantiates the SDK's higher-level primitives first (the
-`brain` crate: devices, residency, models) and reads the state of the whole
-system through them, reaching into a brain crate directly when the state it
-needs sits there. The reach stops at the adapter: no other Splinter crate
-depends on brain, and nothing in Splinter re-implements what brain computes.
-
-**The rule that decides a boundary:** each project proves its own
-capabilities with its own standalone samples, and Splinter proves they
-compose. If moving something into Splinter leaves sven or brain unable to
-demonstrate a capability without Splinter, the boundary is drawn wrong. A
-reusable mechanism (a training objective, a replay sampler, a verifier
-interface) stays in the project that owns the computation; Splinter keeps
-the decision about when and on what to use it.
-
-## Conventions
-
-- **One implementation.** Never copy code out of sven or brain. If Splinter
-  needs something they have, depend on it. For sven, if its SDK does not expose
-  it, fix the SDK in that repository; for brain, `splinter-model` reaches the
-  crate that holds it.
-- **Evidence over claims.** A learning run is judged by a measurement the
-  policy under training cannot influence: held-out probes scored against
-  source material, retention of everything learned before, and an anchor
-  suite for general behaviour. "The model said it learned" is not evidence;
-  neither is a training loss.
-- **Unmeasured is not zero.** A number that was not measured is absent, never
-  reported as `0`.
-- **Zero warnings.** `cargo clippy -D warnings` clean, including warnings the
-  change did not cause.
-- **ASCII punctuation.** No em/en dashes, curly quotes or ellipsis
-  characters anywhere; the text-hygiene hook repairs them.
-- **Every source file** starts with the SPDX line and the copyright line
-  (`scripts/spdx/check.py --fix` adds them).
-- **Linear history.** Rebase, never merge; the pre-push hook refuses merges.
-- **No trailers.** `Co-Authored-By:`/`Claude-Session:` lines are stripped at
-  commit and refused at push.
-
-## Where things go
-
-| What | Where |
+| Path | What it is |
 |---|---|
-| A non-obvious defect or a gate that lied, with the number that proved it | `.agents/knowledge/<NNN>-<slug>.md`, listed in `.agents/knowledge/index.md` |
-| Outstanding work | `.agents/roadmap/` |
-| Research and design notes that inform the roadmap | `.agents/research/` |
-| Research papers (finished, citable writing) | `papers/<topic>/`, LaTeX, builds with `make` |
-| User-facing documentation | `docs/` (the manual; `docs/manifest.yaml` lists and orders its pages), with `README.md` as the overview. The command reference is generated: `splinter cli-reference` |
+| `crates/` | the workspace, in tiers (`architecture.toml` is authoritative); what each crate owns is in its `crates/<crate>/src/lib.rs` docs |
+| `crates/splinter` | the `splinter` binary: `clap` grammar and output, nothing else |
+| `crates/sdk` | `splinter-sdk`, the one way to embed Splinter; the CLI and every sample use only it |
+| `crates/pipelines` | the stages and the pipelines that order them (`learn`, `practice`, `absorb`, `acquire`, release gate) |
+| `crates/orchestrator` | configuration (the only reader of the environment), model roles, the stage engine and the release store |
+| `crates/agent`, `crates/model` | the adapters: the only code that runs sven, and the only code that touches brain |
+| `crates/core`, `crates/store`, `crates/expdb` | the vocabulary, durable state, and the experience database under it |
+| `samples/` | one controlled learning sample per directory, a standalone program on the SDK whose README states what it measures |
+| `tasks/` | the frozen repository task families shared by samples (`tasks/README.md`, `tasks/catalog.toml`) |
+| `examples/first-run` | the inputs of the first-run walk-through |
+| `docs/` | the user manual; `docs/manifest.yaml` orders it, `docs/reference/cli.md` is generated by `splinter cli-reference` |
+| `papers/` | research papers, one scope each (`papers/README.md`) |
+| `scripts/` | gates (`scripts/gates/`), hooks (`scripts/hooks/`), dependency pinning, the lease kit, packaging, qualification and end-to-end runs; each is run by a make target |
+| `tools/docs-publisher` | the pinned documentation publisher |
+| `.agents/rules/` | how to work here (table below) |
+| `.agents/roadmap/` | status, open work and measured numbers, one ledger per workstream; start at `.agents/roadmap/index.md` |
+| `.agents/knowledge/` | defects already paid for, one finding per file; start at `.agents/knowledge/index.md` |
+| `.agents/research/` | research and design notes that inform the roadmap |
 
-Code never cites a `docs/` or `.agents/` path (a gate enforces it): state the
-fact inline instead.
+## Rules to read before you start
 
-## Research papers
-
-`papers/` holds research papers, not plans. A paper is a proper, high-quality
-paper in the style of an arXiv submission (abstract, method, evaluation,
-results, limitations, references; buildable to PDF). A final paper contains only
-findings that are proven and verified. While a paper is a draft (marked in the paper
-directory; a paper that carries a claims ledger keeps `status.txt`) it may also hold
-registered experiments whose results are not yet validated, stated as such with empty
-result tables; a paper's `final` target, where it has one, fails while any registered or
-planned claim remains. Roadmaps, intentions, open questions
-and "next steps" belong in `.agents/roadmap/` and `.agents/research/`; a paper
-that reads like one of them is wrong.
-
-- **Route by scope.** Every paper states its scope in its introduction and
-  `papers/README.md` lists them. Put a new finding in the paper whose scope it
-  falls in; if none fits, start a new paper directory and add its scope there.
-- **Keep papers current.** A change that produces a new verified finding, or
-  invalidates a stated one (a corrected defect, a re-measured result, a
-  changed method), updates the affected paper in the same change: text,
-  tables, figures and the numbers they rest on.
-- **Verified means reproducible.** Every number traces to a measurement that
-  can be rerun with the commands the paper documents, comes with its sample
-  size and uncertainty, and is labelled as a pilot when the evaluation was
-  underpowered or not frozen in advance. A result that was not measured is
-  absent, never zero; a result that did not hold is reported as such.
-- **No speculation as findings.** Claims the evidence does not support stay
-  out or are stated as limitations. Every citation is checked to exist.
-- **The paper must build.** `make` in the paper directory produces the PDF
-  with no undefined references or citations before the change is committed.
-  The PDF is `target/papers/<directory name>.pdf` and the LaTeX intermediates
-  are under `target/papers/.build/`; nothing is written into the paper's
-  directory.
-
-## Architecture
-
-Crates in tiers; a crate depends only on crates in a lower tier, except for
-the reviewed same-tier exceptions `architecture.toml` lists. That file is
-authoritative: it names every crate's tier, the pairs that must never be
-reachable from one another, and the exceptions, each with its reason.
-`scripts/gates/check-architecture.sh` enforces it against `cargo metadata`,
-and `scripts/gates/test-architecture.py` is the gate's own specification.
-
-Dependencies flow down. Read the tiers from the bottom:
-
-```text
-sample, surface        splinter (CLI) and samples/*: depend on the SDK and nothing else
-sdk                    splinter-sdk: the one way to embed Splinter
-workflow               splinter-pipelines: stages and the pipelines that order them
-application            splinter-orchestrator: what a run is carried out with
-adapters               splinter-agent (sven) and splinter-model (brain): the only code that
-                       talks to either
-domain                 splinter-knowledge: intake and task construction
-measurement            splinter-eval and splinter-data: what is measured, what is trained on
-storage                splinter-store and splinter-sandbox: state on disk, processes
-foundation             splinter-core (the vocabulary) and splinter-expdb (the database)
-```
-
-| Crate | Tier | Owns | Depends on |
-|---|---|---|---|
-| `splinter-expdb` | foundation | the experience graph database, with no internal dependencies; `splinter-store` stores experiences in it: immutable content-addressed segments, blob packs and index runs on plain files; manifests as the only transaction layer; per-writer ids so ingest needs no coordination or file locks; the graph of tasks, states, decisions, transitions, counterfactual sets and episode families; modality-neutral episodes of streams on explicit clock domains with events, actions and correspondences; evaluations, derivations and skills kept apart from raw experience; pinned snapshots, compaction and garbage collection, whose storage protocol is model-checked in TLA+; queries and training views (imitation, preference, group-relative, transitions, step labels, world-model windows, contrastive pairs, masked prediction, action chunks) as reproducible projections | - |
-| `splinter-core` | foundation | the vocabulary, with no I/O: the digests (blake3 content addresses; sha256 for what a tool reports) and the canonical JSON they are computed over, the UTC clock, the source (its parts' content addressed, spans resolved to exact bytes; a recorded session is one, with the removals made to it, the digest of its bytes, its dropped images and the namespaced `extra` records its producer filed, kept verbatim), the claim (what a person taught, as proposed, as gated into quotes that are spans, and as ruled on in a ledger entry, with the tasks it was made into and the release that first absorbed it), the task, the immutable content-addressed experience with sven's trajectory format, the annotations made about an experience (verdicts ranked by strength, step labels, relations), the chat wire shapes and the one system prompt every model run on a task answers under and every chat record shows, the names tasks travel under, the rule that an instruction must stand on its own without the material a student is not shown, how a command names a model (`policy:`, `local:`, `remote:`), and the roles models play in a run with the one rule that decides who plays each, longitudinal records (a `timeline-v1` line with interventions) and the participant-safe history made from one: raw identifiers replaced by opaque keyed keys, every item tied to its file line and terms, one content address per history, each with the invariants it keeps | - |
-| `splinter-store` | storage | durable state: the injected `StateRoot` and its layout, time-ordered ids, the decision rule that turns an experience's verdicts into one decision and a reward, the run record every command that writes pipeline state keeps (stages, status, outputs, the cross-process cancel request, kept as events and signals in the experience database); the source store - sources and their parts' content stored once per digest; the task store - generated tasks under their address and named task sets recording how each was generated; the claim sets an extraction proposed and the claim ledger of every ruling on them (admitted, reinforced, forgotten, refused), with the tasks each claim was made into, the release that first took it in and the claims each release was trained on; and the experience store, kept in the experience database through one shared `Workspace`: immutable content-addressed experiences (each also an attempt in the graph), annotations as ranked evaluations of it, experience sets, the derived reward; longitudinal datasets kept as one immutable content-addressed episode per participant, imported from a record file idempotently and in bounded memory; the lineage of datasets, training runs and releases back to the attempts and episodes; maintenance of the database; documents (canonical-JSON records checked against their address on every read), pointers (a name's whole history, moved by compare-and-set), artifacts (the plain files tools need, tracked by the database) and the loss ledger; the resumable JSONL job log (one record a line, appended as each unit finishes, read back once per key so overlapping runs agree), the deterministic state archive, verified restore, verify and repair | core, expdb |
-| `splinter-sandbox` | storage | where a solver's code runs: the one bounded process runner (explicit environment, process-group kill at a timeout, output caps, rlimits), the runtime registry and what a runtime resolves to (version, executable digest; `lua` is Lua 5.1 and an interpreter that reports another version is refused), the process sandbox (bounded, not isolation) and the container sandbox (image pinned by digest, no network, read-only root), workspaces (a source tree pinned by the digest of its archive, laid out byte for byte, commands run in it by either sandbox, and what a solver changed read back from git as a patch that applies to another tree of the same snapshot), and environments whose snapshot digest pins everything that determines their behaviour | core |
-| `splinter-eval` | measurement | measurement: the release gate's four checks and how each is decided (over a sign test it is handed), over closed-book answers and over changes to a repository alike (how an agent is probed for the gate, the exposed attempts and the ones the harness could not carry out set aside and counted in no denominator, a served agent held to the verdicts of the in-process one), the gate for a model updated from facts a person taught it (a declared rule on counts of claims answered on their stopping paraphrases, plus stance rates (hold, accept without inventing, decline) that may not fall below the champion's, no significance test; the same rule without the demand for a gain decides a consolidation), the predictive gate over metrics on paired held-out units, pass@k and where a pass rate and a teacher's verified answer put a task (always, frontier, taught, never), and verifiers by strength (executable checks run in the task's sandbox, mutation-validated generated tests, formal exact match, agreement between answers, judge calibration) with the composite that annotates all their verdicts, a critique verified by the outcome of the retry it led to, the workspace verifier (a patch applied to a fresh copy of the task's snapshot and graded by the project's own commands that must go from failing to passing and keep passing, the hidden tests laid over it, a patch that touches a protected or hidden path refused; `grade` is the same judgement for a caller that needs each command's own output and the files the change touched, which a supervisor such as the coding-loop sample uses) and the exposure audit (a trajectory read for a hidden path, the hidden tests' text or the state root's path, which fails an experience whatever its patch did), and two models compared on the items both were graded on, and the choice of an intervention from measured gain, its uncertainty and its cost (`intervention`: the lower confidence bound of the paired gain per family, net of one-time and per-use cost, or no change) | core, sandbox, store |
-| `splinter-model` | adapters | the model being trained, and the only crate that touches brain: the in-process provider behind sven's `ModelProvider`, `ModelSelection` and its identity, the residency (one resident copy per base checkpoint, shared by every model on it, each model's adapter attached before its generation, released for training and serving), the model loaded for a command (quiescing the device when dropped), LoRA fine-tuning with replay, continuation and held-out scoring, a seed for a local model's draws, the fresh seed a run draws when its caller gave none (`seed::draw`, brain's source) and a cap on the training row (`max_block`) that names an overlong record before any device is claimed, the full-parameter fine-tune and the merge of an adapter into the weights it targets (each a checkpoint directory that is a base like any other), DPO preference fine-tuning scored by brain's preference score, which dataset formats brain trains and the check of a dataset file against its parser, the release manifest `brain serve --adapter-manifest` follows (written with brain's own type), and brain's paired sign test as the gate's significance | core, data, eval |
-| `splinter-agent` | adapters | a task solved through sven in exactly the environment it records (closed-book with no tools, a runtime with the one tool `run_code`, or a change to a repository solved in a fresh copy of its snapshot with sven's file, search and shell tools - the shell in the sandbox's container when there is one - the failures of the checks the task shows put back as follow-up turns and the change read back from git as the final output, with an observer that is handed the episode's tree when it is laid out, with the tools that reach the network or bring in outside state withheld), bounded by sven's run options, under Splinter's system prompt in place of sven's; the open-book prompt a teacher's solve and `ask --open-book` are sent; the judge verifier, a different model grading closed-book through that same solve; the critic, a model saying closed-book what is wrong with a failed attempt from its evidence summaries, never the teacher's material; the retry with that critique, the bounded critique-and-retry loop that records the chain as relations, the typed sven call every other crate asks a model through (`TypedCall`, the empty toolset and the bounds set in one place), a model's next reply to a conversation it was not in (the turns given as they are, an assistant turn included), the reference change of a repository task replayed as an agent's actions (`demonstration`: a scripted model that reads the files a patch changes and edits them by its hunks, run through the same episode as any solver), the planner call that proposes a skill graph from numbered sections, the typed call that asks a model for task proposals, and the one that asks it what a person taught in a session, and the one that asks it to write a claim in its other forms, and the claim judge (typed calls deciding a pair of claims and whether the quotes assert a statement) | core, eval, knowledge, sandbox, store |
-| `splinter-knowledge` | domain | intake: capturing documents, repository trees (and a git revision as a workspace snapshot, `capture_tree`), command runs and recorded agent sessions (secrets removed, one part per step; a structural ATIF key it does not know is refused by its path) as sources, the claims a model proposes from a session (read in several passes, kept where they agree) and the gates that admit them (the person's quotes verbatim, the statement's terms in them, no personal data of a third party, the words asserting the statement when a judge says so, claims paired by the names they share and ruled superseding, reinforcing or separate by a `ClaimJudge` it is handed, else by their statements) with the ledger fold, a live claim as a task (its question, its statement as the reference, the spans of the person's words as evidence) and the verifier that grades an answer to it by the statement's numbers, names and quoted terms it carries and the ones it adds, the other forms a claim is learned in (restatements, reverse questions, consequences) admitted by that same term rule, the code checks a stance pair rests on (a fact's keys, a falsehood made by replacing one, a reply that holds the true value or adopts the false one, one that invents a term or declines), addressable sections, the text gates a generated task is held to, the concepts a task exercises (declared, else the source sections its evidence falls in, else its kind), the grounding material a teacher is shown of a task (the sections its evidence falls in, its passages and hints, never its reference), the denoise task generator, the workspace task generator (a repository's tests profiled and qualified twice, a fault seeded by code admitted only when the project's own tests catch it reproducibly, the tests that catch it taken out of the solver's tree, what earlier runs hold not made again; the `workspace-change` kind is made by code and never asked of a model) and model task generators: the skill graph of a body of documentation (skills grounded in sections with the constraints and requirements the text states and the prerequisites between them, read by rule or proposed by a model and admitted by code, versioned by content address; a web page's HTML read as Markdown), the task kind catalogue as data, a generator model's proposals (asked for through a `TaskProposer` the knowledge crate is handed) admitted by code (grounded, self-contained, naming their subject, executed where computed, deduplicated, never contradicting one another), and the rehearsal tasks a base model answers for its own answers to be replayed (sums and format requests built by code with their references, the brief a model writes general requests from, and the admission that keeps every anchor task and its near copies out) | core, eval, sandbox, store |
-| `splinter-data` | measurement | the holdout rule (which records are held out, a group never divided), the split of a dataset file by it, and the split of the records to train on by the same rule into the records fitted and the monitoring records a run scores as it trains; why the projection refuses a trajectory (the step and the reason), a recorded session as a dialogue whose replies after a given step are supervised and whose earlier ones are context, a record's fixed side of the split (trained on or held out, which the rule never moves), projections of the experience store into training records for one objective (final answers, steps, critiques, preferences, verdicts, decisions, retrieval, outcomes, denoise, raw text, a model's own answers as given), every conversation starting with the system turn every solve runs under, the tool schemas an agent was offered kept in the chat record, a workspace trajectory rendered action by action with the checks' feedback as context and left out, counted by reason, when compacted, unparsed, holding reasoning markup or over the training block (`within_block`), what a student may see of privileged material (a teacher's solve included), the dataset each objective is written as with its manifest (the writer takes the trainer's check as a parameter and knows no backend), the projection of longitudinal episodes into participant-safe `timeline-v1` records at a prediction point, written with a manifest naming episodes, source files and combined terms, the splits of a record dataset (by participant group, by temporal cutoff, leaving one source out) with the leakage gates every split and written dataset passes, the dataset store naming each by its manifest, and the seeded sample of earlier records replayed | core, store |
-| `splinter-orchestrator` | application | what a run is carried out with: `Config` (the only reader of the environment), the runtime a process shares and the context one command works in (its own pin of each policy alias), the environments a task records resolved from the configuration alone (a runtime in the process sandbox; a workspace in a container when the configuration names a docker client and a digest-pinned image, else on the host, its record saying it is not isolated), model references resolved under the configuration and the network opt-in, the roles models play and who plays each, the recorded run and its cross-process cancel, the stage engine that runs a pipeline's stages in order over one state (the engine checks for a cancel and the budget, skips a stage that does not apply, stops where a stage says to, and records every stage with its time and its failure), the generation a release belongs to and the consolidation it sits on (a consolidated checkpoint laid out as the base directory a policy runs and adapters are trained on), the release store (immutable releases, aliases moved by compare-and-set, and the manifest a server follows, rewritten whenever an alias moves) and the answers `ask` gave, and the error every command reports | agent, core, data, eval, knowledge, model, sandbox, store |
-| `splinter-pipelines` | workflow | the stages and the pipeline: the router (a sentence read by an `IntentClassifier` - by default the router-role model through sven's typed call - and routed by code), and each stage as a command sources, sessions, claims (extract and gate, with the extraction's coverage of the facts a recording says its sessions teach), `absorb` (the kit of records a live claim is taught from, the night's dataset with its sealed-probe guard, training again from the base, the stance pass - preference pairs of facts held against a falsehood, statements accepted without support invented and questions declined, derived afresh each night with a fifth of each kind held out - and the gate on counts of claims answered and on stance rates that may not fall below the champion's; the generations of a policy: the claims a consolidated base holds and the bounded sample of their records kept in the mix, `consolidate` taking a generation into the weights by a full fine-tune or a merge and gating the checkpoint against the release in use, and the rebuild from the last base that did not hold a forgotten claim), tasks, solve, verify, critique, dataset, rehearse (the base's own answers to general tasks, never an anchor task), train (from the champion, with replay and the rehearsal mixed in at their shares and monitored on), release (the four-check gate over closed-book suites and over the exam a `practice` reserved - the champion and the candidate attempt its tasks as agents under the same bounds and seeds, paired outcomes clustered by family, each earlier release held to its own exam, the served agent compared by verdict - immutable releases, aliases, rollback), eval, reserve (the exam's families taken out of the sources up front) and the exam set and powered exam built on it - with `learn` composing them into one recorded run, and `practice` composing a repository's stages (snapshot, profile, tasks, reserve the exam's families before any rollout, solve as an agent in copies of the tree, verify with the exposure audit, frontier, dataset by action with the tools, train, release: the run ends in the gate and says why a blocked candidate was not released) into another; and `acquire` (`learn "<objective>" --source <url|path>`: documentation into a skill graph, probes split into dev and final halves that are never trained on, a measured baseline, rounds on the skill expected to benefit most, and an assessment on the final probes), `improve` (which intervention - more samples, another episode protocol, a trained candidate, none - is worth its cost, from what each was measured to do against the incumbent), `generations` (the protected panel of every earlier exam, the full retention matrix with the base as generation 0, replay policies and a rebuild from the base, and one generation decided on retention and regression limits before the gate, with a ledger), and the curriculum: pass@k with a teacher solving open-book what the policy never solves (for a repository task, its reference change replayed as an agent's actions or a stronger model solving it as an agent, each graded by the workspace verifier and never grading itself), the tasks worth training on (failed at least sometimes, with a verified answer), concept mastery across releases from closed-book solves, concepts a failed retention check queues for new tasks, and diversity quotas on a training set | agent, core, data, eval, knowledge, model, orchestrator, sandbox, store |
-| `splinter-sdk` | sdk | the one way to embed Splinter: a `Splinter` handle that owns the runtime, the trainer and the progress receiver, hands each command a context of its own and runs it as a recorded run (`learn`, `practice`), with the commands and the layers a caller works with re-exported under stable names | agent, core, data, eval, knowledge, model, orchestrator, pipelines, sandbox, store |
-| `splinter` | surface | the binary: `clap` grammar and output, nothing else | sdk |
-
-Beside the crates: `samples/<name>` holds one controlled learning
-sample per directory (a standalone program with a README stating what
-was measured), `tasks/<family>` the frozen task families (workspace, hidden
-world, verifier, audit), and `scripts/` the local override, lock pinning,
-hooks and gates.
-
-### Where does it go
-
-| If you are adding... | It belongs in... |
+| Before you... | Read |
 |---|---|
-| A new noun, an id, or an invariant of one | `splinter-core` |
-| A new kind of durable state, or a way to read it | `splinter-store` (or the crate whose types it embeds, when it cannot sit below them) |
-| A new place code runs | `splinter-sandbox` |
-| A new verifier, a measurement, a release-gate check | `splinter-eval` |
-| A new training projection, or a change to the dataset format | `splinter-data` |
-| A new source parser, chunker, or task-construction rule | `splinter-knowledge` |
-| Anything that runs a sven agent or a typed sven call | `splinter-agent` |
-| Anything that touches brain: inference, training, residency, what a trainer can read | `splinter-model` |
-| A setting, a model role, a service a process shares, run recording | `splinter-orchestrator` |
-| A stage, a pipeline, the order stages run in | `splinter-pipelines` |
-| A public type or entry point for callers | `splinter-sdk` |
-| Command-line grammar or output | `splinter` |
-| A controlled learning experiment | `samples/<name>`, on the SDK alone |
-
-### Laws
-
-- **A mechanism never decides when it is used.** A verifier is eval's; which
-  verifier grades a kind is a pipeline's. A trainer is the model adapter's;
-  choosing supervised or preference training is a pipeline's. A typed call is
-  the agent's; asking it is a stage's.
-- **No learning algorithm in the CLI, the SDK or the orchestrator.** They
-  compose and present; algorithms live in the project that owns the
-  computation, and the decision to use one lives in a pipeline.
-- **A model is asked for by role.** No stage names a model; it names a role
-  (`policy`, `teacher`, `generator`, `planner`, `judge`, `critic`, `router`)
-  and configuration decides who plays it. No code that generates tasks calls
-  brain.
-- **An experience is immutable.** Verdicts, rewards, step labels and dataset
-  membership are facts derived about it. Never rewrite an experience to
-  encode a later interpretation: add an annotation, or project a new view.
-- **No crate per training algorithm, and no experience format per
-  pipeline.** Experience is collected once and reinterpreted; algorithms are
-  brain's.
-- **The stage engine records, stages do not.** A stage does its work and
-  reports what it did; cancel, budget, skipping, timing and the run record
-  are the engine's.
-- **Model work runs batched, on every card.** Inference over many prompts
-  (exams, gates, sampling, generation) keeps the server's decode slots full
-  by asking as many requests at once as it has slots, never one at a time;
-  training runs with the largest micro-batch the card holds. Independent work
-  is split across every available GPU. A sequential path exists only where
-  the order of answers is the thing measured, and it says so.
-- **Heavy GPU work is profiled before it runs long.** A training run or a
-  large inference job is first measured on the hardware it will run on: where
-  its time goes (prefill, decode, sampling, data movement, the host), how full
-  the card is, and how throughput scales with batch. A slow path is fixed
-  (here, or upstream in brain) before the long run, not after it.
-
-### Two questions before adding anything
-
-1. *Could a completely different learning pipeline use this?* If yes, it
-   belongs below the pipelines. If no, it belongs in the pipeline.
-2. *Would sven or brain still make sense without Splinter if this lived
-   there?* If moving it upstream keeps them whole, it probably belongs there.
-
-### Changing one thing touches several
-
-- **A training objective:** the objective and its line format (`data`); what
-  the backend can train from a file (`model` capabilities and its dataset
-  check); the stage that picks the objective (`pipelines`); the SDK's
-  exposure and the docs.
-- **A task kind:** the kind catalogue and its admission rules (`knowledge`),
-  the verifier that grades it and the kinds' names (`eval`, `core`), a
-  fixture, an evaluation suite, the docs.
-- **A model role:** the role and its fallback rule (`core::role`), the
-  configuration that feeds it (`orchestrator`), the stage that asks for it,
-  `status` output, the docs.
-- **A pipeline:** its stages and order (`pipelines`, on the stage engine),
-  its request and report, the SDK method, the CLI verb if it has one, a
-  scripted integration spec, the README's capability table.
-- **A kind of task the gate probes:** the suite that holds its tasks and how a
-  model is attempted at them (`pipelines` release), the numbers the report
-  keeps and the rule that decides them (`eval` gate), the exam or anchor that
-  supplies the tasks, the serve check's way of comparing a served run with the
-  in-process one, the CLI's report of the gate, the docs.
-- **A field of an experience:** the vocabulary (`core`), its canonical form
-  and golden test (`store/tests/identity.rs`), ingestion, every projection
-  that reads it, and a note on compatibility with what is already stored: an
-  address must not change for state that is already there.
-
-
-## Quality rules
-
-Each is enforced by a gate in `make check` and at commit where it can be:
-
-- **Layering** - dependencies point down the tiers, forbidden pairs stay
-  unreachable at any depth, an exception that no longer applies is removed,
-  a declared dependency is used, only `splinter-model` depends on brain, only
-  the two adapters depend on sven, and the command line and every sample
-  depend on the SDK and nothing else (`check-architecture`, whose own
-  specification is `scripts/gates/test-architecture.py`).
-- **Configuration is a value** - only `splinter-orchestrator`'s `config` module
-  reads or writes the environment; everything below takes its settings as
-  arguments, and tests build their own `StateRoot` instead of mutating
-  process state (`check-env-reads`).
-- **Small files** - no source file over 800 lines; a file that must stay
-  larger for a while is recorded in `architecture.toml` and may only shrink
-  (`check-architecture`).
-- **No test skips itself silently** - a test that cannot run (no git, no
-  docker daemon, no weights, running as root, an unset environment variable)
-  fails with the reason, or carries `#[ignore = "reason"]` so that every run
-  shows it as ignored. It never prints "skipped" and returns, which reports a
-  pass for a check that never happened: a false success. A skip is allowed
-  only when the person asking for the change explicitly asked for that test
-  to be skippable, and the test says so where it skips (`check-test-skips`).
-  This applies to every test in every crate and sample, and to the ignored
-  tests that need hardware: run with `--ignored`, a missing prerequisite
-  fails them.
-- **Documented** - every public item of a library crate has a doc comment
-  (`#![warn(missing_docs)]` under clippy `-D warnings`).
-- **No numbers without reproduction** - no unreviewed performance figure in
-  a README, comment or string (`check-no-perf-numbers`).
-- **No fixed default seeds** - a literal seed in production code is a salt, a
-  world constant, a frozen artifact's seed, a greedy path's or a test double's,
-  and is listed with that reason in `scripts/gates/seed-literals.allow.d/`;
-  every other default seed is drawn, printed and recorded
-  (`check-seed-literals`). A seed literal in a test says why determinism is
-  necessary with `// seed:` (`# seed:` in Python), else it is dropped and the
-  test passes for any seed; the gate fails a bare one.
-- **Scripts that work** - every script parses and is referenced
-  (`check-scripts`).
-- **Make targets are a tree** - concept first, then kind, then variant; every
-  prefix of a target is a target and every target has a `## name - text` doc
-  line (`check-make-targets`, or `make check/gates/make-targets`).
-- **One definition per default** - a default (a model, a limit, a step
-  count) is a named constant in the crate that owns it; the CLI shows it,
-  it does not restate it.
-- **Errors carry context** - a failure names what failed and on which input;
-  `unwrap`/`expect` outside tests only for an invariant the code states.
-
-## Make targets
-
-HARD RULE. Every public make target is `make <concept>/<subconcept>/.../<action>`:
-
-- The concept comes first (a noun: `build`, `test`, `check`, `deps`, `hooks`,
-  `papers`, `samples`), the verb or variant comes last, and there are as many
-  levels as the thing needs, usually two or three. A test or sample hierarchy
-  with subdirectories gets one segment per directory level:
-  `samples/tool-syntax/audit`. Never put the verb or area second.
-- Names are lowercase `[a-z0-9-]` segments joined by `/`. Private helper
-  targets start with `_`.
-- Every prefix is itself a target, so `make <TAB>` descends one level at a time.
-  An area target is the default action for its area (`build`, `test`, `check`,
-  `papers`: it runs its default set, named in its doc line) or, where no
-  default is safe or sensible (`deps`, `hooks`, `samples`, `build/crate`,
-  `test/crate`), it only lists its children and does nothing else. An umbrella
-  of anything that tags, pushes or uploads never acts.
-- A set that follows from the tree is generated, never hand-listed: explicit
-  targets from a static pattern rule over a computed list (never `%` pattern
-  rules, which bash completion cannot see). Here: `check/gates/<gate>` (one per
-  `scripts/gates/check-<gate>.sh`), `test/crate/<package>`,
-  `build/crate/<package>`, `papers/<name>/pdf`. Adding a directory adds a target.
-- A bare single-segment target is allowed only for an area, or for the leaves
-  `fmt` and `help`.
-- Every target has a `## name - description` line (a generated family has one
-  line with a `<placeholder>`), and sits under a `##@ Section` line; `make help`
-  is generated from them. `scripts/gates/check-make-targets.sh`
-  (`make check/gates/make-targets`, also a pre-commit hook) enforces the
-  machine-checkable part.
+| design anything, add a crate or dependency, or decide which crate owns a change | `.agents/rules/architecture.md` |
+| write code, a test, a measurement, GPU work or a commit | `.agents/rules/quality.md` |
+| add, rename or document a make target | `.agents/rules/make-targets.md` |
+| write or change a paper, or change a finding one states | `.agents/rules/papers.md` |
+| design a gate, a verifier or an exam | `.agents/knowledge/index.md` |
+| change a user-visible command, setting or page | `docs/contributing/documentation.md` |
+| pick up or change a workstream | its ledger in `.agents/roadmap/index.md` |
 
 ## Commands
 
+Build and test through the Makefile; everything builds in the release profile
+into the repository's `target/`. `make help` prints every target as a tree.
+
 ```bash
-make hooks/install   # once per clone: pre-commit, commit-msg and pre-push hooks
-make deps/local      # build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR)
-make deps/lock       # pin Cargo.lock to those checkouts' HEADs
-make build test      # release profile throughout
-make check           # every gate: hygiene, headers, scope, layering, env reads, perf numbers,
-                     # scripts, make targets, fmt, clippy -D warnings, lock sources, history
-make help            # every target as a tree by section; `make <TAB>` descends level by level
-make release/minor   # (or patch, major) bump, date the CHANGELOG section, commit and tag, locally
-make release/publish # push HEAD and the tag, then package/deb/publish: the signed .deb
-                     # (and .asc) on the tag's GitHub release, replacing an earlier upload
+make hooks/install            # once per clone: pre-commit, commit-msg and pre-push hooks
+make deps/local               # build against local sven/brain checkouts (SVEN_DIR, BRAIN_DIR)
+make deps/lock                # pin Cargo.lock to those checkouts' HEADs
+make build                    # every package; build/crate/<package> for one
+make test                     # every test, no model or GPU; test/crate/<package> for one
+make check                    # every gate, fmt, clippy -D warnings and the papers' claims
+make check/gates/<gate>       # one gate (scripts/gates/check-<gate>.sh)
+make docs/check               # the manual, its links and every command it shows
+make agents/roadmap/index     # regenerate the roadmap index after editing a ledger
+make release/minor            # (or patch, major) bump and tag locally; release/publish pushes
 ```
 
-Never run `cargo fmt --all`: it follows the local path overrides into the
-sven and brain checkouts. `make fmt` formats Splinter's own files only.
+Never run `cargo fmt --all`: it follows the local path overrides into the sven
+and brain checkouts. `make fmt` formats Splinter's own files only.
+
+## Conventions & invariants
+
+One line each; the linked file holds the detail and the gate enforces it.
+
+- **One implementation.** Never copy code out of sven or brain; depend on it,
+  and fix a missing sven SDK surface in sven (`.agents/rules/architecture.md`).
+- **Layering.** Dependencies point down the tiers in `architecture.toml`; only
+  the adapters reach sven, only `splinter-model` reaches brain
+  (`make check/gates/architecture`).
+- **Evidence over claims.** A run is judged by measurements the policy cannot
+  influence; an unmeasured number is absent, never `0` (`.agents/rules/quality.md`).
+- **An experience is immutable,** a model is asked for by role, and a
+  mechanism never decides when it is used (`.agents/rules/architecture.md`).
+- **Configuration is a value.** Only the orchestrator's config module reads the
+  environment (`make check/gates/env-reads`).
+- **No silent test skips, no fixed default seeds, no unreviewed performance
+  numbers** (`check/gates/test-skips`, `seed-literals`, `no-perf-numbers`).
+- **Zero warnings.** Clippy `-D warnings` clean, including warnings the change
+  did not cause; every public item documented (`make check/clippy`).
+- **Code never cites a `docs/` or `.agents/` path**; state the fact inline
+  (`make check/gates/no-doc-citations`).
+- **Headers and text.** SPDX and copyright header on every source file, ASCII
+  punctuation (`check/gates/spdx`, `check/gates/text-hygiene`).
+- **History.** Linear (rebase, never merge); no `Co-Authored-By:` or
+  `Claude-Session:` trailers (the commit-msg and pre-push hooks).
+- **Batched, profiled GPU work.** Fill every decode slot and card; profile a
+  long run before it runs long (`.agents/rules/quality.md`).
+
+## Where findings and work go
+
+| What | Where |
+|---|---|
+| Status, open work, measured numbers | the workstream's ledger under `.agents/roadmap/`, in the same commit |
+| A non-obvious defect or a gate that lied, with the number that proved it | `.agents/knowledge/<NNN>-<slug>.md`, listed in `.agents/knowledge/index.md` |
+| Research and design notes | `.agents/research/` |
+| A verified finding | the paper whose scope it falls in (`.agents/rules/papers.md`) |
+| A change to a public contract (command, flag, setting, output) | `docs/`, with `README.md` as the overview |
+| A new convention that needs a home | a file under `.agents/rules/`, with one line and a row above |

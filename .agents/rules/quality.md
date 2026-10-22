@@ -87,8 +87,9 @@ under `scripts/gates/` says what it enforces and why, and
 ## Text and history
 
 - **Headers.** Every source file starts with the SPDX line and the copyright
-  line; Markdown uses the CC-BY-4.0 comment form (`check/gates/spdx`;
-  `python3 scripts/spdx/check.py --fix <file>` inserts them).
+  line (`check/gates/spdx`; `python3 scripts/spdx/check.py --fix <file>`
+  inserts them). Markdown carries the CC-BY-4.0 comment form; no gate checks
+  it.
 - **ASCII punctuation.** No em or en dashes, curly quotes or ellipsis
   characters; the text-hygiene hook repairs them (`check/gates/text-hygiene`).
 - **Linear history.** Rebase, never merge; the pre-push hook and

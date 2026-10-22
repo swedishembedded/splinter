@@ -109,7 +109,7 @@ let learned = splinter.learn(&LearnRequest {
 ## Contributing
 
 `make build`, `make test` and `make check` build, test and run every gate; `make docs` builds the manual. See
-[Contributing](https://swedishembedded.com/docs/splinter/contributing/build) and `AGENTS.md` for the architecture rules.
+[Contributing](https://swedishembedded.com/docs/splinter/contributing/build) and `AGENTS.md`, which routes to the contributor rules.
 
 ## License
 

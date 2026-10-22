@@ -11,7 +11,8 @@ enforces and why.
 | Gate | Enforces |
 |---|---|
 | `text-hygiene` | ASCII punctuation, whitespace, line endings, parseable files |
-| `spdx` | Every tracked file carries its SPDX and copyright header (Markdown uses CC-BY-4.0 comments) |
+| `spdx` | Every tracked source file (Rust, Python, shell, make, C-family, CSS) carries its SPDX and copyright header; Markdown pages carry CC-BY-4.0 comments by convention, unchecked |
+| `agents-md` | `AGENTS.md` stays within its line budget, and every repository path it names exists |
 | `architecture` | `architecture.toml` against the real dependency graph |
 | `env-reads` | Only the orchestrator's config module reads the environment |
 | `large-files` | No model artifacts or oversized files in git |

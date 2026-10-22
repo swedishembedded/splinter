@@ -109,6 +109,13 @@ repos:
         files: (^|/)Makefile$
         pass_filenames: false
 
+      - id: agents-md
+        name: AGENTS.md stays a short routing guide whose paths exist
+        entry: bash scripts/gates/check-agents-md.sh
+        language: system
+        files: ^(AGENTS\.md|scripts/gates/check-agents-md\.sh)$
+        pass_filenames: false
+
       - id: roadmap-index
         name: the roadmap index is generated from the ledgers
         entry: bash scripts/gates/check-roadmap-index.sh

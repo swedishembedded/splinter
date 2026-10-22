@@ -127,14 +127,14 @@ GATE_TARGETS := $(addprefix check/gates/,$(GATE_NAMES))
 
 ## check/gates - default: every text gate below (hygiene, headers, paths, file sizes,
 ##   citations, manifests, lock sources, repo scope, environment reads, seed literals,
-##   crate layering, history, make target naming, roadmap index)
+##   crate layering, history, make target naming, roadmap index, AGENTS.md budget and paths)
 check/gates: check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS)
 
 ## check/gates/text-hygiene - ASCII punctuation, whitespace, line endings, parseable files
 check/gates/text-hygiene:
 	python3 scripts/hooks/text-hygiene.py
 
-## check/gates/spdx - every tracked file carries its SPDX and copyright header
+## check/gates/spdx - every tracked source file carries its SPDX and copyright header
 check/gates/spdx:
 	python3 scripts/spdx/check.py $$(git ls-files)
 
