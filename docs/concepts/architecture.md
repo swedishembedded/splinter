@@ -34,8 +34,9 @@ Splinter runs every agent through sven's public SDK (`sven-sdk`) and holds sven'
 format, ATIF, in its vocabulary. A task is solved through sven in exactly the environment it
 records: closed-book with no tools, a runtime with a single code tool, or a change to a
 repository made in a fresh copy of its snapshot with sven's file, search and shell tools.
-The same typed-call mechanism asks a model for task proposals, claims and judgments. The only
-code in Splinter that talks to sven is the `splinter-agent` crate.
+The same typed-call mechanism asks a model for task proposals, claims and judgments. The
+`splinter-agent` crate is the only code in Splinter that runs sven; `splinter-model` implements
+sven's model-provider interface so that sven's agents can run the in-process model.
 
 ## What it consumes from brain
 

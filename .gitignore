@@ -1,8 +1,7 @@
 # Generated documentation and its PDF (make docs).
 /build/
 
-# Build output. A local build normally goes to a shared target directory
-# chosen by `make deps/local`; this covers a build without one.
+# Build output, with or without `make deps/local`.
 /target/
 
 # Machine-specific cargo overrides written by `make deps/local`: absolute paths to

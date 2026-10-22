@@ -12,12 +12,12 @@ make help                       # every target, from the Makefile's own comments
 ```
 
 Everything builds in the release profile: brain's kernels are unusably slow unoptimised, and one profile means one
-set of compiled dependencies. A local build goes to the repository's `target/` unless `make deps/local` chose a
-shared one. Targets are named `<concept>/<subconcept>/<action>`, and every prefix is itself a target that lists its
+set of compiled dependencies. A build goes to the repository's `target/`; `make deps/local` changes only where sven
+and brain come from. Targets are named `<concept>/<subconcept>/<action>`, and every prefix is itself a target that lists its
 children; a gate enforces the naming.
 
-The dependency layering is enforced: a crate may depend only on a lower tier, and only the adapter crates touch sven
-or brain. Read [architecture](../concepts/architecture.md) and the repository's `architecture.toml` before adding a
+The dependency layering is enforced: a crate may depend only on a lower tier, only `splinter-agent` and `splinter-model`
+depend on sven, and only `splinter-model` depends on brain. Read [architecture](../concepts/architecture.md) and the repository's `architecture.toml` before adding a
 crate or a dependency. A source file is limited in size by a gate; split a module before it reaches the limit.
 
 Sources of truth:
