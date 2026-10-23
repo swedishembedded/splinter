@@ -73,7 +73,7 @@ of them. See [Configuration](../getting-started/configuration.md).
 | Task generation, admission rules and verifiers of closed-book kinds | In Splinter (`splinter-knowledge`, `splinter-eval`), by code |
 | Executable checks and repository tests | In the sandbox: on the host under kernel confinement, or in a container when one is configured |
 | The agent's attempt | Through sven, in the environment the task records |
-| Model inference and training | In brain, in the Splinter process |
+| Model inference and training | In brain: in the learning process for training and the agent's model, and in a `brain serve` process for the release's serve check |
 | The judge | A model other than the teacher, generator and policy, calibrated on controls before its verdicts count |
 | The release gate and the exam | In Splinter, on suites the policy under training never saw; the serve check starts a real `brain serve` |
 
