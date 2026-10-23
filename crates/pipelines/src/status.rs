@@ -9,7 +9,6 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use splinter_model::ModelSelection;
-use splinter_store::runs::list_runs;
 
 use crate::absorb::generation::Generation;
 use crate::curriculum::mastery::{weakest, MasteryReport, DEFAULT_WEAKEST};
@@ -94,12 +93,9 @@ pub fn status(ctx: &Context) -> Result<Status, OrchestratorError> {
     };
     let pin = ctx.policy_pin(POLICY_DEFAULT)?;
     let generation = Generation::of(ctx, POLICY_DEFAULT)?;
-    let runs = list_runs(ctx.workspace())?;
-    let recent_runs = runs
-        .iter()
-        .skip(runs.len().saturating_sub(RECENT_RUNS))
-        .map(RunSummary::from)
-        .collect();
+    let mut recent_runs = splinter_orchestrator::runs::list(ctx)?.runs;
+    let hidden = recent_runs.len().saturating_sub(RECENT_RUNS);
+    recent_runs.drain(..hidden);
     Ok(Status {
         state: ctx.root().path().to_path_buf(),
         policy: PolicyStatus {

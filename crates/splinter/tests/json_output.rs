@@ -32,8 +32,13 @@ impl Drop for Scratch {
 
 /// Runs `splinter --json --state <state> args...`; its exit code and stdout
 /// as JSON.
+///
+/// The home directory is the scratch directory, not the user's: role
+/// discovery reads the model store under it, and a store with an installed
+/// model would change what the reports say.
 fn splinter(state: &Path, args: &[&str]) -> (i32, Value) {
     let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+        .env("HOME", state.parent().unwrap_or(state))
         .arg("--json")
         .arg("--state")
         .arg(state)
