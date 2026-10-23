@@ -23,6 +23,13 @@ use crate::error::OrchestratorError;
 /// How often a running command looks for a cancel request.
 const CANCEL_POLL: Duration = Duration::from_millis(200);
 
+/// How often a running command says it is alive.
+const HEARTBEAT_EVERY: Duration = Duration::from_secs(30);
+
+/// How long a run may go without a heartbeat before a reader calls it lost:
+/// several heartbeat periods, so a slow append never reports a live run dead.
+pub const HEARTBEAT_STALE_SECS: u64 = 120;
+
 /// Recent runs `status` shows.
 pub const RECENT_RUNS: usize = 5;
 
@@ -163,6 +170,9 @@ pub fn record<R: Serialize>(
         cancel.clone(),
         Arc::clone(&done),
     );
+    // The run vouches for itself before any work starts, so a reader can tell
+    // a fresh run from one whose process died.
+    runs::heartbeat(ctx.workspace(), &run, splinter_core::clock::unix_now())?;
     let mut recorder = Recorder {
         ctx,
         log,
@@ -212,10 +222,17 @@ fn watch_for_cancel(
     done: Arc<AtomicBool>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
+        let mut last = std::time::Instant::now();
         while !done.load(Ordering::Relaxed) {
             if runs::cancel_requested(&workspace, &run) {
                 cancel.cancel();
                 return;
+            }
+            if last.elapsed() >= HEARTBEAT_EVERY {
+                // A failed heartbeat only makes a live run look stale; it must
+                // neither stop the run nor be retried here.
+                let _ = runs::heartbeat(&workspace, &run, splinter_core::clock::unix_now());
+                last = std::time::Instant::now();
             }
             std::thread::sleep(CANCEL_POLL);
         }
@@ -237,8 +254,8 @@ pub struct RunSummary {
     pub id: String,
     /// The command it ran.
     pub command: String,
-    /// `running`, `completed`, `failed` or `cancelled`. A run whose process
-    /// died stays `running`.
+    /// `running`, `completed`, `failed`, `cancelled` or `lost`. A run whose
+    /// process stopped writing heartbeats is reported lost.
     pub status: RunStatus,
     /// When it started.
     pub started_at: String,
@@ -246,12 +263,12 @@ pub struct RunSummary {
     pub updated_at: String,
 }
 
-impl From<&Run> for RunSummary {
-    fn from(run: &Run) -> Self {
+impl RunSummary {
+    fn at(run: &Run, now_unix: u64) -> Self {
         Self {
             id: run.id.clone(),
             command: run.command.clone(),
-            status: run.status,
+            status: run.status_at(now_unix, HEARTBEAT_STALE_SECS),
             started_at: run.started_at.clone(),
             updated_at: run.updated_at.clone(),
         }
@@ -268,16 +285,21 @@ pub struct RunList {
 /// Every recorded run.
 pub fn list(ctx: &Context) -> Result<RunList, OrchestratorError> {
     Ok(RunList {
-        runs: list_runs(ctx.workspace())?
-            .iter()
-            .map(RunSummary::from)
-            .collect(),
+        runs: {
+            let now = splinter_core::clock::unix_now();
+            list_runs(ctx.workspace())?
+                .iter()
+                .map(|run| RunSummary::at(run, now))
+                .collect()
+        },
     })
 }
 
 /// The run `id`'s whole record.
 pub fn show(ctx: &Context, id: &str) -> Result<Run, OrchestratorError> {
-    Ok(read_run(ctx.workspace(), id)?)
+    let mut run = read_run(ctx.workspace(), id)?;
+    run.status = run.status_at(splinter_core::clock::unix_now(), HEARTBEAT_STALE_SECS);
+    Ok(run)
 }
 
 /// What `runs cancel` reports.

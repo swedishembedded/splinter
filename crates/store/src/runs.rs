@@ -48,6 +48,9 @@ pub enum RunStatus {
     Failed,
     /// Stopped by a cancel request.
     Cancelled,
+    /// Its process stopped writing heartbeats: it died, was killed, or lost its
+    /// allocation. Computed when a record is read, never stored.
+    Lost,
 }
 
 impl RunStatus {
@@ -59,6 +62,7 @@ impl RunStatus {
             Self::Completed => "completed",
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
+            Self::Lost => "lost",
         }
     }
 }
@@ -153,6 +157,28 @@ pub struct Run {
     /// contexts. Absent from a run recorded before they were kept.
     #[serde(flatten)]
     pub build: BuildInfo,
+    /// The last heartbeat its process wrote, in Unix seconds. Absent from a run
+    /// recorded before heartbeats were kept, which is not judged lost.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_heartbeat_unix: Option<u64>,
+}
+
+impl Run {
+    /// How the run stands at `now_unix`: a run still marked running whose
+    /// process has not written a heartbeat for longer than `stale_after_secs`
+    /// is [`RunStatus::Lost`]. A run recorded before heartbeats existed has
+    /// none and keeps the status its events ended with.
+    #[must_use]
+    pub fn status_at(&self, now_unix: u64, stale_after_secs: u64) -> RunStatus {
+        if self.status != RunStatus::Running {
+            return self.status;
+        }
+        match self.last_heartbeat_unix {
+            Some(at) if now_unix.saturating_sub(at) <= stale_after_secs => RunStatus::Running,
+            Some(_) => RunStatus::Lost,
+            None => RunStatus::Running,
+        }
+    }
 }
 
 /// The writing side of one run. See the module documentation.
@@ -238,6 +264,7 @@ impl RunLog {
                 seeds: BTreeMap::new(),
                 sampled: SampledSeeds::default(),
                 build: build.clone(),
+                last_heartbeat_unix: None,
             },
             events: 1,
             sampled: Vec::new(),
@@ -454,6 +481,7 @@ fn fold(id: &str, events: &[serde_json::Value]) -> Option<Run> {
         seeds: BTreeMap::new(),
         sampled: SampledSeeds::default(),
         build: serde_json::from_value(start["body"]["build"].clone()).unwrap_or_default(),
+        last_heartbeat_unix: None,
     };
     let sampled = sampled_in(events);
     run.sampled = SampledSeeds::of(&sampled);
@@ -513,19 +541,56 @@ pub fn read_sampled_seeds(workspace: &Workspace, run_id: &str) -> Result<Vec<See
 
 /// The record of `run_id`, as of every event any process has committed.
 pub fn read_run(workspace: &Workspace, run_id: &str) -> Result<Run, StoreError> {
-    events_by_run(workspace)?
+    let mut run = events_by_run(workspace)?
         .get(run_id)
         .and_then(|events| fold(run_id, events))
-        .ok_or_else(|| StoreError::UnknownRun(run_id.to_string()))
+        .ok_or_else(|| StoreError::UnknownRun(run_id.to_string()))?;
+    run.last_heartbeat_unix = last_heartbeat(workspace, run_id)?;
+    Ok(run)
+}
+
+/// Record that the run `run_id`'s process is alive at `at_unix`.
+///
+/// A heartbeat is a write-once signal with the next sequence number, never an
+/// overwritten file: the record stays append-only, and a reader takes the
+/// newest note.
+pub fn heartbeat(workspace: &Workspace, run_id: &str, at_unix: u64) -> Result<(), StoreError> {
+    let prefix = heartbeat_prefix(run_id);
+    let next = workspace
+        .signals(&prefix)?
+        .iter()
+        .filter_map(|(name, _)| name.rsplit('/').next()?.parse::<u64>().ok())
+        .max()
+        .unwrap_or(0)
+        + 1;
+    workspace.signal(&format!("{prefix}{next:012}"), &at_unix.to_string())?;
+    Ok(())
+}
+
+/// The newest heartbeat a run wrote, in Unix seconds.
+pub fn last_heartbeat(workspace: &Workspace, run_id: &str) -> Result<Option<u64>, StoreError> {
+    Ok(workspace
+        .signals(&heartbeat_prefix(run_id))?
+        .iter()
+        .filter_map(|(_, note)| note.trim().parse::<u64>().ok())
+        .max())
+}
+
+fn heartbeat_prefix(run_id: &str) -> String {
+    format!("heartbeat/{run_id}/")
 }
 
 /// Every recorded run, oldest first. Events with no start are not a run and
 /// are skipped.
 pub fn list_runs(workspace: &Workspace) -> Result<Vec<Run>, StoreError> {
-    Ok(events_by_run(workspace)?
+    let mut runs: Vec<Run> = events_by_run(workspace)?
         .iter()
         .filter_map(|(id, events)| fold(id, events))
-        .collect())
+        .collect();
+    for run in &mut runs {
+        run.last_heartbeat_unix = last_heartbeat(workspace, &run.id)?;
+    }
+    Ok(runs)
 }
 
 #[cfg(test)]

@@ -12,11 +12,12 @@ root is `~/.splinter` by default (`--state DIR` changes it); see
 
 Every command that writes pipeline state records a run in the experience
 database: the command and its arguments, each stage as it finishes, its
-status (`running`, `completed`, `failed`, `cancelled`) and what it
+status (`running`, `completed`, `failed`, `cancelled`, `lost`) and what it
 produced. `runs cancel <ID>` asks a run in progress to stop, by raising a
 signal any process can see: it stops the model run in progress and the stage
 at its next check, and training at its next optimizer step. A run whose
-process died stays `running`.
+process died is reported `lost` once its heartbeat is stale (a run recorded
+before heartbeats were kept has none and keeps `running`).
 
 ## State
 

@@ -16,7 +16,7 @@ use splinter_core::digest::Digest;
 use splinter_core::rng::Seed;
 use splinter_store::experiences::StoreError;
 use splinter_store::runs::{
-    cancel_requested, list_runs, read_run, request_cancel, RunLog, RunStatus,
+    cancel_requested, heartbeat, list_runs, read_run, request_cancel, RunLog, RunStatus,
 };
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
@@ -25,6 +25,35 @@ fn scratch(name: &str) -> StateRoot {
     let path = std::env::temp_dir().join(format!("splinter-runs-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&path);
     StateRoot::new(path)
+}
+
+#[test]
+fn a_run_that_stops_heartbeating_is_lost_not_running() {
+    let root = scratch("heartbeat");
+    let workspace = Workspace::at(&root);
+    let clock = FixedClock::new("2026-09-30T08:00:00.000Z");
+    let run = RunLog::start(&workspace, "learn", json!({}), &clock).unwrap();
+    let id = run.id().to_string();
+
+    // A run recorded before heartbeats existed keeps the status its events say.
+    assert_eq!(read_run(&workspace, &id).unwrap().last_heartbeat_unix, None);
+    assert_eq!(
+        read_run(&workspace, &id).unwrap().status_at(1_000_000, 120),
+        RunStatus::Running
+    );
+
+    heartbeat(&workspace, &id, 1_000).unwrap();
+    heartbeat(&workspace, &id, 1_030).unwrap();
+    let recorded = read_run(&workspace, &id).unwrap();
+    assert_eq!(recorded.last_heartbeat_unix, Some(1_030));
+    assert_eq!(recorded.status_at(1_060, 120), RunStatus::Running);
+    assert_eq!(recorded.status_at(1_151, 120), RunStatus::Lost);
+
+    // A finished run is not judged by its heartbeat.
+    run.finish(RunStatus::Completed, json!({}), None, &clock)
+        .unwrap();
+    let recorded = read_run(&workspace, &id).unwrap();
+    assert_eq!(recorded.status_at(9_999_999, 120), RunStatus::Completed);
 }
 
 #[test]
