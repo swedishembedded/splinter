@@ -194,20 +194,26 @@ impl Workspace {
         Ok(next.clone())
     }
 
+    /// Every submitted job's current record, in specification order.
+    pub fn jobs(&self) -> Result<Vec<JobRecord>, StoreError> {
+        let mut jobs = Vec::new();
+        for (_, address) in self.pointers("job/")? {
+            let address = stored_address(&address)?;
+            if let Some(record) = self.get_document::<JobRecord>(JOB_RECORD, &address)? {
+                jobs.push(record);
+            }
+        }
+        Ok(jobs)
+    }
+
     /// Every job whose current record still needs reconciling, in specification
     /// order.
     pub fn jobs_needing_reconciliation(&self) -> Result<Vec<JobRecord>, StoreError> {
-        let mut open = Vec::new();
-        for (_, address) in self.pointers("job/")? {
-            let address = stored_address(&address)?;
-            let Some(record) = self.get_document::<JobRecord>(JOB_RECORD, &address)? else {
-                continue;
-            };
-            if record.needs_reconciliation() {
-                open.push(record);
-            }
-        }
-        Ok(open)
+        Ok(self
+            .jobs()?
+            .into_iter()
+            .filter(JobRecord::needs_reconciliation)
+            .collect())
     }
 }
 
@@ -269,6 +275,30 @@ mod tests {
             workspace.job(&job.digest()).unwrap().unwrap().state,
             JobState::Running
         );
+    }
+
+    #[test]
+    fn every_submitted_specification_is_listed_once() {
+        let workspace = workspace("list");
+        assert!(workspace.jobs().unwrap().is_empty());
+        let first = spec();
+        let mut second = spec();
+        second.command.push("--steps".into());
+        workspace
+            .submit_job(&first, "local", "2026-01-01T00:00:00Z", None)
+            .unwrap();
+        workspace
+            .submit_job(&second, "local", "2026-01-01T00:00:00Z", None)
+            .unwrap();
+        // A repeated submission does not add a second listing.
+        workspace
+            .submit_job(&first, "local", "2026-01-01T00:00:01Z", None)
+            .unwrap();
+        let listed = workspace.jobs().unwrap();
+        assert_eq!(listed.len(), 2);
+        assert!(listed
+            .iter()
+            .all(|record| record.state == JobState::Pending));
     }
 
     #[test]

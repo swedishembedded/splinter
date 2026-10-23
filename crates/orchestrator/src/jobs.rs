@@ -113,6 +113,50 @@ impl<'a> JobController<'a> {
         ))
     }
 
+    /// Every submitted job's current record, in specification order.
+    pub fn jobs(&self) -> Result<Vec<JobRecord>, OrchestratorError> {
+        Ok(self.workspace.jobs()?)
+    }
+
+    /// Stop the job `spec` names and record it `Cancelled`.
+    ///
+    /// Workers still running are stopped through the launcher. A job that
+    /// already reached a terminal state is returned as it stands; a
+    /// specification that names no job is refused. The record is replaced with
+    /// one that names the record it replaces, so a concurrent reconciliation
+    /// cannot be silently overwritten.
+    pub fn cancel(&self, spec: &Digest) -> Result<JobRecord, OrchestratorError> {
+        let record = self
+            .workspace
+            .job(spec)?
+            .ok_or_else(|| OrchestratorError::NotFound {
+                what: "job",
+                id: spec.as_str().to_owned(),
+            })?;
+        if record.state.is_terminal() {
+            return Ok(record);
+        }
+        if let Some(dir) = &record.launch {
+            let stopped = Launch::open(Path::new(dir))
+                .map_err(|error| {
+                    OrchestratorError::Refused(format!("job {}: {error}", spec.as_str()))
+                })?
+                .map(|launch| self.launcher.stop(&launch, None))
+                .transpose();
+            stopped.map_err(|error| {
+                OrchestratorError::Refused(format!("job {}: {error}", spec.as_str()))
+            })?;
+        }
+        let next = JobRecord {
+            state: JobState::Cancelled,
+            detail: Some("cancelled on request".to_string()),
+            updated_at: self.clock.utc_now(),
+            lease: None,
+            ..record.clone()
+        };
+        Ok(self.workspace.update_job(&record, &next)?)
+    }
+
     /// Bring every unfinished job up to date with its launcher. Records another
     /// controller moved first are left alone.
     pub fn reconcile(&self) -> Result<Vec<JobRecord>, OrchestratorError> {
@@ -452,6 +496,54 @@ mod tests {
         let updated = controller.reconcile().unwrap();
         assert_eq!(updated[0].state, JobState::Completed);
         assert!(workspace.jobs_needing_reconciliation().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_job_is_listed_and_cancel_stops_it_once() {
+        let (_dir, workspace) = workspace();
+        let launcher = ScriptedLauncher::default();
+        let clock = SystemClock;
+        let root =
+            std::env::temp_dir().join(format!("splinter-controller-{}-cancel", std::process::id()));
+        let controller = JobController::new(&workspace, &launcher, root, &clock, "test-controller");
+        let Submission::Launched(record) = controller.submit(&spec()).unwrap() else {
+            panic!("launched")
+        };
+        assert_eq!(controller.jobs().unwrap(), vec![record.clone()]);
+        assert_eq!(
+            launcher.observe(
+                &Launch::open(Path::new(record.launch.as_ref().unwrap()))
+                    .unwrap()
+                    .unwrap()
+            ),
+            Observation::Running {
+                ranks_alive: vec![42]
+            }
+        );
+
+        let cancelled = controller.cancel(&record.spec).unwrap();
+        assert_eq!(cancelled.state, JobState::Cancelled);
+        assert!(cancelled.lease.is_none(), "a terminal job holds no claim");
+        assert_eq!(
+            launcher.observe(
+                &Launch::open(Path::new(record.launch.as_ref().unwrap()))
+                    .unwrap()
+                    .unwrap()
+            ),
+            Observation::Running {
+                ranks_alive: vec![]
+            },
+            "the workers were stopped"
+        );
+        assert!(workspace.jobs_needing_reconciliation().unwrap().is_empty());
+
+        // Cancelling a finished job returns it as it stands, and a job that
+        // was never submitted is refused.
+        assert_eq!(controller.cancel(&record.spec).unwrap(), cancelled);
+        assert!(matches!(
+            controller.cancel(&JobSpec::single(vec!["/bin/sh".into()]).digest()),
+            Err(OrchestratorError::NotFound { .. })
+        ));
     }
 
     #[test]
