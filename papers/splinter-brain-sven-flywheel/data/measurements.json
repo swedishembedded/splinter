@@ -562,6 +562,36 @@
    "splinter": "3330c206c+6521a67ab",
    "brain": "77e510fbf",
    "command": "python3 arm-shape.py (reads runs/g8 pilot experience sets blake3:d6937cb3, 8c4825ce, 82a28fbb, d3e96985 from the state and the solve-in conclusion counts)"
+  },
+  "ce8-build-t1": {
+   "log": "ce8/build-ce8t.json",
+   "sha256": "79849b8609e4355861e2be5dd737a9237a5760785ae365eb7caf9d42c1f70d2b",
+   "metric_prefix": "ce8.build-t1",
+   "metrics": {
+    "records": 132,
+    "failed": 109,
+    "repeated_action": 9,
+    "compacted": 1,
+    "over_block": 130
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter dataset build --view sft-step --pack --drop-leaking --min-strength executable --max-block 16384 over the eight pass-1 sets (runs/ce8/ce8t.sh; log runs/ce8/logs/ds-ce8t.json)"
+  },
+  "ce8-build-u1": {
+   "log": "ce8/build-ce8t-u1.json",
+   "sha256": "8bc8765a3a7febd0bbb7ede402edf6563a53e8546662909c63f944b6620d81bd",
+   "metric_prefix": "ce8.build-u1",
+   "metrics": {
+    "records": 2689,
+    "failed": 109,
+    "repeated_action": 9,
+    "compacted": 1,
+    "over_block": 1148
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter dataset build --view sft-step (unpacked) over the eight pass-1 sets (runs/ce8/ce8t-u1.sh; log runs/ce8/logs/ds-ce8t-u1.json)"
   }
  }
 }

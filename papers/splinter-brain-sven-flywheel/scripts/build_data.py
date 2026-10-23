@@ -201,6 +201,11 @@ def parse_log(prefix, text):
         return ce4_compare_metrics(json.loads(text))
     if prefix.startswith("ce8.eval"):
         return ce4_compare_metrics(json.loads(text))
+    if prefix.startswith("ce8.build"):
+        # a dataset build report: what it kept and what it excluded, by reason
+        d = json.loads(text)
+        ex = d.get("excluded") or {}
+        return {"records": d["records"], **{k: ex.get(k, 0) for k in ("failed", "repeated_action", "compacted", "over_block")}}
     if prefix.startswith("ce8.shape"):
         # the arm-shape summary is written flat, so the file IS the metrics dict
         return json.loads(text)
