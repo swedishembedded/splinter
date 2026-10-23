@@ -132,6 +132,11 @@ def g8_report_metrics(report):
         "served_base_logprob": f"{base['served_mean_logprob']:.6f}",
         "served_adapter_logprob": f"{adapter['served_mean_logprob']:.6f}",
         "verdict": report["verdict"],
+        # the report carries the emitter's manifest, so the split the scores were taken on is
+        # part of the record rather than a number retyped from it
+        **({"held_out_records": report["provenance"]["held_out"]["records"],
+            "held_out_groups": report["provenance"]["held_out"]["groups"]}
+           if "provenance" in report else {}),
     }
 
 

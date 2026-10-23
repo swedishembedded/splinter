@@ -36,7 +36,10 @@ carries no commit.
 \paragraph{Coding-task experiments.} One pilot has been run: CE8-T and its shuffled-instruction
 control on the pilot subset S1, whose rows are in \code{data/results.csv} with status PILOT and
 whose two \code{experiences compare} reports are recorded in \code{data/measurements.json} beside
-the training logs. No registered comparison has been run. The registration is
+the training logs. The G8 agreement check of the 27B adapter is recorded the same way, as one report
+that carries the sha256 of each of the four score files it read, the manifest of the held-out split they
+were taken on, and every number the three conditions rest on. No registered comparison has been run. The
+registration is
 \code{prereg/coding-tasks.md}; a result is a row of \code{data/results.csv} with the commands,
 commits, harness profile and seeds of the run, and the tables of \cref{sec:pending} are generated
 from them.

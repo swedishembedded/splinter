@@ -133,7 +133,18 @@ same 113 records and 57 steps, keeps step 57 at 0.2315 against 0.2635 for the ba
 monitoring records, also not memorised.\cl{M51} Both are training-side quantities: the control's monitoring
 records are shuffled too, so the two losses are not comparable, and neither is evidence of a gain on any task.
 
-Both candidates were then solved on the pilot subset S1 (23 tasks, one per family of the first
+\paragraph{G8: the served adapter agrees with the trained one.} The registration puts G8 before any arm. On the
+held-out records of the CE8-T training (33 records in 5 whole families, 354 examples, 68407 supervised
+positions) every recorded assistant position is scored twice: by the in-process trainer's forward (bf16 base
+with the adapter, no step) and by the evaluation server (Q8\_0 base with the adapter in its bank), and the same
+pair is taken for the base. The mean absolute served-versus-in-process difference is 5.005e-02 for the base and
+4.694e-02 with the adapter, 0.938 of the base's, so condition (i) holds; top-1 agreement is 97.37\% for the
+base and 97.76\% with the adapter, a drop of -0.39 points, so (ii) holds; and the served adapter's mean
+log-probability, -0.162778, is above the served base's, -0.181931, so (iii) holds and the verdict is
+PASS.\cl{M54} The served adapter is therefore the adapter that was trained, and the evaluation that follows is
+of the trained artifact.
+
+\paragraph{The pilot evaluation: no held-out improvement.} Both candidates were then solved on the pilot subset S1 (23 tasks, one per family of the first
 qualification half) under the solve protocol of \cref{sec:protocol} with thinking off, one attempt per task,
 on one frozen build and one server process that offered the base and both adapters. CE8-T resolves 7 of the
 23 tasks and the base 9; of the 13 paired families the adapter wins 3, loses 4 and ties 6, and the one-sided

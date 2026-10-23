@@ -444,6 +444,29 @@
    "splinter": "3330c206c+6521a67ab",
    "brain": "77e510fbf",
    "command": "splinter experiences compare blake3:82a28fbb... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-ce8ts.json; arms from runs/g8/pilot.sh)"
+  },
+  "g8-ce8t-agreement": {
+   "log": "ce8/g8-agreement-ce8t.report.json",
+   "sha256": "4ee9f0e2b5416d28f9e3a8c019080ea57aec0801a01721e9b56581a2e6e2675d",
+   "metric_prefix": "g8.ce8t",
+   "metrics": {
+    "records": 354,
+    "positions": 68407,
+    "base_diff": "5.005e-02",
+    "adapter_diff": "4.694e-02",
+    "diff_ratio": "0.938",
+    "base_top1": "97.37",
+    "adapter_top1": "97.76",
+    "top1_drop": "-0.39",
+    "served_base_logprob": "-0.181931",
+    "served_adapter_logprob": "-0.162778",
+    "verdict": "PASS",
+    "held_out_records": 33,
+    "held_out_groups": 5
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "36e902322",
+   "command": "g8-compare.py --served-base lease10-served-base.jsonl --served-adapter lease10-served-ce8t.jsonl --inproc-base inproc-base.jsonl --inproc-adapter inproc-ce8t.jsonl --manifest held-out-ce8t.manifest.json (runs/g8) on brain 36e902322 for the in-process side and the evaluation server bin-brain-cbe84f44b-eval for the served side"
   }
  }
 }
