@@ -46,6 +46,14 @@ pub const STOP_GRACE: Duration = Duration::from_secs(2);
 /// The file naming a launch, beside the workers' output.
 const LAUNCH_FILE: &str = "launch.json";
 
+/// The file claiming an attempt before anything is started for it.
+const INTENT_FILE: &str = "launch.intent";
+
+#[path = "job_slurm.rs"]
+mod slurm;
+
+pub use slurm::{SlurmLauncher, SlurmState};
+
 /// Why a launch could not be started, observed or stopped.
 #[derive(Debug, thiserror::Error)]
 pub enum JobError {
@@ -78,6 +86,70 @@ pub enum JobError {
         world: u32,
         /// The operating-system failure.
         source: io::Error,
+    },
+    /// A scheduler command could not be run at all: it is missing, or not
+    /// executable.
+    #[error("could not run {command}: {source}")]
+    SchedulerCommand {
+        /// The command, with the binary it was to run.
+        command: String,
+        /// The operating-system failure.
+        source: io::Error,
+    },
+    /// A scheduler command ran and failed.
+    #[error("{command} failed with {status}: {stderr}")]
+    SchedulerFailed {
+        /// The command that failed.
+        command: String,
+        /// How it ended.
+        status: String,
+        /// What it said on stderr.
+        stderr: String,
+    },
+    /// A scheduler command succeeded but printed something this launcher
+    /// cannot read.
+    #[error("{what} printed output a scheduler job cannot be read from: {output:?}")]
+    Unparseable {
+        /// What was being read.
+        what: String,
+        /// The output that was read.
+        output: String,
+    },
+    /// The scheduler reported a state this launcher does not know.
+    #[error("the scheduler reported an unknown job state: {state:?}")]
+    UnknownState {
+        /// The state as the scheduler spelled it.
+        state: String,
+    },
+    /// The scheduler no longer lists the job, so its terminal state is not
+    /// knowable from it.
+    #[error("the scheduler no longer lists job {job_id}")]
+    NotListed {
+        /// The scheduler's job id.
+        job_id: String,
+    },
+    /// A launch directory holds no scheduler job id.
+    #[error("{} holds no scheduler job id", dir.display())]
+    NoSchedulerJob {
+        /// The launch directory.
+        dir: PathBuf,
+    },
+    /// The launcher cannot carry out this request.
+    #[error("the launcher cannot {action}")]
+    Unsupported {
+        /// What was asked for.
+        action: String,
+    },
+    /// A scheduler accepted a job the launch directory could not record, and
+    /// cancelling it failed as well.
+    #[error("the scheduler accepted job {job_id} but recording it failed: {record}; cancelling it failed: {cancel}")]
+    Unrecorded {
+        /// The scheduler's job id.
+        job_id: String,
+        /// Why the launch directory could not record the job.
+        record: String,
+        /// Why the cancelling failed.
+        cancel: String,
     },
 }
 
@@ -265,37 +337,7 @@ impl JobLauncher for LocalLauncher {
     }
 
     fn launch(&self, spec: &JobSpec, attempt: u32, dir: &Path) -> Result<Launch, JobError> {
-        spec.validate()?;
-        if let Some(existing) = Launch::open(dir)? {
-            return Err(JobError::AlreadyLaunched {
-                dir: dir.to_path_buf(),
-                attempt: existing.attempt,
-            });
-        }
-        fs::create_dir_all(dir)
-            .map_err(|e| JobError::io(format!("creating {}", dir.display()), e))?;
-        // Claim the attempt before starting anything: a crash between spawning
-        // a worker and writing the launch record must not let a retry start a
-        // second set of workers.
-        let intent = dir.join("launch.intent");
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&intent)
-        {
-            Ok(mut file) => {
-                let body = format!("{}\n{}\n", spec.digest().as_str(), attempt);
-                file.write_all(body.as_bytes())
-                    .map_err(|e| JobError::io(format!("writing {}", intent.display()), e))?;
-            }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                return Err(JobError::AlreadyLaunched {
-                    dir: dir.to_path_buf(),
-                    attempt,
-                });
-            }
-            Err(e) => return Err(JobError::io(format!("claiming {}", intent.display()), e)),
-        }
+        claim_attempt(spec, attempt, dir)?;
         let world = spec.workers.world_size();
         let mut children = Vec::new();
         for rank in 0..world {
@@ -382,6 +424,39 @@ impl JobLauncher for LocalLauncher {
 
     fn stop(&self, launch: &Launch, rank: Option<u32>) -> Result<(), JobError> {
         launch.stop(rank)
+    }
+}
+
+/// Claim `dir` for attempt `attempt` before anything is started for it.
+///
+/// The claim is a file created exclusively, so a controller that crashed
+/// between starting a job and recording it cannot have its retry start the
+/// attempt a second time.
+fn claim_attempt(spec: &JobSpec, attempt: u32, dir: &Path) -> Result<(), JobError> {
+    spec.validate()?;
+    if let Some(existing) = Launch::open(dir)? {
+        return Err(JobError::AlreadyLaunched {
+            dir: dir.to_path_buf(),
+            attempt: existing.attempt,
+        });
+    }
+    fs::create_dir_all(dir).map_err(|e| JobError::io(format!("creating {}", dir.display()), e))?;
+    let intent = dir.join(INTENT_FILE);
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&intent)
+    {
+        Ok(mut file) => {
+            let body = format!("{}\n{}\n", spec.digest().as_str(), attempt);
+            file.write_all(body.as_bytes())
+                .map_err(|e| JobError::io(format!("writing {}", intent.display()), e))
+        }
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(JobError::AlreadyLaunched {
+            dir: dir.to_path_buf(),
+            attempt,
+        }),
+        Err(e) => Err(JobError::io(format!("claiming {}", intent.display()), e)),
     }
 }
 
