@@ -27,6 +27,7 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 splinter-model = { workspace = true, features = ["scripted"] }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["time", "rt-multi-thread"] }
 
 [lints]
