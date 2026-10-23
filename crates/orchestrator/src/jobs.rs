@@ -24,10 +24,13 @@ use splinter_core::clock::Clock;
 use splinter_core::digest::Digest;
 use splinter_core::job::{JobSpec, JobState};
 use splinter_sandbox::job::{JobLauncher, Launch, Observation};
-use splinter_store::jobs::JobRecord;
+use splinter_store::jobs::{JobLease, JobRecord};
 use splinter_store::workspace::Workspace;
 
 use crate::error::OrchestratorError;
+
+/// How long a controller's claim on a job lasts, unless it says otherwise.
+pub const DEFAULT_JOB_LEASE_SECS: u64 = 300;
 
 /// What a submission did.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -45,6 +48,8 @@ pub struct JobController<'a> {
     launcher: &'a dyn JobLauncher,
     root: PathBuf,
     clock: &'a dyn Clock,
+    owner: String,
+    lease_seconds: u64,
 }
 
 impl<'a> JobController<'a> {
@@ -55,23 +60,45 @@ impl<'a> JobController<'a> {
         launcher: &'a dyn JobLauncher,
         root: PathBuf,
         clock: &'a dyn Clock,
+        owner: impl Into<String>,
     ) -> JobController<'a> {
         JobController {
             workspace,
             launcher,
             root,
             clock,
+            owner: owner.into(),
+            lease_seconds: DEFAULT_JOB_LEASE_SECS,
         }
+    }
+
+    /// How long this controller's claim on a job lasts.
+    #[must_use]
+    pub fn with_lease(mut self, seconds: u64) -> JobController<'a> {
+        self.lease_seconds = seconds.max(1);
+        self
     }
 
     /// Submit `spec`, launching its first attempt unless the job already
     /// exists.
     pub fn submit(&self, spec: &JobSpec) -> Result<Submission, OrchestratorError> {
+        self.submit_at(spec, splinter_core::clock::unix_now())
+    }
+
+    /// [`Self::submit`], with the claim's expiry measured from `now_unix`.
+    pub fn submit_at(
+        &self,
+        spec: &JobSpec,
+        now_unix: u64,
+    ) -> Result<Submission, OrchestratorError> {
         spec.validate()
             .map_err(|error| OrchestratorError::Refused(format!("job specification: {error}")))?;
-        let Some(record) =
-            self.workspace
-                .submit_job(spec, self.launcher.name(), &self.clock.utc_now())?
+        let Some(record) = self.workspace.submit_job(
+            spec,
+            self.launcher.name(),
+            &self.clock.utc_now(),
+            Some(self.lease_at(now_unix)),
+        )?
         else {
             let existing = self.workspace.job(&spec.digest())?.ok_or_else(|| {
                 OrchestratorError::Refused(format!(
@@ -81,20 +108,30 @@ impl<'a> JobController<'a> {
             })?;
             return Ok(Submission::Existing(existing));
         };
-        Ok(Submission::Launched(self.launch_attempt(spec, record, 1)?))
+        Ok(Submission::Launched(
+            self.launch_attempt(spec, record, 1, now_unix)?,
+        ))
     }
 
     /// Bring every unfinished job up to date with its launcher. Records another
     /// controller moved first are left alone.
     pub fn reconcile(&self) -> Result<Vec<JobRecord>, OrchestratorError> {
+        self.reconcile_at(splinter_core::clock::unix_now())
+    }
+
+    /// [`Self::reconcile`], judging claims as of `now_unix`. A job another
+    /// controller holds under a claim that has not expired is left alone; one
+    /// whose claim expired is taken over, and the takeover is fenced by the
+    /// record compare-and-set.
+    pub fn reconcile_at(&self, now_unix: u64) -> Result<Vec<JobRecord>, OrchestratorError> {
         let mut updated = Vec::new();
         for record in self.workspace.jobs_needing_reconciliation()? {
-            let Some(next) = self.observe(&record)? else {
-                continue;
-            };
-            if next.state == record.state && next.detail == record.detail {
+            if !self.owns(&record, now_unix) {
                 continue;
             }
+            let Some(next) = self.observe(&record, now_unix)? else {
+                continue;
+            };
             if let Ok(record) = self.workspace.update_job(&record, &next) {
                 updated.push(record);
             }
@@ -105,9 +142,14 @@ impl<'a> JobController<'a> {
     /// Launch the next attempt of every job whose last attempt failed and whose
     /// policy allows another.
     pub fn retry_ready(&self) -> Result<Vec<JobRecord>, OrchestratorError> {
+        self.retry_ready_at(splinter_core::clock::unix_now())
+    }
+
+    /// [`Self::retry_ready`], taking jobs whose claim expired at `now_unix`.
+    pub fn retry_ready_at(&self, now_unix: u64) -> Result<Vec<JobRecord>, OrchestratorError> {
         let mut retried = Vec::new();
         for record in self.workspace.jobs_needing_reconciliation()? {
-            if record.state != JobState::Retrying {
+            if record.state != JobState::Retrying || !self.owns(&record, now_unix) {
                 continue;
             }
             let Some(spec) = self.workspace.job_spec(&record.spec)? else {
@@ -117,7 +159,7 @@ impl<'a> JobController<'a> {
                 continue;
             }
             let attempt = record.attempt + 1;
-            let next = self.launch_attempt(&spec, record, attempt)?;
+            let next = self.launch_attempt(&spec, record, attempt, now_unix)?;
             retried.push(next);
         }
         Ok(retried)
@@ -125,7 +167,11 @@ impl<'a> JobController<'a> {
 
     /// The record after observing `record` once, or `None` when another
     /// controller's update already accounts for it.
-    fn observe(&self, record: &JobRecord) -> Result<Option<JobRecord>, OrchestratorError> {
+    fn observe(
+        &self,
+        record: &JobRecord,
+        now_unix: u64,
+    ) -> Result<Option<JobRecord>, OrchestratorError> {
         let state = match &record.launch {
             None => (
                 JobState::Lost,
@@ -188,8 +234,26 @@ impl<'a> JobController<'a> {
             detail: state.1,
             exit_code: state.2,
             updated_at: self.clock.utc_now(),
+            lease: Some(self.lease_at(now_unix)),
             ..record.clone()
         }))
+    }
+
+    /// Whether this controller may act on `record` at `now_unix`: it holds the
+    /// claim, no claim was made, or the claim expired.
+    fn owns(&self, record: &JobRecord, now_unix: u64) -> bool {
+        match &record.lease {
+            None => true,
+            Some(lease) => lease.owner == self.owner || !lease.is_valid(now_unix),
+        }
+    }
+
+    /// This controller's claim, valid from `now_unix`.
+    fn lease_at(&self, now_unix: u64) -> JobLease {
+        JobLease {
+            owner: self.owner.clone(),
+            expires_unix: now_unix.saturating_add(self.lease_seconds),
+        }
     }
 
     /// What a failed attempt becomes: `Retrying` while the policy allows another
@@ -212,6 +276,7 @@ impl<'a> JobController<'a> {
         spec: &JobSpec,
         record: JobRecord,
         attempt: u32,
+        now_unix: u64,
     ) -> Result<JobRecord, OrchestratorError> {
         let dir = self.attempt_dir(&record.spec, attempt);
         let launch = self.launcher.launch(spec, attempt, &dir).map_err(|error| {
@@ -219,6 +284,7 @@ impl<'a> JobController<'a> {
                 state: JobState::Failed,
                 detail: Some(error.to_string()),
                 updated_at: self.clock.utc_now(),
+                lease: Some(self.lease_at(now_unix)),
                 ..record.clone()
             };
             let _ = self.workspace.update_job(&record, &next);
@@ -234,6 +300,7 @@ impl<'a> JobController<'a> {
             detail: Some(format!("{} ranks launched", launch.world_size)),
             exit_code: None,
             updated_at: self.clock.utc_now(),
+            lease: Some(self.lease_at(now_unix)),
             ..record.clone()
         };
         Ok(self.workspace.update_job(&record, &next)?)
@@ -339,7 +406,7 @@ mod tests {
         let clock = SystemClock;
         let root =
             std::env::temp_dir().join(format!("splinter-controller-{}-submit", std::process::id()));
-        let controller = JobController::new(&workspace, &launcher, root, &clock);
+        let controller = JobController::new(&workspace, &launcher, root, &clock, "test-controller");
         let first = controller.submit(&spec()).unwrap();
         let Submission::Launched(record) = first else {
             panic!("the first submission must launch")
@@ -363,7 +430,7 @@ mod tests {
             "splinter-controller-{}-reconcile",
             std::process::id()
         ));
-        let controller = JobController::new(&workspace, &launcher, root, &clock);
+        let controller = JobController::new(&workspace, &launcher, root, &clock, "test-controller");
         let mut job = spec();
         job.retry.attempts = 2;
         let Submission::Launched(record) = controller.submit(&job).unwrap() else {
@@ -388,13 +455,46 @@ mod tests {
     }
 
     #[test]
+    fn a_live_lease_blocks_another_controller_until_it_expires() {
+        let (_dir, workspace) = workspace();
+        let launcher = ScriptedLauncher::default();
+        let clock = SystemClock;
+        let root =
+            std::env::temp_dir().join(format!("splinter-controller-{}-lease", std::process::id()));
+        let first = JobController::new(&workspace, &launcher, root.clone(), &clock, "controller-a")
+            .with_lease(100);
+        let second =
+            JobController::new(&workspace, &launcher, root, &clock, "controller-b").with_lease(100);
+
+        let Submission::Launched(record) = first.submit_at(&spec(), 1_000).unwrap() else {
+            panic!("launched")
+        };
+        let lease = record.lease.as_ref().expect("a submission claims the job");
+        assert_eq!(lease.owner, "controller-a");
+        assert_eq!(lease.expires_unix, 1_100);
+
+        // The first controller's claim is live: the second leaves the job alone.
+        assert!(second.reconcile_at(1_050).unwrap().is_empty());
+
+        // The claim expired: the second takes the job over.
+        let taken = second.reconcile_at(1_101).unwrap();
+        assert_eq!(taken.len(), 1);
+        let lease = taken[0].lease.as_ref().expect("the takeover claims it");
+        assert_eq!(lease.owner, "controller-b");
+        assert_eq!(lease.expires_unix, 1_201);
+
+        // The first controller must not touch it now.
+        assert!(first.reconcile_at(1_150).unwrap().is_empty());
+    }
+
+    #[test]
     fn a_job_whose_workers_are_gone_without_an_exit_code_is_lost_not_completed() {
         let (_dir, workspace) = workspace();
         let launcher = ScriptedLauncher::default();
         let clock = SystemClock;
         let root =
             std::env::temp_dir().join(format!("splinter-controller-{}-lost", std::process::id()));
-        let controller = JobController::new(&workspace, &launcher, root, &clock);
+        let controller = JobController::new(&workspace, &launcher, root, &clock, "test-controller");
         let Submission::Launched(record) = controller.submit(&spec()).unwrap() else {
             panic!("launched")
         };

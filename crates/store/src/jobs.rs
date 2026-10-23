@@ -31,6 +31,26 @@ use splinter_core::job::{JobSpec, JobState};
 const JOB_SPEC: &str = "job_spec";
 const JOB_RECORD: &str = "job_record";
 
+/// A controller's claim on a job, until `expires_unix`: while it is valid, no
+/// other controller reconciles or retries the job. An expired lease is how a
+/// controller that died stops owning its work.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JobLease {
+    /// The controller that claimed the job.
+    pub owner: String,
+    /// When the claim stops being valid, in Unix seconds (inclusive).
+    pub expires_unix: u64,
+}
+
+impl JobLease {
+    /// Whether the claim still holds at `now_unix`.
+    #[must_use]
+    pub fn is_valid(&self, now_unix: u64) -> bool {
+        now_unix <= self.expires_unix
+    }
+}
+
 /// What a controller knows of one job.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -54,6 +74,9 @@ pub struct JobRecord {
     pub detail: Option<String>,
     /// When this record was written.
     pub updated_at: String,
+    /// The controller's claim on the job, when one holds it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lease: Option<JobLease>,
 }
 
 impl JobRecord {
@@ -117,6 +140,7 @@ impl Workspace {
         spec: &JobSpec,
         launcher: &str,
         at: &str,
+        lease: Option<JobLease>,
     ) -> Result<Option<JobRecord>, StoreError> {
         let id = self.put_job_spec(spec)?;
         if self.job(&id)?.is_some() {
@@ -131,6 +155,7 @@ impl Workspace {
             exit_code: None,
             detail: None,
             updated_at: at.to_owned(),
+            lease,
         };
         let address = self.put_document(JOB_RECORD, &record)?;
         match self.move_pointer(&pointer_name(&id), None, address.as_str(), at) {
@@ -206,13 +231,13 @@ mod tests {
         let workspace = workspace("once");
         let job = spec();
         let first = workspace
-            .submit_job(&job, "local", "2026-01-01T00:00:00Z")
+            .submit_job(&job, "local", "2026-01-01T00:00:00Z", None)
             .unwrap()
             .expect("first submission");
         assert_eq!(first.state, JobState::Pending);
         assert!(
             workspace
-                .submit_job(&job, "local", "2026-01-01T00:00:01Z")
+                .submit_job(&job, "local", "2026-01-01T00:00:01Z", None)
                 .unwrap()
                 .is_none(),
             "a retried submission must not create a second job"
@@ -225,7 +250,7 @@ mod tests {
         let workspace = workspace("cas");
         let job = spec();
         let first = workspace
-            .submit_job(&job, "local", "2026-01-01T00:00:00Z")
+            .submit_job(&job, "local", "2026-01-01T00:00:00Z", None)
             .unwrap()
             .unwrap();
         let mut running = first.clone();
@@ -251,7 +276,7 @@ mod tests {
         let workspace = workspace("terminal");
         let job = spec();
         let first = workspace
-            .submit_job(&job, "local", "2026-01-01T00:00:00Z")
+            .submit_job(&job, "local", "2026-01-01T00:00:00Z", None)
             .unwrap()
             .unwrap();
         assert_eq!(workspace.jobs_needing_reconciliation().unwrap().len(), 1);

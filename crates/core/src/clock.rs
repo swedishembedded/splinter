@@ -64,6 +64,15 @@ pub fn utc_now() -> String {
     )
 }
 
+/// The current UTC instant in whole seconds since the Unix epoch, which is
+/// what a lease or a heartbeat compares instead of parsing a timestamp.
+#[must_use]
+pub fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs())
+}
+
 /// A source of [`utc_now`]-shaped timestamps, passed to whatever stamps a
 /// durable record, so a test or a replay can pin time instead of reading the
 /// wall clock.
