@@ -73,6 +73,7 @@ fn context(scratch: &Scratch) -> Context {
     std::fs::write(base.join("tokenizer.json"), b"{}").unwrap();
     let config = Config {
         state_root: StateRoot::new(scratch.0.join("state")),
+        jobs: Default::default(),
         model_store: scratch.0.join("models"),
         policy_base: base,
         policy_context_tokens: None,

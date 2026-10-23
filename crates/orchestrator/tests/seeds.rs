@@ -34,6 +34,7 @@ fn context(test: &str) -> (Context, Reported) {
     std::fs::create_dir_all(&root).unwrap();
     let config = Config {
         state_root: StateRoot::new(root.join("state")),
+        jobs: Default::default(),
         model_store: root.join("models"),
         policy_base: root.join("models/base"),
         policy_context_tokens: None,

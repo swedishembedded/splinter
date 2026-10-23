@@ -178,6 +178,10 @@ pub enum Command {
     /// List, inspect and cancel runs.
     #[command(subcommand)]
     Runs(RunsCommand),
+    /// Submit work that runs outside this process, list it, reconcile it
+    /// after a restart, retry a failed attempt, show one job or cancel one;
+    /// plain `jobs` lists the subcommands.
+    Jobs(JobsArgs),
     /// Show, maintain, verify, repair, archive and restore the state: the
     /// experience database and the files it tracks.
     #[command(subcommand)]
@@ -764,6 +768,7 @@ mod harbor;
 mod harness;
 mod improve;
 mod invocations;
+mod jobs;
 mod learn;
 mod practice;
 pub mod reference;
@@ -781,6 +786,7 @@ pub use global::Global;
 pub use harbor::{HarborCommand, OracleArg};
 pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
 pub use improve::ImproveArgs;
+pub use jobs::{help as jobs_help, JobsArgs, JobsCommand};
 pub use learn::LearnArgs;
 pub use practice::{PracticeArgs, ReplayArg};
 pub use reference::CliReferenceArgs;

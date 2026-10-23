@@ -45,6 +45,7 @@ fn context(test: &str) -> (Context, Reported, ModelRef) {
     std::fs::write(base.join("model.safetensors"), b"scripted").unwrap();
     let config = Config {
         state_root: StateRoot::new(root.join("state")),
+        jobs: Default::default(),
         model_store: root.join("models"),
         policy_base: base.clone(),
         policy_context_tokens: None,

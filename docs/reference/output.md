@@ -48,6 +48,19 @@ is the candidate the preference pass started from, and `candidate` the one it
 made. `claims ledger` adds `"stance"`: per release that absorbed a claim, the
 `rates` its gate measured.
 
+`jobs submit`: `{"launched", "job"}`, where `launched` is false when the same
+specification was already submitted; `jobs list`, `jobs reconcile` and `jobs
+retry`: `{"jobs": [...]}`, the last two holding only the records they changed;
+`jobs show`: `{"job", "spec"}`; `jobs cancel`: `{"job"}`. A job is `{"spec",
+"attempt", "state", "launcher", "launch", "exit_code", "detail", "updated_at",
+"lease"}`: the specification's digest it is named by, the attempt, one of
+`pending`, `admitted`, `running`, `checkpointing`, `completed`, `failed`,
+`retrying`, `cancelled`, `lost` or `preempted`, the launcher, the attempt
+directory, the exit code and what happened when known, and the controller's
+lease (`{"owner", "expires_unix"}` when one holds it). A shown `spec` is
+`{"command", "workers", "inputs", "outputs", "wall_clock_seconds", "retry"}`
+with `workers` `{"nodes", "ranks_per_node", "gpus_per_rank"}`.
+
 `status`: `{"state", "policy", "recent_runs", "counts", "concepts"}` - `policy` is
 `{"reference", "model", "base", "adapter", "release", "generation", "generation_base"}` (`adapter` and
 `release` are `null` until releases exist, `adapter` also for a consolidated checkpoint, which is the

@@ -17,6 +17,14 @@ Runtime state (sources, tasks, experiences, datasets, candidates, releases, answ
 earlier version is still used until `~/.splinter` exists; move it there to adopt the new location. Layout and
 maintenance are in [Storage](../reference/storage.md).
 
+## Jobs
+
+`--job-owner NAME` is the controller name recorded with each job this process
+submits and with the claim it takes on one (default: this machine's host name).
+`--job-attempt-root DIR` writes a job's attempt directories under `DIR`
+(default: `jobs` under the state root). Both are flags; the environment is not
+read.
+
 ## Machine and models
 
 | Flag | Meaning |

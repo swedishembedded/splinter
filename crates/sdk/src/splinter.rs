@@ -11,6 +11,8 @@
 
 use std::sync::Arc;
 
+use crate::jobs::Jobs;
+
 use serde::Serialize;
 use splinter_orchestrator::runs::{record, Recorded, Recorder};
 use splinter_orchestrator::{Config, Context, OrchestratorError, Runtime};
@@ -18,6 +20,7 @@ use splinter_pipelines::acquire::{acquire, AcquireReport, AcquireRequest};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
 use splinter_pipelines::train::{BrainTrainer, Trainer};
+use splinter_sandbox::job::LocalLauncher;
 
 /// Receives each stage's summary as it finishes: `(stage, summary)`.
 pub type Progress = Arc<dyn Fn(&str, &serde_json::Value) + Send + Sync>;
@@ -97,6 +100,24 @@ impl Splinter {
     #[must_use]
     pub fn trainer(&self) -> &dyn Trainer {
         self.trainer.as_ref()
+    }
+
+    /// The jobs of this handle's state root: submit, list, reconcile, show and
+    /// cancel work that runs outside this process, launched as configured.
+    #[must_use]
+    pub fn jobs(&self) -> Jobs<'_> {
+        let config = self.runtime.config();
+        let launcher = match &config.jobs.supervisor {
+            Some(supervisor) => LocalLauncher::supervised(supervisor.clone()),
+            None => LocalLauncher::default(),
+        };
+        Jobs::new(
+            self.runtime.workspace(),
+            self.runtime.clock(),
+            launcher,
+            config.jobs.attempt_root(&config.state_root),
+            config.jobs.owner.clone(),
+        )
     }
 
     /// The context of one command: its own pin of each policy alias on the

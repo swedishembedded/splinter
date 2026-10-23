@@ -27,6 +27,16 @@ commands is seen by the second. Every command that writes state runs as a record
 one place that wrapping lives), readable and cancellable from any process. `Splinter::from_env` reads the
 configuration from the environment as described in [configuration](../getting-started/configuration.md).
 
+## Jobs
+
+`Splinter::jobs()` returns a `Jobs` handle for work that runs outside the
+process: `submit`, `list`, `reconcile`, `retry`, `show` and `cancel`. The
+launcher is the local one, the controller's name and the attempt root come from
+the configuration (`Config::jobs`), and a submission is idempotent by the job
+specification's digest: resubmitting the same specification names the same job
+and starts nothing twice. What each call returns is the durable job record
+(`store::jobs::JobRecord`), not a process handle.
+
 ## What a caller works with
 
 - **The commands**, one module each, with their requests and reports: `learn`, `practice`, `ask`, `sources`,

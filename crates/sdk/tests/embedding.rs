@@ -24,6 +24,7 @@ use splinter_sdk::{Config, Splinter};
 fn config(dir: &std::path::Path) -> Config {
     Config {
         state_root: StateRoot::new(dir.join("state")),
+        jobs: Default::default(),
         model_store: dir.join("models"),
         policy_base: dir.join("models/base"),
         policy_context_tokens: None,

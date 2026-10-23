@@ -606,6 +606,7 @@ fn every_command_takes_the_global_flags() {
         &["state", "archive", "a.tar.zst"],
         &["state", "restore", "a.tar.zst"],
         &["runs", "list"],
+        &["jobs", "list"],
         &["lineage", "ab12"],
     ] {
         let flags = ["--json", "-v", "--allow-remote", "--state", "s"];
@@ -789,4 +790,5 @@ fn abstentions_are_taken_from_the_records_given_passages() {
 mod absorb;
 mod flags;
 mod harness;
+mod jobs;
 mod measure;

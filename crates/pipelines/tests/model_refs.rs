@@ -29,6 +29,7 @@ use splinter_store::StateRoot;
 fn config() -> Config {
     Config {
         state_root: StateRoot::new("state"),
+        jobs: Default::default(),
         model_store: PathBuf::from("/models"),
         policy_base: PathBuf::from("/models/Qwen/Qwen3-0.6B"),
         policy_context_tokens: None,

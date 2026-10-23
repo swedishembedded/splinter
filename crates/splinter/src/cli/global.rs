@@ -19,6 +19,14 @@ pub struct Global {
     /// The state root (default: ~/.splinter).
     #[arg(long, global = true, value_name = "DIR")]
     pub state: Option<PathBuf>,
+    /// The controller name recorded with each job this process submits and
+    /// the claim it takes on one (default: this machine's host name).
+    #[arg(long, global = true, value_name = "NAME")]
+    pub job_owner: Option<String>,
+    /// Where a submitted job's attempt directories are written (default:
+    /// `jobs` under the state root).
+    #[arg(long, global = true, value_name = "DIR")]
+    pub job_attempt_root: Option<PathBuf>,
     /// brain's model store, where `local:<org>/<model>` names a checkpoint
     /// (default: the store `brain pull` fills).
     #[arg(long, global = true, value_name = "DIR")]

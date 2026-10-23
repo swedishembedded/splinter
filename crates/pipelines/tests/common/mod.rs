@@ -109,6 +109,7 @@ impl Drop for Scratch {
 pub fn config(scratch: &Scratch) -> Config {
     Config {
         state_root: scratch.state(),
+        jobs: Default::default(),
         model_store: scratch.0.join("models"),
         policy_base: scratch.0.join("models/Qwen/Qwen3-0.6B"),
         policy_context_tokens: None,

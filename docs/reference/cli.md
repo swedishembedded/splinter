@@ -15,6 +15,8 @@ Every command takes these.
 - `--backend <BACKEND>`: How the hardware is driven: wgpu, vulkan, cuda or cpu. Without it brain picks, which on a CUDA host is not CUDA.
 - `--vram-budget <VRAM_BUDGET>`: The VRAM, in GiB, this process was granted: every card it budgets from is capped at it, so a run on a share of a card sizes its model, KV pool and context to the share. Without it the whole card is budgeted.
 - `--state <DIR>`: The state root (default: ~/.splinter)
+- `--job-owner <NAME>`: The controller name recorded with each job this process submits and the claim it takes on one (default: this machine's host name)
+- `--job-attempt-root <DIR>`: Where a submitted job's attempt directories are written (default: `jobs` under the state root)
 - `--models-dir <DIR>`: brain's model store, where `local:<org>/<model>` names a checkpoint (default: the store `brain pull` fills)
 - `--policy-base <CHECKPOINT>`: The checkpoint the policy trains and `policy:default` serves: a path, or a name in the model store (default: Qwen/Qwen3-0.6B)
 - `--brain-bin <PATH>`: The `brain` executable a release is checked to serve on (default: the first `brain` on PATH)
@@ -130,6 +132,13 @@ Every command takes these.
   - [splinter runs list](#splinter-runs-list) - List the recorded runs
   - [splinter runs show](#splinter-runs-show) - Show one run's record
   - [splinter runs cancel](#splinter-runs-cancel) - Ask a run in progress to stop
+- [splinter jobs](#splinter-jobs) - Submit work that runs outside this process, list it, reconcile it after a restart, retry a failed attempt, show one job or cancel one
+  - [splinter jobs submit](#splinter-jobs-submit) - Submit a program as one job and return as soon as its workers are started and detached
+  - [splinter jobs list](#splinter-jobs-list) - List the submitted jobs and the state each was last seen in
+  - [splinter jobs reconcile](#splinter-jobs-reconcile) - Ask each unfinished job's launcher what became of it and record the answer
+  - [splinter jobs retry](#splinter-jobs-retry) - Start the next attempt of every job whose last attempt failed and whose retry policy allows another
+  - [splinter jobs show](#splinter-jobs-show) - Show one job, its state and the specification it runs
+  - [splinter jobs cancel](#splinter-jobs-cancel) - Stop a job's workers and record it cancelled
 - [splinter state](#splinter-state) - Show, maintain, verify, repair, archive and restore the state
   - [splinter state status](#splinter-state-status) - What the experience database holds, as files
   - [splinter state maintain](#splinter-state-maintain) - Merge small files, index what is not indexed and retire finished writers
@@ -186,6 +195,7 @@ Subcommands:
 - [`exam-report`](#splinter-exam-report) - Analyses done after an exam from what its report kept
 - [`exam-set`](#splinter-exam-set) - Make and show frozen exams
 - [`runs`](#splinter-runs) - List, inspect and cancel runs
+- [`jobs`](#splinter-jobs) - Submit work that runs outside this process, list it, reconcile it after a restart, retry a failed attempt, show one job or cancel one
 - [`state`](#splinter-state) - Show, maintain, verify, repair, archive and restore the state
 - [`lineage`](#splinter-lineage) - Trace any artifact up to where it came from (down to source bytes) and down to everything that came from it
 
@@ -1558,6 +1568,91 @@ splinter runs cancel [OPTIONS] <ID>
 Arguments:
 
 - `<ID>` (required): The run's id.
+
+### splinter jobs
+
+Submit work that runs outside this process, list it, reconcile it after a restart, retry a failed attempt, show one job or cancel one; plain `jobs` lists the subcommands
+
+```text
+splinter jobs [OPTIONS] [COMMAND]
+```
+
+Subcommands:
+
+- [`submit`](#splinter-jobs-submit) - Submit a program as one job and return as soon as its workers are started and detached
+- [`list`](#splinter-jobs-list) - List the submitted jobs and the state each was last seen in
+- [`reconcile`](#splinter-jobs-reconcile) - Ask each unfinished job's launcher what became of it and record the answer
+- [`retry`](#splinter-jobs-retry) - Start the next attempt of every job whose last attempt failed and whose retry policy allows another
+- [`show`](#splinter-jobs-show) - Show one job, its state and the specification it runs
+- [`cancel`](#splinter-jobs-cancel) - Stop a job's workers and record it cancelled
+
+#### splinter jobs submit
+
+Submit a program as one job and return as soon as its workers are started and detached
+
+```text
+splinter jobs submit [OPTIONS] <PROGRAM ARG...>...
+```
+
+Arguments:
+
+- `<PROGRAM ARG...>...` (required): The program and its arguments, run directly and never through a shell. `{rank}` and `{world}` are filled in for each worker.
+
+Options:
+
+- `--nodes <N>`: How many machines the job is placed on. Default: `1`.
+- `--ranks-per-node <N>`: How many workers run on each machine. Default: `1`.
+- `--gpus-per-rank <N>`: How many accelerators each worker may use (`0` for none) Default: `0`.
+- `--wall-clock <SECONDS>`: The job's wall clock in seconds; a worker that outlives it is stopped and the job fails with exit code 124. `0` for no bound. Default: `0`.
+- `--attempts <N>`: Attempts in all, including the first. Default: `1`.
+
+#### splinter jobs list
+
+List the submitted jobs and the state each was last seen in
+
+```text
+splinter jobs list [OPTIONS]
+```
+
+#### splinter jobs reconcile
+
+Ask each unfinished job's launcher what became of it and record the answer: completed, failed, or lost when nothing can account for it
+
+```text
+splinter jobs reconcile [OPTIONS]
+```
+
+#### splinter jobs retry
+
+Start the next attempt of every job whose last attempt failed and whose retry policy allows another
+
+```text
+splinter jobs retry [OPTIONS]
+```
+
+#### splinter jobs show
+
+Show one job, its state and the specification it runs
+
+```text
+splinter jobs show [OPTIONS] <JOB>
+```
+
+Arguments:
+
+- `<JOB>` (required): The job's digest, or a unique prefix of its hex.
+
+#### splinter jobs cancel
+
+Stop a job's workers and record it cancelled
+
+```text
+splinter jobs cancel [OPTIONS] <JOB>
+```
+
+Arguments:
+
+- `<JOB>` (required): The job's digest, or a unique prefix of its hex.
 
 ### splinter state
 

@@ -40,6 +40,30 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       live, another controller leaves the job alone; an expired one is taken
       over, and the takeover is fenced by the record compare-and-set. Every
       reconciliation and retry renews the lease.
+- [x] **Jobs are a user-visible command.** `splinter jobs submit -- <program
+      and args...>` submits one detached local job, with flags for the worker
+      counts, the accelerators per worker, the wall clock (a worker past it
+      is stopped and fails with 124) and the attempts;
+      `jobs list`, `jobs reconcile`, `jobs retry`, `jobs show <id>` and
+      `jobs cancel <id>` operate on the durable record. The SDK exposes the
+      same through `Splinter::jobs()` (`submit`, `list`, `reconcile`, `retry`,
+      `show`, `cancel`) on
+      `LocalLauncher`; the controller name and the attempt root are
+      configuration values (`--job-owner`, `--job-attempt-root`), and the
+      binary is the supervisor each worker runs under. Tests:
+      `crates/splinter/tests/jobs_cli.rs` (submit is idempotent, list and show
+      report it, reconcile completes a clean exit and fails a nonzero one from
+      another process, retry launches the next allowed attempt, cancel stops
+      the workers).
+- [x] **A worker's exit outlives the process that submitted it.** A launcher
+      built with a supervisor starts each worker under it; the supervisor
+      records the exit code in the attempt directory (written once, then
+      renamed), so a controller that did not start the job reads completed or
+      failed instead of lost, and a worker that outlives the specification's
+      wall clock is stopped with its process group and recorded as 124. A
+      launch without a supervised exit still reports no exit code rather than
+      inventing one. Tests: `crates/sandbox/tests/jobs.rs` and the wall-clock
+      case in `crates/splinter/tests/jobs_cli.rs`.
 - [x] **A run that stopped heartbeating reads lost.** A recorded run writes
       append-only heartbeat signals while its process is alive; a reader
       reports `lost` once the newest is older than the stale bound, and a run
@@ -60,9 +84,6 @@ Scope: Submitting work that runs outside the controller and reconciling it after
 
 ## Open
 
-- [ ] No user-visible command submits a job yet: the controller is an API,
-      and a `jobs` verb (submit, status, reconcile) with its documentation is
-      the next step.
 - [ ] No scheduler adapter. Slurm and Kubernetes implement the same
       `JobLauncher` trait; nothing in the controller names either.
 - [ ] No pipeline stage runs a training job through the controller. The train

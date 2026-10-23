@@ -34,6 +34,7 @@
 //!
 //! # What a caller works with
 //!
+//! * The jobs a process submits to run outside it ([`jobs`]).
 //! * The commands, one module each - [`learn`], [`practice`], [`ask`],
 //!   [`sources`], [`sessions`], [`claims`], [`absorb`], [`tasks`], [`timeline`],
 //!   [`solving`], [`verify`], [`critique`], [`datasets`],
@@ -57,9 +58,11 @@
 #![warn(missing_docs)]
 
 pub mod device;
+pub mod jobs;
 pub mod seed;
 mod splinter;
 
+pub use crate::jobs::{JobSubmission, JobView, Jobs};
 pub use crate::splinter::{Progress, Splinter, SplinterBuilder};
 
 // What a command works with.

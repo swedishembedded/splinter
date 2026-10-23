@@ -94,6 +94,7 @@ pub fn world(reply: impl Fn(&str) -> String + Send + Sync + 'static) -> anyhow::
     let dir = tempfile::tempdir()?;
     let config = Config {
         state_root: StateRoot::new(dir.path().join("state")),
+        jobs: Default::default(),
         model_store: dir.path().join("models"),
         policy_base: dir.path().join("models/base"),
         policy_context_tokens: None,

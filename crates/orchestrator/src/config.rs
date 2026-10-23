@@ -38,6 +38,8 @@ pub const DEFAULT_SOLVE_DEADLINE: Duration = Duration::from_secs(300);
 pub struct Config {
     /// Where every store, run and candidate lives.
     pub state_root: StateRoot,
+    /// How jobs are submitted and reconciled.
+    pub jobs: JobSettings,
     /// brain's model store: where `local:<org>/<model>` names a checkpoint.
     pub model_store: PathBuf,
     /// The checkpoint `policy:default` serves.
@@ -128,6 +130,59 @@ pub struct Config {
     /// command line, which knows its own build. Recorded in every run and
     /// release.
     pub build: BuildInfo,
+}
+
+/// How a process submits work that runs outside it: who the controller says it
+/// is, where each attempt's directory is written, and the program that runs a
+/// worker and records its exit.
+///
+/// The owner names the controller on every submission and every lease it
+/// takes, so two controllers can be told apart. It defaults to the machine's
+/// host name. The attempt root defaults to `jobs` under the state root; a
+/// scheduler-backed launcher needs no attempt directory of its own, but the
+/// local one writes each attempt there. The supervisor is the executable that
+/// understands the supervisor protocol; the command line sets it to itself, and
+/// a caller that leaves it unset launches workers directly, so their exit is
+/// known only while the submitting process lives.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct JobSettings {
+    /// The controller's name, recorded with every job it submits.
+    pub owner: String,
+    /// Where attempt directories are written; `None` is `jobs` under the state
+    /// root.
+    pub attempt_root: Option<PathBuf>,
+    /// The executable that runs a worker and records its exit; `None` starts
+    /// workers directly.
+    pub supervisor: Option<PathBuf>,
+}
+
+impl Default for JobSettings {
+    fn default() -> Self {
+        Self {
+            owner: default_owner(),
+            attempt_root: None,
+            supervisor: None,
+        }
+    }
+}
+
+impl JobSettings {
+    /// The directory attempt directories are written under for `state_root`.
+    #[must_use]
+    pub fn attempt_root(&self, state_root: &StateRoot) -> PathBuf {
+        self.attempt_root
+            .clone()
+            .unwrap_or_else(|| state_root.path().join("jobs"))
+    }
+}
+
+/// The controller name when none is configured: this machine's host name.
+fn default_owner() -> String {
+    std::fs::read_to_string("/proc/sys/kernel/hostname")
+        .ok()
+        .map(|name| name.trim().to_owned())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| "local".to_owned())
 }
 
 /// Where the commands of a workspace (a project's tests, a solver's shell)
@@ -244,6 +299,7 @@ impl Config {
     ///   serve on;
     /// * the capture allowlist's variables, and the current directory, for
     ///   command sources;
+    /// * the host name, as the default name of the job controller;
     /// * the [`DOCKER_CLIENT_ENV`] variables a docker client needs.
     #[must_use]
     pub fn from_env() -> Self {
@@ -253,6 +309,7 @@ impl Config {
             .unwrap_or_else(|| home.join(".local/share/brain/models"));
         Self {
             state_root: StateRoot::under_home(&home),
+            jobs: JobSettings::default(),
             policy_base: model_store.join(DEFAULT_POLICY_MODEL),
             policy_context_tokens: None,
             model_store,

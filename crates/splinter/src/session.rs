@@ -765,6 +765,7 @@ impl Session {
             Command::Runs(RunsCommand::List) => emit(json, &runs::list(ctx)?),
             Command::Runs(RunsCommand::Show { id }) => emit(json, &runs::show(ctx, &id)?),
             Command::Runs(RunsCommand::Cancel { id }) => emit(json, &runs::cancel(ctx, &id)?),
+            Command::Jobs(args) => return crate::jobs_session::jobs(&self.splinter, json, args),
             Command::CliReference(args) => return Ok(crate::cli::reference::run(&args)),
             Command::Lineage(args) => {
                 let request = LineageRequest {

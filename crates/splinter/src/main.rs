@@ -36,6 +36,7 @@ mod experiment_output;
 mod harness_output;
 mod harness_session;
 mod improve_session;
+mod jobs_session;
 mod learn_output;
 mod learn_request;
 mod learn_session;
@@ -64,6 +65,15 @@ fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
     if let Some(state) = &global.state {
         config.state_root = StateRoot::new(state);
     }
+    if let Some(owner) = &global.job_owner {
+        config.jobs.owner.clone_from(owner);
+    }
+    if let Some(root) = &global.job_attempt_root {
+        config.jobs.attempt_root = Some(root.clone());
+    }
+    // The binary supervises each worker it launches, so the worker's exit is
+    // recorded where a later process reads it.
+    config.jobs.supervisor = std::env::current_exe().ok();
     if let Some(dir) = &global.models_dir {
         config.model_store.clone_from(dir);
         config.policy_base = dir.join(splinter_sdk::config::DEFAULT_POLICY_MODEL);
@@ -93,6 +103,11 @@ fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
 }
 
 fn main() -> ExitCode {
+    // A worker launched through the local job launcher starts this binary as
+    // its supervisor, which runs the worker and records its exit.
+    if let Some(code) = splinter_sdk::sandbox::job::supervise(std::env::args_os().skip(1)) {
+        return ExitCode::from(u8::try_from(code).unwrap_or(1));
+    }
     let cli = Cli::parse();
     if cli.sentence.is_some() && cli.command.is_some() {
         Cli::command()

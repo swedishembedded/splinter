@@ -19,6 +19,28 @@ at its next check, and training at its next optimizer step. A run whose
 process died is reported `lost` once its heartbeat is stale (a run recorded
 before heartbeats were kept has none and keeps `running`).
 
+## Jobs
+
+A job submitted with `jobs submit` is a content-addressed specification and a
+record in the experience database under the pointer `job/<spec digest>`: its
+state, attempt, launcher, attempt directory, exit code and the controller's
+lease. The specification is the job's identity, so submitting the same one twice
+names the same job and starts nothing.
+
+Its workers run detached, each in its own session, in
+`<state>/jobs/<digest>/attempt-<n>`: `launch.json` names the attempt and the
+worker processes, `rank-<r>.out` and `rank-<r>.err` hold their output, and
+`rank-<r>.exit` holds the exit code recorded after the worker finished, so a
+process that did not start the job reads how it ended. A worker that outlives
+the job's `--wall-clock` is stopped with its process group and recorded as 124.
+`--job-attempt-root DIR` writes the attempt directories elsewhere.
+
+`jobs list` shows each job's last recorded state, `jobs reconcile` records what
+the launcher finds (completed, failed, running, or lost when nothing accounts
+for the workers), `jobs retry` starts the next attempt where the retry policy
+allows one, and `jobs cancel` stops the workers and records the job cancelled. Both `jobs list` and `jobs show` read the record only; nothing is
+observed until `jobs reconcile` runs.
+
 ## State
 
 Everything Splinter knows lives in one experience database under
