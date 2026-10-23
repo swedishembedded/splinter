@@ -157,6 +157,18 @@ the trained adapter is not distinguishable from its shuffled-instruction control
 next levers are a decision-level view of the same trajectories and more verified teacher data, not a longer
 run of this recipe.
 
+\paragraph{CE8-T-u1b: decision-level supervision, the same outcome.} The pilot's result motivated a third
+candidate that changes one variable of the data rather than the recipe: CE8-T-u1b trains on the unpacked
+\code{sft-step} view of the same experiences, one record per admitted action with its own context, instead of
+one packed record per trajectory. The trainer reports 2490 records, and the run takes 1200 steps at a held-out
+monitoring share of 0.05; its kept evaluation, step 960, has a monitoring loss of 0.1676 against 0.1835 for
+the base and a training loss of 0.1359 there, and the guard calls it not memorised.\cl{M55} Solved on the same
+pilot subset under the same protocol it resolves 6 of the 23 tasks where the base resolves 9; of the 13 paired
+families it wins 1, loses 4 and ties 8, and the one-sided sign test gives $p=0.96875$, with 6 attempts exposed
+against 7 for the base.\cl{M56} Supervising decisions rather than whole trajectories does not rescue the
+comparison: the candidate is at or below the base and below its packed predecessor on this subset. Both
+candidates are development probes, not registered comparisons; the registered query stays unmeasured.
+
 \paragraph{What a failure would show.} An adapter that does not win (for CE4, one distilled from the teacher's verified trajectories), a gain that a different
 repository's adapter or unverified trajectories match, a retention loss beyond the margin, or
 a served adapter that disagrees with the in-process one are each stated outcomes of the

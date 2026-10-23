@@ -467,6 +467,45 @@
    "splinter": "3330c206c+6521a67ab",
    "brain": "36e902322",
    "command": "g8-compare.py --served-base lease10-served-base.jsonl --served-adapter lease10-served-ce8t.jsonl --inproc-base inproc-base.jsonl --inproc-adapter inproc-ce8t.jsonl --manifest held-out-ce8t.manifest.json (runs/g8) on brain 36e902322 for the in-process side and the evaluation server bin-brain-cbe84f44b-eval for the served side"
+  },
+  "ce8t-u1b-train": {
+   "log": "ce8/train-ce8t-u1b.log",
+   "sha256": "50f751672a4e6850bab46f7c9d02dd9054449cf963b2a66e0fd2d127981c9b23",
+   "metric_prefix": "ce8.u1b",
+   "metrics": {
+    "records": 2490,
+    "steps_run": 1200,
+    "kept_step": 960,
+    "kept_monitor": "0.1676",
+    "kept_train": "0.1359",
+    "base_monitor": "0.1835",
+    "verdict": "not memorised"
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter train blake3:328125ca... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 1200 --records-per-step 2 --monitor-share 0.05 --seed 1 --eval-every 240 --patience 2 --keep-evaluations (runs/ce8/ce8t-u1b.sh)"
+  },
+  "ce8-p1-u1-eval": {
+   "log": "ce8/pilot-compare-u1b.json",
+   "sha256": "416b9b4057b20aa4a373d025a9bb90109632ef8dc269c673306030091f507743",
+   "metric_prefix": "ce8.eval-u1",
+   "metrics": {
+    "tasks": 23,
+    "paired": 13,
+    "families": 13,
+    "wins": 1,
+    "losses": 4,
+    "ties": 8,
+    "discordant": 5,
+    "p_value": 0.96875,
+    "adapter_verified": 6,
+    "adapter_exposed": 6,
+    "base_verified": 9,
+    "base_exposed": 7
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter experiences compare blake3:d3e96985... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-u1b.json; arm from runs/g8/eval-arm.sh)"
   }
  }
 }
