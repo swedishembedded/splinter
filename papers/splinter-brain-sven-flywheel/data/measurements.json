@@ -506,6 +506,62 @@
    "splinter": "3330c206c+6521a67ab",
    "brain": "77e510fbf",
    "command": "splinter experiences compare blake3:d3e96985... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-u1b.json; arm from runs/g8/eval-arm.sh)"
+  },
+  "ce8-p1-base-s2-eval": {
+   "log": "ce8/pilot-compare-base-s2.json",
+   "sha256": "d92cec94fa83fdedd1b85911d9a26b7269fc32646deb98a70d6c0cf12cdfd4fe",
+   "metric_prefix": "ce8.eval-base-s2",
+   "metrics": {
+    "tasks": 23,
+    "paired": 13,
+    "families": 13,
+    "wins": 1,
+    "losses": 3,
+    "ties": 9,
+    "discordant": 4,
+    "p_value": 0.9375,
+    "adapter_verified": 7,
+    "adapter_exposed": 4,
+    "base_verified": 9,
+    "base_exposed": 7
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter experiences compare blake3:35c7bd9d... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-base-s2.json; the same model solved twice, seeds 16022413115216019911 and 3017204225152849161)"
+  },
+  "ce8-p1-arm-shape": {
+   "log": "ce8/arm-shape.json",
+   "sha256": "eba93d3a68acf45160333f59345e8855ec6be987dfecd188541d944919f4f816",
+   "metric_prefix": "ce8.shape",
+   "metrics": {
+    "base_attempts": 23,
+    "base_completion_median": 2125,
+    "base_steps_max": 58,
+    "base_steps_median": 32,
+    "base_success": 11,
+    "base_tool_calls": 782,
+    "ce8t_attempts": 23,
+    "ce8t_completion_median": 1465,
+    "ce8t_steps_max": 60,
+    "ce8t_steps_median": 13,
+    "ce8t_success": 10,
+    "ce8t_tool_calls": 474,
+    "ce8ts_attempts": 23,
+    "ce8ts_completion_median": 1405,
+    "ce8ts_steps_max": 61,
+    "ce8ts_steps_median": 12,
+    "ce8ts_success": 9,
+    "ce8ts_tool_calls": 392,
+    "u1b_attempts": 23,
+    "u1b_completion_median": 1927,
+    "u1b_steps_max": 52,
+    "u1b_steps_median": 16,
+    "u1b_success": 3,
+    "u1b_tool_calls": 632
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "python3 arm-shape.py (reads runs/g8 pilot experience sets blake3:d6937cb3, 8c4825ce, 82a28fbb, d3e96985 from the state and the solve-in conclusion counts)"
   }
  }
 }

@@ -169,6 +169,21 @@ against 7 for the base.\cl{M56} Supervising decisions rather than whole trajecto
 comparison: the candidate is at or below the base and below its packed predecessor on this subset. Both
 candidates are development probes, not registered comparisons; the registered query stays unmeasured.
 
+\paragraph{What these pilots can and cannot show.} Two measurements bracket what the pilot numbers mean.
+First, the attempts differ in shape. The median episode is 32 steps for the base, 13 for CE8-T, 12 for its
+shuffled-instruction control and 16 for the decision-level candidate; the arms make 782, 474, 392 and 632 tool
+calls, and their solve conclusions report 11, 10, 9 and 3 successes, while the longest episodes still run to 58,
+60, 61 and 52 steps.\cl{M58} The control matches the trained adapter, so what fine-tuning on these records moves
+is when a turn ends, not what a trajectory solves; the decision-level candidate sits between the two, with more
+steps than the packed candidates and the most repetition stops. Second, the seed floor: solved twice on the same
+23 tasks with two registered protocol seeds, the base itself pairs 13 families with 1 win, 3 losses and 9 ties,
+$p=0.9375$, which is statistically indistinguishable from either adapter's comparison.\cl{M57} A pilot of this
+size therefore shows no detectable difference, not a demonstrated loss; the registered confirmatory query on 46
+families is the measurement that could separate them. The training side points the same way: every trajectory
+longer than the 16384-token block was removed before training (130 of the 262 successful attempts of the eight
+development sets, and 1148 of 3837 for the decision-level view), so the records the adapters were trained on are
+the short half of the teacher's successes, and their median record carries about 1650 supervised tokens.
+
 \paragraph{What a failure would show.} An adapter that does not win (for CE4, one distilled from the teacher's verified trajectories), a gain that a different
 repository's adapter or unverified trajectories match, a retention loss beyond the margin, or
 a served adapter that disagrees with the in-process one are each stated outcomes of the

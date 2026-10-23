@@ -201,6 +201,9 @@ def parse_log(prefix, text):
         return ce4_compare_metrics(json.loads(text))
     if prefix.startswith("ce8.eval"):
         return ce4_compare_metrics(json.loads(text))
+    if prefix.startswith("ce8.shape"):
+        # the arm-shape summary is written flat, so the file IS the metrics dict
+        return json.loads(text)
     if prefix.startswith("ce8."):
         return ce8_train_metrics(text)
     if prefix.startswith("g8."):

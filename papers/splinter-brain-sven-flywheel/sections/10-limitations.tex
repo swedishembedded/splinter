@@ -23,7 +23,8 @@ CE8-T and its shuffled-instruction control on the first qualification half that 
 improvement either (\cref{sec:pending}); everything else said about it in \cref{sec:protocol,sec:pending,sec:replicate}
 is a registered rule or a statement about code, and the sign-test table is a design calculation.
 The guard as registered reads one step's training loss and any rise at the last evaluation, so it
-can stop a run on noise; it was kept unchanged.\cl{M48,M49} The registration fixes one model size for the first
+can stop a run on noise; it was kept unchanged.\cl{M48,M49} Both pilots of the adapter are inside the same
+variation the base shows against itself on a second protocol seed.\cl{M57} The registration fixes one model size for the first
 training result (Qwen3-8B, because training, saving and serving an adapter work end to end for
 it), trained on a stronger teacher's verified trajectories because the untrained 8B produced
 too few edits to supply its own (so a gain is distillation from the teacher, not
