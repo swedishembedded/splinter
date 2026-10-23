@@ -35,6 +35,28 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       with no observed exit are `Lost`, never `Completed`. A record another
       controller moved first is left alone. Tests: the module tests in
       `crates/orchestrator/src/jobs.rs`.
+- [x] **A job has an owner with an expiry.** A record carries a lease naming
+      the controller and the instant it stops being valid. While a lease is
+      live, another controller leaves the job alone; an expired one is taken
+      over, and the takeover is fenced by the record compare-and-set. Every
+      reconciliation and retry renews the lease.
+- [x] **A run that stopped heartbeating reads lost.** A recorded run writes
+      append-only heartbeat signals while its process is alive; a reader
+      reports `lost` once the newest is older than the stale bound, and a run
+      recorded before heartbeats keeps the status its events ended with. The
+      `runs list` and `runs show` views apply it, and the storage reference
+      documents the status.
+
+## Decisions
+
+- The experience database and the artifact files stay the two authorities
+  they already are: job metadata, attempts and leases are documents and a
+  pointer in expdb, and the bulk files (adapters, datasets, checkpoints) are
+  plain content-addressed files. No second database, and no scheduler-specific
+  column in either.
+- A job submission is identified by its specification digest, not by a
+  scheduler job id. The scheduler id is an attribute of one attempt; losing
+  it (a requeue, a controller restart) does not create a second job.
 
 ## Open
 
@@ -46,11 +68,7 @@ Scope: Submitting work that runs outside the controller and reconciling it after
 - [ ] No pipeline stage runs a training job through the controller. The train
       stage still calls brain in-process, and brain's training verbs do not
       accept a job plan yet.
-- [ ] Leases and heartbeats for a running job. The compare-and-set fences
-      record updates, but nothing bounds how long a controller may claim to
-      own a job before another may take it over.
 - [ ] Artifact storage backends. Adapters and datasets are plain files at a
       content address; a parallel filesystem works as it is, while an object
       store needs a fetch path brain can read (brain resolves a local path
       today), not only another backend under Splinter.
-- [ ] Run liveness: a run whose process died still reads `running`.
