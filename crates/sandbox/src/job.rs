@@ -24,13 +24,18 @@
 //!
 //! Workers are started in their own session (`setsid`), so they survive the
 //! controller and a terminal's process-group kill. An exit code is known when
-//! the submitting process is still alive; a reopened launch reports that a
-//! worker is gone and the durable job record says what its artifacts prove.
+//! the submitting process is still alive; a launch started under a supervisor
+//! (see [`LocalLauncher::supervised`]) writes each worker's exit into the
+//! launch directory, so a controller that restarted reads the same completed
+//! or failed attempt instead of a lost one. A reopened launch whose workers
+//! were not supervised reports that they are gone, and the durable job record
+//! says what their artifacts prove.
 
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{self, Write};
-use std::os::unix::process::CommandExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -53,6 +58,11 @@ const INTENT_FILE: &str = "launch.intent";
 mod slurm;
 
 pub use slurm::{SlurmLauncher, SlurmState};
+
+/// The first argument of a process the local launcher starts to supervise one
+/// worker: a launcher that records exit status durably runs this program in
+/// place of the worker, and it runs the worker itself.
+pub const SUPERVISOR_MARKER: &str = "__splinter_job_supervisor";
 
 /// Why a launch could not be started, observed or stopped.
 #[derive(Debug, thiserror::Error)]
@@ -216,14 +226,33 @@ impl Launch {
     }
 
     /// What happened to the job as the operating system sees it.
+    ///
+    /// Once no worker is alive, the exit is the one a supervisor recorded for
+    /// every rank, so a controller that restarted reads the same terminal
+    /// state the submitting process would have. A launch whose workers were
+    /// not supervised, or whose supervisor died before it could record the
+    /// exit, reports no exit code rather than inventing one.
     #[must_use]
     pub fn observe(&self) -> Observation {
         let alive = self.ranks_alive();
         if alive.is_empty() {
-            Observation::Exited { exit_code: None }
+            Observation::Exited {
+                exit_code: self.recorded_exit(),
+            }
         } else {
             Observation::Running { ranks_alive: alive }
         }
+    }
+
+    /// The exit every rank's supervisor recorded, or `None` when one is
+    /// missing. A job of several ranks has one exit code: the first non-zero
+    /// one, so any failed rank fails the job.
+    fn recorded_exit(&self) -> Option<i32> {
+        let mut codes = Vec::with_capacity(self.world_size as usize);
+        for rank in 0..self.world_size {
+            codes.push(read_exit(&self.dir, rank)?);
+        }
+        Some(codes.into_iter().find(|code| *code != 0).unwrap_or(0))
     }
 
     /// Stop one worker (the failure a rank crash is simulated with), or every
@@ -318,16 +347,63 @@ pub trait JobLauncher: Send + Sync {
 /// a scheduler. The children are held for the life of the launcher, so their
 /// exit codes are known; a launcher reopened after a controller restart has no
 /// children, and [`Launch::observe`] answers from the operating system.
+///
+/// A launcher built with [`LocalLauncher::supervised`] starts each worker under
+/// a supervisor program instead of directly: the supervisor runs the worker,
+/// records its exit code in the launch directory, and exits. The exit then
+/// outlives the process that submitted the job, so a controller that restarted
+/// reads a completed or failed attempt instead of a lost one. It also enforces
+/// the specification's wall clock: a worker that outlives it is stopped with
+/// its process group and recorded as [`TIMEOUT_EXIT`].
 #[derive(Debug, Default)]
 pub struct LocalLauncher {
     children: Mutex<HashMap<PathBuf, Vec<Child>>>,
+    supervisor: Option<PathBuf>,
 }
 
 impl LocalLauncher {
+    /// A launcher that runs every worker under `supervisor`, a program that
+    /// understands [`SUPERVISOR_MARKER`] (see [`supervise`]).
+    #[must_use]
+    pub fn supervised(supervisor: impl Into<PathBuf>) -> LocalLauncher {
+        LocalLauncher {
+            children: Mutex::new(HashMap::new()),
+            supervisor: Some(supervisor.into()),
+        }
+    }
+
     fn children(&self) -> std::sync::MutexGuard<'_, HashMap<PathBuf, Vec<Child>>> {
         self.children
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The process a worker is started as: the supervisor with its protocol
+    /// arguments, or the worker's own command.
+    fn worker_command(
+        &self,
+        command: &[String],
+        dir: &Path,
+        rank: u32,
+        wall_clock_seconds: u64,
+    ) -> Command {
+        match &self.supervisor {
+            Some(supervisor) => {
+                let mut process = Command::new(supervisor);
+                process
+                    .arg(SUPERVISOR_MARKER)
+                    .arg(dir)
+                    .arg(rank.to_string())
+                    .arg(wall_clock_seconds.to_string())
+                    .args(command);
+                process
+            }
+            None => {
+                let mut process = Command::new(&command[0]);
+                process.args(&command[1..]);
+                process
+            }
+        }
     }
 }
 
@@ -346,9 +422,8 @@ impl JobLauncher for LocalLauncher {
                 .map_err(|e| JobError::io("creating a worker's stdout", e))?;
             let err = fs::File::create(dir.join(format!("rank-{rank}.err")))
                 .map_err(|e| JobError::io("creating a worker's stderr", e))?;
-            let mut process = Command::new(&command[0]);
+            let mut process = self.worker_command(&command, dir, rank, spec.wall_clock_seconds);
             process
-                .args(&command[1..])
                 .current_dir(dir)
                 .stdin(Stdio::null())
                 .stdout(Stdio::from(out))
@@ -414,7 +489,12 @@ impl JobLauncher for LocalLauncher {
                     }
                 }
                 if alive.is_empty() {
-                    return Observation::Exited { exit_code: exit };
+                    // A supervisor's record is what the worker ended with; a
+                    // child killed with its group reports no code to this
+                    // process.
+                    return Observation::Exited {
+                        exit_code: launch.recorded_exit().or(exit),
+                    };
                 }
                 return Observation::Running { ranks_alive: alive };
             }
@@ -457,6 +537,141 @@ fn claim_attempt(spec: &JobSpec, attempt: u32, dir: &Path) -> Result<(), JobErro
             attempt,
         }),
         Err(e) => Err(JobError::io(format!("claiming {}", intent.display()), e)),
+    }
+}
+
+/// The exit code a worker that outlived its wall clock is recorded with, as
+/// `timeout(1)` uses.
+pub const TIMEOUT_EXIT: i32 = 124;
+
+/// Run one supervised worker and record its exit code, when `args` is a
+/// supervisor invocation
+/// (`SUPERVISOR_MARKER DIR RANK WALL_CLOCK_SECONDS PROGRAM [ARG...]`).
+///
+/// Returns `Some(code)` when the arguments name such an invocation and `None`
+/// when they do not, so a program can call this before parsing its own command
+/// line. The worker runs with the supervisor's standard streams (the launcher
+/// points them at the rank's output files), and its exit is written to
+/// `DIR/rank-RANK.exit` before this returns, so a launcher in another process
+/// reads it. A program that cannot be started is recorded as 127, and one that
+/// outlives a nonzero wall clock is stopped and recorded as [`TIMEOUT_EXIT`].
+pub fn supervise(mut args: impl Iterator<Item = OsString>) -> Option<i32> {
+    if args.next().as_deref() != Some(OsStr::new(SUPERVISOR_MARKER)) {
+        return None;
+    }
+    let Some(dir) = args.next().map(PathBuf::from) else {
+        eprintln!("splinter: a job supervisor names no launch directory");
+        return Some(2);
+    };
+    let rank = args
+        .next()
+        .and_then(|rank| rank.into_string().ok())
+        .and_then(|rank| rank.parse::<u32>().ok());
+    let Some(rank) = rank else {
+        eprintln!("splinter: a job supervisor names no rank");
+        return Some(2);
+    };
+    let wall_clock = args
+        .next()
+        .and_then(|seconds| seconds.into_string().ok())
+        .and_then(|seconds| seconds.parse::<u64>().ok());
+    let Some(wall_clock) = wall_clock else {
+        eprintln!("splinter: a job supervisor names no wall clock");
+        record_exit(&dir, rank, 2);
+        return Some(2);
+    };
+    let Some(program) = args.next() else {
+        record_exit(&dir, rank, 2);
+        return Some(2);
+    };
+    let rest: Vec<OsString> = args.collect();
+    let mut worker = match Command::new(&program).args(&rest).spawn() {
+        Ok(worker) => worker,
+        Err(error) => {
+            eprintln!(
+                "splinter: starting {} for rank {rank}: {error}",
+                program.to_string_lossy()
+            );
+            record_exit(&dir, rank, 127);
+            return Some(127);
+        }
+    };
+    let code = wait_for_worker(&mut worker, wall_clock, &dir, rank);
+    record_exit(&dir, rank, code);
+    Some(code)
+}
+
+/// Wait for `worker`, stopping it at `wall_clock` seconds if it outlives the
+/// bound. A launcher made this process the leader of its own session, so the
+/// worker shares its process group: the exit is recorded first, then the group
+/// is taken down, so nothing is orphaned and a launcher in another process
+/// still reads why the attempt ended.
+fn wait_for_worker(worker: &mut Child, wall_clock: u64, dir: &Path, rank: u32) -> i32 {
+    if wall_clock == 0 {
+        return status_code(worker.wait());
+    }
+    let deadline = Instant::now() + Duration::from_secs(wall_clock);
+    loop {
+        match worker.try_wait() {
+            Ok(Some(status)) => return status_code(Ok(status)),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            Ok(None) => {
+                // Record before stopping: the group kill can take this process
+                // with it when it is a session leader.
+                record_exit(dir, rank, TIMEOUT_EXIT);
+                // SAFETY: signal 0 names this process's own group; the ids are
+                // the ones the operating system assigned.
+                if unsafe { libc::getsid(0) } == unsafe { libc::getpid() } {
+                    unsafe { libc::kill(0, SIGKILL) };
+                }
+                worker.kill().ok();
+                worker.wait().ok();
+                return TIMEOUT_EXIT;
+            }
+            Err(_) => {
+                worker.kill().ok();
+                worker.wait().ok();
+                return TIMEOUT_EXIT;
+            }
+        }
+    }
+}
+
+/// The code a worker ended with, a signal being reported as shells report it.
+fn status_code(status: io::Result<std::process::ExitStatus>) -> i32 {
+    match status {
+        Ok(status) => status
+            .code()
+            .unwrap_or_else(|| 128 + status.signal().unwrap_or(0)),
+        Err(_) => 127,
+    }
+}
+
+/// The file a worker's supervisor records its exit code in.
+fn exit_file(dir: &Path, rank: u32) -> PathBuf {
+    dir.join(format!("rank-{rank}.exit"))
+}
+
+/// The exit code recorded for `rank`, when one was.
+fn read_exit(dir: &Path, rank: u32) -> Option<i32> {
+    fs::read_to_string(exit_file(dir, rank))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
+/// Record `rank`'s exit code where a launcher in another process reads it.
+fn record_exit(dir: &Path, rank: u32, code: i32) {
+    let path = exit_file(dir, rank);
+    let temporary = path.with_extension("exit.tmp");
+    let written =
+        fs::write(&temporary, format!("{code}\n")).and_then(|()| fs::rename(&temporary, &path));
+    if let Err(error) = written {
+        eprintln!(
+            "splinter: recording the exit of rank {rank} in {}: {error}",
+            dir.display()
+        );
     }
 }
 

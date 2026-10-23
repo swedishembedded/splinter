@@ -10,11 +10,14 @@
 //! a controller that restarts and reopens the launch instead of launching it
 //! again.
 
+use std::ffi::OsString;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use splinter_core::job::{JobSpec, WorkerPlan};
-use splinter_sandbox::job::{JobLauncher, Launch, LocalLauncher, Observation};
+use splinter_sandbox::job::{
+    supervise, JobLauncher, Launch, LocalLauncher, Observation, SUPERVISOR_MARKER, TIMEOUT_EXIT,
+};
 
 fn two_rank_spec() -> JobSpec {
     let mut spec = JobSpec::single(vec![
@@ -137,6 +140,122 @@ fn one_worker_can_die_while_the_others_keep_running() {
         }
     );
     guard.0.stop(None).unwrap();
+}
+
+#[test]
+fn a_supervisor_runs_the_worker_and_records_its_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    let args = [
+        OsString::from(SUPERVISOR_MARKER),
+        dir.path().as_os_str().to_owned(),
+        OsString::from("0"),
+        OsString::from("0"),
+        OsString::from("/bin/sh"),
+        OsString::from("-c"),
+        OsString::from("exit 7"),
+    ];
+    assert_eq!(supervise(args.into_iter()), Some(7));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("rank-0.exit"))
+            .unwrap()
+            .trim(),
+        "7"
+    );
+    assert_eq!(
+        supervise([OsString::from("something-else")].into_iter()),
+        None,
+        "anything but the marker is not a supervisor invocation"
+    );
+}
+
+#[test]
+fn a_worker_that_outlives_its_wall_clock_is_stopped_and_recorded_as_timed_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let started = Instant::now();
+    let args = [
+        OsString::from(SUPERVISOR_MARKER),
+        dir.path().as_os_str().to_owned(),
+        OsString::from("0"),
+        OsString::from("1"),
+        OsString::from("/bin/sh"),
+        OsString::from("-c"),
+        OsString::from("sleep 30"),
+    ];
+    assert_eq!(supervise(args.into_iter()), Some(TIMEOUT_EXIT));
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "the bound was enforced, not waited out"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("rank-0.exit"))
+            .unwrap()
+            .trim(),
+        TIMEOUT_EXIT.to_string()
+    );
+}
+
+/// A stand-in supervisor that runs the worker and records its exit the way the
+/// real one does, so the launcher's spawn and its reading are tested without
+/// the `splinter` binary.
+fn scripted_supervisor(dir: &Path) -> std::path::PathBuf {
+    let path = dir.join("supervisor.sh");
+    assert!(std::fs::write(
+        &path,
+        "#!/bin/sh\n\
+         dir=$2\n\
+         rank=$3\n\
+         shift 4\n\
+         \"$@\"\n\
+         code=$?\n\
+         printf '%s\\n' \"$code\" > \"$dir/rank-$rank.exit\"\n\
+         exit \"$code\"\n",
+    )
+    .is_ok());
+    use std::os::unix::fs::PermissionsExt;
+    assert!(std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).is_ok());
+    path
+}
+
+#[test]
+fn a_supervised_launch_reports_the_exit_the_supervisor_recorded() {
+    let dir = tempfile::tempdir().unwrap();
+    let launcher = LocalLauncher::supervised(scripted_supervisor(dir.path()));
+    let mut spec = JobSpec::single(vec!["/bin/sh".into(), "-c".into(), "exit 5".into()]);
+    spec.workers = WorkerPlan::default();
+    let launch = launcher.launch(&spec, 1, dir.path()).expect("launch");
+    wait_until("the worker exits", Duration::from_secs(10), || {
+        matches!(launcher.observe(&launch), Observation::Exited { .. })
+    });
+    assert_eq!(
+        launcher.observe(&launch),
+        Observation::Exited { exit_code: Some(5) }
+    );
+    // A controller that restarted holds no children and reads the same exit.
+    let reopened = Launch::open(dir.path()).unwrap().unwrap();
+    assert_eq!(
+        reopened.observe(),
+        Observation::Exited { exit_code: Some(5) }
+    );
+}
+
+#[test]
+fn a_launch_without_a_recorded_exit_says_so_instead_of_inventing_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let spec = JobSpec::single(vec!["/bin/true".into()]);
+    let launch = Launch {
+        digest: spec.digest(),
+        attempt: 1,
+        world_size: 1,
+        pids: vec![u32::MAX],
+        dir: dir.path().to_path_buf(),
+    };
+    assert_eq!(
+        launch.observe(),
+        Observation::Exited { exit_code: None },
+        "no supervisor recorded an exit, so none is known"
+    );
+    std::fs::write(dir.path().join("rank-0.exit"), "3\n").unwrap();
+    assert_eq!(launch.observe(), Observation::Exited { exit_code: Some(3) });
 }
 
 #[test]
