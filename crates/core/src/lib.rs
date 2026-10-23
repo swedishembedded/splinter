@@ -74,6 +74,7 @@ pub mod digest;
 pub mod evidence;
 pub mod experience;
 pub mod extra;
+pub mod job;
 pub mod kinds;
 pub mod longitudinal;
 pub mod model_ref;

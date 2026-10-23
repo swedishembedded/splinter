@@ -157,6 +157,20 @@ impl From<Digest> for String {
     }
 }
 
+/// The content address of a value whose canonical form cannot fail to
+/// serialise, such as a plain data structure a caller passes in.
+///
+/// # Panics
+/// A value whose serialiser refuses to produce a tree. Hashing `[]` instead
+/// would give every such value the same address, so the invariant is asserted
+/// rather than hidden.
+#[must_use]
+pub fn digest_of<T: Serialize + ?Sized>(value: &T) -> Digest {
+    #[allow(clippy::expect_used)]
+    let bytes = canonical_json(value).expect("plain data has a canonical form");
+    Digest::of(&bytes)
+}
+
 /// `value` in the canonical form described in the module documentation.
 pub fn canonical_json<T: Serialize + ?Sized>(value: &T) -> Result<Vec<u8>, serde_json::Error> {
     let tree = serde_json::to_value(value)?;
