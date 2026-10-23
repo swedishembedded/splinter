@@ -80,3 +80,4 @@ in the same commit.
 | [092](092-the-replayed-agents-shell-could-read-the-hidden-diff-and-only-the-gate-noticed-afterwards.md) | The replayed agent's shell could read the hidden diff, and only the gate noticed afterwards |
 | [093](093-an-in-process-model-ignored-the-sampling-flags-so-the-served-and-in-process-arms-of-a-check-did-not-share-a-protocol.md) | An in-process model ignored the sampling flags, so the served and in-process arms of a check did not share a protocol |
 | [094](094-the-whole-command-memory-bound-changed-every-process-sandbox-environment-and-refused-every-stored-task.md) | The whole-command memory bound changed every process-sandbox environment and refused every stored task |
+| [095](095-a-packed-view-removed-every-trajectory-longer-than-its-block-and-the-survivors-taught-the-adapter-to-stop-early.md) | A packed view removed every trajectory longer than its block, and the survivors taught the adapter to stop early |
