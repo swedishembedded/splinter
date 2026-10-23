@@ -323,6 +323,7 @@
     "discordant": 1,
     "p_value": 1.0,
     "adapter_verified": 0,
+    "adapter_exposed": 0,
     "base_verified": 1,
     "base_exposed": 2
    },
@@ -399,6 +400,50 @@
    "splinter": "3330c206c+6521a67ab",
    "brain": "77e510fbf",
    "command": "splinter train blake3:7e0aa54f... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 57 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 8 --patience 2 --keep-evaluations (runs/ce8/ce8t.sh)"
+  },
+  "ce8-p1-t1-compare": {
+   "log": "ce8/pilot-compare-ce8t.json",
+   "sha256": "675c1b7a82d93ac31c17bfc3ee9aea930ed322a801ba03af9f1b3ced38a2630d",
+   "metric_prefix": "ce8.eval-t1",
+   "metrics": {
+    "tasks": 23,
+    "paired": 13,
+    "families": 13,
+    "wins": 3,
+    "losses": 4,
+    "ties": 6,
+    "discordant": 7,
+    "p_value": 0.7734375,
+    "adapter_verified": 7,
+    "adapter_exposed": 4,
+    "base_verified": 9,
+    "base_exposed": 7
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter experiences compare blake3:8c4825ce... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-ce8t.json; arms from runs/g8/pilot.sh)"
+  },
+  "ce8-p1-ts1-compare": {
+   "log": "ce8/pilot-compare-ce8ts.json",
+   "sha256": "8a91e43666cbd2b103d7209c53b2e4d7b6f9c02246b68ff8628d086fd2aa16d1",
+   "metric_prefix": "ce8.eval-ts1",
+   "metrics": {
+    "tasks": 23,
+    "paired": 16,
+    "families": 16,
+    "wins": 2,
+    "losses": 6,
+    "ties": 8,
+    "discordant": 8,
+    "p_value": 0.96484375,
+    "adapter_verified": 7,
+    "adapter_exposed": 2,
+    "base_verified": 9,
+    "base_exposed": 7
+   },
+   "splinter": "3330c206c+6521a67ab",
+   "brain": "77e510fbf",
+   "command": "splinter experiences compare blake3:82a28fbb... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-ce8ts.json; arms from runs/g8/pilot.sh)"
   }
  }
 }

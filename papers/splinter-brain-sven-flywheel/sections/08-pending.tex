@@ -125,15 +125,26 @@ rise at the last evaluation, so it fires on noise of this size; the registration
 written, and the lower monitoring loss than the base's is a training-side quantity, not evidence of
 a gain on any task.
 
-\paragraph{CE8-T and its control: trained, not yet evaluated.} CE8-T trained on one pass over the 113
-records the trainer reports (57 steps); its kept evaluation, step 48, has a monitoring loss of 0.1738 against
-0.1799 for the base and a training loss of 0.1331 there, and the training record's verdict is not memorised, so
-CE8-T is a candidate for evaluation.\cl{M50} CE8-T-S, trained the same way on the same 113 records and 57 steps,
-keeps step 57 at 0.2315 against 0.2635 for the base on its own shuffled monitoring records, also not
-memorised.\cl{M51} Both are training-side quantities: the control's monitoring records are shuffled too, so the
-two losses are not comparable, and neither is evidence of a gain on any task. Whether CE8-T learned anything is
-decided only by the evaluation of \cref{sec:protocol} against the base and CE8-T-S, after the served adapter
-passes G8.
+\paragraph{CE8-T and its control: trained and evaluated on the pilot subset, no improvement.} CE8-T trained on
+one pass over the 113 records the trainer reports (57 steps); its kept evaluation, step 48, has a monitoring
+loss of 0.1738 against 0.1799 for the base and a training loss of 0.1331 there, and the training record's
+verdict is not memorised, so CE8-T is a candidate for evaluation.\cl{M50} CE8-T-S, trained the same way on the
+same 113 records and 57 steps, keeps step 57 at 0.2315 against 0.2635 for the base on its own shuffled
+monitoring records, also not memorised.\cl{M51} Both are training-side quantities: the control's monitoring
+records are shuffled too, so the two losses are not comparable, and neither is evidence of a gain on any task.
+
+Both candidates were then solved on the pilot subset S1 (23 tasks, one per family of the first
+qualification half) under the solve protocol of \cref{sec:protocol} with thinking off, one attempt per task,
+on one frozen build and one server process that offered the base and both adapters. CE8-T resolves 7 of the
+23 tasks and the base 9; of the 13 paired families the adapter wins 3, loses 4 and ties 6, and the one-sided
+sign test gives $p=0.7734375$.\cl{M52} The shuffled control resolves 7 and, over 16 paired families, wins 2,
+loses 6 and ties 8 ($p=0.96484375$).\cl{M53} Neither comparison reaches the registered alpha, and the rule
+that labels an underpowered comparison a pilot applies (13 and 16 non-tied families against the 25 the rule
+requires): the outcome of both arms is reported as \emph{no held-out improvement}, and no confirmatory query
+follows for CE8-T. The adapter does change behaviour on many of the same tasks, but not in one direction, and
+the trained adapter is not distinguishable from its shuffled-instruction control in size or direction. The
+next levers are a decision-level view of the same trajectories and more verified teacher data, not a longer
+run of this recipe.
 
 \paragraph{What a failure would show.} An adapter that does not win (for CE4, one distilled from the teacher's verified trajectories), a gain that a different
 repository's adapter or unverified trajectories match, a retention loss beyond the margin, or

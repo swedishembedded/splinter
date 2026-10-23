@@ -102,8 +102,37 @@ def ce1_metrics():
 
 
 def ce8_metrics():
-    """CE8 training runs: the loss curve's ends, the monitoring evaluations and the guard's verdict."""
+    """CE8 training runs: the loss curve's ends, the monitoring evaluations and the guard's verdict.
+    A `ce8.eval-` run is an evaluation of a candidate against the base under the coding-task
+    protocol: its paired families and the exact sign test, from an `experiences compare` report."""
     return prefixed_metrics("ce8.")
+
+
+def g8_metrics():
+    """G8: the served-versus-in-process agreement report of an adapter arm. The values are
+    formatted where the report is read (parse_log) so a claim quoting them quotes the report."""
+    return prefixed_metrics("g8.")
+
+
+def g8_report_metrics(report):
+    """The agreement report of one G8 arm (`g8-compare.py`): the two sides' mean |served -
+    in-process| log-probability difference, their top-1 agreement, the served mean
+    log-probability, and the base-normalised ratio and point difference of the registration."""
+    base, adapter = report["sides"]["base"], report["sides"]["adapter"]
+    ratio = report["derived"]["diff_ratio_adapter_over_base"]
+    points = report["derived"]["top1_points_adapter_minus_base"]
+    return {
+        "records": base["records"], "positions": base["positions"],
+        "base_diff": f"{base['mean_abs_logprob_diff']:.3e}",
+        "adapter_diff": f"{adapter['mean_abs_logprob_diff']:.3e}",
+        "diff_ratio": f"{ratio:.3f}",
+        "base_top1": f"{100 * base['top1_agreement']:.2f}",
+        "adapter_top1": f"{100 * adapter['top1_agreement']:.2f}",
+        "top1_drop": f"{-100 * points:.2f}",
+        "served_base_logprob": f"{base['served_mean_logprob']:.6f}",
+        "served_adapter_logprob": f"{adapter['served_mean_logprob']:.6f}",
+        "verdict": report["verdict"],
+    }
 
 
 def ce8_train_metrics(text):
@@ -137,6 +166,7 @@ def ce4_compare_metrics(compare):
         "wins": compare["clusters"]["wins"], "losses": compare["clusters"]["losses"], "ties": compare["clusters"]["ties"],
         "discordant": compare["sign_test"]["discordant"], "p_value": compare["sign_test"]["p_value"],
         "adapter_verified": compare["candidate"]["competence"]["counts"]["verified"],
+        "adapter_exposed": compare["candidate"]["exposed"],
         "base_verified": compare["baseline"]["competence"]["counts"]["verified"],
         "base_exposed": compare["baseline"]["exposed"],
     }
@@ -164,8 +194,12 @@ def parse_log(prefix, text):
         return ce1_summary_metrics(json.loads(text))
     if prefix.startswith("ce4."):
         return ce4_compare_metrics(json.loads(text))
+    if prefix.startswith("ce8.eval"):
+        return ce4_compare_metrics(json.loads(text))
     if prefix.startswith("ce8."):
         return ce8_train_metrics(text)
+    if prefix.startswith("g8."):
+        return g8_report_metrics(json.loads(text))
     if prefix.startswith("tj."):
         line = next(l for l in text.splitlines() if l.startswith("TJ "))
         return {k: int(v) for k, v in (kv.split("=") for kv in line.split()[1:])}
@@ -267,6 +301,7 @@ def metrics():
     m.update(ce1_metrics())
     m.update(ce4_metrics())
     m.update(ce8_metrics())
+    m.update(g8_metrics())
     return m
 
 
