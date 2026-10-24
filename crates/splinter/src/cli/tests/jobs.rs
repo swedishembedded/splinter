@@ -6,6 +6,8 @@
 //! `--`, flags included.
 
 use super::{command, parse, Command, JobsArgs, JobsCommand};
+use splinter_sdk::vocabulary::checkpoint::JOB_PLAN_FILE;
+use splinter_sdk::vocabulary::job::{PlanPolicy, JOB_PLAN_FLAG, JOB_RANK_FLAG};
 
 #[test]
 fn a_submission_takes_its_worker_plan_wall_clock_and_attempts() {
@@ -53,4 +55,47 @@ fn a_submission_takes_its_worker_plan_wall_clock_and_attempts() {
         parse(&["jobs", "submit", "--attempts", "0", "--", "prog"]).is_err(),
         "a job allows at least one attempt"
     );
+}
+
+#[test]
+fn a_distributed_submission_prepares_a_plan_for_every_rank() {
+    let Command::Jobs(JobsArgs {
+        command: Some(JobsCommand::Submit(submit)),
+    }) = command(&[
+        "jobs",
+        "submit",
+        "--distributed",
+        "--nodes",
+        "1",
+        "--ranks-per-node",
+        "2",
+        "--gpus-per-rank",
+        "1",
+        "--",
+        "brain",
+        "qwen3",
+        "finetune",
+    ])
+    else {
+        panic!("jobs submit --distributed");
+    };
+    let spec = submit.spec();
+    assert_eq!(spec.plan, Some(PlanPolicy::default()));
+    assert_eq!(spec.workers.world_size(), 2);
+    let for_rank = spec.command_for(1);
+    assert_eq!(
+        for_rank[for_rank.len() - 4..],
+        [JOB_PLAN_FLAG, JOB_PLAN_FILE, JOB_RANK_FLAG, "1"]
+    );
+
+    // Without the option a single-rank job asks for no plan at all.
+    let Command::Jobs(JobsArgs {
+        command: Some(JobsCommand::Submit(plain)),
+    }) = command(&["jobs", "submit", "--", "brain", "qwen3", "finetune"])
+    else {
+        panic!("jobs submit");
+    };
+    let plain = plain.spec();
+    assert_eq!(plain.plan, None);
+    assert!(!plain.command.iter().any(|part| part == JOB_PLAN_FLAG));
 }

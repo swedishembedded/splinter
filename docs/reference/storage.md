@@ -35,6 +35,13 @@ process that did not start the job reads how it ended. A worker that outlives
 the job's `--wall-clock` is stopped with its process group and recorded as 124.
 `--job-attempt-root DIR` writes the attempt directories elsewhere.
 
+A job submitted with `--distributed` runs under a generated plan: before any
+worker starts, `job-plan.json` is written into its attempt directory, naming
+the job by its specification digest, its world size and the coordinator every
+rank registers with. Each worker is given `--job-plan job-plan.json` and its
+own `--job-rank`, so every rank reads the same bytes, and a retry writes the
+next attempt's plan with the same job identity.
+
 `jobs list` shows each job's last recorded state, `jobs reconcile` records what
 the launcher finds (completed, failed, running, or lost when nothing accounts
 for the workers), `jobs retry` starts the next attempt where the retry policy

@@ -10,7 +10,7 @@
 //! them after a restart, show one and cancel one.
 
 use clap::{Args, Subcommand};
-use splinter_sdk::vocabulary::job::{JobSpec, RetryPolicy, WorkerPlan};
+use splinter_sdk::vocabulary::job::{JobSpec, PlanPolicy, RetryPolicy, WorkerPlan};
 
 /// `jobs ...`; none lists the subcommands.
 #[derive(Debug, Args)]
@@ -61,6 +61,12 @@ pub struct SubmitArgs {
         value_name = "PROGRAM ARG..."
     )]
     pub command: Vec<String>,
+    /// Prepare a distributed training job: write its plan into every attempt
+    /// directory before launching and append `--job-plan <file>` and
+    /// `--job-rank <rank>` to each worker. The plan registers the ranks on this
+    /// machine's loopback address.
+    #[arg(long)]
+    pub distributed: bool,
     /// How many machines the job is placed on.
     #[arg(long, default_value_t = 1, value_name = "N",
         value_parser = clap::value_parser!(u32).range(1..))]
@@ -86,7 +92,7 @@ impl SubmitArgs {
     /// The specification the flags and the command describe.
     #[must_use]
     pub fn spec(&self) -> JobSpec {
-        JobSpec {
+        let spec = JobSpec {
             command: self.command.clone(),
             workers: WorkerPlan {
                 nodes: self.nodes,
@@ -100,7 +106,12 @@ impl SubmitArgs {
                 attempts: self.attempts,
                 ..RetryPolicy::default()
             },
+            plan: None,
+        };
+        if self.distributed {
+            return spec.with_plan(PlanPolicy::default());
         }
+        spec
     }
 }
 

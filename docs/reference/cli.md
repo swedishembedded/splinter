@@ -1605,6 +1605,7 @@ Arguments:
 
 Options:
 
+- `--distributed`: Prepare a distributed training job: write its plan into every attempt directory before launching and append `--job-plan <file>` and `--job-rank <rank>` to each worker. The plan registers the ranks on this machine's loopback address.
 - `--nodes <N>`: How many machines the job is placed on. Default: `1`.
 - `--ranks-per-node <N>`: How many workers run on each machine. Default: `1`.
 - `--gpus-per-rank <N>`: How many accelerators each worker may use (`0` for none) Default: `0`.

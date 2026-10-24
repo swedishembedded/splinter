@@ -289,6 +289,7 @@ fn plain_jobs_lists_its_subcommands_and_the_help_names_what_submit_takes() {
     let help = String::from_utf8(output.stdout).unwrap();
     for wanted in [
         "<PROGRAM ARG...>",
+        "--distributed",
         "--nodes <N>",
         "--ranks-per-node <N>",
         "--gpus-per-rank <N>",
