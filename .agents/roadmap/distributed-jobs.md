@@ -64,6 +64,34 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       launch without a supervised exit still reports no exit code rather than
       inventing one. Tests: `crates/sandbox/tests/jobs.rs` and the wall-clock
       case in `crates/splinter/tests/jobs_cli.rs`.
+- [x] **A completed job's outputs become artifacts and lineage.** On reconcile,
+      a clean exit reads the newest `commit-<8 digit step>.json` in the attempt
+      directory, verifies every file it names against the declared length and
+      SHA-256, keeps the bytes in the artifact store, and records one document
+      linking the job specification, the attempt, the step, the plan text, the
+      world size and each artifact's role, address and checksum. No manifest
+      leaves the job completed with no outputs; a malformed manifest, a missing
+      or altered file, or a path (or symlink) out of the attempt directory
+      fails the job instead. Registration is idempotent: an artifact is
+      addressed by its bytes and the document by its canonical form. Tests:
+      the module tests in `crates/store/src/job_outputs.rs` and
+      `crates/orchestrator/tests/controller.rs`.
+- [x] **The checkpoint contract is versioned and held to fixtures.** `JobPlan`
+      and `CheckpointManifest` (with `CheckpointFile`, `ManifestPath` and
+      `Sha256Sum`) refuse unknown fields, absolute or `..` paths, and
+      checksums that are not `sha256:<64 lowercase hex>`. The bytes a trainer
+      writes live in `crates/orchestrator/tests/fixtures/` and a test parses
+      both with the schemas, so a one-sided change fails.
+- [x] **A scheduler's terminal state reaches the controller.**
+      `Observation::Finished` carries `Completed`, `Failed`, `Cancelled`,
+      `Preempted` or `Lost` and an optional exit code. A local exit maps zero
+      to completed and nonzero to failed; Slurm maps COMPLETED, FAILED,
+      NODE_FAIL and TIMEOUT, CANCELLED and PREEMPTED to the matching outcome.
+      A preempted attempt retries only when `retry_on_preemption` is set and
+      attempts remain; cancellation is terminal and only a completed outcome
+      completes the job. Tests: `crates/sandbox/tests/jobs.rs`,
+      `crates/sandbox/tests/slurm.rs` and
+      `crates/orchestrator/tests/controller.rs`.
 - [x] **A run that stopped heartbeating reads lost.** A recorded run writes
       append-only heartbeat signals while its process is alive; a reader
       reports `lost` once the newest is older than the stale bound, and a run
@@ -84,8 +112,8 @@ Scope: Submitting work that runs outside the controller and reconciling it after
 
 ## Open
 
-- [ ] No scheduler adapter. Slurm and Kubernetes implement the same
-      `JobLauncher` trait; nothing in the controller names either.
+- [ ] No Kubernetes adapter. Slurm implements the same `JobLauncher` trait
+      and nothing in the controller names either scheduler.
 - [ ] No pipeline stage runs a training job through the controller. The train
       stage still calls brain in-process, and brain's training verbs do not
       accept a job plan yet.
