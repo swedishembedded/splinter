@@ -28,13 +28,22 @@ fn estimate(label: &str, e: &splinter_sdk::measure::competence::Estimate) -> Str
     }
 }
 
+/// `pass@1 15/46`: the attempts that verified, over every attempt the arm made. This is the
+/// number a regression shows up in when a candidate turns correct fixes into plausible ones:
+/// an exposed attempt has no verdict, so the paired test and `Q` (verified over *graded*
+/// attempts) both leave it out, and instead read such a candidate as a tie.
+fn pass_at_one(verified: usize, attempts: usize) -> String {
+    format!("pass@1 {verified}/{attempts}")
+}
+
 fn arm_line(name: &str, arm: &ArmReport) -> String {
     format!(
-        "{name:<9} {} graded of {} ({} exposed, {} harness-failed)  {}  {}\n",
+        "{name:<9} {} graded of {} ({} exposed, {} harness-failed)  {}  {}  {}\n",
         arm.graded,
         arm.attempts,
         arm.exposed,
         arm.harness_failed,
+        pass_at_one(arm.competence.counts.verified, arm.attempts),
         estimate("Q", &arm.competence.quality),
         estimate("A", &arm.competence.autonomy),
     )
@@ -115,5 +124,18 @@ impl Report for SetComparison {
             );
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pass_at_one;
+
+    /// The reading that made finding 096 visible: an arm that verified 15 of 46 attempts reads
+    /// as `pass@1 15/46`, whatever the paired test does with the other 31.
+    #[test]
+    fn pass_at_one_counts_every_attempt_not_only_the_graded_ones() {
+        assert_eq!(pass_at_one(15, 46), "pass@1 15/46");
+        assert_eq!(pass_at_one(0, 0), "pass@1 0/0");
     }
 }
