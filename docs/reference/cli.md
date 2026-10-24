@@ -17,6 +17,11 @@ Every command takes these.
 - `--state <DIR>`: The state root (default: ~/.splinter)
 - `--job-owner <NAME>`: The controller name recorded with each job this process submits and the claim it takes on one (default: this machine's host name)
 - `--job-attempt-root <DIR>`: Where a submitted job's attempt directories are written (default: `jobs` under the state root)
+- `--job-launcher <KIND>`: How each submitted job's workers are started: `local` runs them on this machine, `slurm` submits the job to Slurm's batch system (default: `local`)
+- `--slurm-sbatch <PATH>`: The `sbatch` program a `slurm` job is submitted with; required when `--job-launcher slurm` is given.
+- `--slurm-squeue <PATH>`: The `squeue` program that reports a `slurm` job's state; required when `--job-launcher slurm` is given.
+- `--slurm-scancel <PATH>`: The `scancel` program that stops a `slurm` job; required when `--job-launcher slurm` is given.
+- `--slurm-arg <ARG>...`: An argument every `slurm` submission passes to `sbatch` before the script (for example `--partition=debug`); repeat for more.
 - `--models-dir <DIR>`: brain's model store, where `local:<org>/<model>` names a checkpoint (default: the store `brain pull` fills)
 - `--policy-base <CHECKPOINT>`: The checkpoint the policy trains and `policy:default` serves: a path, or a name in the model store (default: Qwen/Qwen3-0.6B)
 - `--brain-bin <PATH>`: The `brain` executable a release is checked to serve on (default: the first `brain` on PATH)

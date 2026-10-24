@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use clap::{ArgAction, Args};
-use splinter_sdk::config::{DEFAULT_REMOTE_CONCURRENCY, DEFAULT_SOLVE_DEADLINE};
+use splinter_sdk::config::{LauncherKind, DEFAULT_REMOTE_CONCURRENCY, DEFAULT_SOLVE_DEADLINE};
 use splinter_sdk::vocabulary::prompt::CodingPrompt;
 
 /// Flags every command takes, meaning the same everywhere.
@@ -27,6 +27,32 @@ pub struct Global {
     /// `jobs` under the state root).
     #[arg(long, global = true, value_name = "DIR")]
     pub job_attempt_root: Option<PathBuf>,
+    /// How each submitted job's workers are started: `local` runs them on
+    /// this machine, `slurm` submits the job to Slurm's batch system (default:
+    /// `local`).
+    #[arg(long, global = true, value_name = "KIND", value_parser = launcher_kind)]
+    pub job_launcher: Option<LauncherKind>,
+    /// The `sbatch` program a `slurm` job is submitted with; required when
+    /// `--job-launcher slurm` is given.
+    #[arg(long, global = true, value_name = "PATH")]
+    pub slurm_sbatch: Option<PathBuf>,
+    /// The `squeue` program that reports a `slurm` job's state; required when
+    /// `--job-launcher slurm` is given.
+    #[arg(long, global = true, value_name = "PATH")]
+    pub slurm_squeue: Option<PathBuf>,
+    /// The `scancel` program that stops a `slurm` job; required when
+    /// `--job-launcher slurm` is given.
+    #[arg(long, global = true, value_name = "PATH")]
+    pub slurm_scancel: Option<PathBuf>,
+    /// An argument every `slurm` submission passes to `sbatch` before the
+    /// script (for example `--partition=debug`); repeat for more.
+    #[arg(
+        long = "slurm-arg",
+        global = true,
+        value_name = "ARG",
+        allow_hyphen_values = true
+    )]
+    pub slurm_arg: Vec<String>,
     /// brain's model store, where `local:<org>/<model>` names a checkpoint
     /// (default: the store `brain pull` fills).
     #[arg(long, global = true, value_name = "DIR")]
@@ -204,6 +230,10 @@ pub struct Global {
     /// attempt.
     #[arg(long, global = true, value_name = "ID", value_parser = coding_prompt)]
     pub coding_prompt: Option<CodingPrompt>,
+}
+
+fn launcher_kind(name: &str) -> Result<LauncherKind, String> {
+    LauncherKind::parse(name).map_err(|error| error.to_string())
 }
 
 fn coding_prompt(id: &str) -> Result<CodingPrompt, String> {

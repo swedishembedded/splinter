@@ -22,8 +22,17 @@ maintenance are in [Storage](../reference/storage.md).
 `--job-owner NAME` is the controller name recorded with each job this process
 submits and with the claim it takes on one (default: this machine's host name).
 `--job-attempt-root DIR` writes a job's attempt directories under `DIR`
-(default: `jobs` under the state root). Both are flags; the environment is not
-read.
+(default: `jobs` under the state root).
+
+`--job-launcher KIND` selects what starts a job's workers. `local` (the
+default) runs every rank as a detached process on this machine. `slurm`
+submits the job to Slurm's batch system, which needs `--slurm-sbatch PATH`,
+`--slurm-squeue PATH` and `--slurm-scancel PATH`: the programs that submit a
+job, report its state and stop it. `--slurm-arg ARG` passes an argument to
+every submission before the batch script, for a partition or an account, and
+repeats for more than one. Every one is a flag; the environment is not read,
+and a program the Slurm launcher needs but does not have is refused by name
+before anything is submitted.
 
 ## Machine and models
 

@@ -20,7 +20,7 @@ use splinter_pipelines::acquire::{acquire, AcquireReport, AcquireRequest};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
 use splinter_pipelines::train::{BrainTrainer, Trainer};
-use splinter_sandbox::job::LocalLauncher;
+use splinter_sandbox::job::JobLauncher;
 
 /// Receives each stage's summary as it finishes: `(stage, summary)`.
 pub type Progress = Arc<dyn Fn(&str, &serde_json::Value) + Send + Sync>;
@@ -30,6 +30,9 @@ pub struct Splinter {
     runtime: Arc<Runtime>,
     trainer: Arc<dyn Trainer + Send + Sync>,
     progress: Option<Progress>,
+    /// The launcher the configuration selects, built once with the handle so
+    /// a misconfigured launcher is refused before a command runs.
+    jobs_launcher: Box<dyn JobLauncher>,
 }
 
 /// How a [`Splinter`] is put together.
@@ -62,12 +65,15 @@ impl SplinterBuilder {
         self
     }
 
-    /// The handle, with its runtime started.
+    /// The handle, with its runtime started and the configured job launcher
+    /// built.
     pub fn build(self) -> Result<Splinter, OrchestratorError> {
+        let jobs_launcher = splinter_orchestrator::launcher::launcher(&self.config.jobs)?;
         Ok(Splinter {
             runtime: Arc::new(Runtime::new(self.config, self.allow_remote)?),
             trainer: self.trainer,
             progress: self.progress,
+            jobs_launcher,
         })
     }
 }
@@ -107,14 +113,10 @@ impl Splinter {
     #[must_use]
     pub fn jobs(&self) -> Jobs<'_> {
         let config = self.runtime.config();
-        let launcher = match &config.jobs.supervisor {
-            Some(supervisor) => LocalLauncher::supervised(supervisor.clone()),
-            None => LocalLauncher::default(),
-        };
         Jobs::new(
             self.runtime.workspace(),
             self.runtime.clock(),
-            launcher,
+            self.jobs_launcher.as_ref(),
             config.jobs.attempt_root(&config.state_root),
             config.jobs.owner.clone(),
         )

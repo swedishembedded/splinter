@@ -40,6 +40,35 @@ fn the_remote_knobs_are_global_flags_and_bounded() {
 }
 
 #[test]
+fn the_job_launcher_is_a_global_flag_of_the_configured_kinds() {
+    use splinter_sdk::config::LauncherKind;
+
+    let cli = parse(&["--job-launcher", "slurm", "status"]).unwrap();
+    assert_eq!(cli.global.job_launcher, Some(LauncherKind::Slurm));
+    assert_eq!(parse(&["status"]).unwrap().global.job_launcher, None);
+    assert!(parse(&["--job-launcher", "kubernetes", "status"]).is_err());
+
+    let cli = parse(&[
+        "--slurm-sbatch",
+        "/sl/sbatch",
+        "--slurm-squeue",
+        "/sl/squeue",
+        "--slurm-scancel",
+        "/sl/scancel",
+        "--slurm-arg",
+        "--partition=debug",
+        "--slurm-arg",
+        "--account=abc",
+        "status",
+    ])
+    .unwrap();
+    assert_eq!(cli.global.slurm_sbatch, Some("/sl/sbatch".into()));
+    assert_eq!(cli.global.slurm_squeue, Some("/sl/squeue".into()));
+    assert_eq!(cli.global.slurm_scancel, Some("/sl/scancel".into()));
+    assert_eq!(cli.global.slurm_arg, ["--partition=debug", "--account=abc"]);
+}
+
+#[test]
 fn train_takes_a_positive_max_block() {
     match command(&["train", "ds1", "--max-block", "8192"]) {
         Command::Train(args) => assert_eq!(args.max_block, Some(8192)),

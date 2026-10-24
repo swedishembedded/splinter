@@ -23,7 +23,7 @@ use splinter_core::clock::Clock;
 use splinter_core::digest::Digest;
 use splinter_core::job::JobSpec;
 use splinter_orchestrator::jobs::{JobController, Submission};
-use splinter_sandbox::job::LocalLauncher;
+use splinter_sandbox::job::JobLauncher;
 use splinter_store::jobs::JobRecord;
 use splinter_store::workspace::Workspace;
 
@@ -56,19 +56,19 @@ pub struct JobView {
 pub struct Jobs<'a> {
     workspace: &'a Workspace,
     clock: &'a dyn Clock,
-    launcher: LocalLauncher,
+    launcher: &'a dyn JobLauncher,
     root: std::path::PathBuf,
     owner: String,
     lease_seconds: u64,
 }
 
 impl<'a> Jobs<'a> {
-    /// A handle over the runtime's state, launcher settings and controller
-    /// name.
+    /// A handle over the runtime's state, the configured launcher and the
+    /// controller name.
     pub(crate) fn new(
         workspace: &'a Workspace,
         clock: &'a dyn Clock,
-        launcher: LocalLauncher,
+        launcher: &'a dyn JobLauncher,
         root: std::path::PathBuf,
         owner: String,
     ) -> Jobs<'a> {
@@ -156,7 +156,7 @@ impl<'a> Jobs<'a> {
     fn controller(&self) -> JobController<'_> {
         JobController::new(
             self.workspace,
-            &self.launcher,
+            self.launcher,
             self.root.clone(),
             self.clock,
             &self.owner,

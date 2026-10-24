@@ -71,6 +71,19 @@ fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
     if let Some(root) = &global.job_attempt_root {
         config.jobs.attempt_root = Some(root.clone());
     }
+    if let Some(kind) = global.job_launcher {
+        config.jobs.launcher = kind;
+    }
+    if let Some(binary) = &global.slurm_sbatch {
+        config.jobs.slurm.sbatch = Some(binary.clone());
+    }
+    if let Some(binary) = &global.slurm_squeue {
+        config.jobs.slurm.squeue = Some(binary.clone());
+    }
+    if let Some(binary) = &global.slurm_scancel {
+        config.jobs.slurm.scancel = Some(binary.clone());
+    }
+    config.jobs.slurm.args.clone_from(&global.slurm_arg);
     // The binary supervises each worker it launches, so the worker's exit is
     // recorded where a later process reads it.
     config.jobs.supervisor = std::env::current_exe().ok();
@@ -162,8 +175,15 @@ fn main() -> ExitCode {
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,
         Err(e) => {
+            // A configuration the command cannot run with is a refusal: it
+            // stopped before any work began.
+            let exit = if e.is_refusal() {
+                session::Exit::Refused
+            } else {
+                session::Exit::Failed
+            };
             output::error(cli.global.json, &e);
-            return session::Exit::Failed.into();
+            return exit.into();
         }
     };
     let exit = match (cli.command, cli.sentence) {
