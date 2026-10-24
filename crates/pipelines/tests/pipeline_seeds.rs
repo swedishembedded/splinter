@@ -134,6 +134,7 @@ fn a_mixed_dataset_records_the_seed_that_picked_its_subjects_and_rebuilds_from_i
                 voice: VoiceBuild::default(),
                 max_block: None,
                 pack: false,
+                split_over_block: false,
                 control: Default::default(),
                 serialise_calls: false,
             },

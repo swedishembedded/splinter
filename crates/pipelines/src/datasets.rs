@@ -73,6 +73,12 @@ pub struct BuildRequest {
     /// counted as [`Exclusion::OverBlock`] instead of being refused in the
     /// middle of a run. `None` keeps every record.
     pub max_block: Option<usize>,
+    /// Split a chat record longer than `max_block` into consecutive windows
+    /// that each fit ([`Projection::split_over_block`]) instead of leaving it
+    /// out: every window repeats the instruction and keeps each supervised
+    /// turn exactly once. Meaningless without `max_block`, which leaves the
+    /// records unbounded.
+    pub split_over_block: bool,
     /// For the sft-step view: one record per trajectory with every admitted
     /// action supervised ([`SftStep::packed`]), not one record per action.
     pub pack: bool,
@@ -410,7 +416,7 @@ fn project_without(
             .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
     }
     if let Some(max_block) = request.max_block {
-        projection = within_policy_block(ctx, projection, max_block);
+        projection = within_policy_block(ctx, projection, max_block, request.split_over_block);
     }
     if let Some(passages) = passages {
         projection = with_passages(
@@ -428,18 +434,30 @@ fn project_without(
 /// `projection` without the records longer than `max_block` of the policy's
 /// own tokens, as the record's text and tool schemas are measured (the
 /// tokenizer's, else a character ratio that holds for text that tokenizes
-/// badly). The chat template's markup is not measured, so the bound is a
-/// floor on what the trainer will refuse, not the trainer's own check.
-fn within_policy_block(ctx: &Context, projection: Projection, max_block: usize) -> Projection {
+/// badly); with `split`, a longer chat record is split into windows that fit
+/// ([`Projection::split_over_block`]) instead of left out. The chat
+/// template's markup is not measured, so the bound is a floor on what the
+/// trainer will refuse, not the trainer's own check.
+fn within_policy_block(
+    ctx: &Context,
+    projection: Projection,
+    max_block: usize,
+    split: bool,
+) -> Projection {
     let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
     let tokens = |text: &str| {
         counter
             .as_ref()
             .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
     };
-    projection.within_block(max_block, &|record| {
+    let size = |record: &splinter_data::Record| {
         tokens(&serde_json::to_string(&record.body).unwrap_or_default())
-    })
+    };
+    if split {
+        projection.split_over_block(max_block, &size)
+    } else {
+        projection.within_block(max_block, &size)
+    }
 }
 
 /// The terms a dataset made from `sources` comes under: the most restrictive

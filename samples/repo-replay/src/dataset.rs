@@ -169,6 +169,7 @@ pub fn build_dataset(ctx: &Context, sets: &[String], settings: &DatasetSettings)
         limit: None,
         voice: Default::default(),
         max_block: settings.max_block,
+        split_over_block: false,
         pack: true,
         control: Default::default(),
         serialise_calls: false,

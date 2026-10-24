@@ -81,6 +81,7 @@ pub(super) fn dataset_stage(
         voice: VoiceBuild::default(),
         max_block: None,
         pack: false,
+        split_over_block: false,
         control: Default::default(),
         serialise_calls: false,
     };
