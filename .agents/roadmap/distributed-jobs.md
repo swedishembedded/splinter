@@ -116,9 +116,9 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       (`--job-launcher slurm` with `--slurm-sbatch/-squeue/-scancel` and
       repeatable `--slurm-arg`; the orchestrator factory names a missing
       program by its setting) and is tested end to end against stand-in
-      scheduler programs. A real cluster run is still unproven, and a
-      scheduler's FAILED/TIMEOUT/PREEMPTED states read as `Lost` until the
-      accounting path carries them.
+      scheduler programs. A real cluster run is still unproven; the adapter
+      maps the scheduler's terminal states to distinct outcomes, and job
+      accounting (exit codes from a scheduler) is not wired yet.
 - [ ] No pipeline stage runs a training job through the controller. The train
       stage still calls brain in-process. Brain's GPT trainer does accept a
       plan now (`--job-plan`/`--job-rank`); the Qwen/LoRA trainer does not yet.
