@@ -57,6 +57,9 @@ const INTENT_FILE: &str = "launch.intent";
 #[path = "job_slurm.rs"]
 mod slurm;
 
+#[path = "job_plan.rs"]
+mod plan;
+
 pub use slurm::{SlurmLauncher, SlurmState};
 
 /// The first argument of a process the local launcher starts to supervise one
@@ -566,7 +569,10 @@ fn claim_attempt(spec: &JobSpec, attempt: u32, dir: &Path) -> Result<(), JobErro
         Ok(mut file) => {
             let body = format!("{}\n{}\n", spec.digest().as_str(), attempt);
             file.write_all(body.as_bytes())
-                .map_err(|e| JobError::io(format!("writing {}", intent.display()), e))
+                .map_err(|e| JobError::io(format!("writing {}", intent.display()), e))?;
+            // The plan is part of what the attempt was launched under, so it is
+            // written before the claim is complete and before any worker starts.
+            plan::write(spec, dir)
         }
         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(JobError::AlreadyLaunched {
             dir: dir.to_path_buf(),

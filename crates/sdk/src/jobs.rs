@@ -172,7 +172,7 @@ fn names(spec: &Digest, id: &str) -> bool {
     if text == id {
         return true;
     }
-    let hex = text.rsplit(':').next().unwrap_or(text);
+    let hex = spec.hex();
     let wanted = id.split_once(':').map_or(id, |(_, rest)| rest);
     !wanted.is_empty() && hex.starts_with(wanted)
 }

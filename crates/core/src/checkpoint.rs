@@ -22,6 +22,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::digest::Digest;
 
+/// The file a distributed job writes its plan to, in its attempt directory.
+pub const JOB_PLAN_FILE: &str = "job-plan.json";
+
 /// The plan a distributed trainer runs under, as its coordinator was told it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

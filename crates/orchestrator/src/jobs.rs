@@ -449,7 +449,8 @@ impl<'a> JobController<'a> {
     }
 
     fn attempt_dir(&self, spec: &Digest, attempt: u32) -> PathBuf {
-        let hex = spec.as_str().rsplit(':').next().unwrap_or(spec.as_str());
-        self.root.join(hex).join(format!("attempt-{attempt}"))
+        self.root
+            .join(spec.hex())
+            .join(format!("attempt-{attempt}"))
     }
 }

@@ -41,6 +41,18 @@ fn the_job_plan_the_trainer_reads_has_the_fields_splinter_links_against() {
 }
 
 #[test]
+fn the_plan_splinter_writes_is_the_trainer_fixture_byte_for_byte() {
+    // The same plan builder the launcher writes with, held to the bytes the
+    // trainer's own fixture carries.
+    let plan = splinter_core::job::PlanPolicy::default()
+        .plan("qwen-coding-v1", 2, "127.0.0.1:7000")
+        .unwrap();
+    let mut written = serde_json::to_vec(&plan).unwrap();
+    written.push(b'\n');
+    assert_eq!(written, fixture("job-plan.json"));
+}
+
+#[test]
 fn the_checkpoint_manifest_the_trainer_writes_names_each_artifact() {
     let manifest: CheckpointManifest =
         serde_json::from_slice(&fixture("checkpoint-commit.json")).unwrap();
