@@ -25,6 +25,13 @@ the bug in prose and never applies the patch. The aggregate is not a general los
 editing - both adapters edit 24 of 46 attempts - so what the full supervision cost is
 convergence on the hard tail, where most of a trajectory is exploration.
 
+The behaviour moves with the outcome, measured over all 46 attempts of each arm: the base
+edits a file in 24 attempts (52 %) and ends 13 (28 %) in a repetition abort; the
+full-supervision adapter edits in 24 (52 %) and aborts in 9 (20 %); the decisive-action
+adapter edits in **35 (76 %)** and aborts in **1 (2 %)**. Narrowing the supervision took the
+model from "edits as often as the base but stops converging" to "edits far more often and
+almost never loops".
+
 Caveats, stated so the number is not over-read: the decisive run trained with a splinter
 built from current main rather than the pinned revision, because a dataset carrying the new
 exclusion reason cannot be decoded by the older binary; 23 against the base's 21 is not
