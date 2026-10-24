@@ -49,6 +49,7 @@ pub mod decision;
 pub mod documents;
 pub mod error;
 pub mod experiences;
+pub mod job_outputs;
 pub mod jobs;
 pub mod jsonl;
 pub mod lineage;

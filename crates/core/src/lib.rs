@@ -28,6 +28,8 @@
 //! * [`annotation`] - what is said about an experience after the fact:
 //!   verdicts, step labels and relations. Never a rewrite of the experience.
 //!
+//! * [`checkpoint`] - the manifest a trainer publishes when it commits a
+//!   checkpoint, and the plan its run was launched under.
 //! * [`chat`] and [`prompt`] - the shapes a conversation is written in, and the
 //!   one system turn every model run on a task is sent.
 //! * [`evidence`] - how an executable verdict's evidence reads back.
@@ -66,6 +68,7 @@ pub mod annotation;
 pub mod baseline;
 pub mod build;
 pub mod chat;
+pub mod checkpoint;
 pub mod claim;
 pub mod clock;
 pub mod concurrency;

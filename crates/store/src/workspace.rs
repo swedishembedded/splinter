@@ -177,6 +177,13 @@ impl Workspace {
         &self.shared.root
     }
 
+    /// The state root this workspace keeps its database and files under, for a
+    /// store that lays out bulk files beside it.
+    #[must_use]
+    pub fn state_root(&self) -> &StateRoot {
+        &self.shared.root
+    }
+
     /// The database under `root`. Nothing is opened or created until the
     /// first read or write, so a command that only plans leaves the root
     /// untouched.

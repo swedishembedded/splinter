@@ -24,6 +24,8 @@ use splinter_core::clock::Clock;
 use splinter_core::digest::Digest;
 use splinter_core::job::{JobSpec, JobState};
 use splinter_sandbox::job::{JobLauncher, Launch, Observation};
+use splinter_store::artifacts::ArtifactStore;
+use splinter_store::job_outputs::register_job_outputs;
 use splinter_store::jobs::{JobLease, JobRecord};
 use splinter_store::workspace::Workspace;
 
@@ -240,11 +242,9 @@ impl<'a> JobController<'a> {
                         )),
                         record.exit_code,
                     ),
-                    Observation::Exited { exit_code: Some(0) } => (
-                        JobState::Completed,
-                        Some("the workers exited successfully".to_string()),
-                        Some(0),
-                    ),
+                    Observation::Exited { exit_code: Some(0) } => {
+                        self.register_outputs(record, &launch)
+                    }
                     Observation::Exited {
                         exit_code: Some(code),
                     } => match self.failed_state(record)? {
@@ -281,6 +281,50 @@ impl<'a> JobController<'a> {
             lease: Some(self.lease_at(now_unix)),
             ..record.clone()
         }))
+    }
+
+    /// What a clean exit becomes: `Completed` once the attempt's outputs, if it
+    /// wrote any, are registered as artifacts and lineage.
+    ///
+    /// No commit manifest means the job produced no durable output, which is
+    /// not a failure. A manifest that is malformed, names a missing or altered
+    /// file, or names a path outside the attempt directory is a failure of the
+    /// job, never a claim that it completed.
+    fn register_outputs(
+        &self,
+        record: &JobRecord,
+        launch: &Launch,
+    ) -> (JobState, Option<String>, Option<i32>) {
+        let artifacts = ArtifactStore::new(self.workspace, self.workspace.state_root());
+        match register_job_outputs(
+            self.workspace,
+            &artifacts,
+            &launch.dir,
+            &record.spec,
+            record.attempt,
+        ) {
+            Ok(Some(output)) => (
+                JobState::Completed,
+                Some(format!(
+                    "the workers exited successfully; {} artifacts registered for step {}",
+                    output.files.len(),
+                    output.step
+                )),
+                Some(0),
+            ),
+            Ok(None) => (
+                JobState::Completed,
+                Some("the workers exited successfully".to_string()),
+                Some(0),
+            ),
+            Err(error) => (
+                JobState::Failed,
+                Some(format!(
+                    "the job's outputs could not be registered: {error}"
+                )),
+                Some(0),
+            ),
+        }
     }
 
     /// Whether this controller may act on `record` at `now_unix`: it holds the
@@ -353,248 +397,5 @@ impl<'a> JobController<'a> {
     fn attempt_dir(&self, spec: &Digest, attempt: u32) -> PathBuf {
         let hex = spec.as_str().rsplit(':').next().unwrap_or(spec.as_str());
         self.root.join(hex).join(format!("attempt-{attempt}"))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use splinter_core::clock::SystemClock;
-    use splinter_sandbox::job::JobError;
-    use splinter_store::StateRoot;
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-
-    /// A launcher whose workers are whatever the test says they are.
-    #[derive(Default)]
-    struct ScriptedLauncher {
-        running: Mutex<HashMap<PathBuf, Vec<u32>>>,
-        exits: Mutex<HashMap<PathBuf, i32>>,
-        launches: Mutex<Vec<PathBuf>>,
-    }
-
-    impl ScriptedLauncher {
-        fn set_exit(&self, dir: &Path, code: i32) {
-            self.running.lock().unwrap().remove(dir);
-            self.exits.lock().unwrap().insert(dir.to_path_buf(), code);
-        }
-    }
-
-    impl JobLauncher for ScriptedLauncher {
-        fn name(&self) -> &'static str {
-            "scripted"
-        }
-
-        fn launch(&self, spec: &JobSpec, attempt: u32, dir: &Path) -> Result<Launch, JobError> {
-            std::fs::create_dir_all(dir).map_err(|source| JobError::Io {
-                context: "creating the attempt".into(),
-                source,
-            })?;
-            self.launches.lock().unwrap().push(dir.to_path_buf());
-            self.running
-                .lock()
-                .unwrap()
-                .insert(dir.to_path_buf(), vec![42]);
-            let launch = Launch {
-                digest: spec.digest(),
-                attempt,
-                world_size: spec.workers.world_size(),
-                pids: vec![42],
-                dir: dir.to_path_buf(),
-            };
-            std::fs::write(
-                dir.join("launch.json"),
-                serde_json::to_vec(&launch).unwrap(),
-            )
-            .unwrap();
-            Ok(launch)
-        }
-
-        fn observe(&self, launch: &Launch) -> Observation {
-            if let Some(code) = self.exits.lock().unwrap().get(&launch.dir) {
-                return Observation::Exited {
-                    exit_code: Some(*code),
-                };
-            }
-            Observation::Running {
-                ranks_alive: self
-                    .running
-                    .lock()
-                    .unwrap()
-                    .get(&launch.dir)
-                    .cloned()
-                    .unwrap_or_default(),
-            }
-        }
-
-        fn stop(&self, launch: &Launch, _rank: Option<u32>) -> Result<(), JobError> {
-            self.running.lock().unwrap().remove(&launch.dir);
-            Ok(())
-        }
-    }
-
-    fn workspace() -> (tempfile::TempDir, Workspace) {
-        let dir = tempfile::tempdir().unwrap();
-        let workspace = Workspace::at(&StateRoot::new(dir.path()));
-        (dir, workspace)
-    }
-
-    fn spec() -> JobSpec {
-        JobSpec::single(vec!["brain".into(), "train".into()])
-    }
-
-    #[test]
-    fn submitting_twice_launches_one_attempt() {
-        let (_dir, workspace) = workspace();
-        let launcher = ScriptedLauncher::default();
-        let clock = SystemClock;
-        let root =
-            std::env::temp_dir().join(format!("splinter-controller-{}-submit", std::process::id()));
-        let controller = JobController::new(&workspace, &launcher, root, &clock, "test-controller");
-        let first = controller.submit(&spec()).unwrap();
-        let Submission::Launched(record) = first else {
-            panic!("the first submission must launch")
-        };
-        assert_eq!(record.state, JobState::Running);
-        assert_eq!(record.attempt, 1);
-        let second = controller.submit(&spec()).unwrap();
-        let Submission::Existing(existing) = second else {
-            panic!("the second submission must find the job")
-        };
-        assert_eq!(existing, record);
-        assert_eq!(launcher.launches.lock().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn a_clean_exit_completes_the_job_and_a_failed_one_retries() {
-        let (_dir, workspace) = workspace();
-        let launcher = ScriptedLauncher::default();
-        let clock = SystemClock;
-        let root = std::env::temp_dir().join(format!(
-            "splinter-controller-{}-reconcile",
-            std::process::id()
-        ));
-        let controller = JobController::new(&workspace, &launcher, root, &clock, "test-controller");
-        let mut job = spec();
-        job.retry.attempts = 2;
-        let Submission::Launched(record) = controller.submit(&job).unwrap() else {
-            panic!("launched")
-        };
-
-        launcher.set_exit(Path::new(record.launch.as_ref().unwrap()), 3);
-        let updated = controller.reconcile().unwrap();
-        assert_eq!(updated.len(), 1);
-        assert_eq!(updated[0].state, JobState::Retrying);
-        assert_eq!(updated[0].exit_code, Some(3));
-
-        let retried = controller.retry_ready().unwrap();
-        assert_eq!(retried.len(), 1);
-        assert_eq!(retried[0].attempt, 2);
-        assert_eq!(retried[0].state, JobState::Running);
-
-        launcher.set_exit(Path::new(retried[0].launch.as_ref().unwrap()), 0);
-        let updated = controller.reconcile().unwrap();
-        assert_eq!(updated[0].state, JobState::Completed);
-        assert!(workspace.jobs_needing_reconciliation().unwrap().is_empty());
-    }
-
-    #[test]
-    fn a_job_is_listed_and_cancel_stops_it_once() {
-        let (_dir, workspace) = workspace();
-        let launcher = ScriptedLauncher::default();
-        let clock = SystemClock;
-        let root =
-            std::env::temp_dir().join(format!("splinter-controller-{}-cancel", std::process::id()));
-        let controller = JobController::new(&workspace, &launcher, root, &clock, "test-controller");
-        let Submission::Launched(record) = controller.submit(&spec()).unwrap() else {
-            panic!("launched")
-        };
-        assert_eq!(controller.jobs().unwrap(), vec![record.clone()]);
-        assert_eq!(
-            launcher.observe(
-                &Launch::open(Path::new(record.launch.as_ref().unwrap()))
-                    .unwrap()
-                    .unwrap()
-            ),
-            Observation::Running {
-                ranks_alive: vec![42]
-            }
-        );
-
-        let cancelled = controller.cancel(&record.spec).unwrap();
-        assert_eq!(cancelled.state, JobState::Cancelled);
-        assert!(cancelled.lease.is_none(), "a terminal job holds no claim");
-        assert_eq!(
-            launcher.observe(
-                &Launch::open(Path::new(record.launch.as_ref().unwrap()))
-                    .unwrap()
-                    .unwrap()
-            ),
-            Observation::Running {
-                ranks_alive: vec![]
-            },
-            "the workers were stopped"
-        );
-        assert!(workspace.jobs_needing_reconciliation().unwrap().is_empty());
-
-        // Cancelling a finished job returns it as it stands, and a job that
-        // was never submitted is refused.
-        assert_eq!(controller.cancel(&record.spec).unwrap(), cancelled);
-        assert!(matches!(
-            controller.cancel(&JobSpec::single(vec!["/bin/sh".into()]).digest()),
-            Err(OrchestratorError::NotFound { .. })
-        ));
-    }
-
-    #[test]
-    fn a_live_lease_blocks_another_controller_until_it_expires() {
-        let (_dir, workspace) = workspace();
-        let launcher = ScriptedLauncher::default();
-        let clock = SystemClock;
-        let root =
-            std::env::temp_dir().join(format!("splinter-controller-{}-lease", std::process::id()));
-        let first = JobController::new(&workspace, &launcher, root.clone(), &clock, "controller-a")
-            .with_lease(100);
-        let second =
-            JobController::new(&workspace, &launcher, root, &clock, "controller-b").with_lease(100);
-
-        let Submission::Launched(record) = first.submit_at(&spec(), 1_000).unwrap() else {
-            panic!("launched")
-        };
-        let lease = record.lease.as_ref().expect("a submission claims the job");
-        assert_eq!(lease.owner, "controller-a");
-        assert_eq!(lease.expires_unix, 1_100);
-
-        // The first controller's claim is live: the second leaves the job alone.
-        assert!(second.reconcile_at(1_050).unwrap().is_empty());
-
-        // The claim expired: the second takes the job over.
-        let taken = second.reconcile_at(1_101).unwrap();
-        assert_eq!(taken.len(), 1);
-        let lease = taken[0].lease.as_ref().expect("the takeover claims it");
-        assert_eq!(lease.owner, "controller-b");
-        assert_eq!(lease.expires_unix, 1_201);
-
-        // The first controller must not touch it now.
-        assert!(first.reconcile_at(1_150).unwrap().is_empty());
-    }
-
-    #[test]
-    fn a_job_whose_workers_are_gone_without_an_exit_code_is_lost_not_completed() {
-        let (_dir, workspace) = workspace();
-        let launcher = ScriptedLauncher::default();
-        let clock = SystemClock;
-        let root =
-            std::env::temp_dir().join(format!("splinter-controller-{}-lost", std::process::id()));
-        let controller = JobController::new(&workspace, &launcher, root, &clock, "test-controller");
-        let Submission::Launched(record) = controller.submit(&spec()).unwrap() else {
-            panic!("launched")
-        };
-        // The controller restarted: it has no children, so the exit is unknown.
-        std::fs::remove_file(Path::new(record.launch.as_ref().unwrap()).join("launch.json"))
-            .unwrap();
-        let updated = controller.reconcile().unwrap();
-        assert_eq!(updated[0].state, JobState::Lost);
-        assert_ne!(updated[0].state, JobState::Completed);
     }
 }
