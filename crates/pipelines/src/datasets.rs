@@ -88,6 +88,11 @@ pub struct BuildRequest {
     /// For the sft-step view: read a trajectory exported as one agent step as
     /// one tool call per turn ([`SftStep::serialise_calls`]).
     pub serialise_calls: bool,
+    /// For the sft-step view: keep only the actions whose tool calls are all
+    /// named here, plus every action that calls no tool (the final answer);
+    /// the rest become context and are counted as `ActionNotWanted`
+    /// ([`SftStep::only_actions`]).
+    pub only_actions: Option<Vec<String>>,
 }
 
 /// How the voice view writes the writer's text into records; the other
@@ -299,6 +304,7 @@ fn project_without(
             .packed(request.pack)
             .control(request.control)
             .serialise_calls(request.serialise_calls)
+            .only_actions(request.only_actions.clone().unwrap_or_default())
             .project(&corpus),
         ViewName::Critic => Critic::new(strength).with_strip(strip).project(&corpus),
         ViewName::Preference => Preference::new(strength).with_strip(strip).project(&corpus),

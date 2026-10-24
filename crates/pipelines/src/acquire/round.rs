@@ -238,6 +238,7 @@ impl Acquisition<'_> {
                 split_over_block: false,
                 control: Default::default(),
                 serialise_calls: false,
+                only_actions: None,
             },
         ) {
             Ok(built) => built,

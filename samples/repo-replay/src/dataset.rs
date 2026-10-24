@@ -173,6 +173,7 @@ pub fn build_dataset(ctx: &Context, sets: &[String], settings: &DatasetSettings)
         pack: true,
         control: Default::default(),
         serialise_calls: false,
+        only_actions: None,
     };
     Ok(build(ctx, &request)?)
 }

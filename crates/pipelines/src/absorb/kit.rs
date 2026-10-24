@@ -492,6 +492,7 @@ fn teach_records(
             split_over_block: false,
             control: Default::default(),
             serialise_calls: false,
+            only_actions: None,
         },
         None,
     )?;
