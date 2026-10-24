@@ -20,6 +20,8 @@
 //! * [`roles`] and [`model_ref`] - who plays each role, and what a model
 //!   reference resolves to under the configuration.
 //! * [`runs`] - the recorded run and its cross-process cancel.
+//! * [`jobs`] - the controller that submits, observes and reconciles jobs.
+//! * [`launcher`] - the launcher the job settings select.
 //! * [`pipeline`] - stages run in order over one state, each recorded.
 //! * [`generation`] - the generation a release belongs to, and a consolidated
 //!   checkpoint laid out as a base directory.
@@ -44,6 +46,7 @@ pub mod error;
 pub mod generation;
 pub mod ids;
 pub mod jobs;
+pub mod launcher;
 mod local_sampling;
 pub mod model_ref;
 pub mod pipeline;

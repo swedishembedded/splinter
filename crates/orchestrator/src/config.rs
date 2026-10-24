@@ -132,18 +132,83 @@ pub struct Config {
     pub build: BuildInfo,
 }
 
+/// What starts a job's workers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LauncherKind {
+    /// Every rank runs as a detached process on this machine.
+    #[default]
+    Local,
+    /// The job is submitted to Slurm's batch system.
+    Slurm,
+}
+
+impl LauncherKind {
+    /// The kind a setting names: `local` or `slurm`.
+    ///
+    /// An unknown name is refused by name, so a mistyped flag is reported
+    /// before anything is submitted.
+    pub fn parse(name: &str) -> Result<LauncherKind, LauncherKindError> {
+        match name.trim() {
+            "local" => Ok(LauncherKind::Local),
+            "slurm" => Ok(LauncherKind::Slurm),
+            unknown => Err(LauncherKindError {
+                name: unknown.to_string(),
+            }),
+        }
+    }
+
+    /// The name this kind is configured and recorded under.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LauncherKind::Local => "local",
+            LauncherKind::Slurm => "slurm",
+        }
+    }
+}
+
+/// A launcher kind the configuration does not have.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("unknown job launcher {name:?}: the kinds are `local` and `slurm`")]
+pub struct LauncherKindError {
+    /// The name that was given.
+    pub name: String,
+}
+
+/// What a job is submitted to when [`LauncherKind::Slurm`] is selected: the
+/// scheduler's programs, and any arguments every submission passes.
+///
+/// The programs are values, never the process environment, so a test can
+/// point the launcher at stand-in programs. A path is required for each: a
+/// missing one is refused by name when the launcher is built, rather than
+/// failing a submission later. `sbatch` receives [`SlurmSettings::args`] before
+/// its own arguments, for a partition or an account.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SlurmSettings {
+    /// The `sbatch` program that submits a job.
+    pub sbatch: Option<PathBuf>,
+    /// The `squeue` program that reports a job's state.
+    pub squeue: Option<PathBuf>,
+    /// The `scancel` program that stops a job.
+    pub scancel: Option<PathBuf>,
+    /// Arguments every `sbatch` submission passes before the script.
+    pub args: Vec<String>,
+}
+
 /// How a process submits work that runs outside it: who the controller says it
-/// is, where each attempt's directory is written, and the program that runs a
-/// worker and records its exit.
+/// is, where each attempt's directory is written, the program that runs a
+/// worker and records its exit, and what starts the workers.
 ///
 /// The owner names the controller on every submission and every lease it
 /// takes, so two controllers can be told apart. It defaults to the machine's
-/// host name. The attempt root defaults to `jobs` under the state root; a
-/// scheduler-backed launcher needs no attempt directory of its own, but the
-/// local one writes each attempt there. The supervisor is the executable that
-/// understands the supervisor protocol; the command line sets it to itself, and
-/// a caller that leaves it unset launches workers directly, so their exit is
-/// known only while the submitting process lives.
+/// host name. The attempt root defaults to `jobs` under the state root; the
+/// local launcher writes each attempt there, and the Slurm launcher keeps each
+/// attempt's batch script and scheduler job id there. The supervisor is the
+/// executable that understands the supervisor protocol; the command line sets
+/// it to itself, and a caller that leaves it unset launches workers directly,
+/// so their exit is known only while the submitting process lives. The launcher
+/// kind decides what starts the workers: this machine by default, or Slurm with
+/// [`JobSettings::slurm`] set.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobSettings {
     /// The controller's name, recorded with every job it submits.
@@ -154,6 +219,11 @@ pub struct JobSettings {
     /// The executable that runs a worker and records its exit; `None` starts
     /// workers directly.
     pub supervisor: Option<PathBuf>,
+    /// What starts a job's workers.
+    pub launcher: LauncherKind,
+    /// The Slurm programs, used when [`JobSettings::launcher`] is
+    /// [`LauncherKind::Slurm`].
+    pub slurm: SlurmSettings,
 }
 
 impl Default for JobSettings {
@@ -162,6 +232,8 @@ impl Default for JobSettings {
             owner: default_owner(),
             attempt_root: None,
             supervisor: None,
+            launcher: LauncherKind::Local,
+            slurm: SlurmSettings::default(),
         }
     }
 }
@@ -365,5 +437,38 @@ fn is_executable(path: &Path) -> bool {
     #[cfg(not(unix))]
     {
         path.is_file()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_launcher_kind_is_parsed_by_name_and_an_unknown_one_is_refused() {
+        assert_eq!(LauncherKind::parse("local").unwrap(), LauncherKind::Local);
+        assert_eq!(LauncherKind::parse("slurm").unwrap(), LauncherKind::Slurm);
+        assert_eq!(LauncherKind::parse(" slurm ").unwrap(), LauncherKind::Slurm);
+        assert_eq!(LauncherKind::Local.as_str(), "local");
+        assert_eq!(LauncherKind::Slurm.as_str(), "slurm");
+
+        let error = LauncherKind::parse("kubernetes").unwrap_err();
+        assert_eq!(error.name, "kubernetes");
+        assert!(
+            error.to_string().contains("kubernetes"),
+            "the refusal names the value: {error}"
+        );
+        assert!(error.to_string().contains("`local` and `slurm`"), "{error}");
+    }
+
+    #[test]
+    fn jobs_are_launched_locally_until_a_slurm_configuration_is_given() {
+        let jobs = JobSettings::default();
+        assert_eq!(jobs.launcher, LauncherKind::Local);
+        assert_eq!(jobs.slurm, SlurmSettings::default());
+        assert_eq!(jobs.slurm.sbatch, None);
+        assert_eq!(jobs.slurm.squeue, None);
+        assert_eq!(jobs.slurm.scancel, None);
+        assert!(jobs.slurm.args.is_empty());
     }
 }

@@ -19,6 +19,8 @@ use splinter_store::experiences::StoreError;
 
 use splinter_core::model_ref::RefError;
 
+use crate::launcher::LauncherError;
+
 /// Why a command failed.
 #[derive(Debug, thiserror::Error)]
 pub enum OrchestratorError {
@@ -28,6 +30,9 @@ pub enum OrchestratorError {
     /// An argument is refused before anything runs.
     #[error("{0}")]
     Refused(String),
+    /// The configured job launcher cannot be built.
+    #[error(transparent)]
+    Launcher(#[from] LauncherError),
     /// No stored object of this kind has this id (or id prefix).
     #[error("no {what} {id} in the store")]
     NotFound {
@@ -137,6 +142,7 @@ impl OrchestratorError {
             self,
             Self::Ref(_)
                 | Self::Refused(_)
+                | Self::Launcher(_)
                 | Self::NotFound { .. }
                 | Self::AmbiguousId { .. }
                 | Self::AmbiguousArtifact { .. }
