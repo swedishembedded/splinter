@@ -1,0 +1,1 @@
+{"job":"qwen-coding-v1","world_size":2,"tp":1,"pp":1,"dp":2,"coordinator":"127.0.0.1:7000","handshake_timeout_ms":120000,"op_timeout_ms":600000}
