@@ -82,3 +82,4 @@ in the same commit.
 | [094](094-the-whole-command-memory-bound-changed-every-process-sandbox-environment-and-refused-every-stored-task.md) | The whole-command memory bound changed every process-sandbox environment and refused every stored task |
 | [095](095-a-packed-view-removed-every-trajectory-longer-than-its-block-and-the-survivors-taught-the-adapter-to-stop-early.md) | A packed view removed every trajectory longer than its block, and the survivors taught the adapter to stop early |
 | [096](096-the-paired-sign-test-excludes-exposed-attempts-so-a-regression-read-as-a-tie.md) | The paired sign test excludes exposed attempts, so a regression read as a near-tie |
+| [097](097-supervising-every-action-taught-the-exploration-and-the-fine-tune-fell-off-the-hard-tail.md) | Supervising every action taught the exploration, and the fine-tune fell off the hard tail |
