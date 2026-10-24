@@ -204,6 +204,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "5",
         "--max-block",
         "4096",
+        "--split-over-block",
         "--pack",
         "--control",
         "shuffled",
@@ -232,6 +233,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         export_only,
         limit,
         max_block,
+        split_over_block,
         pack,
         control,
         control_seed,
@@ -249,7 +251,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         (Some("The Writer"), Some(9000), Some(0.2))
     );
     assert!(describe_with.is_some());
-    assert!(pack && drop_leaking && serialise_calls);
+    assert!(pack && drop_leaking && serialise_calls && split_over_block);
     assert_eq!(sets.len(), 2);
     assert_eq!(view, ViewName::Preference);
     assert!(matches!(strip, Some(StripPolicy::Mix { .. })));

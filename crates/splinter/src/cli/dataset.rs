@@ -57,6 +57,11 @@ pub struct BuildArgs {
     /// stopping the training.
     #[arg(long, value_name = "TOKENS", value_parser = positive_count)]
     pub max_block: Option<usize>,
+    /// Split a record longer than `--max-block` into consecutive windows
+    /// that each fit, keeping every supervised action, instead of leaving
+    /// it out; every window repeats the task instruction.
+    #[arg(long)]
+    pub split_over_block: bool,
     /// For the sft-step view: one record per trajectory with every
     /// admitted action supervised, not one record per action.
     #[arg(long)]
