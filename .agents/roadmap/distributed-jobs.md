@@ -118,6 +118,19 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       `runs list` and `runs show` views apply it, and the storage reference
       documents the status.
 
+- [x] **A distributed Brain job is submitted with its plan.** `jobs submit
+      --distributed` writes `job-plan.json` into the attempt directory before
+      any worker starts (job id = the specification digest, world from the
+      worker plan, loopback coordinator per attempt), appends
+      `--job-plan`/`--job-rank`, and the launcher substitutes rank and world.
+      A real two-rank Qwen3-0.6B LoRA run on one machine completed exit 0 in
+      6.6 s from launch to record, with byte-identical adapters in `out0` and
+      `out1`, rank 0's step-2 commit found beside the nested model-store copy,
+      and the adapter registered as an artifact with a matching sha256
+      (10,140,344 bytes). Tests: plan fixture bytes, plan-written-before-ranks,
+      disjoint rank records, per-attempt retry, and a two-rank stand-in that
+      commits and registers.
+
 ## Decisions
 
 - The experience database and the artifact files stay the two authorities
