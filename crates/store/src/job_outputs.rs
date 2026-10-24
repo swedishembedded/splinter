@@ -142,38 +142,58 @@ fn io_error(path: &Path) -> impl FnOnce(io::Error) -> JobOutputError + '_ {
     }
 }
 
-/// The newest commit manifest in `dir`, with its step.
+/// How deep below the launch directory a commit manifest may sit. An artifact
+/// is often written into a store layout below the run directory (a model store
+/// with adapters), so the search follows directories but stays bounded and
+/// never follows a symbolic link out of the tree.
+const MANIFEST_DEPTH: usize = 8;
+
+/// The newest commit manifest at or below `dir`, with its step.
 ///
 /// Only `commit-<8 digit step>.json` is a manifest; a temporary file a job is
 /// still writing is ignored, so a commit is registered once it is complete.
+/// A manifest lives beside the files it names, so the files it lists are
+/// resolved against the manifest's own directory, not the launch directory.
 fn newest_manifest(dir: &Path) -> Result<Option<(u32, PathBuf)>, JobOutputError> {
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(source) => return Err(io_error(dir)(source)),
-    };
     let mut newest: Option<(u32, PathBuf)> = None;
-    for entry in entries {
-        let entry = entry.map_err(io_error(dir))?;
-        let name = entry.file_name();
-        let Some(name) = name.to_str() else { continue };
-        let Some(digits) = name
-            .strip_prefix("commit-")
-            .and_then(|rest| rest.strip_suffix(".json"))
-        else {
-            continue;
+    let mut pending = vec![(dir.to_path_buf(), 0usize)];
+    while let Some((current, depth)) = pending.pop() {
+        let entries = match fs::read_dir(&current) {
+            Ok(entries) => entries,
+            Err(source) if source.kind() == io::ErrorKind::NotFound => continue,
+            Err(source) => return Err(io_error(&current)(source)),
         };
-        if digits.len() != 8 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
-            continue;
-        }
-        let Ok(step) = digits.parse::<u32>() else {
-            continue;
-        };
-        if newest
-            .as_ref()
-            .is_none_or(|(newest_step, _)| step > *newest_step)
-        {
-            newest = Some((step, entry.path()));
+        for entry in entries {
+            let entry = entry.map_err(io_error(&current))?;
+            let file_type = entry.file_type().map_err(io_error(&current))?;
+            if file_type.is_dir() {
+                if depth < MANIFEST_DEPTH && !file_type.is_symlink() {
+                    pending.push((entry.path(), depth + 1));
+                }
+                continue;
+            }
+            if !file_type.is_file() {
+                continue;
+            }
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            let Some(digits) = name
+                .strip_prefix("commit-")
+                .and_then(|rest| rest.strip_suffix(".json"))
+            else {
+                continue;
+            };
+            if digits.len() != 8 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+                continue;
+            }
+            let Ok(step) = digits.parse::<u32>() else {
+                continue;
+            };
+            if newest.as_ref().is_none_or(|(newest_step, path)| {
+                step > *newest_step || (step == *newest_step && entry.path() < *path)
+            }) {
+                newest = Some((step, entry.path()));
+            }
         }
     }
     Ok(newest)
@@ -199,10 +219,13 @@ pub fn register_job_outputs(
     };
     let bytes = fs::read(&manifest_path).map_err(io_error(&manifest_path))?;
     let manifest = CheckpointManifest::parse(&bytes)?;
-    let base = fs::canonicalize(dir).map_err(io_error(dir))?;
+    // The manifest is the anchor: the files it lists sit beside it, wherever
+    // in the launch tree the artifact was written.
+    let manifest_dir = manifest_path.parent().unwrap_or(dir);
+    let base = fs::canonicalize(manifest_dir).map_err(io_error(manifest_dir))?;
     let mut files = Vec::with_capacity(manifest.files.len());
     for file in &manifest.files {
-        let source = dir.join(file.path.as_str());
+        let source = manifest_dir.join(file.path.as_str());
         // A relative path that carries no `..` still leaves the directory when
         // it is a symbolic link out of it.
         let resolved = fs::canonicalize(&source).map_err(io_error(&source))?;
@@ -477,5 +500,28 @@ mod tests {
     fn no_manifest_is_no_output() {
         let fixture = Fixture::new();
         assert!(fixture.register().unwrap().is_none());
+    }
+
+    #[test]
+    fn a_manifest_beside_a_nested_artifact_is_found_and_resolved_against_itself() {
+        let fixture = Fixture::new();
+        let dir = fixture
+            ._launch
+            .path()
+            .join("models/adapters/smoke/r/latest");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("adapter.bin"), b"nested").unwrap();
+        let sha = Digest::sha256_of(b"nested");
+        let text = format!(
+            r#"{{"job":"qwen-coding-v1","plan":{PLAN:?},"step":7,"world_size":2,"files":[{{"role":"adapter","path":"adapter.bin","len":6,"sha256":"{sha}"}}]}}"#
+        );
+        fs::write(dir.join("commit-00000007.json"), text).unwrap();
+        let output = fixture
+            .register()
+            .unwrap()
+            .expect("a nested commit is found");
+        assert_eq!(output.step, 7);
+        assert_eq!(output.files.len(), 1);
+        assert_eq!(output.files[0].role, "adapter");
     }
 }
