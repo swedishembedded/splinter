@@ -231,13 +231,16 @@ impl Launch {
     /// every rank, so a controller that restarted reads the same terminal
     /// state the submitting process would have. A launch whose workers were
     /// not supervised, or whose supervisor died before it could record the
-    /// exit, reports no exit code rather than inventing one.
+    /// exit, reports no exit code rather than inventing one, and its outcome
+    /// is [`JobOutcome::Lost`].
     #[must_use]
     pub fn observe(&self) -> Observation {
         let alive = self.ranks_alive();
         if alive.is_empty() {
-            Observation::Exited {
-                exit_code: self.recorded_exit(),
+            let exit_code = self.recorded_exit();
+            Observation::Finished {
+                outcome: outcome_of(exit_code),
+                exit_code,
             }
         } else {
             Observation::Running { ranks_alive: alive }
@@ -314,13 +317,44 @@ pub enum Observation {
         /// The ranks still alive.
         ranks_alive: Vec<u32>,
     },
-    /// No worker is alive.
-    Exited {
-        /// The exit code, when the observing process started the workers and
-        /// saw one; `None` after a controller restart, where only the durable
-        /// job record can say what the run proved.
+    /// No worker is alive, and the launcher says how the attempt ended.
+    Finished {
+        /// What the launcher observed.
+        outcome: JobOutcome,
+        /// The exit code, when the launcher saw one; `None` when a scheduler
+        /// does not carry one or a controller restart cannot recover it.
         exit_code: Option<i32>,
     },
+}
+
+/// How an attempt ended, as its launcher reports it.
+///
+/// A scheduler distinguishes outcomes a process exit code cannot: it may take
+/// a job back for higher-priority work, fail the node it ran on, or cancel it
+/// on request. The controller decides from these whether an attempt may be
+/// retried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JobOutcome {
+    /// Every worker ended with a zero exit.
+    Completed,
+    /// A worker failed, or the job could not run.
+    Failed,
+    /// Stopped by a cancel request.
+    Cancelled,
+    /// Taken back by the scheduler for other work.
+    Preempted,
+    /// The workers are gone and no exit or scheduler state says how.
+    Lost,
+}
+
+/// The outcome an observed exit code implies: zero completed, nonzero failed,
+/// and an unknown exit is lost rather than a claim of success.
+fn outcome_of(exit_code: Option<i32>) -> JobOutcome {
+    match exit_code {
+        Some(0) => JobOutcome::Completed,
+        Some(_) => JobOutcome::Failed,
+        None => JobOutcome::Lost,
+    }
 }
 
 /// Where a job runs. One implementation starts child processes; a scheduler's
@@ -492,8 +526,10 @@ impl JobLauncher for LocalLauncher {
                     // A supervisor's record is what the worker ended with; a
                     // child killed with its group reports no code to this
                     // process.
-                    return Observation::Exited {
-                        exit_code: launch.recorded_exit().or(exit),
+                    let exit_code = launch.recorded_exit().or(exit);
+                    return Observation::Finished {
+                        outcome: outcome_of(exit_code),
+                        exit_code,
                     };
                 }
                 return Observation::Running { ranks_alive: alive };

@@ -25,7 +25,7 @@ use std::process::Command;
 
 use splinter_core::job::JobSpec;
 
-use super::{claim_attempt, write_launch, JobError, JobLauncher, Launch, Observation};
+use super::{claim_attempt, write_launch, JobError, JobLauncher, JobOutcome, Launch, Observation};
 
 /// The batch script written into the launch directory.
 const SCRIPT_FILE: &str = "job.sbatch";
@@ -79,9 +79,9 @@ impl SlurmState {
     ///
     /// A job still in the scheduler's hands reads as running - with no rank
     /// placed yet while it is pending - so a controller keeps reconciling it.
-    /// A job the scheduler finished reads as exited; only `COMPLETED` proves
-    /// the exit code, since the scheduler's state does not carry a code for
-    /// the others.
+    /// A job the scheduler finished reads as finished with an outcome; only
+    /// `COMPLETED` proves the exit code, since the scheduler's state does not
+    /// carry a code for the others.
     fn observation(self, world_size: u32) -> Observation {
         match self {
             SlurmState::Pending => Observation::Running {
@@ -90,12 +90,24 @@ impl SlurmState {
             SlurmState::Running | SlurmState::Completing => Observation::Running {
                 ranks_alive: (0..world_size).collect(),
             },
-            SlurmState::Completed => Observation::Exited { exit_code: Some(0) },
-            SlurmState::Failed
-            | SlurmState::Cancelled
-            | SlurmState::Timeout
-            | SlurmState::Preempted
-            | SlurmState::NodeFail => Observation::Exited { exit_code: None },
+            SlurmState::Completed => Observation::Finished {
+                outcome: JobOutcome::Completed,
+                exit_code: Some(0),
+            },
+            SlurmState::Failed | SlurmState::Timeout | SlurmState::NodeFail => {
+                Observation::Finished {
+                    outcome: JobOutcome::Failed,
+                    exit_code: None,
+                }
+            }
+            SlurmState::Cancelled => Observation::Finished {
+                outcome: JobOutcome::Cancelled,
+                exit_code: None,
+            },
+            SlurmState::Preempted => Observation::Finished {
+                outcome: JobOutcome::Preempted,
+                exit_code: None,
+            },
         }
     }
 }
@@ -235,7 +247,10 @@ impl JobLauncher for SlurmLauncher {
         // that needs the reason calls `state`, whose error is typed.
         match self.state(launch) {
             Ok(state) => state.observation(launch.world_size),
-            Err(_) => Observation::Exited { exit_code: None },
+            Err(_) => Observation::Finished {
+                outcome: JobOutcome::Lost,
+                exit_code: None,
+            },
         }
     }
 

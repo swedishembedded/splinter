@@ -20,7 +20,7 @@ use splinter_core::clock::SystemClock;
 use splinter_core::job::{JobSpec, JobState};
 use splinter_orchestrator::jobs::{JobController, Submission};
 use splinter_orchestrator::OrchestratorError;
-use splinter_sandbox::job::{JobError, JobLauncher, Launch, Observation};
+use splinter_sandbox::job::{JobError, JobLauncher, JobOutcome, Launch, Observation};
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
@@ -28,14 +28,26 @@ use splinter_store::StateRoot;
 #[derive(Default)]
 struct ScriptedLauncher {
     running: Mutex<HashMap<PathBuf, Vec<u32>>>,
-    exits: Mutex<HashMap<PathBuf, i32>>,
+    finished: Mutex<HashMap<PathBuf, (JobOutcome, Option<i32>)>>,
     launches: Mutex<Vec<PathBuf>>,
 }
 
 impl ScriptedLauncher {
     fn set_exit(&self, dir: &Path, code: i32) {
+        let outcome = if code == 0 {
+            JobOutcome::Completed
+        } else {
+            JobOutcome::Failed
+        };
+        self.set_finished(dir, outcome, Some(code));
+    }
+
+    fn set_finished(&self, dir: &Path, outcome: JobOutcome, exit_code: Option<i32>) {
         self.running.lock().unwrap().remove(dir);
-        self.exits.lock().unwrap().insert(dir.to_path_buf(), code);
+        self.finished
+            .lock()
+            .unwrap()
+            .insert(dir.to_path_buf(), (outcome, exit_code));
     }
 }
 
@@ -70,9 +82,10 @@ impl JobLauncher for ScriptedLauncher {
     }
 
     fn observe(&self, launch: &Launch) -> Observation {
-        if let Some(code) = self.exits.lock().unwrap().get(&launch.dir) {
-            return Observation::Exited {
-                exit_code: Some(*code),
+        if let Some((outcome, exit_code)) = self.finished.lock().unwrap().get(&launch.dir) {
+            return Observation::Finished {
+                outcome: *outcome,
+                exit_code: *exit_code,
             };
         }
         Observation::Running {
@@ -155,6 +168,114 @@ fn a_clean_exit_completes_the_job_and_a_failed_one_retries() {
     let updated = controller.reconcile().unwrap();
     assert_eq!(updated[0].state, JobState::Completed);
     assert!(workspace.jobs_needing_reconciliation().unwrap().is_empty());
+}
+
+/// The state one reconcile gives a job whose launcher reports `outcome`.
+fn outcome_state(
+    outcome: JobOutcome,
+    exit_code: Option<i32>,
+    attempts: u32,
+    retry_on_preemption: bool,
+) -> (JobState, Option<i32>) {
+    let (_state, workspace) = workspace();
+    let launcher = ScriptedLauncher::default();
+    let clock = SystemClock;
+    let root = tempfile::tempdir().unwrap();
+    let controller = JobController::new(
+        &workspace,
+        &launcher,
+        root.path().to_path_buf(),
+        &clock,
+        "test",
+    );
+    let mut job = spec();
+    job.retry.attempts = attempts;
+    job.retry.retry_on_preemption = retry_on_preemption;
+    let Submission::Launched(record) = controller.submit(&job).unwrap() else {
+        panic!("launched")
+    };
+    launcher.set_finished(
+        Path::new(record.launch.as_ref().unwrap()),
+        outcome,
+        exit_code,
+    );
+    let updated = controller.reconcile().unwrap();
+    (updated[0].state, updated[0].exit_code)
+}
+
+#[test]
+fn each_outcome_maps_to_the_state_the_controller_states() {
+    assert_eq!(
+        outcome_state(JobOutcome::Completed, Some(0), 1, true),
+        (JobState::Completed, Some(0))
+    );
+    // The outcome decides, not the code: a launcher that says a job failed
+    // fails it even if it reports a zero exit.
+    assert_eq!(
+        outcome_state(JobOutcome::Failed, Some(0), 1, true),
+        (JobState::Failed, Some(0))
+    );
+    assert_eq!(
+        outcome_state(JobOutcome::Failed, Some(2), 1, true),
+        (JobState::Failed, Some(2))
+    );
+    // A cancel is terminal however many attempts remain.
+    assert_eq!(
+        outcome_state(JobOutcome::Cancelled, None, 5, true),
+        (JobState::Cancelled, None)
+    );
+    assert_eq!(
+        outcome_state(JobOutcome::Lost, None, 1, true),
+        (JobState::Lost, None)
+    );
+}
+
+#[test]
+fn a_preempted_attempt_retries_only_when_the_policy_allows() {
+    assert_eq!(
+        outcome_state(JobOutcome::Preempted, None, 2, true),
+        (JobState::Retrying, None)
+    );
+    assert_eq!(
+        outcome_state(JobOutcome::Preempted, None, 3, false),
+        (JobState::Failed, None)
+    );
+    assert_eq!(
+        outcome_state(JobOutcome::Preempted, None, 1, true),
+        (JobState::Failed, None)
+    );
+}
+
+#[test]
+fn a_retrying_preempted_job_launches_its_next_attempt() {
+    let (_state, workspace) = workspace();
+    let launcher = ScriptedLauncher::default();
+    let clock = SystemClock;
+    let root = tempfile::tempdir().unwrap();
+    let controller = JobController::new(
+        &workspace,
+        &launcher,
+        root.path().to_path_buf(),
+        &clock,
+        "test",
+    );
+    let mut job = spec();
+    job.retry.attempts = 2;
+    let Submission::Launched(record) = controller.submit(&job).unwrap() else {
+        panic!("launched")
+    };
+    launcher.set_finished(
+        Path::new(record.launch.as_ref().unwrap()),
+        JobOutcome::Preempted,
+        None,
+    );
+    let updated = controller.reconcile().unwrap();
+    assert_eq!(updated[0].state, JobState::Retrying);
+
+    let retried = controller.retry_ready().unwrap();
+    assert_eq!(retried.len(), 1);
+    assert_eq!(retried[0].attempt, 2);
+    assert_eq!(retried[0].state, JobState::Running);
 }
 
 /// Writes `name` in `dir` and the manifest entry naming it.

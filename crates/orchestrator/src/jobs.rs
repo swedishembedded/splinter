@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use splinter_core::clock::Clock;
 use splinter_core::digest::Digest;
 use splinter_core::job::{JobSpec, JobState};
-use splinter_sandbox::job::{JobLauncher, Launch, Observation};
+use splinter_sandbox::job::{JobLauncher, JobOutcome, Launch, Observation};
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::job_outputs::register_job_outputs;
 use splinter_store::jobs::{JobLease, JobRecord};
@@ -242,34 +242,9 @@ impl<'a> JobController<'a> {
                         )),
                         record.exit_code,
                     ),
-                    Observation::Exited { exit_code: Some(0) } => {
-                        self.register_outputs(record, &launch)
+                    Observation::Finished { outcome, exit_code } => {
+                        self.finished(record, &launch, outcome, exit_code)?
                     }
-                    Observation::Exited {
-                        exit_code: Some(code),
-                    } => match self.failed_state(record)? {
-                        JobState::Retrying => (
-                            JobState::Retrying,
-                            Some(format!(
-                                "attempt {} exited {code}; a retry is ready",
-                                record.attempt
-                            )),
-                            Some(code),
-                        ),
-                        state => (
-                            state,
-                            Some(format!("attempt {} exited {code}", record.attempt)),
-                            Some(code),
-                        ),
-                    },
-                    Observation::Exited { exit_code: None } => (
-                        JobState::Lost,
-                        Some(
-                            "the workers are gone and the observing process did not see their exit"
-                                .to_string(),
-                        ),
-                        record.exit_code,
-                    ),
                 },
             },
         };
@@ -283,8 +258,73 @@ impl<'a> JobController<'a> {
         }))
     }
 
-    /// What a clean exit becomes: `Completed` once the attempt's outputs, if it
-    /// wrote any, are registered as artifacts and lineage.
+    /// What a launcher's finished outcome becomes.
+    ///
+    /// Only a completed outcome may complete the job. A failed attempt retries
+    /// while the policy allows it, a preempted one only when the policy asks
+    /// for that, a cancelled one is terminal however many attempts remain, and
+    /// an outcome the launcher could not determine leaves the job lost rather
+    /// than a claim of success.
+    fn finished(
+        &self,
+        record: &JobRecord,
+        launch: &Launch,
+        outcome: JobOutcome,
+        exit_code: Option<i32>,
+    ) -> Result<(JobState, Option<String>, Option<i32>), OrchestratorError> {
+        Ok(match outcome {
+            JobOutcome::Completed => self.register_outputs(record, launch, exit_code),
+            JobOutcome::Failed => match self.failed_state(record)? {
+                JobState::Retrying => (
+                    JobState::Retrying,
+                    Some(format!(
+                        "attempt {} failed; a retry is ready",
+                        record.attempt
+                    )),
+                    exit_code,
+                ),
+                state => (
+                    state,
+                    Some(match exit_code {
+                        Some(code) => format!("attempt {} exited {code}", record.attempt),
+                        None => format!("attempt {} failed", record.attempt),
+                    }),
+                    exit_code,
+                ),
+            },
+            JobOutcome::Cancelled => (
+                JobState::Cancelled,
+                Some(format!("attempt {} was cancelled", record.attempt)),
+                exit_code,
+            ),
+            JobOutcome::Preempted => match self.preempted_state(record)? {
+                JobState::Retrying => (
+                    JobState::Retrying,
+                    Some(format!(
+                        "attempt {} was preempted; a retry is ready",
+                        record.attempt
+                    )),
+                    exit_code,
+                ),
+                state => (
+                    state,
+                    Some(format!("attempt {} was preempted", record.attempt)),
+                    exit_code,
+                ),
+            },
+            JobOutcome::Lost => (
+                JobState::Lost,
+                Some(
+                    "the workers are gone and no exit or scheduler state says how they ended"
+                        .to_string(),
+                ),
+                exit_code.or(record.exit_code),
+            ),
+        })
+    }
+
+    /// What a clean finish becomes: `Completed` once the attempt's outputs, if
+    /// it wrote any, are registered as artifacts and lineage.
     ///
     /// No commit manifest means the job produced no durable output, which is
     /// not a failure. A manifest that is malformed, names a missing or altered
@@ -294,6 +334,7 @@ impl<'a> JobController<'a> {
         &self,
         record: &JobRecord,
         launch: &Launch,
+        exit_code: Option<i32>,
     ) -> (JobState, Option<String>, Option<i32>) {
         let artifacts = ArtifactStore::new(self.workspace, self.workspace.state_root());
         match register_job_outputs(
@@ -310,21 +351,34 @@ impl<'a> JobController<'a> {
                     output.files.len(),
                     output.step
                 )),
-                Some(0),
+                exit_code,
             ),
             Ok(None) => (
                 JobState::Completed,
                 Some("the workers exited successfully".to_string()),
-                Some(0),
+                exit_code,
             ),
             Err(error) => (
                 JobState::Failed,
                 Some(format!(
                     "the job's outputs could not be registered: {error}"
                 )),
-                Some(0),
+                exit_code,
             ),
         }
+    }
+
+    /// What a preempted attempt becomes: `Retrying` when the policy retries
+    /// preemption and attempts remain, `Failed` otherwise.
+    fn preempted_state(&self, record: &JobRecord) -> Result<JobState, OrchestratorError> {
+        let retry = self.workspace.job_spec(&record.spec)?.is_some_and(|spec| {
+            spec.retry.retry_on_preemption && record.attempt < spec.retry.attempts
+        });
+        Ok(if retry {
+            JobState::Retrying
+        } else {
+            JobState::Failed
+        })
     }
 
     /// Whether this controller may act on `record` at `now_unix`: it holds the

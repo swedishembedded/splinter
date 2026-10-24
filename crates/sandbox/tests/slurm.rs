@@ -16,7 +16,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use splinter_core::job::{JobSpec, WorkerPlan};
-use splinter_sandbox::job::{JobLauncher, Launch, Observation, SlurmLauncher, SlurmState};
+use splinter_sandbox::job::{
+    JobLauncher, JobOutcome, Launch, Observation, SlurmLauncher, SlurmState,
+};
 
 fn write_program(path: &Path, body: &str) {
     std::fs::write(path, body).unwrap();
@@ -210,32 +212,50 @@ fn every_scheduler_state_maps_to_an_observation() {
         (
             "COMPLETED",
             SlurmState::Completed,
-            Observation::Exited { exit_code: Some(0) },
+            Observation::Finished {
+                outcome: JobOutcome::Completed,
+                exit_code: Some(0),
+            },
         ),
         (
             "FAILED",
             SlurmState::Failed,
-            Observation::Exited { exit_code: None },
+            Observation::Finished {
+                outcome: JobOutcome::Failed,
+                exit_code: None,
+            },
         ),
         (
             "CANCELLED",
             SlurmState::Cancelled,
-            Observation::Exited { exit_code: None },
+            Observation::Finished {
+                outcome: JobOutcome::Cancelled,
+                exit_code: None,
+            },
         ),
         (
             "TIMEOUT",
             SlurmState::Timeout,
-            Observation::Exited { exit_code: None },
+            Observation::Finished {
+                outcome: JobOutcome::Failed,
+                exit_code: None,
+            },
         ),
         (
             "PREEMPTED",
             SlurmState::Preempted,
-            Observation::Exited { exit_code: None },
+            Observation::Finished {
+                outcome: JobOutcome::Preempted,
+                exit_code: None,
+            },
         ),
         (
             "NODE_FAIL",
             SlurmState::NodeFail,
-            Observation::Exited { exit_code: None },
+            Observation::Finished {
+                outcome: JobOutcome::Failed,
+                exit_code: None,
+            },
         ),
     ];
     for (text, state, observation) in cases {
@@ -259,7 +279,10 @@ fn an_unknown_or_empty_state_is_not_a_guess() {
     assert!(error.to_string().contains("unknown job state"), "{error}");
     assert_eq!(
         launcher.observe(&launch),
-        Observation::Exited { exit_code: None }
+        Observation::Finished {
+            outcome: JobOutcome::Lost,
+            exit_code: None,
+        }
     );
 
     // A job the scheduler no longer lists has left the queue; the scheduler
@@ -272,7 +295,10 @@ fn an_unknown_or_empty_state_is_not_a_guess() {
     );
     assert_eq!(
         launcher.observe(&launch),
-        Observation::Exited { exit_code: None }
+        Observation::Finished {
+            outcome: JobOutcome::Lost,
+            exit_code: None,
+        }
     );
 }
 

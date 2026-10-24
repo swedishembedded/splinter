@@ -16,7 +16,8 @@ use std::time::{Duration, Instant};
 
 use splinter_core::job::{JobSpec, WorkerPlan};
 use splinter_sandbox::job::{
-    supervise, JobLauncher, Launch, LocalLauncher, Observation, SUPERVISOR_MARKER, TIMEOUT_EXIT,
+    supervise, JobLauncher, JobOutcome, Launch, LocalLauncher, Observation, SUPERVISOR_MARKER,
+    TIMEOUT_EXIT,
 };
 
 fn two_rank_spec() -> JobSpec {
@@ -94,7 +95,7 @@ fn a_two_rank_job_runs_as_separate_processes() {
     );
     guard.0.stop(None).unwrap();
     wait_until("both ranks exit", Duration::from_secs(10), || {
-        matches!(launcher.observe(&launch), Observation::Exited { .. })
+        matches!(launcher.observe(&launch), Observation::Finished { .. })
     });
 }
 
@@ -224,17 +225,23 @@ fn a_supervised_launch_reports_the_exit_the_supervisor_recorded() {
     spec.workers = WorkerPlan::default();
     let launch = launcher.launch(&spec, 1, dir.path()).expect("launch");
     wait_until("the worker exits", Duration::from_secs(10), || {
-        matches!(launcher.observe(&launch), Observation::Exited { .. })
+        matches!(launcher.observe(&launch), Observation::Finished { .. })
     });
     assert_eq!(
         launcher.observe(&launch),
-        Observation::Exited { exit_code: Some(5) }
+        Observation::Finished {
+            outcome: JobOutcome::Failed,
+            exit_code: Some(5),
+        }
     );
     // A controller that restarted holds no children and reads the same exit.
     let reopened = Launch::open(dir.path()).unwrap().unwrap();
     assert_eq!(
         reopened.observe(),
-        Observation::Exited { exit_code: Some(5) }
+        Observation::Finished {
+            outcome: JobOutcome::Failed,
+            exit_code: Some(5),
+        }
     );
 }
 
@@ -251,11 +258,20 @@ fn a_launch_without_a_recorded_exit_says_so_instead_of_inventing_one() {
     };
     assert_eq!(
         launch.observe(),
-        Observation::Exited { exit_code: None },
+        Observation::Finished {
+            outcome: JobOutcome::Lost,
+            exit_code: None,
+        },
         "no supervisor recorded an exit, so none is known"
     );
     std::fs::write(dir.path().join("rank-0.exit"), "3\n").unwrap();
-    assert_eq!(launch.observe(), Observation::Exited { exit_code: Some(3) });
+    assert_eq!(
+        launch.observe(),
+        Observation::Finished {
+            outcome: JobOutcome::Failed,
+            exit_code: Some(3),
+        }
+    );
 }
 
 #[test]
