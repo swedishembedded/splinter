@@ -1192,6 +1192,7 @@ Options:
 - `--export-only`: Write an objective brain cannot train in the export format.
 - `--limit <N>`: Keep at most this many records, evenly spread over the projection (for voice, over the parts of the sources)
 - `--max-block <TOKENS>`: The longest record, in tokens, the training that reads the dataset fits: a longer record is left out and counted instead of stopping the training.
+- `--split-over-block`: Split a record longer than `--max-block` into consecutive windows that each fit, keeping every supervised action, instead of leaving it out; every window repeats the task instruction.
 - `--pack`: For the sft-step view: one record per trajectory with every admitted action supervised, not one record per action.
 - `--control <CONTROL>`: For the sft-step view: build another dataset than the default. `outcome-verified` admits only experiences an independent verdict passed (the default also admits an action labelled good from one that was not verified or failed; the manifest records `outcome-verified`). The negative controls: `unverified` keeps trajectories whatever their verdict (never an exposed one); `shuffled` gives each verified trajectory the instruction of another task. Values: `outcome-verified`, `unverified`, `shuffled`.
 - `--control-seed <N>`: The seed of the `shuffled` pairing (drawn and printed when not given)
