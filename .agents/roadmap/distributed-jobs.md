@@ -112,11 +112,16 @@ Scope: Submitting work that runs outside the controller and reconciling it after
 
 ## Open
 
-- [ ] No Kubernetes adapter. Slurm implements the same `JobLauncher` trait
-      and nothing in the controller names either scheduler.
+- [ ] No Kubernetes adapter. Slurm is reachable without code changes now
+      (`--job-launcher slurm` with `--slurm-sbatch/-squeue/-scancel` and
+      repeatable `--slurm-arg`; the orchestrator factory names a missing
+      program by its setting) and is tested end to end against stand-in
+      scheduler programs. A real cluster run is still unproven, and a
+      scheduler's FAILED/TIMEOUT/PREEMPTED states read as `Lost` until the
+      accounting path carries them.
 - [ ] No pipeline stage runs a training job through the controller. The train
-      stage still calls brain in-process, and brain's training verbs do not
-      accept a job plan yet.
+      stage still calls brain in-process. Brain's GPT trainer does accept a
+      plan now (`--job-plan`/`--job-rank`); the Qwen/LoRA trainer does not yet.
 - [ ] Artifact storage backends. Adapters and datasets are plain files at a
       content address; a parallel filesystem works as it is, while an object
       store needs a fetch path brain can read (brain resolves a local path
