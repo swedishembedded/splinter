@@ -17,7 +17,10 @@
 //! * Every assistant turn is trimmed.
 //! * What cannot be trained on is left out and counted by reason: reasoning
 //!   markup in text, a compacted context, tool arguments that were not JSON,
-//!   and a record over the training block.
+//!   and a record over the training block (unless it is split into windows
+//!   that each fit, which keeps every supervised action).
+//! * A split window repeats the instruction, keeps an action with the tool
+//!   response it answers, and supervises each turn exactly once.
 //! * A workspace episode is not a closed-book final answer.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
@@ -102,6 +105,37 @@ fn step_records(experiences: Vec<Experience>) -> Projection {
     SftStep::new(Strength::Executable)
         .project(&corpus_of(experiences))
         .unwrap()
+}
+
+fn packed_step_records(experiences: Vec<Experience>) -> Projection {
+    SftStep::new(Strength::Executable)
+        .packed(true)
+        .project(&corpus_of(experiences))
+        .unwrap()
+}
+
+/// The bound these split specs measure a record by: its text and the tools it
+/// was offered.
+fn record_size(record: &Record) -> usize {
+    let (messages, tools) = parts(record);
+    messages.iter().map(|m| m.content.len()).sum::<usize>() + tools.len() * 100
+}
+
+/// The turns every window repeats: the leading ones up to the first user turn.
+fn instruction_prefix(record: &Record) -> Vec<WireMessage> {
+    let (messages, _) = parts(record);
+    let end = messages.iter().position(|m| m.role == "user").unwrap() + 1;
+    messages[..end].to_vec()
+}
+
+/// The contents of the supervised turns of `record`, in order.
+fn supervised_contents(record: &Record) -> Vec<String> {
+    parts(record)
+        .0
+        .iter()
+        .filter(|m| m.train)
+        .map(|m| m.content.clone())
+        .collect()
 }
 
 fn parts(record: &Record) -> (&[WireMessage], &[Value]) {
@@ -324,6 +358,91 @@ fn a_record_over_the_training_block_is_left_out_and_counted() {
     let unbounded = projection.within_block(usize::MAX, &size);
     assert_eq!(unbounded.records.len(), 5);
     assert_eq!(unbounded.count(Exclusion::OverBlock), 0);
+}
+
+#[test]
+fn an_over_block_packed_record_is_split_into_windows_that_each_fit() {
+    let projection = packed_step_records(vec![passed(
+        &workspace_task(),
+        two_feedback_rounds(),
+        offered(),
+        "2026-10-13T01:00:00.000Z",
+    )]);
+    assert_eq!(projection.records.len(), 1, "one record per trajectory");
+    let original = projection.records[0].clone();
+    let bound = record_size(&original) - 1;
+    assert!(
+        projection
+            .clone()
+            .within_block(bound, &record_size)
+            .records
+            .is_empty(),
+        "without the split the whole record is left out"
+    );
+
+    let split = projection.split_over_block(bound, &record_size);
+    assert!(split.records.len() > 1, "the record is split, not dropped");
+    assert_eq!(split.count(Exclusion::OverBlock), 0);
+    for record in &split.records {
+        assert!(record_size(record) <= bound, "every window fits the bound");
+    }
+
+    let prefix = instruction_prefix(&original);
+    let (_, tools) = parts(&original);
+    for record in &split.records {
+        let (messages, record_tools) = parts(record);
+        assert_eq!(
+            &messages[..prefix.len()],
+            &prefix[..],
+            "every window repeats the instruction"
+        );
+        assert_eq!(record_tools, tools);
+    }
+
+    let mut wanted = supervised_contents(&original);
+    let mut got: Vec<String> = split.records.iter().flat_map(supervised_contents).collect();
+    wanted.sort();
+    got.sort();
+    assert_eq!(got, wanted, "every supervised turn is kept exactly once");
+}
+
+#[test]
+fn an_indivisible_turn_too_large_for_the_block_is_dropped_and_counted() {
+    let huge = "x".repeat(2000);
+    let steps = vec![
+        user(1, &format!("{INSTRUCTION}\n{SECRET}")),
+        call(2, "c1", "shell", json!({"cmd": "ls"}), "a.py"),
+        call(3, "c2", "edit", json!({"path": "a.py", "edit": 1}), "ok"),
+        user(4, &huge),
+        call(5, "c3", "edit", json!({"path": "a.py", "edit": 2}), "ok"),
+        call(7, "c4", "edit", json!({"path": "a.py", "edit": 3}), "ok"),
+        say(8, "Done."),
+    ];
+    let projection = packed_step_records(vec![passed(
+        &workspace_task(),
+        steps,
+        offered(),
+        "2026-10-13T01:00:00.000Z",
+    )]);
+    assert_eq!(projection.records.len(), 1, "one record per trajectory");
+
+    let bound = 500;
+    assert!(record_size(&projection.records[0]) > bound);
+    let split = projection.split_over_block(bound, &record_size);
+
+    assert_eq!(
+        split.count(Exclusion::OverBlock),
+        1,
+        "the turn no window can hold is counted once"
+    );
+    assert!(!split.records.is_empty(), "the windows that fit are kept");
+    for record in &split.records {
+        assert!(record_size(record) <= bound, "every kept window fits");
+        assert!(
+            !parts(record).0.iter().any(|m| m.content == huge),
+            "the turn too large for the block is in no window"
+        );
+    }
 }
 
 #[test]

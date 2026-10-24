@@ -65,6 +65,7 @@
 
 #![warn(missing_docs)]
 
+mod block_split;
 mod corpus;
 mod dataset;
 pub mod frozen;
