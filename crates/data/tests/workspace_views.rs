@@ -334,6 +334,30 @@ fn what_cannot_be_trained_on_is_left_out_and_counted_by_reason() {
 }
 
 #[test]
+fn only_the_named_actions_are_kept() {
+    // The decisive actions of a trajectory are its edits and its conclusion; the exploration
+    // around them is most of the tokens and teaches much less. Naming the tools keeps the
+    // edits and every action that calls no tool (the final answer), and counts the rest.
+    let steps = || {
+        vec![
+            user(1, INSTRUCTION),
+            call(2, "c1", "shell", json!({"cmd": "ls"}), "a.py"),
+            call(3, "c2", "edit", json!({"path": "a.py"}), "ok"),
+            say(4, "Fixed."),
+        ]
+    };
+    let all = step_records(vec![passed(&workspace_task(), steps(), offered(), "2026-10-13T01:00:00.000Z")]);
+    assert_eq!(all.records.len(), 3, "the shell action, the edit and the answer");
+
+    let only = SftStep::new(Strength::Executable)
+        .only_actions(vec!["edit".to_string()])
+        .project(&corpus_of(vec![passed(&workspace_task(), steps(), offered(), "2026-10-13T01:00:00.000Z")]))
+        .unwrap();
+    assert_eq!(only.records.len(), 2, "the edit and the final answer");
+    assert_eq!(only.count(Exclusion::ActionNotWanted), 1, "the shell action, counted");
+}
+
+#[test]
 fn a_record_over_the_training_block_is_left_out_and_counted() {
     let projection = step_records(vec![passed(
         &workspace_task(),

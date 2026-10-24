@@ -89,6 +89,7 @@ pub struct SftStep {
     packed: bool,
     control: Control,
     serialise_calls: bool,
+    only_actions: Option<Vec<String>>,
 }
 
 impl SftStep {
@@ -103,6 +104,7 @@ impl SftStep {
             packed: false,
             control: Control::Verified,
             serialise_calls: false,
+            only_actions: None,
         }
     }
 
@@ -129,6 +131,17 @@ impl SftStep {
             serialise_calls,
             ..self
         }
+    }
+
+    /// The same view keeping only the actions whose tool calls are all named in `names`; an
+    /// action that calls no tool (the final answer) is always kept. The rest are context and
+    /// are counted as [`Exclusion::ActionNotWanted`]. This is how a corpus is made of the
+    /// decisive actions - the edits and the conclusion - instead of the exploration around
+    /// them, which is most of the tokens and teaches the least.
+    #[must_use]
+    pub fn only_actions(self, names: Vec<String>) -> Self {
+        // An empty list is no request at all: it cannot mean "keep nothing".
+        Self { only_actions: (!names.is_empty()).then_some(names), ..self }
     }
 
     /// The same view under a negative `control`.
@@ -177,11 +190,20 @@ impl SftStep {
             return projection.exclude(Exclusion::NoAction);
         }
         let mut admitted = Vec::new();
+        let wanted = |action: &crate::trajectory::Action| match &self.only_actions {
+            None => true,
+            Some(names) => {
+                let calls = &conversation.messages[action.index].tool_calls;
+                calls.is_empty() || calls.iter().all(|c| names.iter().any(|n| n == &c.function.name))
+            }
+        };
         for action in conversation.actions.iter().filter(|a| !a.copied) {
             if entry.labelled(action.step, Label::Bad) {
                 projection.exclude(Exclusion::BadStep);
             } else if action.repeated {
                 projection.exclude(Exclusion::RepeatedAction);
+            } else if !wanted(action) {
+                projection.exclude(Exclusion::ActionNotWanted);
             } else if passed.is_ok()
                 || (!outcome_verified && entry.labelled(action.step, Label::Good))
             {

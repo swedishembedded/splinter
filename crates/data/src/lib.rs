@@ -318,6 +318,10 @@ pub enum Exclusion {
     Unrepresentable,
     /// No action to supervise or reward.
     NoAction,
+    /// An action whose tool calls are not the ones a view was asked to keep
+    /// (`SftStep::only_actions`): the exploration around the decisive actions,
+    /// left out on request rather than because it could not be trained.
+    ActionNotWanted,
     /// No reward could be derived.
     NoReward,
     /// A critique whose own decision is not a pass at the minimum strength.
