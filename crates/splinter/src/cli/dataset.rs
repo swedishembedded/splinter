@@ -66,6 +66,12 @@ pub struct BuildArgs {
     /// admitted action supervised, not one record per action.
     #[arg(long)]
     pub pack: bool,
+    /// For the sft-step view: keep only the actions whose tool calls are all
+    /// named here (comma separated), plus the final answer; the rest become
+    /// context and are counted as `ActionNotWanted`. Names the decisive
+    /// actions - the edits and the conclusion - instead of the exploration.
+    #[arg(long, value_delimiter = ',', value_name = "TOOLS")]
+    pub only_actions: Option<Vec<String>>,
     /// For the sft-step view: build another dataset than the default.
     /// `outcome-verified` admits only experiences an independent verdict
     /// passed (the default also admits an action labelled good from one that
