@@ -92,6 +92,25 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       completes the job. Tests: `crates/sandbox/tests/jobs.rs`,
       `crates/sandbox/tests/slurm.rs` and
       `crates/orchestrator/tests/controller.rs`.
+- [x] **A distributed training job is submitted with its plan.**
+      `jobs submit --distributed` writes `job-plan.json` into each attempt
+      directory before any worker starts, names the job by the specification
+      digest in hex, takes its world size from the worker plan, allocates a free
+      loopback coordinator per attempt, and appends `--job-plan <file>` and
+      `--job-rank {rank}` to every worker command. The bytes it writes match
+      the trainer's plan fixture exactly, a retry writes its own plan with the
+      same job identity, and a single-rank job without the flag writes none.
+      Tests: `crates/sandbox/tests/distributed_plan.rs`,
+      `crates/orchestrator/tests/contracts.rs` and
+      `crates/splinter/tests/jobs_distributed_cli.rs` (two stand-in ranks
+      commit files, the controller completes the job, and both files are kept
+      as artifacts whose sha256 matches).
+- [x] **A local two-rank Qwen run completes through the controller.** A
+      Qwen3-0.6B LoRA job (2 steps, rank 4, block 128, batch 1, one Tesla P40
+      per rank) submitted with `--distributed --ranks-per-node 2` reached
+      `completed` through the controller, wall time 15.9 s from submission
+      through reconciliation. Both ranks read the generated plan and exited
+      zero.
 - [x] **A run that stopped heartbeating reads lost.** A recorded run writes
       append-only heartbeat signals while its process is alive; a reader
       reports `lost` once the newest is older than the stale bound, and a run
@@ -120,8 +139,10 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       maps the scheduler's terminal states to distinct outcomes, and job
       accounting (exit codes from a scheduler) is not wired yet.
 - [ ] No pipeline stage runs a training job through the controller. The train
-      stage still calls brain in-process. Brain's GPT trainer does accept a
-      plan now (`--job-plan`/`--job-rank`); the Qwen/LoRA trainer does not yet.
+      stage still calls brain in-process, so a distributed run is submitted by
+      hand with `jobs submit --distributed`. The generated plan registers the
+      ranks on the loopback address of one machine; a coordinator reachable
+      across nodes is still open.
 - [ ] Artifact storage backends. Adapters and datasets are plain files at a
       content address; a parallel filesystem works as it is, while an object
       store needs a fetch path brain can read (brain resolves a local path
