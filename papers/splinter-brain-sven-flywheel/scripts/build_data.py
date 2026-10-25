@@ -294,10 +294,6 @@ def det_metrics(prefix, record):
         arms["c8a_passed"] = record["arm_c8a_passed"]
     if "arm_c8_verdict_differences" in record:
         arms["c8_verdict_differences"] = record["arm_c8_verdict_differences"]
-    if "decisive_c1_wins" in record:
-        arms["decisive_wins"] = record["decisive_c1_wins"]
-        arms["decisive_losses"] = record["decisive_c1_losses"]
-        arms["decisive_ties"] = record["decisive_c1_ties"]
     return arms
 
 
