@@ -14,6 +14,7 @@
 //! candidate's whole description.
 
 use serde::{Deserialize, Serialize};
+use splinter_agent::harness_edit::child;
 use splinter_agent::sven::search::{Proposal, ProposalStep, Proposer, SearchError, SearchRng};
 
 /// One thing a candidate may change.
@@ -21,7 +22,7 @@ use splinter_agent::sven::search::{Proposal, ProposalStep, Proposer, SearchError
 #[serde(deny_unknown_fields)]
 pub struct Knob {
     /// The keys leading to the value, from the document's root
-    /// (`[steps, fix, agent, prompt]`).
+    /// (`[workflow, 0, task]`): a number indexes a list.
     pub path: Vec<String>,
     /// The values the knob may take; at least two.
     pub choices: Vec<serde_yaml::Value>,
@@ -108,7 +109,7 @@ impl MutationSpace {
             serde_yaml::from_str(document).map_err(|e| SpaceError::Document(e.to_string()))?;
         let knob = &self.knobs[rng.below(self.knobs.len())];
         let slot = knob.path.iter().try_fold(&mut root, |at, key| {
-            at.get_mut(key.as_str()).ok_or_else(|| SpaceError::Missing {
+            child(at, key).ok_or_else(|| SpaceError::Missing {
                 path: knob.path.join("."),
             })
         })?;
@@ -170,11 +171,11 @@ mod tests {
     use super::*;
 
     const DOC: &str =
-        "name: h\nlimits:\n  max_model_turns: 4\nsteps:\n  fix:\n    agent:\n      prompt: a\n";
+        "api_version: \"2\"\nname: h\nexecution:\n  limits:\n    model_turns: 4\nworkflow:\n  - name: fix\n    task: a\n";
 
     fn space() -> MutationSpace {
         MutationSpace::parse(
-            "knobs:\n  - path: [limits, max_model_turns]\n    choices: [4, 6, 8]\n  - path: [steps, fix, agent, prompt]\n    choices: [a, b]\n",
+            "knobs:\n  - path: [execution, limits, model_turns]\n    choices: [4, 6, 8]\n  - path: [workflow, '0', task]\n    choices: [a, b]\n",
         )
         .unwrap()
     }
@@ -186,8 +187,8 @@ mod tests {
         for seed in 0..40 {
             let mutated = space.mutate(DOC, &mut SearchRng::from_seed(seed)).unwrap();
             let after: serde_yaml::Value = serde_yaml::from_str(&mutated).unwrap();
-            let turns = |v: &serde_yaml::Value| v["limits"]["max_model_turns"].clone();
-            let prompt = |v: &serde_yaml::Value| v["steps"]["fix"]["agent"]["prompt"].clone();
+            let turns = |v: &serde_yaml::Value| v["execution"]["limits"]["model_turns"].clone();
+            let prompt = |v: &serde_yaml::Value| v["workflow"][0]["task"].clone();
             let changed = usize::from(turns(&before) != turns(&after))
                 + usize::from(prompt(&before) != prompt(&after));
             assert_eq!(changed, 1, "seed {seed}: {mutated}");
@@ -204,13 +205,16 @@ mod tests {
     #[test]
     fn a_knob_the_document_lacks_is_an_error_naming_its_path() {
         let space = MutationSpace::parse(
-            "knobs:\n  - path: [limits, max_tool_calls]\n    choices: [1, 2]\n",
+            "knobs:\n  - path: [execution, limits, tool_calls]\n    choices: [1, 2]\n",
         )
         .unwrap();
         // seed: the only knob is the missing one, so every seed draws it.
         let mut rng = SearchRng::from_seed(1);
         let err = space.mutate(DOC, &mut rng).unwrap_err();
-        assert!(err.to_string().contains("limits.max_tool_calls"), "{err}");
+        assert!(
+            err.to_string().contains("execution.limits.tool_calls"),
+            "{err}"
+        );
     }
 
     #[test]

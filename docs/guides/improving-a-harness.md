@@ -20,8 +20,8 @@ splinter harness optimise TASKSET-ID --baseline harness.yaml --space space.yaml 
 ```
 
 The space lists knobs, each a `path` into the document and the `choices` it may
-take (`[limits, max_model_turns]` with `[4, 6, 8]`, or a step's prompt with
-alternatives); a candidate is the baseline with a few knobs changed. The search
+take (`[execution, limits, model_turns]` with `[4, 6, 8]`, or a task's prompt,
+`[workflow, "0", task]`, with alternatives; a number, quoted, indexes a list); a candidate is the baseline with a few knobs changed. The search
 is sven's (best-of-N or simulated annealing) and follows the share of tasks the
 candidate solved, which guides and never decides. Each candidate is run on the
 whole task set, its attempts verified by the tasks' own verifiers, and compared

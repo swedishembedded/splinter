@@ -252,8 +252,6 @@ Open:
       planning take most of a short budget, or a refusal that names the
       budget a run needs instead of "budget spent".
 - [ ] A persistent configuration file for the global flags.
-- [ ] `splinter-agent`'s harness editor and tests still write `api_version:
-      "1"` harness documents, which the local sven no longer accepts.
 
 ## Build health (local sven and brain)
 

@@ -103,8 +103,9 @@ pub fn apply(document: &str, edits: &HarnessEdits) -> Result<String, String> {
     Ok(text)
 }
 
-/// The value under `key` of a mapping, or at index `key` of a list.
-fn child<'a>(at: &'a mut serde_yaml::Value, key: &str) -> Option<&'a mut serde_yaml::Value> {
+/// The value under `key` of a mapping, or at index `key` of a list: the one
+/// step of a path into a harness document, shared by every editor of one.
+pub fn child<'a>(at: &'a mut serde_yaml::Value, key: &str) -> Option<&'a mut serde_yaml::Value> {
     match at {
         serde_yaml::Value::Sequence(list) => list.get_mut(key.parse::<usize>().ok()?),
         other => other.get_mut(key),

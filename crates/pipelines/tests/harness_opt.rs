@@ -122,22 +122,22 @@ const MENDING: &str = "MEND {{ inputs.task }}";
 fn harness(prompt: &str) -> String {
     format!(
         r#"
-api_version: "1"
+api_version: "2"
 name: solver
 inputs: {{ task: string }}
-capabilities: [ReadFile, WriteFile, ExecuteShell]
-limits: {{ max_steps: 10, max_model_turns: 6, max_tool_calls: 6 }}
-entry: work
-steps:
-  work: {{ agent: {{ prompt: "{prompt}", then: done }} }}
-  done: {{ return: {{ value: {{ finished: true }} }} }}
+agent: {{ profile: coding }}
+execution:
+  limits: {{ model_turns: 6, tool_calls: 6 }}
+workflow:
+  - name: work
+    task: "{prompt}"
 "#
     )
 }
 
 fn space() -> MutationSpace {
     MutationSpace::parse(&format!(
-        "knobs:\n  - path: [steps, work, agent, prompt]\n    choices: [\"{PLAIN}\", \"{MENDING}\"]\n"
+        "knobs:\n  - path: [workflow, '0', task]\n    choices: [\"{PLAIN}\", \"{MENDING}\"]\n"
     ))
     .unwrap()
 }
@@ -292,8 +292,9 @@ fn the_same_search_seed_draws_the_same_candidates() {
     assert_eq!(documents(&first), documents(&parallel));
 }
 
-const BREAKS: &str = r#"{"rationale": "r", "edits": [{"path": ["entry"], "value": "nowhere"}]}"#;
-const MENDS: &str = r#"{"rationale": "ask it to mend", "edits": [{"path": ["steps", "work", "agent", "prompt"], "value": "MEND {{ inputs.task }}"}]}"#;
+const BREAKS: &str =
+    r#"{"rationale": "r", "edits": [{"path": ["workflow", "0", "verify"], "value": ["nowhere"]}]}"#;
+const MENDS: &str = r#"{"rationale": "ask it to mend", "edits": [{"path": ["workflow", "0", "task"], "value": "MEND {{ inputs.task }}"}]}"#;
 
 fn by_model<'a>(
     tasks: &'a TaskSetId,
