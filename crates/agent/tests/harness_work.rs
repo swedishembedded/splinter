@@ -194,27 +194,28 @@ fn options() -> WorkOptions {
 
 /// Edits `app.txt` with an agent step and returns.
 const EDITOR: &str = r#"
-api_version: "1"
+api_version: "2"
 name: editor
 inputs: { task: string }
-capabilities: [WriteFile, ReadFile]
-limits: { max_steps: 20, max_model_turns: 6, max_tool_calls: 6 }
-entry: work
-steps:
-  work: { agent: { prompt: "{{ inputs.task }}", tools: [write_file, read_file], store_as: note, then: done } }
-  done: { return: { value: { finished: true } } }
+agent: { profile: coding, tools: [write_file, read_file] }
+execution:
+  limits: { model_turns: 6, tool_calls: 6 }
+workflow:
+  - name: work
+    task: "{{ inputs.task }}"
 "#;
 
-/// Claims a fix and changes nothing.
+/// Claims a fix and changes nothing: one model turn without tools.
 const TALKER: &str = r#"
-api_version: "1"
+api_version: "2"
 name: talker
 inputs: { task: string }
-limits: { max_steps: 20, max_model_turns: 2 }
-entry: say
-steps:
-  say: { predict: { prompt: "{{ inputs.task }}", store_as: claim, then: done } }
-  done: { return: { value: { claim: "{{ facts.claim }}" } } }
+execution:
+  limits: { model_turns: 2 }
+workflow:
+  - name: say
+    task: "{{ inputs.task }}"
+    model_only: true
 "#;
 
 async fn solve(
@@ -285,21 +286,21 @@ async fn a_document_that_does_not_compile_is_an_engine_error_not_a_solution() {
     let fixture = Fixture::new();
     let environment = fixture.environment();
     let model = Scripted::new(|_| text("unused"));
-    let broken = "api_version: \"1\"\nname: broken\nentry: nowhere\nsteps: {}\n";
+    let broken = "api_version: \"2\"\nname: broken\nexecution: { limits: { model_turns: 1 } }\nworkflow:\n  - name: w\n    task: x\n    verify: [nowhere]\n";
     let result = solve(&fixture, &environment, broken, model).await;
     assert!(matches!(result, Err(SolveError::Engine(_))), "{result:?}");
 }
 
 /// Reads a file that lies beside the tree, not in it, with the shell.
 const SHELLER: &str = r#"
-api_version: "1"
+api_version: "2"
 name: sheller
-capabilities: [ExecuteShell]
-limits: { max_steps: 20, max_model_turns: 6, max_tool_calls: 6 }
-entry: work
-steps:
-  work: { agent: { prompt: "Print ../secret.txt.", tools: [shell], store_as: note, then: done } }
-  done: { return: { value: { finished: true } } }
+agent: { profile: coding, tools: [shell] }
+execution:
+  limits: { model_turns: 6, tool_calls: 6 }
+workflow:
+  - name: work
+    task: "Print ../secret.txt."
 "#;
 
 fn reads_beside_the_tree(req: &CompletionRequest) -> Vec<ResponseEvent> {

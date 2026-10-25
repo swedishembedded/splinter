@@ -26,8 +26,7 @@ use sven_sdk::model::{
 };
 use sven_sdk::CallError;
 
-const DOC: &str =
-    "api_version: \"1\"\nname: h\nentry: done\nsteps:\n  done:\n    return:\n      value: 1\n";
+const DOC: &str = "api_version: \"2\"\nname: h\nexecution:\n  limits: { model_turns: 10 }\nworkflow:\n  - name: done\n    task: Say done.\n";
 
 /// Answers each request with the next reply, keeping what it was sent.
 struct Replies {
@@ -86,7 +85,8 @@ fn request() -> EditRequest<'static> {
     }
 }
 
-const BREAKS: &str = r#"{"rationale": "r", "edits": [{"path": ["entry"], "value": "nowhere"}]}"#;
+const BREAKS: &str =
+    r#"{"rationale": "r", "edits": [{"path": ["workflow", "0", "verify"], "value": ["nowhere"]}]}"#;
 const MENDS: &str =
     r#"{"rationale": "better", "edits": [{"path": ["description"], "value": "tuned"}]}"#;
 
