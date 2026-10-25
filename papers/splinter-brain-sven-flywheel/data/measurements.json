@@ -1165,7 +1165,7 @@
   },
   "qual-query": {
    "log": "g8/qual-query.json",
-   "sha256": "52c5da02c55471093d046a0edf1ca225492b3bffad4ca611ce22a4d5876b4ad9",
+   "sha256": "3d003c4f0927b3db7080f4a797d1670daaa927f8ee1200680562029e5b672b1b",
    "brain_commit": "77e510fbf (frozen evaluation build)",
    "command": "protocol-6seed-record.py over runs/g8/pilot-{base,dec,allnew}-proto-<seed>.verify.json for the six registered decoding seeds",
    "metric_prefix": "g8.qual",
@@ -1173,10 +1173,19 @@
     "seed_count": 3,
     "base_mean_pass1": 20.0,
     "decisive_mean_pass1": 23.0,
+    "all_mean_pass1": 16.33,
     "decisive_vs_base_wins": 18,
     "decisive_vs_base_losses": 12,
     "decisive_vs_base_ties": 16,
-    "decisive_vs_base_p": 0.1807973040267825
+    "decisive_vs_base_p": 0.1807973040267825,
+    "decisive_vs_all_wins": 26,
+    "decisive_vs_all_losses": 11,
+    "decisive_vs_all_ties": 9,
+    "decisive_vs_all_p": 0.010036925959866494,
+    "base_vs_all_wins": 16,
+    "base_vs_all_losses": 11,
+    "base_vs_all_ties": 19,
+    "base_vs_all_p": 0.22103416919708252
    }
   },
   "train-determinism": {
