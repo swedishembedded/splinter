@@ -85,3 +85,5 @@ in the same commit.
 | [097](097-supervising-every-action-taught-the-exploration-and-the-fine-tune-fell-off-the-hard-tail.md) | Supervising every action taught the exploration, and the fine-tune fell off the hard tail |
 | [098](098-the-same-seed-and-corpus-differ-by-seventeen-tasks-when-the-supervision-changes.md) | The same seed and corpus differ by seventeen tasks when the supervision changes |
 | [099](099-recovery-is-a-labelled-rehearsal-and-its-first-six-steps-do-most-of-the-restoration.md) | Recovery is a labelled rehearsal, and its first six steps do most of the restoration |
+| [100](100-at-this-budget-rehearsal-protected-nothing-and-cost-nine-tasks.md) | At this budget rehearsal protected nothing and cost nine tasks |
+| [101](101-a-greedy-arms-outcome-is-not-reproducible-across-runs.md) | A greedy arm's outcome is not reproducible across runs |
