@@ -27,10 +27,16 @@ kernels. A batch-1 against batch-8 matrix (fresh servers, two runs each, three s
 six concurrent identical requests) was deterministic in all four runs on the probe's synthetic
 prompt, while the seeded concurrent test that produced three distinct completions used a
 different prompt and a server that had already served evaluation traffic. The variation is
-therefore prompt- and state-dependent and the simple probe is not a reproduction: the next
-step is a task-derived probe (the real tool schemas and long context, output token ids and
-selected-logit margins, first divergent step). Until then, multiple decoding replicates are
-the rule for any claim. Until one is measured, a difference of a few tasks between two single greedy arms is
+therefore prompt-dependent, and the simple probe is not a reproduction. A **task-derived**
+probe (the real coding system prompt, first request and eight tool schemas from a stored
+record, greedy, fixed seed) reproduced it exactly: three sequential identical requests gave
+three distinct tool calls, six concurrent gave six, and the server echoed the requested seed
+(`brain.seed`) on every call. Since sequential requests differ with the seed honoured, the
+cause is run-to-run numerical nondeterminism in the serving kernels at near-tie decisions, not
+the sampler and not batch composition alone. Batch-1 is therefore **not** the fix. The
+remedies are deterministic/bit-exact kernels (pinned reduction order, no atomics or split-k
+in the sensitive path) or multiple decoding replicates per claim, which the registered
+protocol already prescribes. Until one is measured, a difference of a few tasks between two single greedy arms is
 inside the noise this entry measures; the large same-seed supervision gap and the rehearsal
 contrast are larger than it, but they are still single-run estimates.
 
