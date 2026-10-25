@@ -69,10 +69,12 @@ use splinter_core::release::ReleaseId;
 use splinter_core::rng::Seed;
 
 mod agentic;
+mod improvement;
 mod plan;
 
 use crate::canary::Canaries;
 
+pub use improvement::{improvement, Verified};
 pub use plan::GatePlan;
 
 pub use agentic::{
@@ -227,19 +229,6 @@ impl<T> Check<T> {
             inconclusive: false,
         }
     }
-}
-
-/// What each arm solved over every task the suite assigned, beside the paired
-/// comparison: a task an arm was not graded on (an attempt set aside as
-/// exposed, or as an environment failure) is still a task it did not solve.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Verified {
-    /// Tasks the candidate solved.
-    pub candidate: usize,
-    /// Tasks the champion solved.
-    pub baseline: usize,
-    /// Tasks the suite assigned to both.
-    pub tasks: usize,
 }
 
 /// The improvement check's numbers.
@@ -620,74 +609,6 @@ impl GateReport {
             interval_seed: None,
         }
     }
-}
-
-/// The improvement check over `outcomes` on `suite`.
-#[must_use]
-pub fn improvement(
-    suite: SuiteSummary,
-    variants: Option<SuiteSummary>,
-    outcomes: &[PairedOutcome],
-    alpha: f64,
-    significance: &dyn Significance,
-) -> Check<Improvement> {
-    let comparison = compare(outcomes);
-    if comparison.paired == 0 {
-        return Check::unmeasured(format!(
-            "no held-out task of {} was graded for both models ({} task(s), {} excluded before \
-             grading)",
-            suite.name,
-            suite.tasks,
-            suite.excluded.values().sum::<usize>()
-        ));
-    }
-    let pairs = by_cluster(outcomes);
-    let test = significance.sign_test(&pairs);
-    let verified = Verified {
-        candidate: outcomes
-            .iter()
-            .filter(|outcome| outcome.candidate == Some(true))
-            .count(),
-        baseline: outcomes
-            .iter()
-            .filter(|outcome| outcome.baseline == Some(true))
-            .count(),
-        tasks: suite.tasks,
-    };
-    let failure = if verified.candidate < verified.baseline {
-        Some(format!(
-            "no improvement: the candidate solved fewer tasks than the champion ({} against {} \
-             of {}): a task the candidate was not graded on counts as a task it did not solve, \
-             so an attempt set aside as exposed or as an environment failure cannot remove a \
-             loss from the paired test",
-            verified.candidate, verified.baseline, verified.tasks
-        ))
-    } else {
-        (test.p_value > alpha).then(|| {
-            format!(
-                "no significant improvement: the candidate won {} of {} discordant task(s) \
-                 (tasks about one family of sources count once), p = {:.4} > alpha {alpha}",
-                test.candidate_wins, test.discordant, test.p_value
-            )
-        })
-    };
-    Check::decided(
-        Improvement {
-            suite,
-            verified,
-            variants,
-            comparison,
-            sign_test: test,
-            alpha,
-            generalisation: None,
-            recall: None,
-            task_level: None,
-            agentic: None,
-            power: None,
-            hidden_strength: None,
-        },
-        failure,
-    )
 }
 
 /// The retention check over each earlier release's suite and outcomes.
