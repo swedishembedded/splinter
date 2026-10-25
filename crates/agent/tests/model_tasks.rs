@@ -219,18 +219,23 @@ async fn a_predicted_output_is_admitted_only_when_running_the_shown_code_produce
     let (store, _, source) = stored(&scratch, CLAMP_SPEC);
     let env = python(&scratch);
     let predict = |code: &str, output: &str| {
-        let mut task = entry(
-            &format!("What does this Python program print?\n\n{code}"),
-            output,
-            1,
-            None,
-        );
+        let mut task = entry("What does this Python program print?", output, 1, None);
         task["material"] = json!(code);
         task
     };
+    // A question that repeats the program, wrapped in other code, would ask
+    // about a program that is not the one run.
+    let mut repeated = entry(
+        "What is the output?\n\nmaterial = [[print(min(max(3, 0), 10))]]",
+        "3",
+        1,
+        None,
+    );
+    repeated["material"] = json!("print(min(max(3, 0), 10))");
     let model = Scripted::new(vec![reply(vec![
         predict("print(min(max(12, 0), 10))", "10"),
         predict("print(min(max(-4, 0), 10) + 1)", "0"),
+        repeated,
     ])]);
     let report = generator(model, store, vec![env])
         .generate(&source, &[&kind("predict")])
@@ -238,6 +243,12 @@ async fn a_predicted_output_is_admitted_only_when_running_the_shown_code_produce
         .unwrap();
     assert_eq!(report.admitted.len(), 1, "{report:#?}");
     assert_eq!(report.count(Rejection::ChecksFailed), 1, "{report:#?}");
+    assert_eq!(report.count(Rejection::MaterialNotShown), 1, "{report:#?}");
+    // The solver is shown the question and, once, the program that is run.
+    assert_eq!(
+        report.admitted[0].task.instruction,
+        "What does this Python program print?\n\n```python\nprint(min(max(12, 0), 10))\n```"
+    );
     assert_eq!(
         report.admitted[0].task.environment,
         Environment::closed_book()
@@ -470,12 +481,7 @@ async fn a_question_answered_from_the_source_must_name_a_subject_the_source_name
     // Code shown in the instruction carries what its answer depends on.
     let scratch = Scratch::new("model-tasks-subject-code");
     let (store, _, source) = stored(&scratch, CLAMP_SPEC);
-    let mut task = entry(
-        "What does this Python program print?\n\nprint(min(max(12, 0), 10))",
-        "10",
-        1,
-        None,
-    );
+    let mut task = entry("What does this Python program print?", "10", 1, None);
     task["material"] = json!("print(min(max(12, 0), 10))");
     let model = Scripted::new(vec![reply(vec![task])]);
     let report = generator(model, store, vec![python(&scratch)])

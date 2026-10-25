@@ -608,8 +608,8 @@ fn brief(kind: &TaskKind, count: usize, refused: &[Rejection], author: Option<&s
     }
     if kind.shows_material {
         rules.push(
-            "Put the material the task is about in `material`, and include it verbatim in the \
-             instruction."
+            "Put the material the task is about in `material` and write the instruction as the \
+             question alone: the material is shown below it, so do not repeat it."
                 .into(),
         );
     } else {

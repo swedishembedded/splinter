@@ -259,6 +259,10 @@ impl Admission {
     ) -> Result<Result<Accepted, Refused>, GenerateError> {
         let kind = context.kind;
         let refuse = |refusal: Refusal| Ok(Err(Refused::Because(refusal)));
+        let candidate = match shown(kind, candidate) {
+            Ok(candidate) => candidate,
+            Err(refusal) => return refuse(refusal),
+        };
         let evidence = match evidence(context, &candidate) {
             Ok(evidence) => evidence,
             Err(refusal) => return refuse(refusal),
@@ -486,6 +490,42 @@ fn check_environment(context: &Context<'_>) -> Option<Environment> {
 }
 
 /// The candidate's evidence as spans of the source part.
+/// `candidate` with the instruction the solver is shown. A kind that shows
+/// material has the model write the question alone and the material apart;
+/// the material is set below the question here, fenced, so it is shown once
+/// and exactly as it is run or graded. A question that already repeats the
+/// material is refused: a small model wraps it in other code (`x = [[...]]`)
+/// and the solver would be asked about a program that is not the one run.
+fn shown(kind: &TaskKind, mut candidate: Candidate) -> Result<Candidate, Refusal> {
+    let Some(material) = candidate
+        .material
+        .as_deref()
+        .filter(|m| !m.trim().is_empty())
+    else {
+        return Ok(candidate);
+    };
+    if !kind.shows_material {
+        return Ok(candidate);
+    }
+    if candidate.instruction.contains(material.trim()) {
+        return Err((
+            Rejection::MaterialNotShown,
+            "the instruction repeats the material, which is shown below it".into(),
+        ));
+    }
+    let fence = match kind.runtime.as_deref() {
+        Some("python3") => "python",
+        Some(runtime) => runtime,
+        None => "",
+    };
+    candidate.instruction = format!(
+        "{}\n\n```{fence}\n{}\n```",
+        candidate.instruction.trim_end(),
+        material.trim_end()
+    );
+    Ok(candidate)
+}
+
 fn evidence(context: &Context<'_>, candidate: &Candidate) -> Result<Vec<Span>, Refusal> {
     let source = context.source;
     if candidate.evidence.is_empty() {
@@ -636,12 +676,6 @@ fn privileged(
     match (kind.shows_material, material) {
         (true, None) => {
             return Err((Rejection::MaterialNotShown, "no material is given".into()));
-        }
-        (true, Some(m)) if !candidate.instruction.contains(m) => {
-            return Err((
-                Rejection::MaterialNotShown,
-                "the material is not in the instruction verbatim".into(),
-            ));
         }
         (false, Some(_)) => {
             return Err((

@@ -539,8 +539,8 @@ fn base_kinds() -> Vec<TaskKind> {
             name: "predict".into(),
             brief: "Write up to {count} tasks that show a short, self-contained {runtime} \
                     program exercising what the sections describe and ask what it prints. Put \
-                    the program in `material` and verbatim in the instruction; the reference \
-                    is exactly what it prints."
+                    the program in `material` and the question alone in the instruction (the \
+                    program is shown below it); the reference is exactly what it prints."
                 .into(),
             answer: AnswerForm::Output,
             shows_material: true,
@@ -577,7 +577,8 @@ fn base_kinds() -> Vec<TaskKind> {
             name: "debug".into(),
             brief: "Write up to {count} tasks that show a short {runtime} snippet with one bug \
                     against what the sections specify, and ask for the fixed code. Put the \
-                    faulty snippet in `material` and verbatim in the instruction; the \
+                    faulty snippet in `material` and the question alone in the instruction (the \
+                    snippet is shown below it); the \
                     reference is the fixed code, and the checks pass on it and fail on the \
                     snippet."
                 .into(),
@@ -623,7 +624,8 @@ fn base_kinds() -> Vec<TaskKind> {
             ..text(
                 "transform",
                 "Write up to {count} tasks that show a short excerpt of the sections in \
-                 `material`, verbatim in the instruction, and ask for it in another form \
+                 `material` (shown below the instruction, which is the question alone) and ask \
+                 for it in another form \
                  (a list, a table row, JSON). The reference is the transformed excerpt.",
                 &[Formal, Judged],
             )
