@@ -44,6 +44,11 @@ pub struct Cli {
     /// (default: the store `brain pull` fills).
     #[arg(long, global = true)]
     models_dir: Option<PathBuf>,
+    /// Run workspace commands with the caller's whole filesystem where the
+    /// kernel cannot confine them (documented as the way to run on such a
+    /// kernel; the run still bounds and kills the commands).
+    #[arg(long, global = true)]
+    allow_unconfined_workspace: bool,
     /// Let a model served by brain reason before it answers (default: it is
     /// asked for no reasoning block). Written in the run's `model_selected`
     /// event.
@@ -169,7 +174,10 @@ fn config(cli: &Cli) -> Result<Config> {
         solve_deadline: splinter_sdk::config::DEFAULT_SOLVE_DEADLINE,
         coding_prompt: Default::default(),
         min_calibration_controls: 1,
-        workspace: Default::default(),
+        workspace: splinter_sdk::config::WorkspaceSettings {
+            allow_unconfined: cli.allow_unconfined_workspace,
+            ..Default::default()
+        },
         thinking: cli.thinking,
         served_temperature: cli.temperature.filter(|t| (0.0..=2.0).contains(t)),
         served_top_p: None,

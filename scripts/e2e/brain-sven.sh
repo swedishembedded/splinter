@@ -32,6 +32,7 @@ models=$3
 model=${MODEL:-Qwen/Qwen3-0.6B}
 device=${DEVICE:-cpu}
 ctx=${CTX:-}
+thinking=${THINKING:-}
 secret=4217
 
 skip() { echo "SKIPPED (nothing was tested): $*" >&2; exit 3; }
@@ -74,6 +75,7 @@ model:
   base_url: http://127.0.0.1:$port/v1
   api_key: $key
 YAML
+[ -n "$thinking" ] && echo "  enable_thinking: $thinking" >>"$scratch/sven.yaml"
 
 home=$scratch/home
 repo=$home/repo
