@@ -4,7 +4,7 @@
 \section{Deviations from the registration}\label{app:deviations}
 
 The protocol of \cref{sec:protocol} is the registration in \code{prereg/coding-tasks.md}, fixed before
-any coding-task run. \Cref{tab:deviations} lists the dated changes made in this paper after the
+any coding-task run. \Cref{tab:deviations,tab:deviations2} list the dated changes made in this paper after the
 registration; ``Before'' names the earliest outcome a change preceded.
 
 \begin{table}[p]
@@ -18,6 +18,18 @@ Date & Change & Before \\
 10-21 & CE8 being closed, CE8-T gets its own shuffled negative control (CE8-T-S, from the CE8-T experiences) and the one-pass budget the second CE8 run used; its step count follows the trainer's own record count, read from a one-step sizing run. & CE8-T's training \\
 10-22 & G8 for the 27B compares served and in-process teacher-forced log-probabilities on held-out records, against the base's own served-vs-in-process gap, instead of agent verdicts: the 27B has no in-process agent path (splinter's local provider runs qwen3 only), found when the served half of the verdict check had run (9 of 23 verified) and before any comparison of the two halves existed. & G8 and any evaluation arm \\
 10-22 & CE8-T and CE8-T-S are solved on the pilot subset S1 under amendment 20 (thinking off) before G8 is measured, which the registration places before any arm; both comparisons have fewer than 25 non-tied families, are labelled pilots by the rule, and no confirmatory query follows from them. & any CE8-T evaluation \\
+\bottomrule
+\end{tabular}
+\caption{Changes to the protocol made in this paper, in the order they were made.}\label{tab:deviations}
+\end{table}
+
+\begin{table}[p]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}p{0.12\linewidth}p{0.58\linewidth}p{0.25\linewidth}@{}}
+\toprule
+Date & Change & Before \\
+\midrule
 10-25 & The release gate's improvement check also requires the candidate to have solved at least as many of the suite's assigned tasks as its champion; an attempt withheld as exposed or as a harness failure counts as a task that arm did not solve, so a regression can no longer leave the paired test's denominator. The measured shape that motivated it: a base at 21/46 (9 exposed) against a candidate at 15/46 (19 exposed) read as 5W-3L-15T under the paired test alone. & any release after it \\
 10-25 & Development probes on D46 (46 tasks, one per family, greedy) measure the supervision ablation and the recovery dose-response. They are labelled pilots, are not the registered confirmatory query, and their outcomes are not used as evidence for it; the registration, its partitions and its denominators are unchanged.\cl{D46A,D46C,RCVA,RCVC} & the D46 probes \\
 10-25 & The evaluation-variance explanation is corrected. The two serving probes that appeared to reproduce run-to-run nondeterminism hashed the whole response payload, which carries a random tool-call id and a random chat id, so their distinct-completion counts were artifacts. Remeasured on the completion's token ids and log-probabilities, a batch-1 greedy decode is bit-reproducible, a cache hit equals a cold prefill, and the co-batch does change a row (the int8 projections switch to a tensor-core block from five rows and the decode attention sizes its split count from the batch) - but one request in flight does not make a whole episode reproducible, so a second, unidentified source remains. The three-run greedy spread this paragraph explains (30, 31 and 26 of 46) is unchanged.\cl{REP1,REP2} & the REP1 paragraph and any reading of a single greedy arm \\
@@ -25,5 +37,5 @@ Date & Change & Before \\
 10-26 & The registration's amendment history (the dated amendments appended to \code{prereg/coding-tasks.md} before the runs they could affect) is kept in the repository's history of that file and is no longer restated in this paper; the protocol of \cref{sec:protocol} is the registration as it stands, and the changes made in this paper are the rows above. & the paper's final form \\
 \bottomrule
 \end{tabular}
-\caption{Changes to the protocol made in this paper, in the order they were made.}\label{tab:deviations}
+\caption{Changes made in this paper, continued.}\label{tab:deviations2}
 \end{table}

@@ -17,34 +17,33 @@ that runs on plain \code{brain serve}; the next turn starts from it.
 operational: \emph{can a team take its own git repository and tune a local agentic model
 that is measurably better at completing unseen tasks in it, repeatedly, without losing what it
 had?} The registered test is a paired comparison on repository tasks reserved before any
-rollout, with a retention check and a replication on a second repository
-(\cref{sec:protocol,sec:coding-results}). \textbf{That result has not been measured}, so this is a
-draft: it may contain registered but not yet validated results, and a final version contains
-validated results only (\cref{sec:repro}). What the paper establishes is what is needed to
-measure it honestly: the architecture, a task and verification funnel, a training substrate
-that fits a 27B model on one card, a release gate, the requirements that make the loop work,
-and a protocol and replication recipe fixed before the first coding run. The tables that will
-hold the result are in the paper and are empty.
+rollout (\cref{sec:protocol,sec:coding-results}). \textbf{It did not show the improvement}: the
+candidate registered before the query reached a mean pass@1 of 23.0 against 20.0 for its base on
+the 46 qualification families (18 wins, 12 losses, 16 ties, $p=0.18$). What did separate is the
+supervision: against the same corpus, recipe and seed with every action supervised instead of the
+decisive ones, the candidate won 26 families and lost 11 ($p=0.010$), and the six-seed development
+comparison of the candidate against its base had given $p=0.040$.\cl{QUAL1,PROTO6} The paper
+establishes what is needed to measure such a result honestly and reports what was measured: the
+architecture, a task and verification funnel, a training substrate that fits a 27B model on one card, a
+release gate, the requirements that make the loop work, and the coding-task protocol with
+its results.
 
 \paragraph{Scope.} The paper asks two questions. \emph{What must each stage of the loop do,
 and what does the code contain for it, so that a turn of the loop can add a capability without
 losing one?} (\cref{sec:architecture,sec:training,sec:substrate,sec:requirements}.)
 \emph{Can the same loop be pointed at a repository and its effect on unseen tasks be decided
-by a registered test?} (protocol and recipe only, \cref{sec:protocol,sec:replicate}.) It claims
-no general improvement of any benchmark score and contains no plans beyond the registered
-experiments: a mechanism the code does not contain is marked planned, and a measurement that
+by a registered test?} (\cref{sec:protocol,sec:coding-results}, with the recipe for another
+repository in \cref{sec:replicate}.) It claims
+no general improvement of any benchmark score and contains no plans: a mechanism the code does not contain is marked planned, and a measurement that
 was not made is stated as not made.
 
 \paragraph{How claims are verified.} Every statement about the system or a measurement
 carries the id of a row in a claims ledger (\code{data/claims.csv}, rendered as grey
-bracketed ids). A \textsc{structure} claim is a fact about the code, a command line or the
+bracketed ids). A \textsc{structure} claim is a fact about the code, a command line, the registration file or the
 history of a repository and is re-checked by \code{make verify} against the repositories at
 pinned commits that a fresh clone can reach (\cref{sec:repro}); a \textsc{measured} claim is a
 number computed by \code{scripts/build_data.py} from the measurements recorded in \code{data/measurements.json};
-a \textsc{computed} claim is a number derived by that script from a stated formula; a
-\textsc{registered} claim states a rule that the dated registration files contain; a
-\textsc{planned} claim states that an experiment has not been run and stops being true the
-moment a result row exists; a \textsc{cited} claim states what a published work does and points
+a \textsc{computed} claim is a number derived by that script from a stated formula; a \textsc{cited} claim states what a published work does and points
 at its bibliography entry. A structure check shows that a definition, constant or message exists
 in a file; it does not show that the code behaves accordingly, which only the experiments do.
 
@@ -57,6 +56,8 @@ what the training substrate of one card holds and was measured to do for a 27B m
 (\cref{sec:substrate}).
 (iii)~The requirements that make the loop work, each tied to its implementation or marked
 planned (\cref{sec:requirements}).
-(iv)~A coding-task protocol with registered experiments, including a replication, fixed before
-any run (\cref{sec:protocol,sec:coding-results}), and a replication recipe whose steps are marked
-available or planned (\cref{sec:replicate}).
+(iv)~A coding-task protocol fixed before any run, and its results: a registered confirmatory
+query that does not show the candidate better than its base, and a same-seed supervision contrast
+that separates (\cref{sec:protocol,sec:coding-results}), with a replication recipe whose steps are
+marked available or planned (\cref{sec:replicate}).
+% NEW-EXPERIMENT: self-learning from raw documentation

@@ -16,9 +16,16 @@ implements it or mark it planned, and report what the training substrate of one 
 holds for a 27B model (bf16 LoRA and NF4 QLoRA qualified; a probe step at
 \mThrNfFourEightOneNineTwoTokensPerS{} tokens/s, as measured). Every statement about the system
 or a measurement carries an id in a claims ledger and is re-checked against the three
-repositories at pinned commits or against a raw run record. Finally we register, before any run,
-the experiment the loop exists for: whether a small model's adapter, trained on verified trajectories that a larger teacher
-produced, raises completion of unseen repository tasks over the untrained small model, with
-retention and a replication on a second, independent repository, and a follow-up in which the
-larger model learns from its own verified trajectories. That claim is \emph{not yet measured}: this draft contains its protocol and replication recipe, the teacher's first pass, an underpowered pilot of the headline that does not show it, and the larger model's first training run, which its registered memorisation guard stopped before any evaluation.
+repositories at pinned commits or against a raw run record. Finally we report the experiment the loop exists for, registered before any run: whether a small
+model's adapter, trained on verified trajectories that a larger teacher produced, raises completion
+of unseen repository tasks over the untrained small model. The registered confirmatory query does
+\emph{not} show it: on 46 qualification families the candidate registered in advance reaches a mean
+pass@1 of 23.0 against 20.0 for its base (18 families won, 12 lost, 16 tied; one-sided sign test
+$p=0.18$). The same-seed contrast that changes only the supervision, decisive actions against all
+actions, does separate (26 wins, 11 losses, 9 ties, $p=0.010$), as did the six-seed development
+comparison of the candidate against its base ($p=0.040$).\cl{QUAL1,PROTO6} The larger model's training on
+its own trajectories was stopped by its registered memorisation guard before any evaluation, a pilot
+of its guarded variant showed no improvement, and the registered replication on a second repository
+was not run.
+% NEW-EXPERIMENT: self-learning from raw documentation
 \end{abstract}
