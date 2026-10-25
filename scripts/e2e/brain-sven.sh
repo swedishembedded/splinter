@@ -11,8 +11,10 @@
 # with it. The task's answer lives only in a file the model has to read, so a
 # pass is judged on the file's content, not on the agent's claim.
 #
-# The model runs on the CPU backend, so the run needs no free GPU and takes
-# minutes to tens of minutes.
+# The model runs on the CPU backend by default (no free GPU needed, minutes to
+# tens of minutes). `MODEL` selects the served model id (default Qwen3-0.6B) and
+# `DEVICE` the backend, in brain's device grammar, so the same check runs a
+# different model family or a GPU without editing the script.
 #
 # Exit status: 0 passed; 1 failed (the log is printed); 3 a prerequisite is
 # missing, so nothing was tested. A 3 is never a pass.
@@ -27,7 +29,9 @@ fi
 brain=$1
 sven=$2
 models=$3
-model=Qwen/Qwen3-0.6B
+model=${MODEL:-Qwen/Qwen3-0.6B}
+device=${DEVICE:-cpu}
+ctx=${CTX:-}
 secret=4217
 
 skip() { echo "SKIPPED (nothing was tested): $*" >&2; exit 3; }
@@ -48,8 +52,10 @@ trap cleanup EXIT
 
 port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 
-"$brain" serve --device cpu --openai "$port" --models-dir "$models" \
-    --runtime-dir "$scratch/run" --api-keys-out "$scratch/keys.json" --ready-file "$scratch/ready" \
+serve_args=(--device "$device" --openai "$port" --models-dir "$models"
+    --runtime-dir "$scratch/run" --api-keys-out "$scratch/keys.json" --ready-file "$scratch/ready")
+[ -n "$ctx" ] && serve_args+=(--ctx "$ctx")
+"$brain" serve "${serve_args[@]}" \
     >"$scratch/brain.log" 2>&1 &
 server=$!
 
