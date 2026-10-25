@@ -81,6 +81,27 @@ pub fn model() -> Scripted {
 /// [`model`] as it would be after training: it knows `knows` and, as the
 /// generator, numbers its training tasks `numbers`.
 pub fn authoring(numbers: std::ops::Range<usize>, knows: &[&str]) -> Scripted {
+    writer(numbers, knows, |_| (0..8).collect())
+}
+
+/// [`model`] writing `per_call` probes a request, numbered on from the last
+/// it wrote for the topic: a small generator that needs asking again.
+pub fn writing_probes_in_batches(per_call: usize) -> Scripted {
+    let written = std::sync::Mutex::new(std::collections::BTreeMap::<String, usize>::new());
+    writer(10..18, &[], move |topic| {
+        let mut written = written.lock().unwrap();
+        let from = written.entry(topic.to_string()).or_default();
+        let numbers = (*from..*from + per_call).collect();
+        *from += per_call;
+        numbers
+    })
+}
+
+fn writer(
+    numbers: std::ops::Range<usize>,
+    knows: &[&str],
+    probes: impl Fn(&str) -> Vec<usize> + Send + Sync + 'static,
+) -> Scripted {
     let knows: Vec<String> = knows.iter().map(|t| (*t).to_string()).collect();
     Scripted::new(move |prompt| {
         if prompt.contains("You write training tasks") {
@@ -88,7 +109,7 @@ pub fn authoring(numbers: std::ops::Range<usize>, knows: &[&str]) -> Scripted {
                 return String::new();
             };
             let numbers: Vec<usize> = if prompt.contains("(assessment)") {
-                (0..8).collect()
+                probes(topic)
             } else {
                 numbers.clone().collect()
             };

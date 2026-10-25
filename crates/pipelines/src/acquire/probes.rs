@@ -165,10 +165,16 @@ pub fn fresh_seen() -> Seen {
     Seen::new(DEFAULT_SHINGLE_WORDS, DEFAULT_MAX_OVERLAP)
 }
 
+/// The most times the generator is asked for one skill's probes: a small
+/// model admits two or three tasks a request, fewer than a skill needs.
+pub const MAX_PROBE_WRITES: usize = 4;
+
 /// The probes of `skill`: up to `per_half` dev and as many final tasks,
 /// alternating in the order of the tasks' addresses so the halves do not
-/// depend on the order the generator wrote them in. Every probe's
-/// instruction is added to `seen`, so no later task may repeat one.
+/// depend on the order the generator wrote them in. The generator is asked
+/// again while the skill has fewer than both halves need, up to
+/// [`MAX_PROBE_WRITES`] times and only while each request adds a task. Every
+/// probe's instruction is added to `seen`, so no later task may repeat one.
 pub fn probes_for(
     ctx: &Context,
     skill: &Skill,
@@ -177,6 +183,20 @@ pub fn probes_for(
     seen: &mut Seen,
 ) -> Result<SkillProbes, OrchestratorError> {
     let mut written = write_for(ctx, skill, ask, seen)?;
+    for _ in 1..MAX_PROBE_WRITES {
+        if written.tasks.len() >= 2 * per_half || ask.deadline.is_some_and(|d| Instant::now() >= d)
+        {
+            break;
+        }
+        let more = write_for(ctx, skill, ask, seen)?;
+        for (why, n) in more.refused {
+            *written.refused.entry(why).or_default() += n;
+        }
+        if more.tasks.is_empty() {
+            break;
+        }
+        written.tasks.extend(more.tasks);
+    }
     written.tasks.sort_by(|a, b| a.task.cmp(&b.task));
     let mut probes = SkillProbes {
         skill: skill.id.clone(),

@@ -39,7 +39,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 
 use common::gate::FakeTrainer;
-use common::zork::{context, model, request, write_manual, Learner};
+use common::zork::{context, model, request, write_manual, writing_probes_in_batches, Learner};
 use common::{scratch_context, Scripted};
 use serde_json::json;
 use splinter_agent::CancelToken;
@@ -422,4 +422,23 @@ fn a_run_without_probes_says_why_the_generator_wrote_none() {
             .is_some_and(|(why, n)| !why.is_empty() && n.parse::<usize>().is_ok())),
         "{refused}"
     );
+}
+
+#[test]
+fn a_generator_that_writes_few_probes_a_request_is_asked_again() {
+    // Two probes a request, three a half: one request leaves every skill
+    // unassessable, three give each its six.
+    let (scratch, ctx) =
+        scratch_context("acquire-probe-batches", writing_probes_in_batches(2), false);
+    common::gate::put_base(&ctx);
+    let manual = write_manual(&scratch);
+    let report = acquire(&ctx, &request(&manual), &Learner).unwrap().report;
+    assert!(!report.probes.is_empty());
+    for probes in &report.probes {
+        assert_eq!(
+            (probes.dev.len(), probes.finals.len()),
+            (3, 3),
+            "{probes:?}"
+        );
+    }
 }
