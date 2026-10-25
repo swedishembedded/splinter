@@ -100,10 +100,10 @@ recording:
 
 | outcome | count | why |
 |---|---|---|
-| admitted and verified | 1 of 14 | the teacher's continuation passed the task's hidden checks |
-| the student's transcript compacted | 8 | `step N is a system turn inside the conversation`: the episode replaced its own context before it failed, so there is no faithful transcript to continue |
-| an observation does not replay | 4 | a test run's wall clock, a `grep -r` whose matches came in another order, and two listing totals (fixed: a copied tree allocates other blocks) |
-| continued but did not verify | 1 | the teacher's continuation failed the hidden checks |
+| the student's transcript compacted | 8 of 14 | `step N is a system turn inside the conversation`: the episode replaced its own context before it failed, so there is no faithful transcript to continue |
+| an observation does not replay | 4 of 14 | a test run's wall clock (which replays when the timing coincides - refusal is a coin flip there), a `grep -r` whose matches came in another order, and two listing totals (fixed: a copied tree allocates other blocks) |
+| forkable | 2 of 14 | one clean, one whose timing-dependent observation replayed |
+| continued and verified | 3 of 6 continuations, on 2 tasks | over three runs (32k and 64k teachers); the teacher's continuation has to pass the task's hidden checks, and it does so about half the time |
 
 Two consequences for the design, both measured rather than assumed:
 
@@ -112,6 +112,11 @@ Two consequences for the design, both measured rather than assumed:
   it worked. A solve run whose failures are meant to be corrected has to record the episode
   without proactive compaction (fail on the context limit instead), and that is a change to
   the recording protocol, not to the correction stage.
+- **A continuation must not compact either.** At a 32k teacher, both of the first run's
+  verified corrections had compacted their own context, and the dataset rightly left them out
+  (`Compacted`), since the prefix a record would supervise is a summary then. The continuation
+  now runs with proactive compaction at 1.0 of the budget: an episode that outgrows its window
+  ends at the budget gate with every message.
 - **The student's episode usually ends near the context limit**, so the continuation needs
   room of its own: the teacher bank serves 64k (`CTX=65536 ./serve-bank.sh 0 8791`) and a
   continuation that still compacts is refused by the projection rather than taught, since the
