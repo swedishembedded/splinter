@@ -133,6 +133,24 @@ fn decode(text: &str) -> String {
                 "quot" => '"',
                 "apos" => '\'',
                 "nbsp" => ' ',
+                "ndash" => '\u{2013}',
+                "mdash" => '\u{2014}',
+                "hellip" => '\u{2026}',
+                "lsquo" => '\u{2018}',
+                "rsquo" => '\u{2019}',
+                "ldquo" => '\u{201C}',
+                "rdquo" => '\u{201D}',
+                "laquo" => '\u{AB}',
+                "raquo" => '\u{BB}',
+                "middot" => '\u{B7}',
+                "bull" => '\u{2022}',
+                "times" => '\u{D7}',
+                "copy" => '\u{A9}',
+                "reg" => '\u{AE}',
+                "trade" => '\u{2122}',
+                "sect" => '\u{A7}',
+                "deg" => '\u{B0}',
+                "pi" => '\u{3C0}',
                 _ => {
                     let number = name.strip_prefix('#')?;
                     let code = match number.strip_prefix(['x', 'X']) {
@@ -287,6 +305,19 @@ mod tests {
         );
         let utf8 = "<html><meta charset=\"utf-8\"><body>caf\u{e9}</body></html>";
         assert_eq!(decode_html(utf8.as_bytes()).unwrap(), utf8);
+    }
+
+    #[test]
+    fn typographic_entities_become_their_characters() {
+        let md = html_to_markdown("<h2>2.1 &ndash; Lexical Conventions</h2><p>a&mdash;b &ldquo;q&rdquo; &copy; &hellip;</p>");
+        assert!(
+            md.starts_with("## 2.1 \u{2013} Lexical Conventions\n"),
+            "{md}"
+        );
+        assert!(
+            md.contains("a\u{2014}b \u{201C}q\u{201D} \u{A9} \u{2026}"),
+            "{md}"
+        );
     }
 
     #[test]
