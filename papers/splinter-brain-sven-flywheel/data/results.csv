@@ -3,3 +3,10 @@ CE4,eight repositories (pilot subset S1),adapter against untrained 8B,21,0,1,PIL
 CE8,eight repositories (pilot subset S1),CE8-T against the 27B base,13,3,4,PILOT
 CE8,eight repositories (pilot subset S1),CE8-T-S (shuffled control) against the 27B base,16,2,6,PILOT
 CE8,eight repositories (pilot subset S1),CE8-T-u1b (decision-level) against the 27B base,13,1,4,PILOT
+D46-SS,D46 (46 families),decisive actions against all actions (seed 13),42,16,1,PILOT
+D46-SS,D46 (46 families),decisive actions against all actions (seed 1),38,8,4,PILOT
+D46-SS,D46 (46 families),all actions against the base (seed 13),35,4,11,PILOT
+D46-RCV,D46 (46 families),6 steps from win1 against the base,36,4,6,PILOT
+D46-RCV,D46 (46 families),18 steps from win1 against the base,34,6,8,PILOT
+D46-RCV,D46 (46 families),36 steps from win1 against the base,31,10,5,PILOT
+D46-RCV,D46 (46 families),18 steps from the undamaged decisive seed-1 adapter (control),30,7,2,PILOT

@@ -191,6 +191,70 @@ def ce1_summary_metrics(summary):
     }
 
 
+def verify_metrics(report):
+    """The values a claim may cite from an `experiences verify` report: how many attempts passed
+    and failed, and how many were exposed (a pass on a visible check that fails the hidden one)."""
+    return {"experiences": report["experiences"], "passed": report["passed"],
+            "failed": report["failed"], "exposed": report["exposed"],
+            "undecided": report["undecided"]}
+
+
+def time_metrics(text):
+    """The values a claim may cite from a training time record (`train-*.time`): the wall time,
+    the steps and, when the record names it, the training binary's SHA-256."""
+    m = {}
+    for key in ("wall_s", "steps"):
+        found = re.search(rf"\b{key}=(\d+)", text)
+        if found:
+            m[key] = int(found.group(1))
+    binary = re.search(r"binary_sha256=([0-9a-f]{64})", text)
+    if binary:
+        m["binary_sha256"] = binary.group(1)
+    return m
+
+
+def behaviour_metrics(text):
+    """The values a claim may cite from the behaviour table of the 2026-10-25 session record:
+    how many of the 46 D46 attempts edited a file and how many ended in the repetition stop,
+    per arm. The table is the one under `Behaviour is seed-stable`; the arms are named there."""
+    starts = text.find("Behaviour is seed-stable")
+    if starts < 0:
+        return {}
+    section = text[starts:].split("###")[0]
+    names = {"base": "base", "decisive seed 1": "decisive_s1", "decisive seed 7": "decisive_s7",
+             "decisive seed 13": "decisive_s13", "every action, seed 1": "all_actions_s1"}
+    m = {}
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 3 or cells[0] not in names:
+            continue
+        edited = re.match(r"(\d+)/46", cells[1])
+        aborted = re.match(r"(\d+)", cells[2])
+        if edited and aborted:
+            m[f"{names[cells[0]]}_edited"] = int(edited.group(1))
+            m[f"{names[cells[0]]}_aborted"] = int(aborted.group(1))
+    return m
+
+
+def edit_rate_metrics(text):
+    """The values a claim may cite from the edit-rate record over the stored D46 attempts: how
+    many attempts edited a file and how many ended in the repetition stop, per arm."""
+    names = {"pilot-d46-base.verify.json": "base",
+             "pilot-d46-decisive.verify.json": "decisive_s1",
+             "pilot-d46-decisive2.verify.json": "decisive_s7",
+             "pilot-s13-d46-decisive-s13.verify.json": "decisive_s13",
+             "pilot-d46-allnew.verify.json": "all_actions_s1"}
+    m = {}
+    for line in text.splitlines():
+        found = re.match(r"(\S+)\s+attempts\s+(\d+) edited\s+(\d+) \(\s*\d+%\) repetition-aborted\s+(\d+)", line)
+        if found and found.group(1) in names:
+            arm = names[found.group(1)]
+            m[f"{arm}_attempts"] = int(found.group(2))
+            m[f"{arm}_edited"] = int(found.group(3))
+            m[f"{arm}_aborted"] = int(found.group(4))
+    return m
+
+
 def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
@@ -211,6 +275,16 @@ def parse_log(prefix, text):
         return json.loads(text)
     if prefix.startswith("ce8."):
         return ce8_train_metrics(text)
+    if prefix.startswith(("d46.", "rcv.")):
+        if ".compare" in prefix:
+            return ce4_compare_metrics(json.loads(text))
+        if ".train" in prefix:
+            return time_metrics(text)
+        if ".behaviour" in prefix:
+            return behaviour_metrics(text)
+        if ".edit_rate" in prefix:
+            return edit_rate_metrics(text)
+        return verify_metrics(json.loads(text))
     if prefix.startswith("g8."):
         return g8_report_metrics(json.loads(text))
     if prefix.startswith("tj."):
@@ -315,6 +389,8 @@ def metrics():
     m.update(ce4_metrics())
     m.update(ce8_metrics())
     m.update(g8_metrics())
+    m.update(prefixed_metrics("d46."))
+    m.update(prefixed_metrics("rcv."))
     return m
 
 
@@ -403,6 +479,28 @@ def results_table():
     return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
 
 
+# Development probes, not registered experiments: rows of data/results.csv whose experiment is one
+# of these are rendered by pilot_results_table, and their status must stay PILOT.
+PILOTS = ("D46-SS", "D46-RCV")
+
+
+def pilot_results_table(rows=None):
+    """The paired outcomes of the development probes, from their rows of data/results.csv (or the
+    rows passed, for the test): the exact one-sided sign test is computed from the wins and losses,
+    never typed."""
+    rows = read_results() if rows is None else rows
+    mine = [r for r in rows if r["experiment"] in PILOTS]
+    if not mine:
+        return r"\textbf{NOT MEASURED}"
+    lines = [r"\begin{tabular}{lp{5.4cm}rrrrl}", r"\toprule",
+             r"Probe & Arm & Families & Wins & Losses & $p$ & Status \\", r"\midrule"]
+    for r in mine:
+        wins, losses = int(r["wins"]), int(r["losses"])
+        lines.append(f"{r['experiment']} & {r['arm']} & {r['exam_families']} & {wins} & {losses} "
+                     f"& {upper_tail(wins, wins + losses):.3g} & {r['status']} \\\\")
+    return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
+
+
 def design_table():
     lines = [r"\begin{tabular}{rrrrrr}", r"\toprule",
              r"Non-tied & Wins needed & Smallest $p$ & \multicolumn{3}{c}{Power if $P(\text{win})=$} \\",
@@ -449,6 +547,7 @@ def write_outputs(out):
     (out / "e4_table.tex").write_text(e4_table() + "\n")
     (out / "registered_table.tex").write_text(registered_table() + "\n")
     (out / "results_table.tex").write_text(results_table() + "\n")
+    (out / "pilot_results_table.tex").write_text(pilot_results_table() + "\n")
     (out / "ce1_table.tex").write_text(ce1_table() + "\n")
     (out / "design_table.tex").write_text(design_table() + "\n")
     (out / "power_curve.csv").write_text(power_curve())

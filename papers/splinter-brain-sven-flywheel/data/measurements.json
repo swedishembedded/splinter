@@ -592,6 +592,351 @@
    "splinter": "3330c206c+6521a67ab",
    "brain": "77e510fbf",
    "command": "splinter dataset build --view sft-step (unpacked) over the eight pass-1 sets (runs/ce8/ce8t-u1.sh; log runs/ce8/logs/ds-ce8t-u1.json)"
+  },
+  "d46-base-verify": {
+   "log": "g8/pilot-d46-base.verify.json",
+   "sha256": "9d7862f0e247fd694a2b93b5f0bfd1770ca5066aee0b55e1d4c1d12214f60439",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the D46 base arm (runs/g8)",
+   "metric_prefix": "d46.base.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 21,
+    "failed": 25,
+    "exposed": 9,
+    "undecided": 0
+   }
+  },
+  "d46-s1-verify": {
+   "log": "g8/pilot-d46-decisive.verify.json",
+   "sha256": "2bc20f805c3eee3adca96d6e2825eb96a55d5d22327a53d462ce74d4733ddc6f",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the decisive seed-1 arm (runs/g8)",
+   "metric_prefix": "d46.s1.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 23,
+    "failed": 23,
+    "exposed": 4,
+    "undecided": 0
+   }
+  },
+  "d46-s7-verify": {
+   "log": "g8/pilot-d46-decisive2.verify.json",
+   "sha256": "34b9f715d7771fc33daced9ceabb956eb714f988a3366e257a08333623089b2f",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the decisive seed-7 arm (runs/g8)",
+   "metric_prefix": "d46.s7.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 24,
+    "failed": 22,
+    "exposed": 0,
+    "undecided": 0
+   }
+  },
+  "d46-s13-verify": {
+   "log": "g8/pilot-s13-d46-decisive-s13.verify.json",
+   "sha256": "460448619287b003991c6d6149d2caa7bc1770abf1087e57fecd0237152ea998",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the decisive seed-13 arm (runs/g8)",
+   "metric_prefix": "d46.s13.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 30,
+    "failed": 16,
+    "exposed": 1,
+    "undecided": 0
+   }
+  },
+  "d46-s1-verify-all": {
+   "log": "g8/pilot-d46-allnew.verify.json",
+   "sha256": "1155005f81f690769bee561540ce3f8e9c4fea7620b37b1cdcb2c9efef5bc19d",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the all-action seed-1 arm (runs/g8)",
+   "metric_prefix": "d46.s1.verify_all",
+   "metrics": {
+    "experiences": 46,
+    "passed": 18,
+    "failed": 28,
+    "exposed": 4,
+    "undecided": 0
+   }
+  },
+  "d46-s13-verify-all": {
+   "log": "g8/pilot-ctl-allnew-s13.verify.json",
+   "sha256": "d1617dbf9deb0d21807ec9efe394a142751da190def9965c41b262d13277cb8c",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the all-action seed-13 arm (runs/g8)",
+   "metric_prefix": "d46.s13.verify_all",
+   "metrics": {
+    "experiences": 46,
+    "passed": 13,
+    "failed": 33,
+    "exposed": 3,
+    "undecided": 0
+   }
+  },
+  "d46-s13-compare": {
+   "log": "g8/compare-decisive13-vs-allnew13.json",
+   "sha256": "a62c020e59789bb925747a1c7bbf75fcac7b1d70bde4b9f465a12ff318a940ea",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare decisive seed 13 against all actions (runs/g8/compare-arm.sh)",
+   "metric_prefix": "d46.s13.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 42,
+    "families": 42,
+    "wins": 16,
+    "losses": 1,
+    "ties": 25,
+    "discordant": 17,
+    "p_value": 0.0001373291015625,
+    "adapter_verified": 30,
+    "adapter_exposed": 1,
+    "base_verified": 13,
+    "base_exposed": 3
+   }
+  },
+  "d46-s1-compare": {
+   "log": "g8/compare-decisive1-vs-allnew1.json",
+   "sha256": "c59e7a1d5a39586c96f53b47631431f91b555d60a92bba9ac35f5f648e8ccc3d",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare decisive seed 1 against all actions (runs/g8/compare-arm.sh)",
+   "metric_prefix": "d46.s1.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 38,
+    "families": 38,
+    "wins": 8,
+    "losses": 4,
+    "ties": 26,
+    "discordant": 12,
+    "p_value": 0.19384765625,
+    "adapter_verified": 23,
+    "adapter_exposed": 4,
+    "base_verified": 18,
+    "base_exposed": 4
+   }
+  },
+  "d46-s13-compare-all-base": {
+   "log": "g8/pilot-compare-ctl-allnew-s13.json",
+   "sha256": "3fbd2c03d8df46048d7ae53e1b5323916d2d71966211396ee87e7761e06c0a02",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare all actions seed 13 against the base (runs/g8/compare-arm.sh)",
+   "metric_prefix": "d46.s13.compare_all_base",
+   "metrics": {
+    "tasks": 46,
+    "paired": 35,
+    "families": 35,
+    "wins": 4,
+    "losses": 11,
+    "ties": 20,
+    "discordant": 15,
+    "p_value": 0.982421875,
+    "adapter_verified": 13,
+    "adapter_exposed": 3,
+    "base_verified": 21,
+    "base_exposed": 9
+   }
+  },
+  "rcv-6-verify": {
+   "log": "g8/pilot-rcvA-rcv-win1-6.verify.json",
+   "sha256": "3872cb79eb7feec3fe281662c0e472d7b8c0077fe6981a003033298ebb05a210",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the 6-step recovery arm (runs/g8)",
+   "metric_prefix": "rcv.6.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 23,
+    "failed": 23,
+    "exposed": 2,
+    "undecided": 0
+   }
+  },
+  "rcv-6-compare": {
+   "log": "g8/pilot-compare-rcvA-rcv-win1-6.json",
+   "sha256": "56f7c893a2d6f9450b6ecff55657f2ce12498d28c16eac0adcd19fbc5f5e67ea",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare the 6-step recovery arm against the base (runs/g8/compare-arm.sh)",
+   "metric_prefix": "rcv.6.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 36,
+    "families": 36,
+    "wins": 4,
+    "losses": 6,
+    "ties": 26,
+    "discordant": 10,
+    "p_value": 0.828125,
+    "adapter_verified": 23,
+    "adapter_exposed": 2,
+    "base_verified": 21,
+    "base_exposed": 9
+   }
+  },
+  "rcv-18-verify": {
+   "log": "g8/pilot-d46-recov.verify.json",
+   "sha256": "ce803a495050f0d7e6aa941b658ddb5a78ba28ba3a1bf3615e7aa66fc67b8d0e",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the 18-step recovery arm measured 2026-10-24 (runs/g8)",
+   "metric_prefix": "rcv.18.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 20,
+    "failed": 26,
+    "exposed": 5,
+    "undecided": 0
+   }
+  },
+  "rcv-18-compare": {
+   "log": "g8/pilot-compare-d46-recov.json",
+   "sha256": "0270ad2bac9f4c55565be7fb25f4d077647f3206d6358d2bb58a6bfcfb29dc1d",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare the 18-step recovery arm against the base (runs/g8/compare-arm.sh)",
+   "metric_prefix": "rcv.18.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 34,
+    "families": 34,
+    "wins": 6,
+    "losses": 8,
+    "ties": 20,
+    "discordant": 14,
+    "p_value": 0.78802490234375,
+    "adapter_verified": 20,
+    "adapter_exposed": 5,
+    "base_verified": 21,
+    "base_exposed": 9
+   }
+  },
+  "rcv-36-verify": {
+   "log": "g8/pilot-rcvA-rcv-win1-36.verify.json",
+   "sha256": "dadca7e24679b79afa55d89730a5c83aff8d27ba742e10c72cafc495764adbe6",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the 36-step recovery arm (runs/g8)",
+   "metric_prefix": "rcv.36.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 28,
+    "failed": 18,
+    "exposed": 7,
+    "undecided": 0
+   }
+  },
+  "rcv-36-compare": {
+   "log": "g8/pilot-compare-rcvA-rcv-win1-36.json",
+   "sha256": "483b62d5e1fd33f9cf471ff814cacab88f5f5097e4221bccad02141edf30efe5",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare the 36-step recovery arm against the base (runs/g8/compare-arm.sh)",
+   "metric_prefix": "rcv.36.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 31,
+    "families": 31,
+    "wins": 10,
+    "losses": 5,
+    "ties": 16,
+    "discordant": 15,
+    "p_value": 0.15087890625,
+    "adapter_verified": 28,
+    "adapter_exposed": 7,
+    "base_verified": 21,
+    "base_exposed": 9
+   }
+  },
+  "rcv-ctl18-verify": {
+   "log": "g8/pilot-rcvA-rcv-decisive-18.verify.json",
+   "sha256": "57fdb76d6d1a3a70d17ecac8d47b382b7c6c9f0ba581f60e4de5fc4ae70ed5db",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the undamaged 18-step control (runs/g8)",
+   "metric_prefix": "rcv.ctl18.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 24,
+    "failed": 22,
+    "exposed": 10,
+    "undecided": 0
+   }
+  },
+  "rcv-ctl18-compare": {
+   "log": "g8/pilot-compare-rcvA-rcv-decisive-18.json",
+   "sha256": "38b0061bd2d4f7e0dcac2391ed6d9a8c661641a87316cbb6339fec148a1bc9d2",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare the undamaged 18-step control against the base (runs/g8/compare-arm.sh)",
+   "metric_prefix": "rcv.ctl18.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 30,
+    "families": 30,
+    "wins": 7,
+    "losses": 2,
+    "ties": 21,
+    "discordant": 9,
+    "p_value": 0.08984375,
+    "adapter_verified": 24,
+    "adapter_exposed": 10,
+    "base_verified": 21,
+    "base_exposed": 9
+   }
+  },
+  "rcv-6-train": {
+   "log": "ce8/logs/train-rcv-win1-6.time",
+   "sha256": "e61be57995b749b7cbf457c220c06f6fdf66d2f8fdc3975f0264939f8f685ea9",
+   "brain_commit": "unknown (rebuilt splinter binary sha256 1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab)",
+   "command": "splinter train (runs/ce8/logs/train-rcv-win1-6.time)",
+   "metric_prefix": "rcv.6.train",
+   "metrics": {
+    "wall_s": 303,
+    "steps": 6
+   }
+  },
+  "rcv-36-train": {
+   "log": "ce8/logs/train-rcv-win1-36.time",
+   "sha256": "16806e2ec3df48edbea238b41d1537d31e5e2f122fc10bfcf262139fdbc4aeaf",
+   "brain_commit": "unknown (rebuilt splinter binary sha256 1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab)",
+   "command": "splinter train (runs/ce8/logs/train-rcv-win1-36.time)",
+   "metric_prefix": "rcv.36.train",
+   "metrics": {
+    "wall_s": 815,
+    "steps": 36
+   }
+  },
+  "rcv-ctl18-train": {
+   "log": "ce8/logs/train-rcv-pc1-18.time",
+   "sha256": "d5f3c6fb957109bd238cea81420ec5763f2c04bb30819f8e8919d099ed658d88",
+   "brain_commit": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab",
+   "command": "splinter train (runs/ce8/logs/train-rcv-pc1-18.time)",
+   "metric_prefix": "rcv.ctl18.train",
+   "metrics": {
+    "wall_s": 578,
+    "steps": 18,
+    "binary_sha256": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab"
+   }
+  },
+  "d46-behaviour-edit-rate": {
+   "log": "g8/edit-rate-2026-10-25.txt",
+   "sha256": "aca47ca23023368aebf0a2f22f9d83a50ded84a718c862e66049fb24324fa8b5",
+   "brain_commit": "77e510fbf",
+   "command": "python3 runs/g8/edit-rate.py over the stored D46 attempts (runs/ce8 state)",
+   "metric_prefix": "d46.edit_rate",
+   "metrics": {
+    "base_attempts": 46,
+    "base_edited": 24,
+    "base_aborted": 13,
+    "decisive_s1_attempts": 46,
+    "decisive_s1_edited": 35,
+    "decisive_s1_aborted": 1,
+    "decisive_s7_attempts": 46,
+    "decisive_s7_edited": 36,
+    "decisive_s7_aborted": 0,
+    "decisive_s13_attempts": 46,
+    "decisive_s13_edited": 39,
+    "decisive_s13_aborted": 2,
+    "all_actions_s1_attempts": 46,
+    "all_actions_s1_edited": 22,
+    "all_actions_s1_aborted": 10
+   }
   }
  }
 }
