@@ -32,11 +32,21 @@ adapter edits in **35 (76 %)** and aborts in **1 (2 %)**. Narrowing the supervis
 model from "edits as often as the base but stops converging" to "edits far more often and
 almost never loops".
 
+# The control that was run afterwards changes the attribution, and this entry is corrected
+# rather than left flattering. The same all-action corpus trained with the same rebuilt
+# binary (`allnew`) passes 18/46 - not 12 - so the rebuild accounts for six of the fifteen
+# tasks between the two original arms, and the decisive-action corpus adds five on top of
+# that (23 against 18, both with 4 exposed). On S1 the picture is weaker still: the decisive
+# corpus passed 16 at one seed and 9 at a second, and the all-action corpus with the rebuilt
+# binary passed 9 - so run-to-run spread there is as large as either effect.
+
 Caveats, stated so the number is not over-read: the decisive run trained with a splinter
 built from current main rather than the pinned revision, because a dataset carrying the new
-exclusion reason cannot be decoded by the older binary; 23 against the base's 21 is not
-significant on its own (34 paired families, 9W-8L-17T, p = 0.5); and with one seed, the
-claim is that the regression is gone, not that the gain is real.
+exclusion reason cannot be decoded by the older binary - and that rebuild is worth six
+tasks of the result above; 23 against the base's 21 is not significant on its own (34 paired
+families, 9W-8L-17T, p = 0.5); and with one seed per arm, and a seven-task spread between two
+seeds of one recipe on S1, the claim is that neither corpus regresses with the rebuilt binary,
+not that decisive supervision is worth five tasks.
 
 Consequence: a coding-agent corpus should weight the decisive actions. `--only-actions` makes
 that available; the next run should test it at a second seed and against the frozen training
