@@ -146,6 +146,31 @@ The run ends when every skill is mastered (`--mastery`), no skill can be chosen 
 assessed skill reaches the target on the final probes. `--no-release` stops before the gate;
 otherwise the final candidate is gated like any other and only the gate moves the alias.
 
+Each round's report in the run record (`splinter --json learn ...`, stage `round-N`) says who
+did what and what it cost: `incumbent` (the model that attempted the tasks) and `generator` (the
+model that wrote them), then `proposed`, `written` (admitted), `attempts`, `graded`,
+`verified_passes`, `worth_training`, `records`, and `solve` and `train` with `wall_seconds` (and
+`gpu_seconds` where the attempts recorded device time; training reports wall-clock only). From
+them the useful verified experiences per unit of exploration compute are computed per round.
+
+### Training every weight, and a model that writes its own tasks
+
+By default each round trains a LoRA adapter on the start policy. `--full-fine-tune` trains every
+weight instead: each round starts from the incumbent checkpoint (the start base in round 1, the
+last accepted round's checkpoint after) on the round's records beside a replay of the accepted
+rounds' records (`--replay-fraction`, default 0.25 of each earlier dataset's trained-on records,
+taking a quarter of the training draws). The candidate is a checkpoint directory, measured as
+`local:<directory>`; an accepted one becomes the incumbent, and a rejected or superseded one is
+deleted unless `--keep-candidates`. The learning rate is `--lr`, else 1e-5. `--train-precision
+<SPEC>` (for example `state=int8,sr=on`) is handed to brain's parser unchanged; the default is
+brain's. The release gate takes adapters, so `--full-fine-tune` needs `--no-release`, and `--rank`
+does not apply. Training holds the card for itself: the resident policy is released first.
+
+`--self-generate` lets the incumbent write the training tasks of every round after the first
+accepted one; round 1, and every round before an acceptance, uses the configured generator. The
+probes are written once, before any training, by the configured generator in either case, so
+the exam does not depend on the trained model.
+
 The Lua families and the `lua` runtime are Lua 5.1 and no other: `make deps/lua LUA_DIR=<dir>`
 builds the pinned interpreter, `--runtime-dir <dir>/bin` puts it first, and the runtime refuses
 an interpreter that reports another version.

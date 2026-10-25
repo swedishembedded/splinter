@@ -22,6 +22,7 @@
 //! exactly what it was.
 
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 use serde::Serialize;
 use splinter_core::digest::Digest;
@@ -29,14 +30,18 @@ use splinter_eval::frontier::Distribution;
 use splinter_knowledge::skills::Skill;
 
 use super::competence::SkillCompetence;
+use super::cost::StageCost;
 use super::probes::{score, set_of, write_for, Ask, ProbeScore};
 use super::Acquisition;
-use crate::curriculum::frontier::select_frontier;
+use crate::curriculum::frontier::{select_frontier, tally};
 use crate::curriculum::teacher::{teach, TeachRequest};
 use crate::datasets::{build, BuildRequest, ViewName, VoiceBuild, DEFAULT_MIN_STRENGTH};
 use crate::release::arm;
 use crate::solving::{solve_tasks, SolveRequest};
-use crate::train::{train_recorded_as, TrainRequest, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
+use crate::train::{
+    train_full_recorded_as, train_recorded_as, Candidate, FullCandidate, FullRequest, TrainRequest,
+    DEFAULT_LORA_RANK,
+};
 use crate::verify::{verify_set, Grading};
 use splinter_agent::work::WorkProtocol;
 use splinter_core::model_ref::ModelRef;
@@ -92,16 +97,42 @@ pub struct Round {
     pub skill: String,
     /// The benefit it was selected for.
     pub benefit: f64,
-    /// Tasks written for it.
+    /// The model that attempted the round's tasks and was measured as the
+    /// round's starting point: the policy the run began with, then the last
+    /// accepted candidate.
+    pub incumbent: String,
+    /// The model that wrote the round's training tasks.
+    pub generator: String,
+    /// Tasks the generator proposed, admitted or not.
+    pub proposed: usize,
+    /// Tasks admitted: they exercise the skill and repeat no probe or
+    /// earlier task.
     pub written: usize,
     /// Tasks written that were refused, by reason.
     pub refused: BTreeMap<String, usize>,
+    /// Attempts the incumbent made at the admitted tasks.
+    pub attempts: usize,
+    /// Of those, attempts with a decided verdict.
+    pub graded: usize,
+    /// Of those, verified passes.
+    pub verified_passes: usize,
     /// What the frontier made of the tasks.
     pub frontier: Option<Distribution>,
+    /// Tasks worth training on: failed sometimes with a verified answer, or
+    /// answered by the teacher where the incumbent never solved them.
+    pub worth_training: usize,
     /// Records in the round's dataset.
     pub records: Option<usize>,
+    /// What the incumbent's attempts (solving and verifying) cost.
+    pub solve: Option<StageCost>,
+    /// What training the candidate cost; no device time is reported for it.
+    pub train: Option<StageCost>,
     /// The candidate, when one was trained.
     pub candidate: Option<String>,
+    /// The directory of the full checkpoint the round trained. It is
+    /// deleted when the round is rejected or a later round supersedes it,
+    /// unless the request keeps candidates.
+    pub checkpoint: Option<String>,
     /// The target skill before and after.
     pub target: Option<Change>,
     /// Every other skill measured, before and after.
@@ -110,6 +141,31 @@ pub struct Round {
     pub outcome: Outcome,
     /// The competence graph after it.
     pub competence: Digest,
+}
+
+/// What a round trained.
+enum Trained {
+    /// A LoRA adapter on the start policy.
+    Adapter(Box<Candidate>),
+    /// Every weight, as a checkpoint directory.
+    Full(Box<FullCandidate>),
+}
+
+impl Trained {
+    fn id(&self) -> &str {
+        match self {
+            Self::Adapter(c) => &c.candidate,
+            Self::Full(f) => &f.id,
+        }
+    }
+
+    /// The candidate as a model to attempt and measure.
+    fn model(&self, ctx: &splinter_orchestrator::context::Context) -> ModelRef {
+        match self {
+            Self::Adapter(c) => arm(ctx.config(), Some(&c.adapter)),
+            Self::Full(f) => f.model.clone(),
+        }
+    }
 }
 
 /// The goal a generator is given for training tasks of `skill`.
@@ -141,11 +197,21 @@ impl Acquisition<'_> {
             round,
             skill: skill.id.clone(),
             benefit,
+            incumbent: self.incumbent.to_string(),
+            generator: self.author().to_string(),
+            proposed: 0,
             written: 0,
             refused: BTreeMap::new(),
+            attempts: 0,
+            graded: 0,
+            verified_passes: 0,
             frontier: None,
+            worth_training: 0,
             records: None,
+            solve: None,
+            train: None,
             candidate: None,
+            checkpoint: None,
             target: None,
             others: BTreeMap::new(),
             outcome: Outcome::Skipped {
@@ -159,12 +225,13 @@ impl Acquisition<'_> {
             };
         };
 
+        let generator = self.author().clone();
         let written = write_for(
             ctx,
             skill,
             &Ask {
                 kinds: &self.kinds,
-                generator: &self.generator,
+                generator: &generator,
                 goal: goal_of(&self.request.objective, skill),
                 deadline: self.deadline,
                 cancel: cancel.clone(),
@@ -172,6 +239,7 @@ impl Acquisition<'_> {
             &mut self.seen,
         )?;
         report.written = written.tasks.len();
+        report.proposed = report.written + written.refused.values().sum::<usize>();
         report.refused = written.refused;
         if written.tasks.is_empty() {
             skip(
@@ -184,6 +252,7 @@ impl Acquisition<'_> {
         let tasks = set_of(ctx, &format!("round {round}: {}", skill.id), &digests)?;
 
         let agentic = self.request.pass_at_k;
+        let solving = Instant::now();
         let solved = solve_tasks(
             ctx,
             &SolveRequest {
@@ -201,6 +270,16 @@ impl Acquisition<'_> {
             },
         )?;
         verify_set(ctx, &solved.experience_set, Grading::ActiveJudge, &cancel)?;
+        report.solve = Some(StageCost::of_attempts(
+            ctx,
+            solving,
+            &solved.experience_set,
+        )?);
+        for (count, _) in tally(ctx, &solved.experience_set)?.into_values() {
+            report.attempts += count.attempts;
+            report.graded += count.graded;
+            report.verified_passes += count.passes;
+        }
         let taught = teach(
             ctx,
             &TeachRequest {
@@ -214,6 +293,7 @@ impl Acquisition<'_> {
         )?;
         let kept = select_frontier(ctx, &tasks, &solved, &taught)?;
         report.frontier = Some(kept.distribution);
+        report.worth_training = kept.distribution.kept();
         if kept.distribution.kept() == 0 {
             skip(
                 &mut report,
@@ -265,43 +345,23 @@ impl Acquisition<'_> {
         }
         self.assert_no_probe_trained_on(&kept.frontier_task_set)?;
 
-        let mut datasets = self.datasets.clone();
-        datasets.push(built.dataset.to_string());
-        let candidate = train_recorded_as(
-            ctx,
-            run,
-            &format!("seed-round-{round}"),
-            &TrainRequest {
-                datasets,
-                rehearsal: None,
-                from: ModelRef::policy_default(),
-                replay_fraction: DEFAULT_REPLAY_FRACTION,
-                replay_policy: Default::default(),
-                steps: self.request.steps,
-                rank: self.request.rank.unwrap_or(DEFAULT_LORA_RANK),
-                beta: None,
-                tuning: self.request.tuning,
-            },
-            self.trainer,
-        )?;
-        report.candidate = Some(candidate.candidate.clone());
-        let tuned = arm(ctx.config(), Some(&candidate.adapter));
+        let training = Instant::now();
+        let candidate = self.train_candidate(run, round, &built.dataset.to_string())?;
+        report.train = Some(StageCost::wall_only(training));
+        report.candidate = Some(candidate.id().to_string());
+        if let Trained::Full(full) = &candidate {
+            report.checkpoint = Some(full.checkpoint.dir.display().to_string());
+        }
+        let tuned = candidate.model(self.ctx);
 
         // The target and every skill measured before, on their dev probes.
-        let mut after: BTreeMap<String, ProbeScore> = BTreeMap::new();
-        for measured in self.competence.skills.clone() {
-            let Some(probes) = self.probes.get(&measured.skill) else {
-                continue;
-            };
-            let (scored, _) = score(
-                ctx,
-                &tuned,
-                &probes.dev,
-                &format!("round {round}: dev probes of {}", measured.skill),
-                &cancel,
-            )?;
-            after.insert(measured.skill, scored);
-        }
+        let after = match self.measure(&tuned, round, &cancel) {
+            Ok(after) => after,
+            Err(e) => {
+                self.dispose(candidate);
+                return Err(e);
+            }
+        };
         let changes: BTreeMap<String, Change> = after
             .iter()
             .filter_map(|(id, after)| {
@@ -350,7 +410,7 @@ impl Acquisition<'_> {
             report.outcome = Outcome::Accepted;
             self.incumbent = tuned;
             self.datasets.push(built.dataset.to_string());
-            self.last_candidate = Some(candidate);
+            self.adopt(candidate);
             // The competence of everything the candidate was measured on.
             for (id, scored) in after {
                 let rounds =
@@ -363,8 +423,109 @@ impl Acquisition<'_> {
             }
         } else {
             report.outcome = Outcome::Rejected { reasons };
+            self.dispose(candidate);
         }
         self.close(run, report, skill)
+    }
+
+    /// Trains the round's candidate on `dataset`: an adapter retrained from
+    /// the start policy over every accepted round's dataset, or, with
+    /// `full_fine_tune`, every weight of the incumbent on `dataset` beside a
+    /// replay of the accepted rounds'.
+    fn train_candidate(
+        &self,
+        run: &mut Recorder<'_>,
+        round: usize,
+        dataset: &str,
+    ) -> Result<Trained, OrchestratorError> {
+        let name = format!("seed-round-{round}");
+        let request = self.request;
+        if request.full_fine_tune {
+            return train_full_recorded_as(
+                self.ctx,
+                run,
+                &name,
+                &FullRequest {
+                    datasets: vec![dataset.to_string()],
+                    replay_datasets: self.datasets.clone(),
+                    replay_fraction: request.replay_fraction,
+                    from: self.incumbent.clone(),
+                    steps: request.steps,
+                    tuning: request.tuning,
+                    train_precision: request.train_precision.clone(),
+                },
+                self.trainer,
+            )
+            .map(|f| Trained::Full(Box::new(f)));
+        }
+        let mut datasets = self.datasets.clone();
+        datasets.push(dataset.to_string());
+        train_recorded_as(
+            self.ctx,
+            run,
+            &name,
+            &TrainRequest {
+                datasets,
+                rehearsal: None,
+                from: ModelRef::policy_default(),
+                replay_fraction: request.replay_fraction,
+                replay_policy: Default::default(),
+                steps: request.steps,
+                rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
+                beta: None,
+                tuning: request.tuning,
+            },
+            self.trainer,
+        )
+        .map(|c| Trained::Adapter(Box::new(c)))
+    }
+
+    /// The target and every skill measured before, on their dev probes, as
+    /// `candidate` answers them.
+    fn measure(
+        &self,
+        candidate: &ModelRef,
+        round: usize,
+        cancel: &splinter_agent::CancelToken,
+    ) -> Result<BTreeMap<String, ProbeScore>, OrchestratorError> {
+        let mut after = BTreeMap::new();
+        for measured in &self.competence.skills {
+            let Some(probes) = self.probes.get(&measured.skill) else {
+                continue;
+            };
+            let (scored, _) = score(
+                self.ctx,
+                candidate,
+                &probes.dev,
+                &format!("round {round}: dev probes of {}", measured.skill),
+                cancel,
+            )?;
+            after.insert(measured.skill.clone(), scored);
+        }
+        Ok(after)
+    }
+
+    /// Makes an accepted candidate the one the run stands on. A full
+    /// checkpoint it supersedes is not needed any more.
+    fn adopt(&mut self, candidate: Trained) {
+        match candidate {
+            Trained::Adapter(adapter) => self.last_candidate = Some(*adapter),
+            Trained::Full(full) => {
+                if let Some(superseded) = self.checkpoint.replace(*full) {
+                    self.dispose(Trained::Full(Box::new(superseded)));
+                }
+            }
+        }
+    }
+
+    /// Removes a full checkpoint nothing stands on, unless candidates are
+    /// kept; an adapter is a small artifact and stays.
+    fn dispose(&self, candidate: Trained) {
+        if let Trained::Full(full) = candidate {
+            if !self.request.keep_candidates {
+                full.discard();
+            }
+        }
     }
 
     /// Counts the round against `skill` when nothing was accepted, records

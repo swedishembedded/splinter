@@ -15,7 +15,7 @@ use splinter_sdk::learn::{DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
 use splinter_sdk::powered::DEFAULT_RESAMPLES;
 use splinter_sdk::reserve::{DEFAULT_DEV_FAMILIES, DEFAULT_EXAM_FAMILIES};
 use splinter_sdk::seed::Seed;
-use splinter_sdk::train::{DEFAULT_LORA_RANK, MAX_PASSES};
+use splinter_sdk::train::{DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION, MAX_PASSES};
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
 use super::{
@@ -53,6 +53,30 @@ pub struct AcquireArgs {
         help = format!("How far a skill measured earlier may fall in a round before its \
         candidate is rejected [default: {DEFAULT_RETENTION_DROP}]"))]
     pub retention_drop: Option<f64>,
+    /// Train every weight in each round instead of a LoRA adapter.
+    #[arg(long, requires = "source")]
+    pub full_fine_tune: bool,
+    /// brain's training precision of a full fine-tune.
+    #[arg(
+        long,
+        value_name = "SPEC",
+        requires = "full_fine_tune",
+        help = "brain's training precision of a full fine-tune, e.g. state=int8,sr=on \
+        [default: brain's: fp32 everywhere]"
+    )]
+    pub train_precision: Option<String>,
+    /// Keep the checkpoints of rejected and superseded full-fine-tune rounds.
+    #[arg(long, requires = "full_fine_tune")]
+    pub keep_candidates: bool,
+    /// The fraction of each accepted round's records replayed into the next
+    /// full-fine-tune round.
+    #[arg(long, value_name = "F", value_parser = share, requires = "full_fine_tune",
+        help = format!("The fraction of each accepted round's trained-on records replayed \
+        into the next full-fine-tune round [default: {DEFAULT_REPLAY_FRACTION}]"))]
+    pub replay_fraction: Option<f64>,
+    /// Let the incumbent write the next round's training tasks.
+    #[arg(long, requires = "source")]
+    pub self_generate: bool,
 }
 
 /// `learn`.

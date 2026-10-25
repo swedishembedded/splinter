@@ -37,6 +37,11 @@ pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
         .max_rounds_per_skill
         .unwrap_or(request.max_rounds_per_skill);
     request.retention_drop = named.retention_drop.unwrap_or(request.retention_drop);
+    request.full_fine_tune = named.full_fine_tune;
+    request.train_precision = named.train_precision;
+    request.keep_candidates = named.keep_candidates;
+    request.replay_fraction = named.replay_fraction.unwrap_or(request.replay_fraction);
+    request.self_generate = named.self_generate;
     request.budget = args.budget;
     request.no_release = args.no_release;
     request.gate = args.gate.plan();

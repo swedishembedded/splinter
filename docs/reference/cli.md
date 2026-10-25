@@ -226,6 +226,11 @@ Options:
 - `--max-rounds <N>`: Training rounds in all [default: 8]
 - `--max-rounds-per-skill <N>`: Training rounds one skill may take [default: 2]
 - `--retention-drop <SHARE>`: How far a skill measured earlier may fall in a round before its candidate is rejected [default: 0.25]
+- `--full-fine-tune`: Train every weight in each round instead of a LoRA adapter.
+- `--train-precision <SPEC>`: brain's training precision of a full fine-tune, e.g. state=int8,sr=on [default: brain's: fp32 everywhere]
+- `--keep-candidates`: Keep the checkpoints of rejected and superseded full-fine-tune rounds.
+- `--replay-fraction <F>`: The fraction of each accepted round's trained-on records replayed into the next full-fine-tune round [default: 0.25]
+- `--self-generate`: Let the incumbent write the next round's training tasks.
 - `--goal <TEXT>`: What the learner is after; steers the tasks generated.
 - `--kinds <K,..>...`: Task kinds, comma-separated; when not named, a planner model surveys the sources and chooses them.
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.

@@ -15,6 +15,7 @@ pub mod gate;
 pub mod manual;
 pub mod repo;
 pub mod timeline;
+pub mod zork;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

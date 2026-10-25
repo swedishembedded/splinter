@@ -63,7 +63,10 @@ mod tuning;
 pub use candidate::{
     adopt_checkpoint, candidate_count, candidate_ids, load_candidate, Candidate, Checkpoint,
 };
-pub use full::DEFAULT_FULL_LEARNING_RATE;
+pub use full::{
+    train_full_candidate, train_full_recorded_as, FullCandidate, FullRequest,
+    DEFAULT_FULL_LEARNING_RATE,
+};
 use keep::{keep_candidate, Finished, Outcome};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
 pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};
@@ -209,6 +212,10 @@ pub struct TrainPlan {
     pub beta: f32,
     /// The base's precision and the learning rate, every option resolved.
     pub tuning: Tuning,
+    /// What a full fine-tune stores each parameter as, in brain's textual
+    /// form (`state=int8,sr=on`); `None` is brain's default. Adapter
+    /// trainers ignore it.
+    pub train_precision: Option<String>,
     /// The seed the trainer is handed and the replay is drawn by:
     /// [`Tuning::seed`], or the one drawn when none was given.
     pub seed: u64,
@@ -629,6 +636,7 @@ pub(crate) fn plan_training(
             seed: Some(seed),
             ..request.tuning
         },
+        train_precision: None,
         seed,
         eval_every,
         patience,

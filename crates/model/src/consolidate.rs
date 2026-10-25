@@ -43,6 +43,10 @@ pub struct FullTune<'a> {
     pub learning_rate: Option<f32>,
     /// The AdamW weight decay.
     pub weight_decay: f32,
+    /// What each trainable parameter is stored as, in brain's textual form
+    /// (`state=int8,sr=on`); parsed by brain, which names a key or value it
+    /// does not run. `None` is brain's default (fp32 everywhere).
+    pub train_precision: Option<&'a str>,
     /// The seed of the batch order; the caller draws it when the user gave
     /// none.
     pub seed: u64,
@@ -75,6 +79,12 @@ pub struct Checkpoint {
     pub final_loss: Option<f32>,
 }
 
+/// Whether brain runs `spec` as a full fine-tune's training precision: the
+/// refusal it would give, before anything is loaded.
+pub fn check_train_precision(spec: &str) -> Result<(), String> {
+    brain::TrainPrecision::parse(spec).map(|_| ())
+}
+
 /// Trains every weight of `request.model_dir` on `request.train`.
 pub fn full_fine_tune(request: &FullTune<'_>) -> Result<Checkpoint, PolicyError> {
     let failed = |reason: String| PolicyError::Train {
@@ -98,6 +108,11 @@ pub fn full_fine_tune(request: &FullTune<'_>) -> Result<Checkpoint, PolicyError>
         .weight_decay(request.weight_decay)
         .seed(request.seed)
         .thinking(request.thinking);
+    if let Some(spec) = request.train_precision {
+        let precision = brain::TrainPrecision::parse(spec)
+            .map_err(|e| failed(format!("train precision '{spec}': {e}")))?;
+        tune = tune.train_precision(precision);
+    }
     if let Some(share) = request.replay_share {
         tune = tune.replay_share(share);
     }

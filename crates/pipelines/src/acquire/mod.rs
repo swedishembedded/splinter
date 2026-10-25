@@ -43,6 +43,7 @@
 //!    gate like any other; an incumbent is only ever replaced there.
 
 mod competence;
+mod cost;
 mod graph;
 mod intake;
 mod probes;
@@ -61,6 +62,7 @@ use splinter_knowledge::skills::SkillGraph;
 use splinter_knowledge::tasks::dedup::Seen;
 
 pub use competence::{wilson, CompetenceGraph, SkillCompetence};
+pub use cost::StageCost;
 pub use graph::{plan, Planned, PlannedBy};
 pub use intake::{intake, is_url, Fetched, Intaken};
 pub use probes::{ProbeScore, SkillProbes};
@@ -69,9 +71,9 @@ pub use select::{next_skill, Selection, Targets};
 
 use crate::curriculum::frontier::PassAtK;
 use crate::learn::PolicyUsed;
-use crate::release::{arm, release_recorded, ReleaseRequest, Released};
+use crate::release::{release_recorded, ReleaseRequest, Released};
 use crate::tasks::{check_kinds, DEFAULT_LEARN_KINDS};
-use crate::train::{Candidate, Trainer, Tuning};
+use crate::train::{Candidate, FullCandidate, Trainer, Tuning, DEFAULT_REPLAY_FRACTION};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::roles;
@@ -129,6 +131,27 @@ pub struct AcquireRequest {
     pub steps: Option<u32>,
     /// LoRA rank of the adapter.
     pub rank: Option<u32>,
+    /// Train every weight instead of an adapter. Each round starts from the
+    /// incumbent checkpoint (the start base in round 1, the last accepted
+    /// round's checkpoint after) on the round's records and a replay of the
+    /// accepted rounds' records; the candidate is the checkpoint directory,
+    /// measured as `local:<directory>`. The release gate takes adapters, so
+    /// a request that trains every weight must also stop before it
+    /// ([`Self::no_release`]).
+    pub full_fine_tune: bool,
+    /// brain's training precision of a full fine-tune (`state=int8,sr=on`);
+    /// checked by brain's parser. `None` is brain's default.
+    pub train_precision: Option<String>,
+    /// Keep the checkpoints of rejected and superseded full-fine-tune
+    /// rounds; they are deleted otherwise, being GBs each.
+    pub keep_candidates: bool,
+    /// The fraction of each accepted round's trained-on records replayed
+    /// into the next full-fine-tune round (a quarter of its draws).
+    pub replay_fraction: f64,
+    /// Let the incumbent write the next round's training tasks. Probes are
+    /// written once before any training by the configured generator either
+    /// way, and so is round 1's training tasks (nothing is accepted yet).
+    pub self_generate: bool,
     /// How training runs.
     pub tuning: Tuning,
     /// The models named for roles.
@@ -156,6 +179,11 @@ impl AcquireRequest {
             gate: GatePlan::default(),
             steps: None,
             rank: None,
+            full_fine_tune: false,
+            train_precision: None,
+            keep_candidates: false,
+            replay_fraction: DEFAULT_REPLAY_FRACTION,
+            self_generate: false,
             tuning: Tuning::default(),
             roles: RoleOverrides::default(),
         }
@@ -183,6 +211,8 @@ impl AcquireRequest {
         };
         share("the mastery target", self.mastery)?;
         share("the retention bound", self.retention_drop)?;
+        share("the replay fraction", self.replay_fraction)?;
+        self.validate_training()?;
         if self.probes_per_skill < self.min_probes || self.min_probes == 0 {
             return Err(OrchestratorError::Refused(format!(
                 "{} probe(s) per half cannot rest a competence on {} graded probe(s)",
@@ -195,6 +225,36 @@ impl AcquireRequest {
             ));
         }
         self.pass_at_k.validate()
+    }
+
+    /// Refuses a combination of training options that cannot be carried out
+    /// or would be silently ignored.
+    fn validate_training(&self) -> Result<(), OrchestratorError> {
+        let refuse = |why: &str| Err(OrchestratorError::Refused(why.into()));
+        if !self.full_fine_tune {
+            if self.train_precision.is_some() {
+                return refuse("a training precision applies to a full fine-tune only");
+            }
+            if self.keep_candidates {
+                return refuse("kept candidates are checkpoints of a full fine-tune");
+            }
+            return Ok(());
+        }
+        if !self.no_release {
+            return refuse(
+                "a full fine-tune yields a checkpoint, and the release gate takes adapters: \
+                 stop before it with no_release",
+            );
+        }
+        if self.rank.is_some() {
+            return refuse("a rank is the size of an adapter; a full fine-tune has none");
+        }
+        if let Some(spec) = &self.train_precision {
+            splinter_model::consolidate::check_train_precision(spec).map_err(|e| {
+                OrchestratorError::Refused(format!("training precision '{spec}': {e}"))
+            })?;
+        }
+        Ok(())
     }
 
     fn targets(&self) -> Targets {
@@ -288,9 +348,27 @@ pub(super) struct Acquisition<'a> {
     /// The datasets of the rounds accepted so far.
     pub(super) datasets: Vec<String>,
     pub(super) last_candidate: Option<Candidate>,
+    /// The checkpoint the incumbent is, when every weight is trained.
+    pub(super) checkpoint: Option<FullCandidate>,
 }
 
 impl Acquisition<'_> {
+    /// Whether any candidate has been accepted yet.
+    pub(super) fn has_accepted(&self) -> bool {
+        !self.datasets.is_empty()
+    }
+
+    /// The model that writes a round's training tasks: the configured
+    /// generator, or with `self_generate` the incumbent once one candidate
+    /// has been accepted. Probes are always the configured generator's.
+    pub(super) fn author(&self) -> &ModelRef {
+        if self.request.self_generate && self.has_accepted() {
+            &self.incumbent
+        } else {
+            &self.generator
+        }
+    }
+
     /// Replaces `update`'s skill in the competence graph and keeps the new
     /// revision.
     pub(super) fn update_competence(
@@ -375,6 +453,7 @@ pub fn acquire(
             incumbent: ModelRef::policy_default(),
             datasets: Vec::new(),
             last_candidate: None,
+            checkpoint: None,
         };
         let report = state.run(run, policy, sources, planned)?;
         Ok(report)
@@ -544,10 +623,7 @@ impl Acquisition<'_> {
         cancel: &splinter_agent::CancelToken,
     ) -> Result<Assessment, OrchestratorError> {
         let start = ModelRef::policy_default();
-        let end = self.last_candidate.as_ref().map_or_else(
-            || start.clone(),
-            |c| arm(self.ctx.config(), Some(&c.adapter)),
-        );
+        let end = self.incumbent.clone();
         let mut skills = Vec::new();
         for probes in assessable {
             let (baseline, _) = probes::score(
