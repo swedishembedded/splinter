@@ -26,6 +26,10 @@
 //!   has no passage to show: the task's reference change replayed as the
 //!   actions of an agent, or a stronger model solving it as an agent, either
 //!   graded by the workspace verifier like a student's attempt.
+//! * [`corrections`] - the attempts that failed or got stuck are continued
+//!   by a teacher from the state the student actually reached, verified with
+//!   the task's own hidden checks, and kept as training material in which
+//!   the student's prefix is context and the teacher's actions supervised.
 //! * [`mastery`] - each concept's rolling pass rate per release, from the
 //!   student's closed-book solves; `status` shows the weakest.
 //! * [`queue`] - concepts the release gate saw forgotten (a retention suite
@@ -45,6 +49,7 @@
 //! queue/<hex>.json          one concept queued for generation, named by the concept's digest
 //! ```
 
+pub mod corrections;
 pub mod frontier;
 pub mod mastery;
 pub mod progress;

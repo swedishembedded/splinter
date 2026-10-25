@@ -37,6 +37,7 @@ use super::exam::{exam_canaries, remembered_seed, reserve};
 use super::held::{held_tasks, keep_tasks};
 use super::report::{PracticeReport, Profiled, Snapshotted, TasksMade};
 use super::PracticeRequest;
+use crate::curriculum::corrections::{correct, CorrectionsRequest};
 use crate::curriculum::frontier::select_frontier;
 use crate::curriculum::repository_teacher::{teach_repository, TeachRepositoryRequest};
 use crate::curriculum::schedule::{schedule, yield_of, Strategy};
@@ -74,6 +75,8 @@ pub(super) struct PracticeState<'a> {
     attempts: Option<SetId>,
     /// The teacher's graded demonstrations, when one was named.
     taught: Option<Taught>,
+    /// The verified corrections, when the stage ran.
+    corrections: Option<SetId>,
     candidate: Option<String>,
 }
 
@@ -91,6 +94,7 @@ impl<'a> PracticeState<'a> {
             exam_families: BTreeSet::new(),
             attempts: None,
             taught: None,
+            corrections: None,
             candidate: None,
         }
     }
@@ -122,6 +126,10 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, PracticeState<'a>> {
         )
         .then(FnStage::new("solve", solve_stage))
         .then(FnStage::new("verify", verify_stage).ignoring_budget())
+        .then(
+            FnStage::new("correction", correction_stage)
+                .when(|s| s.practice.request.corrections.is_some()),
+        )
         .then(FnStage::new("teach", teach_stage).when(|s| s.practice.request.teacher.is_some()))
         .then(FnStage::new("frontier", frontier_stage).ignoring_budget())
         .then(FnStage::new("dataset", dataset_stage).ignoring_budget())
@@ -466,6 +474,43 @@ fn verify_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_
     Ok(StageEnd::done(summary))
 }
 
+/// Continues the attempts that failed or got stuck from the state they
+/// reached with the teacher the request names, verifies each continuation
+/// with the task's own hidden checks, and keeps the verified ones for the
+/// dataset; the student's prefix is context in them, the teacher's actions
+/// supervised.
+fn correction_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
+    let (Some(tasks), Some(attempts), Some(plan)) = (
+        st.training.as_ref(),
+        st.attempts.as_ref(),
+        st.practice.request.corrections.as_ref(),
+    ) else {
+        unreachable!("the correction stage follows the verify stage and is asked for a teacher")
+    };
+    let agentic = st.practice.request.agentic();
+    let corrected = correct(
+        ctx,
+        &CorrectionsRequest {
+            task_set: tasks,
+            attempts,
+            teacher: &plan.teacher,
+            max: plan.max,
+            work: WorkProtocol {
+                follow_ups: agentic.follow_ups,
+                max_tool_calls: agentic.max_tool_calls,
+                max_repeated_results: agentic.max_repeated_results,
+                prompt: CodingPrompt::default(),
+            },
+            deadline: st.practice.deadline,
+            cancel: run.cancel_token(),
+        },
+    )?;
+    let summary = to_value(&corrected)?;
+    st.corrections = Some(corrected.experience_set.clone());
+    st.report.correction = Some(corrected);
+    Ok(StageEnd::done(summary))
+}
+
 /// Has the teacher the request names demonstrate each task the policy never
 /// solved; the demonstrations are graded like the policy's attempts.
 fn teach_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
@@ -519,7 +564,15 @@ fn frontier_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_
     st.attempts = Some(kept.frontier_experience_set.clone());
     let distribution = kept.distribution;
     st.report.frontier = Some(kept);
-    if distribution.kept() == 0 {
+    // A verified correction is training material even when the policy never
+    // solved the task and no demonstration answered it: the frontier keeps
+    // nothing from it, but the dataset still trains on the correction.
+    let corrected = st
+        .report
+        .correction
+        .as_ref()
+        .is_some_and(|corrections| corrections.corrections.iter().any(|item| item.admitted));
+    if distribution.kept() == 0 && !corrected {
         return Ok(StageEnd::stop(
             summary,
             format!(
@@ -539,10 +592,12 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
     let Some(attempts) = st.attempts.clone() else {
         unreachable!("the dataset stage follows the frontier stage")
     };
+    let mut sets = vec![attempts];
+    sets.extend(st.corrections.clone());
     let built = match build(
         ctx,
         &BuildRequest {
-            sets: vec![attempts],
+            sets,
             view: ViewName::SftStep,
             strip: None,
             // The workspace verifier's executable verdict, which no weaker

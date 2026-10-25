@@ -27,7 +27,7 @@ use splinter_core::experience::Task;
 use splinter_core::outcome::AttemptReport;
 use splinter_eval::verifiers::workspace::WorkspaceCheck;
 use splinter_sandbox::{CommandCall, WorkspaceEnvironment};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use splinter_orchestrator::context::Context;
 
@@ -39,6 +39,11 @@ pub(crate) struct WorkspaceInputs {
 }
 
 impl WorkspaceInputs {
+    /// The snapshot archive the task's tree is laid out from.
+    pub(crate) fn archive(&self) -> &Path {
+        &self.archive
+    }
+
     /// The inputs for `task`, a change to the repository `env` is a
     /// snapshot of; the reason when it cannot be solved: its archive is not
     /// kept, or its check is not one.

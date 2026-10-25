@@ -62,6 +62,7 @@ Every command takes these.
 
 - [splinter learn](#splinter-learn) - Learn from sources
 - [splinter practice](#splinter-practice) - Learn a repository from its own tests
+- [splinter corrections](#splinter-corrections) - Continue the attempts that failed or got stuck of an existing experience set with a teacher, from the state the student actually reached, and keep the continuations the task's own hidden checks verify as an experience set a dataset can be built from
 - [splinter ask](#splinter-ask) - Answer a question with a model, closed-book unless --open-book
 - [splinter status](#splinter-status) - Show the policy in use, recent runs and what the stores hold
 - [splinter doctor](#splinter-doctor) - Check that a run can start here
@@ -171,6 +172,7 @@ Subcommands:
 
 - [`learn`](#splinter-learn) - Learn from sources
 - [`practice`](#splinter-practice) - Learn a repository from its own tests
+- [`corrections`](#splinter-corrections) - Continue the attempts that failed or got stuck of an existing experience set with a teacher, from the state the student actually reached, and keep the continuations the task's own hidden checks verify as an experience set a dataset can be built from
 - [`ask`](#splinter-ask) - Answer a question with a model, closed-book unless --open-book
 - [`status`](#splinter-status) - Show the policy in use, recent runs and what the stores hold
 - [`doctor`](#splinter-doctor) - Check that a run can start here
@@ -319,6 +321,8 @@ Options:
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
 - `--no-release`: Stop at the trained candidate: do not run the release gate.
 - `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
+- `--correction <REF>`: Continue the attempts that failed or got stuck with this model, from the state the student actually reached, and train on the continuations its own hidden checks verify (`remote:`/`local:`). The teacher sees the student's transcript and workspace, never the grading material.
+- `--corrections <N>`: The most attempts the correction stage continues. Default: `8`.
 - `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`, `learning-progress`.
 - `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
 - `--curriculum <STRATEGY>`: The order tasks are solved and taught in (`--budget` may end the run before all are reached): the order they were admitted in, or by learning progress (the change in a family's verified pass rate between releases, per GPU second it cost) Default: `frontier`. Values: `frontier`, `learning-progress`, `gain-ranked`.
@@ -344,6 +348,23 @@ Options:
 - `--plan <FILE>`: An experiment plan (`experiment check`) this run is one generation of: the repository must be a family the plan trains in `--generation`, and a sealed family is always refused. The catalog is the catalog.toml beside the plan.
 - `--generation <N>`: The generation of the plan, counted from 1.
 - `--test-command <PROGRAM ARG...>...`: The command that runs the project's whole test suite in the root of its tree, as a program and its arguments (everything after this flag, so it comes last). Without it the rules give one: `python3 -m unittest` for a Python project, `cargo test --offline` for a Cargo project.
+
+### splinter corrections
+
+Continue the attempts that failed or got stuck of an existing experience set with a teacher, from the state the student actually reached, and keep the continuations the task's own hidden checks verify as an experience set a dataset can be built from
+
+```text
+splinter corrections [OPTIONS] --attempts <EXPERIENCE-SET> --tasks <TASK-SET> --teacher <REF>
+```
+
+Options:
+
+- `--attempts <EXPERIENCE-SET>` (required): The experience set of the attempts to continue, by id or unique prefix.
+- `--tasks <TASK-SET>` (required): The task set the attempts are of, by id or unique prefix.
+- `--teacher <REF>` (required): The model that continues them (`remote:`/`local:`)
+- `--max <N>`: The most attempts this run continues, one per task [default: 8]
+- `--max-tool-calls <N>`: The calls one continuation may make: the student's own limit, which the remaining budget is counted against.
+- `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
 
 ### splinter ask
 
@@ -608,6 +629,8 @@ Options:
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
 - `--no-release`: Stop at the trained candidate: do not run the release gate.
 - `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
+- `--correction <REF>`: Continue the attempts that failed or got stuck with this model, from the state the student actually reached, and train on the continuations its own hidden checks verify (`remote:`/`local:`). The teacher sees the student's transcript and workspace, never the grading material.
+- `--corrections <N>`: The most attempts the correction stage continues. Default: `8`.
 - `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`, `learning-progress`.
 - `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
 - `--curriculum <STRATEGY>`: The order tasks are solved and taught in (`--budget` may end the run before all are reached): the order they were admitted in, or by learning progress (the change in a family's verified pass rate between releases, per GPU second it cost) Default: `frontier`. Values: `frontier`, `learning-progress`, `gain-ranked`.

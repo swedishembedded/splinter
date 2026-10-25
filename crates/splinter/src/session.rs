@@ -144,8 +144,7 @@ impl Session {
     }
 
     /// Reads sentences until the input ends, each handled like
-    /// `splinter "<line>"`; at a terminal, a question back is answered
-    /// there. Ends with the worst exit of any line.
+    /// `splinter "<line>"`; at a terminal a question back is answered there.
     pub fn repl(&self) -> Exit {
         let stdin = std::io::stdin();
         let interactive = stdin.is_terminal() && !self.global.json;
@@ -267,6 +266,9 @@ impl Session {
                 } else {
                     Exit::Failed
                 });
+            }
+            Command::Corrections(args) => {
+                return crate::corrections_session::corrections_command(ctx, json, *args);
             }
             Command::Ask(args) => {
                 let retrieve = &args.retrieval;

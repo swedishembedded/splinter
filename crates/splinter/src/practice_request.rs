@@ -9,7 +9,7 @@
 //! The `practice` request the command line asks for.
 
 use splinter_sdk::experiment::ExperimentPlan;
-use splinter_sdk::practice::{HistorySource, PlanSlot, PracticeRequest};
+use splinter_sdk::practice::{CorrectionPlan, HistorySource, PlanSlot, PracticeRequest};
 use splinter_sdk::train::Tuning;
 use splinter_sdk::Error;
 
@@ -52,6 +52,10 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
         budget: args.budget,
         no_release: args.no_release,
         teacher: args.teacher,
+        corrections: args.correction.map(|teacher| CorrectionPlan {
+            teacher,
+            max: args.corrections,
+        }),
         replay_policy: args
             .replay
             .map(ReplayArg::policy)
@@ -121,6 +125,26 @@ mod tests {
         assert_eq!(asked.pass_at_k.k, 3);
         assert_eq!(asked.tuning.max_block, Some(8192));
         assert_eq!(asked.test_command, ["python3", "-m", "pytest", "-x"]);
+    }
+
+    #[test]
+    fn a_correction_teacher_reaches_the_request_with_its_cap() {
+        let plain = request(&["./shop"]);
+        assert!(
+            plain.corrections.is_none(),
+            "no teacher, no correction stage"
+        );
+
+        let asked = request(&[
+            "./shop",
+            "--correction",
+            "local:teacher-7b",
+            "--corrections",
+            "3",
+        ]);
+        let plan = asked.corrections.expect("a correction plan");
+        assert_eq!(plan.teacher.to_string(), "local:teacher-7b");
+        assert_eq!(plan.max, 3);
     }
 
     #[test]

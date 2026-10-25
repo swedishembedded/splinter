@@ -35,6 +35,7 @@ order:
 | `reserve` | sets the exam's families aside (a family is the file a fault was seeded in) by a stable hash of their names, before any attempt; `--exam-families N` (default a quarter), and a family an earlier run reserved stays the exam |
 | `solve` | the policy attempts each remaining task `--k` times as an agent in its own copy of the tree, with sven's file, search and shell tools, up to `--follow-ups` more turns when the visible checks stay red and `--max-tool-calls` calls; each attempt draws from a seed that is a function of the task and the attempt |
 | `verify` | applies each patch to a clean copy, lays the hidden tests over it and runs the project's checks; an exposure audit fails any attempt whose trajectory names a hidden path, quotes the hidden tests or names the state root, whatever its patch did, and the stage counts those by kind |
+| `correction` | only with `--correction`: the attempts that failed or got stuck (a failed verdict, or an episode stopped for repeating a call or spending its calls) are continued by the teacher from the state the student actually reached: the student's recorded transcript is replayed into a fresh copy of the snapshot by sven's fork, which refuses unless every replayed observation, the workspace it reaches and the transcript hash match the recording, and the teacher then takes the next turn under the same system prompt, tools and remaining step budget. The continuation is graded by the same hidden checks and exposure audit as an attempt; only verified ones are trained on, with the student's prefix as context and the teacher's actions supervised. One correction per task, at most `--corrections` in a run |
 | `teach` | only with `--teacher`: each task no graded attempt solved is given to the teacher, which is `reference` (the task's own reference change, the inverse of the seeded fault, replayed as an agent's actions through sven's tools: read the file, edit it by the patch's hunks) or a model (`remote:`/`local:`) that solves the task as an agent. Either is graded by the same workspace verifier and exposure audit as the policy's attempts and never grades itself; the exam's tasks are never given to it. A demonstration names the file without searching for it |
 | `frontier` | keeps the tasks the policy solves sometimes (pass@k), and with a teacher the never-solved tasks whose demonstration was verified |
 | `dataset` | the passing attempts, action by action (`sft-step`), with the tools the agent was offered (an action a labeller marked good is also admitted from an experience nobody verified or whose verdict failed, unless `--control outcome-verified` is given; the manifest records it); `--max-block TOKENS` leaves out and counts records longer than the card fits, and `--split-over-block` splits such a record into windows that each fit instead, keeping every supervised action and repeating the instruction in each; the dataset is checked to hold no family of the exam |
@@ -55,6 +56,13 @@ rewrites `<state>/serving/<alias>.json`, the manifest `brain serve
 checkpoint has no adapter to name, so its manifest is withdrawn. A candidate the
 gate blocks, or cannot measure, is not released, and the run exits 1 with the
 reason. `--test-command` takes the rest of the command line, so it comes last.
+
+A corpus of corrections can be built without solving again from an arm that
+already ran: `splinter corrections --attempts <EXPERIENCE-SET> --tasks
+<TASK-SET> --teacher <REF> [--max N]` continues the failed or stuck attempts
+of that set, verifies every continuation and prints the id of the experience
+set holding the verified ones, which `splinter dataset build --view sft-step`
+and `splinter train` then take as any other set.
 
 A task the policy never solves is not dropped when a teacher is named (`splinter practice
 --teacher reference`, or `--teacher remote:<provider>/<model>`): the task's own reference change

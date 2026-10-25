@@ -70,6 +70,11 @@ pub enum Command {
     /// saw the hidden tests), train a candidate from the champion and
     /// release it if it passes the release gate.
     Practice(Box<PracticeArgs>),
+    /// Continue the attempts that failed or got stuck of an existing
+    /// experience set with a teacher, from the state the student actually
+    /// reached, and keep the continuations the task's own hidden checks
+    /// verify as an experience set a dataset can be built from.
+    Corrections(Box<CorrectionsArgs>),
     /// Answer a question with a model, closed-book unless --open-book.
     Ask(AskArgs),
     /// Show the policy in use, recent runs and what the stores hold.
@@ -675,6 +680,7 @@ mod absorb;
 mod baseline;
 mod consolidate;
 mod control;
+mod corrections;
 mod dataset;
 mod exam;
 mod gate;
@@ -695,6 +701,7 @@ pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use baseline::BaselineArgs;
 pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
+pub use corrections::CorrectionsArgs;
 pub use dataset::BuildArgs;
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;

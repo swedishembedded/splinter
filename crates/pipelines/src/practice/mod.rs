@@ -44,6 +44,14 @@
 //!   project's checks run, with the hidden tests laid over it; an exposure
 //!   audit reads the trajectory for anything only the grader holds, and an
 //!   experience it fails is decided fail and counted.
+//! * **correction** - only when a correction teacher is named
+//!   (`--correction`): the attempts that failed or got stuck are continued
+//!   by the teacher from the state the student actually reached, through
+//!   sven's fork of the recorded transcript, and graded by the same
+//!   workspace verifier and exposure audit as a student's attempt. Only the
+//!   verified continuations are trained on, with the student's prefix as
+//!   context and the teacher's actions supervised
+//!   ([`crate::curriculum::corrections`]).
 //! * **teach** - only when a teacher is named (`--teacher`): each task no
 //!   graded attempt solved is given to it. A change to a repository has no
 //!   passage to show a teacher, so the teacher is the task's reference change
@@ -94,12 +102,38 @@ use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::runs::{record, Recorded};
 
 pub use exam::{exam_canaries, ExamReserved};
+
+/// How a run corrects the attempts that failed or got stuck: a teacher
+/// continues each from the state the student actually reached, and only the
+/// continuations the task's hidden checks verify are trained on.
+#[derive(Clone, Debug, Serialize)]
+pub struct CorrectionPlan {
+    /// The model that continues them.
+    pub teacher: splinter_core::model_ref::ModelRef,
+    /// The most corrections this run admits; [`DEFAULT_MAX_CORRECTIONS`]
+    /// when the request does not say.
+    pub max: usize,
+}
+
+/// The most corrections one run admits when the request does not say.
+pub const DEFAULT_MAX_CORRECTIONS: usize = crate::curriculum::corrections::DEFAULT_MAX_CORRECTIONS;
 pub use report::{PracticeReport, Profiled, Snapshotted};
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 12] = [
-    "policy", "snapshot", "profile", "tasks", "reserve", "schedule", "solve", "verify", "teach",
-    "frontier", "dataset", "train",
+pub const STAGES: [&str; 13] = [
+    "policy",
+    "snapshot",
+    "profile",
+    "tasks",
+    "reserve",
+    "schedule",
+    "solve",
+    "verify",
+    "correction",
+    "teach",
+    "frontier",
+    "dataset",
+    "train",
 ];
 
 /// The release stage, which follows training unless the request stops at
@@ -174,6 +208,9 @@ pub struct PracticeRequest {
     /// change replayed, or a stronger model); `None` asks nobody, and such
     /// tasks are dropped.
     pub teacher: Option<RepositoryTeacher>,
+    /// Continue the attempts that failed or got stuck with a teacher, and
+    /// train on its verified continuations; `None` runs no correction stage.
+    pub corrections: Option<CorrectionPlan>,
     /// Train a fresh adapter on the frozen base from the records of every
     /// earlier release and the new ones, instead of continuing the champion
     /// on the new records with a replay of the earlier: the rebuild a

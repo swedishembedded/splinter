@@ -18,7 +18,8 @@ use splinter_sdk::curriculum::repository_teacher::RepositoryTeacher;
 use splinter_sdk::curriculum::schedule::Strategy;
 use splinter_sdk::knowledge::tasks::workspace::InstructionVersion;
 use splinter_sdk::practice::{
-    DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS, DEFAULT_MAX_TOOL_CALLS,
+    DEFAULT_FOLLOW_UPS, DEFAULT_MAX_CORRECTIONS, DEFAULT_MAX_REPEATED_RESULTS,
+    DEFAULT_MAX_TOOL_CALLS,
 };
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::DEFAULT_LORA_RANK;
@@ -130,6 +131,15 @@ pub struct PracticeArgs {
     /// verifier as the policy's attempts; it never grades itself.
     #[arg(long, value_parser = repository_teacher, value_name = "reference|REF")]
     pub teacher: Option<RepositoryTeacher>,
+    /// Continue the attempts that failed or got stuck with this model, from
+    /// the state the student actually reached, and train on the continuations
+    /// its own hidden checks verify (`remote:`/`local:`). The teacher sees
+    /// the student's transcript and workspace, never the grading material.
+    #[arg(long, value_parser = model_reference, value_name = "REF")]
+    pub correction: Option<splinter_sdk::vocabulary::model_ref::ModelRef>,
+    /// The most attempts the correction stage continues.
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CORRECTIONS)]
+    pub corrections: usize,
     /// Which of the earlier releases' records are replayed beside the new
     /// ones (default uniform): none, uniform over every record, or balanced
     /// over capabilities.
@@ -258,6 +268,14 @@ impl CurriculumArgs {
             epsilon: self.lp_explore,
         }
     }
+}
+
+/// A model reference, for clap.
+pub fn model_reference(
+    text: &str,
+) -> Result<splinter_sdk::vocabulary::model_ref::ModelRef, String> {
+    text.parse()
+        .map_err(|e: splinter_sdk::vocabulary::model_ref::RefError| e.to_string())
 }
 
 /// A repository teacher, for clap: `reference` or a model reference.

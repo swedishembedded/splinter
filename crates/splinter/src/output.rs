@@ -10,6 +10,7 @@ use std::fmt::Write as _;
 use serde::Serialize;
 use splinter_sdk::ask::Answer;
 use splinter_sdk::critique::Critiqued;
+use splinter_sdk::curriculum::corrections::Corrections;
 use splinter_sdk::datasets::{Built, Exported};
 use splinter_sdk::experiences::{CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList};
 use splinter_sdk::judge::{Calibrated, JudgeMeasured};
@@ -364,6 +365,43 @@ impl Report for Verified {
         );
         for item in &self.unverified {
             let _ = writeln!(out, "  not graded {}: {}", item.experience, item.reason);
+        }
+        out
+    }
+}
+
+impl Report for Corrections {
+    fn human(&self) -> String {
+        let admitted = self.corrections.iter().filter(|item| item.admitted).count();
+        let mut out = format!(
+            "{} attempt(s) continued by {}: {} verified, {} refused\n  correction set {}\n",
+            self.corrections.len(),
+            self.teacher,
+            admitted,
+            self.refused.len(),
+            self.experience_set
+        );
+        for item in &self.corrections {
+            let _ = writeln!(
+                out,
+                "  {} (from {}): {} prefix action(s), {} teacher action(s), {}",
+                item.task,
+                item.student,
+                item.prefix_actions,
+                item.teacher_actions,
+                if item.admitted {
+                    "verified"
+                } else {
+                    "not verified"
+                }
+            );
+        }
+        for refused in &self.refused {
+            let _ = writeln!(
+                out,
+                "  refused {} (from {}): {}",
+                refused.task, refused.student, refused.reason
+            );
         }
         out
     }

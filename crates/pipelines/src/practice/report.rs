@@ -16,6 +16,7 @@ use splinter_knowledge::tasks::workspace::{HistoryReport, Reason};
 use splinter_store::tasks::TaskSetId;
 
 use super::exam::ExamReserved;
+use crate::curriculum::corrections::Corrections;
 use crate::curriculum::frontier::Frontier;
 use crate::curriculum::schedule::{ScheduleReport, Yield};
 use crate::curriculum::teacher::Taught;
@@ -93,6 +94,10 @@ pub struct PracticeReport {
     pub solve: Option<Solved>,
     /// The verify stage, with the experiences the exposure audit failed.
     pub verify: Option<Verified>,
+    /// The correction stage, when a teacher was named for it: the attempts
+    /// continued from where they stopped, each verified by the task's own
+    /// hidden checks.
+    pub correction: Option<Corrections>,
     /// The teach stage, when a teacher was named: its demonstrations of the
     /// tasks never solved, graded.
     pub teach: Option<Taught>,
