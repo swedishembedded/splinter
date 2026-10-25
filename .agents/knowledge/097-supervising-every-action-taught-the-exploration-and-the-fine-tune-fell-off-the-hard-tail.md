@@ -27,10 +27,12 @@ convergence on the hard tail, where most of a trajectory is exploration.
 
 The behaviour moves with the outcome, measured over all 46 attempts of each arm: the base
 edits a file in 24 attempts (52 %) and ends 13 (28 %) in a repetition abort; the
-full-supervision adapter edits in 24 (52 %) and aborts in 9 (20 %); the decisive-action
-adapter edits in **35 (76 %)** and aborts in **1 (2 %)**. Narrowing the supervision took the
-model from "edits as often as the base but stops converging" to "edits far more often and
-almost never loops".
+full-supervision adapter on the pinned binary edits in 24 (52 %) and aborts in 9 (20 %); the
+same all-action corpus on the rebuilt binary edits in 22 (48 %) and aborts in 10 (22 %); the
+decisive-action adapter on the rebuilt binary edits in **35 (76 %)** and aborts in **1
+(2 %)**. So the rebuild that is worth six tasks changes the outcomes and not the behaviour,
+and the decisive-action supervision is what moves the behaviour - two independent lines
+pointing at supervision for the five tasks it adds.
 
 # The control that was run afterwards changes the attribution, and this entry is corrected
 # rather than left flattering. The same all-action corpus trained with the same rebuilt
