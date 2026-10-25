@@ -14,7 +14,11 @@
 # The model runs on the CPU backend by default (no free GPU needed, minutes to
 # tens of minutes). `MODEL` selects the served model id (default Qwen3-0.6B) and
 # `DEVICE` the backend, in brain's device grammar, so the same check runs a
-# different model family or a GPU without editing the script.
+# different model family or a GPU without editing the script. `CTX` sets the
+# served context; `TEMPERATURE` the sampling temperature (an agent runtime's
+# near-greedy default loops on some served checkpoints); `SYSTEM_PROMPT` a file
+# replacing the agent's own system prompt, which a model served at a small
+# context needs.
 #
 # Exit status: 0 passed; 1 failed (the log is printed); 3 a prerequisite is
 # missing, so nothing was tested. A 3 is never a pass.
@@ -33,6 +37,8 @@ model=${MODEL:-Qwen/Qwen3-0.6B}
 device=${DEVICE:-cpu}
 ctx=${CTX:-}
 thinking=${THINKING:-}
+temperature=${TEMPERATURE:-}
+system_prompt=${SYSTEM_PROMPT:-}
 secret=4217
 
 skip() { echo "SKIPPED (nothing was tested): $*" >&2; exit 3; }
@@ -76,8 +82,10 @@ model:
   api_key: $key
 YAML
 [ -n "$thinking" ] && echo "  enable_thinking: $thinking" >>"$scratch/sven.yaml"
+[ -n "$temperature" ] && echo "  temperature: $temperature" >>"$scratch/sven.yaml"
 
 home=$scratch/home
+[ -n "$system_prompt" ] && { mkdir -p "$home"; HOME=$home XDG_CONFIG_HOME=$home "$sven" config set agent.system_prompt "$system_prompt" >/dev/null 2>&1 || true; }
 repo=$home/repo
 mkdir -p "$repo"
 printf 'The magic number is %s.\n' "$secret" >"$repo/hello.txt"
