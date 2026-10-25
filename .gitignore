@@ -25,6 +25,7 @@
 /papers/*/*.fls
 /papers/*/*.log
 /papers/*/*.out
+/papers/*/*.pdf
 
 # Python bytecode from the hook and task scripts.
 __pycache__/
