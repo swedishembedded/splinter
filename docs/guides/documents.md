@@ -132,8 +132,10 @@ splinter --runtime-dir ./lua51/bin learn "Become an exceptional Lua 5.1 programm
 
 With `--source` the words of the command are the objective and each source (a URL, a file or a
 directory) is read into a graph of skills, with the constraints and requirements the text states
-and the prerequisites between them. A URL is fetched once and an HTML page is read as Markdown;
-the record ties the URL to the digest of the bytes and to the source. Each skill has probes
+and the prerequisites between them. A URL is fetched once; an HTML page, fetched or a local file,
+is decoded in the charset it declares (UTF-8, or Latin-1/windows-1252, the default for a page that
+declares none) and read as Markdown; the record ties the URL (`file://` and the path for a local
+page) to the digest of the bytes and to the source. Each skill has probes
 written from its own sections, split into dev probes (the baseline, a round's gain and what a
 round cost are measured on them) and final probes (only the closing assessment touches them); no
 training task may repeat a probe. Rounds train the skill expected to benefit most, prerequisites

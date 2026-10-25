@@ -486,3 +486,26 @@ fn a_web_page_is_fetched_converted_to_markdown_and_traced_from_its_url() {
     assert!(text.starts_with("## `alpha` register"), "{text}");
     assert!(text.contains("returns a code number"), "{text}");
 }
+
+#[test]
+fn a_local_latin_1_page_is_decoded_converted_and_traced_like_a_fetched_one() {
+    let (scratch, ctx) = scratch_context("acquire-local-html", model(), false);
+    let page = scratch.0.join("manual.html");
+    std::fs::write(
+        &page,
+        b"<html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=iso-8859-1\"></head><body><h2><code>alpha</code> register</h2><p>The <code>alpha</code> register returns a code number \xa9 for each unit of its bank.</p></body></html>",
+    )
+    .unwrap();
+    let taken = intake(&ctx, &[page.display().to_string()]).unwrap();
+    let fetched = taken[0].fetched.as_ref().unwrap();
+    assert_eq!(
+        fetched.url,
+        format!("file://{}", page.canonicalize().unwrap().display())
+    );
+    assert!(fetched.converted);
+    let source = ctx.sources().get_source(&taken[0].source).unwrap();
+    let text =
+        String::from_utf8(ctx.sources().read_blob(&source.parts[0].content).unwrap()).unwrap();
+    assert!(text.starts_with("## `alpha` register"), "{text}");
+    assert!(text.contains("code number \u{a9} for each"), "{text}");
+}

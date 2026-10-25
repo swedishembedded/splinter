@@ -189,6 +189,69 @@ fn tidy(text: &str) -> String {
     out.trim_matches('\n').to_string() + "\n"
 }
 
+/// The text of an HTML page's bytes, decoded as the page declares: UTF-8 when
+/// the bytes are UTF-8; otherwise the `charset` its head declares, where the
+/// Latin labels (`iso-8859-1`, `latin1`, `us-ascii`, `windows-1252`, ...) and
+/// an undeclared charset decode as windows-1252, the superset browsers use for
+/// all of them. Refused, naming the charset, when the page declares one this
+/// does not decode or declares UTF-8 and is not.
+pub fn decode_html(bytes: &[u8]) -> Result<String, String> {
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return Ok(text.to_string());
+    }
+    match declared_charset(bytes).as_deref() {
+        None => Ok(windows_1252(bytes)),
+        Some(label) if LATIN_LABELS.contains(&label) => Ok(windows_1252(bytes)),
+        Some(label) => Err(format!(
+            "the page declares charset {label:?} and its bytes are not text in it that Splinter decodes"
+        )),
+    }
+}
+
+/// The labels that name windows-1252 or a subset of it.
+const LATIN_LABELS: &[&str] = &[
+    "iso-8859-1",
+    "iso8859-1",
+    "iso_8859-1",
+    "latin1",
+    "l1",
+    "us-ascii",
+    "ascii",
+    "windows-1252",
+    "cp1252",
+    "x-cp1252",
+];
+
+/// The `charset` the head of the page declares, lowercased.
+fn declared_charset(bytes: &[u8]) -> Option<String> {
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(4096)]).to_ascii_lowercase();
+    let at = head.find("charset=")? + "charset=".len();
+    let label: String = head[at..]
+        .trim_start_matches(['"', '\''])
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':'))
+        .collect();
+    (!label.is_empty()).then_some(label)
+}
+
+/// `bytes` as windows-1252: Latin-1, except 0x80-0x9F, which hold the
+/// typographic characters; the five bytes it leaves undefined map to the C1
+/// controls of the same value, as browsers decode them.
+fn windows_1252(bytes: &[u8]) -> String {
+    const HIGH: [u32; 32] = [
+        0x20AC, 0x81, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160,
+        0x2039, 0x0152, 0x8D, 0x017D, 0x8F, 0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013,
+        0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178,
+    ];
+    bytes
+        .iter()
+        .map(|&b| match b {
+            0x80..=0x9F => char::from_u32(HIGH[usize::from(b - 0x80)]).unwrap_or('\u{FFFD}'),
+            _ => char::from(b),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,5 +273,28 @@ mod tests {
         );
         assert!(md.contains("\n- one\n- two"), "{md}");
         assert!(!md.contains("gone") && !md.contains("p{}"), "{md}");
+    }
+    #[test]
+    fn a_latin_1_page_decodes_as_it_declares_and_a_utf8_page_as_it_is() {
+        let latin = b"<html><head><META HTTP-EQUIV=\"content-type\" CONTENT=\"text/html; charset=iso-8859-1\"></head><body>Copyright \xa9 Lua.org, PUC-Rio \x93q\x94</body></html>";
+        let text = decode_html(latin).expect("latin-1 decodes");
+        assert!(text.contains("Copyright \u{a9} Lua.org"), "{text}");
+        assert!(text.contains("\u{201c}q\u{201d}"), "{text}");
+        let undeclared = b"<html><body>caf\xe9</body></html>";
+        assert_eq!(
+            decode_html(undeclared).unwrap(),
+            "<html><body>caf\u{e9}</body></html>"
+        );
+        let utf8 = "<html><meta charset=\"utf-8\"><body>caf\u{e9}</body></html>";
+        assert_eq!(decode_html(utf8.as_bytes()).unwrap(), utf8);
+    }
+
+    #[test]
+    fn a_charset_it_does_not_decode_is_refused_by_name() {
+        let sjis = b"<html><meta charset=\"shift_jis\"><body>\x82\xa0</body></html>";
+        let refused = decode_html(sjis).unwrap_err();
+        assert!(refused.contains("shift_jis"), "{refused}");
+        let lying = b"<html><meta charset=utf-8><body>caf\xe9</body></html>";
+        assert!(decode_html(lying).unwrap_err().contains("utf-8"));
     }
 }

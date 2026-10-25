@@ -24,7 +24,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_core::source::SourceId;
-use splinter_knowledge::capture::{default_environment, html_to_markdown};
+use splinter_knowledge::capture::{decode_html, default_environment, html_to_markdown};
 use splinter_sandbox::process::{run, ProcessSpec};
 
 use crate::sources::{self, SourceTarget};
@@ -42,7 +42,8 @@ const FETCHED: &str = "source_fetch";
 /// What one fetch brought in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Fetched {
-    /// The address asked for.
+    /// The address asked for: a URL, or `file://` and the canonical path of
+    /// a local HTML page.
     pub url: String,
     /// The digest of the bytes that came.
     pub sha256: Digest,
@@ -61,7 +62,7 @@ pub struct Intaken {
     pub named: String,
     /// The source it is in the store.
     pub source: SourceId,
-    /// How it was fetched, for a URL.
+    /// How it was fetched and converted, for a URL or a local HTML page.
     pub fetched: Option<Fetched>,
 }
 
@@ -80,6 +81,13 @@ pub fn intake(ctx: &Context, named: &[String]) -> Result<Vec<Intaken>, Orchestra
         .map(|arg| {
             if is_url(arg) {
                 fetch(ctx, arg)
+            } else if let Some(page) = local_html(arg)? {
+                take_in(
+                    ctx,
+                    arg,
+                    &format!("file://{}", page.display()),
+                    std::fs::read(&page).map_err(io(&page))?,
+                )
             } else {
                 let target = SourceTarget::from_learn_arg(arg)?;
                 Ok(Intaken {
@@ -140,16 +148,53 @@ fn fetch(ctx: &Context, url: &str) -> Result<Intaken, OrchestratorError> {
         )));
     }
     let bytes = std::fs::read(download.path()).map_err(io(download.path()))?;
+    take_in(ctx, url, url, bytes)
+}
+
+/// The canonical path of `arg` when it names a local HTML page, which is
+/// taken in as a fetched page is (decoded, converted to Markdown) so that a
+/// manual reads the same whether it is named by URL or by file.
+fn local_html(arg: &str) -> Result<Option<std::path::PathBuf>, OrchestratorError> {
+    let path = std::path::Path::new(arg);
+    if arg.starts_with(sources::COMMAND_PREFIX) || !path.is_file() {
+        return Ok(None);
+    }
+    let mut head = Vec::with_capacity(2048);
+    std::io::Read::read_to_end(
+        &mut std::io::Read::take(std::fs::File::open(path).map_err(io(path))?, 2048),
+        &mut head,
+    )
+    .map_err(io(path))?;
+    if !is_html(&head) {
+        return Ok(None);
+    }
+    path.canonicalize().map(Some).map_err(io(path))
+}
+
+/// Stores the `bytes` that came from `origin` (named `named`) as a source:
+/// an HTML page decoded as it declares and converted to Markdown, anything
+/// else kept as the UTF-8 text it must be; the [`Fetched`] record ties the
+/// origin, the digest of its bytes and the source together.
+fn take_in(
+    ctx: &Context,
+    named: &str,
+    origin: &str,
+    bytes: Vec<u8>,
+) -> Result<Intaken, OrchestratorError> {
+    let scratch = ctx.root().work().join("fetch");
+    std::fs::create_dir_all(&scratch).map_err(io(&scratch))?;
     let sha256 = Digest::sha256_of(&bytes);
     let converted = is_html(&bytes);
-    let text = String::from_utf8(bytes.clone()).map_err(|_| {
-        OrchestratorError::Refused(format!(
-            "{url} is not UTF-8 text: Splinter learns from text"
-        ))
-    })?;
     let (body, extension) = if converted {
+        let text = decode_html(&bytes)
+            .map_err(|why| OrchestratorError::Refused(format!("{origin}: {why}")))?;
         (html_to_markdown(&text), "md")
     } else {
+        let text = String::from_utf8(bytes.clone()).map_err(|_| {
+            OrchestratorError::Refused(format!(
+                "{origin} is not UTF-8 text: Splinter learns from text"
+            ))
+        })?;
         (text, "txt")
     };
     let file = scratch.join(format!("{}.{extension}", &sha256.hex()[..32]));
@@ -158,7 +203,7 @@ fn fetch(ctx: &Context, url: &str) -> Result<Intaken, OrchestratorError> {
         .source
         .id;
     let fetched = Fetched {
-        url: url.to_string(),
+        url: origin.to_string(),
         sha256,
         bytes: bytes.len() as u64,
         converted,
@@ -166,7 +211,7 @@ fn fetch(ctx: &Context, url: &str) -> Result<Intaken, OrchestratorError> {
     };
     ctx.workspace().put_document(FETCHED, &fetched)?;
     Ok(Intaken {
-        named: url.to_string(),
+        named: named.to_string(),
         source,
         fetched: Some(fetched),
     })
