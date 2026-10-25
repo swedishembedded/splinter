@@ -28,3 +28,12 @@ measurement the adapter is a regression that the registered statistic cannot see
 Evidence: `runs/g8/pilot-d46-base.verify.json` (passed 21, exposed 9),
 `runs/g8/pilot-d46-pc1-.verify.json` (passed 15, exposed 19), and
 `runs/g8/pilot-compare-d46-pc1-.json` (paired 23, 5W-3L-15T, p = 0.363).
+
+**Corollary (2026-10-25): the same blindness in the multi-decoding-seed reading.** The
+per-family comparison over decoding seeds averaged a task's outcome over the seeds that were
+graded, dropping the seeds whose attempt was exposed - so an arm that turns a loss into an
+exposed attempt removes it from that task's fraction too, which is the release gate's defect
+one level down. `runs/g8/protocol-summary.py` now prints both readings: the gate's (an exposed
+attempt counts as unsolved for the arm that produced it) and the graded-only one. On the
+three-seed D46 arms they agree at 20W-13L-13T, but there is no reason to rely on that, and the
+gate's reading is the one to quote.
