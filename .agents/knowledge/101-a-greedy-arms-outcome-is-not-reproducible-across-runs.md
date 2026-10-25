@@ -23,7 +23,14 @@ protocol is the right instrument; the development probes in knowledge 098, 099 a
 runs and should be read with this variation in mind.
 
 Mitigations to test are batch-1 evaluation (`ARM_CONCURRENCY=1`) or bit-exact per-row batched
-kernels. Until one is measured, a difference of a few tasks between two single greedy arms is
+kernels. A batch-1 against batch-8 matrix (fresh servers, two runs each, three sequential and
+six concurrent identical requests) was deterministic in all four runs on the probe's synthetic
+prompt, while the seeded concurrent test that produced three distinct completions used a
+different prompt and a server that had already served evaluation traffic. The variation is
+therefore prompt- and state-dependent and the simple probe is not a reproduction: the next
+step is a task-derived probe (the real tool schemas and long context, output token ids and
+selected-logit margins, first divergent step). Until then, multiple decoding replicates are
+the rule for any claim. Until one is measured, a difference of a few tasks between two single greedy arms is
 inside the noise this entry measures; the large same-seed supervision gap and the rehearsal
 contrast are larger than it, but they are still single-run estimates.
 
