@@ -1138,6 +1138,31 @@
     "c8_verdict_differences": 2
    }
   },
+  "det-proto6": {
+   "log": "g8/protocol-6seed.json",
+   "sha256": "a2c82b889b564372770b33a2219170df72de487eee21035c36fd4dc0d5ee62ef",
+   "brain_commit": "77e510fbf (frozen evaluation build)",
+   "command": "protocol-6seed-record.py over runs/g8/pilot-{base,dec,allnew}-proto-<seed>.verify.json for the six registered decoding seeds",
+   "metric_prefix": "g8.proto6",
+   "metrics": {
+    "seed_count": 6,
+    "base_mean_pass1": 19.67,
+    "decisive_mean_pass1": 24.5,
+    "all_mean_pass1": 19.83,
+    "decisive_vs_base_wins": 22,
+    "decisive_vs_base_losses": 11,
+    "decisive_vs_base_ties": 13,
+    "decisive_vs_base_p": 0.04007165622897446,
+    "decisive_vs_all_wins": 22,
+    "decisive_vs_all_losses": 11,
+    "decisive_vs_all_ties": 13,
+    "decisive_vs_all_p": 0.04007165622897446,
+    "base_vs_all_wins": 17,
+    "base_vs_all_losses": 15,
+    "base_vs_all_ties": 14,
+    "base_vs_all_p": 0.4300250329542905
+   }
+  },
   "det-probe": {
    "log": "g8/determinism-record.json",
    "sha256": "0e173786a874ba14e3e740e5b5904ff21ffa2078adffbb3b0eee742c045b85c3",
