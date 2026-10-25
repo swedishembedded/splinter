@@ -214,6 +214,7 @@ impl Fixture {
         let state = StateRoot::under_home(self.home.path());
         let config = Config {
             state_root: state,
+            jobs: splinter_sdk::config::JobSettings::default(),
             model_store: self.home.path().join("models"),
             policy_base: self.home.path().join("models/policy"),
             policy_context_tokens: None,

@@ -152,6 +152,7 @@ fn config(cli: &Cli) -> Result<Config> {
         .unwrap_or_else(|| home.join(".local/share/brain/models"));
     Ok(Config {
         state_root: StateRoot::under_home(&home),
+        jobs: splinter_sdk::config::JobSettings::default(),
         policy_base: model_store.join("Qwen/Qwen3-0.6B"),
         model_store,
         policy_context_tokens: None,

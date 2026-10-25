@@ -123,6 +123,7 @@ impl Run {
         let unused = self.dir.join("unused");
         let config = Config {
             state_root: root,
+            jobs: splinter_sdk::config::JobSettings::default(),
             model_store: unused.join("models"),
             policy_base: unused.join("policy"),
             policy_context_tokens: None,
