@@ -85,6 +85,11 @@ pub struct SolveOptions {
     /// whether it reasons), as its owner declared it; kept with each attempt
     /// of a workspace episode. `None` records nothing.
     pub sampling: Option<serde_json::Value>,
+    /// Tool-call rounds the agent's own loop may take in one turn, sven's
+    /// limit when `None`. A continuation of a recorded episode is held to
+    /// what the episode had left, so the teacher cannot take more steps than
+    /// the student could have.
+    pub max_tool_rounds: Option<u32>,
 }
 
 impl SolveOptions {
@@ -99,6 +104,7 @@ impl SolveOptions {
             first_response: None,
             system: None,
             sampling: None,
+            max_tool_rounds: None,
         }
     }
 
@@ -144,6 +150,9 @@ impl SolveOptions {
         let mut config = Config::default();
         config.tools.max_timeout_secs = SOLVE_MAX_TIMEOUT_SECS;
         config.agent.note_repeated_results = true;
+        if let Some(rounds) = self.max_tool_rounds {
+            config.agent.max_tool_rounds = rounds.max(1);
+        }
         if let Some(wait) = self.first_response {
             let secs = wait.as_secs().max(1);
             config.agent.first_byte_timeout_secs = Some(secs);

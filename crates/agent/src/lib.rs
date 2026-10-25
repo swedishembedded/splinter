@@ -37,6 +37,12 @@
 //!   documented domain asks of a learner, its proposal admitted by code.
 //! * [`replay`] - an experience's code calls run again in the environment
 //!   it records, each result compared with the one it observed.
+//! * [`correction`] - a teacher continuing an attempt the student could not
+//!   finish, from the state it actually reached: the student's transcript is
+//!   replayed through sven's fork into a fresh copy of the task's snapshot
+//!   and refused unless it reproduces, the teacher takes the next turn, and
+//!   the composed trajectory keeps the student's steps as copied context
+//!   with the teacher's actions supervised under per-action provenance.
 //! * [`work`] - a coding agent working in one directory it is confined to,
 //!   with sven's file, search and shell tools, a cap on tool calls, an
 //!   observer of every event, and suspend and resume; and
@@ -56,6 +62,7 @@ pub mod chat;
 pub mod claim_judge;
 pub mod claims;
 pub mod converse;
+pub mod correction;
 pub mod critic;
 pub mod demonstration;
 pub mod forms;

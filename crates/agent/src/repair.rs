@@ -551,6 +551,7 @@ impl<'b> Meter<'b> {
             first_response: None,
             system: None,
             sampling: None,
+            max_tool_rounds: None,
         })
     }
 }
