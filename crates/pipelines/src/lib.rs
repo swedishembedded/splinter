@@ -108,6 +108,7 @@ pub mod rerank;
 pub mod reserve;
 pub mod retrieval;
 pub mod router;
+pub mod sealed;
 pub mod sessions;
 pub mod solving;
 pub mod sources;

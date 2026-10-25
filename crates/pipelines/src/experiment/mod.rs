@@ -45,6 +45,10 @@ pub struct FamilyRef {
     pub domain: String,
     /// The git tree id of its files: what a snapshot of it records.
     pub tree: String,
+    /// The digest of the workspace snapshot the catalog states for it, when
+    /// it states one: a second identity a sealed family is matched by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<String>,
 }
 
 /// One generation of a plan.
@@ -172,6 +176,8 @@ struct CatalogEntry {
     language: String,
     domain: String,
     tree: Option<String>,
+    #[serde(default)]
+    environment: Option<String>,
 }
 
 fn parse_toml<T: serde::de::DeserializeOwned>(
@@ -213,6 +219,7 @@ impl ExperimentPlan {
                         language: entry.language.clone(),
                         domain: entry.domain.clone(),
                         tree: tree.clone(),
+                        environment: entry.environment.clone(),
                     }),
                 },
             }

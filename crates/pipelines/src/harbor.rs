@@ -284,6 +284,7 @@ pub fn export_harbor(
     out: &Path,
     image: &str,
 ) -> Result<Exports, OrchestratorError> {
+    crate::sealed::admit_set(ctx, set)?;
     let backend = ctx.environments().workspace()?;
     let generator = splinter_knowledge::tasks::workspace::WorkspaceGenerator::new(
         backend.sandbox,

@@ -613,7 +613,9 @@ pub enum ExperimentCommand {
     /// Validate a plan against the catalog of families and show its schedule:
     /// families disjoint by domain, no sealed family scheduled for training or
     /// retention, retention only on families an earlier generation trained.
-    /// A plan that is not valid is refused with every violation.
+    /// A plan that is not valid is refused with every violation. A valid plan
+    /// records its sealed final exam in the state root, so a later run that is
+    /// not given the plan cannot read those families either.
     Check {
         /// The plan file.
         #[arg(value_name = "PLAN")]

@@ -330,10 +330,11 @@ impl Session {
                 );
             }
             Command::Experiment(ExperimentCommand::Check { plan, catalog }) => {
-                emit(
-                    json,
-                    &experiment::ExperimentPlan::load(&plan, catalog.as_deref())?,
-                );
+                let plan = experiment::ExperimentPlan::load(&plan, catalog.as_deref())?;
+                // A validated plan seals its final exam in the state root, so
+                // a run that is not given the plan cannot read it later.
+                splinter_sdk::sealed::record(ctx, &plan)?;
+                emit(json, &plan);
             }
             Command::Source(SourceCommand::List) => emit(json, &sources::list(ctx)?),
             Command::Source(SourceCommand::Show { id }) => emit(json, &sources::show(ctx, &id)?),

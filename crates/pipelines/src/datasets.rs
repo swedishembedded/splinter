@@ -200,6 +200,7 @@ pub fn project_with(
 ) -> Result<(Projection, Option<Described>), OrchestratorError> {
     let (projection, described, corpus) =
         project_without(ctx, request, passages, &BTreeSet::new())?;
+    crate::sealed::admit_corpus(ctx, &corpus)?;
     exam_seal::seal(ctx, &corpus, &projection)?;
     Ok((projection, described))
 }

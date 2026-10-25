@@ -172,13 +172,18 @@ fn snapshot_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_
         ctx.clock(),
     )
     .map_err(|e| refused("capturing the repository", &e))?;
-    // Before the repository is taken in as a source: a sealed family, or one
-    // another generation trains, is refused without a trace in the store.
+    // Before the repository is taken in as a source: a sealed family - this
+    // plan's or one an earlier accepted plan recorded in the state root - and
+    // a family another generation trains are refused without a trace in the
+    // store. A plan given to this run writes its seal first, so the check
+    // below is the only admission a run without a plan needs.
     if let Some(slot) = &request.experiment {
+        crate::sealed::record(ctx, &slot.plan)?;
         slot.plan
             .admit(slot.generation, &captured.snapshot.tree_id)
             .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
     }
+    crate::sealed::admit_tree(ctx, &captured.snapshot.tree_id)?;
     ctx.sources().put_source(&captured.source)?;
     let snapshotted = Snapshotted {
         commit: captured.commit.clone(),

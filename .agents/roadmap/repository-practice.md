@@ -107,8 +107,8 @@ Order matters; each line is one self-contained piece of work.
    retention on the first (non-inferiority margin in the paper protocol). The eight families'
    schedule (three generations, retention, two sealed families) is `tasks/e3-plan.toml`,
    validated by `splinter experiment check` and enforced per run by `practice --plan
-   --generation`. Not yet enforced: the sealed families' tree ids are not kept in the state
-   root, so a run without `--plan` can still read one.
+   --generation`. A validated or accepted plan also writes its sealed families (ids and tree
+   ids) to the state root, so a run without `--plan` refuses them too.
 6. Put the measured numbers into `papers/splinter-brain-sven-flywheel/data/results.csv`
    (nothing before it is measured), rebuild the figures, update the audit statuses, and
    settle with the maintainer whether a paper may hold results of a protocol still being run.

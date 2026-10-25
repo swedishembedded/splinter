@@ -78,7 +78,7 @@ pub use splinter_pipelines::{
     compare, critique, curriculum, datasets, describe, dialogue, doctor, eval, exam, exam_set,
     experiences, experiment, generations, graded, harbor, harness_opt, improve, judge, learn,
     lineage, plan, powered, practice, raft, rehearsal, release, rerank, reserve, retrieval, router,
-    sessions, solving, sources, state, status, tasks, timeline, train, variants, verify,
+    sealed, sessions, solving, sources, state, status, tasks, timeline, train, variants, verify,
 };
 
 // The layers, each under one name.

@@ -127,6 +127,7 @@ pub fn teach_repository(
     request: &TeachRepositoryRequest<'_>,
 ) -> Result<Taught, OrchestratorError> {
     let (members, name) = never_solved(ctx, request.task_set, request.attempts)?;
+    crate::sealed::admit_set(ctx, request.task_set)?;
     let task_set = ctx.tasks().put_set(&TaskSet { name, members })?;
     let solve = match request.teacher {
         RepositoryTeacher::Reference => demonstrate(ctx, &task_set, request)?,

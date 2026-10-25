@@ -24,9 +24,12 @@ use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
-/// Everything the task store holds that the workspace generator made.
+/// Everything the task store holds that the workspace generator made, less
+/// the tasks of a sealed final-exam family: a seal recorded after a task was
+/// stored keeps that task out of every later run.
 pub(crate) fn held_tasks(ctx: &Context) -> Result<Held, OrchestratorError> {
     let store = ctx.tasks();
+    let sealed = crate::sealed::families(ctx)?;
     let mut held = Held::none();
     let mut seen: BTreeSet<Digest> = BTreeSet::new();
     for set in store.list_sets()? {
@@ -43,21 +46,31 @@ pub(crate) fn held_tasks(ctx: &Context) -> Result<Held, OrchestratorError> {
             let Some(family) = task.concepts.first() else {
                 continue;
             };
+            // The recorded seal is by tree id and family id; a task of a
+            // sealed family is not a task this run may read.
+            if crate::sealed::refuses_task(&sealed, &task).is_some() {
+                continue;
+            }
             held.insert(key, family, &task.instruction);
         }
     }
     Ok(held)
 }
 
-/// Stores `tasks` and the set they make, named for `commit`.
+/// Stores `tasks` and the set they make, named for `commit`; a task of a
+/// sealed family is refused, as task admission.
 pub(crate) fn keep_tasks(
     ctx: &Context,
     commit: &str,
     tasks: &[WorkspaceTask],
 ) -> Result<TaskSetId, OrchestratorError> {
     let store = ctx.tasks();
+    let sealed = crate::sealed::families(ctx)?;
     let mut members = Vec::with_capacity(tasks.len());
     for made in tasks {
+        if let Some(why) = crate::sealed::refuses_task(&sealed, &made.task) {
+            return Err(OrchestratorError::Refused(why));
+        }
         members.push(TaskEntry {
             task: store.put(&made.task)?,
             generator: Some(WORKSPACE_GENERATOR.to_string()),

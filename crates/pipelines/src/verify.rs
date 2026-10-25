@@ -653,12 +653,19 @@ pub fn verify_set(
         Grading::ActiveJudge | Grading::CodeOnly => active.as_ref(),
     };
     let store = ctx.experiences();
+    let sealed = crate::sealed::families(ctx)?;
     let batch = ctx.workspace().batch();
     let members = store.get_set(set)?.members;
     let experiences = members
         .iter()
         .map(|id| store.get(id))
         .collect::<Result<Vec<_>, _>>()?;
+    // A sealed family's attempts are never verified (or annotated) here.
+    for experience in &experiences {
+        if let Some(why) = crate::sealed::refuses_task(&sealed, &experience.to_task()) {
+            return Err(OrchestratorError::Refused(why));
+        }
+    }
     let mut report = Verified::default();
     let mut verified = Vec::new();
     let mut reasons = Vec::new();

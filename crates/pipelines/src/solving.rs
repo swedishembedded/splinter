@@ -234,6 +234,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         ));
     }
     let set = ctx.tasks().get_set(request.task_set)?;
+    crate::sealed::admit_set(ctx, request.task_set)?;
     let (mut model, sampling) = sampled_solver(ctx, request)?;
     if let Some(system) = request.system {
         model = model.with_system(system);
