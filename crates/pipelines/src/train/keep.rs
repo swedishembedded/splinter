@@ -12,6 +12,7 @@
 
 use std::path::PathBuf;
 
+use splinter_core::build::BinaryIdentity;
 use splinter_core::digest::Digest;
 use splinter_core::terms::{combine_stated, Terms};
 use splinter_core::training::{
@@ -145,6 +146,7 @@ pub(super) fn keep_candidate(
         adapter_digest: trained.adapter_digest,
         base_digest: trained.base_digest,
         training_record,
+        binary: BinaryIdentity::of(&ctx.config().build),
         seed: Some(plan.seed),
         steps: plan.steps,
         rank: request.rank,

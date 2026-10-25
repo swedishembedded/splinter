@@ -13,6 +13,8 @@
 //! absent, never `0` or an empty string: a record with none of them is
 //! exactly what a run recorded before they were kept looks like.
 
+use std::sync::OnceLock;
+
 use serde::{Deserialize, Serialize};
 
 use crate::digest::Digest;
@@ -77,10 +79,7 @@ impl BuildInfo {
                 brain: locked_revision(lock, "brain").map(str::to_owned),
             },
             dirty: dirty.and_then(|v| v.parse().ok()),
-            binary_digest: std::env::current_exe().ok().and_then(|exe| {
-                let file = std::fs::File::open(exe).ok()?;
-                Digest::sha256_of_reader(std::io::BufReader::new(file)).ok()
-            }),
+            binary_digest: running_binary_digest(),
             gpu_contexts,
         }
     }
@@ -90,6 +89,74 @@ impl BuildInfo {
     pub fn is_empty(&self) -> bool {
         self == &Self::default()
     }
+}
+
+/// The executable that trained a model: the file, its SHA-256, and the build
+/// identity the binary knows (its version and the commits it was built from).
+/// Every field is a measurement that may be missing: a binary whose file
+/// cannot be read from its own process records no path or digest, and a
+/// record written before the identity was kept reads as the default.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BinaryIdentity {
+    /// The executable's path, as the process named it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// The SHA-256 of the executable file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest: Option<Digest>,
+    /// The crate version the binary was built as.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// The commits it was built from.
+    #[serde(default, skip_serializing_if = "Revisions::is_empty")]
+    pub revisions: Revisions,
+    /// Whether the splinter tree was dirty when it was built.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dirty: Option<bool>,
+}
+
+impl BinaryIdentity {
+    /// The identity of the running executable, taking the commits and the
+    /// dirty flag from `build` (what the process embedded) and measuring the
+    /// file once for the digest.
+    #[must_use]
+    pub fn of(build: &BuildInfo) -> Self {
+        Self {
+            path: std::env::current_exe()
+                .ok()
+                .map(|exe| exe.display().to_string()),
+            digest: running_binary_digest(),
+            version: Some(env!("CARGO_PKG_VERSION").to_string()),
+            revisions: build.revisions.clone(),
+            dirty: build.dirty,
+        }
+    }
+
+    /// Whether nothing is known.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.path.is_none()
+            && self.digest.is_none()
+            && self.version.is_none()
+            && self.revisions.is_empty()
+            && self.dirty.is_none()
+    }
+}
+
+/// The SHA-256 of the running executable, measured once for the process: the
+/// file is read and hashed on the first call, and every later identity reuses
+/// it. `None` when the executable cannot be opened (a sandbox that does not
+/// expose its own file), never a zero.
+#[must_use]
+pub fn running_binary_digest() -> Option<Digest> {
+    static DIGEST: OnceLock<Option<Digest>> = OnceLock::new();
+    DIGEST
+        .get_or_init(|| {
+            let exe = std::env::current_exe().ok()?;
+            let file = std::fs::File::open(exe).ok()?;
+            Digest::sha256_of_reader(std::io::BufReader::new(file)).ok()
+        })
+        .clone()
 }
 
 /// The commit `package` is locked to in the text of a `Cargo.lock`, for a
@@ -153,5 +220,37 @@ source = \"git+https://example.org/brain#abc123\"\n\n\
     #[test]
     fn an_empty_record_serializes_to_nothing() {
         assert_eq!(serde_json::to_string(&BuildInfo::default()).unwrap(), "{}");
+    }
+
+    #[test]
+    fn the_identity_of_the_running_binary_names_its_file_and_its_digest() {
+        let exe = std::env::current_exe().unwrap();
+        let expected = {
+            let file = std::fs::File::open(&exe).unwrap();
+            Digest::sha256_of_reader(std::io::BufReader::new(file)).unwrap()
+        };
+        let identity =
+            BinaryIdentity::of(&BuildInfo::embedded(LOCK, Some("abc"), Some("true"), None));
+        assert_eq!(
+            identity.path.as_deref(),
+            Some(exe.display().to_string().as_str())
+        );
+        assert_eq!(identity.digest, Some(expected.clone()));
+        assert_eq!(identity.version.as_deref(), Some(env!("CARGO_PKG_VERSION")));
+        assert_eq!(identity.revisions.splinter.as_deref(), Some("abc"));
+        assert_eq!(identity.dirty, Some(true));
+        assert_eq!(running_binary_digest(), Some(expected));
+    }
+
+    #[test]
+    fn an_identity_that_was_not_kept_serializes_to_nothing() {
+        assert_eq!(
+            serde_json::to_string(&BinaryIdentity::default()).unwrap(),
+            "{}"
+        );
+        assert_eq!(
+            serde_json::from_str::<BuildInfo>("{}").unwrap(),
+            BuildInfo::default()
+        );
     }
 }

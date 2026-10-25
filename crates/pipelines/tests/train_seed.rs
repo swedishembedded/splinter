@@ -71,7 +71,10 @@ impl Trainer for SeedOnly {
 
 /// What one recorded `train` of `seed` left: the candidate, the run's
 /// record of its seeds and the seed events reported.
-fn trained(test: &str, seed: Option<u64>) -> (Candidate, Vec<(String, u64)>, usize) {
+fn trained(
+    test: &str,
+    seed: Option<u64>,
+) -> (Candidate, Vec<(String, u64)>, usize, serde_json::Value) {
     let (_scratch, ctx) = gate_context(test, Brain::Honest);
     let reported = Arc::new(Mutex::new(0usize));
     let counter = Arc::clone(&reported);
@@ -99,18 +102,16 @@ fn trained(test: &str, seed: Option<u64>) -> (Candidate, Vec<(String, u64)>, usi
         train_recorded(&ctx, run, &request, &SeedOnly)
     })
     .unwrap();
-    let seeds = read_run(ctx.workspace(), &recorded.run)
-        .unwrap()
-        .seeds
-        .into_iter()
-        .collect();
+    let record = read_run(ctx.workspace(), &recorded.run).unwrap();
+    let seeds = record.seeds.into_iter().collect();
+    let outputs = record.outputs;
     let count = *reported.lock().unwrap();
-    (recorded.report, seeds, count)
+    (recorded.report, seeds, count, outputs)
 }
 
 #[test]
 fn an_unseeded_train_records_the_seed_it_drew_and_a_rerun_with_it_writes_the_same_adapter() {
-    let (first, seeds, reports) = trained("train-seed-drawn", None);
+    let (first, seeds, reports, _) = trained("train-seed-drawn", None);
     let drawn = first
         .seed
         .expect("the candidate records the seed it trained with");
@@ -125,11 +126,32 @@ fn an_unseeded_train_records_the_seed_it_drew_and_a_rerun_with_it_writes_the_sam
         Digest::sha256_of(format!("adapter of seed {drawn}").as_bytes()).to_string()
     );
 
-    let (again, again_seeds, _) = trained("train-seed-given", Some(drawn));
+    let (again, again_seeds, _, _) = trained("train-seed-given", Some(drawn));
     assert_eq!(again.seed, Some(drawn));
     assert_eq!(again_seeds, seeds, "a given seed is recorded the same way");
     assert_eq!(again.adapter_digest, first.adapter_digest);
 
-    let (other, _, _) = trained("train-seed-other", None);
+    let (other, _, _, _) = trained("train-seed-other", None);
     assert_ne!(other.seed, first.seed, "an unseeded run draws afresh");
+}
+
+#[test]
+fn a_training_run_records_the_executable_that_trained_it() {
+    let (candidate, _, _, outputs) = trained("train-identity", Some(7));
+    let exe = std::env::current_exe().unwrap();
+    let expected = {
+        let file = std::fs::File::open(&exe).unwrap();
+        Digest::sha256_of_reader(std::io::BufReader::new(file)).unwrap()
+    };
+    assert_eq!(
+        candidate.binary.path.as_deref(),
+        Some(exe.display().to_string().as_str())
+    );
+    assert_eq!(candidate.binary.digest, Some(expected.clone()));
+    assert!(candidate.binary.version.is_some());
+    assert_eq!(
+        outputs["binary"]["digest"],
+        serde_json::json!(expected.to_string()),
+        "the run's JSON names the same binary"
+    );
 }

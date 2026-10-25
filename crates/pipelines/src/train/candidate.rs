@@ -12,6 +12,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use splinter_core::build::BinaryIdentity;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
@@ -56,6 +57,8 @@ pub(super) struct StoredCandidate {
     adapter_digest: String,
     base_digest: String,
     training_record: serde_json::Value,
+    #[serde(default, skip_serializing_if = "BinaryIdentity::is_empty")]
+    binary: BinaryIdentity,
     #[serde(default)]
     seed: Option<u64>,
     steps: u32,
@@ -107,6 +110,10 @@ pub struct Candidate {
     pub base_digest: String,
     /// brain's training record for it.
     pub training_record: serde_json::Value,
+    /// The executable that trained it: its file, SHA-256 and build identity.
+    /// Absent from a candidate recorded before it was kept.
+    #[serde(default, skip_serializing_if = "BinaryIdentity::is_empty")]
+    pub binary: BinaryIdentity,
     /// The seed of its adapter's initialisation and batch order, drawn when
     /// the run was given none; training again with it on the same data
     /// writes the same adapter. `None` for a candidate recorded before the
@@ -176,6 +183,7 @@ impl Candidate {
             adapter_digest: self.adapter_digest.clone(),
             base_digest: self.base_digest.clone(),
             training_record: self.training_record.clone(),
+            binary: self.binary.clone(),
             seed: self.seed,
             steps: self.steps,
             rank: self.rank,
@@ -204,6 +212,7 @@ impl Candidate {
             adapter_digest: stored.adapter_digest,
             base_digest: stored.base_digest,
             training_record: stored.training_record,
+            binary: stored.binary,
             seed: stored.seed,
             steps: stored.steps,
             rank: stored.rank,
@@ -329,4 +338,48 @@ pub fn adopt_checkpoint(
     }
     record_candidate(ctx, &adopted, adopted.regime)?;
     Ok(adopted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stored() -> StoredCandidate {
+        StoredCandidate {
+            candidate: "c1".into(),
+            from: "policy:default".into(),
+            regime: Regime::Sft,
+            base: PathBuf::from("/base"),
+            parent: None,
+            datasets: Vec::new(),
+            replay: None,
+            rehearsal: None,
+            adapter_artifact: Digest::sha256_of(b"adapter"),
+            adapter_digest: Digest::sha256_of(b"adapter").to_string(),
+            base_digest: Digest::sha256_of(b"base").to_string(),
+            training_record: serde_json::json!({}),
+            binary: BinaryIdentity::default(),
+            seed: None,
+            steps: 3,
+            rank: 4,
+            base_score: None,
+            tuned_score: None,
+            preference: None,
+            curve: None,
+            checkpoints: Vec::new(),
+            records: 0,
+            terms: None,
+        }
+    }
+
+    #[test]
+    fn a_record_written_before_the_binary_identity_was_kept_still_reads() {
+        let value = serde_json::to_value(stored()).unwrap();
+        assert!(
+            value.get("binary").is_none(),
+            "an identity that was not kept is not written: {value}"
+        );
+        let read: StoredCandidate = serde_json::from_value(value).unwrap();
+        assert!(read.binary.is_empty());
+    }
 }

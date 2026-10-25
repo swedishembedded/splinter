@@ -113,6 +113,18 @@ impl Report for Candidate {
         if let Some(curve) = &self.curve {
             out.push_str(&curve_lines(curve));
         }
+        if !self.binary.is_empty() {
+            let _ = writeln!(
+                out,
+                "  binary: {} ({}, {})",
+                self.binary.path.as_deref().unwrap_or("unknown path"),
+                self.binary
+                    .digest
+                    .as_ref()
+                    .map_or_else(|| "unknown digest".to_string(), ToString::to_string),
+                self.binary.version.as_deref().unwrap_or("unknown version")
+            );
+        }
         for warning in self.warnings() {
             let _ = writeln!(out, "  warning: {warning}");
         }
