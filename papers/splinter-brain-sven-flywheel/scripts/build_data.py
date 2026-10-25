@@ -340,7 +340,7 @@ def parse_log(prefix, text):
         return verify_metrics(json.loads(text))
     if prefix.startswith("g8.det."):
         return det_metrics(prefix, json.loads(text))
-    if prefix.startswith("g8.proto6"):
+    if prefix.startswith(("g8.proto6", "g8.qual")):
         return proto6_metrics(json.loads(text))
     if prefix.startswith("g8."):
         return g8_report_metrics(json.loads(text))
