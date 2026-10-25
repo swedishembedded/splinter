@@ -83,3 +83,5 @@ in the same commit.
 | [095](095-a-packed-view-removed-every-trajectory-longer-than-its-block-and-the-survivors-taught-the-adapter-to-stop-early.md) | A packed view removed every trajectory longer than its block, and the survivors taught the adapter to stop early |
 | [096](096-the-paired-sign-test-excludes-exposed-attempts-so-a-regression-read-as-a-tie.md) | The paired sign test excludes exposed attempts, so a regression read as a near-tie |
 | [097](097-supervising-every-action-taught-the-exploration-and-the-fine-tune-fell-off-the-hard-tail.md) | Supervising every action taught the exploration, and the fine-tune fell off the hard tail |
+| [098](098-the-same-seed-and-corpus-differ-by-seventeen-tasks-when-the-supervision-changes.md) | The same seed and corpus differ by seventeen tasks when the supervision changes |
+| [099](099-recovery-is-a-labelled-rehearsal-and-its-first-six-steps-do-most-of-the-restoration.md) | Recovery is a labelled rehearsal, and its first six steps do most of the restoration |
