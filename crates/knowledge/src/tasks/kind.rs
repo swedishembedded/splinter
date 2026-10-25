@@ -540,7 +540,8 @@ fn base_kinds() -> Vec<TaskKind> {
             brief: "Write up to {count} tasks that show a short, self-contained {runtime} \
                     program exercising what the sections describe and ask what it prints. Put \
                     the program in `material` and the question alone in the instruction (the \
-                    program is shown below it); the reference is exactly what it prints."
+                    program is shown below it); the reference is what you expect it to print \
+                    (the program is run, and what it prints is the answer)."
                 .into(),
             answer: AnswerForm::Output,
             shows_material: true,

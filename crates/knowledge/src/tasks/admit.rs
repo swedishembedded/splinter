@@ -32,6 +32,7 @@ use super::generator::{GenerateError, SourceText};
 use super::grounding::{content_words, support};
 use super::kind::{AnswerForm, Material, SolverEnvironment, TaskKind};
 use super::reply::{Candidate, Reply};
+use super::shown::{computed, shown};
 use super::{GeneratedTask, GenerationPolicy, GenerationReport, Rejection};
 
 /// One request's outcome, waiting for admission.
@@ -263,6 +264,10 @@ impl Admission {
             Ok(candidate) => candidate,
             Err(refusal) => return refuse(refusal),
         };
+        let candidate = match computed(kind, context.runtime, candidate)? {
+            Ok(candidate) => candidate,
+            Err(refusal) => return refuse(refusal),
+        };
         let evidence = match evidence(context, &candidate) {
             Ok(evidence) => evidence,
             Err(refusal) => return refuse(refusal),
@@ -490,42 +495,6 @@ fn check_environment(context: &Context<'_>) -> Option<Environment> {
 }
 
 /// The candidate's evidence as spans of the source part.
-/// `candidate` with the instruction the solver is shown. A kind that shows
-/// material has the model write the question alone and the material apart;
-/// the material is set below the question here, fenced, so it is shown once
-/// and exactly as it is run or graded. A question that already repeats the
-/// material is refused: a small model wraps it in other code (`x = [[...]]`)
-/// and the solver would be asked about a program that is not the one run.
-fn shown(kind: &TaskKind, mut candidate: Candidate) -> Result<Candidate, Refusal> {
-    let Some(material) = candidate
-        .material
-        .as_deref()
-        .filter(|m| !m.trim().is_empty())
-    else {
-        return Ok(candidate);
-    };
-    if !kind.shows_material {
-        return Ok(candidate);
-    }
-    if candidate.instruction.contains(material.trim()) {
-        return Err((
-            Rejection::MaterialNotShown,
-            "the instruction repeats the material, which is shown below it".into(),
-        ));
-    }
-    let fence = match kind.runtime.as_deref() {
-        Some("python3") => "python",
-        Some(runtime) => runtime,
-        None => "",
-    };
-    candidate.instruction = format!(
-        "{}\n\n```{fence}\n{}\n```",
-        candidate.instruction.trim_end(),
-        material.trim_end()
-    );
-    Ok(candidate)
-}
-
 fn evidence(context: &Context<'_>, candidate: &Candidate) -> Result<Vec<Span>, Refusal> {
     let source = context.source;
     if candidate.evidence.is_empty() {

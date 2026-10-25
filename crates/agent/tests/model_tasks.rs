@@ -214,7 +214,7 @@ async fn a_construct_task_is_admitted_only_when_its_reference_passes_and_its_tes
 }
 
 #[tokio::test]
-async fn a_predicted_output_is_admitted_only_when_running_the_shown_code_produces_it() {
+async fn a_predicted_output_is_what_running_the_shown_code_prints() {
     let scratch = Scratch::new("model-tasks-predict");
     let (store, _, source) = stored(&scratch, CLAMP_SPEC);
     let env = python(&scratch);
@@ -234,15 +234,20 @@ async fn a_predicted_output_is_admitted_only_when_running_the_shown_code_produce
     repeated["material"] = json!("print(min(max(3, 0), 10))");
     let model = Scripted::new(vec![reply(vec![
         predict("print(min(max(12, 0), 10))", "10"),
+        // The model mispredicts its own program: the program is still a task,
+        // and its answer is what it prints.
         predict("print(min(max(-4, 0), 10) + 1)", "0"),
+        predict("import sys; sys.exit(3)", "nothing"),
+        predict("import random; print(random.random())", "0.5"),
         repeated,
     ])]);
     let report = generator(model, store, vec![env])
         .generate(&source, &[&kind("predict")])
         .await
         .unwrap();
-    assert_eq!(report.admitted.len(), 1, "{report:#?}");
-    assert_eq!(report.count(Rejection::ChecksFailed), 1, "{report:#?}");
+    assert_eq!(report.admitted.len(), 2, "{report:#?}");
+    // The failing and the unstable program have no answer to learn.
+    assert_eq!(report.count(Rejection::ChecksFailed), 2, "{report:#?}");
     assert_eq!(report.count(Rejection::MaterialNotShown), 1, "{report:#?}");
     // The solver is shown the question and, once, the program that is run.
     assert_eq!(
@@ -253,6 +258,20 @@ async fn a_predicted_output_is_admitted_only_when_running_the_shown_code_produce
         report.admitted[0].task.environment,
         Environment::closed_book()
     );
+    let references: Vec<&str> = report
+        .admitted
+        .iter()
+        .map(|a| {
+            a.task
+                .privileged
+                .iter()
+                .find(|p| p.kind == PrivilegedKind::Reference)
+                .unwrap()
+                .content
+                .as_str()
+        })
+        .collect();
+    assert_eq!(references, ["10", "1"]);
 }
 
 #[tokio::test]

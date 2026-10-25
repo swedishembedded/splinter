@@ -309,6 +309,9 @@ pub enum GenerateError {
     /// A sandbox or verifier failed while admitting a task.
     #[error("admitting a task failed: {0}")]
     Admission(#[from] splinter_eval::verifiers::VerifyError),
+    /// The sandbox could not run a task's material.
+    #[error("running a task's material failed: {0}")]
+    Runtime(#[from] splinter_sandbox::SandboxError),
     /// The blocking admission step did not complete.
     #[error("the admission step did not complete: {0}")]
     Join(#[from] tokio::task::JoinError),
