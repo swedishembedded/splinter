@@ -372,6 +372,10 @@ fn refusal(error: &CorrectionError) -> String {
             "the continuation exported {got} steps for a {expected}-message transcript, so its \
              actions cannot be attributed"
         ),
+        CorrectionError::PrefixMismatch { step } => format!(
+            "the continuation does not begin with the student's steps: step {step} differs, so \
+             its actions cannot be attributed"
+        ),
         CorrectionError::NotWorkspace => "the task is not a change to a repository".into(),
     }
 }
