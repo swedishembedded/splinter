@@ -91,3 +91,33 @@ reported as flat and the next single-variable change is named before the run.
   it; a mismatch here reproduces the same covariate shift with extra steps.
 - The teacher must never see grading material, or the correction teaches an unavailable
   solution - the same rule the practice environment already enforces for the student.
+
+## What the first collection measured (2026-10-25)
+
+Fourteen selected attempts from the wins-first adapter's D46 failures (one per task, 34 failed
+attempts in the set), teacher the served 27B, fork verified against each attempt's own
+recording:
+
+| outcome | count | why |
+|---|---|---|
+| admitted and verified | 1 of 14 | the teacher's continuation passed the task's hidden checks |
+| the student's transcript compacted | 8 | `step N is a system turn inside the conversation`: the episode replaced its own context before it failed, so there is no faithful transcript to continue |
+| an observation does not replay | 4 | a test run's wall clock, a `grep -r` whose matches came in another order, and two listing totals (fixed: a copied tree allocates other blocks) |
+| continued but did not verify | 1 | the teacher's continuation failed the hidden checks |
+
+Two consequences for the design, both measured rather than assumed:
+
+- **The corpus is limited by the recorder, not the teacher.** Most failures that a teacher
+  could correct cannot be *continued* at all, because the student compacted its context while
+  it worked. A solve run whose failures are meant to be corrected has to record the episode
+  without proactive compaction (fail on the context limit instead), and that is a change to
+  the recording protocol, not to the correction stage.
+- **The student's episode usually ends near the context limit**, so the continuation needs
+  room of its own: the teacher bank serves 64k (`CTX=65536 ./serve-bank.sh 0 8791`) and a
+  continuation that still compacts is refused by the projection rather than taught, since the
+  prefix it would supervise is no longer the student's.
+
+Admission is also stochastic: one attempt verified on one continuation and not on another.
+A correction corpus therefore has to be collected over more attempts than the number of
+records needed, and the fork success rate, the compaction rate and the verification rate are
+reported together.
