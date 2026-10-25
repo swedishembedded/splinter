@@ -99,6 +99,12 @@ pub enum CorrectionError {
         /// What the continuation exported.
         got: usize,
     },
+    /// The continuation does not begin with the student's own steps.
+    #[error("step {step} of the continuation is not the student's step {step}: its transcript did not survive the replay")]
+    PrefixMismatch {
+        /// The position, from one, of the first step that differs.
+        step: usize,
+    },
     /// The fork was refused.
     #[error(transparent)]
     Fork(#[from] ForkError),
@@ -346,6 +352,18 @@ pub fn compose(
             got: continuation.steps.len(),
         });
     }
+    // As many steps is not the same as the same steps: a continuation that lost
+    // the replayed transcript (a compaction, a truncated export) would have its
+    // own first steps mistaken for the student's and skipped.
+    if let Some((position, _)) = student
+        .steps
+        .iter()
+        .zip(&continuation.steps[..prefix_steps])
+        .enumerate()
+        .find(|(_, (student, continuation))| !same_step(student, continuation))
+    {
+        return Err(CorrectionError::PrefixMismatch { step: position + 1 });
+    }
     let agent = AgentProfile {
         model_name: Some(teacher_model.to_string()),
         ..continuation.agent.clone()
@@ -384,6 +402,21 @@ pub fn compose(
         composed.steps.push(step);
     }
     Ok(composed)
+}
+
+/// Whether `continuation`'s step carries what `student`'s does: the same tool
+/// calls, by id and function, and the same message text.
+fn same_step(student: &TraceStep, continuation: &TraceStep) -> bool {
+    let ids = |step: &TraceStep| -> Vec<(String, String)> {
+        step.tool_calls
+            .iter()
+            .flatten()
+            .map(|call| (call.tool_call_id.clone(), call.function_name.clone()))
+            .collect()
+    };
+    student.source == continuation.source
+        && student.message.as_text() == continuation.message.as_text()
+        && ids(student) == ids(continuation)
 }
 
 /// `extra` with the correction's own provenance beside whatever it held.
@@ -498,6 +531,25 @@ mod tests {
             provenance_of(&composed.steps[2]),
             Some(("teacher", "teacher/1"))
         );
+    }
+
+    #[test]
+    fn a_continuation_that_lost_the_students_steps_is_refused() {
+        // The same count is not the same steps: a continuation whose transcript
+        // did not survive the replay would have its own steps skipped as the
+        // student's, and the record would supervise the wrong actions.
+        let mut student = Trajectory::new("ATIF-v1.7", AgentProfile::new("scripted", "1"));
+        student.steps = vec![user_step(1), call_step(2, "s1", "red")];
+        let mut lost = Trajectory::new("ATIF-v1.7", AgentProfile::new("teacher", "1"));
+        lost.steps = vec![
+            user_step(1),
+            call_step(2, "other", "green"),
+            call_step(3, "t1", "green"),
+        ];
+        assert!(matches!(
+            compose(&student, &lost, "student/1", "teacher/1"),
+            Err(CorrectionError::PrefixMismatch { step: 2 })
+        ));
     }
 
     #[test]
