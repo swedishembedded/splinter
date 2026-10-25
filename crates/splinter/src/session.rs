@@ -15,7 +15,6 @@ use splinter_sdk::agent::CancelToken;
 use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::canaries;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
-use splinter_sdk::curriculum::frontier::{measure, MeasureRequest};
 use splinter_sdk::datasets::{
     build, build_dropping_leaks, export, BuildRequest, Control, VoiceBuild,
 };
@@ -34,7 +33,6 @@ use splinter_sdk::rerank::ModelReranker;
 use splinter_sdk::retrieval::{candidates_for, library_of, Rerank, Retrieval};
 use splinter_sdk::router::{interpret, Routed};
 use splinter_sdk::runs::{self, record};
-use splinter_sdk::solving::solve_set;
 use splinter_sdk::sources::{self, SourceTarget};
 use splinter_sdk::state;
 use splinter_sdk::status::status;
@@ -59,6 +57,7 @@ use crate::harness_session;
 use crate::learn_output;
 use crate::output::{self, emit, shell_words};
 use crate::practice_request::practice_request;
+use crate::solve_session;
 use crate::tasks_session;
 use crate::train_output::Trained;
 
@@ -144,7 +143,8 @@ impl Session {
     }
 
     /// Reads sentences until the input ends, each handled like
-    /// `splinter "<line>"`; at a terminal a question back is answered there.
+    /// `splinter "<line>"`; at a terminal, a question back is answered
+    /// there. Ends with the worst exit of any line.
     pub fn repl(&self) -> Exit {
         let stdin = std::io::stdin();
         let interactive = stdin.is_terminal() && !self.global.json;
@@ -349,54 +349,7 @@ impl Session {
             Command::Session(command) => return absorb_session::session(ctx, json, command),
             Command::Claims(command) => return absorb_session::claims(ctx, json, command),
             Command::Tasks(command) => return tasks_session::tasks(ctx, json, command),
-            Command::Solve(args) if args.frontier => {
-                let set = resolve_task_set(ctx, &args.task_set)?;
-                let pass_at_k = args.pass_at_k.pass_at_k();
-                let arguments = json!({
-                    "task_set": set,
-                    "solver": args.solver,
-                    "teacher": args.teacher,
-                    "frontier": true,
-                    "pass_at_k": pass_at_k,
-                });
-                let measured = record(ctx, "solve", &arguments, |run| {
-                    measure(
-                        ctx,
-                        &MeasureRequest {
-                            task_set: &set,
-                            solver: &args.solver,
-                            teacher: args.teacher.as_ref(),
-                            pass_at_k,
-                            deadline: None,
-                            cancel: run.cancel_token(),
-                        },
-                    )
-                })?;
-                emit(json, &measured);
-            }
-            Command::Solve(args) if args.harness.is_some() => {
-                return harness_session::solve(ctx, json, &args)
-            }
-            Command::Solve(args) => {
-                let set = resolve_task_set(ctx, &args.task_set)?;
-                let resume = args
-                    .resume
-                    .as_deref()
-                    .map(|id| resolve_set(ctx, id))
-                    .transpose()?;
-                let arguments = json!({ "task_set": set, "solver": args.solver, "resume": resume });
-                let solved = record(ctx, "solve", &arguments, |run| {
-                    solve_set(
-                        ctx,
-                        &set,
-                        &args.solver,
-                        None,
-                        &run.cancel_token(),
-                        resume.as_ref(),
-                    )
-                })?;
-                emit(json, &solved);
-            }
+            Command::Solve(args) => return solve_session::solve(ctx, json, &args),
             Command::Harness(command) => return harness_session::harness(ctx, json, command),
             Command::Verify(args) => {
                 let set = resolve_set(ctx, &args.experience_set)?;

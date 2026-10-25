@@ -90,6 +90,12 @@ pub(crate) async fn solve_attempt(
     protocol: &WorkProtocol,
 ) -> Result<(Solution, AttemptReport), SolveError> {
     let started = Instant::now();
+    // The episode's recording policy is the protocol's: a run whose failures
+    // are to be corrected keeps every message instead of compacting them.
+    let options = SolveOptions {
+        compaction: protocol.compaction,
+        ..options
+    };
     let solved = solve_in_workspace(
         task,
         env,

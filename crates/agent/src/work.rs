@@ -411,7 +411,7 @@ const FEEDBACK_LINES: usize = 40;
 const FEEDBACK_CHARS: usize = 4_000;
 
 /// How one episode on a workspace is run.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WorkProtocol {
     /// How many follow-up user turns the worker may be sent after the
     /// visible checks stay red; `0` sends none and runs no check.
@@ -427,6 +427,37 @@ pub struct WorkProtocol {
     /// The coding-agent prompt the worker is held to when the model brings
     /// none of its own.
     pub prompt: CodingPrompt,
+    /// Whether the episode may compact its conversation as it nears the
+    /// context limit. On by default; off keeps the transcript whole, which a
+    /// failure that is meant to be corrected needs, because a compacted
+    /// transcript replaces the messages a correction would continue and so
+    /// cannot be forked at all. The episode then ends at the budget gate.
+    pub compaction: bool,
+}
+
+impl Default for WorkProtocol {
+    fn default() -> Self {
+        Self {
+            follow_ups: 0,
+            max_tool_calls: None,
+            max_repeated_results: None,
+            prompt: CodingPrompt::default(),
+            compaction: true,
+        }
+    }
+}
+
+#[cfg(test)]
+mod protocol_tests {
+    use super::WorkProtocol;
+
+    #[test]
+    fn an_episode_may_compact_unless_it_is_told_not_to() {
+        // A compacted transcript has no faithful prefix to continue, so a run
+        // whose failures are meant to be corrected turns this off; every other
+        // run keeps sven's compaction.
+        assert!(WorkProtocol::default().compaction);
+    }
 }
 
 /// What an episode on a workspace produced.

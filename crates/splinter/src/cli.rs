@@ -383,6 +383,13 @@ pub struct SolveArgs {
     /// its experiences are members of the new set.
     #[arg(long, value_name = "EXPERIENCE-SET", conflicts_with = "frontier")]
     pub resume: Option<String>,
+    /// Record every episode whole: the solver keeps its conversation instead of
+    /// compacting it when it nears the context limit, so a failure can be
+    /// continued from its own transcript. A compacted transcript has no
+    /// faithful prefix and cannot be corrected, so this is the flag an arm
+    /// run for a correction corpus passes.
+    #[arg(long)]
+    pub no_compaction: bool,
 }
 
 /// `verify`.

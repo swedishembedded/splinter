@@ -275,6 +275,9 @@ pub fn correct(
         };
         let mut options = SolveOptions::new(remaining(request.deadline, task_wall));
         options.cancel = Some(request.cancel.clone());
+        // The episode's recording policy is the request's: a continuation that
+        // compacted could not be projected into a record.
+        options.compaction = request.work.compaction;
         match ctx.block_on(continue_attempt(
             &continuation,
             &model,

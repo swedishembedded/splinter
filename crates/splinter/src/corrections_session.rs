@@ -58,6 +58,8 @@ pub(crate) fn corrections_command(
                     max_tool_calls: args.max_tool_calls,
                     max_repeated_results: None,
                     prompt: CodingPrompt::default(),
+                    // The continuation is recorded, so it keeps its transcript.
+                    compaction: false,
                 },
                 deadline,
                 cancel: run.cancel_token(),

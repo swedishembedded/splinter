@@ -42,7 +42,7 @@ use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
 use splinter_pipelines::learn::{learn, LearnRequest, Learned, STAGES};
 use splinter_pipelines::release::arm;
-use splinter_pipelines::solving::solve_set;
+use splinter_pipelines::solving::{harness_protocol, solve_set};
 use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_pipelines::tasks::{generate, Generation};
 use splinter_pipelines::train::{TrainPlan, Trainer};
@@ -246,6 +246,7 @@ fn a_variant_never_enters_a_training_dataset() {
         None,
         &CancelToken::new(),
         None,
+        harness_protocol(),
     )
     .unwrap();
     verify_set(
@@ -448,6 +449,7 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
         None,
         &CancelToken::new(),
         None,
+        harness_protocol(),
     )
     .unwrap();
     verify_set(

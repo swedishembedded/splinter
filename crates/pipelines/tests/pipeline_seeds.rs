@@ -29,7 +29,7 @@ use splinter_core::rng::Seed;
 use splinter_data::Strip;
 use splinter_orchestrator::Context;
 use splinter_pipelines::datasets::{build, parse_strip, BuildRequest, ViewName, VoiceBuild};
-use splinter_pipelines::solving::solve_set;
+use splinter_pipelines::solving::{harness_protocol, solve_set};
 use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_pipelines::tasks::{generate, Generation, TasksGenerated};
 use splinter_pipelines::verify::{verify_set, Grading};
@@ -109,6 +109,7 @@ fn a_mixed_dataset_records_the_seed_that_picked_its_subjects_and_rebuilds_from_i
         None,
         &CancelToken::new(),
         None,
+        harness_protocol(),
     )
     .unwrap();
     verify_set(

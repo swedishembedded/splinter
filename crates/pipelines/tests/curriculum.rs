@@ -24,7 +24,8 @@
 //! * A retention suite the gate saw drop queues its forgotten concepts for
 //!   new tasks, which the next `learn` generates from.
 //! * A training set is deduplicated and capped per concept, kind and
-//!   strength, deterministically.
+//!   strength, deterministically (the selection's own spec is
+//!   `curriculum_quotas.rs`).
 //!
 //! Models are scripted, so every pass@k outcome is controlled.
 
@@ -44,9 +45,8 @@ use common::{scratch_context, Scripted, POLICY};
 use serde_json::json;
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
-use splinter_core::annotation::Strength;
 use splinter_core::digest::Digest;
-use splinter_core::experience::{Environment, ExperienceId, Privileged, PrivilegedKind, Task};
+use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 use splinter_eval::gate::SuiteSummary;
@@ -57,12 +57,11 @@ use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::{measure, MeasureRequest, PassAtK};
 use splinter_pipelines::curriculum::mastery::weakest;
 use splinter_pipelines::curriculum::queue::{enqueue_retention, pending};
-use splinter_pipelines::curriculum::quota::{select, Candidate, Quotas};
 use splinter_pipelines::curriculum::BASE_POLICY;
 use splinter_pipelines::graded::Verdict;
 use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::release::anchor;
-use splinter_pipelines::solving::solve_set;
+use splinter_pipelines::solving::{harness_protocol, solve_set, Solved};
 use splinter_pipelines::status::status;
 use splinter_pipelines::verify::{verify_set, Grading};
 use splinter_store::decision::decide as decision;
@@ -504,6 +503,20 @@ fn facts(ctx: &Context, topics: &[&str], n: usize) -> TaskSetId {
     task_set(ctx, &tasks)
 }
 
+/// The set solved once by `policy`, as `solve` solves it.
+fn solve_once(ctx: &Context, set: &TaskSetId, policy: &ModelRef) -> Solved {
+    solve_set(
+        ctx,
+        set,
+        policy,
+        None,
+        &CancelToken::new(),
+        None,
+        harness_protocol(),
+    )
+    .unwrap()
+}
+
 #[test]
 fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     let (scratch, ctx) = gate_context("curriculum-mastery", Brain::Honest);
@@ -511,7 +524,7 @@ fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     let policy = ModelRef::policy_default();
     ctx.add_model(policy.clone(), knower(&[ANCHOR, "gamma"]));
     let set = facts(&ctx, &["alpha", "gamma"], 3);
-    let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new(), None).unwrap();
+    let solved = solve_once(&ctx, &set, &policy);
     let verified = verify_set(
         &ctx,
         &solved.experience_set,
@@ -547,7 +560,7 @@ fn mastery_is_tallied_per_release_and_status_lists_the_weakest() {
     // A release that learned alpha; the policy now answers as it does.
     let release = released(&ctx, "alpha", &[ANCHOR, "alpha", "gamma"]);
     ctx.add_model(policy.clone(), knower(&[ANCHOR, "alpha"]));
-    let solved = solve_set(&ctx, &set, &policy, None, &CancelToken::new(), None).unwrap();
+    let solved = solve_once(&ctx, &set, &policy);
     verify_set(
         &ctx,
         &solved.experience_set,
@@ -613,188 +626,4 @@ fn a_retention_drop_queues_the_forgotten_concept() {
         waiting[0].reasons
     );
     assert_eq!(status(&ctx).unwrap().concepts.queued, 1);
-}
-
-fn candidate_of(
-    id: u8,
-    instruction: &str,
-    concept: &str,
-    kind: &str,
-    strength: Strength,
-) -> Candidate {
-    Candidate {
-        id: ExperienceId(Digest::of(&[id])),
-        instruction: instruction.into(),
-        concepts: vec![Concept::Declared {
-            name: concept.into(),
-        }],
-        kind: kind.into(),
-        strength,
-        authored: false,
-    }
-}
-
-#[test]
-fn for_one_message_the_writers_own_words_are_kept_whatever_the_strength_or_id() {
-    use Strength::{Formal, Judged};
-    let message = "How do I keep a habit of study when my mornings vanish?";
-    let teachers = candidate_of(1, message, "study", "advise", Formal);
-    let writers = Candidate {
-        authored: true,
-        ..candidate_of(2, message, "study", "advise", Judged)
-    };
-    for pool in [
-        vec![teachers.clone(), writers.clone()],
-        vec![writers.clone(), teachers.clone()],
-    ] {
-        let kept = select(pool, &Quotas::default());
-        assert_eq!(kept.selected, std::slice::from_ref(&writers.id));
-        assert_eq!(kept.duplicates, 1);
-    }
-}
-
-#[test]
-fn quotas_cap_each_share_after_removing_near_duplicates_deterministically() {
-    use Strength::{Executable, Formal};
-    let pool = vec![
-        candidate_of(
-            1,
-            "What baud rate does the console run at?",
-            "console",
-            "recall",
-            Formal,
-        ),
-        candidate_of(
-            2,
-            "What baud rate does the console run at, exactly?",
-            "console",
-            "recall",
-            Formal,
-        ),
-        candidate_of(
-            3,
-            "How many data bits does the console use?",
-            "console",
-            "recall",
-            Formal,
-        ),
-        candidate_of(
-            4,
-            "Which parity does the console use?",
-            "console",
-            "recall",
-            Formal,
-        ),
-        candidate_of(
-            5,
-            "How much current is drawn when idle?",
-            "power",
-            "recall",
-            Formal,
-        ),
-        candidate_of(
-            6,
-            "Write a function returning the idle current.",
-            "power",
-            "construct",
-            Executable,
-        ),
-        candidate_of(
-            7,
-            "Which pin carries the transmit line?",
-            "pins",
-            "recall",
-            Formal,
-        ),
-        candidate_of(8, "Which pin is ground?", "pins", "recall", Formal),
-        candidate_of(
-            9,
-            "What voltage does the board take?",
-            "supply",
-            "recall",
-            Formal,
-        ),
-    ];
-    let quotas = Quotas {
-        max_concept_share: 0.25,
-        max_kind_share: 0.6,
-        max_strength_share: 0.9,
-    };
-    let chosen = select(pool.clone(), &quotas);
-    assert_eq!(chosen.candidates, 9);
-    assert_eq!(chosen.duplicates, 1, "the reworded baud-rate question");
-    // 8 left, 4 concepts: at most ceil(max(0.25, 1/4) * 8) = 2 each; 2
-    // kinds: ceil(0.6 * 8) = 5 recall; 2 strengths: ceil(0.9 * 8) = 8.
-    assert_eq!(chosen.caps["concept"]["declared:console"], 2);
-    assert_eq!(chosen.caps["kind"]["recall"], 5);
-    let kept = |c: &splinter_pipelines::curriculum::quota::Selection, name: &str| {
-        c.selected
-            .iter()
-            .filter(|id| {
-                pool.iter().any(|p| {
-                    &p.id == *id && p.concepts[0].to_string() == format!("declared:{name}")
-                })
-            })
-            .count()
-    };
-    assert!(kept(&chosen, "console") <= 2, "{chosen:#?}");
-    let recall = chosen
-        .selected
-        .iter()
-        .filter(|id| pool.iter().any(|p| &p.id == *id && p.kind == "recall"))
-        .count();
-    assert!(recall <= 5, "{chosen:#?}");
-    assert_eq!(chosen.selected.len(), 6, "{chosen:#?}");
-    assert_eq!(
-        chosen.selected[0],
-        ExperienceId(Digest::of(&[6])),
-        "the strongest verdict first"
-    );
-
-    let mut reversed = pool.clone();
-    reversed.reverse();
-    assert_eq!(select(reversed, &quotas), chosen, "order does not matter");
-
-    let one_kind: Vec<Candidate> = pool.into_iter().filter(|c| c.kind == "recall").collect();
-    let whole = select(one_kind, &Quotas::default());
-    assert_eq!(
-        whole.capped.get("kind"),
-        None,
-        "a pool of one kind is never capped by kind"
-    );
-}
-
-/// A pool that holds a handful of answers of another strength is a pool of
-/// one strength for the quota: the two formal answers of a recall task or two
-/// must not switch on a cap that discards a quarter of the judged ones.
-#[test]
-fn a_stray_group_does_not_switch_on_a_cap_for_the_rest_of_the_pool() {
-    use Strength::{Formal, Judged};
-    let kinds = ["advise", "explain", "compare", "reflect"];
-    let mut pool: Vec<Candidate> = (0..163u8)
-        .map(|n| {
-            let words: String = (0..8).map(|w| format!("w{n}x{w} ")).collect();
-            candidate_of(
-                n,
-                &format!("Say what the writer held, {words}"),
-                &format!("concept-{n}"),
-                kinds[n as usize % kinds.len()],
-                Judged,
-            )
-        })
-        .collect();
-    pool.extend((163..165u8).map(|n| {
-        let words: String = (0..8).map(|w| format!("w{n}x{w} ")).collect();
-        candidate_of(
-            n,
-            &format!("Recall the date, {words}"),
-            &format!("concept-{n}"),
-            "recall",
-            Formal,
-        )
-    }));
-    let kept = select(pool, &Quotas::default());
-    assert_eq!(kept.duplicates, 0);
-    assert_eq!(kept.capped.get("strength"), None, "{:#?}", kept.capped);
-    assert_eq!(kept.selected.len(), 165, "{:#?}", kept.capped);
 }

@@ -27,7 +27,7 @@ use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::Context;
-use splinter_pipelines::solving::{solve_set, Solved};
+use splinter_pipelines::solving::{harness_protocol, solve_set, Solved};
 use splinter_store::tasks::{TaskEntry, TaskSet};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 
@@ -68,7 +68,16 @@ fn solve(
     reference: &ModelRef,
     resume: Option<&splinter_store::experiences::SetId>,
 ) -> Solved {
-    solve_set(ctx, set, reference, None, &CancelToken::new(), resume).unwrap()
+    solve_set(
+        ctx,
+        set,
+        reference,
+        None,
+        &CancelToken::new(),
+        resume,
+        harness_protocol(),
+    )
+    .unwrap()
 }
 
 #[test]

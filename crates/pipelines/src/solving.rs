@@ -172,6 +172,7 @@ pub fn harness_protocol() -> WorkProtocol {
         max_tool_calls: config.max_tool_calls,
         max_repeated_results: config.max_repeated_results,
         prompt: CodingPrompt::default(),
+        compaction: true,
     }
 }
 
@@ -186,6 +187,7 @@ pub fn solve_set(
     deadline: Option<Instant>,
     cancel: &CancelToken,
     resume: Option<&SetId>,
+    work: WorkProtocol,
 ) -> Result<Solved, OrchestratorError> {
     solve_tasks(
         ctx,
@@ -196,7 +198,7 @@ pub fn solve_set(
             sampling: SamplingChoice::Own,
             teacher: false,
             system: None,
-            work: harness_protocol(),
+            work,
             deadline,
             harness: None,
             cancel: cancel.clone(),

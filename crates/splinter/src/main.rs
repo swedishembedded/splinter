@@ -47,6 +47,7 @@ mod practice_output;
 mod practice_request;
 mod release_output;
 mod session;
+mod solve_session;
 mod state_output;
 mod tasks_session;
 mod train_output;
