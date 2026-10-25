@@ -38,9 +38,7 @@ use splinter_core::experience::{Experience, Task};
 use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::{Patch, ResolvedEnvironment, SandboxError, WorkspaceEnvironment};
 use sven_sdk::atif::{AgentProfile, StepOrigin, TraceStep, Trajectory};
-use sven_sdk::fork::{
-    message_count, transcript_digest, workspace_digest, Fork, ForkError, RecordedState,
-};
+use sven_sdk::fork::{transcript_digest, workspace_digest, Fork, ForkError, RecordedState};
 use sven_sdk::{ToolCallRecord, Turn};
 
 use crate::solve::{Model, Solution, SolveError, SolveOptions};
@@ -93,10 +91,10 @@ pub enum CorrectionError {
     /// The continuation exported no steps for the recorded prefix, so the
     /// provenance of its actions cannot be told apart.
     #[error(
-        "the continuation holds {got} steps, fewer than the {expected} of the recorded transcript"
+        "the continuation holds {got} steps, fewer than the {expected} of the student's trajectory"
     )]
     Provenance {
-        /// The recorded prefix's message count.
+        /// The student's own trajectory's step count.
         expected: usize,
         /// What the continuation exported.
         got: usize,
@@ -183,7 +181,6 @@ pub async fn continue_attempt(
 
     let transcript = transcript_of(request.student, request.system)?;
     let recorded = RecordedState::new(reached, transcript_digest(&transcript));
-    let prefix_messages = message_count(&transcript);
 
     let work = WorkOptions::new(SolveOptions {
         max_tool_rounds: request.remaining_rounds.or(options.max_tool_rounds),
@@ -212,7 +209,6 @@ pub async fn continue_attempt(
     let trajectory = compose(
         &request.student.trajectory,
         &continuation,
-        prefix_messages,
         &request.student.provenance.solver,
         &model.identity,
     )?;
@@ -324,25 +320,29 @@ pub fn transcript_of(student: &Experience, system: &str) -> Result<Vec<Turn>, Co
 ///
 /// `student`'s steps keep their ids, model and observations, are renumbered
 /// from one and are marked `is_copied_context`, so no view can supervise
-/// them. `continuation`'s first `prefix_messages` steps are the replayed
-/// transcript, already present in `student`; its later steps are the
-/// teacher's, marked with the teacher's model in `model_name` and in
-/// `extra.correction`.
+/// them. `continuation` begins from the student's own transcript, so its first
+/// as many steps as `student` has are that transcript replayed, already
+/// present in `student`; its later steps are the teacher's, marked with the
+/// teacher's model in `model_name` and in `extra.correction`. Both trajectories
+/// are exports of a recorded conversation by the same derivation and the fork
+/// holds the replayed transcript to the student's digest, so the counts are
+/// comparable where a count of messages is not: one message per turn, but a
+/// step pairs an action with the observation that answered it.
 ///
 /// # Errors
 ///
 /// [`CorrectionError::Provenance`] when `continuation` exported fewer steps
-/// than the recorded prefix, which would make its actions unplaceable.
+/// than `student` has, which would make its actions unplaceable.
 pub fn compose(
     student: &Trajectory,
     continuation: &Trajectory,
-    prefix_messages: usize,
     student_model: &str,
     teacher_model: &str,
 ) -> Result<Trajectory, CorrectionError> {
-    if continuation.steps.len() < prefix_messages {
+    let prefix_steps = student.steps.len();
+    if continuation.steps.len() < prefix_steps {
         return Err(CorrectionError::Provenance {
-            expected: prefix_messages,
+            expected: prefix_steps,
             got: continuation.steps.len(),
         });
     }
@@ -360,7 +360,7 @@ pub fn compose(
     if let Value::Object(fields) = &mut extra {
         fields.insert(
             CORRECTION_KEY.to_string(),
-            json!({ "teacher": teacher_model, "prefix_messages": prefix_messages }),
+            json!({ "teacher": teacher_model, "prefix_steps": prefix_steps }),
         );
     }
     composed.extra = Some(extra);
@@ -374,7 +374,7 @@ pub fn compose(
         step.extra = marked(step.extra, "student", student_model);
         composed.steps.push(step);
     }
-    for step in continuation.steps.iter().skip(prefix_messages) {
+    for step in continuation.steps.iter().skip(prefix_steps) {
         let mut step = step.clone();
         step.step_id = id;
         id += 1;
@@ -421,6 +421,7 @@ mod tests {
     use splinter_core::clock::FixedClock;
     use splinter_core::experience::{Environment, Experience, Provenance, Task};
     use sven_sdk::atif::{ObservationEntry, StepObservation, ToolInvocation};
+    use sven_sdk::fork::message_count;
 
     fn call_step(step: u64, id: &str, result: &str) -> TraceStep {
         let mut step = TraceStep::new(step, StepOrigin::Agent, "");
@@ -449,7 +450,7 @@ mod tests {
             TraceStep::new(4, StepOrigin::Agent, "done"),
         ];
 
-        let composed = compose(&student, &continuation, 2, "student/1", "teacher/1").unwrap();
+        let composed = compose(&student, &continuation, "student/1", "teacher/1").unwrap();
         let roles: Vec<_> = composed
             .steps
             .iter()
@@ -477,14 +478,37 @@ mod tests {
     }
 
     #[test]
+    fn the_prefix_is_the_students_steps_not_the_messages_they_export_as() {
+        // One step with a tool call exports two messages (the call and the
+        // result that answered it), so a two-step student is a three-message
+        // transcript. The continuation replays that transcript as two steps
+        // and adds one: the step count, not the message count, places them.
+        let mut student = Trajectory::new("ATIF-v1.7", AgentProfile::new("scripted", "1"));
+        student.steps = vec![user_step(1), call_step(2, "s1", "red")];
+        let mut continuation = Trajectory::new("ATIF-v1.7", AgentProfile::new("teacher", "1"));
+        continuation.steps = vec![
+            user_step(1),
+            call_step(2, "s1", "red"),
+            call_step(3, "t1", "green"),
+        ];
+        let composed = compose(&student, &continuation, "student/1", "teacher/1").unwrap();
+        assert_eq!(composed.steps.len(), 3);
+        assert_eq!(composed.sft_steps().count(), 1);
+        assert_eq!(
+            provenance_of(&composed.steps[2]),
+            Some(("teacher", "teacher/1"))
+        );
+    }
+
+    #[test]
     fn a_continuation_shorter_than_the_prefix_cannot_be_attributed() {
         let mut student = Trajectory::new("ATIF-v1.7", AgentProfile::new("scripted", "1"));
         student.steps = vec![user_step(1), call_step(2, "s1", "red")];
         let continuation = Trajectory::new("ATIF-v1.7", AgentProfile::new("teacher", "1"));
         assert!(matches!(
-            compose(&student, &continuation, 3, "student/1", "teacher/1"),
+            compose(&student, &continuation, "student/1", "teacher/1"),
             Err(CorrectionError::Provenance {
-                expected: 3,
+                expected: 2,
                 got: 0
             })
         ));
