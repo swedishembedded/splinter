@@ -119,6 +119,7 @@ fn request(set: SetId, max_block: Option<usize>, split_over_block: bool) -> Buil
         pack: true,
         control: Default::default(),
         serialise_calls: false,
+        only_actions: None,
         split_over_block,
     }
 }

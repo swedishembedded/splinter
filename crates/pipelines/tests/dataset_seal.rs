@@ -118,6 +118,7 @@ fn request(set: SetId) -> BuildRequest {
         split_over_block: false,
         control: Default::default(),
         serialise_calls: false,
+        only_actions: None,
     }
 }
 

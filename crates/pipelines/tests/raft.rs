@@ -481,6 +481,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         split_over_block: false,
         control: Default::default(),
         serialise_calls: false,
+        only_actions: None,
     };
     let retrieval = Retrieval {
         library: &library,

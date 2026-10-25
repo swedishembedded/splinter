@@ -269,6 +269,7 @@ fn a_variant_never_enters_a_training_dataset() {
             split_over_block: false,
             control: Default::default(),
             serialise_calls: false,
+            only_actions: None,
         },
     )
     .unwrap_err();
@@ -470,6 +471,7 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
             split_over_block: false,
             control: Default::default(),
             serialise_calls: false,
+            only_actions: None,
         },
     )
     .unwrap();
