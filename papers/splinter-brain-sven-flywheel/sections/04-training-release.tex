@@ -28,7 +28,9 @@ Both are carried out by Brain (\code{ChatFullFineTune}, \code{merge\_adapter}).\
 material it was not trained on.\cl{G01} A check that was not measured fails with the
 reason \emph{not measured}.\cl{G02}
 \emph{Improvement}: a one-sided exact paired sign test at $\alpha=0.05$ over discordant
-clusters, a family of items counting once.\cl{G03}
+clusters, a family of items counting once; the candidate must also have solved at least as
+many of the suite's assigned tasks as its champion, an attempt withheld as exposed or as a
+harness failure counting as unsolved for the arm that produced it.\cl{G03}
 \emph{Retention}: accuracy on every earlier release's held-out suite may not drop by more
 than 0.05.\cl{G04}
 \emph{Anchor}: accuracy on the frozen suite of general tasks may not drop by more than

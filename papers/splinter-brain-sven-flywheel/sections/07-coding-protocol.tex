@@ -70,7 +70,8 @@ partition is never solved for data purposes.\cl{PR02,L07} (ii)~Hidden files are 
 solver's tree and are materialised only in the verifier's.\cl{V07} (iii)~An exposure audit fails
 an attempt whose tool calls name a hidden path or whose outputs repeat a shingle of hidden
 content, and exposed attempts and harness failures are withheld and counted in no
-denominator.\cl{L06,L08,PR06} (iv)~The isolation level of every run is recorded; with
+denominator of the paired test; in the release gate's improvement check they count as tasks
+the arm did not solve, so a candidate cannot remove a loss from the test.\cl{L06,L08,PR06} (iv)~The isolation level of every run is recorded; with
 \code{none} a host command is still confined by the kernel (\cref{sec:audit}) and the audit
 is a second line, and a task whose soundness needs a container is not admitted.\cl{PR06,AU09,CN01} Whether a repository is in the base model's
 pretraining data is not known; the base arm on the same exam bounds that effect without
