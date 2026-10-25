@@ -184,6 +184,10 @@ pub async fn continue_attempt(
 
     let work = WorkOptions::new(SolveOptions {
         max_tool_rounds: request.remaining_rounds.or(options.max_tool_rounds),
+        // The continuation must not compact: the record it is projected into has
+        // to hold the student's whole transcript, and a compaction replaces it
+        // with a summary, which no longer supervises the teacher's action on it.
+        compaction: false,
         ..options
     });
     let confined: Arc<dyn sven_sdk::tool::Tool> = Arc::new(SandboxShell::for_episode(

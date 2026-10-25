@@ -552,6 +552,7 @@ impl<'b> Meter<'b> {
             system: None,
             sampling: None,
             max_tool_rounds: None,
+            compaction: true,
         })
     }
 }

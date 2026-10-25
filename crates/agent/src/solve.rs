@@ -90,6 +90,13 @@ pub struct SolveOptions {
     /// what the episode had left, so the teacher cannot take more steps than
     /// the student could have.
     pub max_tool_rounds: Option<u32>,
+    /// Whether the engine may compact the conversation as it nears the
+    /// context limit. On keeps sven's default; off makes an episode that
+    /// outgrows its window end at the limit with its whole transcript, which
+    /// is what a failure meant to be corrected needs: a compacted transcript
+    /// replaces the messages a correction would continue, so it cannot be
+    /// forked at all.
+    pub compaction: bool,
 }
 
 impl SolveOptions {
@@ -105,6 +112,7 @@ impl SolveOptions {
             system: None,
             sampling: None,
             max_tool_rounds: None,
+            compaction: true,
         }
     }
 
@@ -157,6 +165,12 @@ impl SolveOptions {
             let secs = wait.as_secs().max(1);
             config.agent.first_byte_timeout_secs = Some(secs);
             config.agent.first_token_timeout_secs = Some(secs);
+        }
+        if !self.compaction {
+            // 1.0 is the fraction of the budget at which proactive compaction
+            // would trigger: no request is ever that full, so the episode keeps
+            // every message and ends at the hard budget gate instead.
+            config.agent.compaction_threshold = 1.0;
         }
         if let Some(limit) = self.stream_idle {
             let limit = limit.min(self.deadline);
@@ -448,5 +462,22 @@ pub(crate) fn engine(
              work::solve_in_workspace, not by a single-turn solve"
                 .into(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod compaction_tests {
+    use super::SolveOptions;
+    use std::time::Duration;
+
+    #[test]
+    fn a_solve_that_may_not_compact_keeps_every_message() {
+        // A failure that is meant to be corrected has to hold its whole
+        // transcript: a compaction replaces the messages with a summary, and a
+        // correction has no faithful prefix to continue then.
+        let mut options = SolveOptions::new(Duration::from_secs(60));
+        assert!(options.engine_config().agent.compaction_threshold < 1.0);
+        options.compaction = false;
+        assert_eq!(options.engine_config().agent.compaction_threshold, 1.0);
     }
 }
