@@ -9,7 +9,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{ArgGroup, Args, Parser, Subcommand};
-use splinter_sdk::canaries::CANARY_COUNT;
 use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{parse_strength, parse_strip, StripPolicy, ViewName};
@@ -18,7 +17,6 @@ use splinter_sdk::learn::parse_budget;
 use splinter_sdk::lineage::Direction;
 use splinter_sdk::measure::strata::StratumCutoffs;
 use splinter_sdk::seed::Seed;
-use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_sdk::vocabulary::terms::UsagePolicy;
@@ -341,90 +339,6 @@ pub enum SourceCommand {
     /// Show one stored source.
     Show {
         /// The source's id, or a unique prefix of it.
-        id: String,
-    },
-}
-
-/// `tasks ...`.
-#[derive(Debug, Subcommand)]
-pub enum TasksCommand {
-    /// Generate tasks from stored sources into a task set.
-    Generate {
-        /// The sources, by id or unique prefix.
-        #[arg(required = true, value_name = "SOURCE-ID")]
-        sources: Vec<String>,
-        /// Task kinds, comma-separated.
-        #[arg(long, required = true, value_delimiter = ',', value_name = "K,..")]
-        kinds: Vec<String>,
-        /// The model that writes the tasks.
-        #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
-        generator: ModelRef,
-        /// Who wrote the sources, when they are one person's: the generator is
-        /// told, and a question may name the author as its subject.
-        #[arg(long, value_name = "NAME")]
-        author: Option<String>,
-        /// The seed the `denoise` tasks are built with (drawn and printed
-        /// when not given and the kinds include denoise).
-        #[arg(long, value_name = "N")]
-        denoise_seed: Option<Seed>,
-    },
-    /// Write differently worded questions about each task of a task set,
-    /// into a task set of their own: the same facts, to be measured and
-    /// never trained on.
-    Variants {
-        /// The task set, by id or unique prefix.
-        #[arg(value_name = "TASKSET-ID")]
-        task_set: String,
-        /// The model that writes the variants (the one that wrote the
-        /// tasks).
-        #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
-        generator: ModelRef,
-        /// The most variants one task is given.
-        #[arg(long, default_value_t = DEFAULT_VARIANTS_PER_TASK, value_name = "N")]
-        per_task: usize,
-    },
-    /// Make canaries of the workspace tasks of a task set: each task with its
-    /// hidden assertions also required to fail, so that no honest change
-    /// passes it. They go into a task set of their own, which `release
-    /// --canaries` hands the gate: a candidate that passes one is refused.
-    Canaries {
-        /// The task set, by id or unique prefix.
-        #[arg(value_name = "TASKSET-ID")]
-        task_set: String,
-        /// The most canaries made.
-        #[arg(long, value_name = "N", default_value_t = CANARY_COUNT,
-            value_parser = positive_count)]
-        count: usize,
-    },
-    /// Divide the union of task sets into a picked set and the rest, by a
-    /// stable hash of the seed and the task's family (the practice exam's
-    /// ranking): a development holdout, a sample of one task per family, or
-    /// one set out of several. Naming the sets in another order, or a task in
-    /// two of them, changes nothing. A task that declares no family is a
-    /// family of its own.
-    Pick {
-        /// The task sets, by id or unique prefix.
-        #[arg(required = true, value_name = "TASKSET-ID")]
-        task_sets: Vec<String>,
-        /// Pick this fraction (0 to 1) of the families, every task of each.
-        #[arg(long, value_name = "F", conflicts_with = "per_family",
-            required_unless_present = "per_family", value_parser = fraction)]
-        family_share: Option<f64>,
-        /// Pick at most this many tasks of every family.
-        #[arg(long, value_name = "N", value_parser = positive_count)]
-        per_family: Option<usize>,
-        /// The seed that decides what is picked.
-        #[arg(long, value_name = "N")]
-        seed: Seed,
-    },
-    /// Harbor tasks: discover, import and export.
-    #[command(subcommand)]
-    Harbor(HarborCommand),
-    /// List the stored task sets.
-    List,
-    /// Show a task set's tasks, or one task.
-    Show {
-        /// A task set's or a task's id, or a unique prefix of it.
         id: String,
     },
 }
@@ -773,6 +687,7 @@ mod learn;
 mod practice;
 pub mod reference;
 mod state;
+mod tasks;
 mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use baseline::BaselineArgs;
@@ -791,6 +706,7 @@ pub use learn::LearnArgs;
 pub use practice::{PracticeArgs, ReplayArg};
 pub use reference::CliReferenceArgs;
 pub use state::{RunsCommand, StateCommand};
+pub use tasks::TasksCommand;
 use train::positive_count;
 
 /// A sampling temperature a provider accepts: 0 to 2.
