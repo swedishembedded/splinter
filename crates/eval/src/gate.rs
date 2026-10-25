@@ -19,7 +19,12 @@
 //!    models were graded on,
 //!    candidate right and champion wrong against the reverse, significant
 //!    at `alpha` ([`DEFAULT_ALPHA`]). Ties and unpaired tasks carry no
-//!    evidence; they are excluded and counted.
+//!    evidence; they are excluded and counted. Beside the test, every task
+//!    the suite assigned is counted for each arm ([`Verified`]): the
+//!    candidate must have solved at least as many as the champion, and a
+//!    task it was not graded on counts as unsolved, so an attempt set aside
+//!    as exposed or as an environment failure cannot remove a loss from the
+//!    paired test's denominator.
 //! 2. **Retention** on every earlier release's held-out tasks: per suite,
 //!    the candidate's accuracy may fall at most `retention_bound`
 //!    ([`DEFAULT_RETENTION_BOUND`]) below the champion's. With no earlier
@@ -224,12 +229,32 @@ impl<T> Check<T> {
     }
 }
 
+/// What each arm solved over every task the suite assigned, beside the paired
+/// comparison: a task an arm was not graded on (an attempt set aside as
+/// exposed, or as an environment failure) is still a task it did not solve.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Verified {
+    /// Tasks the candidate solved.
+    pub candidate: usize,
+    /// Tasks the champion solved.
+    pub baseline: usize,
+    /// Tasks the suite assigned to both.
+    pub tasks: usize,
+}
+
 /// The improvement check's numbers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Improvement {
     /// The new data's held-out suite: the records training held out and
     /// the variants of the tasks it trained on.
     pub suite: SuiteSummary,
+    /// Every task the suite assigned, counted for each arm: a task an arm was
+    /// not graded on (an attempt set aside as exposed or as an environment
+    /// failure) is still a task it did not solve. The improvement decision
+    /// refuses a candidate below its champion here, so a loss cannot leave the
+    /// denominator of the paired test.
+    #[serde(default)]
+    pub verified: Verified,
     /// The variants among them: how many were measured and how many were
     /// left out, by reason; `None` when no variant was written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -618,16 +643,38 @@ pub fn improvement(
     }
     let pairs = by_cluster(outcomes);
     let test = significance.sign_test(&pairs);
-    let failure = (test.p_value > alpha).then(|| {
-        format!(
-            "no significant improvement: the candidate won {} of {} discordant task(s) (tasks \
-             about one family of sources count once), p = {:.4} > alpha {alpha}",
-            test.candidate_wins, test.discordant, test.p_value
-        )
-    });
+    let verified = Verified {
+        candidate: outcomes
+            .iter()
+            .filter(|outcome| outcome.candidate == Some(true))
+            .count(),
+        baseline: outcomes
+            .iter()
+            .filter(|outcome| outcome.baseline == Some(true))
+            .count(),
+        tasks: suite.tasks,
+    };
+    let failure = if verified.candidate < verified.baseline {
+        Some(format!(
+            "no improvement: the candidate solved fewer tasks than the champion ({} against {} \
+             of {}): a task the candidate was not graded on counts as a task it did not solve, \
+             so an attempt set aside as exposed or as an environment failure cannot remove a \
+             loss from the paired test",
+            verified.candidate, verified.baseline, verified.tasks
+        ))
+    } else {
+        (test.p_value > alpha).then(|| {
+            format!(
+                "no significant improvement: the candidate won {} of {} discordant task(s) \
+                 (tasks about one family of sources count once), p = {:.4} > alpha {alpha}",
+                test.candidate_wins, test.discordant, test.p_value
+            )
+        })
+    };
     Check::decided(
         Improvement {
             suite,
+            verified,
             variants,
             comparison,
             sign_test: test,

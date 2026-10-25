@@ -6,8 +6,9 @@
 // expertise in evaluation statistics for model releases, you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! Spec: the improvement check decides on the sign test it is handed, and on
-//! nothing else, so the gate can be run and judged without a model backend.
+//! Spec: the improvement check decides on the sign test it is handed and,
+//! over every assigned task, on the candidate not having solved fewer than
+//! the champion, so the gate can be run and judged without a model backend.
 
 use std::collections::BTreeMap;
 
@@ -110,4 +111,46 @@ fn many_wins_inside_one_family_of_sources_are_one_unit_of_evidence() {
     // And items with no family count one by one, as before.
     let unclustered: Vec<PairedOutcome> = (0..8).map(|n| item(n, None, true, false)).collect();
     assert!(improvement(suite(), None, &unclustered, 0.05, &NeedsFive).passed);
+}
+
+#[test]
+fn a_candidate_that_solved_fewer_tasks_is_refused_even_when_the_handed_test_is_significant() {
+    // Four paired tasks: the candidate is right on one, the champion on three.
+    // This is the shape a candidate produces when its own attempts are set
+    // aside as exposed while the champion's are graded: the paired sign test
+    // sees only the pairs both were graded on, so a loss can disappear from
+    // its denominator. The gate must still count every assigned task.
+    let outcomes: Vec<PairedOutcome> = [(true, false), (false, true), (false, true), (false, true)]
+        .into_iter()
+        .enumerate()
+        .map(|(n, (candidate, baseline))| PairedOutcome {
+            item: format!("t{n}"),
+            candidate: Some(candidate),
+            baseline: Some(baseline),
+            cluster: None,
+        })
+        .collect();
+    let mut four = suite();
+    four.tasks = 4;
+    let check = improvement(four, None, &outcomes, 0.05, &Fixed(0.01));
+    assert!(!check.passed, "fewer solved tasks must refuse: {check:?}");
+    let reason = check.reason.expect("it says why");
+    assert!(reason.contains("fewer tasks"), "{reason}");
+    assert!(reason.contains("1 against 3"), "{reason}");
+}
+
+#[test]
+fn non_inferiority_passes_when_the_candidate_solved_at_least_as_many() {
+    let outcomes: Vec<PairedOutcome> = [(true, false), (true, true), (false, false)]
+        .into_iter()
+        .enumerate()
+        .map(|(n, (candidate, baseline))| PairedOutcome {
+            item: format!("t{n}"),
+            candidate: Some(candidate),
+            baseline: Some(baseline),
+            cluster: None,
+        })
+        .collect();
+    let check = improvement(suite(), None, &outcomes, 0.05, &Fixed(0.01));
+    assert!(check.passed, "{check:?}");
 }
