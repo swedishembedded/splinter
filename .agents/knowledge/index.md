@@ -90,3 +90,4 @@ in the same commit.
 | [102](102-a-batch-1-greedy-decode-is-bit-reproducible-and-the-variation-is-the-co-batch.md) | A batch-1 greedy decode is bit-reproducible, and the variation is the co-batch |
 | [103](103-a-sign-test-p-value-was-read-from-the-reverse-tail.md) | A sign test's p-value was read from the reverse tail |
 | [104](104-the-harness-edit-tests-author-documents-the-v2-compiler-refuses.md) | The harness-edit tests author documents the v2 compiler refuses |
+| [105](105-a-development-gain-did-not-replicate-on-the-registered-set.md) | A development gain did not replicate on the registered set |
