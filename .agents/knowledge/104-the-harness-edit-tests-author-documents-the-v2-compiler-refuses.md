@@ -25,3 +25,8 @@ change; the failure reproduces without it.
 Evidence: `runs/g8/tests-splinter-workspace.log` (the two panics and the compiler message),
 `crates/agent/src/harness_edit.rs` (the `DOC` fixture, `apply`'s path walk), and sven's
 `crates/harness-spec/src/lib.rs` (the v2 field list).
+
+**Resolved (2026-10-26).** `apply` learned list paths: a path segment that is a number indexes a
+list, so `["workflow", "0", "task"]` edits a v2 task's prompt, and the proposer's brief now
+describes the v2 workflow instead of the removed step language (it asked models for edits the
+compiler could only refuse). The unit tests edit a v2 document.
