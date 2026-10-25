@@ -7,8 +7,8 @@ A result that only holds for the repositories it was developed on is a demonstra
 method. This section is the recipe for running the loop on a repository of one's own, with
 the status of each step: \emph{available} means a command in the pinned revision does it and
 the ledger checks the command line; \emph{planned} means the registration needs it and it
-does not exist yet.\cl{PL01} It claims no outcome; the outcome of a replication is the
-experiment CE7 of \cref{sec:pending}.
+does not exist yet.\cl{PL01} It claims no outcome; the replication of the headline on a
+second repository was registered (CE7) and was not run (\cref{sec:limitations}).
 
 \subsection{Requirements on the repository}
 
@@ -48,7 +48,7 @@ families are never trained on; a three-way split with a qualification partition 
 is the registration's requirement, and \code{splinter tasks pick}
 draws the development holdout and the qualification partition from the task sets by seed and
 family.\cl{PS07,PL01}
-\item \textbf{Measure the untrained agent} (available; CE1 is reported in \cref{sec:pending}): the base attempts the development and
+\item \textbf{Measure the untrained agent} (available; the teacher's pass is reported in \cref{sec:coding-results}): the base attempts the development and
 qualification partitions with attempts per task fixed from a throughput probe, and
 \code{splinter experiences compare CANDIDATE BASELINE} pairs any two such experience sets
 by task and reports the family-clustered sign test and per-family counts.\cl{PL01}
@@ -83,7 +83,7 @@ running step 2, then CE1 on a small number of families, and only then committing
 \subsection{What to report}
 
 For a replication to count it must report, for the new repository, the same quantities as
-\cref{sec:pending}: the admission funnel by reason, the baseline resolve rate with its
+\cref{sec:coding-results}: the admission funnel by reason, the baseline resolve rate with its
 interval, the paired sign-test counts on the qualification partition, the retention check,
 the isolation level and the three repository commits. Counts that disagree with ours are as
-informative as ones that agree.\cl{PR13}
+informative as ones that agree.

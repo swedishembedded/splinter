@@ -1,83 +1,30 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-\section{The headline experiment and its replication: registered, and what has run}\label{sec:pending}
+\section{The coding-task experiment: results}\label{sec:coding-results}
 
-\paragraph{The claim this paper exists to establish.} Verified engineering-agent experience
-can produce a sustained improvement in completion of previously unseen repository tasks,
-under a controlled compute budget and without unacceptable loss of earlier capability.\cl{PR09}
-\textbf{That claim is not yet measured.} The teacher's first pass (CE1) and an
-underpowered pilot of the headline (CE4) have run and are reported at the end of this section;
-CE8 was trained and stopped by its memorisation guard before any evaluation. This section states
-what is registered, what each outcome will mean and where its numbers will appear; apart from
-the paragraphs marked as results, nothing in it is a result.
+\paragraph{The question.} Can verified engineering-agent experience produce a sustained
+improvement in completion of previously unseen repository tasks, under a controlled compute budget
+and without unacceptable loss of earlier capability?\cl{PR09} The registered confirmatory query
+did not show it: on the 46 qualification families the candidate registered before the query
+reached a mean pass@1 of 23.0 against 20.0 for its base, winning 18 families, losing 12 and tying
+16 (exact one-sided sign test $p=0.18$, not significant at the registered alpha). The same-seed
+supervision contrast did separate: supervising only the decisive actions (file edits and writes)
+against supervising every action, with corpus, recipe, seed and binary fixed, won 26 families and
+lost 11 with 9 tied ($p=0.010$), and the six-decoding-seed development comparison on D46 had
+given $p=0.040$ for the same candidate against its base.\cl{QUAL1,PROTO6} The sections below report
+what was run, in order, with the pilots that shaped it.
 
-The experiments are registered in \code{prereg/coding-tasks.md}, dated 2026-10-16 and written
-before any of their runs; this paper states the registration as it stands, and
-\cref{app:deviations} lists every dated change to it with the outcome each preceded.
-\Cref{tab:registered} lists them. Their
-numbers will be read from \code{data/results.csv} by \code{scripts/build_data.py}; a row exists
-only for a finished run, and the status column below changes by itself when one does.\cl{PL02}
-
-\begin{table}[t]
-\centering\small
-\input{generated/registered_table}
-\caption{The registered coding-task experiments. The status is derived from the rows of
-\code{data/results.csv}.}\label{tab:registered}
-\end{table}
-
-\begin{description}
-\item[CE1, the untrained agent.] The base agent's resolve rate on repository tasks, its failure
-profile, its cost per resolved task and the discordance between the base and the 27B teacher per
-family, which is the sizing input for the qualification partition (greedy decoding makes two seeds of one arm identical). No threshold; nothing is trained before it is
-reported.\cl{PR10}
-\item[CE4, the headline.] A LoRA adapter on Qwen3-8B trained only on verified
-trajectories, produced by the 27B teacher served as the base, from
-development-partition families, compared with the untrained 8B on the qualification partition by the
-primary test of \cref{sec:protocol}, served through Brain and driven by Sven, with retention,
-serve-verdict agreement and the three controls. The headline holds only if the sign test has
-$p<0.05$, retention is not refused and agreement is within the serve check's tolerance; any
-other outcome is reported as what it is, including ``no held-out improvement'' and
-``memorisation''.\cl{PR11,PR15}
-\item[CE6, the 27B model.] Ten stages from loading the exact model to comparing correctness,
-tool-call validity and resources against the base, gated by training correctness and by
-deployment agreement. The 27B is not used for a confirmatory query until both gates pass;
-the training rate of \cref{sec:throughput} is reported as measured and no target is
-registered.\cl{PR12}
-\item[CE7, replication.] The unchanged CE1 and CE4 procedure on a second, independent
-repository chosen by a rule fixed in advance (permissive licence, offline build, a suite of
-bounded running time, no part of the pipeline tuned on it), with the cross cells that separate
-learning a repository from learning the protocol. The headline counts as reproduced only if
-both repositories pass the primary test independently.\cl{PR13}
-\item[CE8, 27B self-improvement.] A LoRA adapter on the bf16 base of the 27B model trained on its
-own verified, exposure-clean trajectories of the development sets (rank 16, alpha 32, learning
-rate $5\times10^{-5}$, $B=2$ records per step, $\lceil 2R/B\rceil$ steps for the $R$ records the trainer
-reports, a held-out monitoring share of 0.2 by whole family read eight times over the budget,
-stopping after two evaluations without improvement), held to a memorisation guard
-(a run whose final training loss is below half its first-step value while its monitoring loss is
-above its minimum is not evaluated), served through the adapter bank of the 8-bit teacher server,
-and compared with the 27B base on the qualification halves under the solve protocol of
-\cref{sec:protocol}. A second candidate, CE8-T, is trained the same way on a teacher pass recorded
-with a 1024-token thinking budget and held to a guard on its kept checkpoint instead of its last step: it is
-memorised, and not evaluated, if the kept evaluation's monitoring loss is not below the base's on the same
-records, or if its training loss (the mean over that evaluation's window) is below half its monitoring loss. A shuffled-instruction control, CE8-S, keeps format, tools and
-token count and breaks the pairing of trajectory and task; learning is claimed only if CE8 beats
-both the base and CE8-S on the primary test. CE8-T is trained on one pass over its records
-($\lceil R/2\rceil$ steps for the $R$ records the trainer reports, read from a one-step sizing run of the same
-recipe) and has its own shuffled control, CE8-T-S, built from the CE8-T experiences with a drawn seed and
-trained on the same steps and evaluations; learning is claimed for CE8-T only if it beats both the base and
-CE8-T-S. Before any arm runs, the served adapter must pass G8 for the 27B, which compares the adapter as served
-with the adapter as trained by teacher-forced log-probabilities, because the 27B has no in-process agent path to
-compare verdicts on: on the held-out records of the CE8-T training, the per-token log-probabilities of the
-recorded assistant tokens are taken from the in-process trainer (bf16 base with the adapter) and from the
-evaluation server (Q8\_0 base with the adapter in its bank), and the same pair is taken for the base without
-the adapter. G8 passes when (i) the mean absolute log-probability difference between served and in-process with
-the adapter is at most 1.25 times that of the base, (ii) their top-1 token agreement with the adapter is at most
-2 points below the base's, and (iii) the served adapter gives the held-out records a higher mean log-probability
-than the served base. One brain build and one splinter binary serve every arm of the evaluation and are named in
-its record. CE8 is a separate comparison and does not enter the
-headline.\cl{PR16}
-\end{description}
+\paragraph{What ran.} The experiments are registered in \code{prereg/coding-tasks.md}, which holds
+the protocol of \cref{sec:protocol}. The headline's student is trained on verified trajectories
+that the 27B teacher produced on development-partition families and is tested against the untrained
+8B;\cl{PR15} the 27B model trained on its own verified trajectories (CE8) is a separate comparison
+outside the headline.\cl{PR16} Run, in this order: the teacher's first pass over the eight
+development sets (CE1), a pilot of the headline (CE4), two CE8 training runs, CE8-T with its
+shuffled control and the G8 agreement check, development probes on D46, and finally the registered
+confirmatory query. Registered experiments that were not run are named in \cref{sec:limitations}.
+\Cref{tab:results} lists the paired outcomes that have a row in \code{data/results.csv}; every other
+number is read from \code{data/measurements.json} through its claim.
 
 \paragraph{Two findings of the first runs.} In a pilot under an earlier,
 unbounded harness the untrained 8B model almost never edited a file, which is why the headline's
@@ -93,7 +40,7 @@ tree marks the episode exposed (\cref{sec:audit}).\cl{CN01}
 \input{generated/results_table}
 \caption{Paired outcomes over qualification-partition families (wins: the adapter resolves more
 of the family than the base; losses: fewer), with the exact one-sided sign test. Every cell is
-empty until its run exists; a cell is never filled with an estimate.}\label{tab:results}
+read from a finished run; none is an estimate.}\label{tab:results}
 \end{table}
 
 \paragraph{CE1: the teacher's first pass, finished.} The 27B teacher has solved the eight development sets once, greedily, confined and under the registered bounds; \cref{tab:ce1} lists every set, each row read from \code{data/measurements.json} and each backed by a ledger entry that quotes its counts.\cl{M39,M40,M41,M42,M43,M44,M45,M46} ``Stopped'' counts the runs that ended at the harness's own bounds (the cap on tool calls or the repetition stop, \cref{sec:protocol}), not infrastructure failures. The exposure audit is applied as registered: an attempt whose trajectory names a path outside its tree is excluded from training evidence and counted, whatever its patch did; the columns ``Hidden pass'' and ``Passed clean'' show how much of the evidence the rule removes in each set.
@@ -160,7 +107,7 @@ pilot subset under the same protocol it resolves 6 of the 23 tasks where the bas
 families it wins 1, loses 4 and ties 8, and the one-sided sign test gives $p=0.96875$, with 6 attempts exposed
 against 7 for the base.\cl{M56} Supervising decisions rather than whole trajectories does not rescue the
 comparison: the candidate is at or below the base and below its packed predecessor on this subset. Both
-candidates are development probes, not registered comparisons; the registered query stays unmeasured.
+candidates are development probes, not registered comparisons.
 
 \paragraph{What these pilots can and cannot show.} Two measurements bracket what the pilot numbers mean.
 First, the attempts differ in shape. The median episode is 32 steps for the base, 13 for CE8-T, 12 for its
@@ -172,7 +119,7 @@ steps than the packed candidates and the most repetition stops. Second, the seed
 23 tasks with two registered protocol seeds, the base itself pairs 13 families with 1 win, 3 losses and 9 ties,
 $p=0.9375$, which is statistically indistinguishable from either adapter's comparison.\cl{M57} A pilot of this
 size therefore shows no detectable difference, not a demonstrated loss; the registered confirmatory query on 46
-families is the measurement that could separate them. The training side points the same way: every trajectory
+families, reported below, is the measurement that could separate them. The training side points the same way: every trajectory
 longer than the 16384-token block was removed before training (130 of the 262 successful attempts of the eight
 development sets, and 1148 of 3837 for the decision-level view), so the records the adapters were trained on are
 the short half of the teacher's successes, and their median record carries about 1650 supervised tokens.\cl{M59}
@@ -193,9 +140,7 @@ The second series recovers the all-action adapter \code{win1}, damaged to 12/46,
 \caption{Development probes on D46 (pilot, not the registered confirmatory query): paired families among the 46, wins and losses from the adapter's side, and the exact one-sided sign test computed from them. A row is a probe, not a confirmatory result.}\label{tab:pilots-d46}
 \end{table}
 
-\paragraph{What a failure would show.} An adapter that does not win (for CE4, one distilled from the teacher's verified trajectories), a gain that a different
-repository's adapter or unverified trajectories match, a retention loss beyond the margin, or
-a served adapter that disagrees with the in-process one are each stated outcomes of the
-registration, and each is publishable as such. A development gain with no qualification gain
-(sign test $p>0.2$) is reported as memorisation. If fewer than 25 non-tied families are
-available the comparison is labelled a pilot and the rule is not loosened.\cl{PR08}
+\paragraph{How outcomes are read.} The primary decision is the one-sided exact sign test of
+\cref{sec:protocol}; a comparison with fewer than 25 non-tied families is labelled a pilot and the
+rule is not loosened, and a development gain with no qualification gain (sign test $p>0.2$) is
+reported as memorisation.\cl{PR04,PR08}

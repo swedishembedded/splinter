@@ -16,13 +16,11 @@ splinter pin is the reachable twin of an earlier pin that no branch contained.
 \code{make check} includes this verification as \code{check/papers}. The bibliography entries
 were checked against the archive's abstract pages on 2026-10-16.
 
-\paragraph{Draft and final.} The paper is marked a draft in \code{status.txt}. A draft may contain
-registered but not yet validated results: the experiments of \cref{sec:pending} are REGISTERED
-and PLANNED claims, and \code{verify} passes with them. \code{make -C
-papers/splinter-brain-sven-flywheel final} runs \code{build\_data.py --check --final}, which
-fails while the paper is marked draft or any REGISTERED or PLANNED claim remains, so a final
-paper contains validated results only.
-
+\paragraph{Draft and final.} The paper is marked a draft in \code{status.txt}. A draft may
+contain registered but not yet validated results, as REGISTERED and PLANNED claims, and \code{verify}
+passes with them; this version holds none. \code{make -C papers/splinter-brain-sven-flywheel final}
+runs \code{build\_data.py --check --final}, which fails while the paper is marked draft or any
+REGISTERED or PLANNED claim remains, so a final paper contains validated results only.
 
 \paragraph{Training qualification and throughput.} The raw logs are not kept in the repository; \code{data/measurements.json} records, per log, the
 values the claims cite, the exact command and the log's sha256, and \code{make verify EVIDENCE=DIR}
@@ -33,16 +31,15 @@ throughput probe is a copy of a log kept with the correction plan;
 its header says what the roadmap records about its command and revision, and that the log itself
 carries no commit.
 
-\paragraph{Coding-task experiments.} One pilot has been run: CE8-T and its shuffled-instruction
-control on the pilot subset S1, whose rows are in \code{data/results.csv} with status PILOT and
-whose two \code{experiences compare} reports are recorded in \code{data/measurements.json} beside
-the training logs. The G8 agreement check of the 27B adapter is recorded the same way, as one report
-that carries the sha256 of each of the four score files it read, the manifest of the held-out split they
-were taken on, and every number the three conditions rest on. No registered comparison has been run. The
-registration is
-\code{prereg/coding-tasks.md}; a result is a row of \code{data/results.csv} with the commands,
-commits, harness profile and seeds of the run, and the tables of \cref{sec:pending} are generated
-from them.
+\paragraph{Coding-task experiments.} The paired outcomes of the pilots are rows of
+\code{data/results.csv} with status PILOT, whose \code{experiences compare} reports are recorded in
+\code{data/measurements.json} beside the training logs. The G8 agreement check of the 27B adapter is
+recorded the same way, as one report that carries the sha256 of each of the four score files it read,
+the manifest of the held-out split they were taken on, and every number the three conditions rest on.
+The registered confirmatory query and the six-decoding-seed development comparison are recorded there
+as well (\code{runs/g8.qual}, \code{runs/g8.proto6}). The registration is
+\code{prereg/coding-tasks.md}; a result carries the commands, commits, harness profile and seeds of
+the run, and the tables of \cref{sec:coding-results} are generated from them.
 
 \paragraph{Build.} \code{make papers/splinter-brain-sven-flywheel/pdf} builds the paper to
 \code{target/papers}; the tables and numbers are generated from \code{data/} into the

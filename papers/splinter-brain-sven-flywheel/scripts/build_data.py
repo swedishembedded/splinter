@@ -481,16 +481,8 @@ def e4_table():
 
 
 # ---------------------------------------------------------------- coding-task tables
-# The registered coding-task experiments (prereg/coding-tasks.md). A status is derived, never typed:
-# an experiment is PENDING until a row of data/results.csv exists.
-REGISTERED = [
-    ("CE1", "Untrained agent: resolve rate, failure profile, cost, discordance", "descriptive, no threshold"),
-    ("CE4", "8B SFT on verified 27B-teacher trajectories against the untrained 8B (headline)", "sign test, qualification, alpha 0.05"),
-    ("CE6", "27B training and deployment, ten stages", "gates G7 and G8"),
-    ("CE7", "Replication on a second, independent repository", "same test, independently"),
-    ("CE8", "27B SFT on its own verified trajectories against the 27B base", "sign test, qualification, alpha 0.05"),
-]
-COMPARISONS = ("CE4", "CE7", "CE8")
+# The registered comparisons that have a row in data/results.csv (prereg/coding-tasks.md).
+COMPARISONS = ("CE4", "CE8")
 
 
 def ce1_table():
@@ -521,13 +513,6 @@ def experiment_status(key):
     if rows:
         return f"{len(rows)} result rows"
     return r"\textbf{PENDING}"
-
-
-def registered_table():
-    lines = [r"\begin{tabular}{lp{6.2cm}p{3.6cm}l}", r"\toprule", r"Id & Question & Primary measure & Status \\", r"\midrule"]
-    for key, question, measure in REGISTERED:
-        lines.append(f"{key} & {question} & {measure} & {experiment_status(key)} \\\\")
-    return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
 
 
 def results_table():
@@ -611,7 +596,6 @@ def write_outputs(out):
     macros += f"\\newcommand{{\\mExperimentsMeasured}}{{{len({k.split('.')[0] for k in m})}}}\n"
     (out / "macros.tex").write_text(macros)
     (out / "e4_table.tex").write_text(e4_table() + "\n")
-    (out / "registered_table.tex").write_text(registered_table() + "\n")
     (out / "results_table.tex").write_text(results_table() + "\n")
     (out / "pilot_results_table.tex").write_text(pilot_results_table() + "\n")
     (out / "ce1_table.tex").write_text(ce1_table() + "\n")
