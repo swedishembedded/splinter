@@ -21,6 +21,12 @@
 //!   own check pass under the workspace verifier. The tests that catch it
 //!   are taken out of the tree the solver is given and kept as a hidden
 //!   overlay; the request names their symptoms and never the change.
+//! * [`WorkspaceGenerator::from_history`] - tasks from a repository's own
+//!   commits: the parent tree is the solver's environment, the commit's
+//!   added or changed tests are the hidden fail-to-pass checks, and a commit
+//!   is admitted only when its parent fails those tests and the commit
+//!   passes them, reproducibly. Formatting-only, generated, vendored and
+//!   merge commits are excluded and counted.
 //! * [`WorkspaceGenerator::import_fixture`] - a task someone authored
 //!   (a rendered seeded-bug repository, a family's workspace template),
 //!   checked the same way before it is admitted.
@@ -42,6 +48,7 @@ mod fixtures;
 mod harbor;
 mod harness;
 mod held;
+mod history;
 mod instruction;
 mod mutate;
 mod pack;
@@ -68,6 +75,10 @@ pub use fixtures::Fixture;
 pub use harbor::{discover, Discovered, HarborTask, Oracle, SplinterMeta, SPLINTER_SCHEMA};
 pub use harness::{Harness, SuiteReport};
 pub use held::Held;
+pub use history::{
+    Admission, HistoryEvidence, HistoryGeneration, HistoryReason, HistoryRecord, HistoryReport,
+    HistoryRequest, HistoryTask, DEFAULT_MAX_COMMITS, ORACLE_RUNS,
+};
 pub use instruction::InstructionVersion;
 pub use profile::{
     Qualified, RepositoryProfile, BASELINE_RUNS, CARGO_TEST, UNITTEST, UNITTEST_DISCOVER,
@@ -229,6 +240,19 @@ pub enum WorkspaceError {
         /// The underlying error.
         source: std::io::Error,
     },
+    /// A git command failed while reading a history.
+    #[error("git {args:?} failed in {repository}: {detail}")]
+    Git {
+        /// The arguments.
+        args: Vec<String>,
+        /// The repository.
+        repository: PathBuf,
+        /// Its standard error.
+        detail: String,
+    },
+    /// A tree could not be captured as a history task's environment.
+    #[error(transparent)]
+    Capture(#[from] crate::capture::TreeError),
     /// The sandbox failed.
     #[error(transparent)]
     Sandbox(#[from] SandboxError),

@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 use splinter_core::digest::Digest;
-use splinter_knowledge::tasks::workspace::Reason;
+use splinter_knowledge::tasks::workspace::{HistoryReport, Reason};
 use splinter_store::tasks::TaskSetId;
 
 use super::exam::ExamReserved;
@@ -66,6 +66,11 @@ pub struct TasksMade {
     pub held_before: usize,
     /// The set the admitted tasks are in; `None` when there are none.
     pub task_set: Option<TaskSetId>,
+    /// The funnel of a history-derived generation: which commits were
+    /// considered and why each was refused. Absent when the run seeded faults
+    /// instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history: Option<HistoryReport>,
 }
 
 /// What a `practice` run reports, stage by stage.

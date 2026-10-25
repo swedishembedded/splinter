@@ -111,6 +111,52 @@ fn an_experiment_plan_is_checked_against_a_catalog() {
 }
 
 #[test]
+fn tasks_history_takes_a_repository_a_range_and_an_optional_test_command() {
+    let Command::Tasks(TasksCommand::History {
+        repository,
+        range,
+        test_command,
+        max_commits,
+        store,
+    }) = command(&[
+        "tasks",
+        "history",
+        "./shop",
+        "--range",
+        "v1..HEAD",
+        "--max-commits",
+        "4",
+        "--store",
+        "--test-command",
+        "python3",
+        "-m",
+        "unittest",
+    ])
+    else {
+        panic!("tasks history");
+    };
+    assert_eq!(repository, std::path::PathBuf::from("./shop"));
+    assert_eq!(range, "v1..HEAD");
+    assert_eq!(test_command, ["python3", "-m", "unittest"]);
+    assert_eq!(max_commits, Some(4));
+    assert!(store);
+
+    // A bare revision reads its history; nothing is stored unless asked.
+    let Command::Tasks(TasksCommand::History {
+        range,
+        store,
+        max_commits,
+        ..
+    }) = command(&["tasks", "history", "./shop"])
+    else {
+        panic!("tasks history");
+    };
+    assert_eq!(range, "HEAD");
+    assert_eq!(max_commits, None);
+    assert!(!store);
+}
+
+#[test]
 fn compare_takes_the_difficulty_cutoffs_together_or_not_at_all() {
     let Command::Experiences(ExperiencesCommand::Compare { strata, .. }) = command(&[
         "experiences",

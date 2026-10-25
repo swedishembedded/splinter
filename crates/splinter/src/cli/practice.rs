@@ -52,6 +52,16 @@ pub struct PracticeArgs {
     /// The most faults seeded in one file.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize))]
     pub mutants_per_file: Option<usize>,
+    /// Read tasks from the repository's history over this revision range
+    /// (e.g. `v1.0..HEAD`) instead of seeding faults: a commit that changes
+    /// source and tests together, whose parent tree fails the commit's own
+    /// tests and whose commit tree passes them, becomes a task.
+    #[arg(long, value_name = "RANGE", conflicts_with = "mutants_per_file")]
+    pub history: Option<String>,
+    /// The most commits of `--history` considered, newest first.
+    #[arg(long, value_name = "N", requires = "history",
+        value_parser = clap::value_parser!(u32).range(1..))]
+    pub history_commits: Option<u32>,
     /// How the requests of the tasks generated are worded: 1, the original,
     /// or 2, which adds the source layout and says the symptoms are hidden
     /// tests' names. A task already stored keeps its request. Original when

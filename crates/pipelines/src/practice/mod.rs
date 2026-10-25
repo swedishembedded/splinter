@@ -69,7 +69,7 @@
 //!   released, and the run stops with the reason of each check that failed.
 
 mod exam;
-mod held;
+pub(crate) mod held;
 pub(crate) use held::{held_tasks, keep_tasks};
 mod report;
 mod stages;
@@ -132,6 +132,10 @@ pub struct PracticeRequest {
     /// The most faults seeded in one file; the generator's default when
     /// `None`.
     pub mutants_per_file: Option<usize>,
+    /// Read the repository's history over this range instead of seeding
+    /// faults in `revision`: a commit that changes source and tests together
+    /// and whose parent tree fails its tests is a task.
+    pub history: Option<HistorySource>,
     /// How the requests of the tasks this run generates are worded; the
     /// original wording when `None`. It only shapes tasks made now: a task
     /// already stored keeps its request and so its address.
@@ -206,6 +210,26 @@ pub struct PlanSlot {
     pub plan: ExperimentPlan,
     /// The generation, counted from 1.
     pub generation: usize,
+}
+
+/// A revision range a run reads tasks from, instead of seeding faults.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct HistorySource {
+    /// The range, as `git rev-list` understands it (`v1.0..HEAD`).
+    pub range: String,
+    /// The most commits considered, newest first.
+    pub max_commits: usize,
+}
+
+impl HistorySource {
+    /// The history of `range`, bounded by the knowledge layer's default.
+    #[must_use]
+    pub fn new(range: impl Into<String>) -> Self {
+        Self {
+            range: range.into(),
+            max_commits: splinter_knowledge::tasks::workspace::DEFAULT_MAX_COMMITS,
+        }
+    }
 }
 
 impl PracticeRequest {

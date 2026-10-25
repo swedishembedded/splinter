@@ -43,6 +43,31 @@ pub enum TasksCommand {
         #[arg(long, value_name = "N")]
         denoise_seed: Option<Seed>,
     },
+    /// Read tasks from a repository's history: a commit that changes source
+    /// and tests together is a task when its parent tree fails the commit's
+    /// own tests and the commit's tree passes them. Formatting-only,
+    /// generated, vendored, merge and test-less commits are excluded and
+    /// counted.
+    History {
+        /// The git repository.
+        #[arg(value_name = "REPOSITORY")]
+        repository: PathBuf,
+        /// The revision range, as `git rev-list` reads it (`A..B`); a bare
+        /// revision reads all of its history.
+        #[arg(long, default_value = "HEAD", value_name = "RANGE")]
+        range: String,
+        /// The command that runs the project's whole test suite in the root
+        /// of its tree (everything after this flag); detected by rule when
+        /// not given.
+        #[arg(long, num_args = 1.., allow_hyphen_values = true, value_name = "PROGRAM ARG...")]
+        test_command: Vec<String>,
+        /// The most commits considered, newest first.
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize))]
+        max_commits: Option<usize>,
+        /// Store the admitted tasks as a task set (no rollout is made).
+        #[arg(long)]
+        store: bool,
+    },
     /// Write differently worded questions about each task of a task set,
     /// into a task set of their own: the same facts, to be measured and
     /// never trained on.

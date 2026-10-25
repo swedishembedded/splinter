@@ -9,7 +9,7 @@
 //! The `practice` request the command line asks for.
 
 use splinter_sdk::experiment::ExperimentPlan;
-use splinter_sdk::practice::{PlanSlot, PracticeRequest};
+use splinter_sdk::practice::{HistorySource, PlanSlot, PracticeRequest};
 use splinter_sdk::train::Tuning;
 use splinter_sdk::Error;
 
@@ -35,6 +35,13 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
         allow_dirty: args.allow_dirty,
         max_tasks: args.max_tasks,
         mutants_per_file: args.mutants_per_file,
+        history: args.history.map(|range| HistorySource {
+            max_commits: args.history_commits.map_or(
+                splinter_sdk::knowledge::tasks::workspace::DEFAULT_MAX_COMMITS,
+                |n| n as usize,
+            ),
+            range,
+        }),
         instruction: args.instruction_version,
         exam_families: args.exam_families,
         exam_seed: args.exam_seed,

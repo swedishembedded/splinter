@@ -45,8 +45,11 @@ gate and lineage.
    not write yet; see the dependencies below.)
 5. [~] Workspace task generation: profile and baseline qualification (twice, flaky refused),
    mutation-seeded faults, import of fixture families; admission reuses dedup across earlier
-   generations. Remaining: faults derived from the repository's history (a fix and the test
-   that came with it, reversed).
+   generations. Faults derived from the repository's history are in: a fix or feature commit
+   and the tests it came with, run backwards, admitted only when the parent fails those tests
+   and the commit passes them twice (`WorkspaceGenerator::from_history`, `practice --history`,
+   `tasks history`). Remaining: test selection for large suites and an oracle-strength class,
+   below.
 6. [x] The pipeline that composes them (tasks, reserve families before rollouts, solve,
    verify, frontier, dataset, train, release) as one recorded run (`practice`), with an SDK
    method and a CLI verb.
@@ -115,8 +118,12 @@ Order matters; each line is one self-contained piece of work.
 
 ### Task generation still missing
 
-- Faults derived from the repository's history (a fix and the test that came with it,
-  reversed), with the same qualification as mutations.
+- History-derived faults are implemented for the core case (`WorkspaceGenerator::from_history`):
+  discovery, exclusion of formatting-only/generated/vendored/merge/test-less commits,
+  parent-tree materialisation, the oracle (parent fails, commit passes, both twice), hidden test
+  evolution and the admission funnel. Remaining: test-selection for large suites (the whole
+  suite is run per oracle side), a pre-built `target` for Rust snapshots, and an
+  oracle-strength class per history task.
 - Test-selection for large suites (impact analysis) so a task grades only relevant tests.
 - Mutation seeding covers Python unittest suites and `cargo test --offline` (read per test
   from libtest; doc-tests are not read). Missing: a pre-built `target` per snapshot (every

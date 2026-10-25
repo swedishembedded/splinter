@@ -4,8 +4,13 @@
 //! `tasks`: generate, vary, seed canaries into, pick from, list and show task
 //! sets, as recorded runs where they write state.
 
+use serde::Serialize;
 use serde_json::json;
 use splinter_sdk::canaries;
+use splinter_sdk::history;
+use splinter_sdk::knowledge::tasks::workspace::{
+    HistoryRecord, HistoryReport, HistoryRequest, DEFAULT_MAX_COMMITS,
+};
 use splinter_sdk::runs::record;
 use splinter_sdk::sources;
 use splinter_sdk::tasks::pick::{pick, Quota};
@@ -18,6 +23,15 @@ use crate::output::emit;
 use crate::session::Exit;
 use splinter_sdk::harbor;
 use splinter_sdk::knowledge::tasks::workspace::Oracle;
+
+/// What `tasks history` made: the funnel, the admitted registrations and the
+/// task set they were stored in, when `--store` was given.
+#[derive(Debug, Serialize)]
+pub(crate) struct HistoryRan {
+    pub(crate) report: HistoryReport,
+    pub(crate) tasks: Vec<HistoryRecord>,
+    pub(crate) task_set: Option<String>,
+}
 
 /// Runs a `tasks` command.
 pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, Error> {
@@ -88,6 +102,44 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
             let set = resolve_task_set(ctx, &task_set)?;
             emit(json, &harbor::export_harbor(ctx, &set, &out, &image)?);
         }
+        TasksCommand::History {
+            repository,
+            range,
+            test_command,
+            max_commits,
+            store,
+        } => {
+            let arguments = json!({
+                "repository": repository,
+                "range": range,
+                "test_command": test_command,
+                "max_commits": max_commits,
+                "store": store,
+            });
+            let ran = record(ctx, "tasks history", &arguments, |_| {
+                let made = history::generate(
+                    ctx,
+                    &HistoryRequest {
+                        repository: &repository,
+                        range: &range,
+                        test_command: (!test_command.is_empty()).then(|| test_command.clone()),
+                        max_commits: max_commits.unwrap_or(DEFAULT_MAX_COMMITS),
+                    },
+                    store,
+                )?;
+                Ok(HistoryRan {
+                    report: made.generation.report,
+                    tasks: made
+                        .generation
+                        .admitted
+                        .into_iter()
+                        .map(|task| task.record)
+                        .collect(),
+                    task_set: made.task_set.map(|id| id.to_string()),
+                })
+            })?;
+            emit(json, &ran);
+        }
         TasksCommand::Variants {
             task_set,
             generator,
@@ -148,4 +200,54 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
         TasksCommand::Show { id } => emit(json, &tasks::show(ctx, &id)?),
     }
     Ok(Exit::Ok)
+}
+
+impl crate::output::Report for HistoryRan {
+    fn human(&self) -> String {
+        use std::fmt::Write as _;
+
+        let mut out = format!(
+            "history: {} attempted, {} accepted\n",
+            self.report.attempted, self.report.accepted
+        );
+        let reason = |reason: &splinter_sdk::knowledge::tasks::workspace::HistoryReason| {
+            serde_json::to_value(reason)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_string))
+                .unwrap_or_else(|| format!("{reason:?}"))
+        };
+        let refused: Vec<String> = self
+            .report
+            .rejected
+            .iter()
+            .map(|(why, count)| format!("{} {count}", reason(why)))
+            .collect();
+        if !refused.is_empty() {
+            let _ = writeln!(out, "  refused: {}", refused.join(", "));
+        }
+        let _ = writeln!(
+            out,
+            "  flaky {}, unbuildable {}, duplicate {}, unverifiable {}",
+            self.report.flaky,
+            self.report.unbuildable,
+            self.report.duplicate,
+            self.report.unverifiable
+        );
+        for task in &self.tasks {
+            let _ = writeln!(
+                out,
+                "  {}  {}  {} hidden test(s) [{}]",
+                &task.repo_sha[..task.repo_sha.len().min(12)],
+                task.family,
+                task.evidence.fail_to_pass.len(),
+                match task.status {
+                    splinter_sdk::knowledge::tasks::workspace::Admission::Accepted => "accepted",
+                }
+            );
+        }
+        if let Some(set) = &self.task_set {
+            let _ = writeln!(out, "task set {set}");
+        }
+        out
+    }
 }

@@ -92,6 +92,7 @@ pub mod graded;
 pub mod grouping;
 pub mod harbor;
 pub mod harness_opt;
+pub mod history;
 pub mod improve;
 pub mod index;
 pub mod judge;

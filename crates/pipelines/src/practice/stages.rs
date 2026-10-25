@@ -23,7 +23,8 @@ use splinter_core::model_ref::{ModelRef, POLICY_DEFAULT};
 use splinter_core::prompt::CodingPrompt;
 use splinter_knowledge::capture::{capture_tree, DirtyPolicy, TreeRequest};
 use splinter_knowledge::tasks::workspace::{
-    RepositoryProfile, WorkspaceError, WorkspaceGenerator, WorkspacePlan,
+    HistoryReport, HistoryRequest, RepositoryProfile, WorkspaceError, WorkspaceGenerator,
+    WorkspacePlan,
 };
 use splinter_orchestrator::pipeline::{FnStage, Pipeline, StageEnd};
 use splinter_orchestrator::runs::{to_json, Recorder};
@@ -209,23 +210,18 @@ fn generator(
     ctx: &Context,
     request: &PracticeRequest,
 ) -> Result<WorkspaceGenerator, OrchestratorError> {
-    let backend = ctx.environments().workspace()?;
     let defaults = WorkspacePlan::default();
-    WorkspaceGenerator::new(
-        backend.sandbox,
-        backend.host,
-        ctx.artifacts(),
-        backend.scratch.join("generate"),
+    crate::history::generator(
+        ctx,
+        WorkspacePlan {
+            max_tasks: request.max_tasks.unwrap_or(defaults.max_tasks),
+            mutants_per_file: request
+                .mutants_per_file
+                .unwrap_or(defaults.mutants_per_file),
+            instruction: request.instruction.unwrap_or(defaults.instruction),
+            ..defaults
+        },
     )
-    .with_plan(WorkspacePlan {
-        max_tasks: request.max_tasks.unwrap_or(defaults.max_tasks),
-        mutants_per_file: request
-            .mutants_per_file
-            .unwrap_or(defaults.mutants_per_file),
-        instruction: request.instruction.unwrap_or(defaults.instruction),
-        ..defaults
-    })
-    .map_err(|e| refused("the task generator", &e))
 }
 
 /// The profile the request names or the rules give for `snapshot`.
@@ -322,9 +318,30 @@ fn tasks_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>) 
         unreachable!("the tasks stage follows the profile stage")
     };
     let held = held_tasks(ctx)?;
-    let generation = generator
-        .from_mutations(snapshot, qualified, &held, ctx.clock())
-        .map_err(|e| refused("making tasks", &e))?;
+    let (generation, history) = match &st.practice.request.history {
+        Some(history) => {
+            let made = generator
+                .from_history(
+                    &HistoryRequest {
+                        repository: &st.practice.request.repository,
+                        range: &history.range,
+                        test_command: (!st.practice.request.test_command.is_empty())
+                            .then(|| st.practice.request.test_command.clone()),
+                        max_commits: history.max_commits,
+                    },
+                    &held,
+                    ctx.clock(),
+                )
+                .map_err(|e| refused("making tasks from the history", &e))?;
+            made.into_generation()
+        }
+        None => (
+            generator
+                .from_mutations(snapshot, qualified, &held, ctx.clock())
+                .map_err(|e| refused("making tasks", &e))?,
+            HistoryReport::default(),
+        ),
+    };
     let task_set = if generation.admitted.is_empty() {
         None
     } else {
@@ -335,6 +352,7 @@ fn tasks_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>) 
         refused: generation.refused.clone(),
         held_before: held.len(),
         task_set: task_set.clone(),
+        history: st.practice.request.history.as_ref().map(|_| history),
     };
     let summary = to_value(&made)?;
     st.report.tasks = Some(made);

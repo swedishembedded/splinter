@@ -480,6 +480,11 @@ GPU column: **none**; **S** = shared short (under the lock, minutes); **X** = ex
   test`).
 
 **P1-HIST. Tasks from repository history** (splinter, lane `s-bench`, 16 h, none)
+- Core in: `WorkspaceGenerator::from_history` (discovery and exclusion of
+  formatting-only/generated/vendored/merge/test-less commits, parent-tree materialisation, the
+  twice-run oracle, hidden test evolution, the admission funnel) with `practice --history` and
+  `tasks history` selecting it. Still open: impact-based test selection, a pre-built Rust
+  `target` per snapshot, and an oracle-strength class.
 - `repository-practice.md` item 5 remainder: for each commit that changes source files and test
   files together, the task is the parent tree with the source change reversed and the commit's
   new or changed tests as hidden fail-to-pass checks; the rest of the suite as pass-to-pass.
@@ -492,9 +497,10 @@ GPU column: **none**; **S** = shared short (under the lock, minutes); **X** = ex
   splinter `crates/expdb` (no internal dependencies), sven `crates/atif`, `crates/hsm`,
   `crates/config`, brain leaf crates chosen by P0-INV with a suite under 60 s on CPU. Each
   source is captured with `capture_tree` at a pinned revision.
-- TDD: `crates/knowledge/tests/history_tasks.rs`: a fixture repo with three commits (one fix
-  with test, one refactor without tests, one test-only) yields exactly one admitted task whose
-  hidden test fails on the reversed tree and passes on the commit. Red today.
+- TDD: `crates/knowledge/tests/history_tasks.rs`: a fixture repo yields the fix-with-test and
+  feature-with-test commits as tasks whose hidden tests fail on the parent tree and pass on the
+  commit; formatting-only, vendored and merge commits are excluded and counted; the solver's
+  tree holds no solution or test evolution; a second pass admits nothing. Green.
 
 **P1-AUTH. Authored change families** (splinter, lane `s-tasks`, 16 h, none)
 - Four small own Rust projects under `tasks/` (own code, Apache-2.0 like the catalog), each with

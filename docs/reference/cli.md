@@ -90,6 +90,7 @@ Every command takes these.
   - [splinter claims ledger](#splinter-claims-ledger) - Show the ledger
 - [splinter tasks](#splinter-tasks) - Generate and inspect task sets
   - [splinter tasks generate](#splinter-tasks-generate) - Generate tasks from stored sources into a task set
+  - [splinter tasks history](#splinter-tasks-history) - Read tasks from a repository's history
   - [splinter tasks variants](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
   - [splinter tasks canaries](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
   - [splinter tasks pick](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
@@ -291,6 +292,8 @@ Options:
 - `--file <PATH>...`: A file, relative to the repository, that tasks may change; repeat for more. Without any, every source file of the project the rules recognise (a Python project with a tests directory, a Cargo project)
 - `--max-tasks <N>`: The most tasks one run admits.
 - `--mutants-per-file <N>`: The most faults seeded in one file.
+- `--history <RANGE>`: Read tasks from the repository's history over this revision range (e.g. `v1.0..HEAD`) instead of seeding faults: a commit that changes source and tests together, whose parent tree fails the commit's own tests and whose commit tree passes them, becomes a task.
+- `--history-commits <N>`: The most commits of `--history` considered, newest first.
 - `--instruction-version <N>`: How the requests of the tasks generated are worded: 1, the original, or 2, which adds the source layout and says the symptoms are hidden tests' names. A task already stored keeps its request. Original when not given.
 - `--exam-families <N>`: How many families (a family is the file a fault was seeded in) to reserve for the exam before any attempt is made at any task: their tasks are set apart and never solved or trained on, in this run or a later one; 0 reserves none [default: a quarter of the families]
 - `--canaries <N>`: The most canaries (exam tasks no honest change can pass) the release gate hands the candidate; a pass on one refuses it; 0 hands none [default: 20]
@@ -446,7 +449,7 @@ Subcommands:
 
 #### splinter experiment check
 
-Validate a plan against the catalog of families and show its schedule: families disjoint by domain, no sealed family scheduled for training or retention, retention only on families an earlier generation trained. A plan that is not valid is refused with every violation
+Validate a plan against the catalog of families and show its schedule: families disjoint by domain, no sealed family scheduled for training or retention, retention only on families an earlier generation trained. A plan that is not valid is refused with every violation. A valid plan records its sealed final exam in the state root, so a later run that is not given the plan cannot read those families either
 
 ```text
 splinter experiment check [OPTIONS] <PLAN>
@@ -578,6 +581,8 @@ Options:
 - `--file <PATH>...`: A file, relative to the repository, that tasks may change; repeat for more. Without any, every source file of the project the rules recognise (a Python project with a tests directory, a Cargo project)
 - `--max-tasks <N>`: The most tasks one run admits.
 - `--mutants-per-file <N>`: The most faults seeded in one file.
+- `--history <RANGE>`: Read tasks from the repository's history over this revision range (e.g. `v1.0..HEAD`) instead of seeding faults: a commit that changes source and tests together, whose parent tree fails the commit's own tests and whose commit tree passes them, becomes a task.
+- `--history-commits <N>`: The most commits of `--history` considered, newest first.
 - `--instruction-version <N>`: How the requests of the tasks generated are worded: 1, the original, or 2, which adds the source layout and says the symptoms are hidden tests' names. A task already stored keeps its request. Original when not given.
 - `--exam-families <N>`: How many families (a family is the file a fault was seeded in) to reserve for the exam before any attempt is made at any task: their tasks are set apart and never solved or trained on, in this run or a later one; 0 reserves none [default: a quarter of the families]
 - `--canaries <N>`: The most canaries (exam tasks no honest change can pass) the release gate hands the candidate; a pass on one refuses it; 0 hands none [default: 20]
@@ -770,6 +775,7 @@ splinter tasks [OPTIONS] <COMMAND>
 Subcommands:
 
 - [`generate`](#splinter-tasks-generate) - Generate tasks from stored sources into a task set
+- [`history`](#splinter-tasks-history) - Read tasks from a repository's history
 - [`variants`](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
 - [`canaries`](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
 - [`pick`](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
@@ -795,6 +801,25 @@ Options:
 - `--generator <REF>`: The model that writes the tasks. Default: `policy:default`.
 - `--author <NAME>`: Who wrote the sources, when they are one person's: the generator is told, and a question may name the author as its subject.
 - `--denoise-seed <N>`: The seed the `denoise` tasks are built with (drawn and printed when not given and the kinds include denoise)
+
+#### splinter tasks history
+
+Read tasks from a repository's history: a commit that changes source and tests together is a task when its parent tree fails the commit's own tests and the commit's tree passes them. Formatting-only, generated, vendored, merge and test-less commits are excluded and counted
+
+```text
+splinter tasks history [OPTIONS] <REPOSITORY>
+```
+
+Arguments:
+
+- `<REPOSITORY>` (required): The git repository.
+
+Options:
+
+- `--range <RANGE>`: The revision range, as `git rev-list` reads it (`A..B`); a bare revision reads all of its history. Default: `HEAD`.
+- `--test-command <PROGRAM ARG...>...`: The command that runs the project's whole test suite in the root of its tree (everything after this flag); detected by rule when not given.
+- `--max-commits <N>`: The most commits considered, newest first.
+- `--store`: Store the admitted tasks as a task set (no rollout is made)
 
 #### splinter tasks variants
 
