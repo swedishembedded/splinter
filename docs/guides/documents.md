@@ -166,10 +166,11 @@ deleted unless `--keep-candidates`. The learning rate is `--lr`, else 1e-5. `--t
 brain's. The release gate takes adapters, so `--full-fine-tune` needs `--no-release`, and `--rank`
 does not apply. Training holds the card for itself: the resident policy is released first.
 
-`--self-generate` lets the incumbent write the training tasks of every round after the first
-accepted one; round 1, and every round before an acceptance, uses the configured generator. The
-probes are written once, before any training, by the configured generator in either case, so
-the exam does not depend on the trained model.
+`--self-generate` lets the incumbent write the training tasks of every round: the policy the run
+began with until a round is accepted, the accepted candidate after. The probes are written once,
+before any training, by the configured generator in either case, so the exam does not depend on
+the trained model. `--structural-graph` reads the skill graph from the sources' structure, one
+skill per section, without asking a planner: a small model rarely writes the planner's reply.
 
 The Lua families and the `lua` runtime are Lua 5.1 and no other: `make deps/lua LUA_DIR=<dir>`
 builds the pinned interpreter, `--runtime-dir <dir>/bin` puts it first, and the runtime refuses

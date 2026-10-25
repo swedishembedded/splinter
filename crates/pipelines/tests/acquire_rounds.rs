@@ -291,12 +291,14 @@ fn with_self_generation_the_accepted_candidate_writes_the_next_rounds_tasks_and_
     .report;
     assert!(report.rounds.iter().all(|r| r.outcome == Outcome::Accepted));
 
-    // Round 1 has nothing accepted yet, so the configured generator writes
-    // it; every later round is written by the model that attempted it.
+    // Every round is written by the model that attempts it: the start
+    // policy in round 1, the accepted candidate after.
     let first = &report.rounds[0];
     assert_eq!(first.generator, "policy:default");
-    for round in &report.rounds[1..] {
+    for round in &report.rounds {
         assert_eq!(round.generator, round.incumbent);
+    }
+    for round in &report.rounds[1..] {
         assert_ne!(round.generator, "policy:default");
     }
     assert_ne!(report.rounds[1].generator, report.rounds[2].generator);

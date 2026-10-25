@@ -39,8 +39,8 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 
 use common::gate::FakeTrainer;
-use common::{scratch_context, Scripted};
 use common::zork::{context, model, request, write_manual, Learner};
+use common::{scratch_context, Scripted};
 use serde_json::json;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
@@ -370,4 +370,27 @@ fn a_local_latin_1_page_is_decoded_converted_and_traced_like_a_fetched_one() {
         String::from_utf8(ctx.sources().read_blob(&source.parts[0].content).unwrap()).unwrap();
     assert!(text.starts_with("## `alpha` register"), "{text}");
     assert!(text.contains("code number \u{a9} for each"), "{text}");
+}
+
+#[test]
+fn a_structural_graph_is_read_by_rule_without_asking_the_planner() {
+    let asked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = asked.clone();
+    let planner = Scripted::new(move |prompt| {
+        if prompt.contains("You plan what to learn") {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        String::new()
+    });
+    let (scratch, ctx) = scratch_context("acquire-structural", planner, false);
+    let manual = write_manual(&scratch);
+    let structural = splinter_pipelines::acquire::AcquireRequest {
+        structural_graph: true,
+        ..request(&manual)
+    };
+    // Whatever becomes of the run, the graph is the sources' own.
+    let _ = acquire(&ctx, &structural, &Learner);
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let _ = acquire(&ctx, &request(&manual), &Learner);
+    assert!(asked.load(std::sync::atomic::Ordering::SeqCst) > 0);
 }

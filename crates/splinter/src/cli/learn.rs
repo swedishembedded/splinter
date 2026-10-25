@@ -77,6 +77,10 @@ pub struct AcquireArgs {
     /// Let the incumbent write the next round's training tasks.
     #[arg(long, requires = "source")]
     pub self_generate: bool,
+    /// Read the skill graph from the sources' structure, one skill per
+    /// section, instead of asking a planner model.
+    #[arg(long, requires = "source")]
+    pub structural_graph: bool,
 }
 
 /// `learn`.

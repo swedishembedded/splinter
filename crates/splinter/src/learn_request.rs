@@ -42,6 +42,7 @@ pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
     request.keep_candidates = named.keep_candidates;
     request.replay_fraction = named.replay_fraction.unwrap_or(request.replay_fraction);
     request.self_generate = named.self_generate;
+    request.structural_graph = named.structural_graph;
     request.budget = args.budget;
     request.no_release = args.no_release;
     request.gate = args.gate.plan();

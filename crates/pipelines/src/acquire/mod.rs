@@ -148,10 +148,14 @@ pub struct AcquireRequest {
     /// The fraction of each accepted round's trained-on records replayed
     /// into the next full-fine-tune round (a quarter of its draws).
     pub replay_fraction: f64,
-    /// Let the incumbent write the next round's training tasks. Probes are
-    /// written once before any training by the configured generator either
-    /// way, and so is round 1's training tasks (nothing is accepted yet).
+    /// Let the incumbent write every round's training tasks: the policy the
+    /// run began with in round 1, the last accepted candidate after. Probes
+    /// are written once before any training by the configured generator
+    /// either way.
     pub self_generate: bool,
+    /// Read the skill graph from the sources' structure instead of asking
+    /// the planner.
+    pub structural_graph: bool,
     /// How training runs.
     pub tuning: Tuning,
     /// The models named for roles.
@@ -184,6 +188,7 @@ impl AcquireRequest {
             keep_candidates: false,
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             self_generate: false,
+            structural_graph: false,
             tuning: Tuning::default(),
             roles: RoleOverrides::default(),
         }
@@ -353,16 +358,12 @@ pub(super) struct Acquisition<'a> {
 }
 
 impl Acquisition<'_> {
-    /// Whether any candidate has been accepted yet.
-    pub(super) fn has_accepted(&self) -> bool {
-        !self.datasets.is_empty()
-    }
-
     /// The model that writes a round's training tasks: the configured
-    /// generator, or with `self_generate` the incumbent once one candidate
-    /// has been accepted. Probes are always the configured generator's.
+    /// generator, or with `self_generate` the incumbent (the policy the run
+    /// began with until a candidate is accepted). Probes are always the
+    /// configured generator's.
     pub(super) fn author(&self) -> &ModelRef {
-        if self.request.self_generate && self.has_accepted() {
+        if self.request.self_generate {
             &self.incumbent
         } else {
             &self.generator
@@ -424,7 +425,7 @@ pub fn acquire(
             ctx,
             &request.objective,
             &ids,
-            Some(&planner),
+            (!request.structural_graph).then_some(&planner),
             deadline,
             &cancel,
         )?;

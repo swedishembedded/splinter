@@ -231,6 +231,7 @@ Options:
 - `--keep-candidates`: Keep the checkpoints of rejected and superseded full-fine-tune rounds.
 - `--replay-fraction <F>`: The fraction of each accepted round's trained-on records replayed into the next full-fine-tune round [default: 0.25]
 - `--self-generate`: Let the incumbent write the next round's training tasks.
+- `--structural-graph`: Read the skill graph from the sources' structure, one skill per section, instead of asking a planner model.
 - `--goal <TEXT>`: What the learner is after; steers the tasks generated.
 - `--kinds <K,..>...`: Task kinds, comma-separated; when not named, a planner model surveys the sources and chooses them.
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
