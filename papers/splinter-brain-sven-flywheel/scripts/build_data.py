@@ -301,6 +301,15 @@ def det_metrics(prefix, record):
     return arms
 
 
+def proto6_metrics(record):
+    """The values a claim may cite from the six-decoding-seed protocol read: each arm's mean
+    pass@1 over the registered decoding seeds and each comparison's per-family sign test."""
+    keys = ["seed_count", "base_mean_pass1", "decisive_mean_pass1", "all_mean_pass1"]
+    for pair in ("decisive_vs_base", "decisive_vs_all", "base_vs_all"):
+        keys += [f"{pair}_wins", f"{pair}_losses", f"{pair}_ties", f"{pair}_p"]
+    return {k: record[k] for k in keys if k in record}
+
+
 def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
@@ -335,6 +344,8 @@ def parse_log(prefix, text):
         return verify_metrics(json.loads(text))
     if prefix.startswith("g8.det."):
         return det_metrics(prefix, json.loads(text))
+    if prefix.startswith("g8.proto6"):
+        return proto6_metrics(json.loads(text))
     if prefix.startswith("g8."):
         return g8_report_metrics(json.loads(text))
     if prefix.startswith("tj."):

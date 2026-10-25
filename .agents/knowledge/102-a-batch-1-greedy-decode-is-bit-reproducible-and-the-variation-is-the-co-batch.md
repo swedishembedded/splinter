@@ -46,10 +46,10 @@ and six concurrent copies give three and five distinct sequences. So a cache hit
 cold prefill's KV.
 
 **One request in flight is not enough for an episode (13:04).** The same adapter on the same
-eight tasks, greedy at `ARM_CONCURRENCY=1`, passed 3 of 8 and then 5 of 8 with two verdicts
-flipped (the runs took 481 s and 781 s); a concurrency-8 run of the same arm passed 5 and
-differed from the first on two tasks. So a bit-identical *request* does not make an *episode*
-reproducible and `ARM_CONCURRENCY=1` alone is not a deterministic instrument. What remains is
+eight tasks, greedy, three runs: two at `ARM_CONCURRENCY=1` (481 s and 781 s) and one at 8.
+Pass counts 3, 5 and 5, and every pair of runs differs on 2 of the 8 tasks - the two runs that
+agree on the count disagree on which tasks passed. So a bit-identical *request* does not make an
+*episode* reproducible and `ARM_CONCURRENCY=1` alone is not a deterministic instrument. What remains is
 on the episode side - the observations a coding agent sees (command output, timings, paths,
 listing order) or the prefill partition of a growing conversation - and it is not yet
 identified.
