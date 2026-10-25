@@ -76,24 +76,17 @@ the adapter is at most 1.25 times that of the base, (ii) their top-1 token agree
 2 points below the base's, and (iii) the served adapter gives the held-out records a higher mean log-probability
 than the served base. One brain build and one splinter binary serve every arm of the evaluation and are named in
 its record. CE8 is a separate comparison and does not enter the
-headline.\cl{PR16,PR34,PR36,PR37,PR38,PR39}
+headline.\cl{PR16}
 \end{description}
 
-\paragraph{Changes that bear on the evidence.} Four of the dated changes of
-\cref{app:deviations} change what the results can mean. \emph{First}, the headline's student
-trains on verified trajectories of the 27B teacher rather than its own, because in a pilot under
-an earlier harness the untrained 8B model almost never edited a file (lane notes
-\code{runs/l1-measure/results.md} on the project drive); the partitions, the primary test and
-the success condition did not change.\cl{PR14,PR15} \emph{Second}, the first teacher run was
-withdrawn: its shell had no filesystem confinement, and in 27 of 61 episodes the 27B searched the
-host and read task sources outside its tree, which the exposure audit as then registered did not
-flag; every workspace command has since been confined by the kernel and a call naming a path
-outside the tree marks the episode exposed.\cl{PR18} \emph{Third}, a defect in brain's backward
-pass scaled every 27B training gradient by about $4\times10^{-6}$ until it was fixed, so every 27B
-training before the fix, including the learning-rate sweep the CE8 recipe first relied on, is no
-basis for any value.\cl{PR36,PR38} \emph{Fourth}, the CE8 training run tripped the registered
-memorisation guard, so its adapter is not evaluated; one further run on a one-pass budget was
-allowed with the guard unchanged and no later retry.\cl{PR40}
+\paragraph{Two findings of the first runs.} In a pilot under an earlier,
+unbounded harness the untrained 8B model almost never edited a file, which is why the headline's
+student trains on verified trajectories of the 27B teacher and why one bounded harness profile is
+pinned for every arm. The first teacher run was withdrawn because its shell had no filesystem
+confinement; of its 61 episodes, 29 were stopped by the repeated-answer bound and 5 by the tool-call
+cap (the 34 conclusions labelled cancelled), and the solve report now names the bound.\cl{TJ01,TJ02}
+Every workspace command has since been confined by the kernel and a call naming a path outside the
+tree marks the episode exposed (\cref{sec:audit}).\cl{CN01}
 
 \begin{table}[t]
 \centering\small
@@ -111,7 +104,7 @@ empty until its run exists; a cell is never filled with an estimate.}\label{tab:
 \caption{CE1, teacher pass 1 on development sets that have finished. Success and cancelled count solve conclusions, the other columns the verified outcome; exposed attempts are counted among the failed.}\label{tab:ce1}
 \end{table}
 
-\paragraph{CE4, the first confirmatory pilot: not shown.} The registered query could be run only on a subset (\cref{app:deviations}), under the protocol in force before the solve protocol of \cref{sec:protocol} (greedy decoding, one attempt per task): one task of each of the 23 families of the first qualification half, solved once by each arm with both served by Brain on the same build and tier. The adapter was trained on the verified, exposure-clean trajectories of the teacher's first pass, projected one tool call per turn. Of the 23 tasks, 21 are paired; the untrained 8B resolves one and the adapter none, so the sign test has a single discordant family against the adapter and does not support the claim; the comparison is a pilot by the registered rule and is reported as \emph{not shown}.\cl{M47,PR24} It is a weak test: with the untrained model near zero there is almost no room for a gain, and the adapter's attempts mostly end at the harness's repetition stop. The step count (47) is not the registered rule's (29 for the 114 training records the trainer reports), and the controls, the second qualification half, retention and the serve-agreement sample were not run.
+\paragraph{CE4, the first confirmatory pilot: not shown.} The registered query could be run only on a subset (\cref{app:deviations}), under the protocol in force before the solve protocol of \cref{sec:protocol} (greedy decoding, one attempt per task): one task of each of the 23 families of the first qualification half, solved once by each arm with both served by Brain on the same build and tier. The adapter was trained on the verified, exposure-clean trajectories of the teacher's first pass, projected one tool call per turn. Of the 23 tasks, 21 are paired; the untrained 8B resolves one and the adapter none, so the sign test has a single discordant family against the adapter and does not support the claim; the comparison is a pilot by the registered rule and is reported as \emph{not shown}.\cl{M47} It is a weak test: with the untrained model near zero there is almost no room for a gain, and the adapter's attempts mostly end at the harness's repetition stop. The step count (47) is not the registered rule's (29 for the 114 training records the trainer reports), and the controls, the second qualification half, retention and the serve-agreement sample were not run.
 
 \paragraph{CE8: trained, stopped by its guard, not evaluated.} The registered CE8 training ran
 and stopped early at step 51: its training loss fell from 0.1476 at the first

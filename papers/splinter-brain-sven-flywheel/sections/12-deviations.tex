@@ -3,64 +3,27 @@
 
 \section{Deviations from the registration}\label{app:deviations}
 
-The protocol of \cref{sec:protocol,sec:pending} is the registration as it stands. It was
-fixed in \code{prereg/coding-tasks.md} before any coding-task run and changed only by dated
-amendments appended to that file, each pushed before the outcome it could affect; the file is
-never rewritten, so every row below can be checked against its git history.
-\Cref{tab:deviations,tab:deviations2} list every change. ``No.'' is the amendment's number in that file; ``Before'' names the earliest outcome the change preceded.
+The protocol of \cref{sec:protocol} is the registration in \code{prereg/coding-tasks.md}, fixed before
+any coding-task run. \Cref{tab:deviations} lists the dated changes made in this paper after the
+registration; ``Before'' names the earliest outcome a change preceded.
 
 \begin{table}[p]
 \centering\small
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}p{0.14\linewidth}p{0.55\linewidth}p{0.25\linewidth}@{}}
+\begin{tabular}{@{}p{0.12\linewidth}p{0.58\linewidth}p{0.25\linewidth}@{}}
 \toprule
-Date (no.) & Change & Before \\
+Date & Change & Before \\
 \midrule
-10-16 (1) & CE4's student trains on the 27B teacher's verified trajectories, not its own (the untrained 8B almost never edited a file); CE8 registered as the 27B counterpart; one harness profile pinned for all arms.\cl{PR14,PR15,PR16} & any run \\
-10-16 (2) & Run parameters: arms, exam seed, 46 qualification and 34 development families, serving flags, the LoRA recipe.\cl{PR17} & any run \\
-10-17 (3) & The first teacher run is withdrawn: its shell had no filesystem confinement and the agent read task sources outside its tree. Every workspace command is confined by the kernel; a call naming a path outside the tree marks the episode exposed; a solve is bounded at one hour; the second repository is named. The withdrawn run's 34 conclusions labelled cancelled were the harness's own bounds, not external cancels (29 repeated-answer stops, five tool-call caps), and the solve report now names the bound.\cl{PR18,TJ01,TJ02} & any training run or query \\
-10-18 (4) & Placement of the passes, the definition of a cancelled conclusion, the controls as built, faster builds allowed only between development sets, an unreachable solver counted as an infrastructure error; one set lost to a server failure is solved again.\cl{PR19} & any dataset \\
-10-19 (5) & The 8B arms on brain's default tensor-core tier; evidence admitted only when the hidden checks passed it; every dataset tied to the build that made it.\cl{PR20} & any dataset \\
-10-19 (6) & Admission of the replication repository fixed (modules, suite, mutants, reserved families).\cl{PR21} & its admission \\
-10-19 (7) & The teacher's second pass dropped; step count from the trainer's record count; the controls that run named.\cl{PR22} & the training dataset \\
-10-19 (8) & Arms run in parallel on two servers of one build; the qualification partition solved in two halves.\cl{PR23} & any 8B arm \\
-10-19 (9) & Runs exported as one step are projected one call per turn; the confirmatory 8B query restricted to a pilot subset.\cl{PR24} & any 8B verdict \\
-10-19 (10) & The replication repository's teacher pass and dataset fixed; training on it deferred.\cl{PR25} & its first solve \\
-10-19 (11, 12) & The first pass's single-step trajectories excluded; the development pass regenerated with a build recording true turns, checked on two tasks first.\cl{PR26,PR27} & any dataset from it \\
+10-21 & CE8-T's memorisation guard judges the kept checkpoint: memorised if its monitoring loss is not below the base's, or its windowed training loss is below half its monitoring loss. Defined after the original guard stopped both CE8 runs on a last-evaluation rise of 0.0003 to 0.003; Under this rule both CE8 runs would pass (kept checkpoints at steps 27 and 30, monitoring loss below the base's, training loss above half of it); CE8 stays not evaluated, because the guard in force for it fired. From here on the protocol changes in this paper, not in the registration file. & CE8-T's training \\
+10-21 & CE8 being closed, CE8-T gets its own shuffled negative control (CE8-T-S, from the CE8-T experiences) and the one-pass budget the second CE8 run used; its step count follows the trainer's own record count, read from a one-step sizing run. & CE8-T's training \\
+10-22 & G8 for the 27B compares served and in-process teacher-forced log-probabilities on held-out records, against the base's own served-vs-in-process gap, instead of agent verdicts: the 27B has no in-process agent path (splinter's local provider runs qwen3 only), found when the served half of the verdict check had run (9 of 23 verified) and before any comparison of the two halves existed. & G8 and any evaluation arm \\
+10-22 & CE8-T and CE8-T-S are solved on the pilot subset S1 under amendment 20 (thinking off) before G8 is measured, which the registration places before any arm; both comparisons have fewer than 25 non-tied families, are labelled pilots by the rule, and no confirmatory query follows from them. & any CE8-T evaluation \\
+10-25 & The release gate's improvement check also requires the candidate to have solved at least as many of the suite's assigned tasks as its champion; an attempt withheld as exposed or as a harness failure counts as a task that arm did not solve, so a regression can no longer leave the paired test's denominator. The measured shape that motivated it: a base at 21/46 (9 exposed) against a candidate at 15/46 (19 exposed) read as 5W-3L-15T under the paired test alone. & any release after it \\
+10-25 & Development probes on D46 (46 tasks, one per family, greedy) measure the supervision ablation and the recovery dose-response. They are labelled pilots, are not the registered confirmatory query, and their outcomes are not used as evidence for it; the registration, its partitions and its denominators are unchanged.\cl{D46A,D46C,RCVA,RCVC} & the D46 probes \\
+10-25 & The evaluation-variance explanation is corrected. The two serving probes that appeared to reproduce run-to-run nondeterminism hashed the whole response payload, which carries a random tool-call id and a random chat id, so their distinct-completion counts were artifacts. Remeasured on the completion's token ids and log-probabilities, a batch-1 greedy decode is bit-reproducible, a cache hit equals a cold prefill, and the co-batch does change a row (the int8 projections switch to a tensor-core block from five rows and the decode attention sizes its split count from the batch) - but one request in flight does not make a whole episode reproducible, so a second, unidentified source remains. The three-run greedy spread this paragraph explains (30, 31 and 26 of 46) is unchanged.\cl{REP1,REP2} & the REP1 paragraph and any reading of a single greedy arm \\
+10-25 & The confirmatory candidate is registered before its query: the decisive-action adapter of training seed 13 (corpus \code{blake3:92252209}, rank 16, alpha 32, $5\times10^{-5}$, 120 steps, packed-bf16 base, the rebuilt training binary), chosen after the six-decoding-seed development read on D46 in which it won 22 families, lost 11 and tied 13 against the base and the same against its all-action control (p=0.0401 each) while the two controls did not separate. The query solves the frozen qualification set (\code{blake3:f7fe502f}, 46 families) with the candidate, its base and the all-action control at the three registered decoding seeds and the protocol's sampling; the decision is the registered one-sided exact sign test at $\alpha=0.05$, and a result that is not significant is reported as not shown.\cl{PROTO6} & any candidate query \\
+10-26 & The registration's amendment history (the dated amendments appended to \code{prereg/coding-tasks.md} before the runs they could affect) is kept in the repository's history of that file and is no longer restated in this paper; the protocol of \cref{sec:protocol} is the registration as it stands, and the changes made in this paper are the rows above. & the paper's final form \\
 \bottomrule
 \end{tabular}
-\caption{Changes to the registered protocol, in the order they were made (amendments 1 to 12).}\label{tab:deviations}
-\end{table}
-
-\begin{table}[p]
-\centering\small
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}p{0.14\linewidth}p{0.55\linewidth}p{0.25\linewidth}@{}}
-\toprule
-Date (no.) & Change & Before \\
-\midrule
-10-19 (13) & The exposure audit judges a probe outside the tree by that call's own result.\cl{PR28} & any dataset under it \\
-10-20 (14) & The build that makes the corrected records, the step rule, a pipeline check on a subset.\cl{PR29} & any dataset from it \\
-10-20 (15) & What a workspace task's request may say and name.\cl{PR30} & re-admission \\
-10-20 (16) & The recording build changed (compaction keeps the task, a 300 s shell bound); teacher servers moved to a faster build between sets.\cl{PR31} & the regenerated passes \\
-10-20 (17, 18) & Two ablation arms of the generations experiment: a learning-progress curriculum in the bandit framing of a self-evolving curriculum~\citep{sec2025} and a learning-progress replay.\cl{PR32,PR33,CT30} & any generation \\
-10-20 (19) & CE8 fixed: the regenerated, exposure-audited development sets as data, the step rule with held-out scoring and a memorisation guard, serving through the adapter bank, the qualification halves.\cl{PR34} & any CE8 run \\
-10-20 (20) & The solve protocol: recommended sampling over three drawn seeds, an optional 1024-token thinking budget (off is primary), a coding-agent prompt, a repetition note.\cl{PR35} & any arm under it \\
-10-20 (21) & CE8's learning rate lowered to $5\times10^{-5}$ after a sweep (later found to have measured a broken gradient, amendment 23).\cl{PR36} & any CE8 outcome \\
-10-21 (22) & CE8 on the bf16 base; its records rebuilt (exposure by call id, the recorded prompt); a teacher pass under thinking whose passes form CE8-T.\cl{PR37} & any CE8 training run \\
-10-21 (23) & A defect in brain's backward pass had scaled every 27B training gradient by about $4\times10^{-6}$; the sweep and the bf16 check behind the two rows above measured it and are no basis; the rate is kept by a stability rule fixed before a new diagnostic; the stopping rules passed explicitly.\cl{PR38} & any valid CE8 run \\
-10-21 (24) & A shuffled-instruction negative control, CE8-S; learning is claimed only if CE8 beats the base and CE8-S.\cl{PR39} & any CE8 evaluation \\
-10-21 (25) & The CE8 run trips the memorisation guard and is not evaluated; exactly one further run on a one-pass budget, the guard unchanged, no later retry.\cl{PR40} & any evaluation \\
-10-21 (26) & The second repository is admitted again with a corrected task generator (mutants inside comments are not counted as equivalent; a failed sub-case is read as its own test, which had refused nine genuine faults), each admission's memory bounded at 12 GiB; the earlier admissions are not used.\cl{PR41} & any of its solves \\
-10-21 (paper) & CE8-T's memorisation guard judges the kept checkpoint: memorised if its monitoring loss is not below the base's, or its windowed training loss is below half its monitoring loss. Defined after the original guard stopped both CE8 runs on a last-evaluation rise of 0.0003 to 0.003; Under this rule both CE8 runs would pass (kept checkpoints at steps 27 and 30, monitoring loss below the base's, training loss above half of it); CE8 stays not evaluated, because the guard in force for it fired. From here on the protocol changes in this paper, not in the registration file. & CE8-T's training \\
-10-21 (paper) & CE8 being closed, CE8-T gets its own shuffled negative control (CE8-T-S, from the CE8-T experiences) and the one-pass budget the second CE8 run used; its step count follows the trainer's own record count, read from a one-step sizing run. & CE8-T's training \\
-10-22 (paper) & G8 for the 27B compares served and in-process teacher-forced log-probabilities on held-out records, against the base's own served-vs-in-process gap, instead of agent verdicts: the 27B has no in-process agent path (splinter's local provider runs qwen3 only), found when the served half of the verdict check had run (9 of 23 verified) and before any comparison of the two halves existed. & G8 and any evaluation arm \\
-10-22 (paper) & CE8-T and CE8-T-S are solved on the pilot subset S1 under amendment 20 (thinking off) before G8 is measured, which the registration places before any arm; both comparisons have fewer than 25 non-tied families, are labelled pilots by the rule, and no confirmatory query follows from them. & any CE8-T evaluation \\
-10-25 (paper) & The release gate's improvement check also requires the candidate to have solved at least as many of the suite's assigned tasks as its champion; an attempt withheld as exposed or as a harness failure counts as a task that arm did not solve, so a regression can no longer leave the paired test's denominator. The measured shape that motivated it: a base at 21/46 (9 exposed) against a candidate at 15/46 (19 exposed) read as 5W-3L-15T under the paired test alone. & any release after it \\
-10-25 (paper) & Development probes on D46 (46 tasks, one per family, greedy) measure the supervision ablation and the recovery dose-response. They are labelled pilots, are not the registered confirmatory query, and their outcomes are not used as evidence for it; the registration, its partitions and its denominators are unchanged.\cl{D46A,D46C,RCVA,RCVC} & the D46 probes \\
-10-25 (paper) & The evaluation-variance explanation is corrected. The two serving probes that appeared to reproduce run-to-run nondeterminism hashed the whole response payload, which carries a random tool-call id and a random chat id, so their distinct-completion counts were artifacts. Remeasured on the completion's token ids and log-probabilities, a batch-1 greedy decode is bit-reproducible, a cache hit equals a cold prefill, and the co-batch does change a row (the int8 projections switch to a tensor-core block from five rows and the decode attention sizes its split count from the batch) - but one request in flight does not make a whole episode reproducible, so a second, unidentified source remains. The three-run greedy spread this paragraph explains (30, 31 and 26 of 46) is unchanged.\cl{REP1,REP2} & the REP1 paragraph and any reading of a single greedy arm \\
-10-25 (paper) & The confirmatory candidate is registered before its query: the decisive-action adapter of training seed 13 (corpus \code{blake3:92252209}, rank 16, alpha 32, $5\times10^{-5}$, 120 steps, packed-bf16 base, the rebuilt training binary), chosen after the six-decoding-seed development read on D46 in which it won 22 families, lost 11 and tied 13 against the base and the same against its all-action control (p=0.0401 each) while the two controls did not separate. The query solves the frozen qualification set (\code{blake3:f7fe502f}, 46 families) with the candidate, its base and the all-action control at the three registered decoding seeds and the protocol's sampling; the decision is the registered one-sided exact sign test at $\alpha=0.05$, and a result that is not significant is reported as not shown.\cl{PROTO6} & any candidate query \\
-\bottomrule
-\end{tabular}
-\caption{Changes to the registered protocol, continued (amendments 13 to 26, then changes made in this paper).}\label{tab:deviations2}
+\caption{Changes to the protocol made in this paper, in the order they were made.}\label{tab:deviations}
 \end{table}

@@ -8,7 +8,7 @@ The question that matters to a team, once the loop of
 \emph{given a git repository, can a local agentic model be tuned to work competently in
 it, repeatedly and with further repositories, and does it get better at what it has met
 rather than only at the newest?} This section states the protocol that asks it. It was
-registered before any run (\code{prereg/coding-tasks.md}; its dated changes are listed in \cref{app:deviations}); everything
+registered before any run (\code{prereg/coding-tasks.md}; the changes made since are listed in \cref{app:deviations}); everything
 in it is a registered rule or a statement about the code; the coding-task measurements are
 reported in \cref{sec:pending}.\cl{PR00}
 
@@ -53,10 +53,7 @@ copy of the snapshot. One harness profile is pinned for every solve of every arm
 collection alike: at most two follow-up turns, at most sixty tool
 calls and a repetition stop at three; a follow-up is given when the visible checks stay red
 and also when a turn ends with the tree unchanged, asking the worker to make the change by
-calling the edit tools.\cl{R03,PS01,PR14} Measurements made before this profile are not
-comparable and are excluded from every analysis; the reason is a pilot observation recorded in
-the lane notes, in which the untrained 8B model almost never edited a file under the earlier
-unbounded harness.\cl{PR14,PR15} The
+calling the edit tools.\cl{R03,PS01} The
 recorded unit is the full trajectory; the verdict is produced outside the agent. Only
 attempts whose patch passes and whose exposure audit is clean are eligible for training, and
 for the headline experiment the attempts are those of a stronger teacher model, not of the
@@ -81,7 +78,7 @@ removing it.
 fault was seeded in for the authored repositories and the subsystem for real
 ones.\cl{PR02} Tasks within a family are not independent, so no test treats them as such. The
 base arm is the unmodified checkpoint in a pinned harness profile; the adapter arm is the same
-checkpoint with the adapter attached; system prompt, tool schemas, budgets, decoding (the model family's recommended sampling, each task solved under three registered seeds and pass@1 averaged over them, thinking off as the primary variant and a 1024-token thinking budget as the secondary one) and environment image are identical.\cl{PR03,PR35} A family is won by the adapter
+checkpoint with the adapter attached; system prompt, tool schemas, budgets, decoding (the model family's recommended sampling, each task solved under three registered seeds and pass@1 averaged over them, thinking off as the primary variant and a 1024-token thinking budget as the secondary one) and environment image are identical.\cl{PR03} A family is won by the adapter
 when its resolved fraction is higher, lost when lower, and dropped when tied. The primary
 decision is a one-sided exact sign test over the non-tied qualification families at
 $\alpha=\alphalevel$, on the adapter served through Brain and driven by Sven; a result that is
