@@ -342,6 +342,14 @@ def parse_log(prefix, text):
         return det_metrics(prefix, json.loads(text))
     if prefix.startswith(("g8.proto6", "g8.qual")):
         return proto6_metrics(json.loads(text))
+    if prefix.startswith("g8.traindet"):
+        d = json.loads(text)
+        return {
+            "steps": int(d["run_a"]["steps"] and 6),
+            "distinct_adapters": 2 if d["run_a_adapter"] != d["run_b_adapter"] else 1,
+            "run_a_monitor": d["run_a"]["monitor"],
+            "run_b_monitor": d["run_b"]["monitor"],
+        }
     if prefix.startswith("g8."):
         return g8_report_metrics(json.loads(text))
     if prefix.startswith("tj."):

@@ -1179,6 +1179,19 @@
     "decisive_vs_base_p": 0.1807973040267825
    }
   },
+  "train-determinism": {
+   "log": "g8/train-determinism.json",
+   "sha256": "a16c84f41f3db3dbc296abbe9ab2587403b1a40c05878f00aa26f8e3ad253b3d",
+   "brain_commit": "ad2d21118 (trainer) with splinter 8910a8f62",
+   "command": "two runs of the recovery recipe (corpus blake3:df000e8f, 6 steps, lr 5e-5, seed 1, from the packed base plus the win1 adapter) with one binary",
+   "metric_prefix": "g8.traindet",
+   "metrics": {
+    "steps": 6,
+    "distinct_adapters": 2,
+    "run_a_monitor": 0.06736854463815689,
+    "run_b_monitor": 0.06726567
+   }
+  },
   "det-probe": {
    "log": "g8/determinism-record.json",
    "sha256": "0e173786a874ba14e3e740e5b5904ff21ffa2078adffbb3b0eee742c045b85c3",
