@@ -131,9 +131,11 @@ pub fn write_for(
         },
     )?;
     let mut resolver = ConceptResolver::new(ctx.sources());
+    // What the generator refused or never got a usable reply for counts
+    // beside what this skill refuses, so an empty skill says why.
     let mut written = Written {
         tasks: Vec::new(),
-        refused: BTreeMap::new(),
+        refused: generated.rejected.clone(),
     };
     for entry in ctx.tasks().get_set(&generated.task_set)?.members {
         let task = ctx.tasks().get(&entry.task)?;

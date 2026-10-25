@@ -394,3 +394,32 @@ fn a_structural_graph_is_read_by_rule_without_asking_the_planner() {
     let _ = acquire(&ctx, &request(&manual), &Learner);
     assert!(asked.load(std::sync::atomic::Ordering::SeqCst) > 0);
 }
+
+#[test]
+fn a_run_without_probes_says_why_the_generator_wrote_none() {
+    let unusable = Scripted::new(|_| "I would write some tasks about registers.".into());
+    let (scratch, ctx) = scratch_context("acquire-no-probes", unusable, false);
+    let manual = write_manual(&scratch);
+    let refused = acquire(
+        &ctx,
+        &splinter_pipelines::acquire::AcquireRequest {
+            structural_graph: true,
+            ..request(&manual)
+        },
+        &Learner,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(refused.contains("no skill has enough probes"), "{refused}");
+    // The replies' fate is named with its count: `(refused: <reason> <n>, ...)`.
+    let named = refused
+        .split_once("(refused: ")
+        .map(|(_, rest)| rest.trim_end_matches(')'))
+        .unwrap_or_else(|| panic!("no refusals named: {refused}"));
+    assert!(
+        named.split(", ").all(|reason| reason
+            .rsplit_once(' ')
+            .is_some_and(|(why, n)| !why.is_empty() && n.parse::<usize>().is_ok())),
+        "{refused}"
+    );
+}

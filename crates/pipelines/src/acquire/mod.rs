@@ -509,11 +509,22 @@ impl Acquisition<'_> {
             .collect();
         run.stage("probes", &probe_list)?;
         if assessable.is_empty() {
-            return Err(OrchestratorError::Refused(
+            let mut refused: BTreeMap<&str, usize> = BTreeMap::new();
+            for (why, n) in probe_list.iter().flat_map(|p| &p.refused) {
+                *refused.entry(why.as_str()).or_default() += n;
+            }
+            let mut reasons: Vec<(&str, usize)> = refused.into_iter().collect();
+            reasons.sort_by_key(|r| std::cmp::Reverse(r.1));
+            let reasons: Vec<String> = reasons
+                .iter()
+                .take(5)
+                .map(|(why, n)| format!("{why} {n}"))
+                .collect();
+            return Err(OrchestratorError::Refused(format!(
                 "no skill has enough probes to be assessed: the generator wrote too few tasks that \
-                 exercise a skill and repeat no other"
-                    .into(),
-            ));
+                 exercise a skill and repeat no other (refused: {})",
+                if reasons.is_empty() { "none proposed".into() } else { reasons.join(", ") }
+            )));
         }
         self.probes = assessable
             .iter()
