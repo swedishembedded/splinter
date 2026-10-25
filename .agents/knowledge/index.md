@@ -87,3 +87,5 @@ in the same commit.
 | [099](099-recovery-is-a-labelled-rehearsal-and-its-first-six-steps-do-most-of-the-restoration.md) | Recovery is a labelled rehearsal, and its first six steps do most of the restoration |
 | [100](100-at-this-budget-rehearsal-protected-nothing-and-cost-nine-tasks.md) | At this budget rehearsal protected nothing and cost nine tasks |
 | [101](101-a-greedy-arms-outcome-is-not-reproducible-across-runs.md) | A greedy arm's outcome is not reproducible across runs |
+| [102](102-a-batch-1-greedy-decode-is-bit-reproducible-and-the-variation-is-the-co-batch.md) | A batch-1 greedy decode is bit-reproducible, and the variation is the co-batch |
+| [103](103-a-sign-test-p-value-was-read-from-the-reverse-tail.md) | A sign test's p-value was read from the reverse tail |

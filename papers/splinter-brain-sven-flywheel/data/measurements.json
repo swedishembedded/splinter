@@ -1123,6 +1123,22 @@
     "binary_sha256": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab"
    }
   },
+  "det-probe": {
+   "log": "g8/determinism-record.json",
+   "sha256": "0122b9f2d6749f143f83188a223c0bfbedf18dfbead00ba182cdcb4a70bde456",
+   "brain_commit": "cbe84f44b",
+   "command": "determinism-record.py over runs/g8/det-margins-a2.out, det-batch-frozen.out and det-batch-small.out (same task-derived request, greedy, fixed seed, frozen evaluation build)",
+   "metric_prefix": "g8.det.probe",
+   "metrics": {
+    "sequential_requests": 5,
+    "sequential_distinct": 1,
+    "concurrent_requests": 6,
+    "concurrent_distinct": 2,
+    "first_divergent_token": 7,
+    "concurrent2_distinct": 1,
+    "concurrent8_distinct": 2
+   }
+  },
   "repeat-differences": {
    "log": "g8/repeat-verdict-differences.json",
    "sha256": "08309646e23a9cdbd7052c747e133aa21ed024c359208e0c9a45e3ecd1c5da8f",

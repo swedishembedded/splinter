@@ -40,6 +40,17 @@ protocol already prescribes. Until one is measured, a difference of a few tasks 
 inside the noise this entry measures; the large same-seed supervision gap and the rehearsal
 contrast are larger than it, but they are still single-run estimates.
 
+**Correction (2026-10-25, lease 14): the mechanism in the last paragraph is wrong, the
+measurement stands.** The task-derived probe hashed the whole response payload, which carries a
+random tool-call id and a random chat id, so its "three distinct of three sequential requests"
+were artifacts. Remeasured on the completion's token ids and log-probabilities, batch-1 greedy
+decoding is bit-identical (five sequential requests, spread 0.000e+00) and the variation appears
+at concurrency 2 or more, where the int8 projections switch to a tensor-core block from five rows
+and the decode attention sizes its split count from the batch. "Batch-1 is not the fix" is wrong;
+batch 1 is the fix, and the arm-level spread this entry measures is the co-batch. See knowledge
+102 for the corrected record. The remedy stands: a task delta of a few tasks between single
+greedy arms at concurrency 8 is not signal.
+
 Evidence: `runs/g8/pilot-s13-d46-decisive-s13.verify.json` (30 passed),
 `runs/g8/pilot-rep-decisive-s13.verify.json` (31),
 `runs/g8/pilot-rep2-decisive-s13.verify.json` (26), their comparisons

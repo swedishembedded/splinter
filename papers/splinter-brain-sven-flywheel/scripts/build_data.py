@@ -266,6 +266,32 @@ def repeat_metrics(report):
     return m
 
 
+def det_metrics(prefix, record):
+    """The values a claim may cite from the serving-determinism record: how many identical greedy
+    requests were sent one at a time and at once, how many distinct completions came back, and the
+    position of the first divergent token (`determinism-record.json`, derived from the probe
+    outputs by the same scripts that produced them)."""
+    if prefix.startswith("g8.det.probe"):
+        bm = record["batch_matrix"]
+        return {
+            "sequential_requests": record["sequential_requests"],
+            "sequential_distinct": record["sequential_distinct_token_sequences"],
+            "concurrent_requests": record["concurrent_requests_96"],
+            "concurrent_distinct": record["concurrent_distinct_96"],
+            "first_divergent_token": int(record["concurrent_first_diff_96"]),
+            "concurrent2_distinct": bm["2"]["concurrent_distinct"],
+            "concurrent8_distinct": bm["8"]["concurrent_distinct"],
+        }
+    return {
+        "subset_tasks": record["arm_subset_tasks"],
+        "c1_verdict_differences": record["arm_c1_verdict_differences"],
+        "c8_verdict_differences": record["arm_c8_verdict_differences"],
+        "decisive_wins": record["decisive_c1_wins"],
+        "decisive_losses": record["decisive_c1_losses"],
+        "decisive_ties": record["decisive_c1_ties"],
+    }
+
+
 def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
@@ -298,6 +324,8 @@ def parse_log(prefix, text):
         if ".edit_rate" in prefix:
             return edit_rate_metrics(text)
         return verify_metrics(json.loads(text))
+    if prefix.startswith("g8.det."):
+        return det_metrics(prefix, json.loads(text))
     if prefix.startswith("g8."):
         return g8_report_metrics(json.loads(text))
     if prefix.startswith("tj."):
