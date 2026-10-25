@@ -39,14 +39,29 @@ Why a co-batch changes a row - two mechanisms, both measured in the source:
   `cap` (the longest neighbour): `flash_splits(cap, batch, n_kv_heads)` in
   `crates/model/src/kv_tier.rs`, so the softmax grouping changes with the co-batch.
 
+**The cache is not a cause (13:25).** `runs/g8/det-cache.py` sends one never-seen prompt once
+(cold), twice more (cache hits) and then six times at once, at the record's own length and at
+about four times it: cold and warm are identical at both lengths, warm repeats are identical,
+and six concurrent copies give three and five distinct sequences. So a cache hit's KV is the
+cold prefill's KV.
+
+**One request in flight is not enough for an episode (13:04).** The same adapter on the same
+eight tasks, greedy at `ARM_CONCURRENCY=1`, passed 3 of 8 and then 5 of 8 with two verdicts
+flipped (the runs took 481 s and 781 s); a concurrency-8 run of the same arm passed 5 and
+differed from the first on two tasks. So a bit-identical *request* does not make an *episode*
+reproducible and `ARM_CONCURRENCY=1` alone is not a deterministic instrument. What remains is
+on the episode side - the observations a coding agent sees (command output, timings, paths,
+listing order) or the prefill partition of a growing conversation - and it is not yet
+identified.
+
 Consequences for evaluation, which is where this cost real measurements: an arm run at
-`--remote-concurrency 8` draws a fresh batch composition on every run and at every step, so a
-greedy arm is not reproducible *at that concurrency*, and a single greedy arm's task delta under
-a few tasks is not signal (knowledge 101's 30/31/26 spread is this, not kernel randomness).
-`ARM_CONCURRENCY=1` with greedy sampling is a deterministic instrument. The batched path can be
-made exact without giving up batching: group the int8 projections (the prefill path already does
-this in `exact_group_rows()`, the decode path has none) and pin the split count to the context
-rather than to the batch; the token-id repeat test above is the acceptance test for that change.
+`--remote-concurrency 8` draws a fresh batch composition on every run and at every step, and
+even one request in flight leaves an episode's own variance, so a single greedy arm's task
+delta under a few tasks is not signal (knowledge 101's 30/31/26 spread is this, not kernel
+randomness). The batched half can be made exact without giving up batching: group the int8
+projections (the prefill path already does this in `exact_group_rows()`, the decode path had
+none) and pin the split count to the context rather than to the batch - `--exact-decode` in
+brain - with the token-id repeat test above as its acceptance test.
 
 Open attribution: the six concurrent requests also arrive together, so their prefills can share
 a round (rounds above 32 rows take the chunk tape, gated to 1e-4 rather than bits). The

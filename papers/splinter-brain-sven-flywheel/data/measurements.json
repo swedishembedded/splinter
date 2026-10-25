@@ -1123,9 +1123,24 @@
     "binary_sha256": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab"
    }
   },
+  "det-arms": {
+   "log": "g8/determinism-record.json",
+   "sha256": "8c60b27f76b5b8c6b90acf29bf3034c08321316f72e65799e2ba9809b595d7df",
+   "brain_commit": "cbe84f44b",
+   "command": "determinism-record.py over runs/g8/pilot-det-{c1a,c1b,c8a}.verify.json and det-cache.out (same adapter, 8-task subset blake3:8ce76afd, greedy, one request in flight twice and eight once)",
+   "metric_prefix": "g8.det.arms",
+   "metrics": {
+    "subset_tasks": 8,
+    "c1a_passed": 3,
+    "c1b_passed": 5,
+    "c1_verdict_differences": 2,
+    "c8a_passed": 5,
+    "c8_verdict_differences": 2
+   }
+  },
   "det-probe": {
    "log": "g8/determinism-record.json",
-   "sha256": "0122b9f2d6749f143f83188a223c0bfbedf18dfbead00ba182cdcb4a70bde456",
+   "sha256": "8c60b27f76b5b8c6b90acf29bf3034c08321316f72e65799e2ba9809b595d7df",
    "brain_commit": "cbe84f44b",
    "command": "determinism-record.py over runs/g8/det-margins-a2.out, det-batch-frozen.out and det-batch-small.out (same task-derived request, greedy, fixed seed, frozen evaluation build)",
    "metric_prefix": "g8.det.probe",
@@ -1136,7 +1151,9 @@
     "concurrent_distinct": 2,
     "first_divergent_token": 7,
     "concurrent2_distinct": 1,
-    "concurrent8_distinct": 2
+    "concurrent8_distinct": 2,
+    "short_prompt_concurrent_distinct": 3,
+    "long_prompt_concurrent_distinct": 5
    }
   },
   "repeat-differences": {

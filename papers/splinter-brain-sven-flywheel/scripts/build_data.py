@@ -281,15 +281,24 @@ def det_metrics(prefix, record):
             "first_divergent_token": int(record["concurrent_first_diff_96"]),
             "concurrent2_distinct": bm["2"]["concurrent_distinct"],
             "concurrent8_distinct": bm["8"]["concurrent_distinct"],
+            "short_prompt_concurrent_distinct": record["warm_concurrent_distinct_short"],
+            "long_prompt_concurrent_distinct": record["warm_concurrent_distinct_long"],
         }
-    return {
+    arms = {
         "subset_tasks": record["arm_subset_tasks"],
+        "c1a_passed": record["arm_c1a_passed"],
+        "c1b_passed": record["arm_c1b_passed"],
         "c1_verdict_differences": record["arm_c1_verdict_differences"],
-        "c8_verdict_differences": record["arm_c8_verdict_differences"],
-        "decisive_wins": record["decisive_c1_wins"],
-        "decisive_losses": record["decisive_c1_losses"],
-        "decisive_ties": record["decisive_c1_ties"],
     }
+    if "arm_c8a_passed" in record:
+        arms["c8a_passed"] = record["arm_c8a_passed"]
+    if "arm_c8_verdict_differences" in record:
+        arms["c8_verdict_differences"] = record["arm_c8_verdict_differences"]
+    if "decisive_c1_wins" in record:
+        arms["decisive_wins"] = record["decisive_c1_wins"]
+        arms["decisive_losses"] = record["decisive_c1_losses"]
+        arms["decisive_ties"] = record["decisive_c1_ties"]
+    return arms
 
 
 def parse_log(prefix, text):
