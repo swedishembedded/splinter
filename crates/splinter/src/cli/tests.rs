@@ -150,7 +150,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     };
     assert_eq!(task_set, "ab12");
     assert_eq!(generator, ModelRef::policy_default());
-    assert_eq!(per_task, DEFAULT_VARIANTS_PER_TASK);
+    assert_eq!(per_task, splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK);
     assert!(matches!(
         command(&["tasks", "variants", "ab12", "--per-task", "5"]),
         Command::Tasks(TasksCommand::Variants { per_task: 5, .. })
@@ -255,7 +255,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     );
     assert!(describe_with.is_some());
     assert!(pack && drop_leaking && serialise_calls && split_over_block);
-    assert_eq!(only_actions, Some(vec!["edit".to_string(), "write_file".to_string()]));
+    assert_eq!(only_actions, Some(vec!["edit".into(), "write_file".into()]));
     assert_eq!(sets.len(), 2);
     assert_eq!(view, ViewName::Preference);
     assert!(matches!(strip, Some(StripPolicy::Mix { .. })));

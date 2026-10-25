@@ -141,7 +141,10 @@ impl SftStep {
     #[must_use]
     pub fn only_actions(self, names: Vec<String>) -> Self {
         // An empty list is no request at all: it cannot mean "keep nothing".
-        Self { only_actions: (!names.is_empty()).then_some(names), ..self }
+        Self {
+            only_actions: (!names.is_empty()).then_some(names),
+            ..self
+        }
     }
 
     /// The same view under a negative `control`.
@@ -194,7 +197,10 @@ impl SftStep {
             None => true,
             Some(names) => {
                 let calls = &conversation.messages[action.index].tool_calls;
-                calls.is_empty() || calls.iter().all(|c| names.iter().any(|n| n == &c.function.name))
+                calls.is_empty()
+                    || calls
+                        .iter()
+                        .all(|c| names.iter().any(|n| n == &c.function.name))
             }
         };
         for action in conversation.actions.iter().filter(|a| !a.copied) {
