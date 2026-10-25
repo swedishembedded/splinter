@@ -10,3 +10,8 @@ D46-RCV,D46 (46 families),6 steps from win1 against the base,36,4,6,PILOT
 D46-RCV,D46 (46 families),18 steps from win1 against the base,34,6,8,PILOT
 D46-RCV,D46 (46 families),36 steps from win1 against the base,31,10,5,PILOT
 D46-RCV,D46 (46 families),18 steps from the undamaged decisive seed-1 adapter (control),30,7,2,PILOT
+D46-GEN2,D46 (46 families),no rehearsal against the base,32,8,4,PILOT
+D46-GEN2,D46 (46 families),rehearsal against the base,34,4,7,PILOT
+D46-GEN2,D46 (46 families),rehearsal against no rehearsal,37,3,13,PILOT
+S1-GEN2,S1 (23 families),no rehearsal against the base,13,2,2,PILOT
+S1-GEN2,S1 (23 families),rehearsal against the base,15,1,0,PILOT

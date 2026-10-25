@@ -40,8 +40,9 @@ class PilotTable(unittest.TestCase):
         self.assertTrue(rows, "the development probes have rows in data/results.csv")
         for row in rows:
             self.assertEqual(row["status"], "PILOT", row)
-            self.assertGreater(int(row["wins"]), 0, row)
-            self.assertGreater(int(row["losses"]), 0, row)
+            self.assertGreaterEqual(int(row["wins"]), 0, row)
+            self.assertGreaterEqual(int(row["losses"]), 0, row)
+            self.assertGreater(int(row["wins"]) + int(row["losses"]), 0, row)
             self.assertGreaterEqual(int(row["exam_families"]),
                                     int(row["wins"]) + int(row["losses"]), row)
 

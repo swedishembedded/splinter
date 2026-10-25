@@ -937,6 +937,235 @@
     "all_actions_s1_edited": 22,
     "all_actions_s1_aborted": 10
    }
+  },
+  "gen2-noreh-verify": {
+   "log": "g8/pilot-gen2-gen2-noreh.verify.json",
+   "sha256": "506d6d87caeb1b6a1a11cd77e488d4a560cd074d038b6ec9e3753caaac12564e",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the D46/S1 arm (runs/g8)",
+   "metric_prefix": "gen2.d46.noreh.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 28,
+    "failed": 18,
+    "exposed": 7,
+    "undecided": 0
+   }
+  },
+  "gen2-noreh-compare": {
+   "log": "g8/pilot-compare-gen2-gen2-noreh.json",
+   "sha256": "bccdb94ab581e7975f89b0d9b4d0a2362575624bbad91c2eb084e99b5e4406b5",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare (runs/g8/compare-arm.sh)",
+   "metric_prefix": "gen2.d46.noreh.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 32,
+    "families": 32,
+    "wins": 8,
+    "losses": 4,
+    "ties": 20,
+    "discordant": 12,
+    "p_value": 0.19384765625,
+    "adapter_verified": 28,
+    "adapter_exposed": 7,
+    "base_verified": 21,
+    "base_exposed": 9
+   }
+  },
+  "gen2-reh-verify": {
+   "log": "g8/pilot-gen2-gen2-reh.verify.json",
+   "sha256": "2c6e0155423e635e85ae89587eae6eb1d29b9aaf3fd3bf1430e091f07df8cf82",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the D46/S1 arm (runs/g8)",
+   "metric_prefix": "gen2.d46.reh.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 19,
+    "failed": 27,
+    "exposed": 5,
+    "undecided": 0
+   }
+  },
+  "gen2-reh-compare": {
+   "log": "g8/pilot-compare-gen2-gen2-reh.json",
+   "sha256": "0a60c38b926115e76bdd0dd6aca0597fe46352a0ce6734b07262fff40ef20649",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare (runs/g8/compare-arm.sh)",
+   "metric_prefix": "gen2.d46.reh.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 34,
+    "families": 34,
+    "wins": 4,
+    "losses": 7,
+    "ties": 23,
+    "discordant": 11,
+    "p_value": 0.88671875,
+    "adapter_verified": 19,
+    "adapter_exposed": 5,
+    "base_verified": 21,
+    "base_exposed": 9
+   }
+  },
+  "gen2-s1-noreh-verify": {
+   "log": "g8/pilot-gen2s1-gen2-noreh.verify.json",
+   "sha256": "89b7ce163872de3200cd78d6ce29a2cc6e4510b4eaea2becdcbbdd20d556fcef",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the D46/S1 arm (runs/g8)",
+   "metric_prefix": "gen2.s1.noreh.verify",
+   "metrics": {
+    "experiences": 23,
+    "passed": 12,
+    "failed": 11,
+    "exposed": 5,
+    "undecided": 0
+   }
+  },
+  "gen2-s1-noreh-compare": {
+   "log": "g8/pilot-compare-gen2s1-gen2-noreh.json",
+   "sha256": "174768c9e9e945b31d723687cf15e63991f1de2bc3af60a99f8daac487496120",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare (runs/g8/compare-arm.sh)",
+   "metric_prefix": "gen2.s1.noreh.compare",
+   "metrics": {
+    "tasks": 23,
+    "paired": 13,
+    "families": 13,
+    "wins": 2,
+    "losses": 2,
+    "ties": 9,
+    "discordant": 4,
+    "p_value": 0.6875,
+    "adapter_verified": 12,
+    "adapter_exposed": 5,
+    "base_verified": 8,
+    "base_exposed": 8
+   }
+  },
+  "gen2-s1-reh-verify": {
+   "log": "g8/pilot-gen2s1-gen2-reh.verify.json",
+   "sha256": "354736e3983410752d2047da1e723840ee5d5eb7470e0379d7ee115b2c290684",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the D46/S1 arm (runs/g8)",
+   "metric_prefix": "gen2.s1.reh.verify",
+   "metrics": {
+    "experiences": 23,
+    "passed": 11,
+    "failed": 12,
+    "exposed": 1,
+    "undecided": 0
+   }
+  },
+  "gen2-s1-reh-compare": {
+   "log": "g8/pilot-compare-gen2s1-gen2-reh.json",
+   "sha256": "a262e8656342d87a48b3785a8c8268bf0e2c6df1f2c26b71d9b3bff160c317b2",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare (runs/g8/compare-arm.sh)",
+   "metric_prefix": "gen2.s1.reh.compare",
+   "metrics": {
+    "tasks": 23,
+    "paired": 15,
+    "families": 15,
+    "wins": 1,
+    "losses": 0,
+    "ties": 14,
+    "discordant": 1,
+    "p_value": 0.5,
+    "adapter_verified": 11,
+    "adapter_exposed": 1,
+    "base_verified": 8,
+    "base_exposed": 8
+   }
+  },
+  "gen2-direct-compare": {
+   "log": "g8/compare-gen2reh-vs-noreh.json",
+   "sha256": "f3ebe2fc341f5ac0b26c3f3553c341e59d0a9960dd624d478df552f0ea043444",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences compare (runs/g8/compare-arm.sh)",
+   "metric_prefix": "gen2.direct.compare",
+   "metrics": {
+    "tasks": 46,
+    "paired": 37,
+    "families": 37,
+    "wins": 3,
+    "losses": 13,
+    "ties": 21,
+    "discordant": 16,
+    "p_value": 0.9979095458984375,
+    "adapter_verified": 19,
+    "adapter_exposed": 5,
+    "base_verified": 28,
+    "base_exposed": 7
+   }
+  },
+  "gen2-noreh-train": {
+   "log": "ce8/logs/train-gen2-noreh.time",
+   "sha256": "123108ce9fa463d1ecca81d8afadd4f7d47e5594558e359046464cbcc80673a0",
+   "brain_commit": "77e510fbf",
+   "command": "splinter train (runs/ce8/logs)",
+   "metric_prefix": "gen2.noreh.train",
+   "metrics": {
+    "wall_s": 2299,
+    "steps": 120,
+    "binary_sha256": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab"
+   }
+  },
+  "gen2-reh-train": {
+   "log": "ce8/logs/train-gen2-reh.time",
+   "sha256": "a9ee6932f2c50a20fb154698cddaeb69e2f33cb9136094cba1c435381c31f9ed",
+   "brain_commit": "77e510fbf",
+   "command": "splinter train (runs/ce8/logs)",
+   "metric_prefix": "gen2.reh.train",
+   "metrics": {
+    "wall_s": 2538,
+    "steps": 120,
+    "binary_sha256": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab"
+   }
+  },
+  "repeat-differences": {
+   "log": "g8/repeat-verdict-differences.json",
+   "sha256": "08309646e23a9cdbd7052c747e133aa21ed024c359208e0c9a45e3ecd1c5da8f",
+   "brain_commit": "77e510fbf",
+   "command": "computed from the three stored verify reports (runs/g8)",
+   "metric_prefix": "d46.repeat_differences",
+   "metrics": {
+    "tasks": 46,
+    "s13_passed": 30,
+    "rep_passed": 31,
+    "rep2_passed": 26,
+    "diff_s13_rep": 9,
+    "diff_s13_rep2": 12,
+    "diff_rep_rep2": 11
+   }
+  },
+  "repeat-rep-verify": {
+   "log": "g8/pilot-rep-decisive-s13.verify.json",
+   "sha256": "b718a65fc46b7ff72e9b3d180c67122f04cdfd8cc2f3e11b99eb25a9f1dc2c1d",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the D46/S1 arm (runs/g8)",
+   "metric_prefix": "d46.repeat_rep.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 31,
+    "failed": 15,
+    "exposed": 0,
+    "undecided": 0
+   }
+  },
+  "repeat-rep2-verify": {
+   "log": "g8/pilot-rep2-decisive-s13.verify.json",
+   "sha256": "7aaec9e2b4a1ae9993b181193b561bdbd1d3f86e7bda114d00b0664a9c4b49ff",
+   "brain_commit": "77e510fbf",
+   "command": "splinter experiences verify over the D46/S1 arm (runs/g8)",
+   "metric_prefix": "d46.repeat_rep2.verify",
+   "metrics": {
+    "experiences": 46,
+    "passed": 26,
+    "failed": 20,
+    "exposed": 0,
+    "undecided": 0
+   }
   }
  }
 }

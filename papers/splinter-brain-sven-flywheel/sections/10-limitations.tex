@@ -16,6 +16,8 @@ practice gate has no canaries. The mechanisms of corpus expansion beyond the fir
 (variants, retention queue, rehearsal, claims) are described from the code and none was
 evaluated for the value it adds.
 
+\paragraph{Single greedy runs and run-to-run variation.} The development probes of \cref{sec:pending} (the supervision ablation, the recovery dose-response and the generation-2 rehearsal ablation) are one run per arm at greedy decoding. The same adapter evaluated three times on the same benchmark decoded 30, 31 and 26 of 46 tasks, and the three reports' verdicts differ pairwise on 9, 12 and 11 of the 46 tasks; a single greedy arm therefore carries about 2.5 tasks of standard deviation, so the paired p-values of single-run comparisons overstate their precision.\cl{REP1} A serving probe over identical greedy requests was deterministic on the server it records (one distinct completion for sequential and six concurrent requests); the session observed a second server disagree but did not keep that output, and a later re-run on both live servers was identical, so whether batch or prefix-cache state causes the variation is \emph{not} isolated. The registered three-decoding-seed query is the right instrument for a confirmatory comparison, is unaffected by the pilots, and remains unrun. Mitigations to test are batch-1 evaluation (\code{ARM\_CONCURRENCY=1}) or bit-exact per-row batched kernels.
+
 \paragraph{The coding-task experiment.} Its claim is not measured. What has run is the
 teacher's first pass, an underpowered pilot of the headline that does not show it, two CE8
 training runs that the registered memorisation guard stopped before evaluation, and a pilot of

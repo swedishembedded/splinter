@@ -255,6 +255,17 @@ def edit_rate_metrics(text):
     return m
 
 
+def repeat_metrics(report):
+    """The values a claim may cite from the derived repeat record: the three runs' pass counts and
+    the number of the 46 task verdicts that differ between each pair."""
+    m = {"tasks": report["tasks"]}
+    for name, passed in report["passes"].items():
+        m[f"{name}_passed"] = passed
+    for pair, count in report["verdict_differences"].items():
+        m[f"diff_{pair}"] = count
+    return m
+
+
 def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
@@ -275,7 +286,9 @@ def parse_log(prefix, text):
         return json.loads(text)
     if prefix.startswith("ce8."):
         return ce8_train_metrics(text)
-    if prefix.startswith(("d46.", "rcv.")):
+    if prefix.startswith(("d46.", "rcv.", "gen2.")):
+        if ".repeat_differences" in prefix:
+            return repeat_metrics(json.loads(text))
         if ".compare" in prefix:
             return ce4_compare_metrics(json.loads(text))
         if ".train" in prefix:
@@ -391,6 +404,7 @@ def metrics():
     m.update(g8_metrics())
     m.update(prefixed_metrics("d46."))
     m.update(prefixed_metrics("rcv."))
+    m.update(prefixed_metrics("gen2."))
     return m
 
 
@@ -481,7 +495,7 @@ def results_table():
 
 # Development probes, not registered experiments: rows of data/results.csv whose experiment is one
 # of these are rendered by pilot_results_table, and their status must stay PILOT.
-PILOTS = ("D46-SS", "D46-RCV")
+PILOTS = ("D46-SS", "D46-RCV", "D46-GEN2", "S1-GEN2")
 
 
 def pilot_results_table(rows=None):
