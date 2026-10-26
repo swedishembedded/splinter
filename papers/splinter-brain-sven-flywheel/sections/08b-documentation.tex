@@ -133,4 +133,11 @@ sampling (0.2, a seed per request), so the baseline and every round's decision w
 They are now answered greedily, and the same base on the same exam scores the same in both
 arms, 34 of 56 dev probes.\cl{SL17,SL19}
 
-% RESULTS: the Lua runs' rounds and assessment go here.
+\paragraph{The loop learns at a small step.} At a learning rate of $10^{-6}$ (six steps,
+one verified answer per task, retention bound 0.5) rounds are accepted: each arm accepted 5
+rounds, and on the final probes, which no round trains on, the self-generate arm went from
+26 to 35 of 53 passes (7 skills up, 1 down) and the fixed-generator arm from 26 to 40 of 53
+(8 up, 0 down).\cl{SL20} The control did better than the arm whose trained model writes the
+next tasks, so these runs show that the loop acquires skills from raw documentation, not
+that self-generated tasks help.
+
