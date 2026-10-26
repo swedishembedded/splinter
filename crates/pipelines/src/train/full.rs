@@ -239,7 +239,7 @@ pub(super) fn train_full(
     plan: &TrainPlan,
     cancel: &CancelToken,
 ) -> Result<Checkpoint, OrchestratorError> {
-    let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
+    let train = trained_records(&combine(plan)?, &plan.dir)?;
     let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
     let rehearsed: Vec<(PathBuf, f32)> = plan
         .rehearsal
@@ -248,7 +248,7 @@ pub(super) fn train_full(
         .collect();
     full_fine_tune(&FullTune {
         model_dir: &plan.base,
-        train: &split.train,
+        train: &train,
         replay: &replayed,
         replay_share: plan.replay_share,
         weighted_replay: &rehearsed,
@@ -268,6 +268,19 @@ pub(super) fn train_full(
     .map_err(trainer_error)
 }
 
+/// The records a full fine-tune trains on: the trained side of the held-out
+/// split, or every record when they come from too few independent source
+/// texts to hold one out whole (one manual's skill, say). A full fine-tune
+/// scores nothing as it trains, and whoever measures it does so on tasks of
+/// its own, so dividing such records would only throw some away.
+fn trained_records(combined: &Path, dir: &Path) -> Result<PathBuf, OrchestratorError> {
+    match split_dataset_file(combined, dir) {
+        Ok(split) => Ok(split.train),
+        Err(splinter_data::ViewError::NoGroupToHoldOut { .. }) => Ok(combined.to_path_buf()),
+        Err(other) => Err(other.into()),
+    }
+}
+
 /// Folds `adapter` into `base` and writes the checkpoint to `out_dir`.
 pub(super) fn merge_into(
     base: &Path,
@@ -275,4 +288,47 @@ pub(super) fn merge_into(
     out_dir: &Path,
 ) -> Result<Checkpoint, OrchestratorError> {
     merge(base, adapter, out_dir).map_err(trainer_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::trained_records;
+
+    fn records(groups: &[&str]) -> String {
+        groups
+            .iter()
+            .enumerate()
+            .map(|(n, group)| {
+                format!(
+                    r#"{{"messages":[],"metadata":{{"experiences":["blake3:{n:064x}"],"group":"{group}"}}}}"#
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn trained(name: &str, groups: &[&str]) -> (usize, bool) {
+        let dir = std::env::temp_dir().join(format!("full-records-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let combined = dir.join("combined.jsonl");
+        std::fs::write(&combined, records(groups)).unwrap();
+        let train = trained_records(&combined, &dir).unwrap();
+        let lines = std::fs::read_to_string(&train).unwrap().lines().count();
+        let whole = train == combined;
+        std::fs::remove_dir_all(&dir).unwrap();
+        (lines, whole)
+    }
+
+    #[test]
+    fn records_of_one_source_text_are_all_trained_on() {
+        assert_eq!(trained("one", &["skill"; 6]), (6, true));
+    }
+
+    #[test]
+    fn records_of_many_source_texts_keep_their_held_out_split() {
+        let groups: Vec<String> = (0..12).map(|n| format!("g{n}")).collect();
+        let refs: Vec<&str> = groups.iter().map(String::as_str).collect();
+        let (lines, whole) = trained("many", &refs);
+        assert!(!whole && lines < 12, "{lines}");
+    }
 }
