@@ -33,6 +33,7 @@ use crate::solving::Solved;
 use crate::sources::{SourceSummary, SourceTarget};
 use crate::tasks::TasksGenerated;
 use crate::train::Candidate;
+use crate::validate::Validated;
 use crate::variants::VariantsGenerated;
 use crate::verify::Verified;
 use splinter_orchestrator::runs::Recorded;
@@ -120,6 +121,9 @@ pub struct LearnReport {
     pub solve: Option<Solved>,
     /// The verify stage.
     pub verify: Option<Verified>,
+    /// The validate stage: which passing attempts the validators kept;
+    /// `None` when no validate harness was named.
+    pub validate: Option<Validated>,
     /// The teach stage: the teacher's graded solves of the tasks never
     /// solved.
     pub teach: Option<Taught>,

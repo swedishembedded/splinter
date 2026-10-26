@@ -48,8 +48,8 @@
 //!   observer of every event, and suspend and resume; and
 //!   [`work::solve_in_workspace`], a whole episode on a task that changes a
 //!   repository, ending in the patch read back from git.
-//! * [`harness_proposer`] - task proposals written by a sven harness run as a
-//!   subprocess (`sven harness run`), read back from the file it leaves.
+//! * [`flywheel`] - the flywheel harnesses (invent, validate) run as `sven
+//!   harness run` subprocesses, and what their runs left on disk read back.
 //! * [`timed`] - a model provider that counts its requests and how long each
 //!   waited for its first stream item, so a run that took long can be told
 //!   from one that did a lot.
@@ -65,9 +65,9 @@ pub mod converse;
 pub mod correction;
 pub mod critic;
 pub mod demonstration;
+pub mod flywheel;
 pub mod forms;
 pub mod harness_edit;
-pub mod harness_proposer;
 pub mod harness_work;
 pub mod judge;
 pub mod knowledge;

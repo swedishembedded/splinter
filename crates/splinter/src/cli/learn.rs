@@ -99,6 +99,74 @@ pub struct AcquireArgs {
     pub probes_from: Option<String>,
 }
 
+/// The flywheel harnesses, run as `sven harness run` against a model server
+/// that is already running.
+#[derive(Debug, Args)]
+pub struct TaskHarnessArgs {
+    /// The invent harness (a directory): agents read each window of the
+    /// sources and write task directories - instruction, environment,
+    /// reference solution, hidden tests, the task's own solving process -
+    /// in place of one call to the generator model. Each admitted task is a
+    /// workspace task graded by its own tests, and is solved by its own
+    /// process.
+    #[arg(
+        long = "task-harness",
+        value_name = "PATH",
+        requires_all = ["sven", "solve_harness", "task_harness_endpoint", "task_harness_model"]
+    )]
+    pub invent: Option<PathBuf>,
+    /// The generic solve harness (a directory holding `harness.yaml`): it
+    /// solves a task that brings no process of its own and is the template
+    /// the invent harness adapts a task's process from.
+    #[arg(long, value_name = "PATH", requires = "invent")]
+    pub solve_harness: Option<PathBuf>,
+    /// The validate harness (a directory): each passing attempt is judged
+    /// under every focus (outcome, process, teaching) and kept only when
+    /// every decision is keep. Without it passing attempts are not validated.
+    #[arg(long, value_name = "PATH", requires = "invent")]
+    pub validate_harness: Option<PathBuf>,
+    /// The `sven` executable that runs the harnesses.
+    #[arg(long, value_name = "PATH", requires = "invent")]
+    pub sven: Option<PathBuf>,
+    /// Base URL of the already running OpenAI-compatible server the
+    /// harnesses' agents use.
+    #[arg(
+        long = "task-harness-endpoint",
+        value_name = "URL",
+        requires = "invent"
+    )]
+    pub endpoint: Option<String>,
+    /// The model the harnesses' agents ask the server for, as
+    /// `provider/name`; a brain server is addressed as `brain/<name>`.
+    #[arg(long = "task-harness-model", value_name = "SPEC", requires = "invent")]
+    pub model: Option<String>,
+    /// The file holding the server's API key: a JSON object of provider
+    /// name to key (`{"brain": "..."}`), or the key on one line.
+    #[arg(
+        long = "task-harness-key-file",
+        value_name = "FILE",
+        requires = "invent"
+    )]
+    pub key_file: Option<PathBuf>,
+    /// The most angles, and so new tasks, one invent run works on.
+    #[arg(
+        long = "task-harness-angles",
+        value_name = "N",
+        default_value_t = 3,
+        requires = "invent"
+    )]
+    pub angles: usize,
+    /// How long one harness run may take, in seconds. A run of the invent
+    /// harness takes tens of minutes.
+    #[arg(
+        long = "task-harness-timeout",
+        value_name = "SECS",
+        default_value_t = 7200,
+        requires = "invent"
+    )]
+    pub timeout_secs: u64,
+}
+
 /// `learn`.
 #[derive(Debug, Args)]
 pub struct LearnArgs {
@@ -124,28 +192,9 @@ pub struct LearnArgs {
     /// What the learner is after; steers the tasks generated.
     #[arg(long, value_name = "TEXT")]
     pub goal: Option<String>,
-    /// A sven harness (a document or directory) that writes the tasks of the
-    /// model kinds in place of one call to the generator model: agents read
-    /// the sections, write tasks and run their reference solutions in the
-    /// kind's runtime. Run with `sven harness run` against the server named
-    /// by --task-harness-endpoint.
-    #[arg(
-        long,
-        value_name = "PATH",
-        requires_all = ["sven", "task_harness_endpoint", "task_harness_model"]
-    )]
-    pub task_harness: Option<PathBuf>,
-    /// The `sven` executable that runs --task-harness.
-    #[arg(long, value_name = "PATH", requires = "task_harness")]
-    pub sven: Option<PathBuf>,
-    /// Base URL of the already running OpenAI-compatible server the
-    /// --task-harness agents use.
-    #[arg(long, value_name = "URL", requires = "task_harness")]
-    pub task_harness_endpoint: Option<String>,
-    /// The model the --task-harness agents ask the server for, as
-    /// `provider/name` (for example `openai/served-name`).
-    #[arg(long, value_name = "SPEC", requires = "task_harness")]
-    pub task_harness_model: Option<String>,
+    /// The flywheel harnesses that invent the tasks.
+    #[command(flatten)]
+    pub task_harness: TaskHarnessArgs,
     /// Task kinds, comma-separated; when not named, a planner model surveys
     /// the sources and chooses them.
     #[arg(long, value_delimiter = ',', value_name = "K,..")]

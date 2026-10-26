@@ -200,6 +200,12 @@ pub fn stage_line(stage: &str, summary: &serde_json::Value) -> String {
             field("failed"),
             field("undecided")
         ),
+        "validate" => format!(
+            "{} of {} passing kept, {} undecided",
+            field("kept"),
+            field("passing"),
+            summary["undecided"].as_array().map_or(0, Vec::len)
+        ),
         "critique" => format!(
             "{} critiqued, {} repaired",
             field("critiqued"),
@@ -468,6 +474,9 @@ impl Report for LearnReport {
         }
         if let Some(r) = &self.verify {
             stage(&mut out, "verify", r.human());
+        }
+        if let Some(r) = &self.validate {
+            stage(&mut out, "validate", r.human());
         }
         if let Some(r) = &self.teach {
             stage(&mut out, "teach", r.human());

@@ -237,10 +237,15 @@ Options:
 - `--reference-teacher`: Teach a task the policy never solves with the task's own reference answer (the output the runtime computed, a reference program), graded like any answer, instead of asking the teacher model.
 - `--probes-from <RUN-ID>`: Take the skill graph and probes of this earlier learn --source run (its id is in `splinter runs list`) instead of planning and generating them; refused unless that run used the same sources. The baseline, rounds and assessment are still this run's.
 - `--goal <TEXT>`: What the learner is after; steers the tasks generated.
-- `--task-harness <PATH>`: A sven harness (a document or directory) that writes the tasks of the model kinds in place of one call to the generator model: agents read the sections, write tasks and run their reference solutions in the kind's runtime. Run with `sven harness run` against the server named by --task-harness-endpoint.
-- `--sven <PATH>`: The `sven` executable that runs --task-harness.
-- `--task-harness-endpoint <URL>`: Base URL of the already running OpenAI-compatible server the --task-harness agents use.
-- `--task-harness-model <SPEC>`: The model the --task-harness agents ask the server for, as `provider/name` (for example `openai/served-name`)
+- `--task-harness <PATH>`: The invent harness (a directory): agents read each window of the sources and write task directories - instruction, environment, reference solution, hidden tests, the task's own solving process - in place of one call to the generator model. Each admitted task is a workspace task graded by its own tests, and is solved by its own process.
+- `--solve-harness <PATH>`: The generic solve harness (a directory holding `harness.yaml`): it solves a task that brings no process of its own and is the template the invent harness adapts a task's process from.
+- `--validate-harness <PATH>`: The validate harness (a directory): each passing attempt is judged under every focus (outcome, process, teaching) and kept only when every decision is keep. Without it passing attempts are not validated.
+- `--sven <PATH>`: The `sven` executable that runs the harnesses.
+- `--task-harness-endpoint <URL>`: Base URL of the already running OpenAI-compatible server the harnesses' agents use.
+- `--task-harness-model <SPEC>`: The model the harnesses' agents ask the server for, as `provider/name`; a brain server is addressed as `brain/<name>`.
+- `--task-harness-key-file <FILE>`: The file holding the server's API key: a JSON object of provider name to key (`{"brain": "..."}`), or the key on one line.
+- `--task-harness-angles <N>`: The most angles, and so new tasks, one invent run works on. Default: `3`.
+- `--task-harness-timeout <SECS>`: How long one harness run may take, in seconds. A run of the invent harness takes tens of minutes. Default: `7200`.
 - `--kinds <K,..>...`: Task kinds, comma-separated; when not named, a planner model surveys the sources and chooses them.
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
 - `--dry-run`: Report the plan and write nothing.
@@ -1008,6 +1013,7 @@ Options:
 - `--top-k <N>`: The policy's top-k cut for its pass@k attempts [default for a local model: 20]
 - `--harness <FILE>`: Run this sven harness document on each workspace task in place of the conversational agent loop; the attempts are verified and compared like any other (`experiences compare`)
 - `--resume <EXPERIENCE-SET>`: Resume an interrupted solve: the experience set its last progress line named. A task that set already answers is not solved again, and its experiences are members of the new set.
+- `--no-compaction`: Record every episode whole: the solver keeps its conversation instead of compacting it when it nears the context limit, so a failure can be continued from its own transcript. A compacted transcript has no faithful prefix and cannot be corrected, so this is the flag an arm run for a correction corpus passes.
 
 ### splinter harness
 

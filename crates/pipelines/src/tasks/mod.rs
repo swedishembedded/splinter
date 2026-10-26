@@ -24,7 +24,8 @@
 use splinter_model::{Sampling, AGENT_SAMPLING};
 
 use splinter_agent::proposer::SvenProposer;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -38,8 +39,8 @@ use splinter_knowledge::advice::{advice_sections, judgment_sections};
 use splinter_knowledge::concepts::SectionRef;
 use splinter_knowledge::denoise::{Denoise, GENERATOR as DENOISE_GENERATOR};
 use splinter_knowledge::tasks::{
-    CallOutcome, CallRecord, Catalogue, Focus, GenerateError, GenerationPolicy, ModelTaskGenerator,
-    Rejection, SourceText, TaskKind, DEFAULT_REQUEST_DEADLINE,
+    Catalogue, Focus, GenerateError, GenerationPolicy, ModelTaskGenerator, SourceText, TaskKind,
+    DEFAULT_REQUEST_DEADLINE,
 };
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
@@ -140,113 +141,25 @@ pub struct Generation<'a> {
     pub deadline: Option<Instant>,
     /// Stops generation.
     pub cancel: CancelToken,
-    /// The harness that writes the model kinds' tasks; `None` asks the
-    /// generator model in one typed call.
+    /// The flywheel harnesses that invent tasks in place of the model
+    /// kinds'; `None` asks the generator model in one typed call.
     pub harness: Option<&'a TaskHarness>,
 }
 
 mod batch;
 mod harness;
 pub mod pick;
+mod report;
+
+use harness::Inventor;
 
 use batch::{Batch, Provenance};
 pub use batch::{
     MAX_CORRECTIONS, MIN_ADMISSION_RATE, MIN_PROPOSALS_BEFORE_GIVING_UP,
     MIN_REFUSALS_BEFORE_CORRECTING,
 };
-pub use harness::TaskHarness;
-
-/// Admitted and rejected proposals of one kind.
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct KindTally {
-    /// Tasks admitted.
-    pub admitted: usize,
-    /// Proposals rejected.
-    pub rejected: usize,
-}
-
-/// One proposal turned away, and exactly why.
-#[derive(Clone, Debug, Serialize)]
-pub struct RejectionNote {
-    /// The kind it was proposed as.
-    pub kind: String,
-    /// The reason, as [`TasksGenerated::rejected`] counts it.
-    pub reason: String,
-    /// What failed: for a malformed reply, the reply itself.
-    pub detail: String,
-}
-
-/// One request put to the generator model.
-#[derive(Clone, Debug, Serialize)]
-pub struct CallNote {
-    /// The kind of task asked for.
-    pub kind: String,
-    /// The digest of what the model was shown.
-    pub prompt: String,
-    /// The size of what the model was shown, in bytes.
-    pub prompt_bytes: usize,
-    /// How long the request took, repairs included, in milliseconds.
-    pub elapsed_ms: u64,
-    /// Tasks in the model's reply, when it replied in the shape asked for.
-    pub candidates: Option<usize>,
-    /// Why there was no usable reply, as [`TasksGenerated::rejected`] names
-    /// it.
-    pub declined: Option<String>,
-}
-
-impl From<&CallRecord> for CallNote {
-    fn from(call: &CallRecord) -> Self {
-        let (candidates, declined) = match call.outcome {
-            CallOutcome::Replied { candidates } => (Some(candidates), None),
-            CallOutcome::Declined { rejection } => (None, Some(reason_name(&rejection))),
-        };
-        Self {
-            kind: call.kind.clone(),
-            prompt: call.prompt.to_string(),
-            prompt_bytes: call.prompt_bytes,
-            elapsed_ms: u64::try_from(call.elapsed.as_millis()).unwrap_or(u64::MAX),
-            candidates,
-            declined,
-        }
-    }
-}
-
-/// What the tasks stage reports.
-#[derive(Clone, Debug, Serialize)]
-pub struct TasksGenerated {
-    /// The task set (`solve <task_set>`).
-    pub task_set: TaskSetId,
-    /// The seed the denoise tasks were built with; `None` when none were
-    /// asked for. Generating again from the same parts with it yields the
-    /// same denoise tasks.
-    pub denoise_seed: Option<Seed>,
-    /// Tasks in it.
-    pub tasks: usize,
-    /// Text parts generated from.
-    pub parts: usize,
-    /// Text parts across the sources, generated from or not.
-    pub parts_total: usize,
-    /// How long generation ran, in seconds.
-    pub elapsed_secs: u64,
-    /// How long generating from every part would take at the pace measured,
-    /// in seconds: `None` when every part was covered.
-    pub full_coverage_secs: Option<u64>,
-    /// Admitted and rejected, by kind.
-    pub per_kind: BTreeMap<String, KindTally>,
-    /// Rejections, by reason.
-    pub rejected: BTreeMap<String, usize>,
-    /// Every rejection of a model's proposal, with what failed.
-    pub rejections: Vec<RejectionNote>,
-    /// Every request put to the generator model, in the order made.
-    pub calls: Vec<CallNote>,
-    /// Single sections generated from, beside the sources' parts.
-    pub sections: usize,
-    /// Why generation stopped before every part was covered, if it did.
-    pub stopped: Option<String>,
-    /// The kinds generation gave up on and why: asked for until their
-    /// proposals were refused too often to be worth another request.
-    pub dropped: BTreeMap<String, String>,
-}
+pub use harness::{InventReport, InventRunNote, RefusedDirectory, TaskHarness};
+pub use report::{CallNote, KindTally, RejectionNote, TasksGenerated};
 
 /// Generates tasks of `request.kinds` from `request.sources` and stores
 /// them as a task set.
@@ -268,11 +181,17 @@ pub fn generate(
     } else {
         None
     };
-    let generator = if model_kinds.is_empty() {
+    // The invent harness writes the tasks the model kinds would be asked
+    // for, so a generator model is asked for none.
+    let generator = if model_kinds.is_empty() || request.harness.is_some() {
         None
     } else {
         Some(model_generator(ctx, request, &model_kinds)?)
     };
+    let mut inventor = request
+        .harness
+        .map(|harness| Inventor::new(ctx, harness, request.goal, &request.cancel))
+        .transpose()?;
     let mut batch = Batch {
         written: request.written.to_vec(),
         deadline: request.deadline,
@@ -316,10 +235,14 @@ pub fn generate(
             if let Some(generator) = &generator {
                 let text = load_text(ctx, request, source_id, &part.name)?;
                 generate_part(ctx, generator, &text, &model_kinds, &mut batch)?;
-                if batch.expired {
-                    stopped = Some("the budget was spent inside a part".into());
-                    break 'sources;
-                }
+            }
+            if let Some(inventor) = &mut inventor {
+                let text = load_text(ctx, request, source_id, &part.name)?;
+                inventor.part(ctx, &text, &mut batch)?;
+            }
+            if batch.expired {
+                stopped = Some("the budget was spent inside a part".into());
+                break 'sources;
             }
         }
     }
@@ -381,6 +304,7 @@ pub fn generate(
         rejections: batch.rejections,
         calls: batch.calls,
         sections,
+        invent: inventor.map(Inventor::into_report),
         stopped,
         dropped: batch.dropped,
     })
@@ -504,9 +428,8 @@ fn model_generator(
         requests_in_flight: ctx.concurrency_for(request.generator),
         ..GenerationPolicy::default()
     };
-    let typed = SvenProposer::new(model).with_cancel(request.cancel.clone());
-    let proposer = harness::proposer(ctx, request.harness, typed, &runtimes, &request.cancel);
-    Ok(ModelTaskGenerator::new(proposer, ctx.sources())
+    let proposer = SvenProposer::new(model).with_cancel(request.cancel.clone());
+    Ok(ModelTaskGenerator::new(Arc::new(proposer), ctx.sources())
         .with_runtimes(runtimes)
         .with_policy(policy))
 }
@@ -650,7 +573,7 @@ fn run_windows(
 }
 
 /// A rejection reason as the report names it: its serialized form.
-pub(crate) fn reason_name(reason: &Rejection) -> String {
+pub(crate) fn reason_name<T: Serialize + std::fmt::Debug>(reason: &T) -> String {
     serde_json::to_value(reason)
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
@@ -664,12 +587,19 @@ fn set_name(request: &Generation<'_>) -> String {
     } else {
         format!(" and {} queued section(s)", request.sections.len())
     };
-    let mut name = format!(
-        "{} tasks from {} source(s){sections} by {}",
-        request.kinds.join("+"),
-        request.sources.len(),
-        request.generator
-    );
+    let mut name = match request.harness {
+        Some(harness) => format!(
+            "invented tasks from {} source(s){sections} by {}",
+            request.sources.len(),
+            harness.model
+        ),
+        None => format!(
+            "{} tasks from {} source(s){sections} by {}",
+            request.kinds.join("+"),
+            request.sources.len(),
+            request.generator
+        ),
+    };
     if let Some(author) = request.author {
         name.push_str(&format!(" by {author}"));
     }

@@ -106,6 +106,7 @@ fn authored(rig: &Rig) -> WorkspaceTask {
         expectations: Vec::new(),
         pinned: Vec::new(),
         hidden_strength: None,
+        process: None,
     };
     let mut admitted = rig
         .generator

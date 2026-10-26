@@ -15,7 +15,7 @@ use splinter_sdk::tasks::TaskHarness;
 use splinter_sdk::train::Tuning;
 use splinter_sdk::vocabulary::role::Role;
 
-use crate::cli::LearnArgs;
+use crate::cli::{LearnArgs, TaskHarnessArgs};
 
 /// Whether the run is to end in a release: a named adapter is published
 /// instead, and `--no-release` stops before the gate.
@@ -72,6 +72,33 @@ pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
     request
 }
 
+/// The flywheel harnesses the command line names; clap has checked that
+/// everything they need comes with the invent harness.
+fn task_harness(args: TaskHarnessArgs) -> Option<TaskHarness> {
+    let TaskHarnessArgs {
+        invent,
+        solve_harness,
+        validate_harness,
+        sven,
+        endpoint,
+        model,
+        key_file,
+        angles,
+        timeout_secs,
+    } = args;
+    Some(TaskHarness {
+        invent: invent?,
+        solve: solve_harness?,
+        validate: validate_harness,
+        sven: sven?,
+        endpoint: endpoint?,
+        model: model?,
+        key_file,
+        angles,
+        run_timeout_secs: timeout_secs,
+    })
+}
+
 /// The `learn` the command line asked for. With no kinds named, a planner
 /// chooses them: naming the kinds is deciding them.
 pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
@@ -80,17 +107,7 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
         plan: args.kinds.is_empty(),
         sources: args.sources,
         goal: args.goal,
-        task_harness: args
-            .task_harness
-            .zip(args.sven)
-            .zip(args.task_harness_endpoint)
-            .zip(args.task_harness_model)
-            .map(|(((harness, sven), endpoint), model)| TaskHarness {
-                harness,
-                sven,
-                endpoint,
-                model,
-            }),
+        task_harness: task_harness(args.task_harness),
         persona: args.persona,
         base: args.base,
         adapter: args.adapter,

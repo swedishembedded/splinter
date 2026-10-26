@@ -45,15 +45,10 @@ use serde::{Deserialize, Serialize};
 use splinter_core::clock::Clock;
 use splinter_eval::verifiers::hidden_strength::HiddenStrength;
 use splinter_eval::verifiers::test_report::TestExpectation;
-use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
 use splinter_sandbox::CommandCall;
 
-use super::{
-    run_quiet, Fixture, FreshTree, Held, WorkspaceError, WorkspaceGeneration, WorkspaceGenerator,
-};
-
-/// The most bytes of one task directory read.
-const MAX_TASK_BYTES: u64 = 64 * 1024 * 1024;
+use super::files::{copy_dir, copy_file, files_under, io, read_files, refuse};
+use super::{Fixture, Held, WorkspaceError, WorkspaceGeneration, WorkspaceGenerator};
 
 /// The schema name `[metadata.splinter]` carries.
 pub const SPLINTER_SCHEMA: &str = "splinter.harbor.v1";
@@ -104,58 +99,6 @@ pub struct HarborTask {
     pub workdir: String,
     config: toml::Table,
     plan: dockerfile::Plan,
-}
-
-fn refuse<T>(dir: &Path, reason: impl Into<String>) -> Result<T, WorkspaceError> {
-    Err(WorkspaceError::Fixture {
-        path: dir.to_path_buf(),
-        reason: reason.into(),
-    })
-}
-
-fn io(path: &Path) -> impl FnOnce(std::io::Error) -> WorkspaceError + '_ {
-    move |source| WorkspaceError::Io {
-        path: path.to_path_buf(),
-        source,
-    }
-}
-
-/// Every regular file under `root`, relative, refusing symlinks and a tree
-/// over [`MAX_TASK_BYTES`].
-fn files_under(root: &Path) -> Result<Vec<String>, WorkspaceError> {
-    fn walk(
-        dir: &Path,
-        prefix: &str,
-        out: &mut Vec<String>,
-        bytes: &mut u64,
-    ) -> Result<(), WorkspaceError> {
-        for entry in std::fs::read_dir(dir).map_err(io(dir))? {
-            let entry = entry.map_err(io(dir))?;
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let kind = entry.file_type().map_err(io(dir))?;
-            let path = entry.path();
-            if kind.is_symlink() {
-                return refuse(&path, "it is a symbolic link");
-            }
-            if kind.is_dir() {
-                walk(&path, &format!("{prefix}{name}/"), out, bytes)?;
-            } else {
-                *bytes += entry.metadata().map_err(io(&path))?.len();
-                if *bytes > MAX_TASK_BYTES {
-                    return refuse(dir, "the task is over 64 MiB");
-                }
-                out.push(format!("{prefix}{name}"));
-            }
-        }
-        Ok(())
-    }
-    let mut out = Vec::new();
-    let mut bytes = 0;
-    if root.is_dir() {
-        walk(root, "", &mut out, &mut bytes)?;
-    }
-    out.sort();
-    Ok(out)
 }
 
 impl HarborTask {
@@ -294,7 +237,7 @@ impl HarborTask {
                 };
                 let name = from.file_name().map(PathBuf::from).unwrap_or_default();
                 if from.is_dir() {
-                    copy_dir(&from, &into.join(&target), true)?;
+                    copy_dir(&from, &into.join(&target), is_build_file)?;
                 } else if from.is_file() {
                     let to = if copy.into_directory {
                         into.join(&target).join(&name)
@@ -309,44 +252,6 @@ impl HarborTask {
         }
         Ok(())
     }
-}
-
-fn copy_file(from: &Path, to: &Path) -> Result<(), WorkspaceError> {
-    if let Some(parent) = to.parent() {
-        std::fs::create_dir_all(parent).map_err(io(parent))?;
-    }
-    std::fs::copy(from, to).map_err(io(from))?;
-    Ok(())
-}
-
-/// Copies the files of `from` into `to`, leaving out the build files of an
-/// environment directory when `environment` is set.
-fn copy_dir(from: &Path, to: &Path, environment: bool) -> Result<(), WorkspaceError> {
-    std::fs::create_dir_all(to).map_err(io(to))?;
-    for entry in std::fs::read_dir(from).map_err(io(from))? {
-        let entry = entry.map_err(io(from))?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if environment && is_build_file(&name) {
-            continue;
-        }
-        let kind = entry.file_type().map_err(io(from))?;
-        if kind.is_dir() {
-            copy_dir(&entry.path(), &to.join(&name), false)?;
-        } else {
-            copy_file(&entry.path(), &to.join(&name))?;
-        }
-    }
-    Ok(())
-}
-
-/// Reads the text files of `dir` as `(path, bytes)`.
-fn read_files(dir: &Path) -> Result<BTreeMap<String, Vec<u8>>, WorkspaceError> {
-    let mut files = BTreeMap::new();
-    for file in files_under(dir)? {
-        let path = dir.join(&file);
-        files.insert(file, std::fs::read(&path).map_err(io(&path))?);
-    }
-    Ok(files)
 }
 
 fn argv(words: &[String]) -> CommandCall {
@@ -384,6 +289,7 @@ impl Fixture {
                 expectations: meta.expectations,
                 pinned: meta.pinned,
                 hidden_strength: meta.hidden_strength,
+                process: None,
             });
         }
         let mut hidden = BTreeMap::new();
@@ -416,6 +322,7 @@ impl Fixture {
             expectations: Vec::new(),
             pinned: Vec::new(),
             hidden_strength: None,
+            process: None,
         })
     }
 }
@@ -532,45 +439,20 @@ impl WorkspaceGenerator {
         if !script_path.is_file() {
             return Ok(None);
         }
-        let fail = |what: &str, e: &dyn std::fmt::Display| format!("the oracle: {what}: {e}");
-        let staged = self
-            .stage(&fixture.tree, &[".git"], None)
-            .map_err(|e| fail("staging", &e))?;
-        let env = self.environment(&staged.snapshot);
-        let tree = FreshTree::lay(&env, &staged.archive, &self.scratch)
-            .map_err(|e| fail("laying out the tree", &e))?;
-        let oracle_dir = tree.path().join(".oracle");
-        copy_dir(&solution, &oracle_dir.join("solution"), false)
-            .map_err(|e| fail("copying", &e))?;
-        let text =
-            std::fs::read_to_string(&script_path).map_err(|e| fail("reading solve.sh", &e))?;
-        std::fs::write(
-            oracle_dir.join("solve.sh"),
-            script::oracle_placeholders(&text, &task.workdir),
-        )
-        .map_err(|e| fail("writing", &e))?;
-        std::fs::write(oracle_dir.join("run.sh"), script::oracle_runner())
-            .map_err(|e| fail("writing", &e))?;
+        let text = std::fs::read_to_string(&script_path)
+            .map_err(|e| format!("the oracle: reading solve.sh: {e}"))?;
+        let scripts = [
+            (
+                "solve.sh",
+                script::oracle_placeholders(&text, &task.workdir),
+            ),
+            ("run.sh", script::oracle_runner()),
+        ];
         let call = CommandCall {
             argv: vec!["sh".into(), ".oracle/run.sh".into()],
             stdin: None,
         };
-        let (result, _) =
-            run_quiet(&env, tree.path(), &call, None).map_err(|e| fail("running", &e))?;
-        std::fs::remove_dir_all(&oracle_dir).map_err(|e| fail("cleaning up", &e))?;
-        if result.exit_code != Some(0) || result.timed_out {
-            return Err(format!(
-                "the oracle: solve.sh did not succeed on the host (exit {:?}): {}",
-                result.exit_code,
-                result.stderr.chars().take(300).collect::<String>()
-            ));
-        }
-        let patch = env
-            .diff_since(tree.path(), tree.baseline(), &DEFAULT_EXCLUDED)
-            .map_err(|e| fail("reading the change", &e))?;
-        if patch.diff.is_empty() {
-            return Err("the oracle: solve.sh changed nothing".into());
-        }
-        Ok(Some(String::from_utf8_lossy(&patch.diff).into_owned()))
+        self.solution_change(&fixture.tree, &solution, &scripts, &call)
+            .map(Some)
     }
 }

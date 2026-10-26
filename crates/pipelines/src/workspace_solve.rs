@@ -23,7 +23,8 @@ use std::time::Instant;
 use splinter_agent::harness_work::solve_harness_in_workspace;
 use splinter_agent::work::{solve_in_workspace, WorkOptions, WorkProtocol};
 use splinter_core::digest::Digest;
-use splinter_core::experience::Task;
+use splinter_core::experience::{PrivilegedKind, Task};
+use splinter_core::kinds::SOLVE_PROCESS;
 use splinter_core::outcome::AttemptReport;
 use splinter_eval::verifiers::workspace::WorkspaceCheck;
 use splinter_sandbox::{CommandCall, WorkspaceEnvironment};
@@ -36,12 +37,21 @@ use splinter_orchestrator::context::Context;
 pub(crate) struct WorkspaceInputs {
     archive: PathBuf,
     visible: Vec<CommandCall>,
+    /// The process that solves the task, a sven harness document its author
+    /// adapted to it, when it brings one.
+    process: Option<String>,
 }
 
 impl WorkspaceInputs {
     /// The snapshot archive the task's tree is laid out from.
     pub(crate) fn archive(&self) -> &Path {
         &self.archive
+    }
+
+    /// The harness document that solves the task: its own process, else
+    /// `fallback`.
+    pub(crate) fn process<'a>(&'a self, fallback: Option<&'a str>) -> Option<&'a str> {
+        self.process.as_deref().or(fallback)
     }
 
     /// The inputs for `task`, a change to the repository `env` is a
@@ -63,6 +73,11 @@ impl WorkspaceInputs {
             visible: check
                 .map(|(_, check)| check.pass_to_pass)
                 .unwrap_or_default(),
+            process: task
+                .privileged
+                .iter()
+                .find(|item| item.kind == PrivilegedKind::Other(SOLVE_PROCESS.into()))
+                .map(|item| item.content.clone()),
         })
     }
 }

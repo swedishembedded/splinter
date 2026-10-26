@@ -12,19 +12,23 @@
 //! check pass.
 
 use std::path::{Path, PathBuf};
+
 use std::sync::Arc;
 
 use splinter_core::annotation::Outcome;
 use splinter_core::clock::Clock;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Privileged, PrivilegedKind, Provenance, Task};
-use splinter_core::kinds::WORKSPACE_CHANGE;
+use splinter_core::kinds::{SOLVE_PROCESS, WORKSPACE_CHANGE};
 use splinter_eval::verifiers::workspace::{WorkspaceCheck, WorkspaceVerifier};
 use splinter_eval::verifiers::Verifier;
-use splinter_sandbox::{ResolvedEnvironment, TreeSnapshot, WorkspaceEnvironment};
+use splinter_sandbox::workspace::DEFAULT_EXCLUDED;
+use splinter_sandbox::{CommandCall, ResolvedEnvironment, TreeSnapshot, WorkspaceEnvironment};
 use splinter_store::artifacts::ArtifactSpec;
 
+use super::files::{copy_dir, skip_nothing};
 use super::pack::{pack_dir, pack_files};
+use super::{run_quiet, FreshTree};
 use super::{WorkspaceError, WorkspaceGenerator, WORKSPACE_GENERATOR};
 
 /// The role of a snapshot's archive in the artifact store.
@@ -122,8 +126,8 @@ impl WorkspaceGenerator {
     }
 
     /// The task: the solver's environment, the request, the check, the
-    /// reference change when there is one, and the family as the concept it
-    /// exercises.
+    /// reference change and the task's own solving process when there are
+    /// any, and the family as the concept it exercises.
     pub(super) fn build_task(
         &self,
         env: &WorkspaceEnvironment,
@@ -131,12 +135,18 @@ impl WorkspaceGenerator {
         instruction: &str,
         family: &str,
         reference: Option<&str>,
+        process: Option<&str>,
     ) -> Result<Task, WorkspaceError> {
         let record = ResolvedEnvironment::Workspace(env.clone()).record()?;
         let mut privileged = vec![check.as_check()?];
         privileged.extend(reference.map(|patch| Privileged {
             kind: PrivilegedKind::Reference,
             content: patch.to_string(),
+            span: None,
+        }));
+        privileged.extend(process.map(|document| Privileged {
+            kind: PrivilegedKind::Other(SOLVE_PROCESS.into()),
+            content: document.to_string(),
             span: None,
         }));
         let task = Task::new(
@@ -167,5 +177,56 @@ impl WorkspaceGenerator {
         let provenance = Provenance::new("splinter/reference-patch", clock);
         let experience = Experience::answered_without_a_run(task.clone(), patch, provenance)?;
         Ok(verifier.verify(task, &experience)?.outcome == Outcome::Pass)
+    }
+
+    /// The change a solution makes to a copy of `tree`, read back as a diff.
+    ///
+    /// The copy is laid out afresh from a snapshot of `tree`; `solution`
+    /// (a directory) and `scripts` (written beside it as `(name, text)`) are
+    /// put under `.oracle/` in it, `call` runs there, and `.oracle/` is
+    /// removed before the change is read, so the diff holds only what the
+    /// solution did to the tree.
+    ///
+    /// # Errors
+    ///
+    /// Why the solution did not yield a change: it could not be staged or
+    /// run, it did not succeed, or it changed nothing.
+    pub(super) fn solution_change(
+        &self,
+        tree: &Path,
+        solution: &Path,
+        scripts: &[(&str, String)],
+        call: &CommandCall,
+    ) -> Result<String, String> {
+        let fail = |what: &str, e: &dyn std::fmt::Display| format!("the oracle: {what}: {e}");
+        let staged = self
+            .stage(tree, &[".git"], None)
+            .map_err(|e| fail("staging", &e))?;
+        let env = self.environment(&staged.snapshot);
+        let fresh = FreshTree::lay(&env, &staged.archive, &self.scratch)
+            .map_err(|e| fail("laying out the tree", &e))?;
+        let oracle_dir = fresh.path().join(".oracle");
+        copy_dir(solution, &oracle_dir.join("solution"), skip_nothing)
+            .map_err(|e| fail("copying", &e))?;
+        for (name, text) in scripts {
+            std::fs::write(oracle_dir.join(name), text).map_err(|e| fail("writing", &e))?;
+        }
+        let (result, _) =
+            run_quiet(&env, fresh.path(), call, None).map_err(|e| fail("running", &e))?;
+        std::fs::remove_dir_all(&oracle_dir).map_err(|e| fail("cleaning up", &e))?;
+        if result.exit_code != Some(0) || result.timed_out {
+            return Err(format!(
+                "the oracle: the solution did not succeed on the host (exit {:?}): {}",
+                result.exit_code,
+                result.stderr.chars().take(300).collect::<String>()
+            ));
+        }
+        let patch = env
+            .diff_since(fresh.path(), fresh.baseline(), &DEFAULT_EXCLUDED)
+            .map_err(|e| fail("reading the change", &e))?;
+        if patch.diff.is_empty() {
+            return Err("the oracle: the solution changed nothing".into());
+        }
+        Ok(String::from_utf8_lossy(&patch.diff).into_owned())
     }
 }

@@ -118,6 +118,7 @@ pub mod status;
 pub mod tasks;
 pub mod timeline;
 pub mod train;
+pub mod validate;
 pub mod variants;
 pub mod verify;
 mod workspace_solve;

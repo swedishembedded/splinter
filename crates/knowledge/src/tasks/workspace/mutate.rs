@@ -270,7 +270,7 @@ impl WorkspaceGenerator {
             expectations,
             pinned: Vec::new(),
         };
-        let task = self.build_task(&env, &check, &text, path, Some(&fix))?;
+        let task = self.build_task(&env, &check, &text, path, Some(&fix), None)?;
         self.keep(&views)?;
         if !self.passes(&env, &task, &fix, clock)? {
             return Err(Stop::Refuse(Reason::NotRestorable));

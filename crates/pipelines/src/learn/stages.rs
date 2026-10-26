@@ -51,6 +51,7 @@ use crate::tasks::{asks_for_denoise, generate, Generation};
 use crate::train::{
     train_recorded, Rehearse, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
 };
+use crate::validate::{validate_attempts, ValidateRequest};
 use crate::variants::{generate_variants, VariantsRequest, DEFAULT_VARIANTS_PER_TASK};
 use crate::verify::{adopt_judge, kind_needs_judge, verify_set, Grading};
 use splinter_core::annotation::Strength;
@@ -315,6 +316,17 @@ pub(super) fn pipeline<'a>() -> Pipeline<'a, LearnState<'a>> {
                 .when(|s| !s.distill)
                 .ignoring_budget(),
         )
+        .then(
+            FnStage::new("validate", validate_stage)
+                .when(|s| {
+                    !s.distill
+                        && s.attempts.is_some()
+                        && s.learn
+                            .task_harness
+                            .is_some_and(|harness| harness.validate.is_some())
+                })
+                .ignoring_budget(),
+        )
         .then(FnStage::new("teach", teach_stage))
         .then(
             FnStage::new("author", author_stage)
@@ -470,6 +482,13 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
     prepare_judge(ctx, st)?;
     // The student attempts under the prompt it is trained under.
     let system = st.system_prompt();
+    // Tasks the flywheel invented bring their own process; the generic one
+    // solves those that bring none.
+    let solve_harness = st
+        .learn
+        .task_harness
+        .map(|harness| harness.solve_document())
+        .transpose()?;
     let attempted = solve_tasks(
         ctx,
         &SolveRequest {
@@ -483,7 +502,7 @@ fn solve_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             system: system.as_deref(),
             work: splinter_agent::work::WorkProtocol::default(),
             deadline: st.stage_deadlines.attempts,
-            harness: None,
+            harness: solve_harness.as_deref(),
             cancel: run.cancel_token(),
             resume: None,
         },
@@ -502,6 +521,27 @@ fn verify_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) 
     let summary = to_value(&verified)?;
     st.failed = verified.failed;
     st.report.verify = Some(verified);
+    Ok(StageEnd::done(summary))
+}
+
+/// Keeps the passing attempts every validator focus keeps; the attempts
+/// that did not pass are left as they are.
+fn validate_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -> Done {
+    let (Some(attempts), Some(harness)) = (st.attempts.as_ref(), st.learn.task_harness) else {
+        unreachable!("the validate stage applies when attempts and a validate harness exist")
+    };
+    let validated = validate_attempts(
+        ctx,
+        &ValidateRequest {
+            attempts,
+            harness,
+            deadline: st.stage_deadlines.attempts,
+            cancel: run.cancel_token(),
+        },
+    )?;
+    let summary = to_value(&validated)?;
+    st.attempts = Some(validated.experience_set.clone());
+    st.report.validate = Some(validated);
     Ok(StageEnd::done(summary))
 }
 

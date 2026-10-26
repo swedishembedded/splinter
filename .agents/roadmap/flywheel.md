@@ -67,18 +67,23 @@ what is still to do.
 10. Scheduler (L, last): one GPU pool, job identity and idempotency keys, leases and
     heartbeats, GPU/disk reservation; only after the single-node cycle is solid.
 11. Fast continual learning (see `continual-learning.md`).
-12. Task directories as the generation contract (M). `harnesses/flywheel/invent` now leaves
-    runnable task directories (instruction, environment, reference solution, hidden
-    `tests/test.sh`, the task's own `harness.yaml`, a commit per admitted task in a git
-    repository, every outcome in `log.jsonl`), while `HarnessProposer` (`learn
-    --task-harness`) still lays out `sections/NN.md`, passes `{count, kind, runtime}` and
-    reads a `tasks.json`: against the current document every request is refused (sven exit 2,
-    a loud `ProposeError`). To do: a consumer that runs invent once per source window with a
-    run-level deadline (an invent run takes tens of minutes; the generation request deadline
-    would kill it and count a decline), keeps `PATH` with sven, git and python3 on it, admits
-    each new commit's task as a workspace task whose verifier is `tests/test.sh`, solves it
-    with the task's own harness, and audits the yield from `log.jsonl` (admitted, rejected,
-    duplicate, failed).
+12. Task directories as the generation contract (M) - done except the live run. `learn
+    --task-harness` runs `harnesses/flywheel/invent` (`splinter_agent::flywheel`) once per
+    source window on a workspace that persists for the stage, with a run-level deadline
+    (`--task-harness-timeout`, never the request deadline) and `sven`, `git`, `python3`,
+    `bash` and the task runtime on `PATH`. The new commits of `tasks/` are read as committed;
+    each task directory becomes a `workspace-change` task through
+    `WorkspaceGenerator::import_task_directory` (hidden `tests/test.sh` run with `TESTS_DIR`,
+    reference change from `solution/solve.sh`, the task's `harness.yaml` kept as the privileged
+    `solve-process` item), a malformed directory is refused with the missing piece named, and
+    the tasks stage reports invent's own yield (`log.jsonl`) beside what it admitted and
+    refused. Solve runs a task's own process (the generic one otherwise). A validate stage
+    (`--validate-harness`) keeps a passing attempt only when every focus decides keep and
+    reports a validator run without a decision apart from the discards. The old
+    `sections/NN.md` / `tasks.json` proposer is removed. Open: an end-to-end run against a live
+    brain server (the fake `sven` specs cover the subprocess contract only); the task runtime
+    must be in `workspace.runtime_dirs` for the host-side verifier and the in-process solve
+    to find it.
 
 ## Evidence discipline
 

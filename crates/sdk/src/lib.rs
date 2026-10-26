@@ -37,7 +37,7 @@
 //! * The jobs a process submits to run outside it ([`jobs`]).
 //! * The commands, one module each - [`learn`], [`practice`], [`ask`],
 //!   [`sources`], [`sessions`], [`claims`], [`absorb`], [`tasks`], [`timeline`],
-//!   [`solving`], [`verify`], [`critique`], [`datasets`],
+//!   [`solving`], [`verify`], [`validate`], [`critique`], [`datasets`],
 //!   [`train`], [`release`], [`eval`], [`lineage`], [`status`], [`doctor`], [`state`],
 //!   [`router`] and the rest - with their requests and reports.
 //! * `absorb::consolidate` takes a generation of a policy's claims into the
@@ -78,8 +78,8 @@ pub use splinter_pipelines::{
     compare, critique, curriculum, datasets, describe, dialogue, doctor, eval, exam, exam_set,
     experiences, experiment, generations, graded, harbor, harness_opt, history, improve, judge,
     learn, lineage, plan, powered, practice, raft, rehearsal, release, rerank, reserve, retrieval,
-    router, sealed, sessions, solving, sources, state, status, tasks, timeline, train, variants,
-    verify,
+    router, sealed, sessions, solving, sources, state, status, tasks, timeline, train, validate,
+    variants, verify,
 };
 
 // The layers, each under one name.

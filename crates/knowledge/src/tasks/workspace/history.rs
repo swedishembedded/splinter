@@ -513,7 +513,14 @@ impl WorkspaceGenerator {
             expectations,
             pinned: Vec::new(),
         };
-        let task = self.build_task(&solver_env, &check, &description, &family, Some(&solution))?;
+        let task = self.build_task(
+            &solver_env,
+            &check,
+            &description,
+            &family,
+            Some(&solution),
+            None,
+        )?;
         let environment = views.snapshot.digest.clone();
         self.keep(&views)?;
         if !self.passes(&solver_env, &task, &solution, clock)? {

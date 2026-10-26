@@ -718,7 +718,7 @@ pub use harbor::{HarborCommand, OracleArg};
 pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
 pub use improve::ImproveArgs;
 pub use jobs::{help as jobs_help, JobsArgs, JobsCommand};
-pub use learn::LearnArgs;
+pub use learn::{LearnArgs, TaskHarnessArgs};
 pub use practice::{PracticeArgs, ReplayArg};
 pub use reference::CliReferenceArgs;
 pub use state::{RunsCommand, StateCommand};

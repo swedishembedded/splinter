@@ -44,6 +44,8 @@
 //! near-duplicate rule, one already made for the family. The family of a mutation-seeded task is the
 //! path of the file that was changed.
 
+mod directory;
+mod files;
 mod fixtures;
 mod harbor;
 mod harness;
@@ -71,6 +73,7 @@ use splinter_sandbox::{
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::error::StoreError;
 
+pub use directory::TaskDirectory;
 pub use fixtures::Fixture;
 pub use harbor::{discover, Discovered, HarborTask, Oracle, SplinterMeta, SPLINTER_SCHEMA};
 pub use harness::{Harness, SuiteReport};

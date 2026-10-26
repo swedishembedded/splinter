@@ -37,3 +37,9 @@ pub const WORKSPACE_CHANGE: &str = "workspace-change";
 /// change, and the files the solver may not touch. It grades the tree, so
 /// the solver never sees it.
 pub const WORKSPACE_CHECK: &str = "workspace-check";
+
+/// The privileged kind of the process that solves a task: a sven harness
+/// document that the task's author adapted to the task. It is the task's own
+/// way of being solved, not part of what the solver is shown, so a view that
+/// strips privileged items drops it.
+pub const SOLVE_PROCESS: &str = "solve-process";

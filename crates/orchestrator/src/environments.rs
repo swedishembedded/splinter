@@ -173,6 +173,14 @@ impl Environments {
         }
     }
 
+    /// The directories the configuration pins the task runtimes' executables
+    /// to (an interpreter a task's tests start), searched first; the
+    /// directories a subprocess that runs a task's code needs on its `PATH`.
+    #[must_use]
+    pub fn runtime_dirs(&self) -> &[PathBuf] {
+        &self.workspace_settings.runtime_dirs
+    }
+
     /// The runtime `name`, resolved in the sandbox.
     pub fn runtime(&self, name: &str) -> Result<RuntimeEnvironment, SandboxError> {
         let mut resolved = self

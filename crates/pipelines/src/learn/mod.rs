@@ -91,7 +91,7 @@ use splinter_orchestrator::roles;
 use splinter_orchestrator::runs::record;
 
 /// The stages, in order, as runs and reports name them.
-pub const STAGES: [&str; 21] = [
+pub const STAGES: [&str; 22] = [
     "policy",
     "sources",
     "plan",
@@ -100,6 +100,7 @@ pub const STAGES: [&str; 21] = [
     "tasks",
     "solve",
     "verify",
+    "validate",
     "teach",
     "author",
     "frontier",
@@ -449,6 +450,13 @@ pub fn learn(
                 })
                 .filter(|stage| {
                     !(request.distill && ["solve", "verify", "critique"].contains(stage))
+                })
+                .filter(|stage| {
+                    !(*stage == "validate"
+                        && request
+                            .task_harness
+                            .as_ref()
+                            .is_none_or(|harness| harness.validate.is_none()))
                 })
                 .collect(),
             dry_run: true,

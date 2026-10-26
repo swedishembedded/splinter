@@ -89,6 +89,10 @@ pub struct Fixture {
     /// How much a pass is worth, when the author or an earlier admission
     /// measured it (see [`WorkspaceCheck::hidden_strength`]).
     pub hidden_strength: Option<HiddenStrength>,
+    /// The sven harness that solves the task, when the author adapted one
+    /// to it. It travels with the task as a privileged item; the solver
+    /// never sees it as part of the request.
+    pub process: Option<String>,
 }
 
 impl Fixture {
@@ -123,6 +127,7 @@ impl Fixture {
             expectations: Vec::new(),
             pinned: Vec::new(),
             hidden_strength: None,
+            process: None,
         })
     }
 
@@ -205,6 +210,7 @@ impl Fixture {
             expectations: Vec::new(),
             pinned: Vec::new(),
             hidden_strength: None,
+            process: None,
         })
     }
 
@@ -344,6 +350,7 @@ impl WorkspaceGenerator {
             &fixture.instruction,
             &fixture.family,
             fixture.reference.as_deref(),
+            fixture.process.as_deref(),
         )?;
         self.keep(&staged)?;
         if let Some(patch) = &fixture.reference {

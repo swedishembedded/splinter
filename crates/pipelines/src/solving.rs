@@ -145,8 +145,8 @@ pub struct SolveRequest<'a> {
     pub work: WorkProtocol,
     /// A sven harness document run in place of the conversational agent loop
     /// on a workspace task ([`splinter_agent::harness_work`]); `work` is not
-    /// used then, the document has its own steps and bounds. Tasks in other
-    /// environments ignore it.
+    /// used then, the document has its own steps and bounds; a task's own
+    /// process runs in its place. Tasks in other environments ignore it.
     pub harness: Option<&'a str>,
     /// No solve starts after this, and none runs past it.
     pub deadline: Option<Instant>,
@@ -663,7 +663,7 @@ async fn attempt_once(
         prompt,
     } = planned;
     if let (ResolvedEnvironment::Workspace(env), Some(inputs)) = (environment, workspace) {
-        let solved = match request.harness {
+        let solved = match inputs.process(request.harness) {
             Some(harness) => {
                 solve_harness_attempt(task, env, inputs, harness, model, options).await
             }
