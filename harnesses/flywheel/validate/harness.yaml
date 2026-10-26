@@ -3,7 +3,7 @@
 #
 # Decide whether one solved trajectory is training data, from one point of view.
 #
-# The host lays out the workspace: TASK.md (what the solver was asked),
+# The host lays out the workspace: task.md (what the solver was asked),
 # workspace/ (the solver's finished working directory), tests.md (the task's
 # hidden tests and what they printed on the solver's work: they passed, or the
 # host would not ask) and trajectory.md (the solver's conversation, rendered
@@ -13,8 +13,9 @@
 # `keep`. Correctness was decided by the tests; a decision can only take a
 # trajectory away.
 #
-# The decision is a typed choice over the whole context, with the evidence
-# that decided it - the shape a decision model answers as well as an agent.
+# The judge investigates and reports in prose; a schema'd step turns the report
+# into the typed decision with its evidence - the shape a decision model
+# answers as well as an agent - so no decision depends on a tool call.
 #
 # Swedish Embedded AB implements review of agent trajectories before they
 # become training data, for its clients. If your team needs expertise in
@@ -26,30 +27,19 @@ name: flywheel-validate
 description: "Decide keep or discard for one solved trajectory, from one point of view, with the evidence."
 inputs:
   focus: { type: string, description: "outcome, process or teaching" }
-variables:
-  decision:
-    type: json
-    description: "keep or discard, and the evidence that decided it"
-    schema:
-      type: object
-      required: [decision, evidence, rejection_reasons]
-      properties:
-        decision: { type: string, enum: [keep, discard] }
-        evidence: { type: array, items: { type: string } }
-        rejection_reasons: { type: array, items: { type: string } }
 agent:
   profile: coding
   tools: [read_file, find_file, grep, shell]
   sampling: { temperature: 0.3, top_p: 0.95, top_k: 20 }
   thinking: { enabled: false }
-  turn: { max_output_tokens: 8192 }
+  turn: { max_output_tokens: 24576 }
   system:
     - when: { eq: inputs.focus, value: outcome }
       text: >-
         You check whether a solved task was solved in substance, beyond what its tests caught. Tests
         are never complete: you look for inputs the task covers on which the work is wrong, for work
         that matches what the tests check without doing what the task asks (special cases keyed to
-        test inputs, hard-coded answers), for requirements of TASK.md the work ignores, and for
+        test inputs, hard-coded answers), for requirements of task.md the work ignores, and for
         files left behind that the task did not ask for. You run the work to find out; you never
         conclude from the solver's own report.
     - when: { eq: inputs.focus, value: process }
@@ -70,22 +60,40 @@ execution:
   limits: { model_turns: 40, tool_calls: 120 }
 workflow:
   - name: judge
-    vars: { decision: required }
     task: |
       Decide whether this trajectory becomes training data, from the point of view your instructions
       give ({{ inputs.focus }}).
 
-      Read TASK.md, tests.md, trajectory.md in full, and the files in workspace/. Where you doubt
+      Read task.md, tests.md, trajectory.md in full, and the files in workspace/. Where you doubt
       something, find out by running it: copy what you need to a scratch directory of your own and run
       it there. Never change workspace/.
 
-      Then set `decision` with harness_vars_set to a JSON object:
-      - "decision": "keep" or "discard";
-      - "evidence": what you examined or ran that decided it, one entry each, specific enough for
-        someone else to repeat (a command and what it printed, a line of the trajectory, a file);
-      - "rejection_reasons": for a discard, each reason in one sentence, naming where it is; empty for
-        a keep.
-      Keep only what you would be glad to see a model imitate. A defect you can point at is a reason to
-      discard; a suspicion you could not confirm by running something is not.
+      End with your judgement: what you examined or ran, each specific enough for someone else to
+      repeat (a command and what it printed, a line of the trajectory, a file); every defect you found,
+      naming where it is; and whether to keep or discard the trajectory. Keep only what you would be
+      glad to see a model imitate. A defect you can point at is a reason to discard; a suspicion you
+      could not confirm by running something is not.
+  - name: decide
+    model_only: true
+    sampling: { temperature: 0 }
+    schema:
+      type: object
+      required: [decision, evidence, rejection_reasons]
+      properties:
+        decision: { type: string, enum: [keep, discard] }
+        evidence: { type: array, items: { type: string } }
+        rejection_reasons: { type: array, items: { type: string } }
+    system: >-
+      You take the keep-or-discard decision on a training trajectory from its reviewer's judgement.
+      Discard when the judgement names a defect it confirmed; keep only when it found none. You answer
+      only with the JSON object asked for.
+    task: |
+      The reviewer's judgement ({{ inputs.focus }}):
+
+      {{ tasks.judge.output }}
+
+      Answer with "decision" ("keep" or "discard"), "evidence" (what the reviewer examined or ran and
+      what it showed, one entry each) and "rejection_reasons" (each confirmed defect in one sentence;
+      empty for a keep).
 outputs:
-  decision: { type: json, value: "{{ vars.decision }}" }
+  decision: { type: json, value: "{{ tasks.decide.output }}" }

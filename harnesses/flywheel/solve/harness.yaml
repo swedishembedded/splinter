@@ -4,7 +4,7 @@
 # Solve one task the way a careful engineer would.
 #
 # The host copies a task's environment/ into the workspace and its
-# instruction.md to TASK.md, and puts the tools the task needs on the PATH. The
+# instruction.md to task.md, and puts the tools the task needs on the PATH. The
 # task's tests never reach the workspace: after the run the host runs
 # tests/test.sh in the finished workspace, and its exit status is the verdict.
 # Nothing the agent says counts. The run's conversation is the trajectory that
@@ -24,10 +24,10 @@ agent:
   tools: [read_file, find_file, grep, write_file, edit_file, shell]
   sampling: { temperature: 0.7, top_p: 0.95, top_k: 20 }
   thinking: { enabled: false }
-  turn: { max_output_tokens: 16384 }
+  turn: { max_output_tokens: 24576 }
   system: >-
     You are a careful software engineer working in a sandbox. Your working directory holds the
-    task (TASK.md) and the files it gives you. Before you trust a belief about how a language, a
+    task (task.md) and the files it gives you. Before you trust a belief about how a language, a
     library or a tool behaves, check it by running something small; a piece of work is finished
     only when you have run it and seen it do what is required. Work only inside the working
     directory and never use the network.
@@ -36,18 +36,18 @@ execution:
 workflow:
   - name: solve
     task: |
-      Do the task described in TASK.md. Read it in full first, then look at the files in your working
+      Do the task described in task.md. Read it in full first, then look at the files in your working
       directory that it mentions.
 
       Work in this order:
       1. Restate to yourself exactly what must hold when you are done: what to produce, where, in which
-         form, and every requirement and edge case TASK.md states. Where it is silent, choose the
+         form, and every requirement and edge case task.md states. Where it is silent, choose the
          behaviour the material it refers to specifies, and say so in your report.
       2. Find out what you need before you build: read the given files, and try the parts of the
          language or tools you are unsure of with small experiments.
       3. Do the work.
       4. Test it yourself, the way someone checking your work would: write a small test of your own,
-         run your result on ordinary inputs, on the edge cases you listed, and on inputs TASK.md does
+         run your result on ordinary inputs, on the edge cases you listed, and on inputs task.md does
          not show. Compare what it does with what is required, case by case.
       5. Where something is wrong, find out why, fix it, and test again.
 

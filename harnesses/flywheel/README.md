@@ -13,9 +13,9 @@ and the prior work it draws on are in `.agents/research/flywheel-harnesses.md`.
 
 | Harness | Workspace the host lays out | Inputs | Leaves |
 |---|---|---|---|
-| [invent](invent/harness.yaml) | `data/` (the raw material), `brief.md` (audience and skills), `tasks/` (earlier tasks, may be empty) | `count` (angles, so new tasks, per run) | new task directories in `tasks/`, an updated `tasks/INDEX.md` |
-| [solve](solve/harness.yaml) | a copy of a task's `environment/`, its `instruction.md` as `TASK.md` | none | the finished workspace; the conversation (`--conversations`) is the trajectory |
-| [validate](validate/harness.yaml) | `TASK.md`, `workspace/` (the finished work), `tests.md` (hidden tests and what they printed), `trajectory.md` | `focus`: `outcome`, `process` or `teaching` | output `decision`: `{decision: keep or discard, evidence, rejection_reasons}` |
+| [invent](invent/harness.yaml) | `data/` (the raw material), `brief.md` (audience and skills), `tasks/` (earlier tasks, may be empty) | `count` (angles, so new tasks, per run) | new task directories in `tasks/`, an updated `tasks/index.md` |
+| [solve](solve/harness.yaml) | a copy of a task's `environment/`, its `instruction.md` as `task.md` | none | the finished workspace; the conversation (`--conversations`) is the trajectory |
+| [validate](validate/harness.yaml) | `task.md`, `workspace/` (the finished work), `tests.md` (hidden tests and what they printed), `trajectory.md` | `focus`: `outcome`, `process` or `teaching` | output `decision`: `{decision: keep or discard, evidence, rejection_reasons}` |
 
 ## A task directory
 
@@ -24,8 +24,14 @@ tasks/<slug>/instruction.md      what the solver is asked
 tasks/<slug>/environment/        the files the solver starts with
 tasks/<slug>/solution/solve.sh   a reference solution, run in a copy of environment/
 tasks/<slug>/tests/test.sh       hidden verification, run in the finished workspace; exit 0 = solved
-tasks/<slug>/task.json           the idea, the novelty and review decisions, and the gate's runs
+tasks/<slug>/harness.yaml        the process that solves this task: a sven harness with the stages
+                                 the task needs, adapted from the generic solve harness
+tasks/<slug>/task.json           the idea, the novelty and admission decisions, and the gate's runs
 ```
+
+`tasks/` is a git repository and every admitted task is one commit, so a task's
+process is versioned and reusable like code. Solve runs a task's own harness, and the
+generic one only for a task without one.
 
 This is the shape a benchmark harness runs. A task is solved end to end by copying
 `environment/`, running the solve harness on it, and running `tests/test.sh`. The same
@@ -52,7 +58,9 @@ tasks therefore serve as training material and as an exam.
   before and pass after the reference solution. The admitted task still holds up when the
   reviewer accepts it. The hidden tests pass on the solver's work.
 - **Agents take every judgement as a typed decision with its reasons and evidence:** novel
-  or duplicate, accept or reject, keep or discard. The decision travels with the task in
+  or duplicate, accept or reject, keep or discard. An agent that explores and runs things
+  reports in prose; a schema'd model-only step turns the report into the typed result, so
+  no result depends on a model remembering to call a tool. The decision travels with the task in
   `task.json` or with the trajectory in the dataset. A decision is a choice over options,
   so a decision model can take the place of the agent later without the documents changing
   shape.
