@@ -1,0 +1,136 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{A small model teaching itself from raw documentation}\label{sec:documentation}
+
+The coding experiment measures one generation of a 27B model learning from a teacher's
+or its own verified trajectories. This section closes the whole loop on a smaller scale:
+a 4B model is given nothing but raw documentation and an objective, writes its own
+tasks, is graded by an interpreter, is trained on every weight, and, once trained, writes
+the next round's tasks itself. No stronger model takes part.
+
+\subsection{Setup}
+
+\paragraph{Source and objective.} The source is three chapters of the Lua~5.1 reference
+manual (string manipulation and patterns, table manipulation, mathematical functions) as
+the HTML the project publishes, in its own Latin-1 encoding; the objective is the
+sentence ``Become an exceptional Lua 5.1 programmer''. A local HTML page is read in the
+charset it declares and converted to the Markdown the sectioner reads, exactly as a
+fetched page is.\cl{SL01} With \code{--structural-graph} the skill graph is read from the
+sections, one skill per function or topic, without asking a planner model.\cl{SL02}
+
+\paragraph{Tasks and their answers.} Every task is of the kind \code{predict-lua}: a short
+program and the question what it prints. The model writes the program and the question;
+admission sets the program below the question in a fenced block, so it is shown once and
+exactly as it is run,\cl{SL03} and the answer is what the pinned Lua~5.1.5 interpreter
+prints: the program must run to completion, print a bounded, non-empty output and print
+the same again, and that output becomes the reference whatever the model predicted.\cl{SL04}
+An answer is graded by the formal verifier, which takes an output given in a fenced
+block as the answer and treats two different blocks as a hedge.\cl{SL05}
+
+\paragraph{The loop.} Probes are written once, before any training, by the model as it
+is, and split per skill into dev probes (the baseline and every round's decision) and
+final probes (the closing assessment only); a skill is asked for probes again while it
+has fewer than both halves need.\cl{SL06} Each round picks the skill expected to benefit
+most, has the incumbent write training tasks for it and attempt each four times, keeps
+the tasks it solved sometimes and the verified answers to them, trains every weight of
+the incumbent on them with a replay of the earlier accepted rounds' records, and accepts
+the candidate only if the target skill improved on its dev probes and no other skill
+lost more than the retention bound.\cl{SL07} With \code{--self-generate} the incumbent writes
+every round's tasks: the base in round one, the last accepted checkpoint after.\cl{SL08}
+The control arm is the same run without it: the base writes every round's tasks.
+
+The records of these runs - the source, the probes, every round's stage and the
+measurements this section cites - are kept in the evidence dataset
+\code{splinter-flywheel-evidence}, with its analysis script.
+
+\subsection{What full fine-tuning costs on one card}
+
+Brain's full fine-tune holds the weights and gradients of a Qwen3 model in fp32 on the
+card and the AdamW moments and master weights in host memory; \code{samples/text/chat-full-finetune}
+runs it on any base in the model store.\cl{SL09} \Cref{tab:fullft} gives what eight steps
+cost on one GH200 at a 631-token block.\cl{SL10}
+
+\begin{table}[t]
+  \centering
+  \small
+  \begin{tabular}{lrrrr}
+    \toprule
+    Model (optimizer state) & Card (GiB) & Host (GiB) & s / 8 steps & Loss \\
+    \midrule
+    Qwen3-0.6B (fp32) & 7.8 & 10.9 & 62 & 1.38 $\to$ 0.91 \\
+    Qwen3-1.7B (fp32) & 15.9 & 32.6 & 128 & 1.56 $\to$ 0.81 \\
+    Qwen3-4B (fp32) & 33.6 & 75.2 & 251 & 1.76 $\to$ 0.91 \\
+    Qwen3-8B (fp32) & 65.6 & 152.7 & 488 & 1.12 $\to$ 0.47 \\
+    Qwen3-8B (int8 moments) & 65.7 & 107.5 & 459 & 1.30 $\to$ 0.83 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Full fine-tuning on one GH200: the run's peak on the card beyond what it held
+  before, the process's peak resident host memory, wall time and training loss before the
+  first and after the last of eight steps (80 chat records written from the Lua manual).
+  The 8B fits the card; in fp32 its host state is 153~GiB, beyond what a 205~GiB job can
+  spare beside a served 27B model, and int8 moments save 45~GiB of it.}
+  \label{tab:fullft}
+\end{table}
+
+
+\subsection{What a small model needs from the loop}\label{sec:small-model-needs}
+
+Each of the following stopped the loop on the Lua chapters before a single round could
+train; each was fixed in the code the paper describes, and each is a requirement any loop
+driven by a model of this size has to meet.
+
+\paragraph{The task must show what is run.} Asked to put its program in the material and
+again verbatim in the instruction, the 4B model wrapped it in other code
+(\code{material = [[print(\dots)]]}), a program that prints nothing, and admission, which
+checked only that the material occurs in the instruction, accepted it. The model now
+writes the question alone and admission sets the material below it.\cl{SL03}
+
+\paragraph{The answer must come from the runtime.} With the model's own prediction as
+the reference, a task was refused whenever the model mispredicted its program, and most
+skills were left with too few probes. The reference is now what the interpreter
+prints.\cl{SL04}
+
+\paragraph{The verifier must read the answer the model gives.} The model answers a
+predict task with a sentence above a fenced block. The verifier took candidates only
+from emphasis and numbers, and most failing baseline probes held the exact output in a
+fence: the baseline measured the answer's format, and training would have taught it.\cl{SL05}
+
+\paragraph{One request is not enough.} A 4B generator admits two or three tasks per
+request; probes and training tasks are asked for again, shown what was already written,
+while a skill is short.\cl{SL06,SL11}
+
+\paragraph{Generation must be compared by what it shows.} Every predict task asks the
+same question of a different program; compared by its whole instruction, every pair was a
+near duplicate and nearly every training task was refused as repeating a probe.
+A task that shows material is now compared by the material.\cl{SL12}
+
+\paragraph{Writing tasks is not executing a procedure.} The generator sampled at the
+agent's temperature (0.2), which keeps a small model on task while it acts but has it
+write the same programs whenever it is asked again; it now samples at 1.2 with a top-k of
+20.\cl{SL13}
+
+\paragraph{The environment can teach.} A task the policy never solves was taught by the
+policy shown the task's passage, and a model cannot run a program; with
+\code{--reference-teacher} the runtime's output is said as the teacher's reply and graded
+like any answer.\cl{SL14}
+
+\paragraph{The exam is not material.} A round's request showed the generator its skill's
+probes as tasks not to repeat; the 4B model copied them, and most training tasks of a
+round were exact probes. The generator is now never shown the exam.\cl{SL15}
+
+\paragraph{An answer must be one the language defines.} A seeded \code{math.random}
+program prints the same on every run and passed every check, but what it prints is the C
+library generator's draw. A candidate fully fine-tuned on such answers lifted its target
+skill from 0 to 4 of 4 dev probes while the other skills fell from 35 to 20 passed probes
+(\code{string.byte(s, 1)} answered 97 for every string); the retention bound rejected
+it.\cl{SL18}
+Programs that read a generator, the clock, the environment, input or the collector are
+now refused.\cl{SL16}
+
+\paragraph{A probe must be answered greedily.} Probes were answered on the model's own
+sampling (0.2, a seed per request), so the baseline and every round's decision were draws.
+They are now answered greedily, and the same base on the same exam scores the same in both
+arms, 34 of 56 dev probes.\cl{SL17,SL19}
+
+% RESULTS: the Lua runs' rounds and assessment go here.

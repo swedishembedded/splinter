@@ -457,6 +457,7 @@ def metrics():
     m.update(prefixed_metrics("d46."))
     m.update(prefixed_metrics("rcv."))
     m.update(prefixed_metrics("gen2."))
+    m.update(prefixed_metrics("lua."))
     return m
 
 

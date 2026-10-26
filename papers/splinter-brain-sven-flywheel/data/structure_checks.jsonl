@@ -397,3 +397,23 @@
 {"id": "PL03.1", "repo": "splinter", "path": "papers/splinter-brain-sven-flywheel/prereg/acquisition.md", "kind": "regex", "pattern": "ACQ1:\\s+a\\s+documented\\s+domain\\s+acquired\\s+with\\s+no\\s+manual\\s+edit", "min": 1, "pin": "splinter_prereg"}
 {"id": "PL03.2", "repo": "splinter", "path": "papers/splinter-brain-sven-flywheel/prereg/acquisition.md", "kind": "regex", "pattern": "INT1:\\s+choosing\\s+how\\s+to\\s+improve", "min": 1, "pin": "splinter_prereg"}
 {"id": "PL03.3", "repo": "splinter", "path": "papers/splinter-brain-sven-flywheel/prereg/acquisition.md", "kind": "regex", "pattern": "GEN1:\\s+three\\s+generations\\s+of\\s+a\\s+coding\\s+policy", "min": 1, "pin": "splinter_prereg"}
+{"id": "SL01.1", "repo": "splinter", "path": "crates/pipelines/src/acquire/intake.rs", "kind": "regex", "pattern": "fn\\ local_html", "min": 1, "pin": "splinter_lua"}
+{"id": "SL01.2", "repo": "splinter", "path": "crates/knowledge/src/capture/html.rs", "kind": "regex", "pattern": "pub\\ fn\\ decode_html", "min": 1, "pin": "splinter_lua"}
+{"id": "SL02.1", "repo": "splinter", "path": "crates/splinter/src/cli/learn.rs", "kind": "regex", "pattern": "pub\\ structural_graph:\\ bool", "min": 1, "pin": "splinter_lua"}
+{"id": "SL03.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/shown.rs", "kind": "regex", "pattern": "pub\\(super\\)\\ fn\\ shown", "min": 1, "pin": "splinter_lua"}
+{"id": "SL03.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/shown.rs", "kind": "regex", "pattern": "the\\ instruction\\ repeats\\ the\\ material", "min": 1, "pin": "splinter_lua"}
+{"id": "SL04.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/shown.rs", "kind": "regex", "pattern": "pub\\(super\\)\\ fn\\ computed", "min": 1, "pin": "splinter_lua"}
+{"id": "SL04.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/shown.rs", "kind": "regex", "pattern": "prints\\ something\\ else\\ when\\ run\\ again", "min": 1, "pin": "splinter_lua"}
+{"id": "SL05.1", "repo": "splinter", "path": "crates/eval/src/verifiers/short_answer.rs", "kind": "regex", "pattern": "fn\\ fenced_blocks", "min": 1, "pin": "splinter_lua"}
+{"id": "SL06.1", "repo": "splinter", "path": "crates/pipelines/src/acquire/probes.rs", "kind": "regex", "pattern": "pub\\ const\\ MAX_PROBE_WRITES:\\ usize\\ =\\ 4", "min": 1, "pin": "splinter_lua"}
+{"id": "SL07.1", "repo": "splinter", "path": "crates/pipelines/src/acquire/round.rs", "kind": "regex", "pattern": "is\\ accepted\\ only\\ if\\ the\\ target\\ improved", "min": 1, "pin": "splinter_lua"}
+{"id": "SL08.1", "repo": "splinter", "path": "crates/pipelines/src/acquire/mod.rs", "kind": "regex", "pattern": "if\\ self\\.request\\.self_generate\\ \\{", "min": 1, "pin": "splinter_lua"}
+{"id": "SL09.1", "repo": "brain", "path": "samples/text/chat-full-finetune/src/main.rs", "kind": "regex", "pattern": "ChatFullFineTune::from_pretrained", "min": 1, "pin": "brain_fullft"}
+{"id": "SL11.1", "repo": "splinter", "path": "crates/pipelines/src/acquire/round.rs", "kind": "regex", "pattern": "pub\\ const\\ ROUND_TASKS_WANTED:\\ usize\\ =\\ 12", "min": 1, "pin": "splinter_lua"}
+{"id": "SL12.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/dedup.rs", "kind": "regex", "pattern": "pub\\ fn\\ identity", "min": 1, "pin": "splinter_lua"}
+{"id": "SL13.1", "repo": "splinter", "path": "crates/pipelines/src/tasks/mod.rs", "kind": "regex", "pattern": "temperature:\\ 1\\.2", "min": 1, "pin": "splinter_lua"}
+{"id": "SL15.1", "repo": "splinter", "path": "crates/pipelines/src/acquire/round.rs", "kind": "regex", "pattern": "The\\ generator\\ is\\ never\\ shown\\ the\\ skill's\\ probes", "min": 1, "pin": "splinter_lua"}
+{"id": "SL16.1", "repo": "splinter", "path": "crates/knowledge/src/tasks/shown.rs", "kind": "regex", "pattern": "fn\\ undefined_by_the_language", "min": 1, "pin": "splinter_lua"}
+{"id": "SL16.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/shown.rs", "kind": "regex", "pattern": "\"math\\.random\",", "min": 1, "pin": "splinter_lua"}
+{"id": "SL17.1", "repo": "splinter", "path": "crates/pipelines/src/acquire/probes.rs", "kind": "regex", "pattern": "SamplingChoice::Prefer\\(GREEDY_SAMPLING\\)", "min": 1, "pin": "splinter_lua"}
+{"id": "SL14.1", "repo": "splinter", "path": "crates/pipelines/src/curriculum/repository_teacher.rs", "kind": "regex", "pattern": "Demonstration::answer", "min": 1, "pin": "splinter_lua"}
