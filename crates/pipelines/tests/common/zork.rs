@@ -97,10 +97,32 @@ pub fn writing_probes_in_batches(per_call: usize) -> Scripted {
     })
 }
 
+/// [`model`] writing `per_call` training tasks a request, numbered on from
+/// the last it wrote for the topic: a small generator a round must ask again.
+pub fn writing_tasks_in_batches(per_call: usize) -> Scripted {
+    let written = std::sync::Mutex::new(std::collections::BTreeMap::<String, usize>::new());
+    let probes = |_: &str| (0..8).collect();
+    writer_with(&[], probes, move |topic| {
+        let mut written = written.lock().unwrap();
+        let from = written.entry(topic.to_string()).or_insert(10);
+        let numbers = (*from..*from + per_call).collect();
+        *from += per_call;
+        numbers
+    })
+}
+
 fn writer(
     numbers: std::ops::Range<usize>,
     knows: &[&str],
     probes: impl Fn(&str) -> Vec<usize> + Send + Sync + 'static,
+) -> Scripted {
+    writer_with(knows, probes, move |_| numbers.clone().collect())
+}
+
+fn writer_with(
+    knows: &[&str],
+    probes: impl Fn(&str) -> Vec<usize> + Send + Sync + 'static,
+    training: impl Fn(&str) -> Vec<usize> + Send + Sync + 'static,
 ) -> Scripted {
     let knows: Vec<String> = knows.iter().map(|t| (*t).to_string()).collect();
     Scripted::new(move |prompt| {
@@ -111,7 +133,7 @@ fn writer(
             let numbers: Vec<usize> = if prompt.contains("(assessment)") {
                 probes(topic)
             } else {
-                numbers.clone().collect()
+                training(topic)
             };
             let tasks: Vec<_> = numbers
                 .into_iter()

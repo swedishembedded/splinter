@@ -31,7 +31,7 @@ use splinter_knowledge::skills::Skill;
 
 use super::competence::SkillCompetence;
 use super::cost::StageCost;
-use super::probes::{score, set_of, write_for, Ask, ProbeScore};
+use super::probes::{score, set_of, write_until, Ask, ProbeScore};
 use super::Acquisition;
 use crate::curriculum::frontier::{select_frontier, tally};
 use crate::curriculum::repository_teacher::{
@@ -171,6 +171,15 @@ impl Trained {
     }
 }
 
+/// The training tasks a round asks the generator for before it attempts
+/// them: a 4B generator admits none or one of eight in a request once its
+/// skill's probes are taken, and a round with fewer than two records cannot
+/// train.
+pub const ROUND_TASKS_WANTED: usize = 12;
+
+/// The most requests one round's tasks take.
+pub const MAX_ROUND_WRITES: usize = 6;
+
 /// The goal a generator is given for training tasks of `skill`.
 fn goal_of(objective: &str, skill: &Skill) -> String {
     let requirements: Vec<&str> = skill
@@ -232,7 +241,7 @@ impl Acquisition<'_> {
         // A training task must not repeat a probe of its skill, so the
         // generator is shown them rather than refused its repeats afterwards.
         let probe_instructions = self.probe_instructions(&skill.id)?;
-        let written = write_for(
+        let written = write_until(
             ctx,
             skill,
             &Ask {
@@ -243,6 +252,8 @@ impl Acquisition<'_> {
                 cancel: cancel.clone(),
             },
             &probe_instructions,
+            ROUND_TASKS_WANTED,
+            MAX_ROUND_WRITES,
             &mut self.seen,
         )?;
         report.written = written.tasks.len();

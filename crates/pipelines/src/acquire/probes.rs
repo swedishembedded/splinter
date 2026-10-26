@@ -174,6 +174,42 @@ pub fn fresh_seen() -> Seen {
     Seen::new(DEFAULT_SHINGLE_WORDS, DEFAULT_MAX_OVERLAP)
 }
 
+/// Writes tasks for `skill` as [`write_for`] does, asking again while fewer
+/// than `want` are admitted, up to `max_writes` requests and only while each
+/// request adds a task. Every request is shown `already` and what the
+/// earlier requests admitted, so it writes something else.
+pub fn write_until(
+    ctx: &Context,
+    skill: &Skill,
+    ask: &Ask<'_>,
+    already: &[String],
+    want: usize,
+    max_writes: usize,
+    seen: &mut Seen,
+) -> Result<Written, OrchestratorError> {
+    let mut written = write_for(ctx, skill, ask, already, seen)?;
+    for _ in 1..max_writes {
+        if written.tasks.len() >= want || ask.deadline.is_some_and(|d| Instant::now() >= d) {
+            break;
+        }
+        let shown: Vec<String> = already
+            .iter()
+            .chain(&written.instructions)
+            .cloned()
+            .collect();
+        let more = write_for(ctx, skill, ask, &shown, seen)?;
+        for (why, n) in more.refused {
+            *written.refused.entry(why).or_default() += n;
+        }
+        if more.tasks.is_empty() {
+            break;
+        }
+        written.tasks.extend(more.tasks);
+        written.instructions.extend(more.instructions);
+    }
+    Ok(written)
+}
+
 /// The most times the generator is asked for one skill's probes: a small
 /// model admits two or three tasks a request, fewer than a skill needs.
 pub const MAX_PROBE_WRITES: usize = 4;
@@ -191,22 +227,7 @@ pub fn probes_for(
     per_half: usize,
     seen: &mut Seen,
 ) -> Result<SkillProbes, OrchestratorError> {
-    let mut written = write_for(ctx, skill, ask, &[], seen)?;
-    for _ in 1..MAX_PROBE_WRITES {
-        if written.tasks.len() >= 2 * per_half || ask.deadline.is_some_and(|d| Instant::now() >= d)
-        {
-            break;
-        }
-        let more = write_for(ctx, skill, ask, &written.instructions, seen)?;
-        for (why, n) in more.refused {
-            *written.refused.entry(why).or_default() += n;
-        }
-        if more.tasks.is_empty() {
-            break;
-        }
-        written.tasks.extend(more.tasks);
-        written.instructions.extend(more.instructions);
-    }
+    let mut written = write_until(ctx, skill, ask, &[], 2 * per_half, MAX_PROBE_WRITES, seen)?;
     written.tasks.sort_by(|a, b| a.task.cmp(&b.task));
     let mut probes = SkillProbes {
         skill: skill.id.clone(),

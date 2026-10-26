@@ -67,7 +67,7 @@ pub use cost::StageCost;
 pub use graph::{plan, Planned, PlannedBy};
 pub use intake::{intake, is_url, Fetched, Intaken};
 pub use probes::{ProbeScore, SkillProbes};
-pub use round::{Change, Outcome, Round};
+pub use round::{Change, Outcome, Round, MAX_ROUND_WRITES, ROUND_TASKS_WANTED};
 pub use select::{next_skill, Selection, Targets};
 
 use crate::curriculum::frontier::PassAtK;

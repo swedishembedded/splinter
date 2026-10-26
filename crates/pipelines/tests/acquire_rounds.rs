@@ -338,11 +338,13 @@ fn every_round_reports_what_it_explored_and_what_that_cost() {
     let recorded = acquire(&ctx, &request(&manual), &Learner).unwrap();
     let run = read_run(ctx.workspace(), &recorded.run).unwrap();
     for round in &recorded.report.rounds {
-        // 8 tasks proposed and admitted, 2 attempts at each, none solved by
-        // a policy that knows nothing, all of them taught.
+        // 8 tasks admitted, fewer than a round wants, so the generator is
+        // asked again; it writes the same 8, refused whole, and the round
+        // goes on with them: 2 attempts at each, none solved by a policy
+        // that knows nothing, all of them taught.
         assert_eq!(
             (round.proposed, round.written, round.attempts, round.graded),
-            (8, 8, 16, 16)
+            (16, 8, 16, 16)
         );
         assert_eq!((round.verified_passes, round.worth_training), (0, 8));
         assert!(round.records.unwrap() > 0);
@@ -420,4 +422,23 @@ fn a_reference_teacher_teaches_with_the_tasks_own_answers_and_asks_no_model() {
             Some(reference.content.as_str())
         );
     }
+}
+
+#[test]
+fn a_round_asks_a_generator_that_writes_one_task_a_request_again() {
+    let (scratch, ctx) = common::scratch_context(
+        "acquire-round-batches",
+        common::zork::writing_tasks_in_batches(1),
+        false,
+    );
+    common::gate::put_base(&ctx);
+    let manual = write_manual(&scratch);
+    let report = acquire(&ctx, &request(&manual), &Learner).unwrap().report;
+    let first = &report.rounds[0];
+    assert_eq!(
+        first.written,
+        splinter_pipelines::acquire::MAX_ROUND_WRITES,
+        "{first:?}"
+    );
+    assert_eq!(first.outcome, Outcome::Accepted, "{first:?}");
 }
