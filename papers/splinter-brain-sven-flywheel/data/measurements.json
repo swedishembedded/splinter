@@ -1367,6 +1367,38 @@
         "skills_up": 7,
         "skills_down": 2
       }
+    },
+    "lua-rep3-self-generate": {
+      "brain_commit": "5e85f323c (splinter 42f9b5826)",
+      "command": "as lua-rep2-*, on the same exam (run-20261026T142254.958-8303), budget 55m",
+      "log": "lua-flywheel/runs/replicate3-self-generate-lr1e-6.json",
+      "sha256": "8f493f30f055626b0f62bf146f1dc7fde567088c6330fec8005fd3130598a218",
+      "metric_prefix": "lua.sgr3",
+      "metrics": {
+        "rounds": 10,
+        "accepted": 2,
+        "final_before": 20,
+        "final_after": 33,
+        "final_graded": 46,
+        "skills_up": 8,
+        "skills_down": 0
+      }
+    },
+    "lua-rep3-fixed-generator": {
+      "brain_commit": "5e85f323c (splinter 42f9b5826)",
+      "command": "as lua-rep2-*, on the same exam (run-20261026T142254.958-8303), budget 55m",
+      "log": "lua-flywheel/runs/replicate3-fixed-generator-lr1e-6.json",
+      "sha256": "efc171a178f7825f0007468638e669eae82ead5c4e2772e3750118ffaeff11e6",
+      "metric_prefix": "lua.fgr3",
+      "metrics": {
+        "rounds": 9,
+        "accepted": 3,
+        "final_before": 20,
+        "final_after": 32,
+        "final_graded": 46,
+        "skills_up": 7,
+        "skills_down": 1
+      }
     }
   }
 }

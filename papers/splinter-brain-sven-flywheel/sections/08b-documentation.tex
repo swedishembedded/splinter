@@ -146,4 +146,9 @@ with the full fine-tune of a later brain revision, accepted 3 rounds in each arm
 from 20 to 30 of 46 in 13 rounds (7 skills up, 0 down) and the fixed-generator arm from 20 to 29 of
 46 in 8 rounds (7 up, 2 down).\cl{SL21} Both arms learn in both replicates; which generator does
 better changes sign between them, so on this evidence the loop learns from tasks its own model
-writes, and whether the trained model's tasks are better than its base's is not settled.
+writes, and whether the trained model's tasks are better than its base's is not settled. A third
+replicate on the second exam, which changes only the runs' random draws, agrees: the self-generate arm
+went from 20 to 33 of 46 (2 of 10 rounds accepted, 8 skills up, 0 down) and the fixed-generator arm
+from 20 to 32 (3 of 9 accepted, 7 up, 1 down).\cl{SL22} All six arms of the three replicates ended
+above their baseline on probes no round trained on; the self-generate arm finished ahead in two
+replicates and behind in one.
