@@ -29,6 +29,9 @@ what was done.
 | 12 | host (test driver) | An attempt whose harness run did not complete (a broken process) and a validator run that gave no decision were counted as a failed attempt and as a discard. | Reported apart: `runs_not_completed`, `validator_runs_without_decision`. |
 | 13 | brain resident full fine-tune | Documented specs (`grad=bf16`, `state=bf16`) were refused on the embedding, which is no longer a store tensor. | brain 0acae2970. |
 | 15 | invent: typed steps | A copy step ran at temperature 0.9 and copied an 800-word map into JSON; the 27B ran to the 8192-token limit and the run failed (`output_truncated`). | Typed steps carry only short fields (the plan extracts the angles; prompts read the survey's prose), and every copy or decision step decodes at temperature 0. |
+| 16 | invent: `forget` | It removed every directory of `tasks/` without a `task.json`, `.git` included: the first failed idea erased the task repository's history, and the next idea's log commit failed (`rollback_failed`), ending the run after an hour. | Only a directory named like a task slug is ever removed; the index skips dot entries. |
+| 17 | invent: empty proposal | A proposer whose turn ended without text was formalized anyway, and the schema'd step invented the slug `empty-proposal`; the author then tried to build a task from nothing. | `propose` verifies it wrote a proposal (at least 30 words), with two repair turns; still empty, the idea fails and is logged. |
+| 18 | all harnesses: `/tmp` | Agents wrote their experiments to `/tmp` on a shared node. | Every prompt sends scratch files to `scratch/` in the working directory. |
 | 14 | gates on commit | Twice a chained command committed after a failing gate (text hygiene, the architecture ratchet), because a pipe or `;` hid the status. | Fixed by follow-up commits; gate chains now `&&` under `pipefail`. |
 
 ## Open, with the consequence
@@ -48,6 +51,11 @@ what was done.
   in the thread's assistant messages into `reasoning_content`; keep a truncated turn's partial
   text and reasoning in its step; give a truncated or unparsable structured answer a bounded
   repair turn, then an item failure.
+- **A tool call cut off at the output limit vanishes.** A proposer's first turn generated 8192
+  tokens and left neither text nor a tool call: most likely a long shell call whose arguments the
+  limit cut, which the stream decoder drops as incomplete. To do in sven: keep the unfinished call
+  in the step and report the truncation to the model, so it can retry with a shorter call. Turns
+  may now emit 24576 tokens.
 - **Conversations are written when a run ends.** A run stopped by a signal loses every
   transcript (sven roadmap, harness-workflows item 1).
 - **`HarnessProposer` reads the old contract** (`tasks.json`, `sections/NN.md`,
