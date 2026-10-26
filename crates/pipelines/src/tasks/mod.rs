@@ -459,17 +459,18 @@ fn with_goal(kind: &TaskKind, goal: Option<&str>) -> TaskKind {
     kind
 }
 
-/// How a generator that runs in process samples its tasks: warmer than an
+/// How a generator that runs in process samples its tasks: hotter than an
 /// agent step's [`AGENT_SAMPLING`], which keeps a small model from drifting
 /// while it executes a procedure but makes it write the same few programs
 /// whenever it is asked again for a section (a Qwen3-4B run refused nearly
-/// every training task it wrote as a repeat), and with room for a reply of
-/// several tasks.
+/// every training task it wrote as a repeat, and still most at 0.9), and
+/// with room for a reply of several tasks. The top-k cut keeps the high
+/// temperature among plausible tokens; admission refuses what does not run.
 pub const GENERATOR_SAMPLING: Sampling = Sampling {
     max_new_tokens: 1024,
-    temperature: 0.9,
-    top_k: 40,
-    top_p: Some(0.95),
+    temperature: 1.2,
+    top_k: 20,
+    top_p: None,
     ..AGENT_SAMPLING
 };
 
