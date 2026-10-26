@@ -180,6 +180,41 @@ pub const ROUND_TASKS_WANTED: usize = 12;
 /// The most requests one round's tasks take.
 pub const MAX_ROUND_WRITES: usize = 6;
 
+/// The verified answers of `set` a round trains on: one per task, the
+/// shortest. A task the policy solved in three of four attempts otherwise
+/// weighs three records against a taught task's one - in a round of four
+/// records, three of them one program - and the policy's passing attempts
+/// can be explanations around the answer, which teach a form the probes do
+/// not ask for.
+fn one_answer_per_task(
+    ctx: &splinter_orchestrator::context::Context,
+    set: &splinter_store::experiences::SetId,
+) -> Result<splinter_store::experiences::SetId, OrchestratorError> {
+    let store = ctx.experiences();
+    let members = store.get_set(set)?.members;
+    let decisions = store.decisions(&members)?;
+    let mut shortest: BTreeMap<Digest, (usize, splinter_core::experience::ExperienceId)> =
+        BTreeMap::new();
+    for id in members {
+        if decisions.get(&id).map(|d| d.passed) != Some(true) {
+            continue;
+        }
+        let experience = store.get(&id)?;
+        let length = experience
+            .final_output
+            .as_deref()
+            .map_or(usize::MAX, str::len);
+        let task = experience.task.id.clone();
+        if shortest.get(&task).is_none_or(|(kept, _)| length < *kept) {
+            shortest.insert(task, (length, id));
+        }
+    }
+    Ok(store.put_set(&splinter_store::experiences::ExperienceSet {
+        name: format!("the shortest verified answer per task of {set}"),
+        members: shortest.into_values().map(|(_, id)| id).collect(),
+    })?)
+}
+
 /// The goal a generator is given for training tasks of `skill`.
 fn goal_of(objective: &str, skill: &Skill) -> String {
     let requirements: Vec<&str> = skill
@@ -338,7 +373,7 @@ impl Acquisition<'_> {
         let built = match build(
             ctx,
             &BuildRequest {
-                sets: vec![kept.frontier_experience_set.clone()],
+                sets: vec![one_answer_per_task(ctx, &kept.frontier_experience_set)?],
                 view: ViewName::SftFinal,
                 strip: None,
                 min_strength: Some(DEFAULT_MIN_STRENGTH),
