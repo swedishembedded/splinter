@@ -30,5 +30,7 @@ was not run. We then run the loop with no teacher at all: a 4B model reads raw H
 manual, writes its own tasks, has them checked by the language's interpreter, and is fully fine-tuned
 each round. At a small learning rate each arm accepted 5 rounds, and on final probes no round trained
 on the model went from 26 to 35 of 53 when it wrote every round's tasks itself and from 26 to 40 when
-its untrained base wrote them; that the trained model's own tasks help more is not shown.\cl{SL20}
+its untrained base wrote them; a second replicate on a fresh exam gave 20 to 30 and 20 to 29 of
+46. The loop learns from tasks its own model writes; that the trained model's tasks help more than
+its base's is not shown.\cl{SL20,SL21}
 \end{abstract}

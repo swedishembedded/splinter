@@ -1335,6 +1335,38 @@
         "skills_up": 8,
         "skills_down": 0
       }
+    },
+    "lua-rep2-self-generate": {
+      "brain_commit": "5e85f323c (splinter 42f9b5826)",
+      "command": "splinter learn --source <manual 5.4-5.6> --kinds predict-lua --structural-graph --full-fine-tune --reference-teacher --probes-from run-20261026T142254.958-8303 --max-rounds 60 --lr 1e-6 --steps 6 --retention-drop 0.5 --self-generate",
+      "log": "lua-flywheel/runs/replicate2-self-generate-lr1e-6.json",
+      "sha256": "c9b367b97895ae2b4236daca67e92117ee03faac40a028e77d1bf270d82ed21b",
+      "metric_prefix": "lua.sgr2",
+      "metrics": {
+        "rounds": 13,
+        "accepted": 3,
+        "final_before": 20,
+        "final_after": 30,
+        "final_graded": 46,
+        "skills_up": 7,
+        "skills_down": 0
+      }
+    },
+    "lua-rep2-fixed-generator": {
+      "brain_commit": "5e85f323c (splinter 42f9b5826)",
+      "command": "splinter learn --source <manual 5.4-5.6> --kinds predict-lua --structural-graph --full-fine-tune --reference-teacher --probes-from run-20261026T142254.958-8303 --max-rounds 60 --lr 1e-6 --steps 6 --retention-drop 0.5",
+      "log": "lua-flywheel/runs/replicate2-fixed-generator-lr1e-6.json",
+      "sha256": "39dfb6ef6614682cfcd18de54c34d23c14d31b52a67cb15d5d69fb4d41ee6a97",
+      "metric_prefix": "lua.fgr2",
+      "metrics": {
+        "rounds": 8,
+        "accepted": 3,
+        "final_before": 20,
+        "final_after": 29,
+        "final_graded": 46,
+        "skills_up": 7,
+        "skills_down": 2
+      }
     }
   }
 }

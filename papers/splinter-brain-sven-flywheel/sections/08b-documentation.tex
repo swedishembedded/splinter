@@ -140,3 +140,10 @@ rounds, and on the final probes, which no round trains on, the self-generate arm
 (8 up, 0 down).\cl{SL20} The control did better than the arm whose trained model writes the
 next tasks, so these runs show that the loop acquires skills from raw documentation, not
 that self-generated tasks help.
+
+\paragraph{A second replicate.} The same experiment on a fresh exam, written by the base model,
+with the full fine-tune of a later brain revision, accepted 3 rounds in each arm. On the final probes the self-generate arm went
+from 20 to 30 of 46 in 13 rounds (7 skills up, 0 down) and the fixed-generator arm from 20 to 29 of
+46 in 8 rounds (7 up, 2 down).\cl{SL21} Both arms learn in both replicates; which generator does
+better changes sign between them, so on this evidence the loop learns from tasks its own model
+writes, and whether the trained model's tasks are better than its base's is not settled.
