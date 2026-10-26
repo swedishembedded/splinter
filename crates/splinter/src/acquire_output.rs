@@ -24,6 +24,7 @@ impl Report for AcquireReport {
         let by = match &report.planned.by {
             PlannedBy::Planner { model, .. } => format!("planned by {model}"),
             PlannedBy::Structure { .. } => "read from the sources by rule".to_string(),
+            PlannedBy::Reused { run } => format!("taken from run {run}"),
         };
         let _ = writeln!(
             out,

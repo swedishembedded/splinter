@@ -86,6 +86,16 @@ pub struct AcquireArgs {
     /// graded like any answer, instead of asking the teacher model.
     #[arg(long, requires = "source", conflicts_with = "teacher")]
     pub reference_teacher: bool,
+    /// Take the graph and probes of an earlier acquisition run.
+    #[arg(
+        long,
+        value_name = "RUN-ID",
+        requires = "source",
+        help = "Take the skill graph and probes of this earlier learn --source run (its id is in \
+        `splinter runs list`) instead of planning and generating them; refused unless that run \
+        used the same sources. The baseline, rounds and assessment are still this run's"
+    )]
+    pub probes_from: Option<String>,
 }
 
 /// `learn`.

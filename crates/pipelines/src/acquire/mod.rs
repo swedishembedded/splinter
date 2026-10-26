@@ -47,6 +47,7 @@ mod cost;
 mod graph;
 mod intake;
 mod probes;
+mod reuse;
 mod round;
 mod select;
 
@@ -160,6 +161,12 @@ pub struct AcquireRequest {
     /// (a computed output, a reference program), graded like any answer,
     /// instead of asking the teacher model.
     pub reference_teacher: bool,
+    /// Take the graph and probes of this earlier acquisition run, recorded
+    /// in the same state root and written from the same sources, instead of
+    /// planning and generating them: the run still measures its own
+    /// baseline, trains its own rounds and assesses. Runs that take the same
+    /// run's probes are measured on one exam.
+    pub probes_from: Option<String>,
     /// How training runs.
     pub tuning: Tuning,
     /// The models named for roles.
@@ -194,6 +201,7 @@ impl AcquireRequest {
             self_generate: false,
             structural_graph: false,
             reference_teacher: false,
+            probes_from: None,
             tuning: Tuning::default(),
             roles: RoleOverrides::default(),
         }
@@ -426,14 +434,25 @@ pub fn acquire(
         let sources = intake(ctx, &request.sources)?;
         run.stage("sources", &sources)?;
         let ids: Vec<_> = sources.iter().map(|s| s.source.clone()).collect();
-        let planned = plan(
-            ctx,
-            &request.objective,
-            &ids,
-            (!request.structural_graph).then_some(&planner),
-            deadline,
-            &cancel,
-        )?;
+        let mut seen = probes::fresh_seen();
+        let (planned, reused) = match &request.probes_from {
+            Some(from) => {
+                let reused = reuse::reuse(ctx, from, &ids, &mut seen)?;
+                run.stage("reused", &serde_json::json!({ "probes_from": from }))?;
+                (reused.planned, Some(reused.probes))
+            }
+            None => {
+                let planned = plan(
+                    ctx,
+                    &request.objective,
+                    &ids,
+                    (!request.structural_graph).then_some(&planner),
+                    deadline,
+                    &cancel,
+                )?;
+                (planned, None)
+            }
+        };
         run.stage("graph", &planned)?;
         let mut state = Acquisition {
             ctx,
@@ -446,7 +465,7 @@ pub fn acquire(
             graph: planned.graph.clone(),
             probes: BTreeMap::new(),
             probe_ids: BTreeSet::new(),
-            seen: probes::fresh_seen(),
+            seen,
             competence: CompetenceGraph {
                 graph: planned.address.clone(),
                 parent: None,
@@ -461,7 +480,7 @@ pub fn acquire(
             last_candidate: None,
             checkpoint: None,
         };
-        let report = state.run(run, policy, sources, planned)?;
+        let report = state.run(run, policy, sources, planned, reused)?;
         Ok(report)
     })
 }
@@ -473,40 +492,25 @@ impl Acquisition<'_> {
         policy: PolicyUsed,
         sources: Vec<Intaken>,
         planned: Planned,
+        reused: Option<Vec<SkillProbes>>,
     ) -> Result<AcquireReport, OrchestratorError> {
         let ctx = self.ctx;
         let cancel = run.cancel_token();
 
-        // Probes, then the baseline measured on the dev half of each.
-        let mut probe_list = Vec::new();
-        for skill in self.graph.order().into_iter().cloned().collect::<Vec<_>>() {
-            let probes = probes::probes_for(
-                ctx,
-                &skill,
-                &probes::Ask {
-                    kinds: &self.kinds,
-                    generator: &self.generator,
-                    goal: format!(
-                        "{} (assessment). Skill: {}. It must be shown to: {}",
-                        self.request.objective,
-                        skill.title,
-                        skill
-                            .requirements
-                            .iter()
-                            .map(|r| r.statement.as_str())
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    ),
-                    deadline: self.deadline,
-                    cancel: cancel.clone(),
-                },
-                self.request.probes_per_skill,
-                &mut self.seen,
-            )?;
-            self.probe_ids
-                .extend(probes.dev.iter().chain(&probes.finals).cloned());
-            probe_list.push(probes);
-        }
+        // Probes (written, or an earlier run's), then the baseline measured
+        // on the dev half of each.
+        let probe_list = match reused {
+            Some(probes) => {
+                self.probe_ids.extend(
+                    probes
+                        .iter()
+                        .flat_map(|p| p.dev.iter().chain(&p.finals))
+                        .cloned(),
+                );
+                probes
+            }
+            None => self.write_probes(&cancel)?,
+        };
         let assessable: Vec<SkillProbes> = probe_list
             .iter()
             .filter(|p| p.assessable(self.request.min_probes))
@@ -629,6 +633,45 @@ impl Acquisition<'_> {
             ended,
             accepted,
         })
+    }
+
+    /// Every skill's probes, written by the generator; each admitted
+    /// instruction is added to `seen`.
+    fn write_probes(
+        &mut self,
+        cancel: &splinter_agent::CancelToken,
+    ) -> Result<Vec<SkillProbes>, OrchestratorError> {
+        let ctx = self.ctx;
+        let mut probe_list = Vec::new();
+        for skill in self.graph.order().into_iter().cloned().collect::<Vec<_>>() {
+            let probes = probes::probes_for(
+                ctx,
+                &skill,
+                &probes::Ask {
+                    kinds: &self.kinds,
+                    generator: &self.generator,
+                    goal: format!(
+                        "{} (assessment). Skill: {}. It must be shown to: {}",
+                        self.request.objective,
+                        skill.title,
+                        skill
+                            .requirements
+                            .iter()
+                            .map(|r| r.statement.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    ),
+                    deadline: self.deadline,
+                    cancel: cancel.clone(),
+                },
+                self.request.probes_per_skill,
+                &mut self.seen,
+            )?;
+            self.probe_ids
+                .extend(probes.dev.iter().chain(&probes.finals).cloned());
+            probe_list.push(probes);
+        }
+        Ok(probe_list)
     }
 
     /// The closing assessment: the final probes of every assessable skill,

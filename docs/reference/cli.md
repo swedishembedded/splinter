@@ -233,6 +233,7 @@ Options:
 - `--self-generate`: Let the incumbent write the next round's training tasks.
 - `--structural-graph`: Read the skill graph from the sources' structure, one skill per section, instead of asking a planner model.
 - `--reference-teacher`: Teach a task the policy never solves with the task's own reference answer (the output the runtime computed, a reference program), graded like any answer, instead of asking the teacher model.
+- `--probes-from <RUN-ID>`: Take the skill graph and probes of this earlier learn --source run (its id is in `splinter runs list`) instead of planning and generating them; refused unless that run used the same sources. The baseline, rounds and assessment are still this run's.
 - `--goal <TEXT>`: What the learner is after; steers the tasks generated.
 - `--kinds <K,..>...`: Task kinds, comma-separated; when not named, a planner model surveys the sources and chooses them.
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.

@@ -62,6 +62,11 @@ pub enum PlannedBy {
         /// Why the planner's graph was not used, when one was asked for.
         reason: Option<String>,
     },
+    /// Taken from an earlier acquisition run's record, not planned.
+    Reused {
+        /// The run whose graph this is.
+        run: String,
+    },
 }
 
 /// What planning made.

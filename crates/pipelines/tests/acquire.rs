@@ -47,7 +47,7 @@ use splinter_core::model_ref::ModelRef;
 use splinter_knowledge::skills::Refusal;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::{Context, OrchestratorError};
-use splinter_pipelines::acquire::{acquire, intake, plan, Outcome, PlannedBy};
+use splinter_pipelines::acquire::{acquire, intake, plan, AcquireRequest, Outcome, PlannedBy};
 use splinter_pipelines::train::{TrainPlan, Trainer};
 use splinter_store::runs::{read_run, RunStatus};
 
@@ -480,4 +480,91 @@ fn the_generator_is_shown_the_probes_it_already_wrote_so_it_does_not_repeat_them
             "the training request does not list the probe {instruction:?}"
         );
     }
+}
+
+/// How many times the generator was asked for probes (the goal of a probe
+/// request names the assessment; a training request does not).
+fn probe_requests(prompts: &std::sync::Mutex<Vec<String>>) -> usize {
+    prompts
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|p| p.contains("You write training tasks") && p.contains("(assessment)"))
+        .count()
+}
+
+#[test]
+fn a_run_can_take_an_earlier_runs_graph_and_probes_and_measure_its_baseline_on_them() {
+    let policy = model();
+    let prompts = policy.prompts.clone();
+    let (scratch, ctx) = scratch_context("acquire-reuse", policy, false);
+    common::gate::put_base(&ctx);
+    let manual = write_manual(&scratch);
+    let first = acquire(&ctx, &request(&manual), &Learner).unwrap();
+    let written = probe_requests(&prompts);
+    assert!(written > 0);
+
+    let second = acquire(
+        &ctx,
+        &AcquireRequest {
+            probes_from: Some(first.run.clone()),
+            ..request(&manual)
+        },
+        &Learner,
+    )
+    .unwrap();
+
+    assert_eq!(probe_requests(&prompts), written, "no probe was generated");
+    assert_eq!(second.report.probes, first.report.probes);
+    assert_eq!(second.report.planned.address, first.report.planned.address);
+    assert!(
+        matches!(&second.report.planned.by, PlannedBy::Reused { run } if *run == first.run),
+        "{:?}",
+        second.report.planned.by
+    );
+    let stages = read_run(ctx.workspace(), &second.run).unwrap().stages;
+    assert!(stages.iter().any(|s| s.stage == "reused"));
+    // The baseline is its own measurement, on the reused dev probes.
+    let (baseline, _) = &second.report.baseline;
+    assert_eq!(baseline.skills.len(), 3);
+    assert!(baseline.skills.iter().all(|s| s.graded == 3));
+    // No training task repeats a reused probe: the rounds still train and
+    // the assessment is on the same final probes.
+    assert!(second
+        .report
+        .rounds
+        .iter()
+        .all(|r| r.outcome == Outcome::Accepted));
+    assert!(second.report.assessment.as_ref().unwrap().accepted);
+}
+
+#[test]
+fn probes_are_not_taken_from_a_run_that_is_unknown_or_was_written_from_other_sources() {
+    let (scratch, ctx) = context("acquire-reuse-refused");
+    let manual = write_manual(&scratch);
+    let first = acquire(&ctx, &request(&manual), &Learner).unwrap();
+    let from = |run: &str, manual: &std::path::Path| {
+        acquire(
+            &ctx,
+            &AcquireRequest {
+                probes_from: Some(run.into()),
+                ..request(manual)
+            },
+            &Learner,
+        )
+        .unwrap_err()
+        .to_string()
+    };
+
+    let unknown = from("no-such-run", &manual);
+    assert!(unknown.contains("no-such-run"), "{unknown}");
+
+    let other = scratch.0.join("other.md");
+    std::fs::write(
+        &other,
+        format!("{}\nAn addendum.\n", common::zork::manual()),
+    )
+    .unwrap();
+    let refused = from(&first.run, &other);
+    assert!(refused.contains("sources"), "{refused}");
 }

@@ -177,6 +177,13 @@ for a code-output kind, the output the runtime computed - said as the teacher's 
 like any answer, so no model teaches. `--structural-graph` reads the skill graph from the sources' structure, one
 skill per section, without asking a planner: a small model rarely writes the planner's reply.
 
+`--probes-from <RUN-ID>` takes the skill graph and the probes of an earlier `learn --source` run
+(its id is in `splinter runs list`, command `acquire`) instead of planning and generating them,
+and is refused when that run does not exist, recorded no probes, or read other sources; the run
+still measures its own baseline, trains its own rounds and assesses on the same final probes. To
+measure two arms on one exam, copy the state root (`cp -r`) and run each arm in its own copy with
+the same `--probes-from`.
+
 The Lua families and the `lua` runtime are Lua 5.1 and no other: `make deps/lua LUA_DIR=<dir>`
 builds the pinned interpreter, `--runtime-dir <dir>/bin` puts it first, and the runtime refuses
 an interpreter that reports another version.
