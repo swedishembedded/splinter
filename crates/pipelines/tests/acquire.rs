@@ -471,13 +471,14 @@ fn the_generator_is_shown_the_probes_it_already_wrote_so_it_does_not_repeat_them
             "the second request does not list {instruction:?}"
         );
     }
-    // A training task must not repeat a probe: the round's request lists them.
+    // The exam is never shown to a training request: a small generator
+    // shown the probes copies them.
     let training = writing(false);
     assert!(!training.is_empty());
     for instruction in &written {
         assert!(
-            training[0].contains(instruction),
-            "the training request does not list the probe {instruction:?}"
+            !training[0].contains(instruction),
+            "the training request shows the probe {instruction:?}"
         );
     }
 }

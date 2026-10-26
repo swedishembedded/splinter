@@ -238,9 +238,10 @@ impl Acquisition<'_> {
         };
 
         let generator = self.author().clone();
-        // A training task must not repeat a probe of its skill, so the
-        // generator is shown them rather than refused its repeats afterwards.
-        let probe_instructions = self.probe_instructions(&skill.id)?;
+        // The generator is never shown the skill's probes: a 4B generator
+        // shown them as tasks not to repeat copied them (69 of 84 training
+        // tasks of a Lua run were exact probes), and the exam is not material
+        // a training task may be written from. A repeat is refused after.
         let written = write_until(
             ctx,
             skill,
@@ -251,7 +252,7 @@ impl Acquisition<'_> {
                 deadline: self.deadline,
                 cancel: cancel.clone(),
             },
-            &probe_instructions,
+            &[],
             ROUND_TASKS_WANTED,
             MAX_ROUND_WRITES,
             &mut self.seen,
@@ -535,19 +536,6 @@ impl Acquisition<'_> {
             after.insert(measured.skill.clone(), scored);
         }
         Ok(after)
-    }
-
-    /// The instructions of `skill`'s probes, dev and final, in address order.
-    fn probe_instructions(&self, skill: &str) -> Result<Vec<String>, OrchestratorError> {
-        let Some(probes) = self.probes.get(skill) else {
-            return Ok(Vec::new());
-        };
-        probes
-            .dev
-            .iter()
-            .chain(&probes.finals)
-            .map(|id| Ok(self.ctx.tasks().get(id)?.instruction))
-            .collect()
     }
 
     /// Makes an accepted candidate the one the run stands on. A full
