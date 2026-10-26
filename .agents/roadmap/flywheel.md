@@ -67,6 +67,18 @@ what is still to do.
 10. Scheduler (L, last): one GPU pool, job identity and idempotency keys, leases and
     heartbeats, GPU/disk reservation; only after the single-node cycle is solid.
 11. Fast continual learning (see `continual-learning.md`).
+12. Task directories as the generation contract (M). `harnesses/flywheel/invent` now leaves
+    runnable task directories (instruction, environment, reference solution, hidden
+    `tests/test.sh`, the task's own `harness.yaml`, a commit per admitted task in a git
+    repository, every outcome in `log.jsonl`), while `HarnessProposer` (`learn
+    --task-harness`) still lays out `sections/NN.md`, passes `{count, kind, runtime}` and
+    reads a `tasks.json`: against the current document every request is refused (sven exit 2,
+    a loud `ProposeError`). To do: a consumer that runs invent once per source window with a
+    run-level deadline (an invent run takes tens of minutes; the generation request deadline
+    would kill it and count a decline), keeps `PATH` with sven, git and python3 on it, admits
+    each new commit's task as a workspace task whose verifier is `tests/test.sh`, solves it
+    with the task's own harness, and audits the yield from `log.jsonl` (admitted, rejected,
+    duplicate, failed).
 
 ## Evidence discipline
 
