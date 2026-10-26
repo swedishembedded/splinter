@@ -21,6 +21,7 @@
 //! ([`splinter_knowledge::tasks::dedup::contradictions`]): two sources may
 //! well disagree, and a model trained on both answers learns neither.
 
+use splinter_model::{Sampling, AGENT_SAMPLING};
 use std::sync::Arc;
 
 use splinter_agent::proposer::SvenProposer;
@@ -458,6 +459,20 @@ fn with_goal(kind: &TaskKind, goal: Option<&str>) -> TaskKind {
     kind
 }
 
+/// How a generator that runs in process samples its tasks: warmer than an
+/// agent step's [`AGENT_SAMPLING`], which keeps a small model from drifting
+/// while it executes a procedure but makes it write the same few programs
+/// whenever it is asked again for a section (a Qwen3-4B run refused nearly
+/// every training task it wrote as a repeat), and with room for a reply of
+/// several tasks.
+pub const GENERATOR_SAMPLING: Sampling = Sampling {
+    max_new_tokens: 1024,
+    temperature: 0.9,
+    top_k: 40,
+    top_p: Some(0.95),
+    ..AGENT_SAMPLING
+};
+
 /// The generator for the model kinds, offered the runtimes they run code
 /// in; refused when one of those runtimes is not available here.
 fn model_generator(
@@ -465,7 +480,11 @@ fn model_generator(
     request: &Generation<'_>,
     kinds: &[TaskKind],
 ) -> Result<ModelTaskGenerator, OrchestratorError> {
-    let model = ctx.model(request.generator)?;
+    let model = match ctx.resampled(request.generator, GENERATOR_SAMPLING)? {
+        Some(model) => model,
+        // A model reached over an API samples as its server does.
+        None => ctx.model(request.generator)?,
+    };
     let mut runtimes = Vec::new();
     for name in kinds.iter().filter_map(|k| k.runtime.as_deref()) {
         let runtime = ctx.environments().runtime(name).map_err(|e| {
