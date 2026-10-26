@@ -1,0 +1,419 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Invent a directory of runnable tasks from raw data.
+#
+# The host lays out the workspace: `data/` (the raw material: documentation, a
+# source tree, specifications, anything), `brief.md` (who the tasks are for:
+# the audience and the skills they should come away with) and `tasks/`
+# (tasks earlier runs made, possibly empty). The tools a task may need (e.g.
+# `lua`) are on the shell's PATH. Each run adds task directories to `tasks/`:
+#
+#   tasks/<slug>/instruction.md     what the solver is asked, as a colleague would ask it
+#   tasks/<slug>/environment/       the files the solver starts with (copied into its workspace)
+#   tasks/<slug>/solution/solve.sh  a reference solution, run in a copy of environment/
+#   tasks/<slug>/tests/test.sh      the hidden verification, run in the solver's finished workspace;
+#                                   exit status 0 means solved
+#   tasks/<slug>/task.json          written by the gate: the idea, the decisions and the gate's runs
+#
+# A task directory is what a benchmark harness runs: the solve harness works in
+# a copy of environment/ from instruction.md, and tests/test.sh decides. The
+# same tasks therefore serve training (trajectories) and evaluation.
+#
+# Agents that each do one thing, every one in a fresh conversation:
+# - an explorer maps the data and chooses the angles to approach it from;
+# - per angle: a proposer proposes one real problem, seeing the index of the
+#   tasks that exist; a novelty decision compares it with that index; an
+#   author builds the task directory; the `task` gate runs the tests on the
+#   untouched environment (they must fail) and after the reference solution
+#   (they must pass) and keeps a transcript of both; a reviewer decides over
+#   all of it - files, transcripts, material, index - whether the task is
+#   admitted, and may fix it first.
+# Code checks only what execution can decide. Whether a task is novel,
+# grounded, fair and worth learning are decisions over rich context, each
+# taken as a typed choice and recorded with its reasons in task.json.
+#
+# Swedish Embedded AB implements autonomous generation of verified agent tasks
+# from raw project data for its clients. If your team needs expertise in
+# turning documentation and source trees into executable training and
+# evaluation tasks, then you can procure our services by sending an email to
+# info@swedishembedded.com.
+api_version: "2"
+name: flywheel-invent
+description: "Map raw data, choose angles, and per angle propose, deduplicate, author, verify and review one runnable task."
+inputs:
+  count: { type: number, description: "the most angles, and so the most new tasks, this run works on" }
+variables:
+  map:
+    type: string
+    description: "what the data holds and how to work with it: layout, concepts, tools, how to run things"
+  angles:
+    type: json
+    description: "the angles this run approaches the data from, one task each"
+    schema: { type: array, items: { type: string } }
+  existing:
+    type: string
+    scope: item
+    description: "the index of the tasks that exist, as the gate listed it"
+  idea:
+    type: json
+    scope: item
+    description: "the problem proposed for the current angle"
+    schema:
+      type: object
+      required: [slug, title, problem, why_real, solution_sketch, verification, data_used]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        problem: { type: string }
+        why_real: { type: string }
+        solution_sketch: { type: string }
+        verification: { type: string }
+        data_used: { type: array, items: { type: string } }
+  verdict:
+    type: json
+    scope: item
+    description: "the reviewer's decision on the current task"
+    schema:
+      type: object
+      required: [decision, reasons, problems]
+      properties:
+        decision: { type: string, enum: [accept, reject] }
+        reasons: { type: array, items: { type: string } }
+        problems: { type: array, items: { type: string } }
+agent:
+  profile: coding
+  tools: [read_file, find_file, grep, shell]
+  sampling: { temperature: 0.9, top_p: 0.95, top_k: 20 }
+  thinking: { enabled: false }
+  turn: { max_output_tokens: 8192 }
+  system: >-
+    You create training tasks for a coding agent: real problems, grounded in the material in
+    data/, that an engineer could be handed and whose solution a program can check. You work in
+    a sandbox; your working directory is the root of the task collection. Run things rather than
+    assume: the material and what the tools print are your only authorities. Never use the
+    network.
+execution:
+  limits: { model_turns: 400, tool_calls: 1500 }
+gates:
+  setup:
+    description: Install the task checker in the run's private directory, out of the agents' reach.
+    run: |
+      mkdir -p tasks
+      cat > "$SVEN_SCRATCHPAD/task_gate.py" <<'PY'
+      """index | check SLUG | admit SLUG VERDICT IDEA NOVELTY"""
+      import json, os, re, shutil, subprocess, sys, tempfile
+
+      LIMIT = 120
+
+
+      def index():
+          lines = []
+          for slug in sorted(os.listdir("tasks")):
+              path = os.path.join("tasks", slug, "task.json")
+              if os.path.isfile(path):
+                  idea = json.load(open(path, encoding="utf-8")).get("idea", {})
+                  lines.append(f"- {slug}: {idea.get('title', '')}. {idea.get('problem', '')[:500]}")
+          text = "\n".join(lines) if lines else "(no task exists yet)"
+          with open("tasks/INDEX.md", "w", encoding="utf-8") as handle:
+              handle.write("# Existing tasks\n\n" + text + "\n")
+          return text
+
+
+      def run(script, workspace, env):
+          try:
+              done = subprocess.run(["bash", script], cwd=workspace, env=env, stdin=subprocess.DEVNULL,
+                                    capture_output=True, text=True, timeout=LIMIT)
+              return {"exit": done.returncode, "stdout": done.stdout[-4000:], "stderr": done.stderr[-4000:]}
+          except subprocess.TimeoutExpired:
+              return {"exit": None, "stdout": "", "stderr": f"timed out after {LIMIT} s"}
+
+
+      def check(slug):
+          root = os.path.abspath(os.path.join("tasks", slug))
+          problems = []
+          if not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,60}", slug):
+              problems.append(f"slug {slug!r} must be 3-61 lowercase letters, digits and hyphens")
+          for path in ("instruction.md", "solution/solve.sh", "tests/test.sh"):
+              full = os.path.join(root, path)
+              if not os.path.isfile(full) or not open(full, encoding="utf-8").read().strip():
+                  problems.append(f"tasks/{slug}/{path} is missing or empty")
+          if not os.path.isdir(os.path.join(root, "environment")):
+              problems.append(f"tasks/{slug}/environment/ is missing (it may be empty, but it must exist)")
+          if problems:
+              return problems, {}
+          env = dict(os.environ, TESTS_DIR=os.path.join(root, "tests"), SOLUTION_DIR=os.path.join(root, "solution"))
+          runs = {}
+          with tempfile.TemporaryDirectory() as scratch:
+              untouched = os.path.join(scratch, "untouched")
+              shutil.copytree(os.path.join(root, "environment"), untouched)
+              runs["tests_on_untouched_environment"] = run(os.path.join(root, "tests", "test.sh"), untouched, env)
+              solved = os.path.join(scratch, "solved")
+              shutil.copytree(os.path.join(root, "environment"), solved)
+              runs["reference_solution"] = run(os.path.join(root, "solution", "solve.sh"), solved, env)
+              runs["tests_after_reference_solution"] = run(os.path.join(root, "tests", "test.sh"), solved, env)
+          if runs["tests_on_untouched_environment"]["exit"] == 0:
+              problems.append("tests/test.sh passes on the untouched environment, so it does not test the task")
+          if runs["reference_solution"]["exit"] != 0:
+              problems.append("solution/solve.sh fails in a copy of environment/")
+          if runs["tests_after_reference_solution"]["exit"] != 0:
+              problems.append("tests/test.sh fails after the reference solution: the task is not solvable as written")
+          return problems, runs
+
+
+      def report(runs):
+          for name, result in runs.items():
+              print(f"=== {name}: exit {result['exit']}\n--- stdout\n{result['stdout']}\n--- stderr\n{result['stderr']}")
+
+
+      def main():
+          mode = sys.argv[1]
+          if mode == "index":
+              print(index())
+              return
+          slug = sys.argv[2].strip()
+          root = os.path.join("tasks", slug)
+          if mode == "check":
+              problems, runs = check(slug)
+              report(runs)
+              if problems:
+                  print("\n".join(problems), file=sys.stderr)
+                  sys.exit(1)
+              with open(os.path.join(root, "runs.json"), "w", encoding="utf-8") as handle:
+                  json.dump(runs, handle, ensure_ascii=False, indent=1)
+              return
+          if mode == "admit":
+              verdict, idea, novelty = (json.loads(arg) for arg in sys.argv[3:6])
+              if verdict.get("decision") != "accept":
+                  shutil.rmtree(root, ignore_errors=True)
+                  print("rejected: " + "; ".join(verdict.get("reasons", [])))
+                  return
+              problems, runs = check(slug)
+              report(runs)
+              if problems:
+                  print("\n".join(problems), file=sys.stderr)
+                  sys.exit(1)
+              if os.path.exists(os.path.join(root, "runs.json")):
+                  os.unlink(os.path.join(root, "runs.json"))
+              with open(os.path.join(root, "task.json"), "w", encoding="utf-8") as handle:
+                  json.dump({"idea": idea, "novelty": novelty, "verdict": verdict, "runs": runs},
+                            handle, ensure_ascii=False, indent=1)
+              index()
+              print("admitted " + slug)
+
+
+      main()
+      PY
+  index:
+    description: The index of the tasks that exist, for the proposer and the novelty decision.
+    capture: existing
+    output_bytes: 262144
+    command: [python3, "{{ run.scratchpad }}/task_gate.py", index]
+  task:
+    description: The task's tests fail on the untouched environment and pass after the reference solution.
+    timeout: 600
+    output_bytes: 65536
+    command: [python3, "{{ run.scratchpad }}/task_gate.py", check, "{{ vars.idea.slug }}"]
+  admit:
+    description: An accepted task still holds up and joins the index; a rejected one is removed.
+    timeout: 600
+    output_bytes: 65536
+    command: [python3, "{{ run.scratchpad }}/task_gate.py", admit, "{{ vars.idea.slug }}", "{{ vars.verdict }}", "{{ vars.idea }}", "{{ tasks.novelty.output }}"]
+  forget:
+    description: Remove a task directory the current angle left unadmitted when it failed for good.
+    run: |
+      python3 - <<'PY'
+      import os, shutil
+      for slug in os.listdir("tasks"):
+          path = os.path.join("tasks", slug)
+          if os.path.isdir(path) and not os.path.isfile(os.path.join(path, "task.json")):
+              shutil.rmtree(path)
+      PY
+workflow:
+  - name: setup
+    verify: [setup]
+  - name: explore
+    vars: { map: required, angles: required }
+    task: |
+      Map the material in data/ for the people who will turn it into tasks. Read brief.md first, then
+      survey data/: list it, read its overview and index files, then read selectively (grep, line
+      ranges) until you understand what it is about. If it holds code, find out how it is built, run
+      and tested, and try it. If it documents a library or a tool, try a few of its documented
+      examples with the tools on the PATH. Read tasks/INDEX.md, if it exists: tasks made already.
+
+      Set `map` with harness_vars_set: at most about 800 words of Markdown on what the material covers
+      (its parts and where they are), the concepts a learner must master, the tools and commands that
+      work here and how to run them, and where the hard and subtle parts are.
+
+      Then choose {{ inputs.count }} angles and set `angles` to a JSON array of them, one string each.
+      An angle is a way of putting the material to work, specific to this material, that no existing
+      task covers. Take them from different families, never two from the same one, the most
+      demanding first:
+      - build something real a practitioner would build with it (a small tool, a converter, a
+        validator, a report generator), working on realistic input files;
+      - debug: code that misuses it in a plausible way, with a symptom, to be diagnosed and fixed;
+      - the edge cases and error behaviour it specifies, exercised by a program that must handle them;
+      - combine several of its parts that are documented separately;
+      - change existing code: refactor, port or extend it while keeping its behaviour;
+      - write the tests or a checker for code that uses it, judged by whether they catch bugs;
+      - reproduce a documented example and extend it to a harder case;
+      - performance or resource limits it documents;
+      - something the material implies but never shows as an example.
+      Each angle names the part of the material it rests on and the kind of problem, e.g.
+      "string.gsub with a function replacement: a templating tool that expands ${name} placeholders
+      from a table and leaves unknown ones intact".
+  - name: tasks
+    for_each:
+      source: { variable: angles }
+      max_items: 64
+      on_item_failure: { verify: [forget] }
+    do:
+      - name: indexed
+        verify: [index]
+      - name: propose
+        vars: { map: read, existing: read, idea: required }
+        task: |
+          Propose one task from this angle:
+
+          {{ item }}
+
+          What the material holds:
+
+          {{ vars.map }}
+
+          The tasks that exist:
+
+          {{ vars.existing }}
+
+          Read the parts of data/ the angle rests on. Propose a problem an engineer could really be
+          handed: a concrete situation, inputs that look like real ones, and a result that matters. It
+          must need the material to be solved well - something a capable programmer who never read it
+          would likely get wrong - and it must differ in substance from every task that exists, not only
+          in names, numbers or story. Prefer problems with several steps over a single call, and ones
+          whose correct solution turns on a detail the material states.
+
+          It must be checkable by a program: after the solver is done, a test script run in its working
+          directory decides by exit status. Say how: which files or commands the test examines and what
+          must hold. Never a test that compares prose, or one a solver could pass without solving the
+          problem.
+
+          Before you decide, try the core of the solution with the tools on the PATH, so you know the
+          problem is solvable as you describe it.
+
+          Set `idea` with harness_vars_set to a JSON object:
+          - "slug": a short lowercase hyphenated name no existing task has;
+          - "title": one line;
+          - "problem": the problem as the solver will be told it, complete;
+          - "why_real": who would face it and why it matters;
+          - "solution_sketch": how a good solution goes, and the detail of the material it turns on;
+          - "verification": what the test script checks, concretely;
+          - "data_used": the files of data/ the task rests on.
+      - name: novelty
+        model_only: true
+        vars: { existing: read, idea: read }
+        schema:
+          type: object
+          required: [decision, nearest, reason]
+          properties:
+            decision: { type: string, enum: [novel, duplicate] }
+            nearest: { type: string }
+            reason: { type: string }
+        system: >-
+          You decide whether a proposed training task is novel. It is a duplicate when a solver who has
+          solved one of the existing tasks would learn essentially nothing new from it: the same skill
+          exercised the same way, even if names, numbers or story differ. It is novel when it needs a
+          different part of the material, a different way of using it, or a different kind of
+          reasoning. You answer only with the JSON object asked for.
+        task: |
+          The proposed task:
+
+          {{ vars.idea }}
+
+          The tasks that exist:
+
+          {{ vars.existing }}
+
+          Decide: "novel" or "duplicate". In "nearest" give the slug of the most similar existing task,
+          or "none", and in "reason" say in one or two sentences what the proposal adds or repeats.
+      - name: author
+        when: { eq: tasks.novelty.output.decision, value: novel }
+        vars: { map: read, idea: read }
+        tools: [read_file, find_file, grep, write_file, edit_file, shell]
+        task: |
+          Build the task directory tasks/{{ vars.idea.slug }}/ for this idea:
+
+          {{ vars.idea }}
+
+          The directory holds:
+          - instruction.md: the problem as the solver is told it - the situation, the files they are
+            given (paths relative to their working directory), exactly what they must produce and where,
+            and every requirement the tests check. Write it as a colleague would hand over the work. Do
+            not give the solution away, and never mention the tests' files or internals.
+          - environment/: the files the solver starts with, e.g. input data, a broken program, a partial
+            project. Copy what is needed from data/ into it; the solver never sees data/. It may be empty
+            when the solver creates everything.
+          - solution/solve.sh: a bash script that solves the task when run with a copy of environment/
+            as its working directory. It may use files next to it through "$SOLUTION_DIR".
+          - tests/test.sh: a bash script run with the solver's finished working directory as its
+            working directory; exit status 0 means solved. It may use files next to it through
+            "$TESTS_DIR". Test behaviour, not wording: run the solver's program on inputs, including
+            inputs the instruction does not show, and check what must hold. Make it fail on plausible
+            wrong solutions (an off-by-one, a missed edge case, a hard-coded answer) and print why it
+            fails.
+
+          Write each file with write_file. Then run it the way the host will: copy environment/ to a
+          scratch directory and run the tests there (they must fail); copy it again, run solve.sh and
+          then the tests (they must pass). Then try a plausible wrong solution and make sure the tests
+          catch it. Fix what does not hold.
+        verify: [task]
+        repair:
+          attempts: 3
+          prompt: |
+            The task check failed:
+            {{ failure.stderr }}
+            What the runs printed:
+            {{ failure.stdout }}
+            Fix the task directory so the tests fail on the untouched environment and pass after the
+            reference solution, and run it again yourself.
+      - name: review
+        when: { eq: tasks.novelty.output.decision, value: novel }
+        vars: { map: read, existing: read, idea: read, verdict: required }
+        tools: [read_file, find_file, grep, write_file, edit_file, shell]
+        task: |
+          You are the last reviewer before a task becomes training data for a coding agent. A bad task
+          teaches the wrong thing to every model trained on it, so reject what you would not stand
+          behind. Judge by reading and by running, never by how sure the author sounds.
+
+          Review the task in tasks/{{ vars.idea.slug }}/. The idea behind it:
+
+          {{ vars.idea }}
+
+          Read every file of the task, the parts of data/ it rests on, and runs.json (what the tests and
+          the reference solution printed when the host ran them). Decide each question, running things
+          where you are not sure:
+          - Grounded: does everything the task requires follow from the material or the stated
+            situation? A requirement the material contradicts teaches an error.
+          - Fair: can a capable solver who reads instruction.md and the files it names know everything
+            the tests check? A test of something the instruction leaves open is unfair.
+          - Sound: do the tests check behaviour, fail on plausible wrong solutions and pass on any
+            correct one? Write a wrong solution and a differently written correct one, and run the
+            tests on both.
+          - Real and worth learning: is this a problem an engineer could be handed, that needs the
+            material?
+          - Novel: does it differ in substance from these tasks?
+
+          {{ vars.existing }}
+
+          If a problem can be fixed, fix the files and run the checks again yourself. Then set `verdict`
+          with harness_vars_set to a JSON object: "decision" is "accept" or "reject"; "reasons" lists
+          what decided it; "problems" lists what you found and did not fix (empty when none). Accept only
+          a task you would be glad to see a model learn from.
+        verify: [admit]
+        repair:
+          attempts: 2
+          prompt: |
+            The accepted task no longer holds up when run:
+            {{ failure.stderr }}
+            Fix it and decide again, or reject it.
+outputs:
+  angles: { type: json, value: "{{ vars.angles }}" }

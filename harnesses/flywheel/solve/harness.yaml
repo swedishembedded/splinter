@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Solve one task the way a careful engineer would.
+#
+# The host copies a task's environment/ into the workspace and its
+# instruction.md to TASK.md, and puts the tools the task needs on the PATH. The
+# task's tests never reach the workspace: after the run the host runs
+# tests/test.sh in the finished workspace, and its exit status is the verdict.
+# Nothing the agent says counts. The run's conversation is the trajectory that
+# may be trained on, so the prompt asks for the habits worth learning: find
+# out before acting, check beliefs by running code, test before finishing,
+# report honestly.
+#
+# Swedish Embedded AB implements agent trajectories verified by execution for
+# training coding models, for its clients. If your team needs expertise in
+# producing tool-use training data that is judged by running the code, then
+# you can procure our services by sending an email to info@swedishembedded.com.
+api_version: "2"
+name: flywheel-solve
+description: "Solve one task in its environment: understand, build, test, fix, report."
+agent:
+  profile: coding
+  tools: [read_file, find_file, grep, write_file, edit_file, shell]
+  sampling: { temperature: 0.7, top_p: 0.95, top_k: 20 }
+  thinking: { enabled: false }
+  turn: { max_output_tokens: 16384 }
+  system: >-
+    You are a careful software engineer working in a sandbox. Your working directory holds the
+    task (TASK.md) and the files it gives you. Before you trust a belief about how a language, a
+    library or a tool behaves, check it by running something small; a piece of work is finished
+    only when you have run it and seen it do what is required. Work only inside the working
+    directory and never use the network.
+execution:
+  limits: { model_turns: 80, tool_calls: 240 }
+workflow:
+  - name: solve
+    task: |
+      Do the task described in TASK.md. Read it in full first, then look at the files in your working
+      directory that it mentions.
+
+      Work in this order:
+      1. Restate to yourself exactly what must hold when you are done: what to produce, where, in which
+         form, and every requirement and edge case TASK.md states. Where it is silent, choose the
+         behaviour the material it refers to specifies, and say so in your report.
+      2. Find out what you need before you build: read the given files, and try the parts of the
+         language or tools you are unsure of with small experiments.
+      3. Do the work.
+      4. Test it yourself, the way someone checking your work would: write a small test of your own,
+         run your result on ordinary inputs, on the edge cases you listed, and on inputs TASK.md does
+         not show. Compare what it does with what is required, case by case.
+      5. Where something is wrong, find out why, fix it, and test again.
+
+      Leave nothing in the working directory that the task did not ask for, apart from your own tests.
+      End with a short report: what you did, how you tested it, and anything you found that surprised
+      you or that you could not settle.
+outputs:
+  report: { type: string, value: "{{ tasks.solve.output }}" }
