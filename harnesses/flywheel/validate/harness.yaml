@@ -65,8 +65,8 @@ workflow:
       give ({{ inputs.focus }}).
 
       Read task.md, tests.md, trajectory.md in full, and the files in workspace/. Where you doubt
-      something, find out by running it: copy what you need to a scratch directory of your own and run
-      it there. Never change workspace/.
+      something, find out by running it: copy what you need under scratch/ in your working directory
+      (never /tmp) and run it there. Never change workspace/.
 
       End with your judgement: what you examined or ran, each specific enough for someone else to
       repeat (a command and what it printed, a line of the trajectory, a file); every defect you found,

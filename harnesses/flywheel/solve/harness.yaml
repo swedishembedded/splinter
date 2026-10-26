@@ -30,7 +30,7 @@ agent:
     task (task.md) and the files it gives you. Before you trust a belief about how a language, a
     library or a tool behaves, check it by running something small; a piece of work is finished
     only when you have run it and seen it do what is required. Work only inside the working
-    directory and never use the network.
+    directory (scratch files under scratch/ there, never /tmp) and never use the network.
 execution:
   limits: { model_turns: 80, tool_calls: 240 }
 workflow:

@@ -70,8 +70,9 @@ agent:
     You create training tasks for a coding agent: real problems, grounded in the material in
     data/, that an engineer could be handed and whose solution a program can check. You work in
     a sandbox; your working directory is the root of the task collection. Run things rather than
-    assume: the material and what the tools print are your only authorities. Never use the
-    network.
+    assume: the material and what the tools print are your only authorities. Put experiments and
+    scratch files under scratch/ in your working directory, never in /tmp or anywhere outside it.
+    Never use the network.
 execution:
   limits: { model_turns: 400, tool_calls: 1500 }
 gates:
@@ -96,6 +97,8 @@ gates:
       def index():
           lines = []
           for slug in sorted(os.listdir("tasks")):
+              if slug.startswith("."):
+                  continue
               path = os.path.join("tasks", slug, "task.json")
               if os.path.isfile(path):
                   idea = json.load(open(path, encoding="utf-8")).get("idea", {})
@@ -237,6 +240,10 @@ gates:
     capture: angles
     output_bytes: 262144
     command: [python3, -c, "import json, sys; print(json.dumps(json.loads(sys.argv[1])))", "{{ tasks.plan.output.angles }}"]
+  proposal:
+    description: The proposer ended with a written proposal.
+    stdin: "{{ tasks.propose.output }}"
+    command: [python3, -c, "import sys; text = sys.stdin.read(); sys.exit(0 if len(text.split()) >= 30 else 'the turn ended without a written proposal')"]
   index:
     description: The index of the tasks that exist, for the proposer and the novelty decision.
     capture: existing
@@ -262,10 +269,12 @@ gates:
     description: Remove a task directory the current angle left unadmitted when it failed for good.
     run: |
       python3 - <<'PY'
-      import os, shutil
+      import os, re, shutil
+      # Only a task directory - a slug's name - is ever removed: never .git or anything else.
       for slug in os.listdir("tasks"):
           path = os.path.join("tasks", slug)
-          if os.path.isdir(path) and not os.path.isfile(os.path.join(path, "task.json")):
+          if re.fullmatch(r"[a-z0-9][a-z0-9-]{2,60}", slug) and os.path.isdir(path) \
+                  and not os.path.isfile(os.path.join(path, "task.json")):
               shutil.rmtree(path)
       PY
 workflow:
@@ -361,6 +370,12 @@ workflow:
           complete), Why it is real (who would face it and why it matters), Solution sketch (how a good
           solution goes, and the detail of the material it turns on), Verification (what the test
           script checks, concretely), Data used (the files of data/ the task rests on).
+        verify: [proposal]
+        repair:
+          attempts: 2
+          prompt: |
+            Your turn ended without the written proposal. Write it now, under the headings Slug,
+            Title, Problem, Why it is real, Solution sketch, Verification and Data used.
       - name: formalize
         model_only: true
         sampling: { temperature: 0 }
