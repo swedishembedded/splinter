@@ -8,9 +8,9 @@ reduced-precision tier, activation recomputation, a loss that never materialises
 full logits, an attention kernel that supports the model's head dimension, and a loader
 that never holds the checkpoint in host memory. This section states what Brain's main
 tree contains for each, what its qualification runs measured for bf16 LoRA and NF4
-QLoRA, and what a later throughput measurement of the same architecture shows. It makes
-no claim that a trained 27B adapter changes what the model generates; that is the
-purpose of experiment CE6 (\cref{sec:coding-results}).
+QLoRA, and what a later throughput measurement of the same architecture shows. What a
+trained 27B adapter changes in what the model does is measured in
+\cref{sec:coding-results}.
 
 \subsection{What the tree contains}
 
