@@ -567,4 +567,21 @@ fn probes_are_not_taken_from_a_run_that_is_unknown_or_was_written_from_other_sou
     .unwrap();
     let refused = from(&first.run, &other);
     assert!(refused.contains("sources"), "{refused}");
+
+    // The same material elsewhere - a copied state root captures its
+    // converted page under another path, so another source id - is the
+    // material the exam was written from.
+    let copy = scratch.0.join("copy").join("manual.md");
+    std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
+    std::fs::copy(&manual, &copy).unwrap();
+    let reused = acquire(
+        &ctx,
+        &AcquireRequest {
+            probes_from: Some(first.run.clone()),
+            ..request(&copy)
+        },
+        &Learner,
+    )
+    .unwrap();
+    assert_eq!(reused.report.probes, first.report.probes);
 }

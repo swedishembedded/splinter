@@ -52,6 +52,26 @@ struct RecordedSource {
     source: SourceId,
 }
 
+/// The content of `sources`: the digests of their parts. A source's id also
+/// names where it was captured from - for a converted page, a file under the
+/// state root - so a copied state root holds the same material under other
+/// ids; the exam is tied to the material, not to the path.
+fn material(
+    ctx: &Context,
+    run: &str,
+    sources: &[SourceId],
+) -> Result<BTreeSet<Digest>, OrchestratorError> {
+    let mut parts = BTreeSet::new();
+    for id in sources {
+        let source = ctx
+            .sources()
+            .get_source(id)
+            .map_err(|e| refuse(run, &format!("source {id} cannot be read: {e}")))?;
+        parts.extend(source.parts.into_iter().map(|p| p.content));
+    }
+    Ok(parts)
+}
+
 fn refuse(run: &str, why: &str) -> OrchestratorError {
     OrchestratorError::Refused(format!("cannot take probes from run {run}: {why}"))
 }
@@ -91,8 +111,8 @@ pub(super) fn reuse(
     }
     let probes: Vec<SkillProbes> = stage(&run, "probes")?;
     let recorded: Vec<RecordedSource> = stage(&run, "sources")?;
-    let written_from: BTreeSet<&SourceId> = recorded.iter().map(|s| &s.source).collect();
-    if written_from != sources.iter().collect() {
+    let written_from: Vec<SourceId> = recorded.into_iter().map(|s| s.source).collect();
+    if material(ctx, from, &written_from)? != material(ctx, from, sources)? {
         return Err(refuse(
             from,
             "its sources differ from this run's, and an exam is valid only for the material \
