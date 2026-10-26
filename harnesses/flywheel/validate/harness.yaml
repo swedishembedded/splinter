@@ -58,6 +58,11 @@ agent:
         convoluted, or when it succeeds by accident.
 execution:
   limits: { model_turns: 40, tool_calls: 120 }
+gates:
+  judgement:
+    description: The judge ended with a written judgement; an empty one must never reach the decision.
+    stdin: "{{ tasks.judge.output }}"
+    command: [python3, -c, "import sys; text = sys.stdin.read(); sys.exit(0 if len(text.split()) >= 30 else 'the turn ended without the written judgement')"]
 workflow:
   - name: judge
     task: |
@@ -73,6 +78,12 @@ workflow:
       naming where it is; and whether to keep or discard the trajectory. Keep only what you would be
       glad to see a model imitate. A defect you can point at is a reason to discard; a suspicion you
       could not confirm by running something is not.
+    verify: [judgement]
+    repair:
+      attempts: 2
+      prompt: |
+        Your turn ended without the written judgement. Write it now: what you examined or ran, the
+        defects you confirmed and where, and whether to keep or discard the trajectory.
   - name: decide
     model_only: true
     sampling: { temperature: 0 }

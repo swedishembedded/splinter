@@ -89,7 +89,7 @@ gates:
       fi
       cat > "$SVEN_SCRATCHPAD/task_gate.py" <<'PY'
       """index | check SLUG | admit SLUG VERDICT IDEA NOVELTY | duplicate NOVELTY | failed ITEM"""
-      import json, os, re, shutil, subprocess, sys, tempfile
+      import fcntl, json, os, re, shutil, subprocess, sys, tempfile
 
       LIMIT = 120
 
@@ -107,6 +107,14 @@ gates:
           with open("tasks/index.md", "w", encoding="utf-8") as handle:
               handle.write("# Existing tasks\n\n" + text + "\n")
           return text
+
+
+      def shared():
+          """One writer at a time on the shared files (log, index, git), so items or runs that
+          share tasks/ never interleave their records or commits; checks run outside it."""
+          lock = open(os.path.join("tasks", ".lock"), "w")
+          fcntl.flock(lock, fcntl.LOCK_EX)
+          return lock
 
 
       def log(entry):
@@ -181,9 +189,21 @@ gates:
       def main():
           mode = sys.argv[1]
           if mode == "index":
+              held = shared()
               print(index())
               return
+          if mode == "yield":
+              held = shared()
+              start = int(open(os.path.join(os.environ["SVEN_SCRATCHPAD"], "log-start")).read())
+              with open("tasks/log.jsonl", encoding="utf-8") as handle:
+                  outcomes = [json.loads(line)["outcome"] for line in handle.readlines()[start:]]
+              counts = {o: outcomes.count(o) for o in sorted(set(outcomes))}
+              print(json.dumps(counts))
+              if not counts.get("admitted"):
+                  sys.exit(f"no task was admitted this run: {counts or 'no idea reached an outcome'}")
+              return
           if mode in ("duplicate", "failed"):
+              held = shared()
               # An idea that ends without a task: why, so a yield count can be audited.
               detail = sys.argv[2] if sys.argv[2:] else ""
               try:
@@ -211,6 +231,7 @@ gates:
           if mode == "admit":
               verdict, idea, novelty = (json.loads(arg) for arg in sys.argv[3:6])
               if verdict.get("decision") != "accept":
+                  held = shared()
                   shutil.rmtree(root, ignore_errors=True)
                   log({"outcome": "rejected", "slug": slug, "idea": idea, "novelty": novelty, "verdict": verdict})
                   commit(f"log: {slug} rejected", ["log.jsonl"])
@@ -221,6 +242,7 @@ gates:
               if problems:
                   print("\n".join(problems), file=sys.stderr)
                   sys.exit(1)
+              held = shared()
               if os.path.exists(os.path.join(root, "runs.json")):
                   os.unlink(os.path.join(root, "runs.json"))
               with open(os.path.join(root, "task.json"), "w", encoding="utf-8") as handle:
@@ -235,11 +257,24 @@ gates:
 
       main()
       PY
+      touch tasks/log.jsonl
+      wc -l < tasks/log.jsonl > "$SVEN_SCRATCHPAD/log-start"
   angles:
     description: The plan's angles, as the run variable the loop iterates.
     capture: angles
     output_bytes: 262144
-    command: [python3, -c, "import json, sys; print(json.dumps(json.loads(sys.argv[1])))", "{{ tasks.plan.output.angles }}"]
+    command: [python3, -c, "import json, sys; angles = json.loads(sys.argv[1]); sys.exit('the plan holds no angle') if not angles else print(json.dumps(angles))", "{{ tasks.plan.output.angles }}"]
+  survey:
+    description: The explorer ended with a survey that has a map and an Angles section.
+    stdin: "{{ tasks.explore.output }}"
+    command: [python3, -c, "import sys; text = sys.stdin.read(); sys.exit(0 if len(text.split()) >= 150 and 'angle' in text.lower() else 'the turn ended without the survey: a Map and a numbered Angles list')"]
+  report:
+    description: The reviewer ended with a written review.
+    stdin: "{{ tasks.review.output }}"
+    command: [python3, -c, "import sys; text = sys.stdin.read(); sys.exit(0 if len(text.split()) >= 30 else 'the turn ended without the written review')"]
+  yield:
+    description: The run admitted at least one task; otherwise it fails, naming every idea's outcome.
+    command: [python3, "{{ run.scratchpad }}/task_gate.py", yield]
   proposal:
     description: The proposer ended with a written proposal.
     stdin: "{{ tasks.propose.output }}"
@@ -308,6 +343,12 @@ workflow:
       Each angle names the part of the material it rests on and the kind of problem, e.g.
       "string.gsub with a function replacement: a templating tool that expands ${name} placeholders
       from a table and leaves unknown ones intact".
+    verify: [survey]
+    repair:
+      attempts: 2
+      prompt: |
+        Your turn ended without the survey. Write it now: a "Map" section and a numbered "Angles"
+        list of {{ inputs.count }} angles, from what you have found.
   - name: plan
     model_only: true
     sampling: { temperature: 0 }
@@ -325,8 +366,11 @@ workflow:
       {{ tasks.explore.output }}
 
       Answer with "angles": the survey's angles, one string each, in their order.
-  - name: planned
     verify: [angles]
+    repair:
+      attempts: 2
+      prompt: |
+        The answer held no angle. Copy every angle of the survey's Angles list into "angles".
   - name: tasks
     for_each:
       source: { variable: angles }
@@ -517,6 +561,12 @@ workflow:
           review: for each question what you checked or ran and what you found, what you fixed, what
           remains, and whether you would accept the task - only one you would be glad to see a model
           learn from.
+        verify: [report]
+        repair:
+          attempts: 2
+          prompt: |
+            Your turn ended without the written review. Write it now: what you checked or ran
+            for each question, what you found and fixed, and whether you would accept the task.
       - name: decide
         when: { eq: tasks.novelty.output.decision, value: novel }
         model_only: true
@@ -545,5 +595,7 @@ workflow:
           Answer with "decision" ("accept" or "reject"), "reasons" (what decided it, from the report)
           and "problems" (what the report found and did not fix; empty when none).
         verify: [admit]
+  - name: yielded
+    verify: [yield]
 outputs:
   angles: { type: json, value: "{{ tasks.plan.output.angles }}" }
