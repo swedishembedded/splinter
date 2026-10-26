@@ -68,6 +68,10 @@ pub(super) struct Batch {
     pub(super) rejections: Vec<RejectionNote>,
     /// Every request put to the generator, in the order made.
     pub(super) calls: Vec<CallNote>,
+    /// Instructions to tell the generator not to repeat: those the request
+    /// brought and those admitted since, a text part's or a queued
+    /// section's worth.
+    pub(super) written: Vec<String>,
     /// What each kind's proposals were refused for, and how often.
     pub(super) refused: BTreeMap<String, BTreeMap<Rejection, usize>>,
     /// No window is put to the generator after this.

@@ -89,6 +89,7 @@ fn a_kind_refused_again_and_again_for_one_reason_is_told_how_to_correct_it() {
             generator: &ModelRef::policy_default(),
             goal: None,
             author: None,
+            written: &[],
             denoise_seed: None,
             deadline: None,
             cancel: CancelToken::new(),

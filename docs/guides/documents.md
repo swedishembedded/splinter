@@ -138,8 +138,11 @@ declares none) and read as Markdown; the record ties the URL (`file://` and the 
 page) to the digest of the bytes and to the source. Each skill has probes
 written from its own sections, split into dev probes (the baseline, a round's gain and what a
 round cost are measured on them) and final probes (only the closing assessment touches them); no
-training task may repeat a probe. Rounds train the skill expected to benefit most, prerequisites
-first; a candidate is accepted when its skill improved on the dev probes and no skill measured
+training task may repeat a probe. Each time the generator is asked again for a skill it is shown
+the instructions already written for it (the newest 12, each cut to 240 characters) and told to
+write different tasks, and a round's task request lists the skill's probes, so repeats are mostly
+not written instead of refused afterwards. Rounds train the skill expected to benefit most,
+prerequisites first; a candidate is accepted when its skill improved on the dev probes and no skill measured
 before fell by more than `--retention-drop`; the competence graph is kept revision by revision.
 The run ends when every skill is mastered (`--mastery`), no skill can be chosen (a skill has
 `--max-rounds-per-skill`), `--max-rounds` or `--budget` is spent, and is accepted only if every

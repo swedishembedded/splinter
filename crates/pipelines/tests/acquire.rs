@@ -38,7 +38,7 @@ mod common;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-use common::gate::FakeTrainer;
+use common::gate::{question, FakeTrainer};
 use common::zork::{context, model, request, write_manual, writing_probes_in_batches, Learner};
 use common::{scratch_context, Scripted};
 use serde_json::json;
@@ -439,6 +439,45 @@ fn a_generator_that_writes_few_probes_a_request_is_asked_again() {
             (probes.dev.len(), probes.finals.len()),
             (3, 3),
             "{probes:?}"
+        );
+    }
+}
+
+#[test]
+fn the_generator_is_shown_the_probes_it_already_wrote_so_it_does_not_repeat_them() {
+    let policy = writing_probes_in_batches(2);
+    let prompts = policy.prompts.clone();
+    let (scratch, ctx) = scratch_context("acquire-avoid-probes", policy, false);
+    common::gate::put_base(&ctx);
+    let manual = write_manual(&scratch);
+    acquire(&ctx, &request(&manual), &Learner).unwrap();
+
+    let prompts = prompts.lock().unwrap();
+    let writing = |assessment: bool| -> Vec<&String> {
+        prompts
+            .iter()
+            .filter(|p| p.contains("You write training tasks"))
+            .filter(|p| p.contains("(assessment)") == assessment)
+            .filter(|p| common::zork::topic_of(p) == Some("alpha"))
+            .collect()
+    };
+    let probes = writing(true);
+    let (first, second) = (probes[0], probes[1]);
+    let written = [question("alpha", 0), question("alpha", 1)];
+    for instruction in &written {
+        assert!(!first.contains(instruction), "nothing was written yet");
+        assert!(
+            second.contains(instruction),
+            "the second request does not list {instruction:?}"
+        );
+    }
+    // A training task must not repeat a probe: the round's request lists them.
+    let training = writing(false);
+    assert!(!training.is_empty());
+    for instruction in &written {
+        assert!(
+            training[0].contains(instruction),
+            "the training request does not list the probe {instruction:?}"
         );
     }
 }

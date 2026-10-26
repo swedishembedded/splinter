@@ -439,6 +439,7 @@ fn tasks_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             generator: st.learn.generator,
             goal: st.learn.goal,
             author: st.persona(),
+            written: &[],
             denoise_seed,
             deadline: st.stage_deadlines.tasks,
             cancel: run.cancel_token(),

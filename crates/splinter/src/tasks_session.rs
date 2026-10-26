@@ -68,6 +68,7 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                         generator: &generator,
                         goal: None,
                         author: author.as_deref(),
+                        written: &[],
                         denoise_seed,
                         deadline: None,
                         cancel: run.cancel_token(),

@@ -128,6 +128,10 @@ pub struct Generation<'a> {
     /// generator as the source's author, and a subject a question may name
     /// ([`SourceText::by`]).
     pub author: Option<&'a str>,
+    /// Instructions already written for this material, shown to the
+    /// generator as tasks not to repeat (the most recent
+    /// [`splinter_knowledge::tasks::MAX_LISTED_INSTRUCTIONS`] are).
+    pub written: &'a [String],
     /// The seed the `denoise` tasks are built with, so the same part under
     /// the same seed yields the same task. Required when `kinds` names
     /// `denoise`, so that no run builds them from a seed it did not state.
@@ -265,6 +269,7 @@ pub fn generate(
         Some(model_generator(ctx, request, &model_kinds)?)
     };
     let mut batch = Batch {
+        written: request.written.to_vec(),
         deadline: request.deadline,
         ..Batch::default()
     };
@@ -286,6 +291,7 @@ pub fn generate(
                 break 'sources;
             }
             batch.parts += 1;
+            batch.written = request.written.to_vec();
             if let Some(denoise_seed) = denoise_seed {
                 let content = ctx.sources().read_blob(&part.content)?;
                 match Denoise::new(denoise_seed.value()).generate(&source, &part.name, &content) {
@@ -568,8 +574,12 @@ fn run_windows(
         }
         let shown = text.clone().select(window)?;
         let corrections = batch.corrections(&active);
-        let report = match ctx.block_on(generator.generate_avoiding(&shown, &active, &corrections))
-        {
+        let report = match ctx.block_on(generator.generate_avoiding(
+            &shown,
+            &active,
+            &corrections,
+            &batch.written,
+        )) {
             Ok(report) => report,
             Err(GenerateError::NoSections) => return Ok(()),
             Err(e) => return Err(e.into()),
@@ -598,6 +608,7 @@ fn run_windows(
             }));
         for generated in report.admitted {
             let kind = generated.task.task.kind.clone();
+            batch.written.push(generated.task.instruction.clone());
             batch.admit(
                 ctx,
                 &kind,

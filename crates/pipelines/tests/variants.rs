@@ -75,6 +75,7 @@ fn manual_tasks(test: &str) -> (Scratch, Context, splinter_pipelines::tasks::Tas
             goal: None,
             author: None,
             // seed: the denoise kind refuses to build without one; any value serves
+            written: &[],
             denoise_seed: Some(Seed::new(1)),
             deadline: None,
             cancel: CancelToken::new(),

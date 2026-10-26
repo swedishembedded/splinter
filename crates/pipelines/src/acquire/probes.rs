@@ -85,11 +85,13 @@ fn not_exercising(
     Ok((!uses).then_some("does_not_use_the_skill"))
 }
 
-/// Tasks written from `skill`'s sections that exercise it and repeat nothing
+/// Tasks written from a skill's sections that exercise it and repeat nothing
 /// in `seen`; each admitted instruction is added to `seen`.
 pub struct Written {
     /// The tasks admitted, by address.
     pub tasks: Vec<TaskEntry>,
+    /// The instructions of [`Self::tasks`], in the same order.
+    pub instructions: Vec<String>,
     /// The tasks refused, by reason.
     pub refused: BTreeMap<String, usize>,
 }
@@ -109,11 +111,15 @@ pub struct Ask<'a> {
 }
 
 /// Writes tasks for `skill` and keeps those that exercise it and are new to
-/// `seen`.
+/// `seen`. `already` are the instructions already written for the skill: the
+/// generator is told not to repeat them. They are the skill's own and not the
+/// other skills' too, since those are written from other sections and the
+/// prompt is bounded; `seen` still refuses a repeat of any of them afterwards.
 pub fn write_for(
     ctx: &Context,
     skill: &Skill,
     ask: &Ask<'_>,
+    already: &[String],
     seen: &mut Seen,
 ) -> Result<Written, OrchestratorError> {
     let generated = generate(
@@ -125,6 +131,7 @@ pub fn write_for(
             generator: ask.generator,
             goal: Some(&ask.goal),
             author: None,
+            written: already,
             denoise_seed: None,
             deadline: ask.deadline,
             cancel: ask.cancel.clone(),
@@ -135,6 +142,7 @@ pub fn write_for(
     // beside what this skill refuses, so an empty skill says why.
     let mut written = Written {
         tasks: Vec::new(),
+        instructions: Vec::new(),
         refused: generated.rejected.clone(),
     };
     for entry in ctx.tasks().get_set(&generated.task_set)?.members {
@@ -152,6 +160,7 @@ pub fn write_for(
             Some(why) => *written.refused.entry(why.into()).or_default() += 1,
             None => {
                 seen.admit(&task.instruction);
+                written.instructions.push(task.instruction);
                 written.tasks.push(entry);
             }
         }
@@ -182,13 +191,13 @@ pub fn probes_for(
     per_half: usize,
     seen: &mut Seen,
 ) -> Result<SkillProbes, OrchestratorError> {
-    let mut written = write_for(ctx, skill, ask, seen)?;
+    let mut written = write_for(ctx, skill, ask, &[], seen)?;
     for _ in 1..MAX_PROBE_WRITES {
         if written.tasks.len() >= 2 * per_half || ask.deadline.is_some_and(|d| Instant::now() >= d)
         {
             break;
         }
-        let more = write_for(ctx, skill, ask, seen)?;
+        let more = write_for(ctx, skill, ask, &written.instructions, seen)?;
         for (why, n) in more.refused {
             *written.refused.entry(why).or_default() += n;
         }
@@ -196,6 +205,7 @@ pub fn probes_for(
             break;
         }
         written.tasks.extend(more.tasks);
+        written.instructions.extend(more.instructions);
     }
     written.tasks.sort_by(|a, b| a.task.cmp(&b.task));
     let mut probes = SkillProbes {

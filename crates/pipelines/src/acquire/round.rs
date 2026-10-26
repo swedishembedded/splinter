@@ -226,6 +226,9 @@ impl Acquisition<'_> {
         };
 
         let generator = self.author().clone();
+        // A training task must not repeat a probe of its skill, so the
+        // generator is shown them rather than refused its repeats afterwards.
+        let probe_instructions = self.probe_instructions(&skill.id)?;
         let written = write_for(
             ctx,
             skill,
@@ -236,6 +239,7 @@ impl Acquisition<'_> {
                 deadline: self.deadline,
                 cancel: cancel.clone(),
             },
+            &probe_instructions,
             &mut self.seen,
         )?;
         report.written = written.tasks.len();
@@ -503,6 +507,19 @@ impl Acquisition<'_> {
             after.insert(measured.skill.clone(), scored);
         }
         Ok(after)
+    }
+
+    /// The instructions of `skill`'s probes, dev and final, in address order.
+    fn probe_instructions(&self, skill: &str) -> Result<Vec<String>, OrchestratorError> {
+        let Some(probes) = self.probes.get(skill) else {
+            return Ok(Vec::new());
+        };
+        probes
+            .dev
+            .iter()
+            .chain(&probes.finals)
+            .map(|id| Ok(self.ctx.tasks().get(id)?.instruction))
+            .collect()
     }
 
     /// Makes an accepted candidate the one the run stands on. A full

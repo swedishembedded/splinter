@@ -67,6 +67,7 @@ fn tasks_of(
             generator: &ModelRef::policy_default(),
             goal: None,
             author: None,
+            written: &[],
             denoise_seed,
             deadline: None,
             cancel: CancelToken::new(),

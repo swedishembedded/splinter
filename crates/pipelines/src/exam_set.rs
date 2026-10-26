@@ -295,6 +295,7 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
             generator: request.generator,
             goal: request.goal,
             author: request.author,
+            written: &[],
             denoise_seed: None,
             deadline: None,
             cancel: request.cancel.clone(),

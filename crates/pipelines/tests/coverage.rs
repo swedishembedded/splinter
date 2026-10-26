@@ -62,6 +62,7 @@ fn run(
             generator: &ModelRef::policy_default(),
             goal: None,
             author: None,
+            written: &[],
             denoise_seed: None,
             deadline,
             cancel: CancelToken::new(),

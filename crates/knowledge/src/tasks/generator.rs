@@ -380,19 +380,23 @@ impl ModelTaskGenerator {
         source: &SourceText,
         kinds: &[&TaskKind],
     ) -> Result<GenerationReport, GenerateError> {
-        self.generate_avoiding(source, kinds, &BTreeMap::new())
+        self.generate_avoiding(source, kinds, &BTreeMap::new(), &[])
             .await
     }
 
     /// [`ModelTaskGenerator::generate`], each kind's brief carrying the
     /// correction ([`Rejection::advice`]) for the reasons `avoid` names for it:
     /// what its earlier proposals were refused for. A kind that keeps getting
-    /// one thing wrong is told, and not asked the same way again.
+    /// one thing wrong is told, and not asked the same way again. `written`
+    /// are instructions already written for this material: each brief lists
+    /// the most recent ones (see [`MAX_LISTED_INSTRUCTIONS`]) as tasks not to
+    /// repeat, since a model that is asked again does not remember its answer.
     pub async fn generate_avoiding(
         &self,
         source: &SourceText,
         kinds: &[&TaskKind],
         avoid: &BTreeMap<String, Vec<Rejection>>,
+        written: &[String],
     ) -> Result<GenerationReport, GenerateError> {
         self.policy.validate()?;
         if self.model.identity().trim().is_empty() {
@@ -424,6 +428,7 @@ impl ModelTaskGenerator {
                 self.policy.tasks_per_request,
                 refused,
                 source.identity.author.as_deref(),
+                written,
             );
             asks.push((*kind, runtime, brief));
         }
@@ -563,12 +568,38 @@ fn prompt_text<I: Serialize + ?Sized>(brief: &str, shown: &I) -> String {
     format!("{brief}\n{sections}")
 }
 
+/// The most instructions a brief lists as already written, newest kept: the
+/// model needs the recent ones to steer away from, and every one listed costs
+/// prompt tokens on each request of a small context.
+pub const MAX_LISTED_INSTRUCTIONS: usize = 12;
+
+/// The most characters of one listed instruction: enough to tell what it
+/// asks, short enough that a long program in an instruction does not fill the
+/// prompt.
+pub const MAX_LISTED_CHARS: usize = 240;
+
+/// `instruction` on one line, cut to [`MAX_LISTED_CHARS`].
+fn listed(instruction: &str) -> String {
+    let line = instruction.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.chars().count() <= MAX_LISTED_CHARS {
+        return line;
+    }
+    let cut: String = line.chars().take(MAX_LISTED_CHARS).collect();
+    format!("{cut}...")
+}
+
 /// The brief for tasks of `kind`: the kind's own brief and the rules every
 /// task is held to, with the name of the sections' `author` when it is
 /// known, since a generator that has no name for the writer calls them "the
 /// writer", which no instruction may. The sections are the call's input; the
 /// reply's shape is its return type.
-fn brief(kind: &TaskKind, count: usize, refused: &[Rejection], author: Option<&str>) -> String {
+fn brief(
+    kind: &TaskKind,
+    count: usize,
+    refused: &[Rejection],
+    author: Option<&str>,
+    written: &[String],
+) -> String {
     let runtime = kind.runtime.as_deref().unwrap_or("-");
     let brief = kind
         .brief
@@ -653,6 +684,19 @@ fn brief(kind: &TaskKind, count: usize, refused: &[Rejection], author: Option<&s
             out.push('\n');
         }
     }
+    if !written.is_empty() {
+        out.push_str(
+            "\nThese tasks were already written. Write different ones: a different program or \
+             question about other parts of the material, not the same task with renamed \
+             variables or reworded:\n",
+        );
+        let first = written.len().saturating_sub(MAX_LISTED_INSTRUCTIONS);
+        for instruction in &written[first..] {
+            out.push_str("- ");
+            out.push_str(&listed(instruction));
+            out.push('\n');
+        }
+    }
     out.push_str("\nA reply looks like this:\n");
     out.push_str(REPLY_EXAMPLE);
     out.push('\n');
@@ -669,12 +713,31 @@ mod tests {
     #[test]
     fn the_brief_names_the_author_where_the_writer_is_meant() {
         let kind = Catalogue::builtin().get("explain").unwrap().clone();
-        let named = brief(&kind, 4, &[], Some("Thomas Jefferson"));
+        let named = brief(&kind, 4, &[], Some("Thomas Jefferson"), &[]);
         assert!(
             named.contains("written by Thomas Jefferson: say that name"),
             "{named}"
         );
-        let unnamed = brief(&kind, 4, &[], None);
+        let unnamed = brief(&kind, 4, &[], None, &[]);
         assert!(!unnamed.contains("written by"), "{unnamed}");
+    }
+
+    /// Instructions already written are listed so the model writes others,
+    /// but only the newest few, each cut short, so the prompt stays small.
+    #[test]
+    fn the_brief_lists_a_bounded_number_of_short_instructions_already_written() {
+        let kind = Catalogue::builtin().get("explain").unwrap().clone();
+        let written: Vec<String> = (0..MAX_LISTED_INSTRUCTIONS + 3)
+            .map(|i| format!("task {i} {}", "x".repeat(MAX_LISTED_CHARS * 2)))
+            .collect();
+        let brief = brief(&kind, 4, &[], None, &written);
+        assert!(!brief.contains("- task 2 "), "{brief}");
+        assert!(brief.contains("- task 3 "), "{brief}");
+        assert!(brief.contains(&format!("- task {} ", written.len() - 1)));
+        assert!(
+            !brief.contains(&"x".repeat(MAX_LISTED_CHARS + 1)),
+            "{brief}"
+        );
+        assert!(!super::brief(&kind, 4, &[], None, &[]).contains("already written"));
     }
 }

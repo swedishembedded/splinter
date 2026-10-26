@@ -61,7 +61,7 @@ async fn a_request_carries_the_correction_for_what_was_refused_before() {
     let avoid: BTreeMap<String, Vec<Rejection>> =
         BTreeMap::from([("converse".to_string(), vec![Rejection::NotSelfContained])]);
     generator
-        .generate_avoiding(&source, &[&kind], &avoid)
+        .generate_avoiding(&source, &[&kind], &avoid, &[])
         .await
         .unwrap();
     let brief = last_brief(&model);
@@ -71,7 +71,7 @@ async fn a_request_carries_the_correction_for_what_was_refused_before() {
     // A refusal that has no correction to give adds nothing.
     let avoid = BTreeMap::from([("converse".to_string(), vec![Rejection::NoReply])]);
     generator
-        .generate_avoiding(&source, &[&kind], &avoid)
+        .generate_avoiding(&source, &[&kind], &avoid, &[])
         .await
         .unwrap();
     assert!(!last_brief(&model).contains("were refused"));
