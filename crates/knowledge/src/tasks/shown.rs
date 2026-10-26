@@ -54,6 +54,44 @@ pub(super) fn shown(kind: &TaskKind, mut candidate: Candidate) -> Result<Candida
     Ok(candidate)
 }
 
+/// What a program of each runtime reads that the language does not define:
+/// a pseudo-random generator's draws, the clock, the environment, input,
+/// the collector's figures, compiled bytecode. A computed answer that comes
+/// from one is a fact about one machine, not about the language - a seeded
+/// `math.random` prints what the C library's generator draws - and training
+/// a policy to repeat it teaches noise: a Qwen3-4B fine-tuned on six such
+/// answers lost 15 of the 35 other probes it passed.
+fn undefined_by_the_language(runtime: &str) -> &'static [&'static str] {
+    match runtime {
+        "lua" => &[
+            "math.random",
+            "os.time",
+            "os.clock",
+            "os.date",
+            "os.getenv",
+            "os.tmpname",
+            "io.read",
+            "collectgarbage",
+            "string.dump",
+        ],
+        "python3" => &[
+            "import random",
+            "from random",
+            "random.",
+            "import time",
+            "time.time",
+            "datetime.now",
+            "os.environ",
+            "os.getenv",
+            "uuid",
+            "input(",
+            "id(",
+            "hash(",
+        ],
+        _ => &[],
+    }
+}
+
 /// The most characters a computed reference may have: an answer the solver
 /// is to write out, not a dump.
 const MAX_COMPUTED_OUTPUT: usize = 2_000;
@@ -76,6 +114,18 @@ pub(super) fn computed(
     ) else {
         return Ok(Ok(candidate));
     };
+    if let Some(name) = kind.runtime.as_deref().and_then(|r| {
+        undefined_by_the_language(r)
+            .iter()
+            .find(|n| code.contains(*n))
+    }) {
+        return Ok(Err((
+            Rejection::ChecksFailed,
+            format!(
+                "the material's output depends on `{name}`, which the language does not define"
+            ),
+        )));
+    }
     let call = CodeCall { code, stdin: None };
     let first = runtime.run(&call)?;
     let refused = |why: String| Ok(Err((Rejection::ChecksFailed, why)));

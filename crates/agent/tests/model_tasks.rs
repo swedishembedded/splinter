@@ -239,6 +239,12 @@ async fn a_predicted_output_is_what_running_the_shown_code_prints() {
         predict("print(min(max(-4, 0), 10) + 1)", "0"),
         predict("import sys; sys.exit(3)", "nothing"),
         predict("import random; print(random.random())", "0.5"),
+        // Seeded, it prints the same twice, but what it prints is the
+        // generator's draw, not anything the language defines.
+        predict(
+            "import random; random.seed(1); print(random.randint(1, 100))",
+            "18",
+        ),
         repeated,
     ])]);
     let report = generator(model, store, vec![env])
@@ -246,8 +252,9 @@ async fn a_predicted_output_is_what_running_the_shown_code_prints() {
         .await
         .unwrap();
     assert_eq!(report.admitted.len(), 2, "{report:#?}");
-    // The failing and the unstable program have no answer to learn.
-    assert_eq!(report.count(Rejection::ChecksFailed), 2, "{report:#?}");
+    // The failing, the unstable and the seeded-random program have no answer
+    // to learn.
+    assert_eq!(report.count(Rejection::ChecksFailed), 3, "{report:#?}");
     assert_eq!(report.count(Rejection::MaterialNotShown), 1, "{report:#?}");
     // The solver is shown the question and, once, the program that is run.
     assert_eq!(
