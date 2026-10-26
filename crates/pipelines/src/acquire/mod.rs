@@ -156,6 +156,10 @@ pub struct AcquireRequest {
     /// Read the skill graph from the sources' structure instead of asking
     /// the planner.
     pub structural_graph: bool,
+    /// Teach a task the policy never solves with its own reference answer
+    /// (a computed output, a reference program), graded like any answer,
+    /// instead of asking the teacher model.
+    pub reference_teacher: bool,
     /// How training runs.
     pub tuning: Tuning,
     /// The models named for roles.
@@ -189,6 +193,7 @@ impl AcquireRequest {
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             self_generate: false,
             structural_graph: false,
+            reference_teacher: false,
             tuning: Tuning::default(),
             roles: RoleOverrides::default(),
         }

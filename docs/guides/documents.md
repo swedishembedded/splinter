@@ -172,7 +172,9 @@ does not apply. Training holds the card for itself: the resident policy is relea
 `--self-generate` lets the incumbent write the training tasks of every round: the policy the run
 began with until a round is accepted, the accepted candidate after. The probes are written once,
 before any training, by the configured generator in either case, so the exam does not depend on
-the trained model. `--structural-graph` reads the skill graph from the sources' structure, one
+the trained model. `--reference-teacher` teaches a task the policy never solves with the task's own reference answer -
+for a code-output kind, the output the runtime computed - said as the teacher's reply and graded
+like any answer, so no model teaches. `--structural-graph` reads the skill graph from the sources' structure, one
 skill per section, without asking a planner: a small model rarely writes the planner's reply.
 
 The Lua families and the `lua` runtime are Lua 5.1 and no other: `make deps/lua LUA_DIR=<dir>`

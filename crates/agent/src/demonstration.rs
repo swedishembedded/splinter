@@ -92,6 +92,17 @@ impl Demonstration {
         })
     }
 
+    /// The demonstration of a task whose answer is `answer` itself: no tool
+    /// call, the answer said as the reply - a closed-book task's reference
+    /// (an output the runtime computed, a reference program).
+    #[must_use]
+    pub fn answer(answer: impl Into<String>) -> Self {
+        Self {
+            actions: Vec::new(),
+            closing: answer.into(),
+        }
+    }
+
     /// The tool calls in the order they are made: `(tool, arguments)`.
     pub fn calls(&self) -> impl Iterator<Item = (&'static str, &serde_json::Value)> {
         self.actions.iter().map(|a| (a.tool, &a.arguments))

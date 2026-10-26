@@ -34,6 +34,9 @@ use super::cost::StageCost;
 use super::probes::{score, set_of, write_for, Ask, ProbeScore};
 use super::Acquisition;
 use crate::curriculum::frontier::{select_frontier, tally};
+use crate::curriculum::repository_teacher::{
+    teach_repository, RepositoryTeacher, TeachRepositoryRequest,
+};
 use crate::curriculum::teacher::{teach, TeachRequest};
 use crate::datasets::{build, BuildRequest, ViewName, VoiceBuild, DEFAULT_MIN_STRENGTH};
 use crate::release::arm;
@@ -284,17 +287,31 @@ impl Acquisition<'_> {
             report.graded += count.graded;
             report.verified_passes += count.passes;
         }
-        let taught = teach(
-            ctx,
-            &TeachRequest {
-                task_set: &tasks,
-                attempts: Some(&solved.experience_set),
-                teacher: &self.teacher,
-                system: None,
-                deadline: self.deadline,
-                cancel: cancel.clone(),
-            },
-        )?;
+        let taught = if self.request.reference_teacher {
+            teach_repository(
+                ctx,
+                &TeachRepositoryRequest {
+                    task_set: &tasks,
+                    attempts: Some(&solved.experience_set),
+                    teacher: &RepositoryTeacher::Reference,
+                    work: WorkProtocol::default(),
+                    deadline: self.deadline,
+                    cancel: cancel.clone(),
+                },
+            )?
+        } else {
+            teach(
+                ctx,
+                &TeachRequest {
+                    task_set: &tasks,
+                    attempts: Some(&solved.experience_set),
+                    teacher: &self.teacher,
+                    system: None,
+                    deadline: self.deadline,
+                    cancel: cancel.clone(),
+                },
+            )?
+        };
         let kept = select_frontier(ctx, &tasks, &solved, &taught)?;
         report.frontier = Some(kept.distribution);
         report.worth_training = kept.distribution.kept();

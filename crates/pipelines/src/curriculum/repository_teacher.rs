@@ -18,7 +18,8 @@
 //!   (the inverse of the seeded fault, kept with the task as its reference)
 //!   replayed as the actions of an agent ([`splinter_agent::demonstration`]):
 //!   a real episode in a fresh copy of the task's snapshot with sven's own
-//!   tools, so the trajectory records what the tools returned.
+//!   tools, so the trajectory records what the tools returned. A closed-book
+//!   task's reference is its answer, said as the reply.
 //! * [`RepositoryTeacher::Model`] - a stronger model (`remote:` or
 //!   `local:`) attempting the task as an agent, exactly as the student
 //!   does, marked the teacher's.
@@ -40,7 +41,7 @@ use crate::solving::{ATTEMPT_PRODUCER, ATTEMPT_VERSION};
 use serde::{Serialize, Serializer};
 use splinter_agent::demonstration::{Demonstration, DEMONSTRATOR};
 use splinter_agent::solve::Solution;
-use splinter_agent::solve::{Model, SolveError, SolveOptions};
+use splinter_agent::solve::{solve, Model, SolveError, SolveOptions};
 use splinter_agent::work::WorkProtocol;
 use splinter_agent::CancelToken;
 use splinter_core::annotation::{Annotation, AnnotationBody, Producer};
@@ -209,44 +210,63 @@ fn demonstrate(
                 .push(skip("the task keeps no reference change to replay".into()));
             continue;
         };
-        let demonstration = match Demonstration::from_patch(&reference.content) {
-            Ok(demonstration) => demonstration,
-            Err(e) => {
-                report.skipped.push(skip(e.to_string()));
-                continue;
-            }
-        };
         let environment = match ctx.environments().for_record(&task.environment) {
-            Ok(ResolvedEnvironment::Workspace(env)) => env,
-            Ok(_) => {
-                report
-                    .skipped
-                    .push(skip("the task is not a change to a repository".into()));
-                continue;
-            }
+            Ok(environment) => environment,
             Err(e) => {
                 report.skipped.push(skip(e.to_string()));
                 continue;
             }
         };
-        let inputs = match WorkspaceInputs::of(ctx, &environment, &task) {
-            Ok(inputs) => inputs,
-            Err(why) => {
-                report.skipped.push(skip(why));
-                continue;
-            }
-        };
-        let model = Model::new(demonstration.provider(), DEMONSTRATOR);
+        let started = Instant::now();
         let mut options = SolveOptions::new(remaining(request.deadline, task_wall));
         options.cancel = Some(request.cancel.clone());
-        let solved = ctx.block_on(solve_attempt(
-            &task,
-            &environment,
-            &inputs,
-            &model,
-            model.solving(options),
-            &request.work,
-        ));
+        let solved = match &environment {
+            ResolvedEnvironment::Workspace(env) => {
+                let demonstration = match Demonstration::from_patch(&reference.content) {
+                    Ok(demonstration) => demonstration,
+                    Err(e) => {
+                        report.skipped.push(skip(e.to_string()));
+                        continue;
+                    }
+                };
+                let inputs = match WorkspaceInputs::of(ctx, env, &task) {
+                    Ok(inputs) => inputs,
+                    Err(why) => {
+                        report.skipped.push(skip(why));
+                        continue;
+                    }
+                };
+                let model = Model::new(demonstration.provider(), DEMONSTRATOR);
+                ctx.block_on(solve_attempt(
+                    &task,
+                    env,
+                    &inputs,
+                    &model,
+                    model.solving(options),
+                    &request.work,
+                ))
+            }
+            // A closed-book task's reference is its answer (an output the
+            // runtime computed, a reference program): said as the reply.
+            ResolvedEnvironment::ClosedBook => {
+                let provider = Demonstration::answer(reference.content.clone()).provider();
+                ctx.block_on(solve(&task, &environment, provider, options))
+                    .map(|solution| {
+                        let report = AttemptReport {
+                            wall_seconds: Some(started.elapsed().as_secs_f64()),
+                            ..AttemptReport::default()
+                        };
+                        (solution, report)
+                    })
+            }
+            ResolvedEnvironment::Runtime(_) => {
+                report.skipped.push(skip(
+                    "a task solved with a runtime tool has no reference to replay as its actions"
+                        .into(),
+                ));
+                continue;
+            }
+        };
         let (solution, attempt_report) = match solved {
             Ok(solved) => solved,
             // An environment that is not what the task records is a task not

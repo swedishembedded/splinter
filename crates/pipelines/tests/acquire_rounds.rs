@@ -371,3 +371,53 @@ fn every_round_reports_what_it_explored_and_what_that_cost() {
         assert_eq!(round.generator, "policy:default");
     }
 }
+
+#[test]
+fn a_reference_teacher_teaches_with_the_tasks_own_answers_and_asks_no_model() {
+    let model = common::zork::model();
+    let prompts = model.prompts.clone();
+    let (scratch, ctx) = common::scratch_context("acquire-reference-teacher", model, false);
+    common::gate::put_base(&ctx);
+    let manual = write_manual(&scratch);
+    let report = acquire(
+        &ctx,
+        &AcquireRequest {
+            reference_teacher: true,
+            ..request(&manual)
+        },
+        &Learner,
+    )
+    .unwrap()
+    .report;
+    // The policy knows nothing, so every training record is a taught one.
+    assert!(report.rounds.iter().any(|r| r.outcome == Outcome::Accepted));
+    // No model was shown grounding material to teach with.
+    assert!(prompts
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|p| !p.contains("Reference material:")));
+    // The demonstrations are the teacher's, said by the demonstrator, and
+    // passed the same verifier as any answer.
+    let demonstrations: Vec<_> = ctx
+        .experiences()
+        .list()
+        .unwrap()
+        .into_iter()
+        .map(|id| ctx.experiences().get(&id).unwrap())
+        .filter(|e| e.provenance.solver == splinter_agent::demonstration::DEMONSTRATOR)
+        .collect();
+    assert!(!demonstrations.is_empty());
+    for experience in demonstrations {
+        assert!(experience.provenance.teacher);
+        let reference = experience
+            .privileged
+            .iter()
+            .find(|p| p.kind == splinter_core::experience::PrivilegedKind::Reference)
+            .unwrap();
+        assert_eq!(
+            experience.final_output.as_deref(),
+            Some(reference.content.as_str())
+        );
+    }
+}

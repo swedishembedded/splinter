@@ -81,6 +81,11 @@ pub struct AcquireArgs {
     /// section, instead of asking a planner model.
     #[arg(long, requires = "source")]
     pub structural_graph: bool,
+    /// Teach a task the policy never solves with the task's own reference
+    /// answer (the output the runtime computed, a reference program),
+    /// graded like any answer, instead of asking the teacher model.
+    #[arg(long, requires = "source", conflicts_with = "teacher")]
+    pub reference_teacher: bool,
 }
 
 /// `learn`.
