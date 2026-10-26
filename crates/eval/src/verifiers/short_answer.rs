@@ -10,9 +10,11 @@
 //! Taking a final short answer out of a sentence.
 //!
 //! A model that answers "There are **3,000** millilitres in 3 litres" has
-//! answered. The answer is taken out only when it is unambiguous: the
-//! candidates are what the answer emphasises, else (for a numeric reference)
-//! the numbers it states, and exactly one distinct candidate must be left. A
+//! answered, and so has one that says "The output is:" above a fenced block
+//! holding the output. The answer is taken out only when it is unambiguous:
+//! the candidates are what the answer emphasises or fences, else (for a
+//! numeric reference) the numbers it states, and exactly one distinct
+//! candidate must be left. A
 //! hedge that lists several candidates therefore never yields an answer, and
 //! neither does a sentence around a reference that has no type to look for.
 
@@ -27,7 +29,8 @@ pub(crate) fn sole_candidate_is(
 ) -> bool {
     let reference = normalisation.apply(reference);
     let numeric = is_number(&reference);
-    let spans = emphasised_spans(answer);
+    let mut spans = emphasised_spans(answer);
+    spans.extend(fenced_blocks(answer));
     let mut candidates: Vec<String> = Vec::new();
     let mut offer = |text: &str| {
         let text = normalisation.apply(text);
@@ -60,6 +63,27 @@ fn emphasised_spans(text: &str) -> Vec<&str> {
         .filter(|(i, _)| i % 2 == 1 && i + 1 < parts.len())
         .map(|(_, part)| *part)
         .collect()
+}
+
+/// The contents of the fenced blocks of `text` (between a line opening with
+/// three backticks, whatever language it names, and the next three
+/// backticks), in order. An unclosed fence holds nothing.
+fn fenced_blocks(text: &str) -> Vec<&str> {
+    let mut blocks = Vec::new();
+    let mut rest = text;
+    while let Some(open) = rest.find("```") {
+        let after = &rest[open + 3..];
+        let Some(body_start) = after.find('\n') else {
+            break;
+        };
+        let body = &after[body_start + 1..];
+        let Some(close) = body.find("```") else {
+            break;
+        };
+        blocks.push(&body[..close]);
+        rest = &body[close + 3..];
+    }
+    blocks
 }
 
 /// Whether `text` is one plain number: optional minus, digits, optional
@@ -137,5 +161,19 @@ mod tests {
         assert!(!sole_candidate_is("7 or 8", "7", &N));
         assert!(sole_candidate_is("Note 3: **7**", "7", &N));
         assert!(!sole_candidate_is("The capital is Paris", "Paris", &N));
+    }
+
+    #[test]
+    fn a_fenced_block_is_a_candidate_and_two_different_ones_are_a_hedge() {
+        let output = "The output of the Lua code is:\n\n```\naaabbbccc\n```";
+        assert!(sole_candidate_is(output, "aaabbbccc", &N));
+        let lines = "The Lua program prints:\n\n```text\nuppercase\nlowercase\n```\n\nbecause ...";
+        assert!(sole_candidate_is(lines, "uppercase\nlowercase", &N));
+        let numeric = "It prints:\n```\n6\n```\nExplanation: t[6] = 6 adds a sixth element.";
+        assert!(sole_candidate_is(numeric, "6", &N));
+        let hedge = "Either\n```\n1.5\n```\nor\n```\n2.5\n```";
+        assert!(!sole_candidate_is(hedge, "1.5", &N));
+        assert!(!sole_candidate_is(output, "aaabbb", &N));
+        assert_eq!(fenced_blocks("a ```lua\nx\n``` b ```\ny"), ["x\n"]);
     }
 }
