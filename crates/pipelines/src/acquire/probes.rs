@@ -30,11 +30,12 @@ use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use crate::curriculum::frontier::tally;
-use crate::solving::{solve_set, Solved};
+use crate::solving::{harness_protocol, solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::tasks::{generate, Generation};
 use crate::verify::{verify_set, Grading};
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
+use splinter_model::local::GREEDY_SAMPLING;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use std::time::Instant;
@@ -276,8 +277,13 @@ pub struct ProbeScore {
     pub passes: usize,
 }
 
-/// `solver` solves each probe once, as its provider answers, and every
-/// verdict is decided by the kinds' own verifiers; what came of it.
+/// `solver` solves each probe once, greedily where its provider lets the
+/// sampling be set, and every verdict is decided by the kinds' own
+/// verifiers; what came of it. A probe answered by a draw (an in-process
+/// model's own sampling is 0.2 with a seed per request) would move the
+/// baseline, every round's decision and the assessment with the draw: two
+/// probes of four changing between candidates no different from their
+/// incumbent rejected a round.
 pub fn score(
     ctx: &Context,
     solver: &ModelRef,
@@ -286,7 +292,22 @@ pub fn score(
     cancel: &CancelToken,
 ) -> Result<(ProbeScore, Solved), OrchestratorError> {
     let set = set_of(ctx, name, probes)?;
-    let solved = solve_set(ctx, &set, solver, None, cancel, None)?;
+    let solved = solve_tasks(
+        ctx,
+        &SolveRequest {
+            task_set: &set,
+            solver,
+            attempts: 1,
+            sampling: SamplingChoice::Prefer(GREEDY_SAMPLING),
+            teacher: false,
+            system: None,
+            work: harness_protocol(),
+            deadline: None,
+            harness: None,
+            cancel: cancel.clone(),
+            resume: None,
+        },
+    )?;
     verify_set(ctx, &solved.experience_set, Grading::CodeOnly, cancel)?;
     let mut score = ProbeScore::default();
     for (count, _) in tally(ctx, &solved.experience_set)?.into_values() {
