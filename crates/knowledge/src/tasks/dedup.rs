@@ -32,6 +32,22 @@ use splinter_core::digest::Digest;
 
 use crate::gates::normalize;
 
+/// What an instruction is compared by: the content of its first fenced block
+/// when it shows one - a task that shows material is that material, and two
+/// of them share the question they ask of it ("What does this program
+/// print?"), which alone would make every pair a near duplicate - else the
+/// instruction itself.
+#[must_use]
+pub fn identity(instruction: &str) -> &str {
+    let shown = instruction.find("```").and_then(|open| {
+        let after = &instruction[open + 3..];
+        let body = &after[after.find('\n')? + 1..];
+        let close = body.find("```")?;
+        Some(body[..close].trim())
+    });
+    shown.filter(|s| !s.is_empty()).unwrap_or(instruction)
+}
+
 /// Why an instruction is not new to the batch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Repeat {
@@ -67,6 +83,7 @@ impl Seen {
     /// Whether `instruction` repeats one admitted so far.
     #[must_use]
     pub fn repeats(&self, instruction: &str) -> Option<Repeat> {
+        let instruction = identity(instruction);
         if self.digests.contains(&digest(instruction)) {
             return Some(Repeat::Exact);
         }
@@ -84,7 +101,7 @@ impl Seen {
         if let Some(repeat) = self.repeats(item) {
             return Some(repeat);
         }
-        let item = spaced_words(item);
+        let item = spaced_words(identity(item));
         (item.trim() != "" && self.spaced.iter().any(|text| text.contains(&item)))
             .then_some(Repeat::Exact)
     }
@@ -102,6 +119,7 @@ impl Seen {
 
     /// Records `instruction` as admitted.
     pub fn admit(&mut self, instruction: &str) {
+        let instruction = identity(instruction);
         self.digests.insert(digest(instruction));
         self.shingles
             .push(shingles(instruction, self.shingle_words));
@@ -292,5 +310,20 @@ mod tests {
         short.admit("What is the capital of France?");
         assert!(short.encloses("Quick one: what is the capital of France? Answer briefly."));
         assert!(!short.encloses("What is the capital of Spain?"));
+    }
+    #[test]
+    fn tasks_that_show_material_are_compared_by_it() {
+        let ask = |code: &str| {
+            format!("What does the following Lua program print?\n\n```lua\n{code}\n```")
+        };
+        let mut seen = Seen::new(3, 0.5);
+        seen.admit(&ask("print(math.sqrt(16))"));
+        // The shared question does not make another program a repeat ...
+        assert_eq!(seen.repeats(&ask("print(string.rep('ab', 3))")), None);
+        assert_eq!(seen.leaks(&ask("print(string.rep('ab', 3))")), None);
+        // ... and another question about the same program does not make it new.
+        let reworded = "What is printed?\n\n```lua\nprint(math.sqrt(16))\n```";
+        assert_eq!(seen.repeats(reworded), Some(Repeat::Exact));
+        assert_eq!(identity("no fence here"), "no fence here");
     }
 }
