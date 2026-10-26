@@ -299,6 +299,7 @@ pub fn create(ctx: &Context, request: &ExamSetRequest<'_>) -> Result<ExamSet, Or
             denoise_seed: None,
             deadline: None,
             cancel: request.cancel.clone(),
+            harness: None,
         },
     )?;
     let store = ctx.tasks();

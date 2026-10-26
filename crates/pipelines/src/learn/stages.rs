@@ -63,6 +63,8 @@ pub(super) struct Learn<'a> {
     /// The model that plans the kinds; `None` keeps `kinds`.
     pub(super) planner: Option<&'a ModelRef>,
     pub(super) goal: Option<&'a str>,
+    /// The harness that writes the tasks, when the request names one.
+    pub(super) task_harness: Option<&'a crate::tasks::TaskHarness>,
     /// Who the policy becomes, as the request names it.
     pub(super) persona: Option<&'a str>,
     /// The share of the training examples that is the writer's own text, as
@@ -443,6 +445,7 @@ fn tasks_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut LearnState<'_>) -
             denoise_seed,
             deadline: st.stage_deadlines.tasks,
             cancel: run.cancel_token(),
+            harness: st.learn.task_harness,
         },
     )?;
     let summary = to_value(&generated)?;

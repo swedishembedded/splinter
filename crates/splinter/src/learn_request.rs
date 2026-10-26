@@ -11,6 +11,7 @@
 use splinter_sdk::acquire::AcquireRequest;
 use splinter_sdk::learn::{ExamPlan, LearnRequest};
 use splinter_sdk::raft::PassageShare;
+use splinter_sdk::tasks::TaskHarness;
 use splinter_sdk::train::Tuning;
 use splinter_sdk::vocabulary::role::Role;
 
@@ -79,6 +80,17 @@ pub(crate) fn learn_request(args: LearnArgs) -> LearnRequest {
         plan: args.kinds.is_empty(),
         sources: args.sources,
         goal: args.goal,
+        task_harness: args
+            .task_harness
+            .zip(args.sven)
+            .zip(args.task_harness_endpoint)
+            .zip(args.task_harness_model)
+            .map(|(((harness, sven), endpoint), model)| TaskHarness {
+                harness,
+                sven,
+                endpoint,
+                model,
+            }),
         persona: args.persona,
         base: args.base,
         adapter: args.adapter,

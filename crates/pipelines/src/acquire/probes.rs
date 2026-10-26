@@ -136,6 +136,7 @@ pub fn write_for(
             denoise_seed: None,
             deadline: ask.deadline,
             cancel: ask.cancel.clone(),
+            harness: None,
         },
     )?;
     let mut resolver = ConceptResolver::new(ctx.sources());

@@ -74,8 +74,8 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::Task;
 
 pub use generator::{
-    GenerateError, ModelTaskGenerator, SourceIdentity, SourceText, MAX_LISTED_CHARS,
-    MAX_LISTED_INSTRUCTIONS,
+    GenerateError, ModelTaskGenerator, SourceIdentity, SourceText, GENERATION_METHOD,
+    MAX_LISTED_CHARS, MAX_LISTED_INSTRUCTIONS,
 };
 pub use kind::{
     AnswerForm, Catalogue, Focus, KindError, Material, SolverEnvironment, TaskKind, VerifierKind,

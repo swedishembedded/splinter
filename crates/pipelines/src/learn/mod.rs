@@ -184,6 +184,9 @@ pub struct LearnRequest {
     pub sources: Vec<String>,
     /// What the learner is after.
     pub goal: Option<String>,
+    /// A sven harness that writes the tasks in place of one typed call to
+    /// the generator model.
+    pub task_harness: Option<crate::tasks::TaskHarness>,
     /// Who the policy is to become, when it is to think like a person: the
     /// training records open with a system prompt that says so, and the
     /// policy is asked under it afterwards. A plan names one from the goal
@@ -469,6 +472,7 @@ pub fn learn(
         kinds: &kinds,
         planner: planner.as_ref(),
         goal: request.goal.as_deref(),
+        task_harness: request.task_harness.as_ref(),
         persona: request.persona.as_deref(),
         voice: request.voice,
         describe_voice: request.describe_voice,

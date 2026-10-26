@@ -71,6 +71,7 @@ fn tasks_of(
             denoise_seed,
             deadline: None,
             cancel: CancelToken::new(),
+            harness: None,
         },
     )
 }

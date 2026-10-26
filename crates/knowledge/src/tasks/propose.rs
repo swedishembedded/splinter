@@ -33,6 +33,14 @@ pub struct ProposalRequest<'a> {
     pub role: &'a str,
     /// What the model is shown: the call's input.
     pub input: serde_json::Value,
+    /// The name of the task kind asked for; `None` for a request that is not
+    /// for a kind's tasks (a request for variants).
+    pub kind: Option<&'a str>,
+    /// The registry name of the runtime the tasks' code runs in, when the
+    /// kind runs code.
+    pub runtime: Option<&'a str>,
+    /// How many tasks the brief asks for at most.
+    pub count: usize,
     /// How long the request may take, every attempt included.
     pub deadline: Duration,
     /// Output tokens the request may generate; `None` leaves it to the

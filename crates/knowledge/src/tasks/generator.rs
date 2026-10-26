@@ -439,7 +439,15 @@ impl ModelTaskGenerator {
                 let shown = &shown;
                 async move {
                     let started = Instant::now();
-                    let reply = self.request(GENERATION_METHOD, &brief, shown).await?;
+                    let reply = self
+                        .request(
+                            GENERATION_METHOD,
+                            &brief,
+                            shown,
+                            Some(kind),
+                            self.policy.tasks_per_request,
+                        )
+                        .await?;
                     let text = prompt_text(&brief, shown);
                     let call = CallRecord {
                         kind: kind.name.clone(),
@@ -518,6 +526,8 @@ impl ModelTaskGenerator {
         method: &str,
         brief: &str,
         shown: &I,
+        kind: Option<&TaskKind>,
+        count: usize,
     ) -> Result<Result<Reply, Refusal>, GenerateError> {
         let input = serde_json::to_value(shown).unwrap_or_else(|e| {
             // Integers and strings always serialize.
@@ -528,6 +538,9 @@ impl ModelTaskGenerator {
             brief,
             role: ROLE,
             input,
+            kind: kind.map(|k| k.name.as_str()),
+            runtime: kind.and_then(|k| k.runtime.as_deref()),
+            count,
             deadline: self.policy.deadline,
             max_output_tokens: self.policy.max_output_tokens,
             repairs: self.policy.repairs,

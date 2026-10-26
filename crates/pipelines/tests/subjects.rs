@@ -97,6 +97,7 @@ fn contradictory_answers_to_one_question_of_one_subject_are_left_out_of_the_set(
             denoise_seed: None,
             deadline: None,
             cancel: CancelToken::new(),
+            harness: None,
         },
     )
     .unwrap();
@@ -225,6 +226,7 @@ fn the_sources_author_is_a_subject_a_question_may_name() {
                 denoise_seed: None,
                 deadline: None,
                 cancel: CancelToken::new(),
+                harness: None,
             },
         )
         .unwrap()

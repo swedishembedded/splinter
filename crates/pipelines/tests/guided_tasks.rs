@@ -93,6 +93,7 @@ fn a_kind_refused_again_and_again_for_one_reason_is_told_how_to_correct_it() {
             denoise_seed: None,
             deadline: None,
             cancel: CancelToken::new(),
+            harness: None,
         },
     )
     .unwrap();

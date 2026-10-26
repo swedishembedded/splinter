@@ -72,6 +72,7 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                         denoise_seed,
                         deadline: None,
                         cancel: run.cancel_token(),
+                        harness: None,
                     },
                 )
             })?;

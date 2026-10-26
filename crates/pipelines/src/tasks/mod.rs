@@ -22,7 +22,6 @@
 //! well disagree, and a model trained on both answers learns neither.
 
 use splinter_model::{Sampling, AGENT_SAMPLING};
-use std::sync::Arc;
 
 use splinter_agent::proposer::SvenProposer;
 use std::collections::{BTreeMap, BTreeSet};
@@ -141,9 +140,13 @@ pub struct Generation<'a> {
     pub deadline: Option<Instant>,
     /// Stops generation.
     pub cancel: CancelToken,
+    /// The harness that writes the model kinds' tasks; `None` asks the
+    /// generator model in one typed call.
+    pub harness: Option<&'a TaskHarness>,
 }
 
 mod batch;
+mod harness;
 pub mod pick;
 
 use batch::{Batch, Provenance};
@@ -151,6 +154,7 @@ pub use batch::{
     MAX_CORRECTIONS, MIN_ADMISSION_RATE, MIN_PROPOSALS_BEFORE_GIVING_UP,
     MIN_REFUSALS_BEFORE_CORRECTING,
 };
+pub use harness::TaskHarness;
 
 /// Admitted and rejected proposals of one kind.
 #[derive(Clone, Debug, Default, Serialize)]
@@ -500,8 +504,9 @@ fn model_generator(
         requests_in_flight: ctx.concurrency_for(request.generator),
         ..GenerationPolicy::default()
     };
-    let proposer = SvenProposer::new(model).with_cancel(request.cancel.clone());
-    Ok(ModelTaskGenerator::new(Arc::new(proposer), ctx.sources())
+    let typed = SvenProposer::new(model).with_cancel(request.cancel.clone());
+    let proposer = harness::proposer(ctx, request.harness, typed, &runtimes, &request.cancel);
+    Ok(ModelTaskGenerator::new(proposer, ctx.sources())
         .with_runtimes(runtimes)
         .with_policy(policy))
 }

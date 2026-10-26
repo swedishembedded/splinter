@@ -235,6 +235,10 @@ Options:
 - `--reference-teacher`: Teach a task the policy never solves with the task's own reference answer (the output the runtime computed, a reference program), graded like any answer, instead of asking the teacher model.
 - `--probes-from <RUN-ID>`: Take the skill graph and probes of this earlier learn --source run (its id is in `splinter runs list`) instead of planning and generating them; refused unless that run used the same sources. The baseline, rounds and assessment are still this run's.
 - `--goal <TEXT>`: What the learner is after; steers the tasks generated.
+- `--task-harness <PATH>`: A sven harness (a document or directory) that writes the tasks of the model kinds in place of one call to the generator model: agents read the sections, write tasks and run their reference solutions in the kind's runtime. Run with `sven harness run` against the server named by --task-harness-endpoint.
+- `--sven <PATH>`: The `sven` executable that runs --task-harness.
+- `--task-harness-endpoint <URL>`: Base URL of the already running OpenAI-compatible server the --task-harness agents use.
+- `--task-harness-model <SPEC>`: The model the --task-harness agents ask the server for, as `provider/name` (for example `openai/served-name`)
 - `--kinds <K,..>...`: Task kinds, comma-separated; when not named, a planner model surveys the sources and chooses them.
 - `--budget <DUR>`: Wall-clock time the whole run may take, in h, m and s: 30m, 2h, 1h30m.
 - `--dry-run`: Report the plan and write nothing.

@@ -59,6 +59,7 @@ fn every_request_to_the_generator_is_noted_in_the_report() {
             denoise_seed: None,
             deadline: None,
             cancel: CancelToken::new(),
+            harness: None,
         },
     )
     .unwrap();

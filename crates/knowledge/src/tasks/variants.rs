@@ -157,7 +157,10 @@ impl ModelTaskGenerator {
         let brief = brief(count, subject);
         let kind = original.task.kind.as_str();
         let mut report = GenerationReport::default();
-        let reply = match self.request(VARIANTS_METHOD, &brief, &shown).await? {
+        let reply = match self
+            .request(VARIANTS_METHOD, &brief, &shown, None, count)
+            .await?
+        {
             Ok(reply) => reply,
             Err((reason, detail)) => {
                 report.reject(kind, 0, reason, detail);

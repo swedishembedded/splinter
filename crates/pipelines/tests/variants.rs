@@ -79,6 +79,7 @@ fn manual_tasks(test: &str) -> (Scratch, Context, splinter_pipelines::tasks::Tas
             denoise_seed: Some(Seed::new(1)),
             deadline: None,
             cancel: CancelToken::new(),
+            harness: None,
         },
     )
     .unwrap();

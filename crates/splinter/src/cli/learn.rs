@@ -3,6 +3,7 @@
 
 //! The grammar of `learn`.
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Args;
@@ -123,6 +124,28 @@ pub struct LearnArgs {
     /// What the learner is after; steers the tasks generated.
     #[arg(long, value_name = "TEXT")]
     pub goal: Option<String>,
+    /// A sven harness (a document or directory) that writes the tasks of the
+    /// model kinds in place of one call to the generator model: agents read
+    /// the sections, write tasks and run their reference solutions in the
+    /// kind's runtime. Run with `sven harness run` against the server named
+    /// by --task-harness-endpoint.
+    #[arg(
+        long,
+        value_name = "PATH",
+        requires_all = ["sven", "task_harness_endpoint", "task_harness_model"]
+    )]
+    pub task_harness: Option<PathBuf>,
+    /// The `sven` executable that runs --task-harness.
+    #[arg(long, value_name = "PATH", requires = "task_harness")]
+    pub sven: Option<PathBuf>,
+    /// Base URL of the already running OpenAI-compatible server the
+    /// --task-harness agents use.
+    #[arg(long, value_name = "URL", requires = "task_harness")]
+    pub task_harness_endpoint: Option<String>,
+    /// The model the --task-harness agents ask the server for, as
+    /// `provider/name` (for example `openai/served-name`).
+    #[arg(long, value_name = "SPEC", requires = "task_harness")]
+    pub task_harness_model: Option<String>,
     /// Task kinds, comma-separated; when not named, a planner model surveys
     /// the sources and chooses them.
     #[arg(long, value_delimiter = ',', value_name = "K,..")]
