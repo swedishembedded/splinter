@@ -98,7 +98,11 @@ what is still to do.
     probes stay the acquisition's (interpreter-graded), so the measurement is unchanged. With
     `--self-generate` the harness model is the incumbent, served for the round; the endpoint
     flag names the fixed or teacher writer otherwise. Spec first: a round with a fake `sven`
-    that admits one task directory trains on its validated attempt and reports invent's yield.
+    that admits one task directory trains on its validated attempt and reports invent's yield. The
+    acquisition rounds solve closed-book kinds only (`common::zork` scripted models), so the
+    change also needs a workspace solve path in `acquire/round.rs` (the tasks stage's
+    `solve` with the task's own process), and the fake-`sven` world of
+    `tests/flywheel_tasks.rs` moved into `tests/common` so both specs share it.
 
 ## Evidence discipline
 
