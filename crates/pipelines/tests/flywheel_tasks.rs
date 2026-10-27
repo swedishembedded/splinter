@@ -29,11 +29,10 @@
 
 mod common;
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use common::{scratch_context, Scratch, Scripted};
+use common::{fake_sven, scratch_context, Scratch, Scripted};
 use splinter_agent::CancelToken;
 use splinter_core::experience::{Experience, PrivilegedKind, Provenance};
 use splinter_core::kinds::WORKSPACE_CHANGE;
@@ -45,47 +44,6 @@ use splinter_pipelines::tasks::{generate, Generation, TaskHarness, TasksGenerate
 use splinter_pipelines::validate::{validate_attempts, ValidateRequest, Validated};
 use splinter_pipelines::verify::{verify_set, Grading};
 use splinter_store::experiences::{ExperienceSet, SetId};
-
-/// A harness run in the fake: it commits one task directory that meets the
-/// contract (calc.sh must print 3) and one that lacks its tests, and logs
-/// the outcome of five ideas.
-const FAKE_SVEN: &str = r#"#!/bin/sh
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --workspace) ws=$2 ;;
-    --input-file) inputs=$2 ;;
-    --trajectory) trajectory=$2 ;;
-    --conversations) conversations=$2 ;;
-  esac
-  shift
-done
-if [ -f "$ws/task.md" ]; then
-  # A validator run: it must be shown the work, the tests and the conversation.
-  [ -f "$ws/tests.md" ] && [ -f "$ws/trajectory.md" ] && [ "$(cat "$ws/workspace/calc.sh")" = "echo 3" ] || { echo "attempt not laid out" >&2; exit 2; }
-  focus=$(sed -n 's/.*"focus":"\([a-z]*\)".*/\1/p' "$inputs")
-  decision=$(sed -n "s/^$focus //p" "$(dirname "$0")/decisions")
-  case "$decision" in
-    keep|discard) echo "{\"status\":\"completed\",\"conclusion\":\"success\",\"output\":{\"decision\":{\"decision\":\"$decision\",\"evidence\":\"e\",\"rejection_reasons\":[\"not $focus\"]}}}" ;;
-    *) echo '{"status":"failed","conclusion":"error"}' ;;
-  esac
-  exit 0
-fi
-cd "$ws/tasks" || exit 2
-[ -d .git ] || { git init -q && git config user.name fake && git config user.email fake@localhost; }
-mkdir -p calc-sum/environment calc-sum/tests calc-sum/solution no-tests/environment no-tests/solution
-echo "Make calc.sh print the sum of one and two." > calc-sum/instruction.md
-echo "echo 1" > calc-sum/environment/calc.sh
-printf '#!/bin/sh\n[ "$(sh calc.sh)" = 3 ]\n' > calc-sum/tests/test.sh
-printf '#!/bin/sh\necho "echo 3" > calc.sh\n' > calc-sum/solution/solve.sh
-echo "Make calc.sh print the product of two and three." > no-tests/instruction.md
-echo "echo 1" > no-tests/environment/calc.sh
-printf '#!/bin/sh\ntrue\n' > no-tests/solution/solve.sh
-for outcome in admitted admitted rejected duplicate failed; do echo "{\"outcome\": \"$outcome\"}" >> log.jsonl; done
-git add -A . && git commit -q -m tasks
-mkdir -p "$conversations"
-echo '{}' > "$trajectory"
-echo '{"status":"completed","conclusion":"success"}'
-"#;
 
 fn write(path: &Path, text: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -104,9 +62,7 @@ struct World {
 fn world(test: &str, validate: bool) -> World {
     let (scratch, ctx) = scratch_context(test, Scripted::new(|_| "{}".to_string()), false);
     let dir = scratch.0.join("harness");
-    let sven = dir.join("bin/sven");
-    write(&sven, FAKE_SVEN);
-    std::fs::set_permissions(&sven, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let sven = fake_sven::install(&dir.join("bin"));
     write(&dir.join("solve/harness.yaml"), "api_version: \"2\"\n");
     let docs = scratch.0.join("docs");
     write(
