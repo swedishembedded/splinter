@@ -31,6 +31,9 @@ manual, writes its own tasks, has them checked by the language's interpreter, an
 each round. At a small learning rate each arm accepted 5 rounds, and on final probes no round trained
 on the model went from 26 to 35 of 53 when it wrote every round's tasks itself and from 26 to 40 when
 its untrained base wrote them; two more replicates on a fresh exam gave 20 to 30 and 20 to 29, and
-20 to 33 and 20 to 32 of 46. Every arm learned from tasks its own model wrote; that the trained
-model's tasks help more than its base's is not shown.\cl{SL20,SL21,SL22}
+20 to 33 and 20 to 32 of 46. Every arm learned from tasks its own model wrote. Over 22 replicates
+on one exam the arm in which the trained model writes the tasks, the arm in which its base writes
+them and an arm in which a 27B model writes them gained 10.86, 10.89 and 11.17 passes of 46 on average,
+with no difference between any two (permutation p of at least 0.87): the loop, not the task writer,
+carries the gain.\cl{SL20,SL21,SL22,SL23}
 \end{abstract}

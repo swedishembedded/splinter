@@ -152,3 +152,19 @@ went from 20 to 33 of 46 (2 of 10 rounds accepted, 8 skills up, 0 down) and the 
 from 20 to 32 (3 of 9 accepted, 7 up, 1 down).\cl{SL22} All six arms of the three replicates ended
 above their baseline on probes no round trained on; the self-generate arm finished ahead in two
 replicates and behind in one.
+
+\paragraph{Who writes the tasks does not matter here.} If tasks written by a more capable model
+taught more, a 4B solver fed tasks from a 27B writer would gain more than one fed tasks from itself.
+We ran a third arm in which the 27B, served by brain on the second card, writes every round's tasks
+while the 4B still solves, is verified by the interpreter and is fully fine-tuned, and repeated all
+three arms on the second exam until each had at least six replicates; runs whose training was refused
+for want of device memory are excluded, not counted as zero. The 7 self-generate, 9 fixed-generator
+and 6 teacher-generator replicates gained on average 10.86, 10.89 and 11.17 passes of 46 on the final
+probes. Exact permutation tests over replicates find no difference (p = 1.0 between self-generate and
+fixed-generator, p = 0.89 between self-generate and teacher-generator, p = 0.87 between
+fixed-generator and teacher-generator), and per skill the teacher-generator and fixed-generator arms
+are each better on 5 skills with 3 tied.\cl{SL23} On this task family the gain comes from the loop
+itself, tasks grounded in the manual, answers checked by the interpreter and a small full fine-tuning
+step, and not from the capability of the model that writes the tasks. The tasks here are short
+programs whose output the interpreter fixes, so a stronger writer has little room to write a better
+task; whether it matters for tasks whose difficulty lies in the problem statement is open.

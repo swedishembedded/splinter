@@ -1399,6 +1399,27 @@
         "skills_up": 7,
         "skills_down": 1
       }
+    },
+    "lua-arms": {
+      "brain_commit": "5e85f323c (splinter 42f9b5826)",
+      "command": "scripts/compare_arms.py replicate2,replicate3,sg4,sg6,sg7,sg9,sg10,fg4,fg5,fg6,fg7,fg8,fg9,fg10,tg2,tg9,tg10,tg11,tg12,tg15 --json lua-flywheel/arms-comparison.json; every arm as lua-rep2-* on the same exam (run-20261026T142254.958-8303), budget 55m; the teacher arm adds --assistant-model remote:brain/unsloth/Qwen3.8-27B-GGUF served by brain on the second card; runs whose training was refused are excluded",
+      "log": "lua-flywheel/arms-comparison.json",
+      "sha256": "c394f58457e17dbabf2279ccdea12d0047d86327bd1b415c12e0916444fd16e8",
+      "metric_prefix": "lua.arms",
+      "metrics": {
+        "sg_replicates": 7,
+        "fg_replicates": 9,
+        "tg_replicates": 6,
+        "sg_mean_gain": 10.86,
+        "fg_mean_gain": 10.89,
+        "tg_mean_gain": 11.17,
+        "p_sg_fg": 1.0,
+        "p_sg_tg": 0.89,
+        "p_fg_tg": 0.87,
+        "tg_skills_better": 5,
+        "fg_skills_better": 5,
+        "skills_tied": 3
+      }
     }
   }
 }
