@@ -761,3 +761,31 @@ mod jobs;
 mod learn;
 mod measure;
 mod solve;
+
+#[test]
+fn an_acquisition_refuses_the_task_harness_it_does_not_run() {
+    // `--source` runs the acquisition rounds, which write tasks with the
+    // generator model; the harness flags were dropped without a word.
+    let harness = [
+        "--task-harness",
+        "h/invent",
+        "--solve-harness",
+        "h/solve",
+        "--sven",
+        "sven",
+        "--task-harness-endpoint",
+        "http://127.0.0.1:8788/v1",
+        "--task-harness-model",
+        "brain/m",
+    ];
+    let with = |lead: &[&str]| parse(&[lead, &harness[..]].concat());
+    command(
+        &["learn", "notes.md"]
+            .iter()
+            .copied()
+            .chain(harness)
+            .collect::<Vec<_>>(),
+    );
+    let refused = with(&["learn", "Lua", "--source", "m.html"]).unwrap_err();
+    assert_eq!(refused.kind(), clap::error::ErrorKind::ArgumentConflict);
+}

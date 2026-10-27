@@ -131,6 +131,7 @@ pub struct TaskHarnessArgs {
     /// Base URL of the already running OpenAI-compatible server the
     /// harnesses' agents use.
     #[arg(
+        id = "task_harness_endpoint",
         long = "task-harness-endpoint",
         value_name = "URL",
         requires = "invent"
@@ -138,7 +139,12 @@ pub struct TaskHarnessArgs {
     pub endpoint: Option<String>,
     /// The model the harnesses' agents ask the server for, as
     /// `provider/name`; a brain server is addressed as `brain/<name>`.
-    #[arg(long = "task-harness-model", value_name = "SPEC", requires = "invent")]
+    #[arg(
+        id = "task_harness_model",
+        long = "task-harness-model",
+        value_name = "SPEC",
+        requires = "invent"
+    )]
     pub model: Option<String>,
     /// The file holding the server's API key: a JSON object of provider
     /// name to key (`{"brain": "..."}`), or the key on one line.
@@ -183,7 +189,8 @@ pub struct LearnArgs {
     #[arg(
         long = "source",
         value_name = "URL|PATH",
-        conflicts_with_all = ["goal", "dry_run", "distill", "no_frontier", "adapter", "base", "persona"]
+        conflicts_with_all = ["goal", "dry_run", "distill", "no_frontier", "adapter", "base", "persona",
+            "invent"]
     )]
     pub source: Vec<String>,
     /// How an acquisition (--source) is measured and stopped.
