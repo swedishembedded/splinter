@@ -83,7 +83,11 @@ what is still to do.
     `sections/NN.md` / `tasks.json` proposer is removed. Open: an end-to-end run against a live
     brain server (the fake `sven` specs cover the subprocess contract only); the task runtime
     must be in `workspace.runtime_dirs` for the host-side verifier and the in-process solve
-    to find it.
+    to find it. The acquisition (`learn --source`, the skill-graph rounds every
+    Lua experiment uses) does not run the harness: its rounds write tasks with the generator
+    model. A live run (2026-10-27) took that path with the flags dropped; the combination is now
+    refused (8a0fecf01). Open: the acquisition's round task writer as the invent harness, so the
+    measured loop and the harness pipeline are one path.
 
 ## Evidence discipline
 
