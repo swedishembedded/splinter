@@ -87,7 +87,18 @@ what is still to do.
     Lua experiment uses) does not run the harness: its rounds write tasks with the generator
     model. A live run (2026-10-27) took that path with the flags dropped; the combination is now
     refused (8a0fecf01). Open: the acquisition's round task writer as the invent harness, so the
-    measured loop and the harness pipeline are one path.
+    measured loop and the harness pipeline are one path. Design: `AcquireRequest` carries the
+    `TaskHarness`; in `acquire/round.rs` the `write_until` call (generator model, closed-book
+    kinds) becomes, when it is set, one `Invent` run per round with the skill's sections as
+    `data/`, `goal_of(objective, skill)` as the brief (probes still never shown; a repeat still
+    refused after) and `ROUND_TASKS_WANTED` as the angle count, on an `InventWorkspace` that
+    persists for the run so novelty spans rounds. Admitted directories enter through
+    `WorkspaceGenerator::import_task_directory` as workspace tasks; the round's solve runs each
+    task's own process and the validate stage gates the records before `train_candidate`. The
+    probes stay the acquisition's (interpreter-graded), so the measurement is unchanged. With
+    `--self-generate` the harness model is the incumbent, served for the round; the endpoint
+    flag names the fixed or teacher writer otherwise. Spec first: a round with a fake `sven`
+    that admits one task directory trains on its validated attempt and reports invent's yield.
 
 ## Evidence discipline
 
