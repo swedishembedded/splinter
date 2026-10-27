@@ -372,7 +372,7 @@ fn try_conversation(
                 let text =
                     text_of(&step.message).ok_or(Unprojectable::Image { step: step.step_id })?;
                 let text = text.trim().to_string();
-                if text.contains("<think>") || text.contains("</think>") {
+                if holds_reasoning_markup(&text) {
                     return Err(Unprojectable::ReasoningInText { step: step.step_id });
                 }
                 if step.tool_calls.iter().flatten().any(has_unparsed_arguments) {
@@ -562,6 +562,14 @@ fn serialise_run_step(
         action(messages, message("assistant", &scrub.text(text), false));
     }
     Ok(())
+}
+
+/// Whether `text` holds a reasoning block's markup, opened or only closed:
+/// a model asked without thinking can still close a block it never opened.
+/// A chat record cannot carry it; the template renders such a turn
+/// differently from the prompt it follows.
+pub(crate) fn holds_reasoning_markup(text: &str) -> bool {
+    text.contains("<think>") || text.contains("</think>")
 }
 
 /// `trajectory` as one conversation of alternating turns, every reply

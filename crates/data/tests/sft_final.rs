@@ -21,7 +21,8 @@ use splinter_core::experience::{
 };
 use splinter_core::prompt::SYSTEM_PROMPT;
 use splinter_data::{
-    write_dataset, Corpus, Format, Objective, RecordBody, SftFinal, Unchecked, View, ViewError,
+    write_dataset, Corpus, Exclusion, Format, Objective, RecordBody, SftFinal, Unchecked, View,
+    ViewError,
 };
 
 const INSTRUCTION: &str = "Restore the passage: brown quick the fox";
@@ -30,6 +31,10 @@ const HINT: &str = "TEACHER-ONLY: the second word is quick";
 const PASSAGE: &str = "TEACHER-ONLY: the quick brown fox jumps over the lazy dog";
 
 fn experience() -> Experience {
+    answering(ANSWER)
+}
+
+fn answering(answer: &str) -> Experience {
     let span = Span::new(Digest::of(PASSAGE.as_bytes()), 14, 33).unwrap();
     let privileged = vec![
         Privileged {
@@ -65,7 +70,7 @@ fn experience() -> Experience {
     Experience::new(
         task,
         Trajectory::new("ATIF-v1.7", profile),
-        Some(ANSWER.into()),
+        Some(answer.into()),
         Provenance::new("scripted", &FixedClock::new("2026-09-30T00:00:00.000Z")),
     )
     .unwrap()
@@ -356,4 +361,22 @@ fn a_prompt_is_inserted_where_a_conversation_has_no_system_turn() {
     let roles: Vec<&str> = messages.iter().map(|m| m.role.as_str()).collect();
     assert_eq!(roles, ["system", "user", "assistant"]);
     assert_eq!(messages[0], turn("system", "You are a surveyor.", false));
+}
+
+#[test]
+fn an_answer_holding_reasoning_markup_is_excluded_not_trained() {
+    // A model asked without thinking can still close a reasoning block it
+    // never opened; the chat template renders such an answer differently
+    // from the prompt it follows, so the trainer refuses the whole dataset.
+    let exp = answering("I'll run it.\n</think>\n\nIt prints 97.");
+    let mut corpus = Corpus::new();
+    corpus
+        .insert(
+            exp.clone(),
+            vec![verdict(&exp, Outcome::Pass, Strength::Executable)],
+        )
+        .unwrap();
+    let projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
+    assert!(projection.records.is_empty());
+    assert_eq!(projection.count(Exclusion::ReasoningInText), 1);
 }

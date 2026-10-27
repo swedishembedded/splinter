@@ -10,6 +10,8 @@
 //! the student's turn (see [`Strip`]), not supervised, and the final output
 //! as the assistant turn, the only supervised one. The trajectory's
 //! intermediate steps stay out of the record. One candidate per experience.
+//! An answer holding reasoning markup is left out, counted as
+//! [`Exclusion::ReasoningInText`].
 //! An episode in a workspace is left out, counted as
 //! [`Exclusion::WorkspaceEpisode`]: its final answer is a patch the policy
 //! writes after working in the tree, never an answer it gives closed-book;
@@ -21,7 +23,7 @@ use splinter_core::annotation::Strength;
 use splinter_core::experience::Environment;
 
 use crate::render::{message, student_turn};
-use crate::trajectory::dialogue;
+use crate::trajectory::{dialogue, holds_reasoning_markup};
 use crate::{
     require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
     View, ViewError,
@@ -76,6 +78,9 @@ pub(crate) fn final_answer_record(
         .final_output
         .as_deref()
         .ok_or(Exclusion::NoFinalOutput)?;
+    if holds_reasoning_markup(answer) {
+        return Err(Exclusion::ReasoningInText);
+    }
     let turn = student_turn(entry, strip)?;
     let messages = dialogue(&entry.experience.trajectory, &turn).unwrap_or_else(|| {
         vec![
