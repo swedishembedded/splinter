@@ -122,7 +122,7 @@ knows = card.get("knows", [])
 answers = card.get("answers", {})
 json.dump({"openai": "sk-fake"}, open(opts["--api-keys-out"], "w"))
 if "--adapter" in opts:
-    print("brain serve: brain/qwen3 adapter=local/test:splinter:candidate:latest digest=" + digest,
+    print("brain serve: brain/qwen3 adapter=local/test:splinter:candidate:candidate-1 digest=" + digest,
           file=sys.stderr, flush=True)
 
 def reply(text):

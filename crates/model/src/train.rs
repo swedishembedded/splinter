@@ -383,7 +383,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .thinking(request.thinking)
         .pack_answers(request.pack_answers)
         .out_dir(request.attempt_dir)
-        .adapter_id(candidate_adapter_id(&base_id))
+        .adapter_id(candidate_adapter_id(&base_id, request.attempt_dir)?)
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
@@ -628,7 +628,7 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
         .nll_weight(request.nll_weight)
         .grad_accum(request.grad_accum)
         .out_dir(request.attempt_dir)
-        .adapter_id(candidate_adapter_id(&base_id))
+        .adapter_id(candidate_adapter_id(&base_id, request.attempt_dir)?)
         .steps(request.steps)
         .rank(request.rank)
         .alpha(request.alpha)
@@ -702,9 +702,21 @@ pub(crate) fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyE
 }
 
 /// The card id a trained candidate's adapter is recorded under: brain's
-/// model-reference grammar for an adapter, `<base>:<owner>:<name>:<tag>`.
-fn candidate_adapter_id(base_id: &str) -> String {
-    format!("{base_id}:splinter:candidate:latest")
+/// model-reference grammar for an adapter, `<base>:<owner>:<name>:<tag>`,
+/// with the attempt directory's name (the candidate's own id) as the tag.
+/// brain serves an adapter under its card id, so two candidates sharing one
+/// id could never be offered together and a served id would not say which
+/// candidate answered.
+fn candidate_adapter_id(base_id: &str, attempt_dir: &Path) -> Result<String, PolicyError> {
+    let tag = attempt_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty() && !n.contains([':', '/']))
+        .ok_or_else(|| PolicyError::Train {
+            dir: attempt_dir.to_path_buf(),
+            reason: "the attempt directory has no name to tag the adapter's card id with".into(),
+        })?;
+    Ok(format!("{base_id}:splinter:candidate:{tag}"))
 }
 
 #[cfg(test)]
@@ -740,13 +752,21 @@ mod tests {
 
     /// `brain serve --adapter` refuses an adapter whose card id is not
     /// `<base>:<owner>:<name>:<tag>`, each segment non-empty, so a candidate
-    /// recorded under any other shape could never pass the gate's serve check.
+    /// recorded under any other shape could never pass the gate's serve check;
+    /// and two candidates must not share an id, or a server could offer only
+    /// one of them.
     #[test]
-    fn a_candidates_card_id_is_an_adapter_reference_with_owner_name_and_tag() {
-        let id = candidate_adapter_id("local/Qwen3-0.6B");
-        let parts: Vec<&str> = id.split(':').collect();
-        assert_eq!(parts.len(), 4, "{id}");
+    fn a_candidates_card_id_is_an_adapter_reference_unique_to_its_attempt() {
+        let a =
+            candidate_adapter_id("local/Qwen3-0.6B", Path::new("/w/train/candidate-1")).unwrap();
+        let b =
+            candidate_adapter_id("local/Qwen3-0.6B", Path::new("/w/train/candidate-2")).unwrap();
+        let parts: Vec<&str> = a.split(':').collect();
+        assert_eq!(parts.len(), 4, "{a}");
         assert_eq!(parts[0], "local/Qwen3-0.6B");
-        assert!(parts.iter().all(|p| !p.is_empty()), "{id}");
+        assert!(parts.iter().all(|p| !p.is_empty()), "{a}");
+        assert_eq!(parts[3], "candidate-1");
+        assert_ne!(a, b);
+        assert!(candidate_adapter_id("local/x", Path::new("/")).is_err());
     }
 }
