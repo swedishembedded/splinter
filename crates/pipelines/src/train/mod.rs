@@ -342,9 +342,13 @@ impl Trainer for BrainTrainer {
             }),
             learning_rate: plan.tuning.learning_rate,
             seed: plan.seed,
-            // The records hold answers and no reasoning, so the model is
-            // trained for no-think mode whatever it is later asked.
-            thinking: false,
+            // Records that carry the reasoning of their steps (an agent's
+            // trajectory) train the model to reason before it acts, the mode
+            // such an agent is served in; records of bare answers train it for
+            // no-think mode, whatever it is later asked. Rendered the other
+            // way, a reasoning turn cannot follow the no-think prompt and
+            // brain refuses the record.
+            thinking: carries_reasoning(&split.train)?,
             // Only datasets built packed are kept as one sequence per record; a
             // dialogue dataset in the same run would otherwise change shape.
             pack_answers: plan.datasets.iter().all(|d| d.manifest.packed),
@@ -405,6 +409,35 @@ impl Trainer for BrainTrainer {
     ) -> Result<ModelCheckpoint, OrchestratorError> {
         full::merge_into(base, adapter, out_dir)
     }
+}
+
+/// Whether any message of the JSON Lines chat records at `path` carries the
+/// reasoning of its step (`reasoning_content`).
+fn carries_reasoning(path: &Path) -> Result<bool, OrchestratorError> {
+    use std::io::BufRead;
+    let file = std::fs::File::open(path).map_err(io(path))?;
+    for line in std::io::BufReader::new(file).lines() {
+        let line = line.map_err(io(path))?;
+        // Cheap test first: most lines of a dataset without reasoning never
+        // parse.
+        if !line.contains("\"reasoning_content\"") {
+            continue;
+        }
+        let record: serde_json::Value = serde_json::from_str(&line).map_err(|e| {
+            OrchestratorError::Refused(format!("{}: not a JSON record: {e}", path.display()))
+        })?;
+        let reasons = record["messages"].as_array().is_some_and(|messages| {
+            messages.iter().any(|m| {
+                m["reasoning_content"]
+                    .as_str()
+                    .is_some_and(|text| !text.trim().is_empty())
+            })
+        });
+        if reasons {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// `plan`'s datasets concatenated in order into one file in its directory.
@@ -759,4 +792,39 @@ fn draw_replay(
         sample.digest = Some(Digest::of(text.as_bytes()));
     }
     Ok(sample)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dataset(name: &str, lines: &[&str]) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("{name}-{}.jsonl", std::process::id()));
+        std::fs::write(&path, lines.join("\n")).unwrap();
+        path
+    }
+
+    /// An agent's records carry the reasoning of their steps and train the
+    /// model to reason; bare answers (and an empty reasoning field) do not.
+    #[test]
+    fn records_with_step_reasoning_train_for_thinking_mode() {
+        let bare = dataset(
+            "bare",
+            &[
+                r#"{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"a","train":true}]}"#,
+                r#"{"messages":[{"role":"assistant","content":"a","reasoning_content":"  "}]}"#,
+            ],
+        );
+        let reasoning = dataset(
+            "reasoning",
+            &[
+                r#"{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"a"}]}"#,
+                r#"{"messages":[{"role":"assistant","content":"","reasoning_content":"look at main.c first"}]}"#,
+            ],
+        );
+        assert!(!carries_reasoning(&bare).unwrap());
+        assert!(carries_reasoning(&reasoning).unwrap());
+        std::fs::remove_file(bare).unwrap();
+        std::fs::remove_file(reasoning).unwrap();
+    }
 }
