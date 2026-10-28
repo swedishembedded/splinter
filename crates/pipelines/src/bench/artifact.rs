@@ -34,6 +34,9 @@ const MANIFEST: &str = "manifest.json";
 /// The file that is the trial's record.
 const TRAJECTORY: &str = "trajectory.atif.json";
 
+/// The file that holds every request the agent sent its model.
+const REQUESTS: &str = "model-requests.jsonl";
+
 /// One row of an export's `index.jsonl`.
 #[derive(Clone, Debug, Deserialize)]
 pub struct IndexRow {
@@ -146,6 +149,19 @@ pub struct Manifest {
     pub files: BTreeMap<String, String>,
 }
 
+/// What the model was given before the first turn, read from the first
+/// request the agent sent it: the system prompt and the tool schemas, which
+/// an ATIF trajectory of this agent does not carry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AgentContext {
+    /// The system prompt of the first request.
+    pub system: String,
+    /// The tool schemas of the first request, in the order they were sent.
+    pub tools: Vec<Value>,
+    /// The sha256 of the `model-requests.jsonl` they were read from.
+    pub source_sha256: String,
+}
+
 /// A trial whose every file matched its digest.
 #[derive(Debug)]
 pub struct Artifact {
@@ -155,6 +171,16 @@ pub struct Artifact {
     pub manifest: Manifest,
     /// The trajectory, parsed from the bytes that were verified.
     pub trajectory: atif::Trajectory,
+    /// The sha256 of the trajectory file as exported.
+    pub trajectory_sha256: String,
+    /// The context of the first request.
+    pub context: AgentContext,
+}
+
+/// The files of a trial that are read, not only hashed.
+struct Read {
+    trajectory: atif::Trajectory,
+    context: AgentContext,
 }
 
 /// Reads the rows of `directory`'s `index.jsonl`; a row that does not parse
@@ -232,11 +258,17 @@ pub fn read_trial(export: &Path, row: &IndexRow) -> Result<Artifact, String> {
     let manifest: Manifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|e| format!("{MANIFEST} is not a trial manifest: {e}"))?;
     agree(row, &manifest)?;
-    let trajectory = verify_files(&dir, &manifest)?;
+    let Read {
+        trajectory,
+        context,
+    } = verify_files(&dir, &manifest)?;
+    let trajectory_sha256 = manifest.files[TRAJECTORY].to_ascii_lowercase();
     Ok(Artifact {
         row: row.clone(),
         manifest,
         trajectory,
+        trajectory_sha256,
+        context,
     })
 }
 
@@ -273,7 +305,7 @@ fn agree(row: &IndexRow, manifest: &Manifest) -> Result<(), String> {
 
 /// Checks every file of `dir` against `manifest.files`, both ways, and
 /// returns the trajectory parsed from the verified bytes.
-fn verify_files(dir: &Path, manifest: &Manifest) -> Result<atif::Trajectory, String> {
+fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
     let mut present: Vec<String> = Vec::new();
     for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))? {
         let entry = entry.map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -287,6 +319,7 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<atif::Trajectory, Str
         }
     }
     let mut trajectory: Option<Vec<u8>> = None;
+    let mut requests: Option<Vec<u8>> = None;
     for (name, expected) in &manifest.files {
         if !is_plain_name(name) {
             return Err(format!(
@@ -295,11 +328,16 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<atif::Trajectory, Str
         }
         let path = dir.join(name);
         let unreadable = |e: io::Error| format!("{name}: {e} (partial artifact)");
-        // The trajectory is parsed from the very bytes that were hashed.
-        let found = if name == TRAJECTORY {
+        // The trajectory and the requests are parsed from the very bytes that
+        // were hashed.
+        let found = if name == TRAJECTORY || name == REQUESTS {
             let bytes = std::fs::read(&path).map_err(unreadable)?;
             let found = sha256_hex(&bytes);
-            trajectory = Some(bytes);
+            if name == TRAJECTORY {
+                trajectory = Some(bytes);
+            } else {
+                requests = Some(bytes);
+            }
             found
         } else {
             sha256_file(&path).map_err(unreadable)?
@@ -311,5 +349,45 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<atif::Trajectory, Str
         }
     }
     let bytes = trajectory.ok_or_else(|| format!("the manifest lists no {TRAJECTORY}"))?;
-    serde_json::from_slice(&bytes).map_err(|e| format!("{TRAJECTORY} is not ATIF: {e}"))
+    let trajectory =
+        serde_json::from_slice(&bytes).map_err(|e| format!("{TRAJECTORY} is not ATIF: {e}"))?;
+    let requests = requests.ok_or_else(|| {
+        format!(
+            "the manifest lists no {REQUESTS}: the system prompt and tools the model ran under \
+             are unknown, and a record without them would not match what it saw"
+        )
+    })?;
+    Ok(Read {
+        trajectory,
+        context: first_request(&requests, &manifest.files[REQUESTS])?,
+    })
+}
+
+/// The context of the first request in the `model-requests.jsonl` `bytes`.
+fn first_request(bytes: &[u8], sha256: &str) -> Result<AgentContext, String> {
+    let line = bytes
+        .split(|b| *b == b'\n')
+        .find(|l| !l.is_empty())
+        .ok_or_else(|| format!("{REQUESTS} is empty"))?;
+    let row: Value = serde_json::from_slice(line).map_err(|e| format!("{REQUESTS} line 1: {e}"))?;
+    let request = row
+        .get("request")
+        .ok_or_else(|| format!("{REQUESTS} line 1 holds no request"))?;
+    let system = request
+        .pointer("/messages/0")
+        .filter(|m| m.get("role").and_then(Value::as_str) == Some("system"))
+        .and_then(|m| m.get("content"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("{REQUESTS}: the first request does not open with a system prompt"))?
+        .to_string();
+    let tools = request
+        .get("tools")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(AgentContext {
+        system,
+        tools,
+        source_sha256: sha256.to_ascii_lowercase(),
+    })
 }

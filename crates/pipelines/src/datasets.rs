@@ -16,7 +16,7 @@ use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::{canonical_json, Digest};
-use splinter_core::experience::ExperienceId;
+use splinter_core::experience::{Environment, ExperienceId};
 use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
 use splinter_data::{
@@ -415,7 +415,14 @@ fn project_without(
     if let Some(prompt) = &request.system_prompt {
         projection = projection.with_system_prompt(prompt);
     }
-    if view == ViewName::SftStep {
+    // A benchmark trial keeps the system prompt its agent was served, which
+    // varies with the repository's commit; the prompt a model is asked under is
+    // whatever its agent builds, so nothing is settled for it.
+    let own_prompts = corpus
+        .entries()
+        .iter()
+        .all(|entry| entry.experience.environment.kind == Environment::BENCH);
+    if view == ViewName::SftStep && !own_prompts {
         // The prompt the runs were made under is the prompt the dataset trains
         // under, so a model trained on it is asked under it.
         projection = projection

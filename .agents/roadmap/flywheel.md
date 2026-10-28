@@ -134,10 +134,10 @@ inconclusive and more tasks are collected rather than the threshold changed.
   verified, the benchmark's grade as an executable verdict, ATIF as the record), one
   experience set per split; the eval split is refused by every dataset build and by the
   dataset store; `sft-step` yields the tool-use records of the passing train trials.
-- Open: a benchmark trajectory records no system prompt and no tool schemas, so the records
-  are trained under Splinter's default system turn with no `tools`, where the solver ran
-  under the agent's prompt and tool schemas. The first request of the trial's
-  `model-requests.jsonl` holds both; carrying them into the experience needs the view to read a
-  leading system step for a non-workspace environment.
+- Done: the first request of the trial's `model-requests.jsonl` supplies the system prompt
+  and the tool schemas, added to the experience's trajectory with the derivation recorded;
+  the records train under them.
+- Open: a tool the agent loaded mid-session is in later requests only, so the records carry the
+  first request's tool list (about 1.4% of requests differ).
 - Done: the reasoning of each step rides on the assistant message as `reasoning_content`
   (brain's `generic-messages-v2` gained the field and renders it through the template).

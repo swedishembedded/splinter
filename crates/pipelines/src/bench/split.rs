@@ -21,11 +21,9 @@
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
-use splinter_core::experience::{Experience, ExperienceId};
+use splinter_core::experience::{Environment, Experience, ExperienceId};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
-
-use super::BENCH_ENVIRONMENT;
 
 /// The class the admitted trials are registered under.
 const TRIAL: &str = "bench_trial";
@@ -130,7 +128,7 @@ pub fn conflict(trials: &[TrialRecord], task: &str, split: Split) -> Option<Stri
 /// bench task that is not `train`, or of one the register holds on the
 /// `eval` side. `None` for any experience that is not a bench one.
 pub fn exam_only(trials: &[TrialRecord], experience: &Experience) -> Option<String> {
-    if experience.environment.kind != BENCH_ENVIRONMENT {
+    if experience.environment.kind != Environment::BENCH {
         return None;
     }
     let spec = &experience.environment.spec;

@@ -44,9 +44,6 @@ use splinter_store::experiences::{ExperienceSet, SetId};
 use artifact::{read_index, read_trial, Artifact};
 use split::{Split, SplitSource, TrialRecord};
 
-/// The environment kind of a benchmark task.
-pub const BENCH_ENVIRONMENT: &str = "bench";
-
 /// The producer of a benchmark verdict.
 pub const VERIFIER_PRODUCER: &str = "bench/verifier";
 
@@ -292,7 +289,7 @@ fn model_of(artifact: &Artifact) -> &str {
 /// The experience of a verified trial: its trajectory under its task.
 fn experience_of(ctx: &Context, artifact: &Artifact, side: Split) -> Result<Experience, String> {
     let manifest = &artifact.manifest;
-    let trajectory = artifact.trajectory.clone();
+    let trajectory = with_agent_context(artifact);
     let instruction = trajectory
         .steps
         .iter()
@@ -318,7 +315,7 @@ fn experience_of(ctx: &Context, artifact: &Artifact, side: Split) -> Result<Expe
     let task = Task::new(
         BENCH_TASK,
         Vec::new(),
-        Environment::new(BENCH_ENVIRONMENT, spec),
+        Environment::new(Environment::BENCH, spec),
         instruction,
         Vec::new(),
     )
@@ -347,6 +344,56 @@ fn experience_of(ctx: &Context, artifact: &Artifact, side: Split) -> Result<Expe
     Experience::new(task, trajectory, None, provenance).map_err(|e| e.to_string())
 }
 
+/// The key of `trajectory.extra` under which a derivation is recorded.
+const ENRICHMENT: &str = "splinter_enrichment";
+
+/// The trajectory the experience records: the exported one, plus what the
+/// model was given before its first turn, which this agent's ATIF does not
+/// carry - its system prompt as a leading system step and its tool schemas as
+/// `agent.tool_definitions` - read from the trial's first model request. The
+/// derivation is recorded in the trajectory itself (source file digest, the
+/// digest of the trajectory as exported, what was added), so the exported
+/// artifact stays the source of truth and the addition is never mistaken for
+/// the agent's own record. What the trajectory already records is kept.
+fn with_agent_context(artifact: &Artifact) -> atif::Trajectory {
+    let context = &artifact.context;
+    let mut trajectory = artifact.trajectory.clone();
+    let mut derived = Vec::new();
+    if trajectory.agent.tool_definitions.is_none() && !context.tools.is_empty() {
+        trajectory.agent.tool_definitions = Some(context.tools.clone());
+        derived.push("agent.tool_definitions");
+    }
+    if trajectory.steps.first().map(|s| s.source) != Some(atif::StepOrigin::System) {
+        // Step ids are sequential from 1, so the prompt takes the first and
+        // the recorded steps follow it.
+        for step in &mut trajectory.steps {
+            step.step_id += 1;
+        }
+        trajectory.steps.insert(
+            0,
+            atif::TraceStep::new(1, atif::StepOrigin::System, context.system.as_str()),
+        );
+        derived.push("steps[0] (system prompt)");
+    }
+    let mut extra = match trajectory.extra.take() {
+        Some(Value::Object(map)) => map,
+        Some(other) => serde_json::Map::from_iter([("exported".to_string(), other)]),
+        None => serde_json::Map::new(),
+    };
+    extra.insert(
+        ENRICHMENT.to_string(),
+        json!({
+            "source": "model-requests.jsonl",
+            "source_sha256": context.source_sha256,
+            "request": 1,
+            "trajectory_sha256": artifact.trajectory_sha256,
+            "added": derived,
+        }),
+    );
+    trajectory.extra = Some(Value::Object(extra));
+    trajectory
+}
+
 /// What belongs to the trial and not to its task, for whoever audits the
 /// verdict.
 fn evidence(artifact: &Artifact, side: Split, source: SplitSource) -> Value {
@@ -355,6 +402,10 @@ fn evidence(artifact: &Artifact, side: Split, source: SplitSource) -> Value {
         "trial": manifest.trial,
         "manifest_sha256": artifact.row.manifest_sha256,
         "files": manifest.files,
+        "context": {
+            "source_sha256": artifact.context.source_sha256,
+            "tools": artifact.context.tools.len(),
+        },
         "task": {
             "id": manifest.task.id,
             "version": manifest.task.version,

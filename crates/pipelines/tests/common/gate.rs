@@ -244,8 +244,8 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         records.push(Record {
             body: RecordBody::Preference {
                 prompt: vec![message("user", question(topic, i), false)],
-                chosen: message("assistant", answer(topic, i), true),
-                rejected: message("assistant", "I do not know.".into(), true),
+                chosen: Box::new(message("assistant", answer(topic, i), true)),
+                rejected: Box::new(message("assistant", "I do not know.".into(), true)),
             },
             metadata: RecordMetadata {
                 group: None,

@@ -53,5 +53,14 @@ failed yields nothing. The view writes tool calls and their results in
 `generic-messages-v2` pairing. The reasoning a step recorded rides on its assistant
 message as `reasoning_content`, the field brain's chat template renders as the turn's
 think block (the one serving sends back), so a trained turn shows its reasoning where the
-model produces it; a step that recorded none has none. A benchmark trajectory records no system prompt and no tool schemas, so the
-records open with Splinter's default system turn and carry no `tools`.
+model produces it; a step that recorded none has none. A benchmark trajectory of this agent records neither its system prompt nor its tool
+schemas, but the trial's first model request (`model-requests.jsonl`, digest-checked like
+every file) holds both. Ingestion adds them to the experience's trajectory, the system
+prompt as a leading system step and the schemas as `agent.tool_definitions`, and records
+the derivation in the trajectory's `extra.splinter_enrichment` (source file digest, the
+digest of the trajectory as exported, what was added); the exported artifact stays the
+source of truth. A trial without that file is refused. The records then open with the
+system prompt the trial's agent was served (it differs between trials only in the
+repository commit it names, so a dataset holds each record under its own) and carry the
+tools it offered. A tool the agent loaded later in a session is not in the first
+request's list.

@@ -300,7 +300,10 @@ pub(crate) fn conversation_serialised(
     student_turn: &str,
     serialise_calls: bool,
 ) -> Result<Conversation, Exclusion> {
-    let setting = if experience.environment.kind == Environment::WORKSPACE {
+    let setting = if matches!(
+        experience.environment.kind.as_str(),
+        Environment::WORKSPACE | Environment::BENCH
+    ) {
         Setting::Workspace
     } else {
         Setting::Closed

@@ -366,8 +366,8 @@ fn line(
             },
         ) => serde_json::to_string(&PreferenceLine {
             prompt: prompt.iter().map(Turn::from).collect(),
-            chosen: chosen.into(),
-            rejected: rejected.into(),
+            chosen: (&**chosen).into(),
+            rejected: (&**rejected).into(),
             metadata: &record.metadata,
         })?,
         // A record serving an objective brain trains is written in that

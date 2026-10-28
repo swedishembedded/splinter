@@ -92,6 +92,19 @@ fn trajectory(note: &str) -> String {
     .to_string()
 }
 
+/// The requests the agent sent: the first holds the system prompt and the
+/// tool schemas the model was given; the commit in the prompt is the trial's.
+fn requests(trial: &str) -> String {
+    let request = json!({"kind": "request", "seq": 1, "request": {
+        "messages": [
+            {"role": "system", "content": format!("You are Sven.\nCommit: {trial}")},
+            {"role": "user", "content": "Repair the firmware."}],
+        "tools": [{"name": "shell", "description": "Run a command.",
+                   "parameters": {"type": "object", "properties": {"command": {"type": "string"}}}}],
+    }});
+    format!("{request}\n{{\"kind\": \"response\", \"seq\": 1}}\n")
+}
+
 /// Writes the export `dir` holding `trials`; returns it.
 fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
     fs::create_dir_all(dir).unwrap();
@@ -101,6 +114,7 @@ fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         fs::create_dir_all(&trial_dir).unwrap();
         let files = [
             ("trajectory.atif.json", trajectory(t.name)),
+            ("model-requests.jsonl", requests(t.name)),
             ("verification.json", "{\"ok\": true}".to_string()),
             ("submission.patch", "diff --git a/x b/x\n".to_string()),
         ];
@@ -199,7 +213,11 @@ fn trials_become_experiences_with_the_benchmarks_verdict_in_one_set_per_split() 
     let eval = store.get_set(&done.eval_set.unwrap()).unwrap();
     assert_eq!((train.members.len(), eval.members.len()), (2, 1));
     let experience = store.get(&eval.members[0]).unwrap();
-    assert_eq!(experience.trajectory.steps.len(), 3);
+    assert_eq!(
+        experience.trajectory.steps.len(),
+        4,
+        "the system prompt leads the three exported steps"
+    );
     assert_eq!(experience.environment.spec["set"], "eval");
     assert_eq!(experience.environment.spec["task"]["version"], "2");
     assert_eq!(experience.environment.spec["verifier"]["digest"], "v1");
@@ -354,8 +372,16 @@ fn only_passing_train_trials_become_tool_use_records_and_eval_never_enters_a_dat
         "the tool result is context: {text}"
     );
     assert!(
-        !text.contains("look first"),
-        "reasoning is not part of the wire format"
+        text.contains("\"reasoning_content\":\"look first\""),
+        "the step's reasoning rides on its turn: {text}"
+    );
+    assert!(
+        text.contains("You are Sven.\\nCommit: t-pass"),
+        "the trial's own system turn: {text}"
+    );
+    assert!(
+        text.contains("\"tools\"") && text.contains("Run a command."),
+        "{text}"
     );
 
     // The eval set cannot be built from, alone or mixed with train.
@@ -374,6 +400,79 @@ fn only_passing_train_trials_become_tool_use_records_and_eval_never_enters_a_dat
     assert_eq!(dropped.dropped.len(), 1);
     assert_eq!(dropped.records, built.records);
     assert!(!fs::read_to_string(&dropped.path).unwrap().contains("org/b"));
+}
+
+#[test]
+fn the_record_opens_with_the_trials_own_system_prompt_and_tools_and_the_derivation_is_recorded() {
+    let (scratch, ctx) = context("bench-context");
+    let dir = export(
+        &scratch.0.join("export"),
+        &[
+            Trial::new("t-one", "org/a", Some("train"), true),
+            Trial::new("t-two", "org/b", Some("train"), true),
+        ],
+    );
+    let done = ingest_bench_trials(&ctx, &[dir], NO_OPTIONS).unwrap();
+    let set = done.train_set.unwrap();
+    let store = ctx.experiences();
+
+    // The trajectory is the exported one plus the context, and says so.
+    let id = store.get_set(&set).unwrap().members[0].clone();
+    let trajectory = store.get(&id).unwrap().trajectory;
+    assert_eq!(trajectory.steps[0].source, atif::StepOrigin::System);
+    assert_eq!(trajectory.steps.len(), 4);
+    assert_eq!(trajectory.steps[1].step_id, 2, "steps stay sequential");
+    assert_eq!(trajectory.agent.tool_definitions.as_ref().unwrap().len(), 1);
+    let enrichment = &trajectory.extra.as_ref().unwrap()["splinter_enrichment"];
+    assert_eq!(enrichment["source"], "model-requests.jsonl");
+    assert_eq!(enrichment["source_sha256"].as_str().unwrap().len(), 64);
+    assert_eq!(enrichment["trajectory_sha256"].as_str().unwrap().len(), 64);
+
+    // Two trials served different prompts (the commit) build one dataset,
+    // each record under its own prompt, with the tools the agent offered.
+    let built = build(&ctx, &sft_request(set)).unwrap();
+    let lines: Vec<Value> = fs::read_to_string(&built.path)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let opening: std::collections::BTreeSet<&str> = lines
+        .iter()
+        .map(|l| l["messages"][0]["content"].as_str().unwrap())
+        .collect();
+    assert_eq!(opening.len(), 2, "{opening:?}");
+    assert!(lines.iter().all(|l| l["messages"][0]["role"] == "system"));
+    assert!(lines
+        .iter()
+        .all(|l| l["tools"][0]["function"]["name"] == "shell"));
+}
+
+#[test]
+fn a_trial_without_the_model_requests_is_refused_because_its_context_is_unknown() {
+    let (scratch, ctx) = context("bench-no-requests");
+    let dir = export(
+        &scratch.0.join("export"),
+        &[Trial::new("t1", "org/a", Some("train"), true)],
+    );
+    // Rewrite the manifest without the requests file, keeping the index honest.
+    let trial = dir.join("t1");
+    fs::remove_file(trial.join("model-requests.jsonl")).unwrap();
+    let mut manifest: Value =
+        serde_json::from_str(&fs::read_to_string(trial.join("manifest.json")).unwrap()).unwrap();
+    manifest["files"]
+        .as_object_mut()
+        .unwrap()
+        .remove("model-requests.jsonl");
+    let text = serde_json::to_string_pretty(&manifest).unwrap();
+    fs::write(trial.join("manifest.json"), &text).unwrap();
+    let row = json!({"trial": "t1", "task": "org/a", "reward": 1.0, "verdict": "pass",
+                     "set": "train", "manifest_sha256": sha256_hex(text.as_bytes()), "path": "t1"});
+    fs::write(dir.join("index.jsonl"), format!("{row}\n")).unwrap();
+    let done = ingest_bench_trials(&ctx, &[dir], NO_OPTIONS).unwrap();
+    assert!(
+        done.refused[0].reason.contains("model-requests.jsonl"),
+        "{done:?}"
+    );
 }
 
 #[test]

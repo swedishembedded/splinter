@@ -100,8 +100,8 @@ impl Preference {
         Ok((
             RecordBody::Preference {
                 prompt: vec![message("user", &turn, false)],
-                chosen: better,
-                rejected: worse,
+                chosen: Box::new(better),
+                rejected: Box::new(worse),
             },
             Provenance::of(vec![chosen.id.clone(), rejected.id.clone()]),
         ))

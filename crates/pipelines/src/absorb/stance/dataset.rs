@@ -59,8 +59,8 @@ fn record(pair: &Pair) -> Record {
     Record {
         body: RecordBody::Preference {
             prompt,
-            chosen: message("assistant", &pair.chosen, true),
-            rejected: message("assistant", &pair.rejected, true),
+            chosen: Box::new(message("assistant", &pair.chosen, true)),
+            rejected: Box::new(message("assistant", &pair.rejected, true)),
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),

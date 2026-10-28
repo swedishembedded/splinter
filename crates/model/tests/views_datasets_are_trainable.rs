@@ -126,8 +126,8 @@ fn a_preference_dataset_is_read_pair_for_pair() {
         Objective::Dpo,
         RecordBody::Preference {
             prompt: vec![message("user", "What is two plus two?", false)],
-            chosen: message("assistant", "4", false),
-            rejected: message("assistant", "5", false),
+            chosen: Box::new(message("assistant", "4", false)),
+            rejected: Box::new(message("assistant", "5", false)),
         },
     );
     let written = write_dataset(&path, &pairs, &BrainDatasetCheck).expect("brain accepts it");

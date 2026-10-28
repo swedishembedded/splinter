@@ -169,6 +169,12 @@ impl Environment {
     /// The kind of an environment with no tools at all.
     pub const CLOSED_BOOK: &'static str = "closed-book";
 
+    /// The kind of an environment a benchmark harness ran the agent in: the
+    /// agent's own tools in a repository, graded by the benchmark's verifier.
+    /// Its trajectory is read like a workspace one - the agent's system
+    /// prompt opens the record - but nothing here can rebuild or re-grade it.
+    pub const BENCH: &'static str = "bench";
+
     /// The kind of an environment that is a source tree pinned by the
     /// digest of its archive, where a solver edits files and runs commands.
     pub const WORKSPACE: &'static str = "workspace";

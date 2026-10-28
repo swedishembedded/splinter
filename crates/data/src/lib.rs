@@ -171,9 +171,9 @@ pub enum RecordBody {
         /// The conversation before the reply.
         prompt: Vec<WireMessage>,
         /// The preferred reply.
-        chosen: WireMessage,
+        chosen: Box<WireMessage>,
         /// The reply it is preferred over.
-        rejected: WireMessage,
+        rejected: Box<WireMessage>,
     },
     /// A query, the text that answers it, and texts that do not. Contrastive.
     Contrastive {

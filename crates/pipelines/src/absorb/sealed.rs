@@ -261,7 +261,7 @@ fn record_texts(record: &Record) -> Vec<&str> {
         } => prompt
             .iter()
             .filter(|m| m.role != "system")
-            .chain([chosen, rejected])
+            .chain([&**chosen, &**rejected])
             .map(|m| m.content.as_str())
             .collect(),
         RecordBody::Text { text } => vec![text.as_str()],
