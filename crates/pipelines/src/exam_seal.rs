@@ -20,6 +20,9 @@
 //! * The families a clean build trains on are remembered, so no later run
 //!   reserves one of them (see [`crate::practice`]).
 //!
+//! * An experience of a benchmark task that is not in the benchmark's `train`
+//!   split is refused: it is examination material ([`crate::bench::split`]).
+//!
 //! A family is the file a task's fault was seeded in (its first concept).
 
 use std::collections::BTreeSet;
@@ -119,12 +122,21 @@ pub fn leaks(
     corpus: &Corpus,
     projection: &Projection,
 ) -> Result<Vec<Leak>, OrchestratorError> {
+    let mut found: Vec<Leak> = Vec::new();
+    let register = crate::bench::split::trials(ctx)?;
+    for entry in corpus.entries() {
+        if let Some(reason) = crate::bench::split::exam_only(&register, &entry.experience) {
+            found.push(Leak {
+                experience: entry.id.clone(),
+                reason: format!("experience {}: {reason}", entry.id),
+            });
+        }
+    }
     let exam = reserved(ctx)?;
     if exam.is_empty() {
-        return Ok(Vec::new());
+        return Ok(found);
     }
     let workspace = workspace_entries(corpus);
-    let mut found: Vec<Leak> = Vec::new();
     let mut note = |experience: &ExperienceId, reason: String| {
         if !found.iter().any(|l| &l.experience == experience) {
             found.push(Leak {

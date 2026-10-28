@@ -482,6 +482,25 @@ pub enum ExperiencesCommand {
         #[arg(required = true, value_name = "TRIAL")]
         trials: Vec<PathBuf>,
     },
+    /// Admit the trials of exports written by `bench export` as experiences:
+    /// every file is checked against the digest in the trial's manifest and
+    /// the manifest against the export's index, a tampered or partial trial is
+    /// refused with the reason, the benchmark's grade is the verdict and the
+    /// ATIF trajectory the record. Ingesting an export again changes nothing;
+    /// a trial name with other content is refused. Trials come out in one
+    /// experience set per split: `train` trials can be built into datasets,
+    /// `eval` trials are examination material no dataset accepts.
+    IngestBench {
+        /// The export directories (each holds index.jsonl).
+        #[arg(required = true, value_name = "EXPORT")]
+        exports: Vec<PathBuf>,
+        /// The split of trials whose export names none (exports made before
+        /// the benchmark recorded splits). Without it such a trial is refused:
+        /// a split is never guessed. The register records that the operator
+        /// stated it, and a trial that names its split must agree.
+        #[arg(long, value_enum, value_name = "SPLIT")]
+        assume_set: Option<BenchSplit>,
+    },
     /// Compare two experience sets of the same tasks: the candidate's against
     /// the baseline's, paired by task, a family counted once. Exposed and
     /// harness-failed attempts are left out and counted.
@@ -685,6 +704,7 @@ impl LineageArgs {
 
 mod absorb;
 mod baseline;
+mod bench;
 mod consolidate;
 mod control;
 mod corrections;
@@ -706,6 +726,7 @@ mod tasks;
 mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use baseline::BaselineArgs;
+pub use bench::BenchSplit;
 pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;

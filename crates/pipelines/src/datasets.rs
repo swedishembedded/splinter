@@ -496,6 +496,13 @@ pub fn store_dataset(
     projection: &Projection,
     export_only: bool,
 ) -> Result<StoredDataset, OrchestratorError> {
+    crate::bench::admit_projection(
+        ctx,
+        projection
+            .records
+            .iter()
+            .flat_map(|record| record.metadata.experiences.iter().cloned()),
+    )?;
     if !export_only {
         TrainingCapabilities::BRAIN
             .require(projection.objective)

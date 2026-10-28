@@ -29,6 +29,7 @@ navigation:
       - docs/guides/releases.md
       - docs/guides/improving-a-harness.md
       - docs/guides/harbor-tasks.md
+      - docs/guides/bench-trials.md
       - docs/guides/invented-tasks.md
   - title: Concepts
     pages:

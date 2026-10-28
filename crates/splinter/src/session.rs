@@ -424,6 +424,23 @@ impl Session {
                 })?;
                 emit(json, &ingested);
             }
+            Command::Experiences(ExperiencesCommand::IngestBench {
+                exports,
+                assume_set,
+            }) => {
+                let options = splinter_sdk::bench::IngestOptions {
+                    assume_set: assume_set.map(Into::into),
+                };
+                let arguments = json!({ "exports": exports, "assume_set": assume_set.map(|s| format!("{s:?}")) });
+                let ingested = record(ctx, "experiences ingest-bench", &arguments, |_| {
+                    splinter_sdk::bench::ingest_bench_trials(ctx, &exports, options)
+                })?;
+                emit(json, &ingested);
+                // A refused trial did not become an experience.
+                if !ingested.report.refused.is_empty() {
+                    return Ok(Exit::Failed);
+                }
+            }
             Command::Experiences(ExperiencesCommand::Compare {
                 candidate,
                 baseline,

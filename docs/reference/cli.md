@@ -114,6 +114,7 @@ Every command takes these.
   - [splinter experiences show](#splinter-experiences-show) - Show an experience set, or one experience with its annotations
   - [splinter experiences replay](#splinter-experiences-replay) - Run an experience's code calls again in the environment it records (or every experience of a set) and compare each result with the one it observed
   - [splinter experiences ingest-harbor](#splinter-experiences-ingest-harbor) - Read the trials Harbor left for imported tasks (each a trial directory with result.json and agent/trajectory.json in ATIF) as experiences carrying Harbor's own verdict
+  - [splinter experiences ingest-bench](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
@@ -1152,6 +1153,7 @@ Subcommands:
 - [`show`](#splinter-experiences-show) - Show an experience set, or one experience with its annotations
 - [`replay`](#splinter-experiences-replay) - Run an experience's code calls again in the environment it records (or every experience of a set) and compare each result with the one it observed
 - [`ingest-harbor`](#splinter-experiences-ingest-harbor) - Read the trials Harbor left for imported tasks (each a trial directory with result.json and agent/trajectory.json in ATIF) as experiences carrying Harbor's own verdict
+- [`ingest-bench`](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 
 #### splinter experiences list
@@ -1202,6 +1204,22 @@ Arguments:
 
 - `<TASKSET-ID>` (required): The task set the trials' tasks were imported into.
 - `<TRIAL>...` (required): The trial directories.
+
+#### splinter experiences ingest-bench
+
+Admit the trials of exports written by `bench export` as experiences: every file is checked against the digest in the trial's manifest and the manifest against the export's index, a tampered or partial trial is refused with the reason, the benchmark's grade is the verdict and the ATIF trajectory the record. Ingesting an export again changes nothing; a trial name with other content is refused. Trials come out in one experience set per split: `train` trials can be built into datasets, `eval` trials are examination material no dataset accepts
+
+```text
+splinter experiences ingest-bench [OPTIONS] <EXPORT>...
+```
+
+Arguments:
+
+- `<EXPORT>...` (required): The export directories (each holds index.jsonl)
+
+Options:
+
+- `--assume-set <SPLIT>`: The split of trials whose export names none (exports made before the benchmark recorded splits). Without it such a trial is refused: a split is never guessed. The register records that the operator stated it, and a trial that names its split must agree. Values: `train`, `eval`.
 
 #### splinter experiences compare
 

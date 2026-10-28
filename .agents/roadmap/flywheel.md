@@ -127,3 +127,17 @@ inconclusive and more tasks are collected rather than the threshold changed.
   and 8B; the brief, not the rule, is the next thing to test.
 - The serve check reports the beginning of the server's output in its not-measured reason after the
   notices of every model it skipped; show the last lines first.
+
+## Benchmark trials (2026-10-28)
+
+- Done: `experiences ingest-bench` admits the trial artifacts a benchmark exports (digests
+  verified, the benchmark's grade as an executable verdict, ATIF as the record), one
+  experience set per split; the eval split is refused by every dataset build and by the
+  dataset store; `sft-step` yields the tool-use records of the passing train trials.
+- Open: a benchmark trajectory records no system prompt and no tool schemas, so the records
+  are trained under Splinter's default system turn with no `tools`, where the solver ran
+  under the agent's prompt and tool schemas. The first request of the trial's
+  `model-requests.jsonl` holds both; carrying them into the experience needs the view to read a
+  leading system step for a non-workspace environment.
+- Open: the model's reasoning is dropped by the chat wire format, so a model trained on
+  these records is not taught to reason before acting.

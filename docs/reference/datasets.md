@@ -54,6 +54,14 @@ parser then checks every record, with the same pairing rule, before a dataset
 is stored, so a dataset with a repeated call id, a call answered twice or a
 result before its call cannot be stored.
 
+## Benchmark trials
+
+An experience of a benchmark trial (`experiences ingest-bench`, see
+[Benchmark trials as training data](../guides/bench-trials.md)) is training data only
+when its task is in the benchmark's `train` split. A build refuses an experience of an
+`eval` task, or of a task the register holds as `eval`; `--drop-leaking` leaves it out
+and lists it instead.
+
 ## Manifest
 
 Every dataset is stored under the state root by content address, beside a manifest that

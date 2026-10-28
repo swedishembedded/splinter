@@ -43,3 +43,9 @@ pub const WORKSPACE_CHECK: &str = "workspace-check";
 /// way of being solved, not part of what the solver is shown, so a view that
 /// strips privileged items drops it.
 pub const SOLVE_PROCESS: &str = "solve-process";
+
+/// The task kind of a trial exported by a benchmark harness: the instruction
+/// the solver was given, in the benchmark's own environment, graded by the
+/// benchmark's verifier. Its environment spec records which split of the
+/// benchmark the task belongs to, and only a `train` task is training data.
+pub const BENCH_TASK: &str = "bench-task";

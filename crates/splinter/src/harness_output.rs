@@ -136,3 +136,29 @@ impl Report for splinter_sdk::harbor::Ingested {
         out
     }
 }
+
+impl Report for splinter_sdk::bench::BenchIngested {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        for (side, set) in [("train", &self.train_set), ("eval", &self.eval_set)] {
+            if let Some(set) = set {
+                let _ = writeln!(out, "{side} trials: experience set {set}");
+            }
+        }
+        let _ = writeln!(
+            out,
+            "admitted {:?}, already held {}, verdicts {:?}",
+            self.admitted, self.already_held, self.verdicts
+        );
+        for refused in &self.refused {
+            let trial = refused.trial.as_deref().unwrap_or("(export)");
+            let _ = writeln!(
+                out,
+                "  refused {} {trial}: {}",
+                refused.export.display(),
+                refused.reason
+            );
+        }
+        out
+    }
+}

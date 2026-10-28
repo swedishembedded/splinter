@@ -6510,6 +6510,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
  "splinter-agent",
  "splinter-core",
  "splinter-data",
