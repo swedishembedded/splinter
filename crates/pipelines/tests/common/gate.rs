@@ -181,6 +181,7 @@ fn dataset_made(
             content,
             tool_calls: Vec::new(),
             tool_call_id: None,
+            reasoning_content: None,
             train,
         };
         records.push(Record {
@@ -231,6 +232,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         content,
         tool_calls: Vec::new(),
         tool_call_id: None,
+        reasoning_content: None,
         train,
     };
     let mut records = Vec::new();

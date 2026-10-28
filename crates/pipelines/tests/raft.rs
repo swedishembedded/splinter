@@ -70,6 +70,7 @@ fn turn(role: &str, content: &str, train: bool) -> WireMessage {
         content: content.into(),
         tool_calls: Vec::new(),
         tool_call_id: None,
+        reasoning_content: None,
         train,
     }
 }

@@ -50,6 +50,8 @@ and prints both. Only the first can be built into a dataset:
 calls, then the final answer) with the conversation up to it as context and only the
 action supervised, or one record per trajectory with `--pack`. A trial the benchmark
 failed yields nothing. The view writes tool calls and their results in
-`generic-messages-v2` pairing; the model's reasoning is not part of that wire format and
-is left out. A benchmark trajectory records no system prompt and no tool schemas, so the
+`generic-messages-v2` pairing. The reasoning a step recorded rides on its assistant
+message as `reasoning_content`, the field brain's chat template renders as the turn's
+think block (the one serving sends back), so a trained turn shows its reasoning where the
+model produces it; a step that recorded none has none. A benchmark trajectory records no system prompt and no tool schemas, so the
 records open with Splinter's default system turn and carry no `tools`.

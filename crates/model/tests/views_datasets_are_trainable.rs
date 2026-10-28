@@ -52,6 +52,7 @@ fn message(role: &str, content: &str, train: bool) -> WireMessage {
         content: content.into(),
         tool_calls: Vec::new(),
         tool_call_id: None,
+        reasoning_content: None,
         train,
     }
 }
@@ -153,4 +154,59 @@ fn only_the_objectives_brain_trains_from_a_file_are_trainable() {
         );
         assert!(!brain.supports(objective.line_format()), "{objective:?}");
     }
+}
+
+/// A trained turn's reasoning is written as `reasoning_content`, which brain's
+/// parser accepts on an assistant turn, and it is the field serving sends back:
+/// the prompt that carries the turn renders it as the turn's think block.
+#[test]
+fn an_assistant_turns_reasoning_is_accepted_and_rendered_as_its_think_block() {
+    use brain::chat::{ChatMessage, ChatRequest};
+
+    let dir = scratch("reasoning");
+    let path = dir.join("sft.jsonl");
+    let mut thinking = message("assistant", "4", true);
+    thinking.reasoning_content = Some("Two and two make four.".into());
+    let record = projection(
+        Objective::Sft,
+        RecordBody::Chat {
+            messages: vec![
+                message("user", "What is two plus two?", false),
+                thinking.clone(),
+            ],
+            tools: Vec::new(),
+        },
+    );
+    write_dataset(&path, &record, &BrainDatasetCheck).expect("brain accepts reasoning_content");
+    assert!(std::fs::read_to_string(&path)
+        .unwrap()
+        .contains("\"reasoning_content\":\"Two and two make four.\""));
+
+    let reasoning = thinking.reasoning_content.clone().unwrap();
+    let prompt = ChatRequest::new(vec![
+        ChatMessage::user("What is two plus two?"),
+        ChatMessage::assistant("4").with_reasoning(reasoning),
+    ])
+    .render_prompt()
+    .expect("the serving renderer");
+    assert!(
+        prompt.contains("<think>\nTwo and two make four.\n</think>\n\n4"),
+        "{prompt}"
+    );
+
+    let mut on_a_user_turn = message("user", "hi", false);
+    on_a_user_turn.reasoning_content = Some("no".into());
+    let refused = write_dataset(
+        &dir.join("bad.jsonl"),
+        &projection(
+            Objective::Sft,
+            RecordBody::Chat {
+                messages: vec![on_a_user_turn, message("assistant", "4", true)],
+                tools: Vec::new(),
+            },
+        ),
+        &BrainDatasetCheck,
+    );
+    assert!(refused.is_err(), "reasoning belongs to an assistant turn");
+    std::fs::remove_dir_all(&dir).ok();
 }

@@ -139,5 +139,5 @@ inconclusive and more tasks are collected rather than the threshold changed.
   under the agent's prompt and tool schemas. The first request of the trial's
   `model-requests.jsonl` holds both; carrying them into the experience needs the view to read a
   leading system step for a non-workspace environment.
-- Open: the model's reasoning is dropped by the chat wire format, so a model trained on
-  these records is not taught to reason before acting.
+- Done: the reasoning of each step rides on the assistant message as `reasoning_content`
+  (brain's `generic-messages-v2` gained the field and renders it through the template).

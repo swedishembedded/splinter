@@ -26,8 +26,9 @@
 //! * An agent step is one assistant message - its text and every tool
 //!   call it made, in `generic-messages-v2`'s tool-call form with the
 //!   arguments JSON-encoded - followed by one `tool` message per
-//!   observation result, answering its call by id. Reasoning content is
-//!   not part of the wire format and is left out.
+//!   observation result, answering its call by id. The step's reasoning
+//!   content is the message's `reasoning_content`, which brain's chat template
+//!   renders as the turn's think block; a step that recorded none has none.
 //! * Results are paired to calls by id within their step. A step in which two
 //!   calls share an id is refused (the pairing is ambiguous); ids repeat across
 //!   steps (a model numbers each response's calls from zero), so the record
@@ -402,6 +403,7 @@ fn try_conversation(
                 let repeated = !asked.is_empty() && asked.iter().all(|c| seen_calls.contains(c));
                 seen_calls.extend(asked);
                 let mut assistant = message("assistant", &scrub.text(&text), false);
+                assistant.reasoning_content = reasoning_of(step, &scrub)?;
                 assistant.tool_calls = calls
                     .into_iter()
                     .map(|c| scoped(step, c))
@@ -535,9 +537,15 @@ fn serialise_run_step(
         });
         messages.push(assistant);
     };
+    let mut first = true;
     for call in calls {
         let id = call.id.clone();
         let mut assistant = message("assistant", "", false);
+        // The step's reasoning led its first call.
+        if first {
+            assistant.reasoning_content = reasoning_of(step, scrub)?;
+            first = false;
+        }
         assistant.tool_calls = vec![scoped(step, call)];
         for call in &mut assistant.tool_calls {
             call.function.arguments = scrub.text(&call.function.arguments);
@@ -562,6 +570,25 @@ fn serialise_run_step(
         action(messages, message("assistant", &scrub.text(text), false));
     }
     Ok(())
+}
+
+/// The reasoning an agent step recorded, trimmed, as the wire message
+/// carries it: `None` for a step that recorded none. Brain's chat template
+/// renders it as the turn's think block, so markup in it would close the
+/// block early and refuses the trajectory like markup in the answer.
+fn reasoning_of(step: &TraceStep, scrub: &Scrub) -> Result<Option<String>, Unprojectable> {
+    let Some(reasoning) = step
+        .reasoning_content
+        .as_deref()
+        .map(str::trim)
+        .filter(|r| !r.is_empty())
+    else {
+        return Ok(None);
+    };
+    if holds_reasoning_markup(reasoning) {
+        return Err(Unprojectable::ReasoningInText { step: step.step_id });
+    }
+    Ok(Some(scrub.text(reasoning)))
 }
 
 /// Whether `text` holds a reasoning block's markup, opened or only closed:

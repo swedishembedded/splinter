@@ -519,6 +519,7 @@ fn chat(claim: &Claim, user: &str, assistant: &str) -> Record {
         content: content.into(),
         tool_calls: Vec::new(),
         tool_call_id: None,
+        reasoning_content: None,
         train,
     };
     Record {

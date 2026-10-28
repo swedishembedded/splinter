@@ -19,6 +19,12 @@ pub struct WireMessage {
     /// On a `tool` message, the id of the call it answers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// On an assistant message, the reasoning the model produced before it.
+    /// Brain hands it to the checkpoint's chat template as the turn's
+    /// `reasoning_content`, which renders it as the turn's think block, so a
+    /// trained turn shows the reasoning where the model produces it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
     /// Required on every message by the consuming parser: a record with no
     /// explicit supervision boundary is either a silent no-op or a silent
     /// prompt leak into the loss.

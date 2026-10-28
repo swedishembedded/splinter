@@ -80,6 +80,7 @@ fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> R
         content: content.into(),
         tool_calls: Vec::new(),
         tool_call_id: None,
+        reasoning_content: None,
         train,
     };
     Record {

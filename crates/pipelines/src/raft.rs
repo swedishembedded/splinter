@@ -342,12 +342,14 @@ fn abstain(record: &mut splinter_data::Record, question: &str, context: &[&Passa
     turns.push(WireMessage {
         role: "user".into(),
         content: prompt,
+        reasoning_content: None,
         train: false,
         ..template.clone()
     });
     turns.push(WireMessage {
         role: "assistant".into(),
         content: reply.to_string(),
+        reasoning_content: None,
         train: true,
         tool_calls: Vec::new(),
         tool_call_id: None,

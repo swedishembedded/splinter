@@ -36,6 +36,11 @@ chosen and the rejected answer), each checked by brain's own parser.
 Objectives brain cannot train (contrastive, reward, raw text) need
 `--export-only`.
 
+The reasoning an agent step recorded (ATIF `reasoning_content`) is the `reasoning_content`
+of the assistant message it becomes, trimmed. Brain's chat template renders it as the
+turn's think block, in either thinking mode; a step that recorded none carries none, and
+reasoning that holds think markup leaves the trajectory out as `reasoning_in_text`.
+
 A workspace trajectory is cleaned of the machine that ran it: the harness's
 scratch directory is named relative to itself, the owner and group of a long
 listing and the name of a home directory become `user`. An action that repeats

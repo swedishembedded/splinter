@@ -132,6 +132,7 @@ fn context(role: &str, text: &str) -> WireMessage {
         content: text.to_string(),
         tool_calls: Vec::new(),
         tool_call_id: None,
+        reasoning_content: None,
         train: false,
     }
 }
@@ -209,6 +210,7 @@ pub fn records_from_performance(
                 },
             }],
             tool_call_id: None,
+            reasoning_content: None,
             train: true,
         });
         messages.push(WireMessage {
@@ -217,6 +219,7 @@ pub fn records_from_performance(
         });
     }
     messages.push(WireMessage {
+        reasoning_content: None,
         train: true,
         ..context("assistant", closing)
     });

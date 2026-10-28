@@ -339,6 +339,7 @@ fn a_prompt_is_inserted_where_a_conversation_has_no_system_turn() {
         content: content.into(),
         tool_calls: Vec::new(),
         tool_call_id: None,
+        reasoning_content: None,
         train,
     };
     let exp = experience();
