@@ -168,7 +168,11 @@ mod tests {
     use sven_sdk::model::{FunctionCall, ToolResultContent};
 
     fn message(role: Role, content: MessageContent) -> Message {
-        Message { role, content }
+        Message {
+            role,
+            content,
+            reasoning: None,
+        }
     }
 
     fn user(text: &str) -> Message {

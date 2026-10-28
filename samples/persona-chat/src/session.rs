@@ -160,6 +160,7 @@ impl Session {
                             arguments: made.raw_arguments.clone(),
                         },
                     },
+                    reasoning: None,
                 });
                 self.history
                     .push(Message::tool_result(&made.id, &answered.1));

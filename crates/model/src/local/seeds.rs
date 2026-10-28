@@ -133,6 +133,7 @@ mod tests {
             messages: vec![Message {
                 role: Role::User,
                 content: MessageContent::Text("hello".into()),
+                reasoning: None,
             }],
             ..CompletionRequest::default()
         };

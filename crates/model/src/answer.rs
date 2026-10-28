@@ -219,6 +219,7 @@ impl Answerer {
         let message = |role, text: &str| Message {
             role,
             content: MessageContent::Text(text.to_string()),
+            reasoning: None,
         };
         let request = CompletionRequest {
             messages: vec![message(Role::System, system), message(Role::User, user)],

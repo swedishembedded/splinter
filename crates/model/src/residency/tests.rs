@@ -62,6 +62,7 @@ async fn answer(model: &LocalQwen) -> String {
         messages: vec![Message {
             role: Role::User,
             content: MessageContent::Text("which adapter are you?".into()),
+            reasoning: None,
         }],
         ..CompletionRequest::default()
     };

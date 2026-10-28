@@ -101,6 +101,7 @@ fn ask(ctx: &Context, reference: &ModelRef, sampling: Sampling, requests: usize)
             messages: vec![Message {
                 role: Role::User,
                 content: MessageContent::Text("hello".into()),
+                reasoning: None,
             }],
             ..CompletionRequest::default()
         };
