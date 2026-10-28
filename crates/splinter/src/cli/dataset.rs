@@ -59,7 +59,8 @@ pub struct BuildArgs {
     pub max_block: Option<usize>,
     /// Split a record longer than `--max-block` into consecutive windows
     /// that each fit, keeping every supervised action, instead of leaving
-    /// it out; every window repeats the task instruction.
+    /// it out; every window repeats the task instruction. A window with no
+    /// supervised turn is left out and counted as `NothingSupervised`.
     #[arg(long)]
     pub split_over_block: bool,
     /// For the sft-step view: one record per trajectory with every

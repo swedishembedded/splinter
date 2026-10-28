@@ -375,6 +375,10 @@ pub enum Exclusion {
     NotConserved,
     /// A record longer than the training block it was projected for.
     OverBlock,
+    /// A window of a record split to fit the training block that holds no
+    /// supervised turn (the exploration around the decisive actions of an
+    /// `SftStep::only_actions` view): training on it would learn nothing.
+    NothingSupervised,
     /// An episode in a workspace, which the policy never answers
     /// closed-book: its final answer is not a record of the view that
     /// trains final answers.

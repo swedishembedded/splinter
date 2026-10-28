@@ -449,6 +449,61 @@ fn an_over_block_packed_record_is_split_into_windows_that_each_fit() {
 }
 
 #[test]
+fn a_window_with_no_supervised_turn_is_left_out_and_counted() {
+    // Only the edit is decisive: the windows made of exploration alone carry
+    // nothing to learn, and training on them would only spend the card.
+    let filler = "y".repeat(300);
+    let mut steps = vec![user(1, INSTRUCTION)];
+    for at in 0..6u64 {
+        steps.push(call(
+            2 + at,
+            &format!("c{at}"),
+            "shell",
+            json!({"cmd": filler}),
+            &filler,
+        ));
+    }
+    steps.push(call(9, "e1", "edit", json!({"path": "a.py"}), "ok"));
+    steps.push(say(10, "Done."));
+    let projection = SftStep::new(Strength::Executable)
+        .only_actions(vec!["edit".to_string()])
+        .packed(true)
+        .project(&corpus_of(vec![passed(
+            &workspace_task(),
+            steps,
+            offered(),
+            "2026-10-13T01:00:00.000Z",
+        )]))
+        .unwrap();
+    assert_eq!(projection.records.len(), 1);
+    let original = projection.records[0].clone();
+    let bound = record_size(&original) / 3;
+
+    let split = projection.split_over_block(bound, &record_size);
+
+    assert!(
+        split.count(Exclusion::NothingSupervised) > 0,
+        "exploration-only windows are counted"
+    );
+    assert_eq!(split.count(Exclusion::OverBlock), 0);
+    assert!(!split.records.is_empty());
+    for record in &split.records {
+        assert!(
+            !supervised_contents(record).is_empty(),
+            "every kept window supervises something"
+        );
+    }
+    let mut wanted = supervised_contents(&original);
+    let mut got: Vec<String> = split.records.iter().flat_map(supervised_contents).collect();
+    wanted.sort();
+    got.sort();
+    assert_eq!(
+        got, wanted,
+        "every supervised turn is still kept exactly once"
+    );
+}
+
+#[test]
 fn an_indivisible_turn_too_large_for_the_block_is_dropped_and_counted() {
     let huge = "x".repeat(2000);
     let steps = vec![

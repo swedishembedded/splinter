@@ -30,7 +30,8 @@ impl Projection {
     /// ends on a call the next window answers. An indivisible unit that does
     /// not fit even with the instruction alone is dropped, as is a record
     /// that is not a chat conversation, and each such drop is counted as
-    /// [`Exclusion::OverBlock`].
+    /// [`Exclusion::OverBlock`]. A window left with no supervised turn is
+    /// dropped too and counted as [`Exclusion::NothingSupervised`].
     ///
     /// `size` is the caller's: it must be the same measure the bound it
     /// derives from uses (see [`Projection::within_block`]), and it sees the
@@ -40,6 +41,7 @@ impl Projection {
         let records = std::mem::take(&mut self.records);
         let mut kept = Vec::with_capacity(records.len());
         let mut over_block = 0usize;
+        let mut unsupervised = 0usize;
         for record in records {
             if size(&record) <= max_block {
                 kept.push(record);
@@ -52,13 +54,30 @@ impl Projection {
             };
             let (windows, dropped) = split_chat(&messages, &tools, &metadata, max_block, size);
             over_block += dropped;
-            kept.extend(windows);
+            let before = windows.len();
+            let supervised: Vec<Record> = windows.into_iter().filter(is_supervised).collect();
+            unsupervised += before - supervised.len();
+            kept.extend(supervised);
         }
         self.records = kept;
         if over_block > 0 {
             *self.excluded.entry(Exclusion::OverBlock).or_insert(0) += over_block;
         }
+        if unsupervised > 0 {
+            *self
+                .excluded
+                .entry(Exclusion::NothingSupervised)
+                .or_insert(0) += unsupervised;
+        }
         self
+    }
+}
+
+/// Whether a window supervises at least one turn.
+fn is_supervised(record: &Record) -> bool {
+    match &record.body {
+        RecordBody::Chat { messages, .. } => messages.iter().any(|m| m.train),
+        _ => true,
     }
 }
 
