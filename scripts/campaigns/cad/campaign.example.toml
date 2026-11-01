@@ -39,7 +39,8 @@ binary = "~/bin/splinter"
 state = "~/campaigns/cad/state"
 
 [train]
-roles = ["specifier", "designer"]            # text-only roles: the trainer reads no images
+roles = ["visual", "specifier", "designer", "reviewer"]
+images = true                                # records carry the pictures the models were shown
 base = "local:Qwen/Qwen3.8-27B-FP8"
 base_precision = "bf16"
 max_block = 16384

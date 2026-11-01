@@ -263,7 +263,8 @@ def learn(campaign: Campaign, gen: Generation, train_exports: list[str]) -> dict
     if not set_ids:
         raise SystemExit("loop: no training experience set was admitted")
     t = campaign["train"]
-    built = splinter(campaign, gen, "dataset", "build", "--view", "sft-step", "--roles", ",".join(t["roles"]),
+    images = ["--images"] if t.get("images") else []
+    built = splinter(campaign, gen, "dataset", "build", "--view", "sft-step", *images, "--roles", ",".join(t["roles"]),
                      "--max-block", str(t["max_block"]), "--split-over-block", *sorted(set(set_ids)),
                      log_name="dataset")
     dataset = built["dataset"]
