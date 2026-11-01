@@ -1,0 +1,378 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for self-improving engineering
+# agents for its clients. If your team needs expertise in closing the loop from
+# verified agent work to better local models then you can procure our services
+# by sending an email to info@swedishembedded.com.
+"""The CAD improvement loop: explore, learn, measure, promote, repeat.
+
+    python3 scripts/campaigns/cad/loop.py --config CAMPAIGN.toml [--generations N] [--status]
+
+One generation, starting from the champion (the base model, or the last
+promoted adapter):
+
+1. **serve** the champion with brain on the campaign's card;
+2. **explore**: the benchmark runs every training-family task with the champion
+   (the harness's every role on the served model); every graded trial is
+   exported;
+3. **measure** the champion on the held-out families (the exam), unless the
+   generation it was promoted in already did;
+4. **publish** both exports and the pass rates per generation to the dataset
+   repository (and its remote, when configured);
+5. **learn**: every training export so far is admitted (one experience per
+   harness conversation; held-out tasks are refused by Splinter's seal), the
+   conversations of the trained roles that passed become an `sft-step`
+   dataset, and a LoRA adapter is trained on the base from it;
+6. **candidate**: the adapter is served and measured on the same exam;
+7. **decide**: the candidate replaces the champion only when its paired
+   per-task gain on the exam is positive (the benchmark's paired report: mean
+   delta and its 95% interval); the decision and its numbers are recorded.
+
+Every step writes its result to ``<work>/generations/<n>/state.json`` before the
+next starts, so the loop resumes where it stopped (a lease that ended, a
+crash): a finished step is never repeated, an unfinished one is redone from its
+start. Nothing here chooses a model, a split or a recipe on its own: they are
+the campaign file's.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+
+
+def log(message: str) -> None:
+    print(f"[loop {time.strftime('%Y-%m-%d %H:%M:%S')}] {message}", file=sys.stderr, flush=True)
+
+
+def path(value: str) -> Path:
+    return Path(os.path.expanduser(os.path.expandvars(value))).resolve()
+
+
+@dataclass(frozen=True)
+class Campaign:
+    doc: dict
+
+    def __getitem__(self, key: str):
+        return self.doc[key]
+
+    @property
+    def work(self) -> Path:
+        return path(self["paths"]["work"])
+
+
+# --------------------------------------------------------------------------- state
+
+
+class Generation:
+    """One generation's directory and its resumable state."""
+
+    def __init__(self, campaign: Campaign, number: int):
+        self.number = number
+        self.dir = campaign.work / "generations" / f"{number:03d}"
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.file = self.dir / "state.json"
+        self.state = json.loads(self.file.read_text()) if self.file.is_file() else {"generation": number}
+
+    def done(self, step: str) -> bool:
+        return step in self.state.get("done", [])
+
+    def record(self, step: str, **values) -> None:
+        self.state.update(values)
+        self.state.setdefault("done", []).append(step)
+        tmp = self.file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.state, indent=2, sort_keys=True) + "\n")
+        tmp.replace(self.file)
+        log(f"generation {self.number}: {step} done")
+
+
+def champion(campaign: Campaign) -> dict:
+    """The model the next generation starts from, with the exam job it was last
+    measured by: the last promoted adapter, else the base."""
+    best = {"name": "base", "adapter": None, "exam_job": None}
+    for gen_dir in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]")):
+        state = json.loads((gen_dir / "state.json").read_text()) if (gen_dir / "state.json").is_file() else {}
+        if "champion_in" in state:
+            best = {**state["champion_in"], "exam_job": state.get("exam_job") or state["champion_in"].get("exam_job")}
+        if state.get("decision", {}).get("promoted"):
+            best = state["candidate"]
+    return best
+
+
+# --------------------------------------------------------------------------- steps
+
+
+def run(argv: list[str], log_file: Path, env: dict | None = None, timeout: float | None = None,
+        cwd: Path | None = None) -> str:
+    """Run `argv`, its stderr appended to `log_file`; its stdout. A failure stops the loop."""
+    log(" ".join(str(a) for a in argv))
+    with open(log_file, "a") as err:
+        done = subprocess.run([str(a) for a in argv], stdout=subprocess.PIPE, stderr=err, text=True,
+                              env={**os.environ, **(env or {})}, timeout=timeout, check=False, cwd=cwd)
+    if done.returncode != 0:
+        raise SystemExit(f"loop: {argv[0]} exited {done.returncode}; see {log_file}")
+    return done.stdout
+
+
+def stop_serving(campaign: Campaign) -> None:
+    """Stop any brain of the campaign's binary directory serving the campaign's card."""
+    s = campaign["serve"]
+    card, binary = s["card"], path(s["brain"])
+    pattern = f"^{binary.parent}/brain[^ ]* --device gpu{card} "
+    for pid in subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True).stdout.split():
+        os.kill(int(pid), signal.SIGTERM)
+    deadline = time.time() + 120
+    while subprocess.run(["pgrep", "-f", pattern], capture_output=True).returncode == 0:
+        if time.time() > deadline:
+            raise SystemExit(f"loop: the brain on gpu{card} did not stop")
+        time.sleep(1)
+    (campaign.work / f"ready-gpu{card}").unlink(missing_ok=True)
+
+
+def serve(campaign: Campaign, model: dict, gen: Generation) -> str:
+    """Serve `model` (base, or base + adapter) on the campaign's card; the model id to request."""
+    s = campaign["serve"]
+    card, port, binary = s["card"], s["port"], path(s["brain"])
+    ready = campaign.work / f"ready-gpu{card}"
+    stop_serving(campaign)
+    argv = [binary, "--device", f"gpu{card}", "--backend", "cuda", "serve", "--max-batch", str(s["max_batch"]),
+            "--speculative", "off", "--openai", f"127.0.0.1:{port}", "--api-key-file", path(s["key_file"]),
+            "--checkpoint", path(s["checkpoint"]), "--ready-file", ready]
+    if model.get("adapter"):
+        argv += ["--adapter", model["adapter"], "--adapter-targets", "all"]
+    server_log = campaign.work / f"brain-gpu{card}.log"
+    env = {**os.environ, **campaign["serve"].get("env", {})}
+    with open(server_log, "a") as out:
+        subprocess.Popen([str(a) for a in argv], stdout=out, stderr=out, stdin=subprocess.DEVNULL,
+                         start_new_session=True, env=env)
+    deadline = time.time() + 900
+    while not ready.exists():
+        if time.time() > deadline:
+            raise SystemExit(f"loop: brain on gpu{card} not ready after 900 s; see {server_log}")
+        time.sleep(2)
+    key = path(s["key_file"]).read_text().strip()
+    import urllib.request
+
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/v1/models", headers={"Authorization": f"Bearer {key}"})
+    listed = [m["id"] for m in json.load(urllib.request.urlopen(request, timeout=30))["data"]]
+    if model.get("adapter"):
+        ids = [i for i in listed if ":splinter:candidate:" in i]
+        if len(ids) != 1:
+            raise SystemExit(f"loop: expected one adapter model served, found {ids}")
+        return ids[0]
+    if s["base_model"] not in listed:
+        raise SystemExit(f"loop: {s['base_model']} is not served (served: {listed})")
+    return s["base_model"]
+
+
+def profile(campaign: Campaign, gen: Generation, model_id: str, attempts: int, name: str) -> Path:
+    """A run profile with every harness role on `model_id`."""
+    s, b = campaign["serve"], campaign["bench"]
+    roles = "\n".join(f'{role} = "brain"' for role in ["main", *b["roles"]])
+    text = (f'[sven]\nbuild = "{path(b["sven"])}"\n\n[run]\nenvironment = "userns"\nattempts = {attempts}\n'
+            f'concurrency = {b["concurrency"]}\n\n[roles]\n{roles}\n\n[upstreams.brain]\n'
+            f'base_url = "http://127.0.0.1:{s["port"]}/v1"\nmodel = "{model_id}"\napi_key_env = "BRAIN_KEY"\n')
+    out = gen.dir / f"{name}.toml"
+    out.write_text(text)
+    return out
+
+
+def bench_run(campaign: Campaign, gen: Generation, prof: Path, split: str, name: str) -> str:
+    """Run the collection's `split` tasks; the job directory."""
+    b = campaign["bench"]
+    jobs = campaign.work / "jobs"
+    jobs.mkdir(exist_ok=True)
+    before = set(jobs.iterdir())
+    env = {"BRAIN_KEY": path(campaign["serve"]["key_file"]).read_text().strip(),
+           "TMPDIR": str(campaign.work / "tmp")}
+    (campaign.work / "tmp").mkdir(exist_ok=True)
+    run([path(b["dir"]) / "bench", "run", b["collection"], "--profile", prof, "--set", split,
+         "--jobs-dir", jobs], gen.dir / f"{name}.log", env=env, cwd=path(b["dir"]))
+    new = sorted(set(jobs.iterdir()) - before)
+    if len(new) != 1:
+        raise SystemExit(f"loop: expected one new job directory, found {new}")
+    return str(new[0])
+
+
+def bench_export(campaign: Campaign, gen: Generation, job: str, name: str) -> str:
+    out = campaign.work / "exports" / f"{gen.number:03d}-{name}"
+    run([path(campaign["bench"]["dir"]) / "bench", "export", job, "--out", out], gen.dir / f"{name}-export.log",
+        cwd=path(campaign["bench"]["dir"]))
+    return str(out)
+
+
+def bench_compare(campaign: Campaign, job: str, against: str) -> dict:
+    out = run([path(campaign["bench"]["dir"]) / "bench", "--output", "json", "report", job, "--against", against],
+              campaign.work / "report.log", cwd=path(campaign["bench"]["dir"]))
+    return json.loads(out)["summary"]
+
+
+def splinter(campaign: Campaign, gen: Generation, *args, log_name: str = "splinter") -> dict:
+    sp = campaign["splinter"]
+    out = run([path(sp["binary"]), "--state", path(sp["state"]), "--models-dir", path(campaign["serve"]["models_dir"]),
+               "--device", f"gpu{campaign['serve']['card']}", "--backend", "cuda", "--json", *args],
+              gen.dir / f"{log_name}.log", env=campaign["serve"].get("env", {}))
+    return json.loads(out)
+
+
+def learn(campaign: Campaign, gen: Generation, train_exports: list[str]) -> dict:
+    """Admit every training export, build the role dataset, train an adapter from the base."""
+    set_ids = []
+    for export in train_exports:
+        report = splinter(campaign, gen, "experiences", "ingest-bench", export, log_name="ingest")
+        if report.get("train_set"):
+            set_ids.append(report["train_set"])
+    if not set_ids:
+        raise SystemExit("loop: no training experience set was admitted")
+    t = campaign["train"]
+    built = splinter(campaign, gen, "dataset", "build", "--view", "sft-step", "--roles", ",".join(t["roles"]),
+                     "--max-block", str(t["max_block"]), "--split-over-block", *sorted(set(set_ids)),
+                     log_name="dataset")
+    dataset = built["dataset"]
+    stop_serving(campaign)  # the trainer takes the whole card
+    trained = splinter(campaign, gen, "train", dataset, "--from", t["base"], "--base-precision", t["base_precision"],
+                       "--max-block", str(t["max_block"]), "--rank", str(t["rank"]), "--alpha", str(t["alpha"]),
+                       "--lr", str(t["lr"]), "--steps", str(t["steps"]), "--records-per-step",
+                       str(t["records_per_step"]), "--eval-every", str(t["eval_every"]), "--patience",
+                       str(t["patience"]), "--monitor-share", str(t["monitor_share"]), "--seed", str(t["seed"]),
+                       log_name="train")
+    adapter = Path(trained["adapter"])
+    keep = campaign.work / "adapters" / f"gen{gen.number + 1:03d}.safetensors"
+    keep.parent.mkdir(exist_ok=True)
+    shutil.copy(adapter, keep)
+    return {"set_ids": sorted(set(set_ids)), "dataset": dataset, "dataset_report": built, "adapter": str(keep),
+            "train_report": trained}
+
+
+def publish(campaign: Campaign) -> None:
+    """Copy every export into the dataset repository, refresh the progress table and chart."""
+    repo = path(campaign["paths"]["dataset_repo"])
+    generations = []
+    for gen_dir in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]")):
+        state = json.loads((gen_dir / "state.json").read_text())
+        n = gen_dir.name
+        for key in ("explore_export", "exam_export", "candidate_exam_export"):
+            if state.get(key):
+                target = repo / "generations" / n / key.removesuffix("_export")
+                if not target.exists():
+                    shutil.copytree(state[key], target)
+        jobs = [state[k] for k in ("explore_job", "exam_job") if state.get(k)]
+        if jobs:
+            generations.append(f"g{state['generation']}={','.join(jobs)}")
+    if generations:
+        subprocess.run([sys.executable, repo / "scripts" / "progress.py",
+                        *[a for g in generations for a in ("--generation", g)]], check=True)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    if subprocess.run(["git", "-C", repo, "diff", "--cached", "--quiet"]).returncode != 0:
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "loop: generations and progress"], check=True)
+    remote = campaign["paths"].get("dataset_remote")
+    if remote:
+        subprocess.run([path(campaign["paths"]["hf"]), "upload", remote, repo, "--repo-type", "dataset",
+                        "--exclude", ".git/*", "--commit-message", "loop: generations and progress"], check=True)
+
+
+def decide(summary: dict, rule: dict) -> dict:
+    """Promote the candidate only on a positive paired gain on the exam."""
+    mean = summary.get("mean_delta")
+    low = (summary.get("interval95") or [None, None])[0]
+    if mean is None:
+        return {"promoted": False, "reason": "no paired tasks", "summary": summary}
+    if rule.get("require_interval_above_zero", False):
+        ok = low is not None and low > 0
+        reason = f"mean delta {mean:+.3f}, lower bound {low}: {'above' if ok else 'not above'} zero"
+    else:
+        ok = mean > rule.get("min_mean_delta", 0.0)
+        reason = f"mean delta {mean:+.3f} {'>' if ok else '<='} {rule.get('min_mean_delta', 0.0)}"
+    return {"promoted": ok, "reason": reason, "summary": summary}
+
+
+# --------------------------------------------------------------------------- the loop
+
+
+def generation(campaign: Campaign, number: int) -> None:
+    gen = Generation(campaign, number)
+    start = gen.state.get("champion_in") or champion(campaign)
+    gen.state["champion_in"] = start
+    b = campaign["bench"]
+    adopt = campaign.doc.get("adopt", {}).get(str(number), {})
+    if not gen.done("explore"):
+        if adopt.get("explore_job"):
+            job = adopt["explore_job"]
+        else:
+            model_id = serve(campaign, start, gen)
+            job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["explore_attempts"], "explore"),
+                            "train", "explore")
+        gen.record("explore", explore_job=job, explore_export=bench_export(campaign, gen, job, "explore"))
+    if not gen.done("exam"):
+        job = adopt.get("exam_job") or start.get("exam_job")
+        if not job:
+            model_id = serve(campaign, start, gen)
+            job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "exam"), "eval", "exam")
+        gen.record("exam", exam_job=job, exam_export=bench_export(campaign, gen, job, "exam"))
+    if not gen.done("publish"):
+        publish(campaign)
+        gen.record("publish")
+    if not gen.done("learn"):
+        exports = []
+        for gen_dir in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]")):
+            state = json.loads((gen_dir / "state.json").read_text())
+            if state.get("explore_export"):
+                exports.append(state["explore_export"])
+        gen.record("learn", learned=learn(campaign, gen, exports))
+    if not gen.done("candidate"):
+        candidate = {"name": f"gen{number + 1:03d}", "adapter": gen.state["learned"]["adapter"]}
+        model_id = serve(campaign, candidate, gen)
+        job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "candidate"), "eval",
+                        "candidate")
+        candidate["exam_job"] = job
+        gen.record("candidate", candidate=candidate, candidate_exam_export=bench_export(campaign, gen, job,
+                                                                                         "candidate-exam"))
+    if not gen.done("decide"):
+        summary = bench_compare(campaign, gen.state["candidate"]["exam_job"], gen.state["exam_job"])
+        gen.record("decide", decision=decide(summary, campaign["promote"]))
+        publish(campaign)
+    log(f"generation {number}: {gen.state['decision']['reason']} -> "
+        f"{'promoted' if gen.state['decision']['promoted'] else 'champion kept'}")
+
+
+def status(campaign: Campaign) -> None:
+    for gen_dir in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]")):
+        state = json.loads((gen_dir / "state.json").read_text())
+        decision = state.get("decision", {})
+        print(f"{gen_dir.name}: done={state.get('done', [])} "
+              f"decision={decision.get('reason', '-')} promoted={decision.get('promoted', '-')}")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--config", type=Path, required=True)
+    ap.add_argument("--generations", type=int, default=1, help="how many generations to run from where it stands")
+    ap.add_argument("--status", action="store_true", help="print each generation's state and stop")
+    args = ap.parse_args()
+    campaign = Campaign(tomllib.loads(args.config.read_text()))
+    campaign.work.mkdir(parents=True, exist_ok=True)
+    if args.status:
+        status(campaign)
+        return 0
+    existing = sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]"))
+    first = 0
+    for gen_dir in existing:
+        state = json.loads((gen_dir / "state.json").read_text())
+        first = int(gen_dir.name) + (1 if "decide" in state.get("done", []) else 0)
+    for number in range(first, first + args.generations):
+        generation(campaign, number)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# A CAD improvement-loop campaign (scripts/campaigns/cad/loop.py). Copy it,
+# point the paths at this machine, and run `make campaign/cad/run CONFIG=...`.
+# "~" and $VARIABLES expand.
+
+[paths]
+work = "~/campaigns/cad"                     # generations, jobs, exports, adapters, logs
+dataset_repo = "~/datasets/cad-rl"           # a git repository with scripts/progress.py
+# dataset_remote = "<user>/cad-rl"           # also upload it there after every generation
+# hf = "~/venv/bin/hf"                       # the uploader
+
+[serve]
+brain = "~/bin/brain"                        # the serving binary (image input for the 27B)
+checkpoint = "~/models/Qwen/Qwen3.8-27B-FP8"
+models_dir = "~/models"
+base_model = "Qwen/Qwen3.8-27B-FP8"          # the model id the base is served as
+card = 0
+port = 8799
+key_file = "~/keys/brain"
+max_batch = 32
+env = { BRAIN_BACKEND = "cuda" }
+
+[bench]
+dir = "~/bench"                              # the benchmark checkout
+collection = "tasks/cad"
+sven = "~/bin/sven"                          # the agent build every trial runs
+roles = ["designer", "reviewer", "specifier", "visual"]
+concurrency = 12
+explore_attempts = 2                         # training-family attempts per generation
+exam_attempts = 2                            # held-out attempts per measured model
+
+[splinter]
+binary = "~/bin/splinter"
+state = "~/campaigns/cad/state"
+
+[train]
+roles = ["specifier", "designer"]            # text-only roles: the trainer reads no images
+base = "local:Qwen/Qwen3.8-27B-FP8"
+base_precision = "bf16"
+max_block = 16384
+rank = 16
+alpha = 32
+lr = 5e-5
+steps = 80
+records_per_step = 4
+eval_every = 10
+patience = 3
+monitor_share = 0.1
+seed = 20261101
+
+[promote]
+min_mean_delta = 0.0                         # or require_interval_above_zero = true
+
+# A generation can adopt jobs that already ran (for example the base run):
+# [adopt.0]
+# explore_job = "~/campaigns/cad/jobs/<job>"
+# exam_job = "~/campaigns/cad/jobs/<job>"
