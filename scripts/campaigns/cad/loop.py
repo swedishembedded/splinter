@@ -9,6 +9,8 @@
 
     python3 scripts/campaigns/cad/loop.py --config CAMPAIGN.toml [--generations N] [--status]
 
+``campaign.example.toml`` beside this file is a complete campaign file to copy.
+
 One generation, starting from the champion (the base model, or the last
 promoted adapter):
 
