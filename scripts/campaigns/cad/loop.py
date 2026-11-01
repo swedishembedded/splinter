@@ -124,6 +124,16 @@ def run(argv: list[str], log_file: Path, env: dict | None = None, timeout: float
     return done.stdout
 
 
+def with_env_script(campaign: Campaign, argv: list) -> list[str]:
+    """`argv` run after sourcing the campaign's `serve.env_script` (the machine's
+    CUDA libraries and the like), when it names one."""
+    script = campaign["serve"].get("env_script")
+    argv = [str(a) for a in argv]
+    if not script:
+        return argv
+    return ["bash", "-c", 'source "$0" && exec "$@"', str(path(script)), *argv]
+
+
 def stop_serving(campaign: Campaign) -> None:
     """Stop any brain binary serving the campaign's card, whichever path started it
     (a symlinked and a resolved directory are the same binaries)."""
@@ -153,7 +163,7 @@ def serve(campaign: Campaign, model: dict, gen: Generation) -> str:
     server_log = campaign.work / f"brain-gpu{card}.log"
     env = {**os.environ, **campaign["serve"].get("env", {})}
     with open(server_log, "a") as out:
-        subprocess.Popen([str(a) for a in argv], stdout=out, stderr=out, stdin=subprocess.DEVNULL,
+        subprocess.Popen(with_env_script(campaign, argv), stdout=out, stderr=out, stdin=subprocess.DEVNULL,
                          start_new_session=True, env=env)
     deadline = time.time() + 900
     while not ready.exists():
@@ -219,8 +229,9 @@ def bench_compare(campaign: Campaign, job: str, against: str) -> dict:
 
 def splinter(campaign: Campaign, gen: Generation, *args, log_name: str = "splinter") -> dict:
     sp = campaign["splinter"]
-    out = run([path(sp["binary"]), "--state", path(sp["state"]), "--models-dir", path(campaign["serve"]["models_dir"]),
-               "--device", f"gpu{campaign['serve']['card']}", "--backend", "cuda", "--json", *args],
+    out = run(with_env_script(campaign, [path(sp["binary"]), "--state", path(sp["state"]), "--models-dir",
+                                         path(campaign["serve"]["models_dir"]), "--device",
+                                         f"gpu{campaign['serve']['card']}", "--backend", "cuda", "--json", *args]),
               gen.dir / f"{log_name}.log", env=campaign["serve"].get("env", {}))
     return json.loads(out)
 

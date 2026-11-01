@@ -21,6 +21,7 @@ port = 8799
 key_file = "~/keys/brain"
 max_batch = 32
 env = { BRAIN_BACKEND = "cuda" }
+# env_script = "~/bin/cuda-env.sh"           # sourced before brain and the trainer start
 
 [bench]
 dir = "~/bench"                              # the benchmark checkout
