@@ -68,6 +68,7 @@ fn projection(objective: Objective, body: RecordBody) -> Projection {
             body,
             metadata: metadata(objective),
         }],
+        groups: Vec::new(),
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,
@@ -86,6 +87,7 @@ fn chat(train: bool) -> Projection {
                 message("assistant", "4", train),
             ],
             tools: Vec::new(),
+            advantage: None,
         },
     )
 }
@@ -176,6 +178,7 @@ fn an_assistant_turns_reasoning_is_accepted_and_rendered_as_its_think_block() {
                 thinking.clone(),
             ],
             tools: Vec::new(),
+            advantage: None,
         },
     );
     write_dataset(&path, &record, &BrainDatasetCheck).expect("brain accepts reasoning_content");
@@ -204,6 +207,7 @@ fn an_assistant_turns_reasoning_is_accepted_and_rendered_as_its_think_block() {
             RecordBody::Chat {
                 messages: vec![on_a_user_turn, message("assistant", "4", true)],
                 tools: Vec::new(),
+                advantage: None,
             },
         ),
         &BrainDatasetCheck,

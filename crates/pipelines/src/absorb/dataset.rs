@@ -92,6 +92,7 @@ fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> R
                 message("assistant", statement, true),
             ],
             tools: Vec::new(),
+            advantage: None,
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),
@@ -137,16 +138,8 @@ pub fn assemble(
     for (id, claim) in live {
         let Some(kit) = kits.get(id) else { continue };
         let mut mine = Projection {
-            view: VIEW.into(),
-            objective: Objective::Sft,
-            strip: None,
-            min_strength: None,
             records: kit.records.clone(),
-            excluded: BTreeMap::new(),
-            system_prompt: None,
-            packed: false,
-            outcome_verified_only: false,
-            terms: None,
+            ..Projection::new(VIEW, Objective::Sft, None, None)
         };
         for task in &kit.stopping {
             mine.records
@@ -187,16 +180,8 @@ pub fn assemble(
     let mut kept_replay: Vec<Record> = Vec::new();
     for (id, (statement, group)) in by_claim {
         let mut projection = Projection {
-            view: VIEW.into(),
-            objective: Objective::Sft,
-            strip: None,
-            min_strength: None,
             records: group,
-            excluded: BTreeMap::new(),
-            system_prompt: None,
-            packed: false,
-            outcome_verified_only: false,
-            terms: None,
+            ..Projection::new(VIEW, Objective::Sft, None, None)
         };
         // A sealed probe is refused wherever a record came from.
         let leaks = sealed.remove_leaks(&mut projection, |_| vec![statement.to_string()]);
@@ -212,16 +197,9 @@ pub fn assemble(
     let held = held_out.len();
     records.extend(held_out);
     let mut projection = Projection {
-        view: VIEW.into(),
-        objective: Objective::Sft,
-        strip: None,
-        min_strength: None,
         records,
-        excluded: BTreeMap::new(),
-        system_prompt: None,
-        packed: false,
-        outcome_verified_only: false,
         terms: source_terms(ctx, sessions.iter())?,
+        ..Projection::new(VIEW, Objective::Sft, None, None)
     };
     if let Some(prompt) = system {
         projection = projection.with_system_prompt(prompt);

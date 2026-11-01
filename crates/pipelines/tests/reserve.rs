@@ -302,6 +302,7 @@ fn reserving_twice_over_a_lineage_with_fresh_seeds_never_examines_what_was_train
             strip: None,
             min_strength: None,
             records: trained.iter().map(record).collect(),
+            groups: Vec::new(),
             excluded: Default::default(),
             system_prompt: None,
             packed: false,

@@ -140,7 +140,9 @@ fn supervised_contents(record: &Record) -> Vec<String> {
 
 fn parts(record: &Record) -> (&[WireMessage], &[Value]) {
     match &record.body {
-        RecordBody::Chat { messages, tools } => (messages, tools),
+        RecordBody::Chat {
+            messages, tools, ..
+        } => (messages, tools),
         other => panic!("a chat record, got {other:?}"),
     }
 }

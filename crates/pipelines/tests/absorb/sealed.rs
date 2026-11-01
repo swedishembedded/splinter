@@ -43,6 +43,7 @@ fn record(user: &str, assistant: &str) -> Record {
                 message("assistant", assistant, true),
             ],
             tools: Vec::new(),
+            advantage: None,
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),
@@ -63,6 +64,7 @@ fn projection(records: Vec<Record>) -> Projection {
         strip: None,
         min_strength: None,
         records,
+        groups: Vec::new(),
         excluded: Default::default(),
         system_prompt: None,
         packed: false,

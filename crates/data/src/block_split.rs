@@ -48,11 +48,17 @@ impl Projection {
                 continue;
             }
             let Record { body, metadata } = record;
-            let RecordBody::Chat { messages, tools } = body else {
+            let RecordBody::Chat {
+                messages,
+                tools,
+                advantage,
+            } = body
+            else {
                 over_block += 1;
                 continue;
             };
-            let (windows, dropped) = split_chat(&messages, &tools, &metadata, max_block, size);
+            let (windows, dropped) =
+                split_chat(&messages, &tools, advantage, &metadata, max_block, size);
             over_block += dropped;
             let before = windows.len();
             let supervised: Vec<Record> = windows.into_iter().filter(is_supervised).collect();
@@ -86,6 +92,7 @@ fn is_supervised(record: &Record) -> bool {
 fn split_chat(
     messages: &[WireMessage],
     tools: &[serde_json::Value],
+    advantage: Option<f64>,
     metadata: &RecordMetadata,
     max_block: usize,
     size: &dyn Fn(&Record) -> usize,
@@ -133,6 +140,7 @@ fn split_chat(
             body: RecordBody::Chat {
                 messages: repeated,
                 tools: tools.to_vec(),
+                advantage,
             },
             metadata: metadata.clone(),
         }

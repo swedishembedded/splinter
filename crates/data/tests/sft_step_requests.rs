@@ -159,7 +159,9 @@ fn view() -> SftStep {
 
 fn chat(record: &Record) -> (&[WireMessage], &[Value]) {
     match &record.body {
-        RecordBody::Chat { messages, tools } => (messages, tools),
+        RecordBody::Chat {
+            messages, tools, ..
+        } => (messages, tools),
         other => panic!("a chat record, got {other:?}"),
     }
 }

@@ -192,6 +192,7 @@ fn dataset_made(
                     message("assistant", answer(topic, i), true),
                 ],
                 tools: Vec::new(),
+                advantage: None,
             },
             metadata: RecordMetadata {
                 group: None,
@@ -210,6 +211,7 @@ fn dataset_made(
         strip: Some(Strip::All),
         min_strength: Some(Strength::Formal),
         records,
+        groups: Vec::new(),
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,
@@ -266,6 +268,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         strip: Some(Strip::All),
         min_strength: Some(Strength::Formal),
         records,
+        groups: Vec::new(),
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,

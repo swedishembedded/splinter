@@ -24,9 +24,14 @@ pub(crate) fn under_system_prompt(body: RecordBody) -> RecordBody {
         RecordBody::Chat {
             mut messages,
             tools,
+            advantage,
         } => {
             open_with_system(&mut messages, system);
-            RecordBody::Chat { messages, tools }
+            RecordBody::Chat {
+                messages,
+                tools,
+                advantage,
+            }
         }
         RecordBody::Rewarded {
             mut messages,

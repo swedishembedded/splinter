@@ -56,13 +56,10 @@
 
 use splinter_core::annotation::{AnnotationBody, Label, Outcome, Strength};
 use splinter_core::chat::WireMessage;
-use splinter_core::harness::{HarnessConversation, RecordedCalls};
+use splinter_core::harness::HarnessConversation;
 use splinter_core::rng::SplitMix64;
 
-use crate::images::MAX_IMAGES_PER_RECORD;
-use crate::render::student_turn;
-use crate::requests::conversation_of_requests;
-use crate::trajectory::{conversation_serialised, Conversation};
+use super::rendering::{Judgement, Rendering};
 use crate::{
     require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
     View, ViewError,
@@ -101,13 +98,8 @@ pub enum Control {
 #[derive(Clone, Debug)]
 pub struct SftStep {
     min_strength: Strength,
-    strip: Strip,
-    packed: bool,
+    rendering: Rendering,
     control: Control,
-    serialise_calls: bool,
-    only_actions: Option<Vec<String>>,
-    only_roles: Option<Vec<String>>,
-    images: bool,
 }
 
 impl SftStep {
@@ -118,13 +110,8 @@ impl SftStep {
     pub fn new(min_strength: Strength) -> Self {
         Self {
             min_strength,
-            strip: Strip::default(),
-            packed: false,
+            rendering: Rendering::default(),
             control: Control::Verified,
-            serialise_calls: false,
-            only_actions: None,
-            only_roles: None,
-            images: false,
         }
     }
 
@@ -138,19 +125,18 @@ impl SftStep {
     /// many more tokens than one of per-action records; within a step each
     /// supervised token weighs the same in both forms.
     #[must_use]
-    pub fn packed(self, packed: bool) -> Self {
-        Self { packed, ..self }
+    pub fn packed(mut self, packed: bool) -> Self {
+        self.rendering.packed = packed;
+        self
     }
 
     /// The same view reading a run exported as one agent step as one call per
     /// turn ([`crate::trajectory`]): for trajectories recorded before the agent
     /// kept its turns apart.
     #[must_use]
-    pub fn serialise_calls(self, serialise_calls: bool) -> Self {
-        Self {
-            serialise_calls,
-            ..self
-        }
+    pub fn serialise_calls(mut self, serialise_calls: bool) -> Self {
+        self.rendering.serialise_calls = serialise_calls;
+        self
     }
 
     /// The same view keeping only the actions whose tool calls are all named in `names`; an
@@ -159,12 +145,10 @@ impl SftStep {
     /// decisive actions - the edits and the conclusion - instead of the exploration around
     /// them, which is most of the tokens and teaches the least.
     #[must_use]
-    pub fn only_actions(self, names: Vec<String>) -> Self {
+    pub fn only_actions(mut self, names: Vec<String>) -> Self {
         // An empty list is no request at all: it cannot mean "keep nothing".
-        Self {
-            only_actions: (!names.is_empty()).then_some(names),
-            ..self
-        }
+        self.rendering.only_actions = (!names.is_empty()).then_some(names);
+        self
     }
 
     /// The same view keeping only the harness conversations answered by one of
@@ -173,12 +157,10 @@ impl SftStep {
     /// [`Exclusion::RoleNotWanted`]. This is how one role's model is trained
     /// on the conversations it answered and no other's.
     #[must_use]
-    pub fn only_roles(self, roles: Vec<String>) -> Self {
+    pub fn only_roles(mut self, roles: Vec<String>) -> Self {
         // An empty list is no request at all: it cannot mean "keep nothing".
-        Self {
-            only_roles: (!roles.is_empty()).then_some(roles),
-            ..self
-        }
+        self.rendering.only_roles = (!roles.is_empty()).then_some(roles);
+        self
     }
 
     /// The same view admitting the conversations whose model was shown
@@ -187,8 +169,9 @@ impl SftStep {
     /// pictures). Without it they are counted as [`Exclusion::ShownImages`]
     /// and never trained on as text alone.
     #[must_use]
-    pub fn images(self, images: bool) -> Self {
-        Self { images, ..self }
+    pub fn images(mut self, images: bool) -> Self {
+        self.rendering.images = images;
+        self
     }
 
     /// The same view under a negative `control`.
@@ -199,24 +182,15 @@ impl SftStep {
 
     /// The same view under `strip`.
     #[must_use]
-    pub fn with_strip(self, strip: Strip) -> Self {
-        Self { strip, ..self }
-    }
-
-    /// Whether the roles asked for (if any) include the model role that
-    /// answered `conversation`; an unknown role matches none.
-    fn wants_role(&self, conversation: Option<&HarnessConversation>) -> bool {
-        self.only_roles.as_ref().is_none_or(|wanted| {
-            conversation
-                .and_then(|c| c.role.as_deref())
-                .is_some_and(|role| wanted.iter().any(|w| w == role))
-        })
+    pub fn with_strip(mut self, strip: Strip) -> Self {
+        self.rendering.strip = strip;
+        self
     }
 
     fn project_entry(&self, entry: &Entry, projection: &mut Projection) {
         // Which experiences are wanted at all comes before how they did.
         let conversation = HarnessConversation::of(&entry.experience.trajectory);
-        if !self.wants_role(conversation.as_ref()) {
+        if !self.rendering.wants_role(conversation.as_ref()) {
             return projection.exclude(Exclusion::RoleNotWanted);
         }
         let outcome_verified = self.control == Control::OutcomeVerified;
@@ -239,93 +213,28 @@ impl SftStep {
                 return;
             }
         }
-        let conversation = match self.conversation_of(entry, conversation.as_ref()) {
+        let conversation = match self.rendering.conversation_of(entry, conversation.as_ref()) {
             Ok(conversation) => conversation,
             Err(reason) => return projection.exclude(reason),
         };
         if conversation.actions.is_empty() {
             return projection.exclude(Exclusion::NoAction);
         }
-        let mut admitted = Vec::new();
-        let images_before = images_before_each_message(&conversation);
-        let wanted = |action: &crate::trajectory::Action| match &self.only_actions {
-            None => true,
-            Some(names) => {
-                let calls = &conversation.messages[action.index].tool_calls;
-                calls.is_empty()
-                    || calls
-                        .iter()
-                        .all(|c| names.iter().any(|n| n == &c.function.name))
-            }
-        };
-        for action in conversation.actions.iter().filter(|a| !a.copied) {
+        let judge = |action: &crate::trajectory::Action| {
             if entry.labelled(action.step, Label::Bad) {
-                projection.exclude(Exclusion::BadStep);
-            } else if action.repeated {
-                projection.exclude(Exclusion::RepeatedAction);
-            } else if !wanted(action) {
-                projection.exclude(Exclusion::ActionNotWanted);
-            } else if images_before[action.index] > MAX_IMAGES_PER_RECORD {
-                projection.exclude(Exclusion::TooManyImages);
+                Judgement::Bad
             } else if passed.is_ok()
                 || (!outcome_verified && entry.labelled(action.step, Label::Good))
             {
-                admitted.push(action);
+                Judgement::Admit
+            } else {
+                Judgement::Skip
             }
-        }
-        let provenance = || Provenance::of(vec![entry.id.clone()]);
-        // One record has one list of tools: actions taken under another list
-        // than the last one's cannot be packed with it.
-        if self.packed && admitted.iter().any(|a| a.tools != admitted[0].tools) {
-            return projection.exclude(Exclusion::Unrepresentable);
-        }
-        if self.packed {
-            if let Some(record) = conversation.packed_record(&admitted) {
-                projection.push(record, provenance());
-            }
-        } else {
-            for action in admitted {
-                projection.push(conversation.record(action), provenance());
-            }
+        };
+        for record in self.rendering.records(&conversation, projection, judge) {
+            projection.push(record, Provenance::of(vec![entry.id.clone()]));
         }
     }
-
-    /// The conversation `entry` is: read from the requests its model was sent
-    /// when it recorded them, else from its trajectory. A conversation whose
-    /// model was shown images is the first only, and only when images are
-    /// wanted.
-    fn conversation_of(
-        &self,
-        entry: &Entry,
-        harness: Option<&HarnessConversation>,
-    ) -> Result<Conversation, Exclusion> {
-        let shown_images = harness.is_some_and(|c| c.shown_images);
-        if shown_images && !self.images {
-            return Err(Exclusion::ShownImages);
-        }
-        if let Some(recorded) = RecordedCalls::of(&entry.experience.trajectory) {
-            let calls = recorded.calls().ok_or(Exclusion::Unrepresentable)?;
-            return conversation_of_requests(&entry.experience, &calls);
-        }
-        if shown_images {
-            return Err(Exclusion::RequestsNotRecorded);
-        }
-        let turn = student_turn(entry, &self.strip)?;
-        conversation_serialised(&entry.experience, &turn, self.serialise_calls)
-    }
-}
-
-/// For each message of `conversation`, the images in the messages up to and
-/// including it.
-fn images_before_each_message(conversation: &Conversation) -> Vec<usize> {
-    conversation
-        .messages
-        .iter()
-        .scan(0, |seen, message| {
-            *seen += message.images.len();
-            Some(*seen)
-        })
-        .collect()
 }
 
 impl View for SftStep {
@@ -341,10 +250,10 @@ impl View for SftStep {
         let mut projection = Projection::new(
             NAME,
             Objective::Sft,
-            Some(self.strip.clone()),
+            Some(self.rendering.strip.clone()),
             Some(self.min_strength),
         );
-        projection.packed = self.packed;
+        projection.packed = self.rendering.packed;
         projection.outcome_verified_only = self.control == Control::OutcomeVerified;
         for entry in corpus.entries() {
             self.project_entry(entry, &mut projection);

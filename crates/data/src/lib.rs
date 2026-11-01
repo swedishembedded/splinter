@@ -26,6 +26,7 @@
 //! | [`DecisionView`] | SFT | the passing action where a passing and a failed attempt part |
 //! | [`Retrieval`] | contrastive | an instruction and the source span it is grounded in |
 //! | [`OutcomeView`] | reward | a whole trajectory and its derived reward |
+//! | [`PolicyGradient`] | policy gradient | each action of every graded attempt, with the attempt's advantage over the other attempts of its task |
 //! | [`DenoiseView`] | SFT | a denoise task's corrupted passage and its original |
 //! | [`Cpt`] | continued pretraining | the raw text of source parts |
 //! | [`Voice`] | SFT | the writer's own text, a stretch of whole sections at a time, as the answer |
@@ -74,6 +75,7 @@ pub mod images;
 mod markers;
 pub mod overlap;
 pub mod partition;
+mod record;
 mod render;
 mod replay;
 mod requests;
@@ -92,7 +94,6 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::annotation::Strength;
-use splinter_core::chat::WireMessage;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{ExperienceError, ExperienceId};
@@ -105,6 +106,7 @@ pub use dataset::{
     manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest, Unchecked,
     EXPORT_FORMAT,
 };
+pub use record::{Record, RecordBody, RecordMetadata, Side};
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
@@ -112,9 +114,10 @@ pub use trajectory::{projection_refusal, session_dialogue};
 pub use unprojectable::Unprojectable;
 pub use views::{
     chars_as_tokens, description, Control, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
-    OutcomeView, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep, VerifierView,
-    Voice, DEFAULT_MAX_FAMILY_SHARE,
+    OutcomeView, PolicyGradient, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep,
+    VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
+pub use views::{AdvantageKind, GroupReport, RewardShape, TrialReport};
 
 /// The training objective a view's records serve.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,6 +135,10 @@ pub enum Objective {
     Contrastive,
     /// A whole trajectory with a scalar reward.
     Reward,
+    /// Reinforcement learning from rollouts: chat records that each carry the
+    /// advantage of the attempt they come from, trained with a clipped
+    /// policy gradient.
+    PolicyGradient,
     /// Continued pretraining on raw text.
     Cpt,
 }
@@ -146,150 +153,11 @@ impl Objective {
     #[must_use]
     pub fn line_format(self) -> Format {
         match self {
-            Self::Sft | Self::Classification => Format::GenericMessagesV2,
+            Self::Sft | Self::Classification | Self::PolicyGradient => Format::GenericMessagesV2,
             Self::Dpo => Format::GenericPreferenceV1,
             Self::Contrastive | Self::Reward | Self::Cpt => Format::SplinterExportV1,
         }
     }
-}
-
-/// What a record holds; each [`Objective`] has one shape.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "shape", rename_all = "snake_case")]
-pub enum RecordBody {
-    /// A conversation in `generic-messages-v2` messages; `train` marks the
-    /// supervised turns. SFT and classification.
-    Chat {
-        /// The conversation.
-        messages: Vec<WireMessage>,
-        /// The tool schemas the conversation was held under, in the form
-        /// brain's chat template renders them: OpenAI function-calling
-        /// entries, `{"type": "function", "function": {name, description,
-        /// parameters}}`. Empty for a conversation with no tools, which is
-        /// then written as it was before records had this field.
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        tools: Vec<serde_json::Value>,
-    },
-    /// A shared prompt and two replies to it, the first preferred. DPO.
-    Preference {
-        /// The conversation before the reply.
-        prompt: Vec<WireMessage>,
-        /// The preferred reply.
-        chosen: Box<WireMessage>,
-        /// The reply it is preferred over.
-        rejected: Box<WireMessage>,
-    },
-    /// A query, the text that answers it, and texts that do not. Contrastive.
-    Contrastive {
-        /// The query.
-        query: String,
-        /// The text it is grounded in.
-        positive: String,
-        /// Other texts of the same source it is not grounded in.
-        negatives: Vec<String>,
-    },
-    /// A whole conversation and the reward it earned. Reward.
-    Rewarded {
-        /// The conversation; the solver's turns are marked `train`.
-        messages: Vec<WireMessage>,
-        /// The derived reward, always measured.
-        reward: f64,
-    },
-    /// Raw text. Continued pretraining.
-    Text {
-        /// The text.
-        text: String,
-    },
-}
-
-impl RecordBody {
-    /// A chat record of `messages` held under no tools.
-    #[must_use]
-    pub fn chat(messages: Vec<WireMessage>) -> Self {
-        Self::Chat {
-            messages,
-            tools: Vec::new(),
-        }
-    }
-
-    /// The shape's name, as it is serialized.
-    #[must_use]
-    pub fn shape(&self) -> &'static str {
-        match self {
-            Self::Chat { .. } => "chat",
-            Self::Preference { .. } => "preference",
-            Self::Contrastive { .. } => "contrastive",
-            Self::Rewarded { .. } => "rewarded",
-            Self::Text { .. } => "text",
-        }
-    }
-
-    /// Whether this is the shape `objective`'s records have.
-    #[must_use]
-    pub fn serves(&self, objective: Objective) -> bool {
-        matches!(
-            (self, objective),
-            (
-                Self::Chat { .. },
-                Objective::Sft | Objective::Classification
-            ) | (Self::Preference { .. }, Objective::Dpo)
-                | (Self::Contrastive { .. }, Objective::Contrastive)
-                | (Self::Rewarded { .. }, Objective::Reward)
-                | (Self::Text { .. }, Objective::Cpt)
-        )
-    }
-}
-
-/// One training record and where it came from.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Record {
-    /// What is trained on.
-    pub body: RecordBody,
-    /// Where it came from; carried in the dataset, never rendered into the
-    /// prompt.
-    pub metadata: RecordMetadata,
-}
-
-/// Which side of the training split a record is fixed to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Side {
-    /// Always trained on: a record the run exists to teach, which no rule
-    /// may hold out.
-    Train,
-    /// Never trained on: a record that only measures.
-    HeldOut,
-}
-
-/// Where a record came from.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RecordMetadata {
-    /// The experiences it was projected from, in the view's order (for a
-    /// pair: the chosen or critiquing one first).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub experiences: Vec<ExperienceId>,
-    /// The task it was projected from, for a view that reads tasks.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task: Option<Digest>,
-    /// The content digests of the source text it holds, for a view that
-    /// reads sources.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub sources: Vec<Digest>,
-    /// The group of overlapping source text it was projected from, when
-    /// known: records of one group are held out or trained on together (see
-    /// `crate::holdout`). Set by whoever has the source text, never
-    /// by a view.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub group: Option<String>,
-    /// The side of the split the producer fixed for it, when it did; the
-    /// holdout rule leaves such a record where it is (see
-    /// `crate::holdout::Membership`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub split: Option<Side>,
-    /// The view that projected it.
-    pub view: String,
-    /// The objective it serves.
-    pub objective: Objective,
 }
 
 /// Why a view left a candidate out. A view counts each candidate it
@@ -343,6 +211,13 @@ pub enum Exclusion {
     TooManyImages,
     /// No reward could be derived.
     NoReward,
+    /// An attempt in a group with nothing to compare it with: the only one of
+    /// its task, or all of the group earned the same reward, so no attempt did
+    /// better or worse than another and the advantage of each is zero.
+    NoGroupSignal,
+    /// The verdict does not record which attempt (trial) of which task it
+    /// grades, so the experience belongs to no group.
+    NoRollout,
     /// A critique whose own decision is not a pass at the minimum strength.
     UnverifiedCritique,
     /// The experience a relation names is not in the corpus.
@@ -449,6 +324,10 @@ pub struct Projection {
     pub min_strength: Option<Strength>,
     /// The records, in the corpus's order.
     pub records: Vec<Record>,
+    /// The groups of attempts a policy-gradient view compared, with the
+    /// reward and advantage of each attempt; empty for any other view.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<GroupReport>,
     /// Candidates left out, by reason.
     pub excluded: BTreeMap<Exclusion, usize>,
     /// The system prompt every conversation opens with when it is not the
@@ -474,8 +353,10 @@ pub struct Projection {
 }
 
 impl Projection {
-    /// An empty projection of `view`.
-    fn new(
+    /// An empty projection of `view`, for a producer outside this crate that
+    /// builds its records itself.
+    #[must_use]
+    pub fn new(
         view: &str,
         objective: Objective,
         strip: Option<Strip>,
@@ -487,6 +368,7 @@ impl Projection {
             strip,
             min_strength,
             records: Vec::new(),
+            groups: Vec::new(),
             excluded: BTreeMap::new(),
             system_prompt: None,
             packed: false,

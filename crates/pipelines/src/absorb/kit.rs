@@ -533,6 +533,7 @@ fn chat(claim: &Claim, user: &str, assistant: &str) -> Record {
                 message("assistant", assistant, true),
             ],
             tools: Vec::new(),
+            advantage: None,
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),

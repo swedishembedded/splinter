@@ -228,6 +228,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
                 body: body.clone(),
                 metadata: metadata(objective),
             }],
+            groups: Vec::new(),
             excluded: BTreeMap::new(),
             system_prompt: None,
             packed: false,

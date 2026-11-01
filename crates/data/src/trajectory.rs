@@ -182,6 +182,7 @@ impl Conversation {
         Some(RecordBody::Chat {
             messages,
             tools: self.tool_sets[tools].clone(),
+            advantage: None,
         })
     }
 
@@ -191,6 +192,7 @@ impl Conversation {
         RecordBody::Chat {
             messages: self.up_to(action),
             tools: self.tool_sets[action.tools].clone(),
+            advantage: None,
         }
     }
 }

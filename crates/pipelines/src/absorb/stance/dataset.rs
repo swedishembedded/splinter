@@ -10,8 +10,6 @@
 //! The night's pairs as a preference dataset, kept out of reach of every
 //! sealed probe.
 
-use std::collections::BTreeMap;
-
 use splinter_agent::chat::Turn;
 use splinter_core::chat::WireMessage;
 use splinter_core::prompt::SYSTEM_PROMPT;
@@ -116,16 +114,9 @@ pub(super) fn store(
         return Ok(None);
     }
     let mut projection = Projection {
-        view: VIEW.into(),
-        objective: Objective::Dpo,
-        strip: None,
-        min_strength: None,
         records: pairs.iter().map(record).collect(),
-        excluded: BTreeMap::new(),
-        system_prompt: None,
-        packed: false,
-        outcome_verified_only: false,
         terms: source_terms(ctx, sessions.iter())?,
+        ..Projection::new(VIEW, Objective::Dpo, None, None)
     };
     if let Some(prompt) = system {
         projection = projection.with_system_prompt(prompt);

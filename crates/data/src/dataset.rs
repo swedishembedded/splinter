@@ -147,6 +147,10 @@ pub struct Manifest {
     pub sources: Vec<Digest>,
     /// Records and exclusions.
     pub counts: Counts,
+    /// The groups of attempts whose rewards the records' advantages were made
+    /// from (a policy-gradient dataset); empty for any other.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<crate::GroupReport>,
     /// The system prompt the records open with when it is not the default;
     /// `None` when it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -193,6 +197,8 @@ struct ChatLine<'a> {
     messages: &'a [splinter_core::chat::WireMessage],
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
     tools: &'a [serde_json::Value],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    advantage: Option<f64>,
     metadata: &'a RecordMetadata,
 }
 
@@ -350,13 +356,19 @@ fn line(
         });
     }
     Ok(match (format, &record.body) {
-        (Format::GenericMessagesV2, RecordBody::Chat { messages, tools }) => {
-            serde_json::to_string(&ChatLine {
+        (
+            Format::GenericMessagesV2,
+            RecordBody::Chat {
                 messages,
                 tools,
-                metadata: &record.metadata,
-            })?
-        }
+                advantage,
+            },
+        ) => serde_json::to_string(&ChatLine {
+            messages,
+            tools,
+            advantage: *advantage,
+            metadata: &record.metadata,
+        })?,
         (
             Format::GenericPreferenceV1,
             RecordBody::Preference {
@@ -417,6 +429,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
             records: projection.records.len(),
             excluded: projection.excluded.clone(),
         },
+        groups: projection.groups.clone(),
         system_prompt: projection.system_prompt.clone(),
         packed: projection.packed,
         outcome_verified_only: projection.outcome_verified_only,
