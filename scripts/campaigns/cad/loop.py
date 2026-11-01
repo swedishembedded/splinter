@@ -356,7 +356,9 @@ def adopted(job: str) -> str:
 # --------------------------------------------------------------------------- the loop
 
 
-def generation(campaign: Campaign, number: int) -> None:
+def generation(campaign: Campaign, number: int, stop_before: str | None = None) -> bool:
+    """Run generation `number` from where it stands; False when it halted
+    before `stop_before` (the step is left for a later run)."""
     gen = Generation(campaign, number)
     start = gen.state.get("champion_in") or champion(campaign)
     gen.state["champion_in"] = start
@@ -412,6 +414,9 @@ def generation(campaign: Campaign, number: int) -> None:
     if not gen.done("publish"):
         publish(campaign)
         gen.record("publish")
+    if stop_before == "learn" and not gen.done("learn"):
+        log(f"generation {number}: halted before learn (--stop-before learn)")
+        return False
     if not gen.done("learn"):
         exports = []
         for gen_dir in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]")):
@@ -446,6 +451,7 @@ def generation(campaign: Campaign, number: int) -> None:
         publish(campaign)
     log(f"generation {number}: {gen.state['decision']['reason']} -> "
         f"{'promoted' if gen.state['decision']['promoted'] else 'champion kept'}")
+    return True
 
 
 def status(campaign: Campaign) -> None:
@@ -461,6 +467,8 @@ def main() -> int:
     ap.add_argument("--config", type=Path, required=True)
     ap.add_argument("--generations", type=int, default=1, help="how many generations to run from where it stands")
     ap.add_argument("--status", action="store_true", help="print each generation's state and stop")
+    ap.add_argument("--stop-before", choices=["learn"],
+                    help="halt a generation before this step (its exploration and exam data are kept; rerun to go on)")
     args = ap.parse_args()
     campaign = Campaign(tomllib.loads(args.config.read_text()))
     campaign.work.mkdir(parents=True, exist_ok=True)
@@ -473,7 +481,8 @@ def main() -> int:
         state = json.loads((gen_dir / "state.json").read_text())
         first = int(gen_dir.name) + (1 if "decide" in state.get("done", []) else 0)
     for number in range(first, first + args.generations):
-        generation(campaign, number)
+        if not generation(campaign, number, args.stop_before):
+            break
     return 0
 
 
