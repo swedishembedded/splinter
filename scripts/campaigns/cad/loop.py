@@ -125,10 +125,10 @@ def run(argv: list[str], log_file: Path, env: dict | None = None, timeout: float
 
 
 def stop_serving(campaign: Campaign) -> None:
-    """Stop any brain of the campaign's binary directory serving the campaign's card."""
-    s = campaign["serve"]
-    card, binary = s["card"], path(s["brain"])
-    pattern = f"^{binary.parent}/brain[^ ]* --device gpu{card} "
+    """Stop any brain binary serving the campaign's card, whichever path started it
+    (a symlinked and a resolved directory are the same binaries)."""
+    card = campaign["serve"]["card"]
+    pattern = f"/brain[^ /]* --device gpu{card} "
     for pid in subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True).stdout.split():
         os.kill(int(pid), signal.SIGTERM)
     deadline = time.time() + 120
