@@ -39,7 +39,7 @@ def the_champion_is_the_last_promoted_adapter_with_its_exam(tmp_path):
     _gen(tmp_path, 0, {"champion_in": base, "exam_job": "j0", "candidate": {"name": "gen001", "adapter": "a1",
          "exam_job": "j1"}, "decision": {"promoted": False}})
     kept = loop.champion(campaign)
-    assert kept["adapter"] is None and kept["exam_job"] == "j0", "a kept champion is not measured again"
+    assert kept["adapter"] is None and kept["exam_job"] == "j0", "a kept champion carries its exam"
     _gen(tmp_path, 1, {"champion_in": kept, "exam_job": "j0", "candidate": {"name": "gen002", "adapter": "a2",
          "exam_job": "j2"}, "decision": {"promoted": True}})
     assert loop.champion(campaign) == {"name": "gen002", "adapter": "a2", "exam_job": "j2"}

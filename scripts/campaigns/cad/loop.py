@@ -27,6 +27,9 @@ promoted adapter):
    conversations of the trained roles that passed become an `sft-step`
    dataset, and a LoRA adapter is trained on the base from it;
 6. **candidate**: the adapter is served and measured on the same exam;
+   If the stack (agent build, serving build, benchmark commit) changed since
+   the champion's exam, the champion sits it again first: the two exams that
+   are compared always ran on one stack;
 7. **decide**: the candidate replaces the champion only when its paired
    per-task gain on the exam is positive (the benchmark's paired report: mean
    delta and its 95% interval); the decision and its numbers are recorded.
@@ -112,7 +115,8 @@ def champion(campaign: Campaign) -> dict:
     for gen_dir in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]")):
         state = json.loads((gen_dir / "state.json").read_text()) if (gen_dir / "state.json").is_file() else {}
         if "champion_in" in state:
-            best = {**state["champion_in"], "exam_job": state.get("exam_job") or state["champion_in"].get("exam_job")}
+            best = {**state["champion_in"], "exam_job": state.get("exam_job") or state["champion_in"].get("exam_job"),
+                    "exam_stack": state.get("exam_stack") or state["champion_in"].get("exam_stack")}
         if state.get("decision", {}).get("promoted"):
             best = state["candidate"]
     return best
@@ -325,6 +329,20 @@ def decide(summary: dict, rule: dict) -> dict:
     return {"promoted": ok, "reason": reason, "summary": summary}
 
 
+def stack(campaign: Campaign) -> dict:
+    """What a measurement depends on besides the model: the agent build, the
+    serving build and the benchmark's commit. Two exams compare only under one stack."""
+    import hashlib
+
+    def digest(file: Path) -> str:
+        return hashlib.sha256(file.read_bytes()).hexdigest()
+
+    bench_commit = subprocess.run(["git", "-C", str(path(campaign["bench"]["dir"])), "rev-parse", "HEAD"],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+    return {"sven": digest(path(campaign["bench"]["sven"])), "brain": digest(path(campaign["serve"]["brain"])),
+            "bench": bench_commit}
+
+
 def adopted(job: str) -> str:
     """A job run before the loop, by its full path; refused until its run records
     `finished_at`, so no generation learns from half a run."""
@@ -345,6 +363,7 @@ def generation(campaign: Campaign, number: int) -> None:
     b = campaign["bench"]
     adopt = campaign.doc.get("adopt", {}).get(str(number), {})
     (card, port), exam_card = cards(campaign)
+    current = stack(campaign)
 
     def explore() -> None:
         if gen.done("explore"):
@@ -360,13 +379,15 @@ def generation(campaign: Campaign, number: int) -> None:
     def exam() -> None:
         if gen.done("exam"):
             return
-        job = adopted(adopt["exam_job"]) if adopt.get("exam_job") else start.get("exam_job")
+        job = adopted(adopt["exam_job"]) if adopt.get("exam_job") else None
+        if not job and start.get("exam_job") and start.get("exam_stack") == current:
+            job = start["exam_job"]  # measured before under this very stack
         if not job:
             c, p = exam_card or (card, port)
             model_id = serve(campaign, start, gen, c, p)
             job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "exam", p), "eval",
                             "exam")
-        gen.record("exam", exam_job=job, exam_export=bench_export(campaign, gen, job, "exam"))
+        gen.record("exam", exam_job=job, exam_stack=current, exam_export=bench_export(campaign, gen, job, "exam"))
 
     if exam_card:
         # Two cards: the champion explores on one while it sits the exam on the other.
@@ -400,6 +421,15 @@ def generation(campaign: Campaign, number: int) -> None:
         if exam_card:
             stop_serving(campaign, exam_card[0])
         gen.record("learn", learned=learn(campaign, gen, exports))
+    if not gen.done("candidate") and gen.state.get("exam_stack") != current:
+        # The stack changed since the champion sat the exam (an upgraded agent or
+        # server build): measure it again, so champion and candidate meet on one stack.
+        c, p = exam_card or (card, port)
+        model_id = serve(campaign, start, gen, c, p)
+        job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "exam-again", p),
+                        "eval", "exam-again")
+        gen.record("exam-again", exam_job=job, exam_stack=current,
+                   exam_export=bench_export(campaign, gen, job, "exam-again"))
     if not gen.done("candidate"):
         candidate = {"name": f"gen{number + 1:03d}", "adapter": gen.state["learned"]["adapter"]}
         c, p = exam_card or (card, port)
@@ -407,6 +437,7 @@ def generation(campaign: Campaign, number: int) -> None:
         job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "candidate", p), "eval",
                         "candidate")
         candidate["exam_job"] = job
+        candidate["exam_stack"] = current
         gen.record("candidate", candidate=candidate, candidate_exam_export=bench_export(campaign, gen, job,
                                                                                          "candidate-exam"))
     if not gen.done("decide"):
