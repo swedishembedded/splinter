@@ -22,7 +22,7 @@
 use atif::{ContextManagement, StepOrigin, ToolInvocation, TraceStep, Trajectory};
 use serde_json::Value;
 
-use crate::trajectory::Unprojectable;
+use crate::unprojectable::Unprojectable;
 
 /// The key of a tool call's `extra` holding the argument text the model
 /// sent when it was not valid JSON.
@@ -84,11 +84,15 @@ pub(crate) fn has_unparsed_arguments(call: &ToolInvocation) -> bool {
 /// kept as it is; a bare `{name, description, parameters}` function schema
 /// is wrapped; anything else is refused, naming its index.
 pub(crate) fn chat_tools(trajectory: &Trajectory) -> Result<Vec<Value>, Unprojectable> {
-    trajectory
-        .agent
-        .tool_definitions
-        .iter()
-        .flatten()
+    chat_tool_list(trajectory.agent.tool_definitions.iter().flatten())
+}
+
+/// [`chat_tools`] for the schemas of one request.
+pub(crate) fn chat_tool_list<'a>(
+    definitions: impl IntoIterator<Item = &'a Value>,
+) -> Result<Vec<Value>, Unprojectable> {
+    definitions
+        .into_iter()
         .enumerate()
         .map(|(index, definition)| {
             let object = definition

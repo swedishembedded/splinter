@@ -51,6 +51,9 @@ brain = { git = "https://github.com/swedishembedded/brain", default-features = f
 # A crate of brain beyond the SDK, for the state of the machine the SDK's
 # primitives run on: only `splinter-model` uses it.
 brain-gpu-core = { git = "https://github.com/swedishembedded/brain" }
+# brain's chat-record parser, for the check a stored dataset passes before any
+# base is chosen: only `splinter-model` uses it.
+brain-data = { git = "https://github.com/swedishembedded/brain" }
 # The follower of a release manifest, and the fixtures that write an adapter it
 # accepts: a spec of `splinter-model` proves a manifest written here is one the
 # server takes.

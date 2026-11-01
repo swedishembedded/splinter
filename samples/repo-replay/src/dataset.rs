@@ -175,6 +175,7 @@ pub fn build_dataset(ctx: &Context, sets: &[String], settings: &DatasetSettings)
         serialise_calls: false,
         only_actions: None,
         roles: None,
+        images: false,
     };
     Ok(build(ctx, &request)?)
 }

@@ -51,10 +51,17 @@ conversation in `extra.splinter_harness`:
   divide exactly among the conversations (one request per agent step, in order) and one
   role answered all of a conversation's; otherwise the role is `unknown` and is never
   guessed;
-- `shown_images`: whether its model was shown images (read from the request log; the
-  trajectory need not carry them). When the log cannot be divided among the
-  conversations, any of them may have been shown the images the log holds, so all are
-  marked.
+- `shown_images`: whether its model was shown images, in a user turn or in a tool's
+  result (read from the request log; the trajectory need not carry them). When the log
+  cannot be divided among the conversations, any of them may have been shown the images
+  the log holds, so all are marked.
+
+When the log divides among the conversations and holds a response to every request, the
+experience also records the requests its model was sent (`extra.splinter_harness_calls`):
+each request exactly as sent, with the response it got. A request repeats the one before
+and adds the turns since, so they are stored as the difference to the request before,
+and a picture shown once is stored once. A trial ingested before requests were kept
+records none (ingest it again into a fresh store to get them).
 
 The command reports the conversations admitted by role. The register, the idempotency
 rule and the leakage protection work per conversation: a trial is admitted once, an
@@ -68,11 +75,59 @@ splinter dataset build --view sft-step --roles specifier,designer TRAIN-SET-ID
 
 `--roles` (sft-step view) keeps the conversations answered by the roles named, each
 role's model learning from its own conversations; every other experience, including a
-conversation of unknown role, is counted as `RoleNotWanted`. A conversation whose model
-was shown images is left out and counted as `ShownImages`, whatever the roles asked for:
-brain's LoRA path trains text only, and a record of such a conversation would teach
-answers about pictures the student never saw. The build reports both counts with the
-other exclusions (and fails, listing them, when nothing is left).
+conversation of unknown role, is counted as `RoleNotWanted`. The build reports both counts
+with the other exclusions (and fails, listing them, when nothing is left).
+
+### Training the roles that read images
+
+A conversation whose model was shown images (a `visual` role surveying a drawing, a
+`reviewer` reading previews, any role that attached a file) is left out and counted as
+`ShownImages` unless the build is told the training base reads them:
+
+```sh
+splinter dataset build --view sft-step --images \
+    --roles visual,specifier,designer,reviewer TRAIN-SET-ID
+```
+
+`--images` says the base is a vision-language one (brain trains Qwen3.8 on records whose
+turns carry pictures). Without it a record would teach answers about pictures the student
+never saw, so such conversations are never trained on as text alone. With it they are
+built from the requests, as below, and `splinter train` validates the dataset against the
+base it trains: a base without a vision tower refuses it, naming the record.
+
+**A conversation that recorded its requests is built from them**, whether or not it was
+shown images; one that did not is built from its trajectory as before. Each action
+(an agent step's tool calls, or the final answer) is one record: the request its model was
+sent, as sent - its system prompt, the instruction with the pictures attached to it, the
+earlier turns, the tool results with the pictures they returned, the tools it was offered -
+and the model's answer as the only supervised turn (its reasoning as `reasoning_content`,
+its tool calls in `generic-messages-v2` pairing, as the trajectory-based records have
+them). Pictures are `image_url` data-URL parts of the user and tool turns, in place, and
+never in a supervised turn. Where the request log is the record, the trajectory's gaps do
+not matter: a survey conversation's trajectory holds no user turn, the request holds it.
+
+This replaces the trajectory-based projection for these conversations instead of being a
+second mode, because it is the record of what the model was asked and offered. For a
+conversation of text, the records are the ones the trajectory gives except in two places,
+both corrections: the user turn is the one the model was sent (the trajectory path put the
+task's description, `Conversation <name> of benchmark task ...`, where the instruction
+stands), and the tools are the ones the request offered (the trajectory path listed every
+tool of the harness's agent record, including some the role was never offered).
+
+What is counted instead of dropped:
+
+- `RequestsNotRecorded`: the conversation was shown images but recorded no requests (it
+  was ingested before they were kept, or the log did not divide among the conversations).
+- `TooManyImages`: an action whose request holds more than 8 images, the most brain reads in
+  one record. Later actions of a conversation that accumulates pictures are counted too.
+- `Compacted`: the conversation's requests do not extend one another (its context was
+  rewritten between two of them), so no single list of messages holds what the model saw.
+
+`--pack` and `--max-block` apply as for text: `--max-block` counts each picture as the
+rows it adds to the sequence (one per 32 x 32 pixels, at most 4096) and not as text. Brain
+refuses an image of more than 36 megapixels, a longer record than `max_block`, or a
+held-out record with pictures when it trains; the dataset check at build time reads the
+pictures only as inline `data:` URLs.
 
 ## Splits
 

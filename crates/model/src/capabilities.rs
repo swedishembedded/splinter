@@ -17,9 +17,11 @@
 
 use std::path::{Path, PathBuf};
 
+use splinter_data::images::image_rows;
 use splinter_data::{DatasetCheck, Format, Objective};
 
 use crate::error::PolicyError;
+use crate::pictures::{holds_images, validate_pictured_dataset};
 use crate::train::{validate_dataset, validate_preference_dataset};
 
 /// The dataset formats a backend trains from a file.
@@ -69,13 +71,20 @@ impl TrainingCapabilities {
 
 /// brain's own parsers as the check of a dataset file: the wire schema and
 /// supervision boundaries of a chat file, which must supervise something,
-/// and a preference file, which must be read whole.
+/// and a preference file, which must be read whole. A chat file with pictures
+/// is read as the trainer of a base that reads them would, except that no
+/// base is chosen yet: every picture is taken for an inline `data:` URL and
+/// not decoded. The base is checked when it is trained
+/// ([`crate::pictures::validate_dataset_on`]).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BrainDatasetCheck;
 
 impl DatasetCheck for BrainDatasetCheck {
     fn check(&self, format: Format, pending: &Path, records: usize) -> Result<(), String> {
         match format {
+            Format::GenericMessagesV2 if holds_images(pending).map_err(|e| e.to_string())? => {
+                validate_pictured_dataset(pending)
+            }
             Format::GenericMessagesV2 => {
                 let summary = validate_dataset(pending).map_err(|e| format!("{e:#}"))?;
                 if summary.trained_messages == 0 {
@@ -161,12 +170,13 @@ pub fn overlong_records(
         let line_no = index + 1;
         let record: serde_json::Value =
             serde_json::from_str(line).map_err(|e| unreadable(format!("line {line_no}: {e}")))?;
-        let request = chat_request_of(&record)
+        let (request, picture_rows) = chat_request_of(&record)
             .map_err(|reason| unreadable(format!("line {line_no}: {reason}")))?;
-        let tokens = tokenizer
-            .prompt_ids(&request)
-            .map_err(|e| unreadable(format!("line {line_no}: {e}")))?
-            .len();
+        let tokens = picture_rows
+            + tokenizer
+                .prompt_ids(&request)
+                .map_err(|e| unreadable(format!("line {line_no}: {e}")))?
+                .len();
         if tokens > max_block as usize {
             overlong.push(OverlongRecord {
                 dataset: dataset.to_path_buf(),
@@ -179,10 +189,36 @@ pub fn overlong_records(
     Ok(overlong)
 }
 
+/// The text of a message's `content`, which is a string or a list of parts
+/// (the text parts joined, as the trainer joins them), and the rows the
+/// pictures among the parts add to the sequence the decoder trains on.
+fn content_of(message: &serde_json::Value) -> (String, usize) {
+    match message.get("content") {
+        Some(serde_json::Value::String(text)) => (text.clone(), 0),
+        Some(serde_json::Value::Array(parts)) => {
+            let mut text = String::new();
+            let mut rows = 0;
+            for part in parts {
+                if let Some(piece) = part.get("text").and_then(serde_json::Value::as_str) {
+                    text.push_str(piece);
+                } else if let Some(url) = part
+                    .pointer("/image_url/url")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    rows += image_rows(url);
+                }
+            }
+            (text, rows)
+        }
+        _ => (String::new(), 0),
+    }
+}
+
 /// A `generic-messages-v2` record as the request brain renders for its
 /// conversation: its messages (an assistant turn's tool calls and a tool
-/// result's call id included) and the tools it offers.
-fn chat_request_of(record: &serde_json::Value) -> Result<brain::ChatRequest, String> {
+/// result's call id included) and the tools it offers, and the rows its
+/// pictures add.
+fn chat_request_of(record: &serde_json::Value) -> Result<(brain::ChatRequest, usize), String> {
     use brain::chat::{ToolCall, ToolSchema};
     let text = |v: &serde_json::Value, key: &str| {
         v.get(key)
@@ -190,13 +226,15 @@ fn chat_request_of(record: &serde_json::Value) -> Result<brain::ChatRequest, Str
             .unwrap_or_default()
             .to_owned()
     };
+    let mut picture_rows = 0;
     let messages = record
         .get("messages")
         .and_then(serde_json::Value::as_array)
         .ok_or("no messages array")?
         .iter()
         .map(|m| {
-            let content = text(m, "content");
+            let (content, rows) = content_of(m);
+            picture_rows += rows;
             Ok(match text(m, "role").as_str() {
                 "system" => brain::ChatMessage::system(content),
                 "user" => brain::ChatMessage::user(content),
@@ -242,7 +280,7 @@ fn chat_request_of(record: &serde_json::Value) -> Result<brain::ChatRequest, Str
                 .collect()
         })
         .unwrap_or_default();
-    Ok(brain::ChatRequest::new(messages).tools(tools))
+    Ok((brain::ChatRequest::new(messages).tools(tools), picture_rows))
 }
 
 /// What a record's metadata names it by: its first experience, else its task.

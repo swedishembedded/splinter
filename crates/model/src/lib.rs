@@ -50,6 +50,7 @@ pub mod error;
 pub mod exam;
 pub mod local;
 pub mod manifest;
+pub mod pictures;
 pub mod precision;
 mod progress;
 pub mod report;

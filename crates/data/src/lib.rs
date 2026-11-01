@@ -70,11 +70,13 @@ mod corpus;
 mod dataset;
 pub mod frozen;
 pub mod holdout;
+pub mod images;
 mod markers;
 pub mod overlap;
 pub mod partition;
 mod render;
 mod replay;
+mod requests;
 mod scrub;
 pub mod split;
 mod store;
@@ -83,6 +85,7 @@ mod system_turn;
 pub mod timeline_dataset;
 pub mod timeline_store;
 mod trajectory;
+mod unprojectable;
 mod views;
 
 use std::collections::BTreeMap;
@@ -105,7 +108,8 @@ pub use dataset::{
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
-pub use trajectory::{projection_refusal, session_dialogue, Unprojectable};
+pub use trajectory::{projection_refusal, session_dialogue};
+pub use unprojectable::Unprojectable;
 pub use views::{
     chars_as_tokens, description, Control, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
     OutcomeView, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep, VerifierView,
@@ -327,10 +331,16 @@ pub enum Exclusion {
     /// trained on its own conversations, and a conversation of no known role
     /// is never guessed into one.
     RoleNotWanted,
-    /// A harness conversation whose model was shown images. The trajectory
-    /// cannot carry them and the training target takes text only, so a record
-    /// of it would teach answers about pictures the student never saw.
+    /// A harness conversation shown images, built where the base is not known
+    /// to read them (`SftStep::images`).
     ShownImages,
+    /// A harness conversation shown images, built where images are wanted,
+    /// that recorded no requests (ingested before they were kept): the
+    /// pictures are not in the experience. Ingest the trial again.
+    RequestsNotRecorded,
+    /// An action whose context holds more images than a record may
+    /// ([`images::MAX_IMAGES_PER_RECORD`]).
+    TooManyImages,
     /// No reward could be derived.
     NoReward,
     /// A critique whose own decision is not a pass at the minimum strength.

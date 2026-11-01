@@ -410,7 +410,9 @@ const ENRICHMENT: &str = "splinter_enrichment";
 
 /// The trajectory the experience records. A harness conversation's own
 /// trajectory already holds its system prompt and tools; it gains only the
-/// record of which conversation it is ([`splinter_core::harness`]). Any
+/// record of which conversation it is and, when the request log divides among
+/// the conversations, the requests its model was sent
+/// ([`splinter_core::harness`]). Any
 /// other trajectory is enriched ([`with_agent_context`]).
 fn recorded_trajectory(unit: &Unit) -> atif::Trajectory {
     match &unit.kind {
@@ -422,6 +424,9 @@ fn recorded_trajectory(unit: &Unit) -> atif::Trajectory {
                 None => serde_json::Map::new(),
             };
             extra.insert(harness::KEY.to_string(), conversation.to_value());
+            if let Some(calls) = &unit.calls {
+                extra.insert(harness::CALLS_KEY.to_string(), calls.to_value());
+            }
             trajectory.extra = Some(Value::Object(extra));
             trajectory
         }

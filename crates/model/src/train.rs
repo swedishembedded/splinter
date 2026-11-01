@@ -38,6 +38,7 @@ use splinter_core::training::{
 use crate::capabilities::overlong_records;
 use crate::error::PolicyError;
 use crate::local::{closed_think_pairs, opens_think_block};
+use crate::pictures::validate_dataset_on;
 use crate::progress::{poll, StepClock};
 
 /// The DPO temperature `beta` a preference fine-tune uses when its caller
@@ -357,17 +358,17 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         dir: request.attempt_dir.to_path_buf(),
         reason,
     };
-    let trained_on = validate_dataset(request.train)?;
-    let held_out_summary = validate_dataset(request.held_out)?;
+    let trained_on = validate_dataset_on(request.train, request.model_dir)?;
+    let held_out_summary = validate_dataset_on(request.held_out, request.model_dir)?;
     let (weights, base_id) = base_weights(request.model_dir)?;
     for replayed in request.replay {
-        validate_dataset(replayed)?;
+        validate_dataset_on(replayed, request.model_dir)?;
     }
     for (weighted, _) in request.weighted_replay {
-        validate_dataset(weighted)?;
+        validate_dataset_on(weighted, request.model_dir)?;
     }
     if let Some(monitor) = request.monitor {
-        validate_dataset(monitor)?;
+        validate_dataset_on(monitor, request.model_dir)?;
     } else if request.eval_every > 0 {
         return Err(failed(
             "the run was asked to evaluate as it trains but given no monitoring records".into(),

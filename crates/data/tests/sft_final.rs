@@ -335,6 +335,7 @@ fn a_projection_opens_its_records_with_a_persons_prompt_and_the_manifest_says_so
 fn a_prompt_is_inserted_where_a_conversation_has_no_system_turn() {
     use splinter_core::chat::WireMessage;
     let turn = |role: &str, content: &str, train: bool| WireMessage {
+        images: Vec::new(),
         role: role.into(),
         content: content.into(),
         tool_calls: Vec::new(),

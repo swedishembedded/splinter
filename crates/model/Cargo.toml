@@ -16,6 +16,7 @@ splinter-data = { workspace = true }
 sven-sdk = { workspace = true }
 brain = { workspace = true }
 brain-gpu-core = { workspace = true }
+brain-data = { workspace = true }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }

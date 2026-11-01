@@ -18,6 +18,7 @@ pub(crate) const EXECUTION_HEADING: &str = "Execution evidence:";
 /// A message with no tool calls.
 pub(crate) fn message(role: &str, content: &str, train: bool) -> WireMessage {
     WireMessage {
+        images: Vec::new(),
         role: role.into(),
         content: content.into(),
         tool_calls: Vec::new(),

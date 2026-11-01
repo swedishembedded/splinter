@@ -388,6 +388,7 @@ impl Acquisition<'_> {
                 serialise_calls: false,
                 only_actions: None,
                 roles: None,
+                images: false,
             },
         ) {
             Ok(built) => built,

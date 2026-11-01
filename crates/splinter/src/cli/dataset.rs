@@ -76,11 +76,20 @@ pub struct BuildArgs {
     /// For the sft-step view: keep only the conversations of a harness trial
     /// answered by these model roles (comma separated, as `ingest-bench`
     /// recorded them); every other experience, and a conversation whose role
-    /// is unknown, is counted as `RoleNotWanted`. A conversation whose model
-    /// was shown images is always left out and counted as `ShownImages`: the
-    /// training takes text only.
+    /// is unknown, is counted as `RoleNotWanted`.
     #[arg(long, value_delimiter = ',', value_name = "ROLES")]
     pub roles: Option<Vec<String>>,
+    /// For the sft-step view: the training base reads images (a vision-language
+    /// base such as Qwen3.8), so a harness conversation whose model was shown
+    /// images is built from the requests it was sent, the pictures in the turns
+    /// that carried them and only the answers supervised. Without it such a
+    /// conversation is left out and counted as `ShownImages`, never trained on
+    /// as text alone. A conversation ingested before requests were kept is
+    /// counted as `RequestsNotRecorded` (ingest the trial again into a fresh
+    /// store), and an action whose context holds more than 8 images as
+    /// `TooManyImages`.
+    #[arg(long)]
+    pub images: bool,
     /// For the sft-step view: build another dataset than the default.
     /// `outcome-verified` admits only experiences an independent verdict
     /// passed (the default also admits an action labelled good from one that

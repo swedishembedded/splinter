@@ -76,6 +76,7 @@ pub struct Assembled {
 
 fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> Record {
     let message = |role: &str, content: &str, train: bool| WireMessage {
+        images: Vec::new(),
         role: role.into(),
         content: content.into(),
         tool_calls: Vec::new(),

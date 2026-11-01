@@ -177,6 +177,7 @@ fn dataset_made(
             ctx.tasks().put(&task).unwrap();
         }
         let message = |role: &str, content: String, train: bool| WireMessage {
+            images: Vec::new(),
             role: role.into(),
             content,
             tool_calls: Vec::new(),
@@ -228,6 +229,7 @@ fn dataset_made(
 pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
     let held_out_from = n - (n / 10).max(1);
     let message = |role: &str, content: String, train: bool| WireMessage {
+        images: Vec::new(),
         role: role.into(),
         content,
         tool_calls: Vec::new(),

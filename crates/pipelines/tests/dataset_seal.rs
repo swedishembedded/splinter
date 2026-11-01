@@ -120,6 +120,7 @@ fn request(set: SetId) -> BuildRequest {
         serialise_calls: false,
         only_actions: None,
         roles: None,
+        images: false,
     }
 }
 

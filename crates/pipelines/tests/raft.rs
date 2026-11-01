@@ -66,6 +66,7 @@ impl Embedder for Concepts {
 
 fn turn(role: &str, content: &str, train: bool) -> WireMessage {
     WireMessage {
+        images: Vec::new(),
         role: role.into(),
         content: content.into(),
         tool_calls: Vec::new(),
@@ -484,6 +485,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         serialise_calls: false,
         only_actions: None,
         roles: None,
+        images: false,
     };
     let retrieval = Retrieval {
         library: &library,

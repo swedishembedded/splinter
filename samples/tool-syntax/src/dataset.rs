@@ -128,6 +128,7 @@ pub struct RecordMetadata {
 /// teach the model to produce them.
 fn context(role: &str, text: &str) -> WireMessage {
     WireMessage {
+        images: Vec::new(),
         role: role.to_string(),
         content: text.to_string(),
         tool_calls: Vec::new(),
@@ -199,6 +200,7 @@ pub fn records_from_performance(
     for (index, (tool, arguments, observation)) in performed.iter().enumerate() {
         let id = format!("call_{index}");
         messages.push(WireMessage {
+            images: Vec::new(),
             role: "assistant".into(),
             content: String::new(),
             tool_calls: vec![WireToolCall {
@@ -214,11 +216,13 @@ pub fn records_from_performance(
             train: true,
         });
         messages.push(WireMessage {
+            images: Vec::new(),
             tool_call_id: Some(id),
             ..context("tool", observation)
         });
     }
     messages.push(WireMessage {
+        images: Vec::new(),
         reasoning_content: None,
         train: true,
         ..context("assistant", closing)

@@ -37,9 +37,16 @@
 //!
 //! A harness trial is one experience per conversation ([`splinter_core::harness`]).
 //! [`SftStep::only_roles`] keeps the conversations a model role answered
-//! ([`Exclusion::RoleNotWanted`] for the rest, checked first), and a
-//! conversation whose model was shown images is left out whatever its verdict
-//! ([`Exclusion::ShownImages`]): the training takes text only.
+//! ([`Exclusion::RoleNotWanted`] for the rest, checked first). A conversation
+//! that recorded the requests its model was sent is rendered from them
+//! ([`crate::requests`]), each record being the request as sent, pictures
+//! included; one that did not is rendered from its trajectory, which holds no
+//! pictures. A conversation whose model was shown images is left out
+//! ([`Exclusion::ShownImages`]) unless the view was told the training base
+//! reads them ([`SftStep::images`]); then it is built from its requests, or
+//! counted as [`Exclusion::RequestsNotRecorded`] when it recorded none, and an
+//! action whose context holds more images than a record may is counted as
+//! [`Exclusion::TooManyImages`].
 //!
 //! Candidates: an experience, until its actions are reached; then each
 //! action (a bad one counts as [`Exclusion::BadStep`]).
@@ -49,11 +56,13 @@
 
 use splinter_core::annotation::{AnnotationBody, Label, Outcome, Strength};
 use splinter_core::chat::WireMessage;
-use splinter_core::harness::HarnessConversation;
+use splinter_core::harness::{HarnessConversation, RecordedCalls};
 use splinter_core::rng::SplitMix64;
 
+use crate::images::MAX_IMAGES_PER_RECORD;
 use crate::render::student_turn;
-use crate::trajectory::conversation_serialised;
+use crate::requests::conversation_of_requests;
+use crate::trajectory::{conversation_serialised, Conversation};
 use crate::{
     require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
     View, ViewError,
@@ -98,6 +107,7 @@ pub struct SftStep {
     serialise_calls: bool,
     only_actions: Option<Vec<String>>,
     only_roles: Option<Vec<String>>,
+    images: bool,
 }
 
 impl SftStep {
@@ -114,6 +124,7 @@ impl SftStep {
             serialise_calls: false,
             only_actions: None,
             only_roles: None,
+            images: false,
         }
     }
 
@@ -170,6 +181,16 @@ impl SftStep {
         }
     }
 
+    /// The same view admitting the conversations whose model was shown
+    /// images, for a training base that reads them (brain trains a
+    /// vision-language base on records whose user and tool turns carry
+    /// pictures). Without it they are counted as [`Exclusion::ShownImages`]
+    /// and never trained on as text alone.
+    #[must_use]
+    pub fn images(self, images: bool) -> Self {
+        Self { images, ..self }
+    }
+
     /// The same view under a negative `control`.
     #[must_use]
     pub fn control(self, control: Control) -> Self {
@@ -218,22 +239,15 @@ impl SftStep {
                 return;
             }
         }
-        if conversation.as_ref().is_some_and(|c| c.shown_images) {
-            return projection.exclude(Exclusion::ShownImages);
-        }
-        let turn = match student_turn(entry, &self.strip) {
-            Ok(turn) => turn,
+        let conversation = match self.conversation_of(entry, conversation.as_ref()) {
+            Ok(conversation) => conversation,
             Err(reason) => return projection.exclude(reason),
         };
-        let conversation =
-            match conversation_serialised(&entry.experience, &turn, self.serialise_calls) {
-                Ok(conversation) => conversation,
-                Err(reason) => return projection.exclude(reason),
-            };
         if conversation.actions.is_empty() {
             return projection.exclude(Exclusion::NoAction);
         }
         let mut admitted = Vec::new();
+        let images_before = images_before_each_message(&conversation);
         let wanted = |action: &crate::trajectory::Action| match &self.only_actions {
             None => true,
             Some(names) => {
@@ -251,6 +265,8 @@ impl SftStep {
                 projection.exclude(Exclusion::RepeatedAction);
             } else if !wanted(action) {
                 projection.exclude(Exclusion::ActionNotWanted);
+            } else if images_before[action.index] > MAX_IMAGES_PER_RECORD {
+                projection.exclude(Exclusion::TooManyImages);
             } else if passed.is_ok()
                 || (!outcome_verified && entry.labelled(action.step, Label::Good))
             {
@@ -258,6 +274,11 @@ impl SftStep {
             }
         }
         let provenance = || Provenance::of(vec![entry.id.clone()]);
+        // One record has one list of tools: actions taken under another list
+        // than the last one's cannot be packed with it.
+        if self.packed && admitted.iter().any(|a| a.tools != admitted[0].tools) {
+            return projection.exclude(Exclusion::Unrepresentable);
+        }
         if self.packed {
             if let Some(record) = conversation.packed_record(&admitted) {
                 projection.push(record, provenance());
@@ -268,6 +289,43 @@ impl SftStep {
             }
         }
     }
+
+    /// The conversation `entry` is: read from the requests its model was sent
+    /// when it recorded them, else from its trajectory. A conversation whose
+    /// model was shown images is the first only, and only when images are
+    /// wanted.
+    fn conversation_of(
+        &self,
+        entry: &Entry,
+        harness: Option<&HarnessConversation>,
+    ) -> Result<Conversation, Exclusion> {
+        let shown_images = harness.is_some_and(|c| c.shown_images);
+        if shown_images && !self.images {
+            return Err(Exclusion::ShownImages);
+        }
+        if let Some(recorded) = RecordedCalls::of(&entry.experience.trajectory) {
+            let calls = recorded.calls().ok_or(Exclusion::Unrepresentable)?;
+            return conversation_of_requests(&entry.experience, &calls);
+        }
+        if shown_images {
+            return Err(Exclusion::RequestsNotRecorded);
+        }
+        let turn = student_turn(entry, &self.strip)?;
+        conversation_serialised(&entry.experience, &turn, self.serialise_calls)
+    }
+}
+
+/// For each message of `conversation`, the images in the messages up to and
+/// including it.
+fn images_before_each_message(conversation: &Conversation) -> Vec<usize> {
+    conversation
+        .messages
+        .iter()
+        .scan(0, |seen, message| {
+            *seen += message.images.len();
+            Some(*seen)
+        })
+        .collect()
 }
 
 impl View for SftStep {

@@ -58,118 +58,8 @@ use crate::markers::{
 };
 use crate::render::message;
 use crate::scrub::Scrub;
+use crate::unprojectable::Unprojectable;
 use crate::{Exclusion, RecordBody};
-
-/// Why a trajectory cannot be rendered as training conversations; every
-/// variant names the ATIF `step_id` that decided it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Unprojectable {
-    /// The capture says the run did not end cleanly (see
-    /// `atif::persist::CAPTURE_STATUS_KEY`): a prefix of a run is not a record
-    /// of one, and its steps are not a success whatever they end on.
-    #[error("the trajectory is marked incomplete: the run it records did not finish")]
-    Incomplete,
-    /// The step holds image content, which a chat record cannot carry.
-    #[error("step {step} holds image content, which a training record cannot represent")]
-    Image {
-        /// The step.
-        step: u64,
-    },
-    /// The step's observation answers no tool call of the same step.
-    #[error("step {step} has an observation that answers no tool call of its own")]
-    UnansweredObservation {
-        /// The step.
-        step: u64,
-    },
-    /// A second user step beside tool calls: a trajectory is rendered either
-    /// as one instruction with its actions or as a dialogue of replies.
-    #[error(
-        "step {step} makes a tool call in a trajectory with more than one user step; it can be \
-         rendered as a dialogue or as a tool-call record, not both"
-    )]
-    ToolCallInDialogue {
-        /// The agent step with the call or observation.
-        step: u64,
-    },
-    /// A second user step where one instruction with its actions is wanted.
-    #[error("step {step} is a second user step; an instruction with actions has one")]
-    SecondUserStep {
-        /// The step.
-        step: u64,
-    },
-    /// A dialogue step copied from another trajectory, which is never
-    /// supervised.
-    #[error("step {step} is copied from another trajectory and cannot be part of a dialogue")]
-    CopiedInDialogue {
-        /// The step.
-        step: u64,
-    },
-    /// An assistant turn holds `<think>` markup.
-    #[error("step {step} holds reasoning markup in its text, which a chat record cannot carry")]
-    ReasoningInText {
-        /// The step.
-        step: u64,
-    },
-    /// The agent's context was compacted before this step.
-    #[error("step {step} marks the context being compacted; the turns before it are not what the agent saw after it")]
-    Compacted {
-        /// The system step that marks it.
-        step: u64,
-    },
-    /// A tool call whose arguments are a stand-in for text that is not JSON.
-    #[error(
-        "step {step} makes a tool call whose arguments the model sent as text that is not JSON"
-    )]
-    UnparsedArguments {
-        /// The agent step with the call.
-        step: u64,
-    },
-    /// A tool call id used by two calls of one step: results are paired to
-    /// calls by id, so every call would be given every result.
-    #[error("step {step} makes two tool calls with the same id")]
-    DuplicateCallId {
-        /// The agent step with the two calls.
-        step: u64,
-    },
-    /// The projection lost or invented a call or a result of its source.
-    #[error(
-        "the projection holds {calls} tool calls and {results} tool results where its source has \
-         {source_calls} and {source_results}"
-    )]
-    NotConserved {
-        /// Tool calls in the projected messages.
-        calls: usize,
-        /// Tool results in the projected messages.
-        results: usize,
-        /// Tool calls of the steps projected.
-        source_calls: usize,
-        /// Observation results of the steps projected.
-        source_results: usize,
-    },
-    /// The solve recorded a system prompt that only its digest is known by:
-    /// the record cannot open with the prompt the run was under.
-    #[error("the solve was held to a system prompt this build holds no text of")]
-    UnknownSystemPrompt,
-    /// A tool schema that is neither an OpenAI function-calling entry nor
-    /// a bare function schema.
-    #[error("tool definition {index} is not a function schema")]
-    ToolDefinition {
-        /// Its index in the trajectory's `tool_definitions`.
-        index: usize,
-    },
-    /// Two user steps, or two agent steps, in a row.
-    #[error("step {step} does not alternate user and agent turns")]
-    NotAlternating {
-        /// The step.
-        step: u64,
-    },
-    /// The dialogue ends on a user step, which no reply answers.
-    #[error("the dialogue ends on user step {step}, which no agent reply answers")]
-    EndsUnanswered {
-        /// The last step.
-        step: u64,
-    },
-}
 
 /// Why `trajectory` is refused by the projection, or `None` when it can be
 /// rendered: as a dialogue when it has two or more user steps, otherwise as
@@ -185,20 +75,6 @@ pub fn projection_refusal(trajectory: &Trajectory) -> Option<Unprojectable> {
         try_dialogue(trajectory, "", &|_, _| true).err()
     } else {
         try_conversation(trajectory, "", Setting::Closed, false).err()
-    }
-}
-
-impl From<Unprojectable> for Exclusion {
-    fn from(refusal: Unprojectable) -> Self {
-        match refusal {
-            Unprojectable::ReasoningInText { .. } => Self::ReasoningInText,
-            Unprojectable::Incomplete => Self::Incomplete,
-            Unprojectable::Compacted { .. } => Self::Compacted,
-            Unprojectable::UnparsedArguments { .. } => Self::UnparsedArguments,
-            Unprojectable::DuplicateCallId { .. } => Self::DuplicateCallId,
-            Unprojectable::NotConserved { .. } => Self::NotConserved,
-            _ => Self::Unrepresentable,
-        }
     }
 }
 
@@ -226,6 +102,42 @@ pub(crate) struct Action {
     /// trajectory whose result was the same: the agent had that result, and
     /// asking again is the loop and not the work.
     pub(crate) repeated: bool,
+    /// The index in [`Conversation::tool_sets`] of the tool schemas the agent
+    /// was offered when it took the action.
+    pub(crate) tools: usize,
+}
+
+/// What a trajectory says about one of its agent steps, whether or not the
+/// step becomes a message: the facts that decide whether it is learned from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct AgentStep {
+    /// The ATIF `step_id`.
+    pub(crate) step: u64,
+    /// Whether ATIF marks the step as copied from another trajectory.
+    pub(crate) copied: bool,
+    /// Whether every call of the step repeats a call of an earlier step whose
+    /// result was the same (see [`Action::repeated`]).
+    pub(crate) repeated: bool,
+}
+
+/// The agent steps of `trajectory`, in order.
+pub(crate) fn agent_steps(trajectory: &Trajectory) -> Vec<AgentStep> {
+    let mut seen_calls: HashSet<(String, String, String)> = HashSet::new();
+    trajectory
+        .steps
+        .iter()
+        .filter(|s| s.source == StepOrigin::Agent)
+        .map(|step| {
+            let asked = calls_asked(step, &wire_calls(step));
+            let repeated = !asked.is_empty() && asked.iter().all(|c| seen_calls.contains(c));
+            seen_calls.extend(asked);
+            AgentStep {
+                step: step.step_id,
+                copied: step.is_excluded_from_sft(),
+                repeated,
+            }
+        })
+        .collect()
 }
 
 /// A trajectory as messages, none supervised, and where its actions are.
@@ -235,8 +147,9 @@ pub(crate) struct Conversation {
     pub(crate) messages: Vec<WireMessage>,
     /// Its actions, in order.
     pub(crate) actions: Vec<Action>,
-    /// The tool schemas the agent was offered, in a chat record's form.
-    pub(crate) tools: Vec<serde_json::Value>,
+    /// The tool schemas the agent was offered, in a chat record's form: one
+    /// set for a trajectory, one per distinct set a request log shows.
+    pub(crate) tool_sets: Vec<Vec<serde_json::Value>>,
 }
 
 impl Conversation {
@@ -265,9 +178,10 @@ impl Conversation {
         for action in actions {
             messages[action.index].train = true;
         }
+        let tools = actions.iter().map(|a| a.tools).max()?;
         Some(RecordBody::Chat {
             messages,
-            tools: self.tools.clone(),
+            tools: self.tool_sets[tools].clone(),
         })
     }
 
@@ -276,7 +190,7 @@ impl Conversation {
     pub(crate) fn record(&self, action: &Action) -> RecordBody {
         RecordBody::Chat {
             messages: self.up_to(action),
-            tools: self.tools.clone(),
+            tools: self.tool_sets[action.tools].clone(),
         }
     }
 }
@@ -347,7 +261,8 @@ fn try_conversation(
         .iter()
         .rposition(|s| s.source == StepOrigin::Agent);
     let scrub = Scrub::of(trajectory);
-    let mut seen_calls: HashSet<(String, String, String)> = HashSet::new();
+    let facts = agent_steps(trajectory);
+    let mut agent_steps_read = 0usize;
     for (position, step) in trajectory.steps.iter().enumerate() {
         match step.source {
             StepOrigin::System if is_compaction(step) => {
@@ -373,6 +288,8 @@ fn try_conversation(
                 }
             }
             StepOrigin::Agent => {
+                let fact = facts[agent_steps_read];
+                agent_steps_read += 1;
                 let text =
                     text_of(&step.message).ok_or(Unprojectable::Image { step: step.step_id })?;
                 let text = text.trim().to_string();
@@ -402,9 +319,6 @@ fn try_conversation(
                 }
                 let is_action = !calls.is_empty() || Some(position) == last_agent;
                 let ids: Vec<String> = calls.iter().filter_map(|c| c.id.clone()).collect();
-                let asked = calls_asked(step, &calls);
-                let repeated = !asked.is_empty() && asked.iter().all(|c| seen_calls.contains(c));
-                seen_calls.extend(asked);
                 let mut assistant = message("assistant", &scrub.text(&text), false);
                 assistant.reasoning_content = reasoning_of(step, &scrub)?;
                 assistant.tool_calls = calls
@@ -418,9 +332,10 @@ fn try_conversation(
                 if is_action {
                     actions.push(Action {
                         index: messages.len(),
-                        step: step.step_id,
-                        copied: step.is_excluded_from_sft(),
-                        repeated,
+                        step: fact.step,
+                        copied: fact.copied,
+                        repeated: fact.repeated,
+                        tools: 0,
                     });
                 }
                 messages.push(assistant);
@@ -470,7 +385,7 @@ fn try_conversation(
     Ok(Conversation {
         messages,
         actions,
-        tools,
+        tool_sets: vec![tools],
     })
 }
 
@@ -537,6 +452,7 @@ fn serialise_run_step(
             step: step.step_id,
             copied: step.is_excluded_from_sft(),
             repeated: false,
+            tools: 0,
         });
         messages.push(assistant);
     };

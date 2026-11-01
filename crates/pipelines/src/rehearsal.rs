@@ -309,6 +309,7 @@ pub fn rehearse_on(
             serialise_calls: false,
             only_actions: None,
             roles: None,
+            images: false,
         },
     )?;
     Ok(Rehearsed {

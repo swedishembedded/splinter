@@ -121,6 +121,7 @@ fn request(set: SetId, max_block: Option<usize>, split_over_block: bool) -> Buil
         serialise_calls: false,
         only_actions: None,
         roles: None,
+        images: false,
         split_over_block,
     }
 }

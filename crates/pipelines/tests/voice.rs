@@ -162,6 +162,7 @@ fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
             serialise_calls: false,
             only_actions: None,
             roles: None,
+            images: false,
         },
     )
     .unwrap();
@@ -183,6 +184,7 @@ fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
             serialise_calls: false,
             only_actions: None,
             roles: None,
+            images: false,
         },
     )
     .unwrap();
@@ -312,6 +314,7 @@ fn the_voice_dataset_is_limited_to_a_spread_of_the_corpus() {
             serialise_calls: false,
             only_actions: None,
             roles: None,
+            images: false,
         },
     )
     .unwrap();
@@ -350,6 +353,7 @@ fn a_known_writer_is_asked_as_under_two_system_turns_within_a_token_budget() {
         serialise_calls: false,
         only_actions: None,
         roles: None,
+        images: false,
     };
     let refused = build(&ctx, &request(Some("The Writer"), Some("p".into()), None));
     assert!(
@@ -437,6 +441,7 @@ fn a_passage_is_asked_by_its_description_unless_the_description_copies_it() {
         serialise_calls: false,
         only_actions: None,
         roles: None,
+        images: false,
     };
     let asks = |built: &splinter_pipelines::datasets::Built| -> Vec<String> {
         std::fs::read_to_string(&built.path)

@@ -473,6 +473,7 @@ impl Session {
                     serialise_calls,
                     only_actions,
                     roles,
+                    images,
                     writer,
                     token_limit,
                     max_family_share,
@@ -506,6 +507,7 @@ impl Session {
                     serialise_calls,
                     only_actions,
                     roles,
+                    images,
                 };
                 // The strip is settled inside the run, which states the seed
                 // `mix:F` picks its subjects by.

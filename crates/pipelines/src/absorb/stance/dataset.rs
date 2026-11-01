@@ -30,6 +30,7 @@ pub const VIEW: &str = "stance-pairs";
 
 fn message(role: &str, content: &str, train: bool) -> WireMessage {
     WireMessage {
+        images: Vec::new(),
         role: role.into(),
         content: content.into(),
         tool_calls: Vec::new(),

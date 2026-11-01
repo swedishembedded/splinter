@@ -340,6 +340,7 @@ fn abstain(record: &mut splinter_data::Record, question: &str, context: &[&Passa
     }
     .prompt(question);
     turns.push(WireMessage {
+        images: Vec::new(),
         role: "user".into(),
         content: prompt,
         reasoning_content: None,
@@ -347,6 +348,7 @@ fn abstain(record: &mut splinter_data::Record, question: &str, context: &[&Passa
         ..template.clone()
     });
     turns.push(WireMessage {
+        images: Vec::new(),
         role: "assistant".into(),
         content: reply.to_string(),
         reasoning_content: None,

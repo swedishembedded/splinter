@@ -97,6 +97,11 @@ pub struct BuildRequest {
     /// one of these model roles; every other experience is counted as
     /// `RoleNotWanted` ([`SftStep::only_roles`]).
     pub roles: Option<Vec<String>>,
+    /// For the sft-step view: the training base reads images, so a harness
+    /// conversation whose model was shown some is built from the requests it
+    /// was sent, pictures in the turns that carried them ([`SftStep::images`]).
+    /// Without it such a conversation is counted as `ShownImages`.
+    pub images: bool,
 }
 
 /// How the voice view writes the writer's text into records; the other
@@ -269,6 +274,12 @@ fn project_without(
             view.as_str()
         )));
     }
+    if request.images && view != ViewName::SftStep {
+        return Err(OrchestratorError::Refused(format!(
+            "view {} has no conversations that were shown images, so --images does not apply",
+            view.as_str()
+        )));
+    }
     if request.min_strength.is_some() && !view.takes_min_strength() {
         return Err(OrchestratorError::Refused(format!(
             "view {} reads no verdict, so --min-strength does not apply",
@@ -311,6 +322,7 @@ fn project_without(
             .serialise_calls(request.serialise_calls)
             .only_actions(request.only_actions.clone().unwrap_or_default())
             .only_roles(request.roles.clone().unwrap_or_default())
+            .images(request.images)
             .project(&corpus),
         ViewName::Critic => Critic::new(strength).with_strip(strip).project(&corpus),
         ViewName::Preference => Preference::new(strength).with_strip(strip).project(&corpus),
@@ -469,8 +481,10 @@ fn within_policy_block(
             .as_ref()
             .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
     };
+    // A picture is the rows it adds to the sequence, not its base64.
     let size = |record: &splinter_data::Record| {
-        tokens(&serde_json::to_string(&record.body).unwrap_or_default())
+        let (text, image_rows) = record.body.text_and_image_rows();
+        tokens(&text) + image_rows
     };
     if split {
         projection.split_over_block(max_block, &size)

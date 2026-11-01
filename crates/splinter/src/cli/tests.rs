@@ -209,6 +209,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "edit,write_file",
         "--roles",
         "specifier,designer",
+        "--images",
         "--pack",
         "--control",
         "shuffled",
@@ -240,6 +241,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         split_over_block,
         only_actions,
         roles,
+        images,
         pack,
         control,
         control_seed,
@@ -257,7 +259,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         (Some("The Writer"), Some(9000), Some(0.2))
     );
     assert!(describe_with.is_some());
-    assert!(pack && drop_leaking && serialise_calls && split_over_block);
+    assert!(pack && drop_leaking && serialise_calls && split_over_block && images);
     assert_eq!(only_actions, Some(vec!["edit".into(), "write_file".into()]));
     assert_eq!(roles, Some(vec!["specifier".into(), "designer".into()]));
     assert_eq!(sets.len(), 2);

@@ -122,3 +122,57 @@ fn a_record_over_max_block_is_reported_by_name_before_training() {
         .unwrap()
         .is_empty());
 }
+
+/// A conversation whose user turn carries a picture, in the parts brain reads.
+fn image_record(images: usize, supervised_image: bool) -> String {
+    let picture =
+        r#"{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0KGgo="}}"#;
+    let user = vec![picture; images].join(",");
+    let answer = if supervised_image {
+        format!(r#"[{picture}]"#)
+    } else {
+        r#""A plate.""#.to_owned()
+    };
+    format!(
+        r#"{{"messages":[{{"role":"user","content":[{{"type":"text","text":"What is this?"}},{user}],"train":false}},{{"role":"assistant","content":{answer},"train":true}}]}}"#
+    )
+}
+
+/// A dataset with pictures in the context of a supervised answer is stored
+/// without a base to read them with; what brain refuses whatever the base is
+/// stays refused, naming the line.
+#[test]
+fn the_dataset_check_takes_pictures_in_the_context_and_refuses_the_rest() {
+    let dir = tempfile::tempdir().unwrap();
+    let check = |lines: &[String]| {
+        let path = write(dir.path(), "images.jsonl", lines);
+        BrainDatasetCheck.check(Format::GenericMessagesV2, &path, lines.len())
+    };
+    check(&[plain_record("ok"), image_record(1, false)]).expect("pictures in the context");
+    check(&[image_record(8, false)]).expect("eight pictures are the most");
+    let nine = check(&[plain_record("ok"), image_record(9, false)]).expect_err("nine pictures");
+    assert!(nine.contains(":2:") && nine.contains("image"), "{nine}");
+    let answered = check(&[image_record(1, true)]).expect_err("a picture in a supervised turn");
+    assert!(answered.contains("supervised"), "{answered}");
+}
+
+/// A picture is rows in the sequence the decoder trains on, which the
+/// length of a record counts; its base64 is not text.
+#[test]
+fn a_picture_counts_the_rows_it_adds_to_a_record() {
+    let dir = tempfile::tempdir().unwrap();
+    byte_level_checkpoint(dir.path());
+    let path = write(
+        dir.path(),
+        "train.jsonl",
+        &[plain_record("short"), image_record(1, false)],
+    );
+    // The stand-in picture has no readable header: the most one image takes.
+    let found = overlong_records(&path, dir.path(), 4_000).unwrap();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].line, 2);
+    assert!(found[0].tokens > 4_096, "{found:?}");
+    assert!(overlong_records(&path, dir.path(), 5_000)
+        .unwrap()
+        .is_empty());
+}
