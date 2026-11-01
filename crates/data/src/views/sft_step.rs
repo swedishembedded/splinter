@@ -35,6 +35,12 @@
 //!   the same ([`Exclusion::RepeatedAction`]): the tail of a loop stays in the
 //!   context of what follows and is not learned.
 //!
+//! A harness trial is one experience per conversation ([`splinter_core::harness`]).
+//! [`SftStep::only_roles`] keeps the conversations a model role answered
+//! ([`Exclusion::RoleNotWanted`] for the rest, checked first), and a
+//! conversation whose model was shown images is left out whatever its verdict
+//! ([`Exclusion::ShownImages`]): the training takes text only.
+//!
 //! Candidates: an experience, until its actions are reached; then each
 //! action (a bad one counts as [`Exclusion::BadStep`]).
 //!
@@ -43,6 +49,7 @@
 
 use splinter_core::annotation::{AnnotationBody, Label, Outcome, Strength};
 use splinter_core::chat::WireMessage;
+use splinter_core::harness::HarnessConversation;
 use splinter_core::rng::SplitMix64;
 
 use crate::render::student_turn;
@@ -90,6 +97,7 @@ pub struct SftStep {
     control: Control,
     serialise_calls: bool,
     only_actions: Option<Vec<String>>,
+    only_roles: Option<Vec<String>>,
 }
 
 impl SftStep {
@@ -105,6 +113,7 @@ impl SftStep {
             control: Control::Verified,
             serialise_calls: false,
             only_actions: None,
+            only_roles: None,
         }
     }
 
@@ -147,6 +156,20 @@ impl SftStep {
         }
     }
 
+    /// The same view keeping only the harness conversations answered by one of
+    /// the model `roles`; every other experience, including a conversation of
+    /// unknown role and an experience that is no conversation, is counted as
+    /// [`Exclusion::RoleNotWanted`]. This is how one role's model is trained
+    /// on the conversations it answered and no other's.
+    #[must_use]
+    pub fn only_roles(self, roles: Vec<String>) -> Self {
+        // An empty list is no request at all: it cannot mean "keep nothing".
+        Self {
+            only_roles: (!roles.is_empty()).then_some(roles),
+            ..self
+        }
+    }
+
     /// The same view under a negative `control`.
     #[must_use]
     pub fn control(self, control: Control) -> Self {
@@ -159,7 +182,22 @@ impl SftStep {
         Self { strip, ..self }
     }
 
+    /// Whether the roles asked for (if any) include the model role that
+    /// answered `conversation`; an unknown role matches none.
+    fn wants_role(&self, conversation: Option<&HarnessConversation>) -> bool {
+        self.only_roles.as_ref().is_none_or(|wanted| {
+            conversation
+                .and_then(|c| c.role.as_deref())
+                .is_some_and(|role| wanted.iter().any(|w| w == role))
+        })
+    }
+
     fn project_entry(&self, entry: &Entry, projection: &mut Projection) {
+        // Which experiences are wanted at all comes before how they did.
+        let conversation = HarnessConversation::of(&entry.experience.trajectory);
+        if !self.wants_role(conversation.as_ref()) {
+            return projection.exclude(Exclusion::RoleNotWanted);
+        }
         let outcome_verified = self.control == Control::OutcomeVerified;
         let passed = match self.control {
             Control::Unverified => admit_unverified(entry),
@@ -179,6 +217,9 @@ impl SftStep {
                 projection.exclude(reason);
                 return;
             }
+        }
+        if conversation.as_ref().is_some_and(|c| c.shown_images) {
+            return projection.exclude(Exclusion::ShownImages);
         }
         let turn = match student_turn(entry, &self.strip) {
             Ok(turn) => turn,

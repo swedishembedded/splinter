@@ -150,6 +150,9 @@ impl Report for splinter_sdk::bench::BenchIngested {
             "admitted {:?}, already held {}, verdicts {:?}",
             self.admitted, self.already_held, self.verdicts
         );
+        if !self.roles.is_empty() {
+            let _ = writeln!(out, "harness conversations by role {:?}", self.roles);
+        }
         for refused in &self.refused {
             let trial = refused.trial.as_deref().unwrap_or("(export)");
             let _ = writeln!(

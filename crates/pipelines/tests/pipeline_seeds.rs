@@ -141,6 +141,7 @@ fn a_mixed_dataset_records_the_seed_that_picked_its_subjects_and_rebuilds_from_i
                 control: Default::default(),
                 serialise_calls: false,
                 only_actions: None,
+                roles: None,
             },
         )
         .unwrap();

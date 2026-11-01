@@ -11,6 +11,7 @@
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code)]
 
+pub mod bench;
 pub mod fake_brain;
 pub mod fake_sven;
 pub mod gate;

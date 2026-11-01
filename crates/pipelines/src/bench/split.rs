@@ -68,11 +68,18 @@ pub enum SplitSource {
     Operator,
 }
 
-/// One trial that was admitted as an experience.
+/// One experience of an admitted trial: the trial's trajectory, or, for a
+/// trial that ran a harness, one of its conversations. Every record of a
+/// trial carries the trial's task and split, so the leakage protection
+/// below applies to a conversation exactly as it does to a trial.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrialRecord {
     /// The trial's name; a name is admitted once.
     pub trial: String,
+    /// The harness conversation this experience is; `None` for a trial that
+    /// ran a single agent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<String>,
     /// The digest of the manifest it was admitted from.
     pub manifest_sha256: String,
     /// The benchmark task's id.
@@ -96,7 +103,7 @@ pub fn trials(ctx: &Context) -> Result<Vec<TrialRecord>, OrchestratorError> {
     Ok(found)
 }
 
-/// Registers an admitted trial; registering the same one again changes
+/// Registers an admitted experience of a trial; registering the same one again changes
 /// nothing.
 pub fn register(ctx: &Context, record: &TrialRecord) -> Result<(), OrchestratorError> {
     ctx.workspace().put_document(TRIAL, record)?;

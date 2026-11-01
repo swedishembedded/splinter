@@ -93,6 +93,10 @@ pub struct BuildRequest {
     /// the rest become context and are counted as `ActionNotWanted`
     /// ([`SftStep::only_actions`]).
     pub only_actions: Option<Vec<String>>,
+    /// For the sft-step view: keep only the harness conversations answered by
+    /// one of these model roles; every other experience is counted as
+    /// `RoleNotWanted` ([`SftStep::only_roles`]).
+    pub roles: Option<Vec<String>>,
 }
 
 /// How the voice view writes the writer's text into records; the other
@@ -306,6 +310,7 @@ fn project_without(
             .control(request.control)
             .serialise_calls(request.serialise_calls)
             .only_actions(request.only_actions.clone().unwrap_or_default())
+            .only_roles(request.roles.clone().unwrap_or_default())
             .project(&corpus),
         ViewName::Critic => Critic::new(strength).with_strip(strip).project(&corpus),
         ViewName::Preference => Preference::new(strength).with_strip(strip).project(&corpus),

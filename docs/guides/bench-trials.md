@@ -29,6 +29,51 @@ one. The agent build, the model, the image, the reward and metrics and the artif
 digests are the verdict's evidence. Ingesting an export again changes nothing; a trial
 name that returns with other content is refused.
 
+## Harness trials: one experience per conversation
+
+A benchmark run through a sven harness is several conversations, each answered by a
+model role (a surveying `visual` role, a `specifier`, a `designer`, a `reviewer`, ...).
+Its top-level `trajectory.atif.json` holds no steps; the record is the
+`conversations/NNNN-<name>.json` files, which the manifest lists with their digests like
+every other file. A conversation file that is altered, missing, or not listed, or a
+conversation the top-level trajectory names that the manifest does not hold, refuses the
+trial exactly as any other tampered file does.
+
+`ingest-bench` admits such a trial as **one experience per conversation**. All of them
+share the trial's task, split and verdict: the benchmark graded the trial, so its grade
+applies to every conversation that contributed. Each experience's trajectory records the
+conversation in `extra.splinter_harness`:
+
+- `conversation`: its name;
+- `role` and `role_source`: the model role that answered it. `export` when the export
+  names it (`extra.harness.role`); `request_log` when an older export does not but
+  `model-requests.jsonl` attributes it. That attribution is made only when the requests
+  divide exactly among the conversations (one request per agent step, in order) and one
+  role answered all of a conversation's; otherwise the role is `unknown` and is never
+  guessed;
+- `shown_images`: whether its model was shown images (read from the request log; the
+  trajectory need not carry them). When the log cannot be divided among the
+  conversations, any of them may have been shown the images the log holds, so all are
+  marked.
+
+The command reports the conversations admitted by role. The register, the idempotency
+rule and the leakage protection work per conversation: a trial is admitted once, an
+`eval` trial's conversations never enter a dataset, and an interrupted ingestion is
+completed by the next one. A trial of a single agent is unchanged.
+
+```sh
+splinter experiences ingest-bench export-dir
+splinter dataset build --view sft-step --roles specifier,designer TRAIN-SET-ID
+```
+
+`--roles` (sft-step view) keeps the conversations answered by the roles named, each
+role's model learning from its own conversations; every other experience, including a
+conversation of unknown role, is counted as `RoleNotWanted`. A conversation whose model
+was shown images is left out and counted as `ShownImages`, whatever the roles asked for:
+brain's LoRA path trains text only, and a record of such a conversation would teach
+answers about pictures the student never saw. The build reports both counts with the
+other exclusions (and fails, listing them, when nothing is left).
+
 ## Splits
 
 The command writes two experience sets, `bench train trials` and `bench eval trials`,

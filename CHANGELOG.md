@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `experiences ingest-bench` admits a benchmark trial that ran a sven harness as one experience per conversation (same task, split and verdict, the model role recorded), and `dataset build --view sft-step` takes `--roles` to train a role on its own conversations; a conversation whose model was shown images is left out and counted (`ShownImages`). See the benchmark trials guide.
 - `--workspace-tree-memory-gib N` names the bound on the memory of a whole project command (24 GiB when not given); `0` names none and offers the environment of the tasks stored before the bound, which `solve` otherwise refuses.
 - A model solving in process (`local:...`, `policy:...`) samples as `--temperature`, `--top-p`, `--top-k`, `--sampling-seed` and `--thinking` say, as a served model does; without them it keeps the agent sampling. Its `Sampling` has an optional nucleus cut (`top_p`). The thinking budget still applies to served models only.
 - The orchestrator's async runtime has 4 worker threads instead of one per core: on a 144-core node every subprocess a run spawned copied 144 thread stacks.

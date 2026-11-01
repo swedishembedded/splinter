@@ -119,6 +119,7 @@ fn request(set: SetId) -> BuildRequest {
         control: Default::default(),
         serialise_calls: false,
         only_actions: None,
+        roles: None,
     }
 }
 

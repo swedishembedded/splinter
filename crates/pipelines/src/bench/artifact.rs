@@ -15,6 +15,12 @@
 //! row, and every file in the directory is exactly one the manifest lists,
 //! with the digest it lists. Anything else is refused with the reason, and
 //! nothing of a refused trial reaches the store.
+//!
+//! A trial that ran a harness (several conversations, each answered by a
+//! model role) has no steps in its top-level trajectory; its record is the
+//! `conversations/NNNN-<name>.json` files, each listed in the manifest with
+//! its digest like every other file. Such a trial is read as one [`Unit`] per
+//! conversation; any other trial is one unit, its trajectory.
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -24,6 +30,7 @@ use std::path::{Component, Path};
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest as _, Sha256};
+use splinter_core::harness::{HarnessConversation, RoleSource};
 
 /// The manifest schema this reader understands.
 pub const MANIFEST_SCHEMA: &str = "bench.trial-artifact/1";
@@ -36,6 +43,9 @@ const TRAJECTORY: &str = "trajectory.atif.json";
 
 /// The file that holds every request the agent sent its model.
 const REQUESTS: &str = "model-requests.jsonl";
+
+/// The directory of a harness trial's per-conversation trajectories.
+const CONVERSATIONS: &str = "conversations";
 
 /// One row of an export's `index.jsonl`.
 #[derive(Clone, Debug, Deserialize)]
@@ -162,6 +172,40 @@ pub struct AgentContext {
     pub source_sha256: String,
 }
 
+/// What a unit of a trial is.
+#[derive(Debug)]
+pub enum UnitKind {
+    /// The trajectory of a trial that ran a single agent. The trajectory does
+    /// not record its system prompt and tools; the context of the trial's
+    /// first request does.
+    Single(AgentContext),
+    /// One conversation of a harness trial, whose trajectory records its
+    /// system prompt and tools itself.
+    Conversation(HarnessConversation),
+}
+
+/// One trajectory of a trial that becomes one experience.
+#[derive(Debug)]
+pub struct Unit {
+    /// What it is.
+    pub kind: UnitKind,
+    /// The trajectory, parsed from the bytes that were verified.
+    pub trajectory: atif::Trajectory,
+    /// The sha256 of the trajectory file as exported.
+    pub trajectory_sha256: String,
+}
+
+impl Unit {
+    /// The harness conversation it is, if it is one.
+    #[must_use]
+    pub fn conversation(&self) -> Option<&HarnessConversation> {
+        match &self.kind {
+            UnitKind::Conversation(c) => Some(c),
+            UnitKind::Single(_) => None,
+        }
+    }
+}
+
 /// A trial whose every file matched its digest.
 #[derive(Debug)]
 pub struct Artifact {
@@ -169,18 +213,15 @@ pub struct Artifact {
     pub row: IndexRow,
     /// The verified manifest.
     pub manifest: Manifest,
-    /// The trajectory, parsed from the bytes that were verified.
-    pub trajectory: atif::Trajectory,
-    /// The sha256 of the trajectory file as exported.
-    pub trajectory_sha256: String,
-    /// The context of the first request.
-    pub context: AgentContext,
+    /// What becomes experience: one unit, or one per conversation.
+    pub units: Vec<Unit>,
 }
 
 /// The files of a trial that are read, not only hashed.
 struct Read {
     trajectory: atif::Trajectory,
-    context: AgentContext,
+    requests: Vec<u8>,
+    conversations: Vec<(String, atif::Trajectory, String)>,
 }
 
 /// Reads the rows of `directory`'s `index.jsonl`; a row that does not parse
@@ -258,18 +299,176 @@ pub fn read_trial(export: &Path, row: &IndexRow) -> Result<Artifact, String> {
     let manifest: Manifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|e| format!("{MANIFEST} is not a trial manifest: {e}"))?;
     agree(row, &manifest)?;
-    let Read {
-        trajectory,
-        context,
-    } = verify_files(&dir, &manifest)?;
-    let trajectory_sha256 = manifest.files[TRAJECTORY].to_ascii_lowercase();
+    let read = verify_files(&dir, &manifest)?;
+    let units = units_of(&manifest, read)?;
     Ok(Artifact {
         row: row.clone(),
         manifest,
-        trajectory,
-        trajectory_sha256,
-        context,
+        units,
     })
+}
+
+/// The units of a verified trial: its trajectory, or its conversations.
+fn units_of(manifest: &Manifest, read: Read) -> Result<Vec<Unit>, String> {
+    let requests = &manifest.files[REQUESTS];
+    if read.conversations.is_empty() {
+        let trajectory_sha256 = manifest.files[TRAJECTORY].to_ascii_lowercase();
+        return Ok(vec![Unit {
+            kind: UnitKind::Single(first_request(&read.requests, requests)?),
+            trajectory: read.trajectory,
+            trajectory_sha256,
+        }]);
+    }
+    let named = read
+        .trajectory
+        .extra
+        .as_ref()
+        .and_then(|e| e.pointer("/harness/conversations"))
+        .and_then(Value::as_array);
+    let found: Vec<&str> = read.conversations.iter().map(|c| c.0.as_str()).collect();
+    if let Some(named) = named {
+        let named: Vec<&str> = named.iter().filter_map(Value::as_str).collect();
+        if named != found {
+            return Err(format!(
+                "the trial's trajectory lists conversations {named:?}, the manifest holds \
+                 {found:?} (partial artifact)"
+            ));
+        }
+    }
+    let log = RequestLog::parse(&read.requests)?;
+    let trajectories: Vec<&atif::Trajectory> = read.conversations.iter().map(|c| &c.1).collect();
+    let attributed = log.attribute(&trajectories);
+    Ok(read
+        .conversations
+        .into_iter()
+        .enumerate()
+        .map(|(n, (name, trajectory, sha))| {
+            let exported = trajectory
+                .extra
+                .as_ref()
+                .and_then(|e| e.pointer("/harness/role"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let (role, role_source, logged) = match (exported, &attributed) {
+                (Some(role), _) => (
+                    Some(role),
+                    RoleSource::Export,
+                    attributed.as_ref().map(|a| a[n].clone()),
+                ),
+                (None, Some(a)) => (a[n].role.clone(), a[n].source(), Some(a[n].clone())),
+                (None, None) => (None, RoleSource::Unknown, None),
+            };
+            Unit {
+                kind: UnitKind::Conversation(HarnessConversation {
+                    conversation: name,
+                    role,
+                    role_source,
+                    // Without an attribution any conversation may have been
+                    // shown the images the log holds.
+                    shown_images: logged.map_or(log.any_image, |a| a.images),
+                }),
+                trajectory,
+                trajectory_sha256: sha,
+            }
+        })
+        .collect())
+}
+
+/// The requests of one conversation as the request log attributes them.
+#[derive(Clone, Debug)]
+struct Attribution {
+    /// The one model role all its requests name, if they do.
+    role: Option<String>,
+    images: bool,
+}
+
+impl Attribution {
+    fn source(&self) -> RoleSource {
+        if self.role.is_some() {
+            RoleSource::RequestLog
+        } else {
+            RoleSource::Unknown
+        }
+    }
+}
+
+/// What `model-requests.jsonl` says about each request: the model role it
+/// was sent to and whether it carries an image.
+struct RequestLog {
+    requests: Vec<(Option<String>, bool)>,
+    any_image: bool,
+}
+
+impl RequestLog {
+    fn parse(bytes: &[u8]) -> Result<Self, String> {
+        let mut requests = Vec::new();
+        for (n, line) in bytes.split(|b| *b == b'\n').enumerate() {
+            if line.is_empty() {
+                continue;
+            }
+            let row: Value = serde_json::from_slice(line)
+                .map_err(|e| format!("{REQUESTS} line {}: {e}", n + 1))?;
+            if row.get("kind").and_then(Value::as_str) != Some("request") {
+                continue;
+            }
+            let role = row.get("model").and_then(Value::as_str).map(str::to_string);
+            let images = row
+                .pointer("/request/messages")
+                .and_then(Value::as_array)
+                .is_some_and(|messages| {
+                    messages.iter().any(|m| {
+                        m.get("content")
+                            .and_then(Value::as_array)
+                            .is_some_and(|parts| {
+                                parts
+                                    .iter()
+                                    .any(|p| p.get("type").and_then(Value::as_str) != Some("text"))
+                            })
+                    })
+                });
+            requests.push((role, images));
+        }
+        let any_image = requests.iter().any(|r| r.1);
+        Ok(Self {
+            requests,
+            any_image,
+        })
+    }
+
+    /// Divides the requests among `conversations`, in order, one request per
+    /// agent step. Only an exact division counts: the request count must
+    /// equal the agent steps of all the conversations, or the requests cannot
+    /// be told apart and nothing is attributed.
+    fn attribute(&self, conversations: &[&atif::Trajectory]) -> Option<Vec<Attribution>> {
+        let steps: Vec<usize> = conversations
+            .iter()
+            .map(|t| {
+                t.steps
+                    .iter()
+                    .filter(|s| s.source == atif::StepOrigin::Agent)
+                    .count()
+            })
+            .collect();
+        if steps.iter().sum::<usize>() != self.requests.len() {
+            return None;
+        }
+        let mut rest = self.requests.as_slice();
+        Some(
+            steps
+                .into_iter()
+                .map(|n| {
+                    let (own, tail) = rest.split_at(n);
+                    rest = tail;
+                    let first = own.first().and_then(|r| r.0.clone());
+                    let one_role = own.iter().all(|r| r.0 == first);
+                    Attribution {
+                        role: first.filter(|_| one_role),
+                        images: own.iter().any(|r| r.1),
+                    }
+                })
+                .collect(),
+        )
+    }
 }
 
 /// The manifest and the index row must say the same about the trial.
@@ -303,15 +502,56 @@ fn agree(row: &IndexRow, manifest: &Manifest) -> Result<(), String> {
     Ok(())
 }
 
-/// Checks every file of `dir` against `manifest.files`, both ways, and
-/// returns the trajectory parsed from the verified bytes.
-fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
-    let mut present: Vec<String> = Vec::new();
-    for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))? {
-        let entry = entry.map_err(|e| format!("{}: {e}", dir.display()))?;
-        present.push(entry.file_name().to_string_lossy().into_owned());
+/// The names of the files in `dir`, a harness trial's conversation files as
+/// `conversations/<file>`; anything else that is a directory is a name the
+/// manifest cannot list, hence refused by the caller.
+fn present_files(dir: &Path) -> Result<Vec<String>, String> {
+    let unreadable = |path: &Path, e: io::Error| format!("{}: {e}", path.display());
+    let mut present = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| unreadable(dir, e))? {
+        let entry = entry.map_err(|e| unreadable(dir, e))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name == CONVERSATIONS && entry.path().is_dir() {
+            let inner = entry.path();
+            for file in std::fs::read_dir(&inner).map_err(|e| unreadable(&inner, e))? {
+                let file = file.map_err(|e| unreadable(&inner, e))?;
+                present.push(format!(
+                    "{CONVERSATIONS}/{}",
+                    file.file_name().to_string_lossy()
+                ));
+            }
+        } else {
+            present.push(name);
+        }
     }
-    for name in &present {
+    Ok(present)
+}
+
+/// Whether `name` is a file a manifest may list: one plain file name, or one
+/// plain file name directly under `conversations/`.
+fn is_listable(name: &str) -> bool {
+    let file = name
+        .strip_prefix(CONVERSATIONS)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(name);
+    is_plain_name(file)
+}
+
+/// The name of the conversation a manifest key `conversations/NNNN-<name>.json`
+/// holds, when the trajectory does not state it.
+fn conversation_file_name(key: &str) -> Option<&str> {
+    let stem = key
+        .strip_prefix(CONVERSATIONS)?
+        .strip_prefix('/')?
+        .strip_suffix(".json")?;
+    let (index, name) = stem.split_once('-')?;
+    (index.bytes().all(|b| b.is_ascii_digit()) && !name.is_empty()).then_some(name)
+}
+
+/// Checks every file of `dir` against `manifest.files`, both ways, and
+/// returns the trajectories parsed from the verified bytes.
+fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
+    for name in &present_files(dir)? {
         if name != MANIFEST && !manifest.files.contains_key(name) {
             return Err(format!(
                 "{name} is in the directory but not in the manifest"
@@ -320,23 +560,39 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
     }
     let mut trajectory: Option<Vec<u8>> = None;
     let mut requests: Option<Vec<u8>> = None;
+    let mut conversations: Vec<(String, atif::Trajectory, String)> = Vec::new();
     for (name, expected) in &manifest.files {
-        if !is_plain_name(name) {
+        if !is_listable(name) {
             return Err(format!(
                 "the manifest lists {name:?}, which is not a plain file name"
             ));
         }
         let path = dir.join(name);
         let unreadable = |e: io::Error| format!("{name}: {e} (partial artifact)");
-        // The trajectory and the requests are parsed from the very bytes that
-        // were hashed.
-        let found = if name == TRAJECTORY || name == REQUESTS {
+        // The trajectories and the requests are parsed from the very bytes
+        // that were hashed.
+        let parsed = name == TRAJECTORY || name == REQUESTS || name.starts_with(CONVERSATIONS);
+        let found = if parsed {
             let bytes = std::fs::read(&path).map_err(unreadable)?;
             let found = sha256_hex(&bytes);
-            if name == TRAJECTORY {
-                trajectory = Some(bytes);
-            } else {
-                requests = Some(bytes);
+            if found.eq_ignore_ascii_case(expected) {
+                if name == TRAJECTORY {
+                    trajectory = Some(bytes);
+                } else if name == REQUESTS {
+                    requests = Some(bytes);
+                } else {
+                    let parsed: atif::Trajectory = serde_json::from_slice(&bytes)
+                        .map_err(|e| format!("{name} is not ATIF: {e}"))?;
+                    let named = parsed
+                        .extra
+                        .as_ref()
+                        .and_then(|e| e.pointer("/harness/conversation"))
+                        .and_then(Value::as_str)
+                        .or_else(|| conversation_file_name(name))
+                        .ok_or_else(|| format!("{name} does not say which conversation it is"))?
+                        .to_string();
+                    conversations.push((named, parsed, found.clone()));
+                }
             }
             found
         } else {
@@ -359,7 +615,8 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
     })?;
     Ok(Read {
         trajectory,
-        context: first_request(&requests, &manifest.files[REQUESTS])?,
+        requests,
+        conversations,
     })
 }
 

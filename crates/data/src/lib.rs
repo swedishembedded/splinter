@@ -322,6 +322,15 @@ pub enum Exclusion {
     /// (`SftStep::only_actions`): the exploration around the decisive actions,
     /// left out on request rather than because it could not be trained.
     ActionNotWanted,
+    /// A harness conversation answered by a model role the view was not asked
+    /// for (`SftStep::only_roles`), or whose role is unknown: a role is
+    /// trained on its own conversations, and a conversation of no known role
+    /// is never guessed into one.
+    RoleNotWanted,
+    /// A harness conversation whose model was shown images. The trajectory
+    /// cannot carry them and the training target takes text only, so a record
+    /// of it would teach answers about pictures the student never saw.
+    ShownImages,
     /// No reward could be derived.
     NoReward,
     /// A critique whose own decision is not a pass at the minimum strength.

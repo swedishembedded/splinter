@@ -73,6 +73,14 @@ pub struct BuildArgs {
     /// actions - the edits and the conclusion - instead of the exploration.
     #[arg(long, value_delimiter = ',', value_name = "TOOLS")]
     pub only_actions: Option<Vec<String>>,
+    /// For the sft-step view: keep only the conversations of a harness trial
+    /// answered by these model roles (comma separated, as `ingest-bench`
+    /// recorded them); every other experience, and a conversation whose role
+    /// is unknown, is counted as `RoleNotWanted`. A conversation whose model
+    /// was shown images is always left out and counted as `ShownImages`: the
+    /// training takes text only.
+    #[arg(long, value_delimiter = ',', value_name = "ROLES")]
+    pub roles: Option<Vec<String>>,
     /// For the sft-step view: build another dataset than the default.
     /// `outcome-verified` admits only experiences an independent verdict
     /// passed (the default also admits an action labelled good from one that

@@ -30,27 +30,15 @@ mod common;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use common::{config, Scratch};
+use common::bench::{context, sft_request, NO_OPTIONS};
 use serde_json::{json, Value};
-use splinter_core::annotation::Strength;
-use splinter_core::clock::FixedClock;
 use splinter_data::Exclusion;
 use splinter_orchestrator::Context;
 use splinter_pipelines::bench::artifact::sha256_hex;
 use splinter_pipelines::bench::split::Split;
 use splinter_pipelines::bench::{ingest_bench_trials, IngestOptions};
-use splinter_pipelines::datasets::{
-    build, build_dropping_leaks, BuildRequest, ViewName, VoiceBuild,
-};
+use splinter_pipelines::datasets::{build, build_dropping_leaks};
 use splinter_store::experiences::{ExperienceSet, SetId};
-
-fn context(test: &str) -> (Scratch, Context) {
-    let scratch = Scratch::new(test);
-    let ctx = Context::new(config(&scratch), false)
-        .unwrap()
-        .with_clock(Box::new(FixedClock::new("2026-10-28T09:00:00.000Z")));
-    (scratch, ctx)
-}
 
 /// One synthetic trial: a task, the split the export states for it (if any)
 /// and whether the benchmark passed it.
@@ -158,25 +146,6 @@ fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
     dir.to_path_buf()
 }
 
-fn sft_request(set: SetId) -> BuildRequest {
-    BuildRequest {
-        sets: vec![set],
-        view: ViewName::SftStep,
-        strip: None,
-        min_strength: Some(Strength::Executable),
-        system_prompt: None,
-        export_only: false,
-        limit: None,
-        voice: VoiceBuild::default(),
-        max_block: None,
-        pack: false,
-        split_over_block: false,
-        control: Default::default(),
-        serialise_calls: false,
-        only_actions: None,
-    }
-}
-
 fn mixed(ctx: &Context, a: &SetId, b: &SetId) -> SetId {
     let store = ctx.experiences();
     let mut members = store.get_set(a).unwrap().members;
@@ -188,8 +157,6 @@ fn mixed(ctx: &Context, a: &SetId, b: &SetId) -> SetId {
         })
         .unwrap()
 }
-
-const NO_OPTIONS: IngestOptions = IngestOptions { assume_set: None };
 
 #[test]
 fn trials_become_experiences_with_the_benchmarks_verdict_in_one_set_per_split() {

@@ -120,6 +120,7 @@ fn request(set: SetId, max_block: Option<usize>, split_over_block: bool) -> Buil
         control: Default::default(),
         serialise_calls: false,
         only_actions: None,
+        roles: None,
         split_over_block,
     }
 }

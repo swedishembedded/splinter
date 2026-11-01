@@ -207,6 +207,8 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "--split-over-block",
         "--only-actions",
         "edit,write_file",
+        "--roles",
+        "specifier,designer",
         "--pack",
         "--control",
         "shuffled",
@@ -237,6 +239,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         max_block,
         split_over_block,
         only_actions,
+        roles,
         pack,
         control,
         control_seed,
@@ -256,6 +259,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     assert!(describe_with.is_some());
     assert!(pack && drop_leaking && serialise_calls && split_over_block);
     assert_eq!(only_actions, Some(vec!["edit".into(), "write_file".into()]));
+    assert_eq!(roles, Some(vec!["specifier".into(), "designer".into()]));
     assert_eq!(sets.len(), 2);
     assert_eq!(view, ViewName::Preference);
     assert!(matches!(strip, Some(StripPolicy::Mix { .. })));

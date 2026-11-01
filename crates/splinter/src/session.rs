@@ -472,6 +472,7 @@ impl Session {
                     drop_leaking,
                     serialise_calls,
                     only_actions,
+                    roles,
                     writer,
                     token_limit,
                     max_family_share,
@@ -504,6 +505,7 @@ impl Session {
                     control: Control::Verified,
                     serialise_calls,
                     only_actions,
+                    roles,
                 };
                 // The strip is settled inside the run, which states the seed
                 // `mix:F` picks its subjects by.

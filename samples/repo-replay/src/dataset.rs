@@ -174,6 +174,7 @@ pub fn build_dataset(ctx: &Context, sets: &[String], settings: &DatasetSettings)
         control: Default::default(),
         serialise_calls: false,
         only_actions: None,
+        roles: None,
     };
     Ok(build(ctx, &request)?)
 }

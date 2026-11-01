@@ -20,7 +20,12 @@
 //! belongs to the trial and not to the task - the agent build, the model, the
 //! image, the digests of the artifact - is the verdict's evidence.
 //!
-//! Admission is idempotent: a trial is registered with the digest of the
+//! A trial that ran a harness is admitted as one experience per conversation
+//! ([`splinter_core::harness`] says which and in what role), all under the
+//! trial's task, split and verdict: the trial's grade applies to every
+//! conversation that contributed to it.
+//!
+//! Admission is idempotent: each experience of a trial is registered with the digest of the
 //! manifest it came from, so ingesting an export again changes nothing, and
 //! the same trial name with other content is refused. The split is enforced
 //! where datasets are made ([`split::exam_only`]), not here: an `eval` trial
@@ -36,12 +41,13 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance, Task};
+use splinter_core::harness;
 use splinter_core::kinds::BENCH_TASK;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::experiences::{ExperienceSet, SetId};
 
-use artifact::{read_index, read_trial, Artifact};
+use artifact::{read_index, read_trial, AgentContext, Artifact, Unit, UnitKind};
 use split::{Split, SplitSource, TrialRecord};
 
 /// The producer of a benchmark verdict.
@@ -83,6 +89,10 @@ pub struct BenchIngested {
     pub already_held: usize,
     /// Trials admitted or held, by the benchmark's verdict.
     pub verdicts: BTreeMap<String, usize>,
+    /// The harness conversations admitted or held, by the model role that
+    /// answered them (`unknown` when neither the export nor the request log
+    /// says).
+    pub roles: BTreeMap<String, usize>,
     /// The trials and exports refused.
     pub refused: Vec<BenchRefused>,
 }
@@ -133,17 +143,13 @@ pub fn ingest_bench_trials(
             };
             match admitted {
                 Err(reason) => done.refused.push(refuse(Some(&row.trial), reason)),
-                Ok(Admission {
-                    record,
-                    fresh,
-                    outcome,
-                }) => {
-                    if fresh {
-                        *done
-                            .admitted
-                            .entry(record.split.as_str().into())
-                            .or_default() += 1;
-                        register.push(record.clone());
+                Ok(admissions) => {
+                    let Some(first) = admissions.first() else {
+                        continue;
+                    };
+                    let (side, outcome) = (first.record.split, first.outcome);
+                    if admissions.iter().any(|a| a.fresh) {
+                        *done.admitted.entry(side.as_str().into()).or_default() += 1;
                     } else {
                         done.already_held += 1;
                     }
@@ -151,10 +157,18 @@ pub fn ingest_bench_trials(
                         .verdicts
                         .entry(format!("{outcome:?}").to_lowercase())
                         .or_default() += 1;
-                    members
-                        .entry(record.split)
-                        .or_default()
-                        .push(record.experience);
+                    for admission in admissions {
+                        if admission.fresh {
+                            register.push(admission.record.clone());
+                        }
+                        if let Some(role) = admission.role {
+                            *done.roles.entry(role).or_default() += 1;
+                        }
+                        members
+                            .entry(side)
+                            .or_default()
+                            .push(admission.record.experience);
+                    }
                 }
             }
         }
@@ -173,11 +187,14 @@ pub fn ingest_bench_trials(
     Ok(done)
 }
 
-/// A trial admitted, or found already held.
+/// One experience of a trial admitted, or found already held.
 struct Admission {
     record: TrialRecord,
     fresh: bool,
     outcome: Outcome,
+    /// The role of a harness conversation (`unknown` when not known); `None`
+    /// for a trial of a single agent.
+    role: Option<String>,
 }
 
 /// The split of `artifact`: its own, else the operator's.
@@ -203,14 +220,18 @@ fn split_of(artifact: &Artifact, options: IngestOptions) -> Result<(Split, Split
     }
 }
 
-/// Admits one verified trial; the outer error is the store's, the inner the
-/// reason the trial is refused.
+/// Admits the experiences of one verified trial, one per unit; the outer
+/// error is the store's, the inner the reason the trial is refused.
+///
+/// A trial whose experiences are all registered is held and changes nothing.
+/// One that a crash left partly admitted is completed: only the experiences
+/// the register lacks are made.
 fn admit(
     ctx: &Context,
     register: &[TrialRecord],
     artifact: &Artifact,
     options: IngestOptions,
-) -> Result<Result<Admission, String>, OrchestratorError> {
+) -> Result<Result<Vec<Admission>, String>, OrchestratorError> {
     let (side, source) = match split_of(artifact, options) {
         Ok(found) => found,
         Err(reason) => return Ok(Err(reason)),
@@ -221,84 +242,124 @@ fn admit(
         "fail" => Outcome::Fail,
         _ => Outcome::Abstain,
     };
-    if let Some(held) = register.iter().find(|t| t.trial == manifest.trial) {
-        return Ok(
-            if held.manifest_sha256 == artifact.row.manifest_sha256 && held.split == side {
-                Ok(Admission {
-                    record: held.clone(),
-                    fresh: false,
-                    outcome,
-                })
-            } else {
-                Err(format!(
-                    "trial {} is already admitted with other content (manifest {}, set {}); a \
-                     trial name is admitted once",
-                    held.trial,
-                    held.manifest_sha256,
-                    held.split.as_str()
-                ))
+    let held: Vec<&TrialRecord> = register
+        .iter()
+        .filter(|t| t.trial == manifest.trial)
+        .collect();
+    if let Some(other) = held
+        .iter()
+        .find(|t| t.manifest_sha256 != artifact.row.manifest_sha256 || t.split != side)
+    {
+        return Ok(Err(format!(
+            "trial {} is already admitted with other content (manifest {}, set {}); a trial name \
+             is admitted once",
+            other.trial,
+            other.manifest_sha256,
+            other.split.as_str()
+        )));
+    }
+    if held.is_empty() {
+        if let Some(reason) = split::conflict(register, &manifest.task.id, side) {
+            return Ok(Err(reason));
+        }
+    }
+    let mut admissions = Vec::new();
+    for unit in &artifact.units {
+        let name = unit.conversation().map(|c| c.conversation.clone());
+        let role = unit
+            .conversation()
+            .map(|c| c.role.clone().unwrap_or_else(|| "unknown".into()));
+        if let Some(record) = held.iter().find(|t| t.conversation == name) {
+            admissions.push(Admission {
+                record: (*record).clone(),
+                fresh: false,
+                outcome,
+                role,
+            });
+            continue;
+        }
+        let experience = match experience_of(ctx, artifact, unit, side) {
+            Ok(experience) => experience,
+            Err(reason) => return Ok(Err(reason)),
+        };
+        let store = ctx.experiences();
+        let id = store.put(&experience)?;
+        store.annotate(&Annotation {
+            experience: id.clone(),
+            producer: Producer {
+                name: VERIFIER_PRODUCER.into(),
+                version: manifest.verifier.digest.clone(),
             },
-        );
-    }
-    if let Some(reason) = split::conflict(register, &manifest.task.id, side) {
-        return Ok(Err(reason));
-    }
-    let experience = match experience_of(ctx, artifact, side) {
-        Ok(experience) => experience,
-        Err(reason) => return Ok(Err(reason)),
-    };
-    let store = ctx.experiences();
-    let id = store.put(&experience)?;
-    store.annotate(&Annotation {
-        experience: id.clone(),
-        producer: Producer {
-            name: VERIFIER_PRODUCER.into(),
-            version: manifest.verifier.digest.clone(),
-        },
-        body: AnnotationBody::Verdict {
+            body: AnnotationBody::Verdict {
+                outcome,
+                strength: Strength::Executable,
+                evidence: evidence(artifact, unit, side, source),
+            },
+        })?;
+        let record = TrialRecord {
+            trial: manifest.trial.clone(),
+            conversation: name,
+            manifest_sha256: artifact.row.manifest_sha256.clone(),
+            task: manifest.task.id.clone(),
+            split: side,
+            split_source: source,
+            experience: id,
+        };
+        split::register(ctx, &record)?;
+        admissions.push(Admission {
+            record,
+            fresh: true,
             outcome,
-            strength: Strength::Executable,
-            evidence: evidence(artifact, side, source),
-        },
-    })?;
-    let record = TrialRecord {
-        trial: manifest.trial.clone(),
-        manifest_sha256: artifact.row.manifest_sha256.clone(),
-        task: manifest.task.id.clone(),
-        split: side,
-        split_source: source,
-        experience: id,
-    };
-    split::register(ctx, &record)?;
-    Ok(Ok(Admission {
-        record,
-        fresh: true,
-        outcome,
-    }))
+            role,
+        });
+    }
+    Ok(Ok(admissions))
 }
 
-/// The model the trial's agent ran on: the `main` role, else the first.
-fn model_of(artifact: &Artifact) -> &str {
+/// The model that ran `unit`: the model of the conversation's role when the
+/// role is known, else the `main` role's, else the first.
+fn model_of<'a>(artifact: &'a Artifact, unit: &Unit) -> &'a str {
     let models = &artifact.manifest.models;
-    models
-        .get("main")
+    unit.conversation()
+        .and_then(|c| c.role.as_deref())
+        .and_then(|role| models.get(role))
+        .or_else(|| models.get("main"))
         .or_else(|| models.values().next())
         .map_or("unknown", |m| m.model.as_str())
 }
 
-/// The experience of a verified trial: its trajectory under its task.
-fn experience_of(ctx: &Context, artifact: &Artifact, side: Split) -> Result<Experience, String> {
+/// The experience of one unit of a verified trial: its trajectory under its
+/// task.
+fn experience_of(
+    ctx: &Context,
+    artifact: &Artifact,
+    unit: &Unit,
+    side: Split,
+) -> Result<Experience, String> {
     let manifest = &artifact.manifest;
-    let trajectory = with_agent_context(artifact);
-    let instruction = trajectory
+    let trajectory = recorded_trajectory(unit);
+    let instruction = match trajectory
         .steps
         .iter()
         .find(|s| s.source == atif::StepOrigin::User)
-        .ok_or("the trajectory has no user step: the instruction is unknown")?
-        .message
-        .as_text()
-        .ok_or("the instruction is not plain text")?
-        .to_string();
+    {
+        Some(step) => step
+            .message
+            .as_text()
+            .ok_or("the instruction is not plain text")?
+            .to_string(),
+        // A conversation can open with a turn the export does not carry as
+        // text (images); it is named, not invented.
+        None => match unit.conversation() {
+            Some(c) => format!(
+                "Conversation {} of benchmark task {}.",
+                c.conversation, manifest.task.id
+            ),
+            None => {
+                return Err("the trajectory has no user step: the instruction is unknown".into())
+            }
+        },
+    };
     // What is the task's, not the trial's: another trial of the task, by any
     // agent, has the same task address.
     let spec = json!({
@@ -334,7 +395,7 @@ fn experience_of(ctx: &Context, artifact: &Artifact, side: Split) -> Result<Expe
             "bench/{}@{}/{}",
             agent.name,
             agent.version,
-            model_of(artifact)
+            model_of(artifact, unit)
         ),
         ctx.clock(),
     );
@@ -347,7 +408,28 @@ fn experience_of(ctx: &Context, artifact: &Artifact, side: Split) -> Result<Expe
 /// The key of `trajectory.extra` under which a derivation is recorded.
 const ENRICHMENT: &str = "splinter_enrichment";
 
-/// The trajectory the experience records: the exported one, plus what the
+/// The trajectory the experience records. A harness conversation's own
+/// trajectory already holds its system prompt and tools; it gains only the
+/// record of which conversation it is ([`splinter_core::harness`]). Any
+/// other trajectory is enriched ([`with_agent_context`]).
+fn recorded_trajectory(unit: &Unit) -> atif::Trajectory {
+    match &unit.kind {
+        UnitKind::Conversation(conversation) => {
+            let mut trajectory = unit.trajectory.clone();
+            let mut extra = match trajectory.extra.take() {
+                Some(Value::Object(map)) => map,
+                Some(other) => serde_json::Map::from_iter([("exported".to_string(), other)]),
+                None => serde_json::Map::new(),
+            };
+            extra.insert(harness::KEY.to_string(), conversation.to_value());
+            trajectory.extra = Some(Value::Object(extra));
+            trajectory
+        }
+        UnitKind::Single(context) => with_agent_context(unit, context),
+    }
+}
+
+/// The exported trajectory, plus what the
 /// model was given before its first turn, which this agent's ATIF does not
 /// carry - its system prompt as a leading system step and its tool schemas as
 /// `agent.tool_definitions` - read from the trial's first model request. The
@@ -355,9 +437,8 @@ const ENRICHMENT: &str = "splinter_enrichment";
 /// digest of the trajectory as exported, what was added), so the exported
 /// artifact stays the source of truth and the addition is never mistaken for
 /// the agent's own record. What the trajectory already records is kept.
-fn with_agent_context(artifact: &Artifact) -> atif::Trajectory {
-    let context = &artifact.context;
-    let mut trajectory = artifact.trajectory.clone();
+fn with_agent_context(unit: &Unit, context: &AgentContext) -> atif::Trajectory {
+    let mut trajectory = unit.trajectory.clone();
     let mut derived = Vec::new();
     if trajectory.agent.tool_definitions.is_none() && !context.tools.is_empty() {
         trajectory.agent.tool_definitions = Some(context.tools.clone());
@@ -386,7 +467,7 @@ fn with_agent_context(artifact: &Artifact) -> atif::Trajectory {
             "source": "model-requests.jsonl",
             "source_sha256": context.source_sha256,
             "request": 1,
-            "trajectory_sha256": artifact.trajectory_sha256,
+            "trajectory_sha256": unit.trajectory_sha256,
             "added": derived,
         }),
     );
@@ -396,16 +477,17 @@ fn with_agent_context(artifact: &Artifact) -> atif::Trajectory {
 
 /// What belongs to the trial and not to its task, for whoever audits the
 /// verdict.
-fn evidence(artifact: &Artifact, side: Split, source: SplitSource) -> Value {
+fn evidence(artifact: &Artifact, unit: &Unit, side: Split, source: SplitSource) -> Value {
     let manifest = &artifact.manifest;
     json!({
         "trial": manifest.trial,
         "manifest_sha256": artifact.row.manifest_sha256,
         "files": manifest.files,
-        "context": {
-            "source_sha256": artifact.context.source_sha256,
-            "tools": artifact.context.tools.len(),
+        "context": match &unit.kind {
+            UnitKind::Single(c) => json!({"source_sha256": c.source_sha256, "tools": c.tools.len()}),
+            UnitKind::Conversation(_) => Value::Null,
         },
+        "conversation": unit.conversation(),
         "task": {
             "id": manifest.task.id,
             "version": manifest.task.version,
@@ -422,7 +504,7 @@ fn evidence(artifact: &Artifact, side: Split, source: SplitSource) -> Value {
             "version": manifest.agent.version,
             "sven_build_sha256": manifest.agent.sven_build_sha256,
         },
-        "model": model_of(artifact),
+        "model": model_of(artifact, unit),
         "image": manifest.image,
         "tokens": manifest.tokens,
         "wall_seconds": manifest.wall_seconds,

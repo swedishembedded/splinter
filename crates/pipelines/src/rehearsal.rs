@@ -308,6 +308,7 @@ pub fn rehearse_on(
             control: Default::default(),
             serialise_calls: false,
             only_actions: None,
+            roles: None,
         },
     )?;
     Ok(Rehearsed {
