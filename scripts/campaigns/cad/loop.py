@@ -296,6 +296,16 @@ def decide(summary: dict, rule: dict) -> dict:
     return {"promoted": ok, "reason": reason, "summary": summary}
 
 
+def adopted(job: str) -> str:
+    """A job run before the loop, by its full path; refused until its run records
+    `finished_at`, so no generation learns from half a run."""
+    full = path(job)
+    results = [json.loads(r.read_text()) for r in full.glob("*/result.json")]
+    if not results or not all(r.get("finished_at") for r in results):
+        raise SystemExit(f"loop: the adopted job {full} has not finished")
+    return str(full)
+
+
 # --------------------------------------------------------------------------- the loop
 
 
@@ -307,14 +317,14 @@ def generation(campaign: Campaign, number: int) -> None:
     adopt = campaign.doc.get("adopt", {}).get(str(number), {})
     if not gen.done("explore"):
         if adopt.get("explore_job"):
-            job = adopt["explore_job"]
+            job = adopted(adopt["explore_job"])
         else:
             model_id = serve(campaign, start, gen)
             job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["explore_attempts"], "explore"),
                             "train", "explore")
         gen.record("explore", explore_job=job, explore_export=bench_export(campaign, gen, job, "explore"))
     if not gen.done("exam"):
-        job = adopt.get("exam_job") or start.get("exam_job")
+        job = adopted(adopt["exam_job"]) if adopt.get("exam_job") else start.get("exam_job")
         if not job:
             model_id = serve(campaign, start, gen)
             job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "exam"), "eval", "exam")
