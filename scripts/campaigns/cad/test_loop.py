@@ -53,7 +53,17 @@ def a_generation_resumes_after_its_last_finished_step(tmp_path):
     assert again.done("explore") and not again.done("exam") and again.state["explore_job"] == "j"
 
 
+def a_second_card_takes_the_exams():
+    one = loop.Campaign({"serve": {"card": 0, "port": 8799}})
+    assert loop.cards(one) == ((0, 8799), None)
+    two = loop.Campaign({"serve": {"card": 0, "port": 8799, "exam_card": 1, "exam_port": 8800}})
+    assert loop.cards(two) == ((0, 8799), (1, 8800))
+
+
 class Loop(unittest.TestCase):
+    def test_a_second_card_takes_the_exams(self):
+        a_second_card_takes_the_exams()
+
     def test_a_candidate_is_promoted_only_on_a_positive_paired_gain(self):
         a_candidate_is_promoted_only_on_a_positive_paired_gain()
 

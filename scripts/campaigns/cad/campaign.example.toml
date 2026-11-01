@@ -18,6 +18,8 @@ models_dir = "~/models"
 base_model = "Qwen/Qwen3.8-27B-FP8"          # the model id the base is served as
 card = 0
 port = 8799
+# exam_card = 1                              # a second card: the exam runs beside the exploration
+# exam_port = 8800
 key_file = "~/keys/brain"
 max_batch = 32
 env = { BRAIN_BACKEND = "cuda" }

@@ -46,6 +46,7 @@ import signal
 import subprocess
 import sys
 import time
+import threading
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -87,7 +88,13 @@ class Generation:
     def done(self, step: str) -> bool:
         return step in self.state.get("done", [])
 
+    _lock = threading.Lock()
+
     def record(self, step: str, **values) -> None:
+        with self._lock:
+            self._record(step, **values)
+
+    def _record(self, step: str, **values) -> None:
         self.state.update(values)
         self.state.setdefault("done", []).append(step)
         tmp = self.file.with_suffix(".tmp")
@@ -134,10 +141,17 @@ def with_env_script(campaign: Campaign, argv: list) -> list[str]:
     return ["bash", "-c", 'source "$0" && exec "$@"', str(path(script)), *argv]
 
 
-def stop_serving(campaign: Campaign) -> None:
-    """Stop any brain binary serving the campaign's card, whichever path started it
+def cards(campaign: Campaign) -> tuple[tuple[int, int], tuple[int, int] | None]:
+    """The (card, port) everything runs on, and the (card, port) the exams run on
+    beside it when the campaign names a second card."""
+    s = campaign["serve"]
+    exam = (s["exam_card"], s["exam_port"]) if "exam_card" in s else None
+    return (s["card"], s["port"]), exam
+
+
+def stop_serving(campaign: Campaign, card: int) -> None:
+    """Stop any brain binary serving `card`, whichever path started it
     (a symlinked and a resolved directory are the same binaries)."""
-    card = campaign["serve"]["card"]
     pattern = f"/brain[^ /]* --device gpu{card} "
     for pid in subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True).stdout.split():
         os.kill(int(pid), signal.SIGTERM)
@@ -149,12 +163,12 @@ def stop_serving(campaign: Campaign) -> None:
     (campaign.work / f"ready-gpu{card}").unlink(missing_ok=True)
 
 
-def serve(campaign: Campaign, model: dict, gen: Generation) -> str:
-    """Serve `model` (base, or base + adapter) on the campaign's card; the model id to request."""
+def serve(campaign: Campaign, model: dict, gen: Generation, card: int, port: int) -> str:
+    """Serve `model` (base, or base + adapter) on `card`; the model id to request."""
     s = campaign["serve"]
-    card, port, binary = s["card"], s["port"], path(s["brain"])
+    binary = path(s["brain"])
     ready = campaign.work / f"ready-gpu{card}"
-    stop_serving(campaign)
+    stop_serving(campaign, card)
     argv = [binary, "--device", f"gpu{card}", "--backend", "cuda", "serve", "--max-batch", str(s["max_batch"]),
             "--speculative", "off", "--openai", f"127.0.0.1:{port}", "--api-key-file", path(s["key_file"]),
             "--checkpoint", path(s["checkpoint"]), "--ready-file", ready]
@@ -185,13 +199,13 @@ def serve(campaign: Campaign, model: dict, gen: Generation) -> str:
     return s["base_model"]
 
 
-def profile(campaign: Campaign, gen: Generation, model_id: str, attempts: int, name: str) -> Path:
-    """A run profile with every harness role on `model_id`."""
-    s, b = campaign["serve"], campaign["bench"]
+def profile(campaign: Campaign, gen: Generation, model_id: str, attempts: int, name: str, port: int) -> Path:
+    """A run profile with every harness role on `model_id` at `port`."""
+    b = campaign["bench"]
     roles = "\n".join(f'{role} = "brain"' for role in ["main", *b["roles"]])
     text = (f'[sven]\nbuild = "{path(b["sven"])}"\n\n[run]\nenvironment = "userns"\nattempts = {attempts}\n'
             f'concurrency = {b["concurrency"]}\n\n[roles]\n{roles}\n\n[upstreams.brain]\n'
-            f'base_url = "http://127.0.0.1:{s["port"]}/v1"\nmodel = "{model_id}"\napi_key_env = "BRAIN_KEY"\n')
+            f'base_url = "http://127.0.0.1:{port}/v1"\nmodel = "{model_id}"\napi_key_env = "BRAIN_KEY"\n')
     out = gen.dir / f"{name}.toml"
     out.write_text(text)
     return out
@@ -200,8 +214,9 @@ def profile(campaign: Campaign, gen: Generation, model_id: str, attempts: int, n
 def bench_run(campaign: Campaign, gen: Generation, prof: Path, split: str, name: str) -> str:
     """Run the collection's `split` tasks; the job directory."""
     b = campaign["bench"]
-    jobs = campaign.work / "jobs"
-    jobs.mkdir(exist_ok=True)
+    # Each run gets a directory of its own, so two runs at once never take each other's job.
+    jobs = campaign.work / "jobs" / f"{gen.number:03d}-{name}"
+    jobs.mkdir(parents=True, exist_ok=True)
     before = set(jobs.iterdir())
     env = {"BRAIN_KEY": path(campaign["serve"]["key_file"]).read_text().strip(),
            "TMPDIR": str(campaign.work / "tmp")}
@@ -250,7 +265,7 @@ def learn(campaign: Campaign, gen: Generation, train_exports: list[str]) -> dict
                      "--max-block", str(t["max_block"]), "--split-over-block", *sorted(set(set_ids)),
                      log_name="dataset")
     dataset = built["dataset"]
-    stop_serving(campaign)  # the trainer takes the whole card
+    stop_serving(campaign, campaign["serve"]["card"])  # the trainer takes the whole card
     trained = splinter(campaign, gen, "train", dataset, "--from", t["base"], "--base-precision", t["base_precision"],
                        "--max-block", str(t["max_block"]), "--rank", str(t["rank"]), "--alpha", str(t["alpha"]),
                        "--lr", str(t["lr"]), "--steps", str(t["steps"]), "--records-per-step",
@@ -326,20 +341,50 @@ def generation(campaign: Campaign, number: int) -> None:
     gen.state["champion_in"] = start
     b = campaign["bench"]
     adopt = campaign.doc.get("adopt", {}).get(str(number), {})
-    if not gen.done("explore"):
+    (card, port), exam_card = cards(campaign)
+
+    def explore() -> None:
+        if gen.done("explore"):
+            return
         if adopt.get("explore_job"):
             job = adopted(adopt["explore_job"])
         else:
-            model_id = serve(campaign, start, gen)
-            job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["explore_attempts"], "explore"),
+            model_id = serve(campaign, start, gen, card, port)
+            job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["explore_attempts"], "explore", port),
                             "train", "explore")
         gen.record("explore", explore_job=job, explore_export=bench_export(campaign, gen, job, "explore"))
-    if not gen.done("exam"):
+
+    def exam() -> None:
+        if gen.done("exam"):
+            return
         job = adopted(adopt["exam_job"]) if adopt.get("exam_job") else start.get("exam_job")
         if not job:
-            model_id = serve(campaign, start, gen)
-            job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "exam"), "eval", "exam")
+            c, p = exam_card or (card, port)
+            model_id = serve(campaign, start, gen, c, p)
+            job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "exam", p), "eval",
+                            "exam")
         gen.record("exam", exam_job=job, exam_export=bench_export(campaign, gen, job, "exam"))
+
+    if exam_card:
+        # Two cards: the champion explores on one while it sits the exam on the other.
+        failures: list[BaseException] = []
+
+        def guarded(step):
+            try:
+                step()
+            except BaseException as error:  # noqa: BLE001 - re-raised below, after both finish
+                failures.append(error)
+
+        threads = [threading.Thread(target=guarded, args=(step,)) for step in (explore, exam)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        if failures:
+            raise failures[0]
+    else:
+        explore()
+        exam()
     if not gen.done("publish"):
         publish(campaign)
         gen.record("publish")
@@ -349,11 +394,14 @@ def generation(campaign: Campaign, number: int) -> None:
             state = json.loads((gen_dir / "state.json").read_text())
             if state.get("explore_export"):
                 exports.append(state["explore_export"])
+        if exam_card:
+            stop_serving(campaign, exam_card[0])
         gen.record("learn", learned=learn(campaign, gen, exports))
     if not gen.done("candidate"):
         candidate = {"name": f"gen{number + 1:03d}", "adapter": gen.state["learned"]["adapter"]}
-        model_id = serve(campaign, candidate, gen)
-        job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "candidate"), "eval",
+        c, p = exam_card or (card, port)
+        model_id = serve(campaign, candidate, gen, c, p)
+        job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "candidate", p), "eval",
                         "candidate")
         candidate["exam_job"] = job
         gen.record("candidate", candidate=candidate, candidate_exam_export=bench_export(campaign, gen, job,
