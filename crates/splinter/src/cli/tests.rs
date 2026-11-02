@@ -251,6 +251,7 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         token_limit,
         max_family_share,
         describe_with,
+        ..
     } = *args;
     assert_eq!(control, Some(super::ControlKind::Shuffled));
     assert_eq!(control_seed.map(splinter_sdk::seed::Seed::value), Some(5));
@@ -766,6 +767,7 @@ mod harness;
 mod jobs;
 mod learn;
 mod measure;
+mod rollouts;
 mod solve;
 
 #[test]

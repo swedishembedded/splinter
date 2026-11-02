@@ -21,9 +21,10 @@ use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
 use splinter_data::{
     manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Objective,
-    OutcomeView, Preference, Projection, RecordBody, Rehearsal, Retrieval, SftFinal, SftStep,
-    StoredDataset, VerifierView, View, Voice, DEFAULT_MAX_FAMILY_SHARE,
+    OutcomeView, PolicyGradient, Preference, Projection, RecordBody, Rehearsal, Retrieval,
+    SftFinal, SftStep, StoredDataset, VerifierView, View, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
+pub use splinter_data::{AdvantageKind, GroupReport, RewardShape};
 pub use splinter_data::{Control, Strip};
 use splinter_knowledge::sections::sections;
 use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
@@ -43,7 +44,8 @@ use splinter_orchestrator::ids;
 use splinter_orchestrator::runs::to_json;
 
 pub use crate::dataset_views::{
-    parse_strength, parse_strip, StripPolicy, ViewName, DEFAULT_MIN_STRENGTH,
+    parse_advantage, parse_reward_metric, parse_strength, parse_strip, StripPolicy, ViewName,
+    DEFAULT_MIN_STRENGTH,
 };
 
 /// One `dataset build`.
@@ -102,6 +104,53 @@ pub struct BuildRequest {
     /// was sent, pictures in the turns that carried them ([`SftStep::images`]).
     /// Without it such a conversation is counted as `ShownImages`.
     pub images: bool,
+    /// For the policy-gradient view: how an attempt's reward and its advantage
+    /// are made.
+    pub rl: RlBuild,
+}
+
+/// How the policy-gradient view rewards an attempt and reads its advantage;
+/// the other views ignore it.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct RlBuild {
+    /// The metrics a failed attempt's reward is made of, with their weights
+    /// (non-negative, summing to one); none leaves a failure at zero.
+    pub reward_metrics: Vec<(String, f64)>,
+    /// The most a failed attempt can earn, below a pass's one; needs
+    /// `reward_metrics`. `None` is [`DEFAULT_FAIL_CEILING`].
+    pub fail_ceiling: Option<f64>,
+    /// How the advantage is read from the rewards of a group.
+    pub advantage: AdvantageKind,
+}
+
+/// The most a failed attempt earns when metrics shape its reward and no
+/// ceiling is named: half of a pass's.
+pub const DEFAULT_FAIL_CEILING: f64 = 0.5;
+
+impl RlBuild {
+    /// The reward shape this asks for.
+    fn shape(&self) -> Result<RewardShape, OrchestratorError> {
+        let refused = |e: splinter_data::ViewError| OrchestratorError::Refused(e.to_string());
+        match (self.reward_metrics.is_empty(), self.fail_ceiling) {
+            (true, None) => Ok(RewardShape::unshaped()),
+            (true, Some(_)) => Err(OrchestratorError::Refused(
+                "--fail-ceiling bounds what the --reward-metric terms earn a failed attempt; \
+                 name at least one metric"
+                    .into(),
+            )),
+            (false, ceiling) => RewardShape::shaped(
+                ceiling.unwrap_or(DEFAULT_FAIL_CEILING),
+                self.reward_metrics.clone(),
+            )
+            .map_err(refused),
+        }
+    }
+
+    fn is_default(&self) -> bool {
+        self.reward_metrics.is_empty()
+            && self.fail_ceiling.is_none()
+            && self.advantage == AdvantageKind::default()
+    }
 }
 
 /// How the voice view writes the writer's text into records; the other
@@ -150,6 +199,10 @@ pub struct Built {
     /// seal, and why ([`build_dropping_leaks`]); empty otherwise.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub dropped: Vec<exam_seal::Leak>,
+    /// The groups of attempts a policy-gradient dataset compared: each
+    /// attempt's reward and advantage.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<GroupReport>,
 }
 
 impl From<StoredDataset> for Built {
@@ -164,6 +217,7 @@ impl From<StoredDataset> for Built {
             path: stored.path,
             described: None,
             dropped: Vec::new(),
+            groups: stored.manifest.groups,
         }
     }
 }
@@ -268,15 +322,23 @@ fn project_without(
             view.as_str()
         )));
     }
-    if request.serialise_calls && view != ViewName::SftStep {
+    if request.serialise_calls && !matches!(view, ViewName::SftStep | ViewName::PolicyGradient) {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no run to take apart, so --serialise-calls does not apply",
             view.as_str()
         )));
     }
-    if request.images && view != ViewName::SftStep {
+    let trains_actions = matches!(view, ViewName::SftStep | ViewName::PolicyGradient);
+    if request.images && !trains_actions {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no conversations that were shown images, so --images does not apply",
+            view.as_str()
+        )));
+    }
+    if !request.rl.is_default() && view != ViewName::PolicyGradient {
+        return Err(OrchestratorError::Refused(format!(
+            "view {} has no rewards or advantages, so --reward-metric, --fail-ceiling and \
+             --advantage do not apply",
             view.as_str()
         )));
     }
@@ -319,6 +381,15 @@ fn project_without(
             .with_strip(strip)
             .packed(request.pack)
             .control(request.control)
+            .serialise_calls(request.serialise_calls)
+            .only_actions(request.only_actions.clone().unwrap_or_default())
+            .only_roles(request.roles.clone().unwrap_or_default())
+            .images(request.images)
+            .project(&corpus),
+        ViewName::PolicyGradient => PolicyGradient::new(strength)
+            .with_strip(strip)
+            .rewards(request.rl.shape()?)
+            .advantage(request.rl.advantage)
             .serialise_calls(request.serialise_calls)
             .only_actions(request.only_actions.clone().unwrap_or_default())
             .only_roles(request.roles.clone().unwrap_or_default())
@@ -439,7 +510,7 @@ fn project_without(
         .entries()
         .iter()
         .all(|entry| entry.experience.environment.kind == Environment::BENCH);
-    if view == ViewName::SftStep && !own_prompts {
+    if trains_actions && !own_prompts {
         // The prompt the runs were made under is the prompt the dataset trains
         // under, so a model trained on it is asked under it.
         projection = projection

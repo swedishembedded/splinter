@@ -143,6 +143,7 @@ fn a_mixed_dataset_records_the_seed_that_picked_its_subjects_and_rebuilds_from_i
                 only_actions: None,
                 roles: None,
                 images: false,
+                rl: Default::default(),
             },
         )
         .unwrap();

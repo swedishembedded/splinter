@@ -1268,7 +1268,7 @@ Arguments:
 
 Options:
 
-- `--view <VIEW>` (required): sft-final, sft-step, critic, preference, verifier, decision, retrieval, outcome, denoise, cpt, voice or rehearsal.
+- `--view <VIEW>` (required): sft-final, sft-step, critic, preference, verifier, decision, retrieval, outcome, denoise, cpt, voice, rehearsal or policy-gradient.
 - `--strip <all|keep:K,..|mix:F>`: What the student sees: all (only the instruction), keep:K,.. or mix:F.
 - `--mix-seed <N>`: The seed that picks which subjects keep their privileged context under `--strip mix:F` (drawn and printed when not given; a dataset built again with the same seed holds the same records)
 - `--min-strength <STRENGTH>`: The weakest decision counted: executable, formal, consistency (default) or judged.
@@ -1277,6 +1277,9 @@ Options:
 - `--limit <N>`: Keep at most this many records, evenly spread over the projection (for voice, over the parts of the sources)
 - `--max-block <TOKENS>`: The longest record, in tokens, the training that reads the dataset fits: a longer record is left out and counted instead of stopping the training.
 - `--split-over-block`: Split a record longer than `--max-block` into consecutive windows that each fit, keeping every supervised action, instead of leaving it out; every window repeats the task instruction. A window with no supervised turn is left out and counted as `NothingSupervised`.
+- `--reward-metric <NAME=WEIGHT>...`: For the policy-gradient view: a metric the verifier measured, in [0, 1], and its weight, that earns a failed attempt part of the reward (`--reward-metric iou=0.5 --reward-metric feature_match=0.5`); repeat it per metric, the weights summing to one. A pass always earns 1. Without any, a failed attempt earns nothing. A failed attempt that did not record a named metric is an error.
+- `--fail-ceiling <F>`: For the policy-gradient view: the most a failed attempt earns from the reward metrics, below a pass's 1 (default 0.5), so that any pass outranks any failure.
+- `--advantage <KIND>`: For the policy-gradient view: how an attempt's advantage is read from the rewards of the attempts at its task: `standardised` (GRPO's: the reward less the group mean over its standard deviation, the default) or `mean-centred` (the reward less the group mean)
 - `--pack`: For the sft-step view: one record per trajectory with every admitted action supervised, not one record per action.
 - `--only-actions <TOOLS>...`: For the sft-step view: keep only the actions whose tool calls are all named here (comma separated), plus the final answer; the rest become context and are counted as `ActionNotWanted`. Names the decisive actions - the edits and the conclusion - instead of the exploration.
 - `--roles <ROLES>...`: For the sft-step view: keep only the conversations of a harness trial answered by these model roles (comma separated, as `ingest-bench` recorded them); every other experience, and a conversation whose role is unknown, is counted as `RoleNotWanted`.

@@ -122,6 +122,7 @@ fn request(set: SetId, max_block: Option<usize>, split_over_block: bool) -> Buil
         only_actions: None,
         roles: None,
         images: false,
+        rl: Default::default(),
         split_over_block,
     }
 }

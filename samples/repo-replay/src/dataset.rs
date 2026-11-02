@@ -176,6 +176,7 @@ pub fn build_dataset(ctx: &Context, sets: &[String], settings: &DatasetSettings)
         only_actions: None,
         roles: None,
         images: false,
+        rl: Default::default(),
     };
     Ok(build(ctx, &request)?)
 }

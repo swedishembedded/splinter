@@ -8,12 +8,14 @@
 
 //! The grammar of `dataset build`.
 
-use splinter_sdk::datasets::{StripPolicy, ViewName};
+use splinter_sdk::datasets::{AdvantageKind, StripPolicy, ViewName};
 use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
-use super::{model_ref, positive_count, strength, strip, view, ControlKind};
+use super::{
+    advantage, model_ref, positive_count, reward_metric, strength, strip, view, ControlKind,
+};
 
 /// `dataset build`: experience sets projected through a view into a stored
 /// dataset.
@@ -23,7 +25,7 @@ pub struct BuildArgs {
     #[arg(required = true, value_name = "EXPERIENCE-SET")]
     pub sets: Vec<String>,
     /// sft-final, sft-step, critic, preference, verifier, decision,
-    /// retrieval, outcome, denoise, cpt, voice or rehearsal.
+    /// retrieval, outcome, denoise, cpt, voice, rehearsal or policy-gradient.
     #[arg(long, required = true, value_parser = view, value_name = "VIEW")]
     pub view: ViewName,
     /// What the student sees: all (only the instruction), keep:K,..
@@ -63,6 +65,25 @@ pub struct BuildArgs {
     /// supervised turn is left out and counted as `NothingSupervised`.
     #[arg(long)]
     pub split_over_block: bool,
+    /// For the policy-gradient view: a metric the verifier measured, in [0, 1],
+    /// and its weight, that earns a failed attempt part of the reward
+    /// (`--reward-metric iou=0.5 --reward-metric feature_match=0.5`); repeat it
+    /// per metric, the weights summing to one. A pass always earns 1. Without
+    /// any, a failed attempt earns nothing. A failed attempt that did not
+    /// record a named metric is an error.
+    #[arg(long = "reward-metric", value_parser = reward_metric, value_name = "NAME=WEIGHT")]
+    pub reward_metrics: Vec<(String, f64)>,
+    /// For the policy-gradient view: the most a failed attempt earns from the
+    /// reward metrics, below a pass's 1 (default 0.5), so that any pass
+    /// outranks any failure.
+    #[arg(long, value_name = "F", requires = "reward_metrics")]
+    pub fail_ceiling: Option<f64>,
+    /// For the policy-gradient view: how an attempt's advantage is read from
+    /// the rewards of the attempts at its task: `standardised` (GRPO's: the
+    /// reward less the group mean over its standard deviation, the default) or
+    /// `mean-centred` (the reward less the group mean).
+    #[arg(long, value_parser = advantage, value_name = "KIND")]
+    pub advantage: Option<AdvantageKind>,
     /// For the sft-step view: one record per trajectory with every
     /// admitted action supervised, not one record per action.
     #[arg(long)]

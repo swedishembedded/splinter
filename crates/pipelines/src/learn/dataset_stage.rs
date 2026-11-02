@@ -87,6 +87,7 @@ pub(super) fn dataset_stage(
         only_actions: None,
         roles: None,
         images: false,
+        rl: Default::default(),
     };
     // Passages of the run's own sources, when a share of the records is to
     // carry them: the embedding model is loaded for it and the index kept.

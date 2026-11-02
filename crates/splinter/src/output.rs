@@ -527,7 +527,7 @@ impl Report for Replayed {
 
 impl Report for Built {
     fn human(&self) -> String {
-        format!(
+        let mut out = format!(
             "dataset {}: {} {} record(s), objective {}, format {}\n  file: {}\n  excluded: {}\n",
             self.dataset,
             self.records,
@@ -536,7 +536,26 @@ impl Report for Built {
             word(&self.format),
             self.path.display(),
             tally(&self.excluded)
-        )
+        );
+        for group in &self.groups {
+            let _ = writeln!(
+                out,
+                "  group {} v{} by {}: {} trial(s){}",
+                group.task,
+                group.version,
+                group.policy,
+                group.trials.len(),
+                if group.signal { "" } else { ", no signal" }
+            );
+            for trial in &group.trials {
+                let _ = writeln!(
+                    out,
+                    "    {}: reward {:.3}, advantage {:+.3}",
+                    trial.trial, trial.reward, trial.advantage
+                );
+            }
+        }
+        out
     }
 }
 

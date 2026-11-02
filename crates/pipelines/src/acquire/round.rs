@@ -389,6 +389,7 @@ impl Acquisition<'_> {
                 only_actions: None,
                 roles: None,
                 images: false,
+                rl: Default::default(),
             },
         ) {
             Ok(built) => built,

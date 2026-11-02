@@ -15,7 +15,7 @@ use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::experience::PrivilegedKind;
 use splinter_core::rng::Seed;
-use splinter_data::{Fraction, Strip};
+use splinter_data::{AdvantageKind, Fraction, Strip};
 
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -54,11 +54,14 @@ pub enum ViewName {
     /// A model's own answers as given, unless a verifier decided one wrong:
     /// what a run rehearses so the new data does not move it off them.
     Rehearsal,
+    /// Each action of every graded attempt, with the attempt's advantage over
+    /// the other attempts of its task: reinforcement learning from rollouts.
+    PolicyGradient,
 }
 
 impl ViewName {
     /// Every view, in the order `--help` lists them.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::SftFinal,
         Self::SftStep,
         Self::Critic,
@@ -71,6 +74,7 @@ impl ViewName {
         Self::Cpt,
         Self::Voice,
         Self::Rehearsal,
+        Self::PolicyGradient,
     ];
 
     /// The name a command line uses.
@@ -89,6 +93,7 @@ impl ViewName {
             Self::Cpt => "cpt",
             Self::Voice => "voice",
             Self::Rehearsal => "rehearsal",
+            Self::PolicyGradient => "policy-gradient",
         }
     }
 
@@ -212,6 +217,33 @@ pub fn parse_strength(text: &str) -> Result<Strength, OrchestratorError> {
     })
 }
 
+/// A `--reward-metric`: `NAME=WEIGHT`, a metric the verifier measures and
+/// how much of a failed attempt's reward it earns.
+pub fn parse_reward_metric(text: &str) -> Result<(String, f64), OrchestratorError> {
+    let refused = || {
+        OrchestratorError::Refused(format!(
+            "{text:?} is not a reward metric: NAME=WEIGHT with a weight from 0 to 1"
+        ))
+    };
+    let (name, weight) = text.split_once('=').ok_or_else(refused)?;
+    let weight: f64 = weight.parse().map_err(|_| refused())?;
+    if name.is_empty() || !(0.0..=1.0).contains(&weight) {
+        return Err(refused());
+    }
+    Ok((name.to_string(), weight))
+}
+
+/// An `--advantage`: `standardised` or `mean-centred`.
+pub fn parse_advantage(text: &str) -> Result<AdvantageKind, OrchestratorError> {
+    match text {
+        "standardised" => Ok(AdvantageKind::Standardised),
+        "mean-centred" => Ok(AdvantageKind::MeanCentred),
+        _ => Err(OrchestratorError::Refused(format!(
+            "{text:?} is not an advantage: standardised (GRPO's, the default) or mean-centred"
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,6 +273,18 @@ mod tests {
         for refused in ["none", "keep:hnt", "mix:2", "mix:x", "keep:other:"] {
             assert!(parse_strip(refused).is_err(), "{refused}");
         }
+        assert_eq!(
+            parse_reward_metric("iou=0.25").ok(),
+            Some(("iou".to_string(), 0.25))
+        );
+        for refused in ["iou", "=0.5", "iou=x", "iou=1.5", "iou=-1"] {
+            assert!(parse_reward_metric(refused).is_err(), "{refused}");
+        }
+        assert_eq!(
+            parse_advantage("mean-centred").ok(),
+            Some(AdvantageKind::MeanCentred)
+        );
+        assert!(parse_advantage("raw").is_err());
         assert_eq!(parse_strength("formal").ok(), Some(Strength::Formal));
         assert!(parse_strength("strong").is_err());
         for view in ViewName::ALL {

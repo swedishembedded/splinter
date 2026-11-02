@@ -11,7 +11,10 @@ use std::time::Duration;
 use clap::{ArgGroup, Args, Parser, Subcommand};
 use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
-use splinter_sdk::datasets::{parse_strength, parse_strip, StripPolicy, ViewName};
+use splinter_sdk::datasets::{
+    parse_advantage, parse_reward_metric, parse_strength, parse_strip, AdvantageKind, StripPolicy,
+    ViewName,
+};
 use splinter_sdk::eval::SuiteChoice;
 use splinter_sdk::learn::parse_budget;
 use splinter_sdk::lineage::Direction;
@@ -227,6 +230,14 @@ fn share(text: &str) -> Result<f64, String> {
     } else {
         Err(format!("{value} is not a share in (0, 1]"))
     }
+}
+
+fn reward_metric(text: &str) -> Result<(String, f64), String> {
+    parse_reward_metric(text).map_err(|e| e.to_string())
+}
+
+fn advantage(text: &str) -> Result<AdvantageKind, String> {
+    parse_advantage(text).map_err(|e| e.to_string())
 }
 
 fn strength(text: &str) -> Result<Strength, String> {

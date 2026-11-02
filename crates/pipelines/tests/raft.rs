@@ -488,6 +488,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         only_actions: None,
         roles: None,
         images: false,
+        rl: Default::default(),
     };
     let retrieval = Retrieval {
         library: &library,

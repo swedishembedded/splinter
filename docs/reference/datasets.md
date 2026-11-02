@@ -16,7 +16,8 @@ it with its manifest into a directory, and `train` reads it. The guide to using 
 (the writer's own text as answers, from every text part of the sources the
 experience sets cite; see [Learn how a person thinks](../guides/personas.md)), `rehearsal` (a model's own answers as it
 gave them, every experience with a final answer that no verifier decided
-wrong, under the default prompt). `--limit N` keeps at most N records of any
+wrong, under the default prompt), `policy-gradient` (every action of every graded attempt,
+weighted by the attempt's advantage; see below). `--limit N` keeps at most N records of any
 view, evenly spread over the projection, the rest counted as `over_limit`. The
 default `--min-strength` is `consistency`; `--strip` defaults to `all`
 (the student sees only the instruction - also for a teacher's solve,
@@ -35,6 +36,37 @@ brain's `generic-messages-v2`, `preference` as brain's
 chosen and the rejected answer), each checked by brain's own parser.
 Objectives brain cannot train (contrastive, reward, raw text) need
 `--export-only`.
+
+### Policy gradient
+
+The `policy-gradient` view is reinforcement learning from graded attempts. Where `sft-step`
+imitates the actions of verified work, this view keeps the failures too and says how each
+attempt did against the others at the same task:
+
+- An attempt is a benchmark trial; its conversations (the roles of a harness) are one
+  rollout. The verdict `ingest-bench` records names the trial, the task id and version, the
+  model that ran it and the metrics the verifier measured; an experience whose verdict names
+  no trial or task is left out as `no_rollout`.
+- The reward of a pass is `1.0`. A failure earns `--fail-ceiling` (default `0.5`, always
+  below one, so any pass outranks any failure) times the weighted sum of the metrics named
+  by repeated `--reward-metric NAME=WEIGHT` (metrics in [0, 1], weights non-negative and
+  summing to one); with no `--reward-metric` a failure earns nothing. A failed attempt that
+  recorded no such metric, or one outside [0, 1], stops the build naming the trial and the
+  metric; it is never read as zero. Splinter's core knows no metric: the names are yours.
+- A group is the attempts at one task version made by one policy (the model recorded on the
+  verdict); each trial counts once however many conversations it had. The advantage of an
+  attempt is `(reward - mean) / (std + 1e-6)` over its group (population standard deviation;
+  GRPO's), or with `--advantage mean-centred` the reward less the mean. A group of one
+  attempt, or whose attempts all earned the same, teaches nothing and its experiences are
+  counted as `no_group_signal`.
+- Each action of each conversation of an attempt with an advantage is one record, rendered
+  exactly as `sft-step` renders it (the requests its model was sent, `--images`, `--roles`,
+  `--only-actions`) with the attempt's advantage in the record's top-level `advantage` field,
+  the key brain's policy-gradient trainer reads. Step labels judge nothing here.
+- The build report and the manifest list every group (task, version, policy) with each
+  trial's reward and advantage, including groups that yielded no record. The exam seal is
+  unchanged: a held-out trial is refused, or left out with `--drop-leaking`. The same
+  experiences always give the same bytes.
 
 The reasoning an agent step recorded (ATIF `reasoning_content`) is the `reasoning_content`
 of the assistant message it becomes, trimmed. Brain's chat template renders it as the

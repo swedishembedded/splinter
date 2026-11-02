@@ -275,6 +275,7 @@ fn a_variant_never_enters_a_training_dataset() {
             only_actions: None,
             roles: None,
             images: false,
+            rl: Default::default(),
         },
     )
     .unwrap_err();
@@ -480,6 +481,7 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
             only_actions: None,
             roles: None,
             images: false,
+            rl: Default::default(),
         },
     )
     .unwrap();

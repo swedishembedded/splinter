@@ -16,7 +16,7 @@ use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::canaries;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::datasets::{
-    build, build_dropping_leaks, export, BuildRequest, Control, VoiceBuild,
+    build, build_dropping_leaks, export, BuildRequest, Control, RlBuild, VoiceBuild,
 };
 use splinter_sdk::describe::DescribeRequest;
 use splinter_sdk::doctor::doctor;
@@ -478,6 +478,9 @@ impl Session {
                     token_limit,
                     max_family_share,
                     describe_with,
+                    reward_metrics,
+                    fail_ceiling,
+                    advantage,
                 } = *args;
                 let request = BuildRequest {
                     sets: sets
@@ -508,6 +511,11 @@ impl Session {
                     only_actions,
                     roles,
                     images,
+                    rl: RlBuild {
+                        reward_metrics,
+                        fail_ceiling,
+                        advantage: advantage.unwrap_or_default(),
+                    },
                 };
                 // The strip is settled inside the run, which states the seed
                 // `mix:F` picks its subjects by.

@@ -617,6 +617,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
             only_actions: None,
             roles: None,
             images: false,
+            rl: Default::default(),
             voice: VoiceBuild::default(),
         },
     ) {

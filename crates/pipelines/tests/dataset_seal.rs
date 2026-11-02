@@ -121,6 +121,7 @@ fn request(set: SetId) -> BuildRequest {
         only_actions: None,
         roles: None,
         images: false,
+        rl: Default::default(),
     }
 }
 

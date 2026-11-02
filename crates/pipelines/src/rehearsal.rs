@@ -310,6 +310,7 @@ pub fn rehearse_on(
             only_actions: None,
             roles: None,
             images: false,
+            rl: Default::default(),
         },
     )?;
     Ok(Rehearsed {

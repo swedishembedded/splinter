@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (reinforcement learning from graded attempts)
+- `dataset build --view policy-gradient` turns the trials of a benchmark into records for a clipped policy gradient: attempts at one task version by one policy form a group, each attempt earns a reward (a pass 1; a failure `--fail-ceiling` times the weighted `--reward-metric NAME=WEIGHT` metrics, nothing without them), its advantage is read from the group (`--advantage standardised|mean-centred`), and every action of every conversation of the attempt, failures included, is a record carrying the attempt's `advantage`. A group of one attempt or of equal rewards yields nothing (`no_group_signal`); the report and manifest list every group with each trial's reward and advantage.
+
 ### Added (packaging and release)
 - `make package/deb` builds a Debian package of the `splinter` binary (`target/debian/splinter_<version>_<arch>.deb`, Depends from dpkg-shlibdeps). `make package/deb/publish` signs it (detached `.asc`, `gpg --verify`) and attaches both to the GitHub release of `v<version>`, creating the release from the tag with its CHANGELOG section as the body, and replacing an earlier upload; it checks gh, the login, the tag (checked out, clean, on GitHub at the same commit) and the signing key before building, and says what to do when one is missing. `make release/{patch,minor,major}` bump, date the Unreleased section, commit and tag locally; `make release/publish` pushes HEAD and the tag to `RELEASE_REMOTE` (default `origin`) and publishes. `make test/package` is the publishing script's spec.
 
