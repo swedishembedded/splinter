@@ -76,6 +76,7 @@ def imitation_learns_from_every_generation_from_the_base():
     assert loop.learning_exports(campaign, states) == ["e0", "e1"]
     view = loop.dataset_args(campaign)
     assert view[:2] == ["--view", "sft-step"] and "--reward-metric" not in view
+    assert view[view.index("--from") + 1] == "local:B"
     train = loop.train_args(campaign, {"adapter": "/a/gen001.safetensors"})
     assert train[train.index("--from") + 1] == "local:B", "imitation trains a fresh adapter on the base"
     assert "--eval-every" in train and "--clip-eps" not in train
@@ -87,6 +88,7 @@ def reinforcement_learns_on_policy_from_the_champion():
     assert loop.learning_exports(campaign, states) == ["e1"], "only the rollouts of the policy being trained"
     view = loop.dataset_args(campaign)
     assert view[:2] == ["--view", "policy-gradient"]
+    assert view[view.index("--from") + 1] == "local:B", "records are measured by the base the training starts from"
     assert [view[i + 1] for i, a in enumerate(view) if a == "--reward-metric"] == [
         "iou=0.5", "feature_match=0.25", "deviation_score=0.25"]
     assert view[view.index("--fail-ceiling") + 1] == "0.5" and view[view.index("--advantage") + 1] == "standardised"
