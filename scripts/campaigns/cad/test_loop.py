@@ -100,6 +100,16 @@ def reinforcement_learns_on_policy_from_the_champion():
     assert loop.train_args(campaign, {"adapter": None})[train.index("--from") + 1] == "local:B"
 
 
+def a_dataset_can_be_built_to_a_smaller_block_than_the_training_fits():
+    campaign = loop.Campaign({"train": {**RL, "dataset_max_block": 15360}})
+    view = loop.dataset_args(campaign)
+    assert view[view.index("--max-block") + 1] == "15360"
+    train = loop.train_args(campaign, {"adapter": None})
+    assert train[train.index("--max-block") + 1] == "16384"
+    plain = loop.dataset_args(loop.Campaign({"train": RL}))
+    assert plain[plain.index("--max-block") + 1] == "16384", "by default the dataset fits the training block"
+
+
 def an_unknown_objective_is_refused():
     campaign = loop.Campaign({"train": {**TRAIN, "objective": "dpo"}})
     try:
@@ -116,6 +126,9 @@ class Loop(unittest.TestCase):
 
     def test_reinforcement_learns_on_policy_from_the_champion(self):
         reinforcement_learns_on_policy_from_the_champion()
+
+    def test_a_dataset_can_be_built_to_a_smaller_block_than_the_training_fits(self):
+        a_dataset_can_be_built_to_a_smaller_block_than_the_training_fits()
 
     def test_an_unknown_objective_is_refused(self):
         an_unknown_objective_is_refused()

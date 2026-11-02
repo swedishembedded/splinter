@@ -298,7 +298,10 @@ def dataset_args(campaign: Campaign) -> list[str]:
         args += ["--fail-ceiling", str(reward["fail_ceiling"]), "--advantage", reward["advantage"]]
     if t.get("images"):
         args.append("--images")
-    return [*args, "--roles", ",".join(t["roles"]), "--max-block", str(t["max_block"]), "--split-over-block"]
+    # The dataset's block can be smaller than the training's: the build
+    # measures a record without the chat template's markup, the trainer with it.
+    block = t.get("dataset_max_block", t["max_block"])
+    return [*args, "--roles", ",".join(t["roles"]), "--max-block", str(block), "--split-over-block"]
 
 
 def train_args(campaign: Campaign, start: dict) -> list[str]:
