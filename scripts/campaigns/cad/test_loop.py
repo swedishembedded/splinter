@@ -134,6 +134,14 @@ def steps_run_side_by_side_and_a_failure_is_raised_after_both_finish():
     assert done == ["first"], "the other step still finished"
 
 
+def an_exam_the_model_server_failed_decides_nothing():
+    healthy = {"model_server_errors": 0, "environment_errors": 0, "errors": 0}
+    assert loop.exam_problems(healthy) == []
+    broken = {"model_server_errors": 22, "environment_errors": 0, "errors": 0}
+    assert "22 trial(s) ended by the model server" in loop.exam_problems(broken)[0]
+    assert loop.exam_problems({"model_server_errors": 0, "environment_errors": 3, "errors": 0})
+
+
 def an_unknown_objective_is_refused():
     campaign = loop.Campaign({"train": {**TRAIN, "objective": "dpo"}})
     try:
@@ -156,6 +164,9 @@ class Loop(unittest.TestCase):
 
     def test_steps_run_side_by_side_and_a_failure_is_raised_after_both_finish(self):
         steps_run_side_by_side_and_a_failure_is_raised_after_both_finish()
+
+    def test_an_exam_the_model_server_failed_decides_nothing(self):
+        an_exam_the_model_server_failed_decides_nothing()
 
     def test_an_unknown_objective_is_refused(self):
         an_unknown_objective_is_refused()

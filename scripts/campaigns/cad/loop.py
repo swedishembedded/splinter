@@ -250,6 +250,25 @@ def bench_export(campaign: Campaign, gen: Generation, job: str, name: str) -> st
     return str(out)
 
 
+def bench_summary(campaign: Campaign, job: str) -> dict:
+    out = run([path(campaign["bench"]["dir"]) / "bench", "--output", "json", "report", job],
+              campaign.work / "report.log", cwd=path(campaign["bench"]["dir"]))
+    return json.loads(out)["summary"]
+
+
+def exam_problems(summary: dict) -> list[str]:
+    """Why an exam says nothing about the model that sat it: trials the model
+    server, the environment or the harness ended are not the model's failures,
+    and a comparison over them would decide on a broken run."""
+    found = []
+    for key, what in (("model_server_errors", "ended by the model server"),
+                      ("environment_errors", "ended by the environment"),
+                      ("errors", "that raised an error")):
+        if summary.get(key):
+            found.append(f"{summary[key]} trial(s) {what}")
+    return found
+
+
 def bench_compare(campaign: Campaign, job: str, against: str) -> dict:
     out = run([path(campaign["bench"]["dir"]) / "bench", "--output", "json", "report", job, "--against", against],
               campaign.work / "report.log", cwd=path(campaign["bench"]["dir"]))
@@ -528,6 +547,11 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
         exam_again()
         candidate_exam()
     if not gen.done("decide"):
+        for who, job in (("candidate", gen.state["candidate"]["exam_job"]), ("champion", gen.state["exam_job"])):
+            problems = exam_problems(bench_summary(campaign, job))
+            if problems:
+                raise SystemExit(f"loop: the {who}'s exam {job} decides nothing: " + "; ".join(problems)
+                                 + " (fix the cause, set the exam aside and run the generation again)")
         summary = bench_compare(campaign, gen.state["candidate"]["exam_job"], gen.state["exam_job"])
         gen.record("decide", decision=decide(summary, campaign["promote"]))
         publish(campaign)
