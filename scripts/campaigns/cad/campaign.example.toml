@@ -10,6 +10,8 @@ work = "~/campaigns/cad"                     # generations, jobs, exports, adapt
 dataset_repo = "~/datasets/cad-rl"           # a git repository with scripts/progress.py
 # dataset_remote = "<user>/cad-rl"           # also upload it there after every generation
 # hf = "~/venv/bin/hf"                       # the uploader
+# python = "~/venv/bin/python"               # runs the dataset's scripts/progress.py (needs matplotlib);
+#                                            # default: the interpreter running the loop
 
 [serve]
 brain = "~/bin/brain"                        # the serving binary (image input for the 27B)

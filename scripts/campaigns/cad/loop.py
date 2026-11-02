@@ -358,7 +358,10 @@ def publish(campaign: Campaign) -> None:
         if jobs:
             generations.append(f"g{state['generation']}={','.join(jobs)}")
     if generations:
-        subprocess.run([sys.executable, repo / "scripts" / "progress.py",
+        # The dataset's own tools need their own packages (the chart: matplotlib):
+        # the campaign names the interpreter that has them.
+        python = path(campaign["paths"]["python"]) if campaign["paths"].get("python") else sys.executable
+        subprocess.run([python, repo / "scripts" / "progress.py",
                         *[a for g in generations for a in ("--generation", g)]], check=True)
     subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
     if subprocess.run(["git", "-C", repo, "diff", "--cached", "--quiet"]).returncode != 0:
