@@ -77,6 +77,12 @@ repos:
         files: (\.(rs|py|sh|bats|md)|Makefile|scripts/gates/(test-)?seed-literals[^/]*|scripts/gates/seed-literals\.allow\.d/.*)$
         pass_filenames: false
 
+      - id: copyright
+        name: every copyright line names the holder the same way
+        entry: bash scripts/gates/check-copyright.sh
+        language: system
+        pass_filenames: false
+
       - id: architecture
         name: crate layering and file size (architecture.toml)
         entry: bash scripts/gates/check-architecture.sh
