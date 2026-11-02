@@ -50,6 +50,9 @@ const REQUESTS: &str = "model-requests.jsonl";
 /// The directory of a harness trial's per-conversation trajectories.
 const CONVERSATIONS: &str = "conversations";
 
+/// The directory, beside a trajectory, of the pictures it shows.
+const IMAGES: &str = "images";
+
 /// One row of an export's `index.jsonl`.
 #[derive(Clone, Debug, Deserialize)]
 pub struct IndexRow {
@@ -598,39 +601,65 @@ fn agree(row: &IndexRow, manifest: &Manifest) -> Result<(), String> {
     Ok(())
 }
 
-/// The names of the files in `dir`, a harness trial's conversation files as
-/// `conversations/<file>`; anything else that is a directory is a name the
-/// manifest cannot list, hence refused by the caller.
+/// The names of the files in `dir`: a harness trial's conversation files as
+/// `conversations/<file>`, and the pictures beside a trajectory as
+/// `images/<file>` and `conversations/images/<file>`. Any other directory is a
+/// name the manifest cannot list, hence refused by the caller.
 fn present_files(dir: &Path) -> Result<Vec<String>, String> {
     let unreadable = |path: &Path, e: io::Error| format!("{}: {e}", path.display());
+    let entries = |path: &Path| -> Result<Vec<(String, bool)>, String> {
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(path).map_err(|e| unreadable(path, e))? {
+            let entry = entry.map_err(|e| unreadable(path, e))?;
+            found.push((
+                entry.file_name().to_string_lossy().into_owned(),
+                entry.path().is_dir(),
+            ));
+        }
+        Ok(found)
+    };
     let mut present = Vec::new();
-    for entry in std::fs::read_dir(dir).map_err(|e| unreadable(dir, e))? {
-        let entry = entry.map_err(|e| unreadable(dir, e))?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name == CONVERSATIONS && entry.path().is_dir() {
-            let inner = entry.path();
-            for file in std::fs::read_dir(&inner).map_err(|e| unreadable(&inner, e))? {
-                let file = file.map_err(|e| unreadable(&inner, e))?;
-                present.push(format!(
-                    "{CONVERSATIONS}/{}",
-                    file.file_name().to_string_lossy()
-                ));
+    for (name, is_dir) in entries(dir)? {
+        match (name.as_str(), is_dir) {
+            (CONVERSATIONS, true) => {
+                for (file, inner_dir) in entries(&dir.join(CONVERSATIONS))? {
+                    if file == IMAGES && inner_dir {
+                        for (picture, _) in entries(&dir.join(CONVERSATIONS).join(IMAGES))? {
+                            present.push(format!("{CONVERSATIONS}/{IMAGES}/{picture}"));
+                        }
+                    } else {
+                        present.push(format!("{CONVERSATIONS}/{file}"));
+                    }
+                }
             }
-        } else {
-            present.push(name);
+            (IMAGES, true) => {
+                for (picture, _) in entries(&dir.join(IMAGES))? {
+                    present.push(format!("{IMAGES}/{picture}"));
+                }
+            }
+            _ => present.push(name),
         }
     }
     Ok(present)
 }
 
-/// Whether `name` is a file a manifest may list: one plain file name, or one
-/// plain file name directly under `conversations/`.
+/// Whether `name` is a file a manifest may list: one plain file name, one
+/// directly under `conversations/`, or a picture directly under `images/` or
+/// `conversations/images/`.
 fn is_listable(name: &str) -> bool {
-    let file = name
-        .strip_prefix(CONVERSATIONS)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(name);
+    fn under<'a>(prefix: &str, name: &'a str) -> Option<&'a str> {
+        name.strip_prefix(prefix)?.strip_prefix('/')
+    }
+    let file = under(CONVERSATIONS, name).unwrap_or(name);
+    let file = under(IMAGES, file).unwrap_or(file);
     is_plain_name(file)
+}
+
+/// Whether manifest key `name` is a conversation's trajectory (not a picture).
+fn is_conversation(name: &str) -> bool {
+    name.strip_prefix(CONVERSATIONS)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .is_some_and(is_plain_name)
 }
 
 /// The name of the conversation a manifest key `conversations/NNNN-<name>.json`
@@ -667,7 +696,7 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
         let unreadable = |e: io::Error| format!("{name}: {e} (partial artifact)");
         // The trajectories and the requests are parsed from the very bytes
         // that were hashed.
-        let parsed = name == TRAJECTORY || name == REQUESTS || name.starts_with(CONVERSATIONS);
+        let parsed = name == TRAJECTORY || name == REQUESTS || is_conversation(name);
         let found = if parsed {
             let bytes = std::fs::read(&path).map_err(unreadable)?;
             let found = sha256_hex(&bytes);

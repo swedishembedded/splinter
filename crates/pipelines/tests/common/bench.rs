@@ -107,7 +107,7 @@ fn trajectory(note: &str, picture: bool) -> String {
     let instruction = format!("Repair the firmware ({note}).");
     let opening = if picture {
         json!([{"type": "text", "text": instruction},
-               {"type": "image", "source": {"media_type": "image/png", "path": "images/a.png"}}])
+               {"type": "image", "source": {"media_type": "image/png", "path": picture_path()}}])
     } else {
         json!(instruction)
     };
@@ -126,6 +126,15 @@ fn trajectory(note: &str, picture: bool) -> String {
         ]
     })
     .to_string()
+}
+
+/// The bytes of the picture a trial with a picture shows.
+const PICTURE: &[u8] = b"\x89PNG drawing";
+
+/// Where the trajectory names its picture: `images/<sha256>.png` beside it,
+/// as the benchmark exports it.
+fn picture_path() -> String {
+    format!("images/{}.png", sha256_hex(PICTURE))
 }
 
 /// The requests the agent sent: the first holds the system prompt and the
@@ -148,14 +157,22 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
     for t in trials {
         let trial_dir = dir.join(t.name);
         fs::create_dir_all(&trial_dir).unwrap();
-        let files = [
-            ("trajectory.atif.json", trajectory(t.name, t.picture)),
-            ("model-requests.jsonl", requests(t.name)),
-            ("verification.json", "{\"ok\": true}".to_string()),
-            ("submission.patch", "diff --git a/x b/x\n".to_string()),
+        let mut files: Vec<(String, Vec<u8>)> = vec![
+            (
+                "trajectory.atif.json".into(),
+                trajectory(t.name, t.picture).into_bytes(),
+            ),
+            ("model-requests.jsonl".into(), requests(t.name).into_bytes()),
+            ("verification.json".into(), b"{\"ok\": true}".to_vec()),
+            ("submission.patch".into(), b"diff --git a/x b/x\n".to_vec()),
         ];
-        for (name, text) in &files {
-            fs::write(trial_dir.join(name), text).unwrap();
+        if t.picture {
+            files.push((picture_path(), PICTURE.to_vec()));
+        }
+        for (name, bytes) in &files {
+            let path = trial_dir.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
         }
         let reward = if t.pass { 1.0 } else { 0.0 };
         let verdict = if t.pass { "pass" } else { "fail" };
@@ -177,7 +194,7 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
             "tokens": {"prompt": 10, "completion": 5},
             "wall_seconds": 1.5,
             "files": files.iter()
-                .map(|(n, text)| (n.to_string(), json!(sha256_hex(text.as_bytes()))))
+                .map(|(n, bytes)| (n.clone(), json!(sha256_hex(bytes))))
                 .collect::<serde_json::Map<String, Value>>(),
         });
         let manifest_text = serde_json::to_string_pretty(&manifest).unwrap();

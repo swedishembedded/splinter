@@ -85,7 +85,7 @@ fn trials_become_experiences_with_the_benchmarks_verdict_in_one_set_per_split() 
 }
 
 #[test]
-fn an_instruction_given_with_a_picture_is_admitted_as_its_text() {
+fn an_instruction_given_with_a_picture_is_admitted_as_its_text_with_the_picture_it_names() {
     let (scratch, ctx) = context("bench-picture");
     let dir = export(
         &scratch.0.join("export"),
