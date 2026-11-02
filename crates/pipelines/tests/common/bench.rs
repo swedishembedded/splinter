@@ -65,6 +65,9 @@ pub struct Trial {
     pub pass: bool,
     /// What the verifier measured, in the grade.
     pub metrics: Value,
+    /// The opening user turn carries a picture beside its text, as an agent
+    /// given an attachment records it.
+    pub picture: bool,
 }
 
 impl Trial {
@@ -80,6 +83,15 @@ impl Trial {
             set,
             pass,
             metrics: json!({"build_success": 1.0}),
+            picture: false,
+        }
+    }
+
+    /// The same trial with a picture attached to its opening turn.
+    pub fn with_picture(self) -> Self {
+        Self {
+            picture: true,
+            ..self
         }
     }
 
@@ -91,13 +103,20 @@ impl Trial {
 
 /// An ATIF trajectory of one tool call answered by its result, then a final
 /// answer; `note` distinguishes the trials.
-fn trajectory(note: &str) -> String {
+fn trajectory(note: &str, picture: bool) -> String {
+    let instruction = format!("Repair the firmware ({note}).");
+    let opening = if picture {
+        json!([{"type": "text", "text": instruction},
+               {"type": "image", "source": {"media_type": "image/png", "path": "images/a.png"}}])
+    } else {
+        json!(instruction)
+    };
     json!({
         "schema_version": "ATIF-v1.7",
         "agent": {"name": "sven", "version": "4.0.0", "model_name": "openai/main"},
         "extra": {"sven": {"created_at": "2026-10-27T18:16:21.405627709Z"}},
         "steps": [
-            {"step_id": 1, "source": "user", "message": format!("Repair the firmware ({note}).")},
+            {"step_id": 1, "source": "user", "message": opening},
             {"step_id": 2, "source": "agent", "model_name": "m", "message": "\n",
              "reasoning_content": "look first",
              "tool_calls": [{"tool_call_id": "c0", "function_name": "shell",
@@ -130,7 +149,7 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         let trial_dir = dir.join(t.name);
         fs::create_dir_all(&trial_dir).unwrap();
         let files = [
-            ("trajectory.atif.json", trajectory(t.name)),
+            ("trajectory.atif.json", trajectory(t.name, t.picture)),
             ("model-requests.jsonl", requests(t.name)),
             ("verification.json", "{\"ok\": true}".to_string()),
             ("submission.patch", "diff --git a/x b/x\n".to_string()),

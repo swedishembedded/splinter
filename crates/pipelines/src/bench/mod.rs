@@ -328,6 +328,28 @@ fn model_of<'a>(artifact: &'a Artifact, unit: &Unit) -> &'a str {
         .map_or("unknown", |m| m.model.as_str())
 }
 
+/// The instruction of a trial's opening user turn: its text, or the text
+/// segments of a turn that also carries attachments (pictures) in their
+/// order; the pictures themselves reach a dataset from the recorded requests.
+fn instruction_text(message: &atif::MessageBody) -> Result<String, String> {
+    if let Some(text) = message.as_text() {
+        return Ok(text.to_string());
+    }
+    let parts: Vec<&str> = message
+        .as_segments()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|segment| match segment {
+            atif::ContentSegment::Text { text } => Some(text.as_str()),
+            atif::ContentSegment::Image { .. } => None,
+        })
+        .collect();
+    if parts.is_empty() {
+        return Err("the instruction has no text".into());
+    }
+    Ok(parts.join("\n\n"))
+}
+
 /// The experience of one unit of a verified trial: its trajectory under its
 /// task.
 fn experience_of(
@@ -343,11 +365,7 @@ fn experience_of(
         .iter()
         .find(|s| s.source == atif::StepOrigin::User)
     {
-        Some(step) => step
-            .message
-            .as_text()
-            .ok_or("the instruction is not plain text")?
-            .to_string(),
+        Some(step) => instruction_text(&step.message)?,
         // A conversation can open with a turn the export does not carry as
         // text (images); it is named, not invented.
         None => match unit.conversation() {

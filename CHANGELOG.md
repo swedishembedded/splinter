@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `splinter-tool-syntax train` (one monitored LoRA fine-tune on `demonstrate`'s train and held-out records, with a required `--seed`) and `splinter-tool-syntax measure --arm NAME [--adapter-digest D]`, which refuses to measure an adapter arm unless the server lists the model id with that adapter's digest. `demonstrate` writes four differently worded demonstrations per twin and holds the last one out.
 
 ### Fixed
+- `experiences ingest-bench` admits a trial whose opening user turn carries pictures beside its text (an agent given an attachment records it so): the instruction is the turn's text, and the task is the one the text alone names. Every such trial was refused as "the instruction is not plain text".
 - `max_repeated_results` stops a stagnating worker at the same call on every run: the count is taken before each model request (`RepetitionGuard`) instead of by the event watcher, which under load let the run make 22 or more calls before it was cancelled.
 
 ### Changed (exposure audit)

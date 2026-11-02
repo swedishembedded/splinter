@@ -85,6 +85,33 @@ fn trials_become_experiences_with_the_benchmarks_verdict_in_one_set_per_split() 
 }
 
 #[test]
+fn an_instruction_given_with_a_picture_is_admitted_as_its_text() {
+    let (scratch, ctx) = context("bench-picture");
+    let dir = export(
+        &scratch.0.join("export"),
+        &[Trial::new("t-pic", "org/a", Some("train"), true).with_picture()],
+    );
+    let done = ingest_bench_trials(&ctx, &[dir], NO_OPTIONS).unwrap();
+    assert!(done.refused.is_empty(), "{:?}", done.refused);
+    assert_eq!(done.admitted.get("train"), Some(&1));
+    let store = ctx.experiences();
+    let train = store.get_set(&done.train_set.unwrap()).unwrap();
+    let experience = store.get(&train.members[0]).unwrap();
+    // The task is the same task the text alone names: the picture is the
+    // request's, not part of what identifies the task.
+    let plain = export(
+        &scratch.0.join("plain"),
+        &[Trial::new("t-pic", "org/a", Some("train"), true)],
+    );
+    let (_scratch2, ctx2) = context("bench-picture-plain");
+    let again = ingest_bench_trials(&ctx2, &[plain], NO_OPTIONS).unwrap();
+    let store2 = ctx2.experiences();
+    let members = store2.get_set(&again.train_set.unwrap()).unwrap().members;
+    let twin = store2.get(&members[0]).unwrap();
+    assert_eq!(experience.task.id, twin.task.id);
+}
+
+#[test]
 fn ingesting_an_export_again_changes_nothing_and_other_content_under_a_name_is_refused() {
     let (scratch, ctx) = context("bench-idempotent");
     let trials = [
