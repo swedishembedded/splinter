@@ -23,6 +23,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use splinter_core::training::{PolicyGradientStep, PolicyGradientSummary};
+
 use crate::capabilities::overlong_records;
 use crate::error::PolicyError;
 use crate::pictures::validate_dataset_on;
@@ -237,6 +239,28 @@ pub struct TrainedPolicyGradient {
     pub records: usize,
     /// Training row length, sized to the longest example.
     pub block: u32,
+    /// The per-step statistics brain measured (KL to the reference, clip
+    /// fraction, importance ratio) and their summary.
+    pub statistics: PolicyGradientSummary,
+}
+
+/// brain's statistics of a run as Splinter's report records them.
+fn summarised(stats: &brain::PolicyGradientStats) -> PolicyGradientSummary {
+    let steps = stats
+        .steps
+        .iter()
+        .map(|s| PolicyGradientStep {
+            step: s.step,
+            loss: s.loss,
+            clip_fraction: s.clip_fraction,
+            kl: s.kl,
+            ratio_mean: s.ratio_mean,
+            ratio_min: s.ratio_min,
+            ratio_max: s.ratio_max,
+            mean_advantage: s.mean_advantage,
+        })
+        .collect();
+    PolicyGradientSummary::from_steps(steps, stats.steps_skipped_nonfinite)
 }
 
 /// Fine-tunes a LoRA on the rollout records of `request.train` by a clipped
@@ -314,11 +338,12 @@ pub fn train_policy_gradient(
     if outcome.status != brain::FineTuneStatus::Completed {
         return Err(failed("it did not complete".into()));
     }
-    if outcome.policy_gradient.is_none() {
+    let Some(run) = &outcome.policy_gradient else {
         return Err(failed(
             "brain trained the records by imitation and reported no policy-gradient run".into(),
         ));
-    }
+    };
+    let statistics = summarised(&run.stats);
     let incomplete = |what: &str| failed(format!("it reported no {what}"));
     Ok(TrainedPolicyGradient {
         adapter: outcome.adapter.ok_or_else(|| incomplete("adapter"))?,
@@ -333,6 +358,7 @@ pub fn train_policy_gradient(
             .ok_or_else(|| incomplete("training record"))?,
         records: trained_on.records,
         block: outcome.block,
+        statistics,
     })
 }
 
@@ -373,6 +399,35 @@ mod tests {
         );
         assert_eq!(config.reference, brain::ReferencePolicy::StartOfRun);
         assert_eq!(config.loss_agg, brain::LossAgg::TokenSum);
+    }
+
+    #[test]
+    fn brains_step_statistics_become_the_reports_series() {
+        let stats = brain::PolicyGradientStats {
+            steps: vec![
+                brain::PolicyGradientStep {
+                    step: 1,
+                    kl: Some(0.0),
+                    clip_fraction: 0.0,
+                    ratio_mean: 1.0,
+                    ..Default::default()
+                },
+                brain::PolicyGradientStep {
+                    step: 2,
+                    kl: Some(0.1),
+                    clip_fraction: 0.5,
+                    ratio_mean: 1.2,
+                    ..Default::default()
+                },
+            ],
+            steps_skipped_nonfinite: 1,
+            ..Default::default()
+        };
+        let summary = summarised(&stats);
+        assert_eq!(summary.steps.len(), 2);
+        assert_eq!((summary.first_kl, summary.last_kl), (Some(0.0), Some(0.1)));
+        assert_eq!(summary.mean_clip_fraction, Some(0.25));
+        assert_eq!(summary.steps_skipped_nonfinite, 1);
     }
 
     #[test]

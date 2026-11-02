@@ -16,7 +16,8 @@ use splinter_core::build::BinaryIdentity;
 use splinter_core::digest::Digest;
 use splinter_core::terms::{combine_stated, Terms};
 use splinter_core::training::{
-    HeldOutScore, PreferenceSummary, Regime, RehearsalSample, ReplaySample, TrainingCurve,
+    HeldOutScore, PolicyGradientSummary, PreferenceSummary, Regime, RehearsalSample, ReplaySample,
+    TrainingCurve,
 };
 use splinter_model::policy_gradient::TrainedPolicyGradient;
 use splinter_model::train::{Trained, TrainedPreference};
@@ -155,6 +156,7 @@ pub(super) fn keep_candidate(
         tuned_score: trained.tuned_score,
         preference: trained.preference,
         curve: trained.curve,
+        policy_gradient: trained.policy_gradient,
         checkpoints,
         records: trained.records,
         terms: plan_terms(ctx, plan)?,
@@ -191,6 +193,7 @@ pub(super) struct Outcome {
     tuned_score: Option<HeldOutScore>,
     preference: Option<PreferenceSummary>,
     curve: Option<TrainingCurve>,
+    policy_gradient: Option<PolicyGradientSummary>,
     evaluations: Vec<(u32, PathBuf)>,
 }
 
@@ -206,6 +209,7 @@ impl From<Trained> for Outcome {
             tuned_score: Some(t.tuned),
             preference: None,
             curve: Some(t.curve),
+            policy_gradient: None,
             evaluations: t.evaluations,
         }
     }
@@ -228,6 +232,7 @@ impl From<TrainedPreference> for Outcome {
                 held_out_score: t.held_out_score,
             }),
             curve: None,
+            policy_gradient: None,
             evaluations: Vec::new(),
         }
     }
@@ -246,6 +251,7 @@ impl From<TrainedPolicyGradient> for Outcome {
             tuned_score: None,
             preference: None,
             curve: None,
+            policy_gradient: Some(t.statistics),
             evaluations: Vec::new(),
         }
     }

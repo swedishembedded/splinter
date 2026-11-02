@@ -147,6 +147,95 @@ pub struct PreferenceSummary {
     pub held_out_score: Option<PreferenceScore>,
 }
 
+/// What one optimiser step of a policy-gradient run measured (brain's
+/// per-step statistics). Losses are per supervised token.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PolicyGradientStep {
+    /// 1-based index of the step among those the objective ran.
+    pub step: usize,
+    /// The advantage-weighted loss: clipped surrogate, KL term and imitation
+    /// cross-entropy.
+    pub loss: f32,
+    /// Of the tokens with an advantage, the share whose importance ratio was
+    /// outside the clip band on the side the advantage pushes toward.
+    pub clip_fraction: f32,
+    /// The k3 KL to the reference over the policy tokens; `None` when no
+    /// reference was measured.
+    pub kl: Option<f32>,
+    /// The importance ratio over the policy tokens: mean, smallest, largest.
+    pub ratio_mean: f32,
+    /// See `ratio_mean`.
+    pub ratio_min: f32,
+    /// See `ratio_mean`.
+    pub ratio_max: f32,
+    /// The mean advantage of the step's sequences.
+    pub mean_advantage: f32,
+}
+
+/// A policy-gradient run's statistics: the series of every step and the
+/// figures that summarise it. The same numbers are in brain's training
+/// record; this is what a report reads without opening it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PolicyGradientSummary {
+    /// Every optimiser step, in order.
+    pub steps: Vec<PolicyGradientStep>,
+    /// Steps not taken because a loss or gradient was not finite.
+    pub steps_skipped_nonfinite: usize,
+    /// KL to the reference at the first step measuring one.
+    pub first_kl: Option<f32>,
+    /// KL to the reference at the last step measuring one.
+    pub last_kl: Option<f32>,
+    /// Mean KL over the steps that measured one.
+    pub mean_kl: Option<f32>,
+    /// Mean clip fraction over all steps.
+    pub mean_clip_fraction: Option<f32>,
+    /// Mean of the steps' mean importance ratio.
+    pub mean_ratio: Option<f32>,
+    /// Mean advantage-weighted loss over all steps.
+    pub mean_loss: Option<f32>,
+}
+
+impl PolicyGradientSummary {
+    /// The summary of `steps`; every figure is `None` where no step measured
+    /// it.
+    #[must_use]
+    pub fn from_steps(steps: Vec<PolicyGradientStep>, steps_skipped_nonfinite: usize) -> Self {
+        fn mean(values: impl Iterator<Item = f32>) -> Option<f32> {
+            let (sum, n) = values.fold((0.0_f64, 0_usize), |(s, n), v| (s + f64::from(v), n + 1));
+            (n > 0).then(|| (sum / n as f64) as f32)
+        }
+        let kls = || steps.iter().filter_map(|s| s.kl);
+        Self {
+            first_kl: kls().next(),
+            last_kl: kls().next_back(),
+            mean_kl: mean(kls()),
+            mean_clip_fraction: mean(steps.iter().map(|s| s.clip_fraction)),
+            mean_ratio: mean(steps.iter().map(|s| s.ratio_mean)),
+            mean_loss: mean(steps.iter().map(|s| s.loss)),
+            steps,
+            steps_skipped_nonfinite,
+        }
+    }
+
+    /// One line for a report: how far the policy moved from the reference
+    /// and how often the clip bound it.
+    #[must_use]
+    pub fn line(&self) -> String {
+        let figure = |v: Option<f32>, places: usize| {
+            v.map_or("not measured".to_string(), |v| format!("{v:.places$}"))
+        };
+        format!(
+            "{} step(s), KL to the reference first {} / last {} / mean {}, mean clip fraction {}, mean ratio {}",
+            self.steps.len(),
+            figure(self.first_kl, 4),
+            figure(self.last_kl, 4),
+            figure(self.mean_kl, 4),
+            figure(self.mean_clip_fraction, 3),
+            figure(self.mean_ratio, 3),
+        )
+    }
+}
+
 /// Which step's adapter a candidate carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -403,6 +492,50 @@ pub struct TrainingSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pg_step(step: usize, kl: Option<f32>, clip_fraction: f32) -> PolicyGradientStep {
+        PolicyGradientStep {
+            step,
+            kl,
+            clip_fraction,
+            ratio_mean: 1.0,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_policy_gradient_summary_reads_the_first_last_and_mean_kl_and_the_mean_clip_fraction() {
+        let summary = PolicyGradientSummary::from_steps(
+            vec![
+                pg_step(1, Some(0.0), 0.0),
+                pg_step(2, None, 0.5),
+                pg_step(3, Some(0.25), 0.25),
+                pg_step(4, Some(0.5), 0.25),
+            ],
+            1,
+        );
+        assert_eq!(summary.first_kl, Some(0.0));
+        assert_eq!(summary.last_kl, Some(0.5));
+        assert_eq!(
+            summary.mean_kl,
+            Some(0.25),
+            "steps without a KL do not count"
+        );
+        assert_eq!(summary.mean_clip_fraction, Some(0.25));
+        assert_eq!(summary.steps_skipped_nonfinite, 1);
+        let line = summary.line();
+        assert!(
+            line.contains("4 step(s)") && line.contains("last 0.5000"),
+            "{line}"
+        );
+    }
+
+    #[test]
+    fn a_policy_gradient_summary_of_no_step_measures_nothing() {
+        let summary = PolicyGradientSummary::from_steps(Vec::new(), 0);
+        assert_eq!((summary.first_kl, summary.mean_clip_fraction), (None, None));
+        assert!(summary.line().contains("not measured"));
+    }
 
     fn curve(points: &[(u32, f32, f32)], selected_step: u32, stopped_early: bool) -> TrainingCurve {
         TrainingCurve {

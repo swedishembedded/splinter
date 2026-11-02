@@ -736,6 +736,7 @@ impl Trainer for FakeTrainer {
             training_record: fake.record,
             records: fake.records,
             block: 0,
+            statistics: super::policy_gradient::scripted(),
         })
     }
 

@@ -71,7 +71,10 @@ brain's own, left at brain's defaults unless named:
 
 The plan records every setting, brain's training record keeps the loss, clip fraction, KL and
 importance ratio of each step, and the candidate is released through the same gate as any
-other.
+other. The candidate's report carries the same series under `policy_gradient`, with the first,
+last and mean KL to the reference, the mean clip fraction and the mean ratio, and `train` prints
+them as one line. brain also prints the step's KL, clip fraction and ratio on its step log line.
+The KL costs one forward pass over the dataset before the first step, none per step.
 
 ## Watching the training and choosing the step
 

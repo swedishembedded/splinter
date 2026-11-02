@@ -113,6 +113,9 @@ impl Report for Candidate {
         if let Some(curve) = &self.curve {
             out.push_str(&curve_lines(curve));
         }
+        if let Some(measured) = &self.policy_gradient {
+            let _ = writeln!(out, "  policy gradient: {}", measured.line());
+        }
         if !self.binary.is_empty() {
             let _ = writeln!(
                 out,

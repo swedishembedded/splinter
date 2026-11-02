@@ -245,6 +245,22 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     assert_eq!((candidate.base_score, candidate.tuned_score), (None, None));
     assert!(candidate.curve.is_none() && candidate.preference.is_none());
     assert_eq!(candidate.replay, None);
+    // What the run measured is in the report: KL, clip fraction, ratio.
+    let measured = candidate.policy_gradient.as_ref().unwrap();
+    assert_eq!(measured, &common::policy_gradient::scripted());
+    assert_eq!(
+        (measured.first_kl, measured.last_kl),
+        (Some(0.0), Some(0.02))
+    );
+    let reported = serde_json::to_value(&candidate).unwrap();
+    assert_eq!(
+        reported["policy_gradient"]["steps"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(reported["policy_gradient"]["mean_clip_fraction"].is_number());
     let plan = trainer.plans.lock().unwrap()[0].clone();
     assert_eq!(plan.regime, Regime::PolicyGradient);
     assert_eq!((plan.eval_every, plan.patience), (0, 0));

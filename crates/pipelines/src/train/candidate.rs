@@ -18,7 +18,8 @@ use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_core::terms::Terms;
 use splinter_core::training::{
-    HeldOutScore, PreferenceSummary, Regime, RehearsalSample, ReplaySample, TrainingCurve,
+    HeldOutScore, PolicyGradientSummary, PreferenceSummary, Regime, RehearsalSample, ReplaySample,
+    TrainingCurve,
 };
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -71,6 +72,8 @@ pub(super) struct StoredCandidate {
     preference: Option<PreferenceSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     curve: Option<TrainingCurve>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    policy_gradient: Option<PolicyGradientSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     checkpoints: Vec<Checkpoint>,
     records: usize,
@@ -136,6 +139,11 @@ pub struct Candidate {
     /// preference regime and for a candidate recorded before curves were.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub curve: Option<TrainingCurve>,
+    /// What a policy-gradient run measured at every step (KL to the
+    /// reference, clip fraction, importance ratio) and its summary; `None`
+    /// for the other regimes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy_gradient: Option<PolicyGradientSummary>,
     /// The adapter of every evaluation of the run, when it was asked to keep
     /// them: the one the candidate carries is among them.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -191,6 +199,7 @@ impl Candidate {
             tuned_score: self.tuned_score,
             preference: self.preference.clone(),
             curve: self.curve.clone(),
+            policy_gradient: self.policy_gradient.clone(),
             checkpoints: self.checkpoints.clone(),
             records: self.records,
             terms: self.terms.clone(),
@@ -220,6 +229,7 @@ impl Candidate {
             tuned_score: stored.tuned_score,
             preference: stored.preference,
             curve: stored.curve,
+            policy_gradient: stored.policy_gradient,
             checkpoints: stored.checkpoints,
             records: stored.records,
             terms: stored.terms,
@@ -367,6 +377,7 @@ mod tests {
             tuned_score: None,
             preference: None,
             curve: None,
+            policy_gradient: None,
             checkpoints: Vec::new(),
             records: 0,
             terms: None,
