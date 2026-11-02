@@ -26,6 +26,10 @@ pub enum BasePrecision {
     /// that lets the 27B hybrid base train on a card shared with a server.
     /// A `qwen35` base only.
     Nf4,
+    /// Block-scaled E4M3 fp8, half of bf16: the native format of an fp8
+    /// checkpoint, held without requantisation loss. brain refuses it for a
+    /// base whose trainer does not hold fp8.
+    Fp8,
 }
 
 impl std::str::FromStr for BasePrecision {
@@ -37,12 +41,30 @@ impl std::str::FromStr for BasePrecision {
             "bf16" => Ok(Self::Bf16),
             "int8" => Ok(Self::Int8),
             "nf4" => Ok(Self::Nf4),
-            other => Err(format!("{other:?} is not one of fp32, bf16, int8, nf4")),
+            "fp8" => Ok(Self::Fp8),
+            other => Err(format!(
+                "{other:?} is not one of fp32, bf16, int8, nf4, fp8"
+            )),
         }
     }
 }
 
 impl BasePrecision {
+    /// The name brain's `ChatFineTune::base_format` takes for this tier, the
+    /// one mapping every training path uses. `None` for [`Self::Fp32`]: brain
+    /// then picks the tier the device and the base allow, as it always has
+    /// when no tier is asked for. brain refuses a format the base cannot hold.
+    #[must_use]
+    pub fn brain_format(self) -> Option<&'static str> {
+        match self {
+            Self::Fp32 => None,
+            Self::Bf16 => Some("bf16"),
+            Self::Int8 => Some("int8"),
+            Self::Nf4 => Some("nf4"),
+            Self::Fp8 => Some("fp8"),
+        }
+    }
+
     /// [`Self::Bf16`] when `on`, else fp32: what a `--bf16-base` flag asks.
     #[must_use]
     pub fn bf16_if(on: bool) -> Self {
@@ -51,5 +73,26 @@ impl BasePrecision {
         } else {
             Self::Fp32
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BasePrecision;
+
+    #[test]
+    fn every_tier_maps_to_the_name_brain_takes() {
+        let tiers = [
+            ("fp32", BasePrecision::Fp32, None),
+            ("bf16", BasePrecision::Bf16, Some("bf16")),
+            ("int8", BasePrecision::Int8, Some("int8")),
+            ("nf4", BasePrecision::Nf4, Some("nf4")),
+            ("fp8", BasePrecision::Fp8, Some("fp8")),
+        ];
+        for (text, tier, format) in tiers {
+            assert_eq!(text.parse::<BasePrecision>(), Ok(tier));
+            assert_eq!(tier.brain_format(), format);
+        }
+        assert!("fp4".parse::<BasePrecision>().is_err());
     }
 }

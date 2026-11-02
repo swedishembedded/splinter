@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (fp8 frozen base)
+- `train --base-precision fp8` holds the frozen base as block-scaled E4M3, half of bf16 and the native format of an fp8 checkpoint (a bf16 copy of a 27B fp8 base ran a 96 GB card out of memory). Every tier now reaches brain through the one `ChatFineTune::base_format` call (`BasePrecision::brain_format`) in the SFT and policy-gradient paths, replacing the `bf16_base`/`int8_base`/`nf4_base` switches; brain refuses a format the base cannot hold.
+
 ### Fixed (dataset block)
 - `dataset build --max-block` (with or without `--split-over-block`) counts a chat record exactly as `train` will: the record is written as its dataset line and measured by brain's `ExampleMeter`, the count the trainer's length check refuses by (chat template markup, the shape each record trains in, picture rows). A record or window the build keeps no longer exceeds the same `--max-block` at `train` (a record fitting by its JSON text could exceed it by the template's markup). Where the policy base has no readable chat tokenizer, or the records are not chat lines, the build falls back to the earlier floor and says so in its report (`block_measure`). A campaign's `dataset_max_block` is no longer needed for chat records with a tokenizer. `train`'s check uses the same count, in the mode the run trains in (`thinking`, packed), and a picture on a base without a vision tower is refused at the check, naming its line. Cargo.lock pins brain at b685c53f0, which adds `ExampleMeter`.
 

@@ -280,11 +280,11 @@ pub fn train_policy_gradient(
         .alpha(request.alpha)
         .seed(request.seed)
         .weight_decay(request.weight_decay)
-        .bf16_base(request.base == BasePrecision::Bf16)
-        .int8_base(request.base == BasePrecision::Int8)
-        .nf4_base(request.base == BasePrecision::Nf4)
         .grad_accum(request.grad_accum)
         .policy_gradient(request.options.config());
+    if let Some(format) = request.base.brain_format() {
+        fine_tune = fine_tune.base_format(format);
+    }
     if let Some(lr) = request.learning_rate {
         fine_tune = fine_tune.lr(lr);
     }

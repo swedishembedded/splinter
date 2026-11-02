@@ -212,9 +212,10 @@ pub struct TrainArgs {
     #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
     pub from: ModelRef,
     /// How the frozen base is held while the adapter trains; the adapter and
-    /// its optimizer stay fp32. NF4 is a `qwen35` (27B) tier.
+    /// its optimizer stay fp32. NF4 and fp8 are `qwen35` (27B) tiers; fp8 is
+    /// the native format of an fp8 checkpoint.
     #[arg(long, value_name = "TIER", value_parser = clap::value_parser!(BasePrecision),
-        help = "How the frozen base is held while the adapter trains: fp32, bf16, int8 or nf4 \
+        help = "How the frozen base is held while the adapter trains: fp32, bf16, int8, nf4 or fp8 \
                 [default: fp32]")]
     pub base_precision: Option<BasePrecision>,
     /// The fraction of each earlier release's training records replayed,

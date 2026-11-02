@@ -1324,7 +1324,7 @@ Arguments:
 Options:
 
 - `--from <REF>`: The base to train, and an adapter on it to continue; for a run on rollouts, the adapter whose policy generated them. Default: `policy:default`.
-- `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8 or nf4 [default: fp32]
+- `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8, nf4 or fp8 [default: fp32]
 - `--replay-fraction <F>`: The fraction of each earlier release's training records replayed, when training from a policy alias. Default: `0.25`.
 - `--steps <N>`: The step budget: the most steps the training may take [default: 3 passes over the examples, within bounds]
 - `--rank <R>`: LoRA rank of a new adapter. Default: `8`.

@@ -396,15 +396,15 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         .alpha(request.alpha)
         .seed(request.seed)
         .weight_decay(request.weight_decay)
-        .bf16_base(request.base == BasePrecision::Bf16)
-        .int8_base(request.base == BasePrecision::Int8)
-        .nf4_base(request.base == BasePrecision::Nf4)
         .grad_accum(request.grad_accum)
         .eval_every(request.eval_every)
         .patience(request.patience)
         // A monitored run exports its best evaluation whether or not its
         // patience ever runs out.
         .keep_best(request.eval_every > 0);
+    if let Some(format) = request.base.brain_format() {
+        fine_tune = fine_tune.base_format(format);
+    }
     if let Some(monitor) = request.monitor {
         fine_tune = fine_tune.monitor(monitor);
     }

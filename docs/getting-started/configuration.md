@@ -53,7 +53,9 @@ before anything is submitted.
 | `--cargo-home DIR` | A cargo home the commands of a Cargo project build offline from. |
 
 `--bf16-base` (on `learn`, `practice` and `absorb`) and `train --base-precision` hold a large policy's
-base at bf16 so it trains on one card.
+base at bf16 so it trains on one card. `train --base-precision` also takes `int8`, `nf4` and `fp8`
+(block-scaled E4M3, half of bf16: an fp8 checkpoint's own format, so nothing is requantised); brain refuses a
+tier the base cannot hold, naming the formats it can.
 
 ## Model references
 

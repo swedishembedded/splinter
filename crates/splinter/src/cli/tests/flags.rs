@@ -149,7 +149,11 @@ fn train_names_the_tier_the_frozen_base_is_held_at() {
         panic!("train --base-precision");
     };
     assert_eq!(nf4.base_precision, Some(BasePrecision::Nf4));
-    assert!(parse(&["train", "ds-1", "--base-precision", "fp8"]).is_err());
+    let Command::Train(fp8) = command(&["train", "ds-1", "--base-precision", "fp8"]) else {
+        panic!("train --base-precision fp8");
+    };
+    assert_eq!(fp8.base_precision, Some(BasePrecision::Fp8));
+    assert!(parse(&["train", "ds-1", "--base-precision", "fp4"]).is_err());
 }
 
 #[test]
