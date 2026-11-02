@@ -164,3 +164,27 @@ system prompt the trial's agent was served (it differs between trials only in th
 repository commit it names, so a dataset holds each record under its own) and carry the
 tools it offered. A tool the agent loaded later in a session is not in the first
 request's list.
+
+## Reinforcement learning from the trials
+
+Several trials of one task by one policy are a group, and the `policy-gradient` view
+turns the group into training records whose weight is how much better each attempt did than
+the others - failures included, which `sft-step` discards:
+
+```
+splinter dataset build --view policy-gradient \
+    --reward-metric iou=0.5 --reward-metric feature_match=0.25 --reward-metric deviation_score=0.25 \
+    --fail-ceiling 0.5 --advantage standardised --roles designer --images \
+    --max-block 8192 --drop-leaking TRAIN-SET-ID
+splinter train DATASET-ID --from local:/models/qwen3.8-27b+round-3.safetensors \
+    --clip-eps 0.2 --kl-beta 0.02 --reference start --base-precision bf16
+```
+
+A pass earns 1; a failure earns at most `--fail-ceiling` by the metrics the verifier measured,
+so a close miss ranks above a far one and any pass above both. `--advantage` defaults to
+`standardised` (GRPO's) and may be `mean-centred`. The report lists each group's trials with
+their reward and advantage; a group of one trial, or whose trials all earned the same, yields
+no record (`no_group_signal`). `--from` names the adapter whose policy ran the trials, so the
+rollouts are close to on-policy. The exam seal is unchanged: `eval` trials never reach the
+dataset. See [Datasets reference](../reference/datasets.md#policy-gradient) and
+[Build datasets and train a candidate](training.md#training-on-rollouts).

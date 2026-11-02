@@ -7,6 +7,7 @@
 use clap::Args;
 use splinter_sdk::learn::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::measure::memorisation::MEMORISATION_GAP_RATIO;
+use splinter_sdk::model::policy_gradient::{LossAggregation, PolicyGradientOptions, Reference};
 use splinter_sdk::model::train::BasePrecision;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{
@@ -137,15 +138,77 @@ impl OptimiserArgs {
     }
 }
 
+fn clip_eps(text: &str) -> Result<f32, String> {
+    match text.parse::<f32>() {
+        Ok(eps) if eps > 0.0 && eps < 1.0 => Ok(eps),
+        _ => Err(format!("{text:?} is not a number in (0, 1)")),
+    }
+}
+
+/// The objective of a run on rollout records: what the clipped policy
+/// gradient is set with. Each names brain's own setting; what is left out is
+/// brain's default.
+#[derive(Debug, Default, Clone, Copy, Args)]
+pub struct PolicyGradientArgs {
+    /// Half-width of the clip band `[1 - eps, 1 + eps]` of the importance
+    /// ratio.
+    #[arg(long, value_name = "EPS", value_parser = clip_eps, help = format!(
+        "For a dataset of rollouts (the policy-gradient view): the half-width of the clip band \
+         of the importance ratio, in (0, 1) [default: {}]",
+        PolicyGradientOptions::defaults().clip_eps
+    ))]
+    pub clip_eps: Option<f32>,
+    /// Coefficient of the KL penalty to the reference policy.
+    #[arg(long, value_name = "BETA", value_parser = non_negative_rate, help = format!(
+        "For a dataset of rollouts: the coefficient of the KL penalty to the reference policy; \
+         0 puts none in the loss [default: {}]",
+        PolicyGradientOptions::defaults().kl_beta
+    ))]
+    pub kl_beta: Option<f32>,
+    /// The policy the KL penalty is taken against.
+    #[arg(long, value_name = "base|start", value_parser = clap::value_parser!(Reference), help =
+        "For a dataset of rollouts: the policy the KL penalty keeps the adapter close to: the \
+         frozen base, or `start`, the adapter the run begins from (--from) [default: base]")]
+    pub reference: Option<Reference>,
+    /// How the token terms of the loss are normalised.
+    #[arg(long, value_name = "seq-mean|token-sum", value_parser = clap::value_parser!(LossAggregation), help =
+        "For a dataset of rollouts: how the token terms of the loss are normalised, per \
+         sequence or over all tokens of a step [default: seq-mean]")]
+    pub loss_agg: Option<LossAggregation>,
+    /// The temperature the rollouts were sampled at.
+    #[arg(long, value_name = "T", value_parser = positive_rate, help = format!(
+        "For a dataset of rollouts: the temperature they were sampled at [default: {}]",
+        PolicyGradientOptions::defaults().temperature
+    ))]
+    pub temperature: Option<f32>,
+}
+
+impl PolicyGradientArgs {
+    /// The objective's settings as the training run takes them.
+    #[must_use]
+    pub fn options(self) -> PolicyGradientOptions {
+        PolicyGradientOptions {
+            clip_eps: self.clip_eps,
+            kl_beta: self.kl_beta,
+            reference: self.reference,
+            loss_agg: self.loss_agg,
+            temperature: self.temperature,
+        }
+    }
+}
+
 /// `train`: the datasets' objective decides how - chat datasets by
-/// supervised fine-tuning, preference datasets by DPO.
+/// supervised fine-tuning, preference datasets by DPO, rollout datasets (the
+/// policy-gradient view) by a clipped policy gradient.
 #[derive(Debug, Args)]
 pub struct TrainArgs {
-    /// The datasets, by id or unique prefix, all chat or all preference
-    /// pairs; the newest records of the last are held out for scoring.
+    /// The datasets, by id or unique prefix, all chat, all preference pairs
+    /// or all rollouts; the newest records of the last are held out for
+    /// scoring (rollouts hold nothing out).
     #[arg(required = true, value_name = "DATASET-ID")]
     pub datasets: Vec<String>,
-    /// The base to train, and an adapter on it to continue.
+    /// The base to train, and an adapter on it to continue; for a run on
+    /// rollouts, the adapter whose policy generated them.
     #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
     pub from: ModelRef,
     /// How the frozen base is held while the adapter trains; the adapter and
@@ -177,6 +240,9 @@ pub struct TrainArgs {
     /// The learning rate, alpha and weight decay of the training.
     #[command(flatten)]
     pub optimiser: OptimiserArgs,
+    /// The clipped policy gradient's settings, for a dataset of rollouts.
+    #[command(flatten)]
+    pub policy_gradient: PolicyGradientArgs,
     /// Records averaged into one optimizer step (default: one when the steps
     /// are named, else from the size of the dataset).
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]

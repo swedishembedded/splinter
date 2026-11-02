@@ -18,6 +18,7 @@ use splinter_core::terms::{combine_stated, Terms};
 use splinter_core::training::{
     HeldOutScore, PreferenceSummary, Regime, RehearsalSample, ReplaySample, TrainingCurve,
 };
+use splinter_model::policy_gradient::TrainedPolicyGradient;
 use splinter_model::train::{Trained, TrainedPreference};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
@@ -226,6 +227,24 @@ impl From<TrainedPreference> for Outcome {
                 train_score: t.train_score,
                 held_out_score: t.held_out_score,
             }),
+            curve: None,
+            evaluations: Vec::new(),
+        }
+    }
+}
+
+impl From<TrainedPolicyGradient> for Outcome {
+    fn from(t: TrainedPolicyGradient) -> Self {
+        Self {
+            adapter: t.adapter,
+            adapter_digest: t.adapter_digest,
+            base_digest: t.base_digest,
+            training_record: t.training_record,
+            records: t.records,
+            // Nothing is held out and nothing monitored: the exam judges it.
+            base_score: None,
+            tuned_score: None,
+            preference: None,
             curve: None,
             evaluations: Vec::new(),
         }

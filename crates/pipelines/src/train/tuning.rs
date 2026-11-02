@@ -9,6 +9,7 @@
 //! What a training run is tuned with beyond its datasets, step count and rank.
 
 use serde::Serialize;
+use splinter_model::policy_gradient::PolicyGradientOptions;
 
 /// How a run trains beyond its step count and rank: what depends on the
 /// base and the card, not on the data.
@@ -63,4 +64,8 @@ pub struct Tuning {
     /// not start. A dataset built for the run leaves such records out when
     /// it is built with the same bound ([`crate::datasets::BuildRequest::max_block`]).
     pub max_block: Option<u32>,
+    /// The settings of the policy-gradient objective, for a run on rollout
+    /// records; a run of any other regime refuses them. Brain's defaults for
+    /// what is left out.
+    pub policy_gradient: PolicyGradientOptions,
 }

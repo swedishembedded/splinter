@@ -708,7 +708,10 @@ pub(crate) fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyE
 /// brain serves an adapter under its card id, so two candidates sharing one
 /// id could never be offered together and a served id would not say which
 /// candidate answered.
-fn candidate_adapter_id(base_id: &str, attempt_dir: &Path) -> Result<String, PolicyError> {
+pub(crate) fn candidate_adapter_id(
+    base_id: &str,
+    attempt_dir: &Path,
+) -> Result<String, PolicyError> {
     let tag = attempt_dir
         .file_name()
         .and_then(|n| n.to_str())

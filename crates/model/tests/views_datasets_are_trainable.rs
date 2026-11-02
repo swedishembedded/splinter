@@ -93,6 +93,30 @@ fn chat(train: bool) -> Projection {
 }
 
 #[test]
+fn a_rollout_dataset_is_read_whole_with_its_advantages_and_only_the_policy_gradient_trains_them() {
+    let dir = scratch("rollouts");
+    let path = dir.join("rollouts.jsonl");
+    let rollouts = projection(
+        Objective::PolicyGradient,
+        RecordBody::chat(vec![
+            message("user", "What is two plus two?", false),
+            message("assistant", "5", true),
+        ])
+        .with_advantage(-1.25),
+    );
+    TrainingCapabilities::BRAIN
+        .require(Objective::PolicyGradient)
+        .expect("brain trains rollouts");
+    let written = write_dataset(&path, &rollouts, &BrainDatasetCheck)
+        .expect("brain's parser reads the advantage");
+    assert_eq!(written.format, Format::GenericMessagesV2);
+    assert!(std::fs::read_to_string(&path)
+        .unwrap()
+        .contains("\"advantage\":-1.25"));
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn a_chat_dataset_is_read_whole_and_its_supervision_is_counted_alike() {
     let dir = scratch("chat");
     let path = dir.join("sft.jsonl");

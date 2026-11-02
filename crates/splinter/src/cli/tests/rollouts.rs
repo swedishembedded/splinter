@@ -2,7 +2,9 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 //! The grammar's specs for reinforcement learning from rollouts: building a
-//! `policy-gradient` dataset.
+//! `policy-gradient` dataset and training one.
+
+use splinter_sdk::model::policy_gradient::{LossAggregation, Reference};
 
 use super::{command, parse, Command, DatasetCommand};
 
@@ -52,6 +54,52 @@ fn a_policy_gradient_dataset_is_built_with_a_shaped_reward_and_a_chosen_advantag
         &["--advantage", "raw"],
     ] {
         let mut argv = vec!["dataset", "build", "ab12", "--view", "policy-gradient"];
+        argv.extend_from_slice(refused);
+        assert!(parse(&argv).is_err(), "{refused:?}");
+    }
+}
+
+#[test]
+fn a_run_on_rollouts_is_set_with_brains_policy_gradient_settings() {
+    let Command::Train(train) = command(&[
+        "train",
+        "ab12",
+        "--from",
+        "local:./ckpt+round-3.safetensors",
+        "--clip-eps",
+        "0.2",
+        "--kl-beta",
+        "0.02",
+        "--reference",
+        "start",
+        "--loss-agg",
+        "token-sum",
+        "--temperature",
+        "0.7",
+    ]) else {
+        panic!("train");
+    };
+    let options = train.policy_gradient.options();
+    assert_eq!(
+        (options.clip_eps, options.kl_beta, options.temperature),
+        (Some(0.2), Some(0.02), Some(0.7))
+    );
+    assert_eq!(options.reference, Some(Reference::StartOfRun));
+    assert_eq!(options.loss_agg, Some(LossAggregation::TokenSum));
+    // Left out, they are brain's defaults.
+    let Command::Train(plain) = command(&["train", "ab12"]) else {
+        panic!("train");
+    };
+    assert!(plain.policy_gradient.options().named().is_empty());
+    for refused in [
+        &["--clip-eps", "1.5"][..],
+        &["--clip-eps", "0"],
+        &["--kl-beta", "-1"],
+        &["--reference", "adapter"],
+        &["--loss-agg", "mean"],
+        &["--temperature", "0"],
+    ] {
+        let mut argv = vec!["train", "ab12"];
         argv.extend_from_slice(refused);
         assert!(parse(&argv).is_err(), "{refused:?}");
     }

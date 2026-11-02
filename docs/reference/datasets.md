@@ -68,6 +68,9 @@ attempt did against the others at the same task:
   unchanged: a held-out trial is refused, or left out with `--drop-leaking`. The same
   experiences always give the same bytes.
 
+`train` trains such a dataset by brain's clipped policy gradient; see
+[Build datasets and train a candidate](../guides/training.md).
+
 The reasoning an agent step recorded (ATIF `reasoning_content`) is the `reasoning_content`
 of the assistant message it becomes, trimmed. Brain's chat template renders it as the
 turn's think block, in either thinking mode; a step that recorded none carries none, and

@@ -16,6 +16,11 @@
 //!   its regime, and is released through the same gate.
 //! * A later supervised candidate replays only the chat records of its
 //!   lineage.
+//! * A dataset of rollout records (each carrying an advantage) is trained by
+//!   the policy-gradient objective with the settings named, brain's defaults
+//!   resolved into the plan; it holds nothing out and monitors nothing,
+//!   rehearses nothing, and a setting it cannot honour is refused rather than
+//!   dropped.
 //!
 //! Training is the fixtures' test double; brain's preference trainer itself
 //! is exercised by brain's own tests.
@@ -26,12 +31,13 @@
 mod common;
 
 use common::gate::{
-    anchor_file, dataset, decide, gate_context, policy, preference_dataset, released, Brain,
-    FakeTrainer, ANCHOR, FACTS,
+    anchor_file, dataset, decide, gate_context, policy, preference_dataset, released,
+    rollout_dataset, Brain, FakeTrainer, ANCHOR, FACTS,
 };
 use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
 use splinter_core::training::Regime;
+use splinter_model::policy_gradient::{LossAggregation, PolicyGradientOptions, Reference};
 use splinter_model::train::BasePrecision;
 use splinter_orchestrator::Context;
 use splinter_pipelines::release::anchor;
@@ -217,4 +223,116 @@ fn a_machine_configured_to_hold_bases_at_bf16_trains_at_bf16_whichever_command_t
     )
     .unwrap();
     assert!(trainer.plans.lock().unwrap()[0].tuning.bf16_base);
+}
+
+#[test]
+fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_defaults_otherwise()
+{
+    let (_scratch, ctx) = gate_context("train-policy-gradient", Brain::Missing);
+    let rollouts = rollout_dataset(&ctx, "alpha", &[1.5, -0.5, -1.0, 0.0]);
+    let trainer = FakeTrainer::knowing(&[]);
+
+    let candidate = train(
+        &ctx,
+        &request(&[&rollouts], None),
+        &trainer,
+        &CancelToken::new(),
+    )
+    .unwrap();
+    assert_eq!(*trainer.called.lock().unwrap(), [Regime::PolicyGradient]);
+    assert_eq!(candidate.regime, Regime::PolicyGradient);
+    // Nothing is held out or monitored: no score, no curve, no replay.
+    assert_eq!((candidate.base_score, candidate.tuned_score), (None, None));
+    assert!(candidate.curve.is_none() && candidate.preference.is_none());
+    assert_eq!(candidate.replay, None);
+    let plan = trainer.plans.lock().unwrap()[0].clone();
+    assert_eq!(plan.regime, Regime::PolicyGradient);
+    assert_eq!((plan.eval_every, plan.patience), (0, 0));
+    let defaults = PolicyGradientOptions::defaults();
+    assert_eq!(plan.tuning.policy_gradient.resolved(), defaults);
+    assert!(
+        plan.tuning.policy_gradient.named().len() == 5,
+        "recorded in the plan"
+    );
+
+    let named = TrainRequest {
+        tuning: Tuning {
+            policy_gradient: PolicyGradientOptions {
+                clip_eps: Some(0.1),
+                kl_beta: Some(0.0),
+                reference: Some(Reference::StartOfRun),
+                loss_agg: Some(LossAggregation::TokenSum),
+                temperature: Some(0.7),
+            },
+            ..Tuning::default()
+        },
+        ..request(&[&rollouts], None)
+    };
+    let trainer = FakeTrainer::knowing(&[]);
+    train(&ctx, &named, &trainer, &CancelToken::new()).unwrap();
+    let plan = trainer.plans.lock().unwrap()[0].clone();
+    let resolved = plan.tuning.policy_gradient.resolved();
+    assert_eq!(
+        (resolved.clip_eps, resolved.kl_beta, resolved.temperature),
+        (0.1, 0.0, 0.7)
+    );
+    assert_eq!(
+        (resolved.reference, resolved.loss_agg),
+        (Reference::StartOfRun, LossAggregation::TokenSum)
+    );
+}
+
+#[test]
+fn a_setting_a_run_cannot_honour_is_refused_not_dropped() {
+    let (_scratch, ctx) = gate_context("train-policy-gradient-refusals", Brain::Missing);
+    let rollouts = rollout_dataset(&ctx, "alpha", &[1.0, -1.0]);
+    let chat = dataset(&ctx, "beta", FACTS);
+    let trainer = FakeTrainer::knowing(&[]);
+    let with = |tuning: Tuning, datasets: &[&DatasetId]| TrainRequest {
+        tuning,
+        ..request(datasets, None)
+    };
+
+    // Rollouts are not mixed with imitation data, rehearsed, or monitored.
+    let mixed = refusal(&ctx, &request(&[&chat, &rollouts], None), &trainer);
+    assert!(mixed.contains("one run trains one regime"), "{mixed}");
+    let beta = refusal(&ctx, &request(&[&rollouts], Some(0.2)), &trainer);
+    assert!(beta.contains("preference datasets only"), "{beta}");
+    let monitored = refusal(
+        &ctx,
+        &with(
+            Tuning {
+                eval_every: Some(5),
+                patience: Some(2),
+                ..Tuning::default()
+            },
+            &[&rollouts],
+        ),
+        &trainer,
+    );
+    assert!(
+        monitored.contains("--eval-every") && monitored.contains("--patience"),
+        "{monitored}"
+    );
+    // The objective's settings mean nothing to an imitation run.
+    let imitation = refusal(
+        &ctx,
+        &with(
+            Tuning {
+                policy_gradient: PolicyGradientOptions {
+                    clip_eps: Some(0.1),
+                    kl_beta: Some(0.01),
+                    ..PolicyGradientOptions::default()
+                },
+                ..Tuning::default()
+            },
+            &[&chat],
+        ),
+        &trainer,
+    );
+    assert!(
+        imitation.contains("--clip-eps") && imitation.contains("--kl-beta"),
+        "{imitation}"
+    );
+    assert!(trainer.called.lock().unwrap().is_empty());
 }

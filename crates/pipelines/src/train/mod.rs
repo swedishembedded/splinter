@@ -55,6 +55,7 @@ mod candidate;
 mod full;
 mod keep;
 mod monitoring;
+mod policy_gradient;
 mod records;
 mod rehearsal;
 mod seeds;
@@ -87,7 +88,8 @@ use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::training::{Regime, ReplaySample, ReplaySource};
 use splinter_data::holdout::split_dataset_file;
-use splinter_data::{select_replay, Format, Fraction, ReplayPolicy, StoredDataset};
+use splinter_data::{select_replay, Format, Fraction, Objective, ReplayPolicy, StoredDataset};
+use splinter_model::policy_gradient::TrainedPolicyGradient;
 use splinter_model::train::{
     fine_tune, train_preference, FineTune, PreferenceTune, Trained, TrainedPreference,
 };
@@ -142,11 +144,14 @@ const EVALUATIONS_DIR: &str = "evaluations";
 /// The replayed records, inside a candidate's directory.
 pub const REPLAY_FILE: &str = "replay.jsonl";
 
-/// The regime a dataset of `format` is trained by; `None` for a format
-/// brain does not train.
+/// The regime a dataset of `format` holding `objective`'s records is trained
+/// by; `None` for a format brain does not train.
 #[must_use]
-pub fn regime_of(format: Format) -> Option<Regime> {
+pub fn regime_of(format: Format, objective: Objective) -> Option<Regime> {
     match format {
+        Format::GenericMessagesV2 if objective == Objective::PolicyGradient => {
+            Some(Regime::PolicyGradient)
+        }
         Format::GenericMessagesV2 => Some(Regime::Sft),
         Format::GenericPreferenceV1 => Some(Regime::Dpo),
         Format::SplinterExportV1 => None,
@@ -257,6 +262,21 @@ pub trait Trainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<TrainedPreference, OrchestratorError>;
+
+    /// Trains the policy-gradient adapter `plan` describes into `plan.dir`
+    /// on the rollout records of its datasets, stopping when `cancel` fires.
+    /// A trainer without the objective refuses: the records carry advantages
+    /// that imitation would silently ignore.
+    fn train_policy_gradient(
+        &self,
+        _ctx: &Context,
+        _plan: &TrainPlan,
+        _cancel: &CancelToken,
+    ) -> Result<TrainedPolicyGradient, OrchestratorError> {
+        Err(OrchestratorError::Refused(
+            "this trainer cannot train a policy gradient on rollout records".into(),
+        ))
+    }
 
     /// Trains every weight of `plan.base` on the plan's records into a
     /// checkpoint directory under `plan.dir`, stopping when `cancel` fires:
@@ -393,6 +413,15 @@ impl Trainer for BrainTrainer {
         .map_err(trainer_error)
     }
 
+    fn train_policy_gradient(
+        &self,
+        _ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<TrainedPolicyGradient, OrchestratorError> {
+        policy_gradient::train(plan, cancel)
+    }
+
     fn train_full(
         &self,
         _ctx: &Context,
@@ -424,7 +453,7 @@ fn trainer_error(e: PolicyError) -> OrchestratorError {
 /// refused when brain cannot train it.
 pub fn trainable(ctx: &Context, id: &str) -> Result<(StoredDataset, Regime), OrchestratorError> {
     let dataset = resolve_dataset(ctx, id)?;
-    let Some(regime) = regime_of(dataset.manifest.format) else {
+    let Some(regime) = regime_of(dataset.manifest.format, dataset.manifest.objective) else {
         return Err(OrchestratorError::Refused(format!(
             "dataset {} is export-only ({:?} records); brain cannot train it",
             dataset.id, dataset.manifest.objective
@@ -478,13 +507,14 @@ pub(crate) fn plan_training(
             ))
         }
         (Regime::Dpo, beta) => beta.unwrap_or(DEFAULT_DPO_BETA),
-        (Regime::Sft, None) => DEFAULT_DPO_BETA,
-        (Regime::Sft, Some(_)) => {
+        (Regime::Sft | Regime::PolicyGradient, None) => DEFAULT_DPO_BETA,
+        (Regime::Sft | Regime::PolicyGradient, Some(_)) => {
             return Err(OrchestratorError::Refused(
                 "beta applies to preference datasets only; these are chat datasets".into(),
             ))
         }
     };
+    policy_gradient::check_settings(regime, &request.tuning)?;
     let datasets: Vec<StoredDataset> = resolved.into_iter().map(|(d, _)| d).collect();
     let monitor_share = request
         .tuning
@@ -512,10 +542,16 @@ pub(crate) fn plan_training(
     let steps = request
         .steps
         .unwrap_or_else(|| steps_for(examples, records_per_step.unwrap_or(1)));
-    let eval_every = request
-        .tuning
-        .eval_every
-        .unwrap_or_else(|| eval_every_for(steps));
+    // A policy-gradient run has no monitoring loss to select on.
+    let monitored = regime != Regime::PolicyGradient;
+    let eval_every = if monitored {
+        request
+            .tuning
+            .eval_every
+            .unwrap_or_else(|| eval_every_for(steps))
+    } else {
+        0
+    };
     // A run with no evaluations has none to be patient about.
     let patience = if eval_every == 0 {
         0
@@ -560,6 +596,11 @@ pub(crate) fn plan_training(
         (Some(_), Regime::Dpo) => {
             return Err(OrchestratorError::Refused(
                 "a preference run trains on its pairs alone and rehearses nothing".into(),
+            ))
+        }
+        (Some(_), Regime::PolicyGradient) => {
+            return Err(OrchestratorError::Refused(
+                "a policy-gradient run trains on its rollouts alone and rehearses nothing".into(),
             ))
         }
         (Some(_), Regime::Other) => return Err(OrchestratorError::Refused(
@@ -615,6 +656,7 @@ pub(crate) fn plan_training(
             eval_every: Some(eval_every),
             patience: Some(patience),
             monitor_share: Some(monitor_share),
+            policy_gradient: policy_gradient::resolved(regime, request.tuning.policy_gradient),
             seed: Some(seed),
             ..request.tuning
         },
@@ -645,6 +687,7 @@ pub fn train(
     let trained = match regime {
         Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),
         Regime::Dpo => Outcome::from(trainer.train_preference(ctx, &plan, cancel)?),
+        Regime::PolicyGradient => Outcome::from(trainer.train_policy_gradient(ctx, &plan, cancel)?),
         Regime::Other => {
             return Err(OrchestratorError::Refused(
                 "a full checkpoint is not trained by the adapter trainers".into(),

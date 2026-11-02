@@ -1319,11 +1319,11 @@ splinter train [OPTIONS] <DATASET-ID>...
 
 Arguments:
 
-- `<DATASET-ID>...` (required): The datasets, by id or unique prefix, all chat or all preference pairs; the newest records of the last are held out for scoring.
+- `<DATASET-ID>...` (required): The datasets, by id or unique prefix, all chat, all preference pairs or all rollouts; the newest records of the last are held out for scoring (rollouts hold nothing out)
 
 Options:
 
-- `--from <REF>`: The base to train, and an adapter on it to continue. Default: `policy:default`.
+- `--from <REF>`: The base to train, and an adapter on it to continue; for a run on rollouts, the adapter whose policy generated them. Default: `policy:default`.
 - `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8 or nf4 [default: fp32]
 - `--replay-fraction <F>`: The fraction of each earlier release's training records replayed, when training from a policy alias. Default: `0.25`.
 - `--steps <N>`: The step budget: the most steps the training may take [default: 3 passes over the examples, within bounds]
@@ -1333,6 +1333,11 @@ Options:
 - `--lr <LR>`: The peak learning rate [default: 0.0002]
 - `--alpha <A>`: The LoRA alpha, the update scaled by alpha / rank [default: 2 x the rank]
 - `--weight-decay <WD>`: The AdamW weight decay on the adapter's matrices [default: 0]
+- `--clip-eps <EPS>`: For a dataset of rollouts (the policy-gradient view): the half-width of the clip band of the importance ratio, in (0, 1) [default: 0.2]
+- `--kl-beta <BETA>`: For a dataset of rollouts: the coefficient of the KL penalty to the reference policy; 0 puts none in the loss [default: 0.02]
+- `--reference <base|start>`: For a dataset of rollouts: the policy the KL penalty keeps the adapter close to: the frozen base, or `start`, the adapter the run begins from (--from) [default: base]
+- `--loss-agg <seq-mean|token-sum>`: For a dataset of rollouts: how the token terms of the loss are normalised, per sequence or over all tokens of a step [default: seq-mean]
+- `--temperature <T>`: For a dataset of rollouts: the temperature they were sampled at [default: 1]
 - `--records-per-step <N>`: Records averaged into one optimizer step (default: one when the steps are named, else from the size of the dataset)
 - `--seed <N>`: The seed of a fresh adapter's initialisation, the batch order and the draw of the records replayed (drawn, printed and recorded in the run and the candidate if not given)
 - `--rehearsal <DATASET-ID>`: A rehearsal dataset (`rehearse`, or any chat dataset of the base's own answers) mixed into training at --rehearsal-share of the draws, never held out, a share of it in the monitoring set.

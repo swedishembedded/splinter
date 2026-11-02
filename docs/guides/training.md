@@ -38,13 +38,40 @@ loss stops improving.
 `train` trains the regime its datasets' objective names - chat datasets
 by supervised fine-tuning, preference datasets by DPO against the model
 the run starts from (`--beta`, the DPO temperature, defaults to brain's);
-one run's datasets are all one or all the other. It concatenates them in
+a dataset of rollouts (the `policy-gradient` view, whose records carry an
+`advantage`) by brain's clipped policy gradient, below; one run's datasets are all of one
+regime. It concatenates them in
 order and holds the newest records out for scoring (a record of the writer's
 own text, which has no question to examine, is held out with its family and
 scored by nobody): a supervised candidate
 reports the held-out loss of base and candidate, a preference candidate
 brain's preference score on the held-out pairs (how often, and by how
 many nats, it prefers the chosen answer more than its reference does).
+
+## Training on rollouts
+
+A `policy-gradient` dataset trains with a clipped policy gradient, the way GRPO and PPO do:
+a record with a negative advantage lowers the probability of its action, one with a positive
+advantage raises it, and a KL penalty keeps the adapter near a reference policy. Nothing is
+imitated. Brain trains it on `qwen35` bases only and refuses any other, and refuses a
+dataset with advantages under supervised training, so neither can silently drop them. The
+run holds nothing out and monitors nothing - the exam is its judge - and replays and
+rehearses nothing; `--eval-every`, `--patience`, `--monitor-share`, `--keep-evaluations`,
+`--rehearsal` and `--beta` are refused with it. `--from local:<checkpoint>+<adapter>` (or a
+`policy:` alias) continues the adapter whose policy generated the rollouts. The settings are
+brain's own, left at brain's defaults unless named:
+
+| Flag | Meaning |
+|---|---|
+| `--clip-eps` | half-width of the clip band of the importance ratio, in (0, 1) (0.2) |
+| `--kl-beta` | coefficient of the KL penalty to the reference; 0 puts none in the loss (0.02) |
+| `--reference base\|start` | the policy the penalty is taken against: the frozen base, or the adapter the run begins from (`base`) |
+| `--loss-agg seq-mean\|token-sum` | how token terms are normalised (`seq-mean`) |
+| `--temperature` | the temperature the rollouts were sampled at (1.0) |
+
+The plan records every setting, brain's training record keeps the loss, clip fraction, KL and
+importance ratio of each step, and the candidate is released through the same gate as any
+other.
 
 ## Watching the training and choosing the step
 

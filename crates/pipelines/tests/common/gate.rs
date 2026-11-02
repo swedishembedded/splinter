@@ -38,6 +38,7 @@ use splinter_core::training::{HeldOutScore, Regime, TrainingCurve};
 use splinter_data::holdout::holdout_split_grouped;
 use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
 use splinter_eval::gate::GateConfig;
+use splinter_model::policy_gradient::TrainedPolicyGradient;
 use splinter_model::train::Trained;
 use splinter_model::train::TrainedPreference;
 use splinter_orchestrator::{Context, OrchestratorError};
@@ -139,6 +140,53 @@ pub fn dataset_under(
     prompt: Option<&str>,
 ) -> DatasetId {
     dataset_made(ctx, topic, facts, prompt, &[], None)
+}
+
+/// Stores a policy-gradient dataset of rollout records: one action about
+/// `topic` per advantage in `advantages`, each carrying its advantage.
+pub fn rollout_dataset(ctx: &Context, topic: &str, advantages: &[f64]) -> DatasetId {
+    let message = |role: &str, content: String, train: bool| WireMessage {
+        images: Vec::new(),
+        role: role.into(),
+        content,
+        tool_calls: Vec::new(),
+        tool_call_id: None,
+        reasoning_content: None,
+        train,
+    };
+    let records = advantages
+        .iter()
+        .enumerate()
+        .map(|(i, advantage)| Record {
+            body: RecordBody::Chat {
+                messages: vec![
+                    message("user", question(topic, i), false),
+                    message("assistant", answer(topic, i), true),
+                ],
+                tools: Vec::new(),
+                advantage: Some(*advantage),
+            },
+            metadata: RecordMetadata {
+                group: None,
+                split: None,
+                experiences: Vec::new(),
+                task: None,
+                sources: Vec::new(),
+                view: "policy-gradient".into(),
+                objective: Objective::PolicyGradient,
+            },
+        })
+        .collect();
+    let projection = Projection {
+        records,
+        ..Projection::new(
+            "policy-gradient",
+            Objective::PolicyGradient,
+            Some(Strip::All),
+            Some(Strength::Executable),
+        )
+    };
+    store_dataset(ctx, &projection, false).unwrap().id
 }
 
 /// [`dataset_under`], every record naming `sources` (the contents of text
@@ -669,6 +717,24 @@ impl FakeTrainer {
 impl Trainer for FakeTrainer {
     fn holds_out_by_group(&self) -> bool {
         self.by_group
+    }
+
+    fn train_policy_gradient(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        _cancel: &CancelToken,
+    ) -> Result<TrainedPolicyGradient, OrchestratorError> {
+        self.called.lock().unwrap().push(Regime::PolicyGradient);
+        let fake = self.fake(ctx, plan);
+        Ok(TrainedPolicyGradient {
+            adapter: fake.adapter,
+            adapter_digest: fake.digest,
+            base_digest: Digest::sha256_of(BASE_BYTES).to_string(),
+            training_record: fake.record,
+            records: fake.records,
+            block: 0,
+        })
     }
 
     fn train(
