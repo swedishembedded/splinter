@@ -360,7 +360,10 @@ def publish(campaign: Campaign) -> None:
     if generations:
         # The dataset's own tools need their own packages (the chart: matplotlib):
         # the campaign names the interpreter that has them.
-        python = path(campaign["paths"]["python"]) if campaign["paths"].get("python") else sys.executable
+        # Not resolved: a virtual environment's interpreter is a symlink whose
+        # target is the bare base interpreter, without the environment's packages.
+        named = campaign["paths"].get("python")
+        python = os.path.expanduser(os.path.expandvars(named)) if named else sys.executable
         subprocess.run([python, repo / "scripts" / "progress.py",
                         *[a for g in generations for a in ("--generation", g)]], check=True)
     subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
