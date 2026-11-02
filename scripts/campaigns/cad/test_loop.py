@@ -60,7 +60,66 @@ def a_second_card_takes_the_exams():
     assert loop.cards(two) == ((0, 8799), (1, 8800))
 
 
+TRAIN = {"roles": ["designer", "specifier"], "images": True, "base": "local:B", "base_precision": "bf16",
+         "max_block": 16384, "rank": 16, "alpha": 32, "lr": 5e-5, "steps": 80, "records_per_step": 4,
+         "eval_every": 10, "patience": 3, "monitor_share": 0.1, "seed": 7}  # seed: only passed through, any value
+RL = {**TRAIN, "objective": "policy-gradient",
+      "reward": {"metrics": {"iou": 0.5, "feature_match": 0.25, "deviation_score": 0.25}, "fail_ceiling": 0.5,
+                 "advantage": "standardised"},
+      "policy_gradient": {"clip_eps": 0.2, "kl_beta": 0.02, "reference": "base", "loss_agg": "seq-mean",
+                          "temperature": 1.0}}
+
+
+def imitation_learns_from_every_generation_from_the_base():
+    campaign = loop.Campaign({"train": TRAIN})
+    states = [{"explore_export": "e0"}, {"explore_export": "e1"}]
+    assert loop.learning_exports(campaign, states) == ["e0", "e1"]
+    view = loop.dataset_args(campaign)
+    assert view[:2] == ["--view", "sft-step"] and "--reward-metric" not in view
+    train = loop.train_args(campaign, {"adapter": "/a/gen001.safetensors"})
+    assert train[train.index("--from") + 1] == "local:B", "imitation trains a fresh adapter on the base"
+    assert "--eval-every" in train and "--clip-eps" not in train
+
+
+def reinforcement_learns_on_policy_from_the_champion():
+    campaign = loop.Campaign({"train": RL})
+    states = [{"explore_export": "e0"}, {"explore_export": "e1"}]
+    assert loop.learning_exports(campaign, states) == ["e1"], "only the rollouts of the policy being trained"
+    view = loop.dataset_args(campaign)
+    assert view[:2] == ["--view", "policy-gradient"]
+    assert [view[i + 1] for i, a in enumerate(view) if a == "--reward-metric"] == [
+        "iou=0.5", "feature_match=0.25", "deviation_score=0.25"]
+    assert view[view.index("--fail-ceiling") + 1] == "0.5" and view[view.index("--advantage") + 1] == "standardised"
+    train = loop.train_args(campaign, {"adapter": "/a/gen001.safetensors"})
+    assert train[train.index("--from") + 1] == "local:B+/a/gen001.safetensors", "the champion's adapter goes on"
+    assert train[train.index("--kl-beta") + 1] == "0.02"
+    for flag in ("--clip-eps", "--reference", "--loss-agg", "--temperature"):
+        assert flag in train
+    for refused in ("--eval-every", "--patience", "--monitor-share"):
+        assert refused not in train, f"{refused} is refused beside the policy-gradient objective"
+    assert loop.train_args(campaign, {"adapter": None})[train.index("--from") + 1] == "local:B"
+
+
+def an_unknown_objective_is_refused():
+    campaign = loop.Campaign({"train": {**TRAIN, "objective": "dpo"}})
+    try:
+        loop.dataset_args(campaign)
+    except SystemExit as error:
+        assert "dpo" in str(error)
+    else:
+        raise AssertionError("an unknown objective must stop the loop")
+
+
 class Loop(unittest.TestCase):
+    def test_imitation_learns_from_every_generation_from_the_base(self):
+        imitation_learns_from_every_generation_from_the_base()
+
+    def test_reinforcement_learns_on_policy_from_the_champion(self):
+        reinforcement_learns_on_policy_from_the_champion()
+
+    def test_an_unknown_objective_is_refused(self):
+        an_unknown_objective_is_refused()
+
     def test_a_second_card_takes_the_exams(self):
         a_second_card_takes_the_exams()
 

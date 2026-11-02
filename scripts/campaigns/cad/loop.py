@@ -22,10 +22,17 @@ promoted adapter):
    generation it was promoted in already did;
 4. **publish** both exports and the pass rates per generation to the dataset
    repository (and its remote, when configured);
-5. **learn**: every training export so far is admitted (one experience per
-   harness conversation; held-out tasks are refused by Splinter's seal), the
-   conversations of the trained roles that passed become an `sft-step`
-   dataset, and a LoRA adapter is trained on the base from it;
+5. **learn** (``train.objective``): the training exports are admitted (one
+   experience per harness conversation; held-out tasks are refused by
+   Splinter's seal), then either
+   * ``sft-step`` (imitation): the passing conversations of the trained roles
+     of every generation so far train a fresh LoRA adapter on the base; or
+   * ``policy-gradient`` (reinforcement learning): every graded attempt of
+     this generation (``explore_attempts`` >= 2 per task form a group) earns a
+     reward from its verdict (a pass 1, a failure a share of ``fail_ceiling``
+     by the weighted ``reward.metrics``), every action of it is weighed by the
+     attempt's advantage over its group, and brain's clipped policy gradient
+     trains the champion's adapter on, with a KL anchor;
 6. **candidate**: the adapter is served and measured on the same exam;
    If the stack (agent build, serving build, benchmark commit) changed since
    the champion's exam, the champion sits it again first: the two exams that
@@ -257,8 +264,64 @@ def splinter(campaign: Campaign, gen: Generation, *args, log_name: str = "splint
     return json.loads(out)
 
 
-def learn(campaign: Campaign, gen: Generation, train_exports: list[str]) -> dict:
-    """Admit every training export, build the role dataset, train an adapter from the base."""
+OBJECTIVES = ("sft-step", "policy-gradient")
+
+
+def objective(campaign: Campaign) -> str:
+    """How a generation learns: `sft-step` imitates the trained roles' passing
+    actions; `policy-gradient` reinforces every graded attempt by its advantage
+    over the other attempts at its task."""
+    name = campaign["train"].get("objective", "sft-step")
+    if name not in OBJECTIVES:
+        raise SystemExit(f"loop: train.objective {name!r} is not one of {', '.join(OBJECTIVES)}")
+    return name
+
+
+def learning_exports(campaign: Campaign, states: list[dict]) -> list[str]:
+    """The exploration exports a generation learns from, oldest first. Imitation
+    takes every generation's; the policy gradient only the newest, the rollouts
+    of the very policy it trains (on-policy: older rollouts came from another one)."""
+    exports = [s["explore_export"] for s in states if s.get("explore_export")]
+    return exports[-1:] if objective(campaign) == "policy-gradient" else exports
+
+
+def dataset_args(campaign: Campaign) -> list[str]:
+    """`splinter dataset build` arguments: the view and, for the policy
+    gradient, how a trial's reward is read from its verdict."""
+    t = campaign["train"]
+    view = objective(campaign)
+    args = ["--view", view]
+    if view == "policy-gradient":
+        reward = t["reward"]
+        for name, weight in reward.get("metrics", {}).items():
+            args += ["--reward-metric", f"{name}={weight}"]
+        args += ["--fail-ceiling", str(reward["fail_ceiling"]), "--advantage", reward["advantage"]]
+    if t.get("images"):
+        args.append("--images")
+    return [*args, "--roles", ",".join(t["roles"]), "--max-block", str(t["max_block"]), "--split-over-block"]
+
+
+def train_args(campaign: Campaign, start: dict) -> list[str]:
+    """`splinter train` arguments. Imitation trains a fresh adapter on the base
+    with a held-out monitor; the policy gradient continues the champion's
+    adapter (the policy its rollouts came from) under brain's clipped objective,
+    with no held-out monitor (brain refuses one beside it; the exam judges)."""
+    t = campaign["train"]
+    common = ["--base-precision", t["base_precision"], "--max-block", str(t["max_block"]), "--rank", str(t["rank"]),
+              "--alpha", str(t["alpha"]), "--lr", str(t["lr"]), "--steps", str(t["steps"]), "--records-per-step",
+              str(t["records_per_step"]), "--seed", str(t["seed"])]
+    if objective(campaign) == "sft-step":
+        return ["--from", t["base"], *common, "--eval-every", str(t["eval_every"]), "--patience", str(t["patience"]),
+                "--monitor-share", str(t["monitor_share"])]
+    pg = t["policy_gradient"]
+    origin = f"{t['base']}+{start['adapter']}" if start.get("adapter") else t["base"]
+    return ["--from", origin, *common, "--clip-eps", str(pg["clip_eps"]), "--kl-beta", str(pg["kl_beta"]),
+            "--reference", pg["reference"], "--loss-agg", pg["loss_agg"], "--temperature", str(pg["temperature"])]
+
+
+def learn(campaign: Campaign, gen: Generation, train_exports: list[str], start: dict) -> dict:
+    """Admit the generation's training exports, build the dataset its objective
+    learns from and train the next adapter."""
     set_ids = []
     for export in train_exports:
         report = splinter(campaign, gen, "experiences", "ingest-bench", export, log_name="ingest")
@@ -266,25 +329,17 @@ def learn(campaign: Campaign, gen: Generation, train_exports: list[str]) -> dict
             set_ids.append(report["train_set"])
     if not set_ids:
         raise SystemExit("loop: no training experience set was admitted")
-    t = campaign["train"]
-    images = ["--images"] if t.get("images") else []
-    built = splinter(campaign, gen, "dataset", "build", "--view", "sft-step", *images, "--roles", ",".join(t["roles"]),
-                     "--max-block", str(t["max_block"]), "--split-over-block", *sorted(set(set_ids)),
+    built = splinter(campaign, gen, "dataset", "build", *dataset_args(campaign), *sorted(set(set_ids)),
                      log_name="dataset")
     dataset = built["dataset"]
     stop_serving(campaign, campaign["serve"]["card"])  # the trainer takes the whole card
-    trained = splinter(campaign, gen, "train", dataset, "--from", t["base"], "--base-precision", t["base_precision"],
-                       "--max-block", str(t["max_block"]), "--rank", str(t["rank"]), "--alpha", str(t["alpha"]),
-                       "--lr", str(t["lr"]), "--steps", str(t["steps"]), "--records-per-step",
-                       str(t["records_per_step"]), "--eval-every", str(t["eval_every"]), "--patience",
-                       str(t["patience"]), "--monitor-share", str(t["monitor_share"]), "--seed", str(t["seed"]),
-                       log_name="train")
+    trained = splinter(campaign, gen, "train", dataset, *train_args(campaign, start), log_name="train")
     adapter = Path(trained["adapter"])
     keep = campaign.work / "adapters" / f"gen{gen.number + 1:03d}.safetensors"
     keep.parent.mkdir(exist_ok=True)
     shutil.copy(adapter, keep)
-    return {"set_ids": sorted(set(set_ids)), "dataset": dataset, "dataset_report": built, "adapter": str(keep),
-            "train_report": trained}
+    return {"objective": objective(campaign), "set_ids": sorted(set(set_ids)), "dataset": dataset,
+            "dataset_report": built, "adapter": str(keep), "train_report": trained}
 
 
 def publish(campaign: Campaign) -> None:
@@ -418,14 +473,11 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
         log(f"generation {number}: halted before learn (--stop-before learn)")
         return False
     if not gen.done("learn"):
-        exports = []
-        for gen_dir in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]")):
-            state = json.loads((gen_dir / "state.json").read_text())
-            if state.get("explore_export"):
-                exports.append(state["explore_export"])
+        states = [json.loads((d / "state.json").read_text())
+                  for d in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]"))]
         if exam_card:
             stop_serving(campaign, exam_card[0])
-        gen.record("learn", learned=learn(campaign, gen, exports))
+        gen.record("learn", learned=learn(campaign, gen, learning_exports(campaign, states), start))
     if not gen.done("candidate") and gen.state.get("exam_stack") != current:
         # The stack changed since the champion sat the exam (an upgraded agent or
         # server build): measure it again, so champion and candidate meet on one stack.

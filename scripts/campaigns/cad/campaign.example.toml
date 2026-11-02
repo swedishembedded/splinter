@@ -39,6 +39,7 @@ binary = "~/bin/splinter"
 state = "~/campaigns/cad/state"
 
 [train]
+objective = "policy-gradient"                # or "sft-step": imitate the passing attempts of every generation
 roles = ["visual", "specifier", "designer", "reviewer"]
 images = true                                # records carry the pictures the models were shown
 base = "local:Qwen/Qwen3.8-27B-FP8"
@@ -51,8 +52,20 @@ steps = 80
 records_per_step = 4
 eval_every = 10
 patience = 3
-monitor_share = 0.1
+monitor_share = 0.1                          # eval_every, patience, monitor_share: sft-step only
 seed = 20261101
+
+[train.reward]                               # policy-gradient: a pass earns 1, a failure fail_ceiling x the weighted metrics
+metrics = { iou = 0.5, feature_match = 0.25, deviation_score = 0.25 }
+fail_ceiling = 0.5
+advantage = "standardised"                   # or "mean-centred"
+
+[train.policy_gradient]                      # brain's clipped objective; the champion's adapter trains on
+clip_eps = 0.2
+kl_beta = 0.02
+reference = "base"                           # the KL anchor: the base, or "start" (the champion)
+loss_agg = "seq-mean"
+temperature = 1.0                            # the temperature the rollouts were sampled at
 
 [promote]
 min_mean_delta = 0.0                         # or require_interval_above_zero = true
