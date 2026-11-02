@@ -137,6 +137,7 @@ fn projection(records: Vec<Record>) -> Projection {
         system_prompt: None,
         packed: false,
         outcome_verified_only: false,
+        block_measure: None,
         terms: None,
     }
 }

@@ -336,8 +336,14 @@ fn refuse_overlong(request: &FineTune<'_>, max_block: u32) -> Result<(), String>
     .chain(request.weighted_replay.iter().map(|(p, _)| p.as_path()));
     let mut named = Vec::new();
     for dataset in datasets {
-        let found =
-            overlong_records(dataset, request.model_dir, max_block).map_err(|e| e.to_string())?;
+        let found = overlong_records(
+            dataset,
+            request.model_dir,
+            request.thinking,
+            request.pack_answers,
+            max_block,
+        )
+        .map_err(|e| e.to_string())?;
         named.extend(found.iter().map(ToString::to_string));
     }
     if named.is_empty() {

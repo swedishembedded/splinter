@@ -298,8 +298,9 @@ def dataset_args(campaign: Campaign) -> list[str]:
         args += ["--fail-ceiling", str(reward["fail_ceiling"]), "--advantage", reward["advantage"]]
     if t.get("images"):
         args.append("--images")
-    # The dataset's block can be smaller than the training's: the build
-    # measures a record without the chat template's markup, the trainer with it.
+    # The dataset's block can be smaller than the training's. It need not be for
+    # chat records when the base has a tokenizer: the build counts them as the
+    # trainer does, and says in its report when it fell back to a floor.
     block = t.get("dataset_max_block", t["max_block"])
     return [*args, "--roles", ",".join(t["roles"]), "--max-block", str(block), "--split-over-block"]
 

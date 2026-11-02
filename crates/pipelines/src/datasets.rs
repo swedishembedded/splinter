@@ -24,7 +24,7 @@ use splinter_data::{
     OutcomeView, PolicyGradient, Preference, Projection, RecordBody, Rehearsal, Retrieval,
     SftFinal, SftStep, StoredDataset, VerifierView, View, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
-pub use splinter_data::{AdvantageKind, GroupReport, RewardShape};
+pub use splinter_data::{AdvantageKind, BlockMeasure, GroupReport, RewardShape};
 pub use splinter_data::{Control, Strip};
 use splinter_knowledge::sections::sections;
 use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
@@ -203,6 +203,11 @@ pub struct Built {
     /// attempt's reward and advantage.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub groups: Vec<GroupReport>,
+    /// What `--max-block` measured records by, when it was given: the
+    /// trainer's own count, or the floor that stands in where that is
+    /// unavailable, with the reason. Not stored with the dataset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_measure: Option<BlockMeasure>,
 }
 
 impl From<StoredDataset> for Built {
@@ -218,6 +223,7 @@ impl From<StoredDataset> for Built {
             described: None,
             dropped: Vec::new(),
             groups: stored.manifest.groups,
+            block_measure: None,
         }
     }
 }
@@ -249,6 +255,7 @@ pub fn build_with(
     let stored = store_dataset(ctx, &projection, request.export_only)?;
     Ok(Built {
         described,
+        block_measure: projection.block_measure.clone(),
         ..Built::from(stored)
     })
 }
@@ -291,6 +298,7 @@ pub fn build_dropping_leaks(
     Ok(Built {
         described,
         dropped,
+        block_measure: projection.block_measure.clone(),
         ..Built::from(stored)
     })
 }
@@ -518,7 +526,8 @@ fn project_without(
             .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
     }
     if let Some(max_block) = request.max_block {
-        projection = within_policy_block(ctx, projection, max_block, request.split_over_block);
+        projection =
+            crate::block::within_policy_block(ctx, projection, max_block, request.split_over_block);
     }
     if let Some(passages) = passages {
         projection = with_passages(
@@ -531,37 +540,6 @@ fn project_without(
     }
     assign_groups(ctx, &corpus, &mut projection)?;
     Ok((projection, described, corpus))
-}
-
-/// `projection` without the records longer than `max_block` of the policy's
-/// own tokens, as the record's text and tool schemas are measured (the
-/// tokenizer's, else a character ratio that holds for text that tokenizes
-/// badly); with `split`, a longer chat record is split into windows that fit
-/// ([`Projection::split_over_block`]) instead of left out. The chat
-/// template's markup is not measured, so the bound is a floor on what the
-/// trainer will refuse, not the trainer's own check.
-fn within_policy_block(
-    ctx: &Context,
-    projection: Projection,
-    max_block: usize,
-    split: bool,
-) -> Projection {
-    let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
-    let tokens = |text: &str| {
-        counter
-            .as_ref()
-            .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
-    };
-    // A picture is the rows it adds to the sequence, not its base64.
-    let size = |record: &splinter_data::Record| {
-        let (text, image_rows) = record.body.text_and_image_rows();
-        tokens(&text) + image_rows
-    };
-    if split {
-        projection.split_over_block(max_block, &size)
-    } else {
-        projection.within_block(max_block, &size)
-    }
 }
 
 /// The terms a dataset made from `sources` comes under: the most restrictive

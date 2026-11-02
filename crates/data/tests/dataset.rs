@@ -233,6 +233,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
             system_prompt: None,
             packed: false,
             outcome_verified_only: false,
+            block_measure: None,
             terms: None,
         };
         assert_eq!(objective.line_format(), Format::SplinterExportV1);

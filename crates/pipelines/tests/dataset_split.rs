@@ -14,6 +14,11 @@
 //!   still left out and counted as `OverBlock`.
 //! * With it true, the same record is split into windows that each fit, and
 //!   nothing is counted as `OverBlock`.
+//! * When the policy base has a chat tokenizer, "fits" is the trainer's own
+//!   count: every record the build writes passes the trainer's length check
+//!   at the same `--max-block`, including a record whose JSON text fits a
+//!   bound its rendered request does not. Without one, the build says it fell
+//!   back to the floor.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -30,7 +35,10 @@ use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, S
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_core::kinds::WORKSPACE_CHANGE;
-use splinter_data::{chars_as_tokens, Exclusion, Record};
+use splinter_data::{chars_as_tokens, dataset_line, BlockMeasure, Exclusion, Projection, Record};
+use splinter_model::capabilities::overlong_records;
+use splinter_model::fixture::markup_heavy_checkpoint;
+use splinter_model::measure::RecordMeter;
 use splinter_model::TokenCounter;
 use splinter_orchestrator::Context;
 use splinter_pipelines::datasets::{project_with, BuildRequest, ViewName, VoiceBuild};
@@ -160,4 +168,76 @@ fn a_build_splits_an_over_block_record_only_when_asked() {
     for record in &split.records {
         assert!(measure(record) <= bound, "every window fits the bound");
     }
+}
+
+/// The dataset file of `projection`, as `dataset build` writes it.
+fn written(scratch: &std::path::Path, projection: &Projection) -> std::path::PathBuf {
+    let path = scratch.join("built.jsonl");
+    let lines: Vec<String> = projection
+        .records
+        .iter()
+        .map(|record| dataset_line(projection.objective, record).unwrap())
+        .collect();
+    std::fs::write(&path, lines.join("\n") + "\n").unwrap();
+    path
+}
+
+#[test]
+fn a_build_bounds_records_by_the_count_the_trainer_checks_them_by() {
+    let (scratch, ctx) = scratch_context("dataset-exact", Scripted::new(|_| String::new()), false);
+    let base = ctx.config().policy_base.clone();
+    std::fs::create_dir_all(&base).unwrap();
+    markup_heavy_checkpoint(&base);
+    let experience = attempt(&ctx);
+    let set = set_of(&ctx, &experience);
+
+    let (unbounded, _) = project_with(&ctx, &request(set.clone(), None, false), None).unwrap();
+    assert_eq!(unbounded.block_measure, None, "no bound, no measure");
+    let record = &unbounded.records[0];
+    let meter = RecordMeter::for_model(&base, false, unbounded.packed).unwrap();
+    let rendered = meter
+        .tokens(&dataset_line(unbounded.objective, record).unwrap())
+        .unwrap();
+    let floor = measure(&ctx)(record);
+    assert!(
+        floor < rendered,
+        "the case under test: the JSON text ({floor}) fits a bound its rendered request ({rendered}) does not"
+    );
+
+    // Left out, not kept as the floor would: it fits the floor, not the trainer.
+    let (left_out, _) =
+        project_with(&ctx, &request(set.clone(), Some(floor), false), None).unwrap();
+    assert!(left_out.records.is_empty());
+    assert_eq!(left_out.count(Exclusion::OverBlock), 1);
+    assert_eq!(
+        left_out.block_measure,
+        Some(BlockMeasure::Trainer {
+            first_refusal: None
+        })
+    );
+
+    // Kept whole at the trainer's own count.
+    let (whole, _) =
+        project_with(&ctx, &request(set.clone(), Some(rendered), false), None).unwrap();
+    assert_eq!(whole.records.len(), 1);
+
+    // Split: every window passes the trainer's check at the same bound.
+    let (split, _) = project_with(&ctx, &request(set, Some(floor), true), None).unwrap();
+    assert!(split.records.len() > 1, "asked, the record is split");
+    let path = written(&scratch.0, &split);
+    let overlong = overlong_records(&path, &base, false, split.packed, floor as u32).unwrap();
+    assert!(overlong.is_empty(), "trainer refuses: {overlong:?}");
+}
+
+#[test]
+fn a_build_without_a_chat_tokenizer_says_it_measured_by_the_floor() {
+    let (scratch, ctx) = scratch_context("dataset-floor", Scripted::new(|_| String::new()), false);
+    std::mem::forget(scratch);
+    let experience = attempt(&ctx);
+    let set = set_of(&ctx, &experience);
+    let (bounded, _) = project_with(&ctx, &request(set, Some(1_000_000), false), None).unwrap();
+    let Some(BlockMeasure::Floor { reason }) = bounded.block_measure else {
+        panic!("the base has no tokenizer: {:?}", bounded.block_measure);
+    };
+    assert!(!reason.is_empty());
 }

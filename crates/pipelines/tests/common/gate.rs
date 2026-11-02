@@ -264,6 +264,7 @@ fn dataset_made(
         system_prompt: None,
         packed: false,
         outcome_verified_only: false,
+        block_measure: None,
         terms,
     };
     let projection = match prompt {
@@ -321,6 +322,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         system_prompt: None,
         packed: false,
         outcome_verified_only: false,
+        block_measure: None,
         terms: None,
     };
     store_dataset(ctx, &projection, false).unwrap().id

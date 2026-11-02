@@ -17,10 +17,10 @@
 
 use std::path::{Path, PathBuf};
 
-use splinter_data::images::image_rows;
 use splinter_data::{DatasetCheck, Format, Objective};
 
 use crate::error::PolicyError;
+use crate::measure::RecordMeter;
 use crate::pictures::{holds_images, validate_pictured_dataset};
 use crate::train::{validate_dataset, validate_preference_dataset};
 
@@ -144,22 +144,24 @@ impl std::fmt::Display for OverlongRecord {
 }
 
 /// The records of `dataset` longer than `max_block` tokens, in file order.
-/// A record's length is its conversation, with the tools it offers, rendered
-/// by brain's chat renderer and tokenized by the tokenizer of the checkpoint
-/// in `model_dir`. The generation prompt the renderer appends can make it a
-/// few tokens longer than the training row, never shorter, and the trainer's
-/// own cap still decides what it accepts. Needs no device.
+///
+/// A record's length is [`RecordMeter::tokens`]: what the fine-tune of the
+/// checkpoint in `model_dir` trains it as, in the mode `thinking` and
+/// `pack_answers` name (the trainer's, [`crate::train::FineTune`]). A record
+/// the trainer would not read is an error naming its line, as the trainer
+/// refuses it. Needs no device.
 pub fn overlong_records(
     dataset: &Path,
     model_dir: &Path,
+    thinking: bool,
+    pack_answers: bool,
     max_block: u32,
 ) -> Result<Vec<OverlongRecord>, PolicyError> {
     let unreadable = |reason: String| PolicyError::Dataset {
         path: dataset.to_path_buf(),
         reason,
     };
-    let tokenizer = brain::chat_tokens::ChatTokenizer::from_model_dir(model_dir)
-        .map_err(|e| unreadable(e.to_string()))?;
+    let meter = RecordMeter::for_model(model_dir, thinking, pack_answers)?;
     let text = std::fs::read_to_string(dataset).map_err(|e| unreadable(e.to_string()))?;
     let mut overlong = Vec::new();
     for (index, line) in text
@@ -168,119 +170,20 @@ pub fn overlong_records(
         .filter(|(_, l)| !l.trim().is_empty())
     {
         let line_no = index + 1;
-        let record: serde_json::Value =
-            serde_json::from_str(line).map_err(|e| unreadable(format!("line {line_no}: {e}")))?;
-        let (request, picture_rows) = chat_request_of(&record)
+        let tokens = meter
+            .tokens(line)
             .map_err(|reason| unreadable(format!("line {line_no}: {reason}")))?;
-        let tokens = picture_rows
-            + tokenizer
-                .prompt_ids(&request)
-                .map_err(|e| unreadable(format!("line {line_no}: {e}")))?
-                .len();
         if tokens > max_block as usize {
+            let origin = serde_json::from_str(line).ok().and_then(|r| origin_of(&r));
             overlong.push(OverlongRecord {
                 dataset: dataset.to_path_buf(),
                 line: line_no,
-                origin: origin_of(&record),
+                origin,
                 tokens,
             });
         }
     }
     Ok(overlong)
-}
-
-/// The text of a message's `content`, which is a string or a list of parts
-/// (the text parts joined, as the trainer joins them), and the rows the
-/// pictures among the parts add to the sequence the decoder trains on.
-fn content_of(message: &serde_json::Value) -> (String, usize) {
-    match message.get("content") {
-        Some(serde_json::Value::String(text)) => (text.clone(), 0),
-        Some(serde_json::Value::Array(parts)) => {
-            let mut text = String::new();
-            let mut rows = 0;
-            for part in parts {
-                if let Some(piece) = part.get("text").and_then(serde_json::Value::as_str) {
-                    text.push_str(piece);
-                } else if let Some(url) = part
-                    .pointer("/image_url/url")
-                    .and_then(serde_json::Value::as_str)
-                {
-                    rows += image_rows(url);
-                }
-            }
-            (text, rows)
-        }
-        _ => (String::new(), 0),
-    }
-}
-
-/// A `generic-messages-v2` record as the request brain renders for its
-/// conversation: its messages (an assistant turn's tool calls and a tool
-/// result's call id included) and the tools it offers, and the rows its
-/// pictures add.
-fn chat_request_of(record: &serde_json::Value) -> Result<(brain::ChatRequest, usize), String> {
-    use brain::chat::{ToolCall, ToolSchema};
-    let text = |v: &serde_json::Value, key: &str| {
-        v.get(key)
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default()
-            .to_owned()
-    };
-    let mut picture_rows = 0;
-    let messages = record
-        .get("messages")
-        .and_then(serde_json::Value::as_array)
-        .ok_or("no messages array")?
-        .iter()
-        .map(|m| {
-            let (content, rows) = content_of(m);
-            picture_rows += rows;
-            Ok(match text(m, "role").as_str() {
-                "system" => brain::ChatMessage::system(content),
-                "user" => brain::ChatMessage::user(content),
-                "tool" => brain::ChatMessage::tool(text(m, "tool_call_id"), content),
-                "assistant" => {
-                    let calls = m
-                        .get("tool_calls")
-                        .and_then(serde_json::Value::as_array)
-                        .map(|calls| {
-                            calls
-                                .iter()
-                                .map(|c| {
-                                    let function = c.get("function").unwrap_or(c);
-                                    ToolCall {
-                                        id: text(c, "id"),
-                                        name: text(function, "name"),
-                                        arguments: text(function, "arguments"),
-                                    }
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    brain::ChatMessage::assistant(content).with_tool_calls(calls)
-                }
-                other => return Err(format!("unknown role {other:?}")),
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    let tools = record
-        .get("tools")
-        .and_then(serde_json::Value::as_array)
-        .map(|tools| {
-            tools
-                .iter()
-                .map(|t| {
-                    let function = t.get("function").unwrap_or(t);
-                    ToolSchema::new(
-                        text(function, "name"),
-                        text(function, "description"),
-                        function.get("parameters").cloned().unwrap_or_default(),
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    Ok((brain::ChatRequest::new(messages).tools(tools), picture_rows))
 }
 
 /// What a record's metadata names it by: its first experience, else its task.

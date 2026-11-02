@@ -48,8 +48,11 @@ pub mod device;
 pub mod embed;
 pub mod error;
 pub mod exam;
+#[cfg(feature = "scripted")]
+pub mod fixture;
 pub mod local;
 pub mod manifest;
+pub mod measure;
 pub mod pictures;
 pub mod policy_gradient;
 pub mod precision;

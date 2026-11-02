@@ -56,7 +56,8 @@ pub struct BuildArgs {
     pub limit: Option<usize>,
     /// The longest record, in tokens, the training that reads the
     /// dataset fits: a longer record is left out and counted instead of
-    /// stopping the training.
+    /// stopping the training. Records are counted as the trainer counts
+    /// them; the report says so, or that a floor stood in for it.
     #[arg(long, value_name = "TOKENS", value_parser = positive_count)]
     pub max_block: Option<usize>,
     /// Split a record longer than `--max-block` into consecutive windows

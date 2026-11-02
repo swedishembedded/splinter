@@ -22,23 +22,7 @@ pub(super) fn carries_reasoning(path: &Path) -> Result<bool, OrchestratorError> 
     use std::io::BufRead;
     let file = std::fs::File::open(path).map_err(io(path))?;
     for line in std::io::BufReader::new(file).lines() {
-        let line = line.map_err(io(path))?;
-        // Cheap test first: most lines of a dataset without reasoning never
-        // parse.
-        if !line.contains("\"reasoning_content\"") {
-            continue;
-        }
-        let record: serde_json::Value = serde_json::from_str(&line).map_err(|e| {
-            OrchestratorError::Refused(format!("{}: not a JSON record: {e}", path.display()))
-        })?;
-        let reasons = record["messages"].as_array().is_some_and(|messages| {
-            messages.iter().any(|m| {
-                m["reasoning_content"]
-                    .as_str()
-                    .is_some_and(|text| !text.trim().is_empty())
-            })
-        });
-        if reasons {
+        if splinter_model::measure::carries_reasoning(&line.map_err(io(path))?) {
             return Ok(true);
         }
     }

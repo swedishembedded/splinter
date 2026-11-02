@@ -11,7 +11,7 @@ use serde::Serialize;
 use splinter_sdk::ask::Answer;
 use splinter_sdk::critique::Critiqued;
 use splinter_sdk::curriculum::corrections::Corrections;
-use splinter_sdk::datasets::{Built, Exported};
+use splinter_sdk::datasets::{BlockMeasure, Built, Exported};
 use splinter_sdk::experiences::{CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList};
 use splinter_sdk::judge::{Calibrated, JudgeMeasured};
 use splinter_sdk::router::Routed;
@@ -537,6 +537,24 @@ impl Report for Built {
             self.path.display(),
             tally(&self.excluded)
         );
+        match &self.block_measure {
+            Some(BlockMeasure::Trainer { first_refusal }) => {
+                out.push_str("  block: records counted as the trainer counts them\n");
+                if let Some(reason) = first_refusal {
+                    let _ = writeln!(
+                        out,
+                        "  block: a record the trainer would refuse was left out: {reason}"
+                    );
+                }
+            }
+            Some(BlockMeasure::Floor { reason }) => {
+                let _ = writeln!(
+                    out,
+                    "  block: WARNING records counted by a floor on the trainer's count, which can still refuse a kept record: {reason}"
+                );
+            }
+            None => {}
+        }
         for group in &self.groups {
             let _ = writeln!(
                 out,

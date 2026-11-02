@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 
 use splinter_data::{DatasetCheck, Format};
 use splinter_model::capabilities::{overlong_records, BrainDatasetCheck};
+use splinter_model::fixture::byte_level_checkpoint;
 
 /// A conversation that offers one tool, calls it, reads the result and
 /// answers. Only the two assistant turns are supervised.
@@ -32,37 +33,6 @@ fn write(dir: &Path, name: &str, lines: &[String]) -> PathBuf {
     let path = dir.join(name);
     std::fs::write(&path, lines.join("\n") + "\n").unwrap();
     path
-}
-
-/// A checkpoint directory whose tokenizer maps every byte to one token, so a
-/// record's length is the byte length of its rendering.
-fn byte_level_checkpoint(dir: &Path) {
-    let printable: Vec<u32> = (0x21..=0x7e)
-        .chain(0xa1..=0xac)
-        .chain(0xae..=0xff)
-        .collect();
-    let mut extra = 0;
-    let mut vocab = serde_json::Map::new();
-    for byte in 0u32..256 {
-        let ch = if printable.contains(&byte) {
-            byte
-        } else {
-            extra += 1;
-            255 + extra
-        };
-        vocab.insert(char::from_u32(ch).unwrap().to_string(), byte.into());
-    }
-    std::fs::write(
-        dir.join("vocab.json"),
-        serde_json::to_string(&vocab).unwrap(),
-    )
-    .unwrap();
-    std::fs::write(dir.join("merges.txt"), "#version: 0.2\n").unwrap();
-    std::fs::write(
-        dir.join("tokenizer_config.json"),
-        r#"{"added_tokens_decoder":{"256":{"content":"<|endoftext|>","special":true},"257":{"content":"<|im_start|>","special":true},"258":{"content":"<|im_end|>","special":true}}}"#,
-    )
-    .unwrap();
 }
 
 /// A record that offers tools and calls them passes the check a dataset is
@@ -108,17 +78,17 @@ fn a_record_over_max_block_is_reported_by_name_before_training() {
             plain_record("short"),
         ],
     );
-    let found = overlong_records(&path, dir.path(), 400).unwrap();
+    let found = overlong_records(&path, dir.path(), true, false, 100).unwrap();
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].line, 2);
     assert_eq!(found[0].origin.as_deref(), Some("exp-long"));
-    assert!(found[0].tokens > 400, "{found:?}");
+    assert!(found[0].tokens > 100, "{found:?}");
     let named = found[0].to_string();
     assert!(
         named.contains("train.jsonl:2") && named.contains("exp-long") && named.contains("tokens"),
         "{named}"
     );
-    assert!(overlong_records(&path, dir.path(), 100_000)
+    assert!(overlong_records(&path, dir.path(), true, false, 100_000)
         .unwrap()
         .is_empty());
 }
@@ -156,10 +126,11 @@ fn the_dataset_check_takes_pictures_in_the_context_and_refuses_the_rest() {
     assert!(answered.contains("supervised"), "{answered}");
 }
 
-/// A picture is rows in the sequence the decoder trains on, which the
-/// length of a record counts; its base64 is not text.
+/// A picture is rows only a vision tower can give it, so on a base without one
+/// the trainer refuses the record and so does the check, naming the line,
+/// rather than counting a guess.
 #[test]
-fn a_picture_counts_the_rows_it_adds_to_a_record() {
+fn a_picture_on_a_base_without_a_vision_tower_is_refused_naming_its_line() {
     let dir = tempfile::tempdir().unwrap();
     byte_level_checkpoint(dir.path());
     let path = write(
@@ -167,12 +138,8 @@ fn a_picture_counts_the_rows_it_adds_to_a_record() {
         "train.jsonl",
         &[plain_record("short"), image_record(1, false)],
     );
-    // The stand-in picture has no readable header: the most one image takes.
-    let found = overlong_records(&path, dir.path(), 4_000).unwrap();
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert_eq!(found[0].line, 2);
-    assert!(found[0].tokens > 4_096, "{found:?}");
-    assert!(overlong_records(&path, dir.path(), 5_000)
-        .unwrap()
-        .is_empty());
+    let err = overlong_records(&path, dir.path(), true, false, 5_000)
+        .expect_err("a text-only trainer cannot read the picture")
+        .to_string();
+    assert!(err.contains("line 2") && err.contains("image"), "{err}");
 }

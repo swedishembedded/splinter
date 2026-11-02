@@ -66,6 +66,7 @@ pub mod acquire;
 pub mod ask;
 pub mod author;
 pub mod bench;
+mod block;
 pub mod brain_server;
 pub mod budget;
 pub mod canaries;

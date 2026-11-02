@@ -103,8 +103,8 @@ use splinter_store::experiences::StoreError;
 
 pub use corpus::{Corpus, Entry};
 pub use dataset::{
-    manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest, Unchecked,
-    EXPORT_FORMAT,
+    dataset_line, manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest,
+    Unchecked, EXPORT_FORMAT,
 };
 pub use record::{Record, RecordBody, RecordMetadata, Side};
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
@@ -350,6 +350,36 @@ pub struct Projection {
     /// stated any. Set by whoever resolved the sources, never by a view.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terms: Option<splinter_core::terms::Terms>,
+    /// How [`Projection::within_block`] / [`Projection::split_over_block`]
+    /// measured the records, when the caller bounded them; `None` when it did
+    /// not. Set by the caller that supplied the measure, so a build reports
+    /// whether the bound is the trainer's own count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_measure: Option<BlockMeasure>,
+}
+
+/// What a record's size was counted by when a projection was bounded to a
+/// training block.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockMeasure {
+    /// The trainer's own count: the dataset line the record is written as,
+    /// read and encoded by the training backend's chat reader. A record
+    /// fitting the bound by it is not refused by the trainer's length check.
+    Trainer {
+        /// The first reason a record could not be measured, if any could not:
+        /// the trainer would refuse it too, so it was left out.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        first_refusal: Option<String>,
+    },
+    /// The record's JSON text through a tokenizer (else a character ratio)
+    /// plus image rows: a floor on the trainer's count, which also counts the
+    /// chat template's markup. A record fitting the bound by it can still be
+    /// refused by the trainer.
+    Floor {
+        /// Why the trainer's count was not used.
+        reason: String,
+    },
 }
 
 impl Projection {
@@ -374,6 +404,7 @@ impl Projection {
             packed: false,
             outcome_verified_only: false,
             terms: None,
+            block_measure: None,
         }
     }
 
@@ -492,9 +523,9 @@ impl Projection {
     /// The same projection without the records longer than `max_block`
     /// tokens as `size` counts them, which the trainer would refuse mid-run;
     /// they are counted as [`Exclusion::OverBlock`]. `size` sees the record
-    /// as it stands, so a system prompt set before this call is counted; the
-    /// chat template's own markup is not, so a bound set to a trainer's limit
-    /// needs the tokenizer's measure to be exact.
+    /// as it stands, so a system prompt set before this call is counted; a
+    /// bound set to a trainer's limit needs the trainer's own count as
+    /// `size` ([`BlockMeasure::Trainer`]), not a floor on it.
     #[must_use]
     pub fn within_block(mut self, max_block: usize, size: &dyn Fn(&Record) -> usize) -> Self {
         let total = self.records.len();

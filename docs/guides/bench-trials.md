@@ -124,7 +124,9 @@ What is counted instead of dropped:
   rewritten between two of them), so no single list of messages holds what the model saw.
 
 `--pack` and `--max-block` apply as for text: `--max-block` counts each picture as the
-rows it adds to the sequence (one per 32 x 32 pixels, at most 4096) and not as text. Brain
+rows the base's vision tower gives it and not as text, exactly as `train` counts it. Where
+the base has no readable chat tokenizer, the build says in its report that it measured by
+a floor instead, and then counts a picture as one row per 32 x 32 pixels (at most 4096). Brain
 refuses an image of more than 36 megapixels, a longer record than `max_block`, or a
 held-out record with pictures when it trains; the dataset check at build time reads the
 pictures only as inline `data:` URLs.

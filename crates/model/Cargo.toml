@@ -27,6 +27,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+# Its own specs use the checkpoint fixture (`fixture`).
+splinter-model = { workspace = true, features = ["scripted"] }
 brain-catalog = { workspace = true }
 brain-testutil = { workspace = true }
 splinter-store = { workspace = true }

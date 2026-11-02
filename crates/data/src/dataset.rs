@@ -340,6 +340,14 @@ pub(crate) fn place_dataset(
     Ok((digest, Digest::of(&manifest)))
 }
 
+/// `record` as the line [`write_dataset`] writes for a projection of
+/// `objective`: the text a trainer reads, for a caller that sizes a record as
+/// the trainer will. Refused when the record's shape does not serve
+/// `objective`.
+pub fn dataset_line(objective: Objective, record: &Record) -> Result<String, ViewError> {
+    line(objective.line_format(), objective, 0, record)
+}
+
 /// `record` as one line of `format`, refused when its shape does not serve
 /// `objective`.
 fn line(

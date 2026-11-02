@@ -251,7 +251,13 @@ pub fn train_policy_gradient(
     let trained_on = validate_dataset_on(request.train, request.model_dir)?;
     let (weights, base_id) = base_weights(request.model_dir)?;
     if let Some(max_block) = request.max_block {
-        let long = overlong_records(request.train, request.model_dir, max_block)?;
+        let long = overlong_records(
+            request.train,
+            request.model_dir,
+            request.thinking,
+            false,
+            max_block,
+        )?;
         if !long.is_empty() {
             return Err(failed(format!(
                 "{} record(s) longer than max_block {max_block}; shorten or drop them: {}",
