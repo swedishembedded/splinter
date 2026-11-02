@@ -112,6 +112,28 @@ def a_dataset_can_be_built_to_a_smaller_block_than_the_training_fits():
     assert plain[plain.index("--max-block") + 1] == "16384", "by default the dataset fits the training block"
 
 
+def steps_run_side_by_side_and_a_failure_is_raised_after_both_finish():
+    import threading
+    met = threading.Barrier(2, timeout=5)  # each step waits for the other: only side by side do both pass
+    done = []
+
+    def first():
+        met.wait()
+        done.append("first")
+
+    def failing():
+        met.wait()
+        raise RuntimeError("the exam failed")
+
+    try:
+        loop.concurrently([first, failing])
+    except RuntimeError as error:
+        assert "exam failed" in str(error)
+    else:
+        raise AssertionError("a failed step must stop the loop")
+    assert done == ["first"], "the other step still finished"
+
+
 def an_unknown_objective_is_refused():
     campaign = loop.Campaign({"train": {**TRAIN, "objective": "dpo"}})
     try:
@@ -131,6 +153,9 @@ class Loop(unittest.TestCase):
 
     def test_a_dataset_can_be_built_to_a_smaller_block_than_the_training_fits(self):
         a_dataset_can_be_built_to_a_smaller_block_than_the_training_fits()
+
+    def test_steps_run_side_by_side_and_a_failure_is_raised_after_both_finish(self):
+        steps_run_side_by_side_and_a_failure_is_raised_after_both_finish()
 
     def test_an_unknown_objective_is_refused(self):
         an_unknown_objective_is_refused()

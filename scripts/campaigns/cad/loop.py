@@ -33,10 +33,11 @@ promoted adapter):
      by the weighted ``reward.metrics``), every action of it is weighed by the
      attempt's advantage over its group, and brain's clipped policy gradient
      trains the champion's adapter on, with a KL anchor;
-6. **candidate**: the adapter is served and measured on the same exam;
+6. **candidate**: the adapter is served and measured on the same exam.
    If the stack (agent build, serving build, benchmark commit) changed since
-   the champion's exam, the champion sits it again first: the two exams that
-   are compared always ran on one stack;
+   the champion's exam, the champion sits it again (beside the candidate, on
+   the other card, when there are two): the two exams that are compared
+   always ran on one stack;
 7. **decide**: the candidate replaces the champion only when its paired
    per-task gain on the exam is positive (the benchmark's paired report: mean
    delta and its 95% interval); the decision and its numbers are recorded.
@@ -422,6 +423,26 @@ def adopted(job: str) -> str:
 # --------------------------------------------------------------------------- the loop
 
 
+def concurrently(steps) -> None:
+    """Run `steps` side by side (one per card) and wait for all; the first
+    failure is raised once every step has finished, so none is cut off."""
+    failures: list[BaseException] = []
+
+    def guarded(step):
+        try:
+            step()
+        except BaseException as error:  # noqa: BLE001 - re-raised below, after all finish
+            failures.append(error)
+
+    threads = [threading.Thread(target=guarded, args=(step,)) for step in steps]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    if failures:
+        raise failures[0]
+
+
 def generation(campaign: Campaign, number: int, stop_before: str | None = None) -> bool:
     """Run generation `number` from where it stands; False when it halted
     before `stop_before` (the step is left for a later run)."""
@@ -459,21 +480,7 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
 
     if exam_card:
         # Two cards: the champion explores on one while it sits the exam on the other.
-        failures: list[BaseException] = []
-
-        def guarded(step):
-            try:
-                step()
-            except BaseException as error:  # noqa: BLE001 - re-raised below, after both finish
-                failures.append(error)
-
-        threads = [threading.Thread(target=guarded, args=(step,)) for step in (explore, exam)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-        if failures:
-            raise failures[0]
+        concurrently([explore, exam])
     else:
         explore()
         exam()
@@ -489,16 +496,21 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
         if exam_card:
             stop_serving(campaign, exam_card[0])
         gen.record("learn", learned=learn(campaign, gen, learning_exports(campaign, states), start))
-    if not gen.done("candidate") and gen.state.get("exam_stack") != current:
+    def exam_again() -> None:
         # The stack changed since the champion sat the exam (an upgraded agent or
         # server build): measure it again, so champion and candidate meet on one stack.
-        c, p = exam_card or (card, port)
+        if gen.done("candidate") or gen.done("exam-again") or gen.state.get("exam_stack") == current:
+            return
+        c, p = (card, port)  # beside the candidate's exam when there are two cards
         model_id = serve(campaign, start, gen, c, p)
         job = bench_run(campaign, gen, profile(campaign, gen, model_id, b["exam_attempts"], "exam-again", p),
                         "eval", "exam-again")
         gen.record("exam-again", exam_job=job, exam_stack=current,
                    exam_export=bench_export(campaign, gen, job, "exam-again"))
-    if not gen.done("candidate"):
+
+    def candidate_exam() -> None:
+        if gen.done("candidate"):
+            return
         candidate = {"name": f"gen{number + 1:03d}", "adapter": gen.state["learned"]["adapter"]}
         c, p = exam_card or (card, port)
         model_id = serve(campaign, candidate, gen, c, p)
@@ -508,6 +520,13 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
         candidate["exam_stack"] = current
         gen.record("candidate", candidate=candidate, candidate_exam_export=bench_export(campaign, gen, job,
                                                                                          "candidate-exam"))
+
+    if exam_card:
+        # Two cards: the champion sits the exam again on one while the candidate sits it on the other.
+        concurrently([exam_again, candidate_exam])
+    else:
+        exam_again()
+        candidate_exam()
     if not gen.done("decide"):
         summary = bench_compare(campaign, gen.state["candidate"]["exam_job"], gen.state["exam_job"])
         gen.record("decide", decision=decide(summary, campaign["promote"]))
