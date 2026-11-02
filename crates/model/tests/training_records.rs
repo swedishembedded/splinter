@@ -17,7 +17,10 @@ use std::path::{Path, PathBuf};
 
 use splinter_data::{DatasetCheck, Format};
 use splinter_model::capabilities::{overlong_records, BrainDatasetCheck};
-use splinter_model::fixture::byte_level_checkpoint;
+use splinter_model::fixture::{
+    byte_level_checkpoint, png_data_url, vision_checkpoint, VISION_ROW_PIXELS,
+};
+use splinter_model::measure::RecordMeter;
 
 /// A conversation that offers one tool, calls it, reads the result and
 /// answers. Only the two assistant turns are supervised.
@@ -142,4 +145,30 @@ fn a_picture_on_a_base_without_a_vision_tower_is_refused_naming_its_line() {
         .expect_err("a text-only trainer cannot read the picture")
         .to_string();
     assert!(err.contains("line 2") && err.contains("image"), "{err}");
+}
+
+/// On a base with a vision tower a picture is counted as the fine-tune counts
+/// it: the rows its size gives it under the checkpoint's own image
+/// preprocessing, between the vision markers, read from the configuration
+/// alone (no weights, no device).
+#[test]
+fn a_picture_on_a_base_with_a_vision_tower_counts_the_rows_its_size_gives_it() {
+    let dir = tempfile::tempdir().unwrap();
+    vision_checkpoint(dir.path());
+    let meter = RecordMeter::for_model(dir.path(), true, false).unwrap();
+    let with_picture = |width: u32, height: u32| {
+        let url = png_data_url(width, height);
+        format!(
+            r#"{{"messages":[{{"role":"user","content":[{{"type":"text","text":"see"}},{{"type":"image_url","image_url":{{"url":"{url}"}}}}],"train":false}},{{"role":"assistant","content":"a","train":true}}]}}"#
+        )
+    };
+    let text_only = meter
+        .tokens(r#"{"messages":[{"role":"user","content":"see","train":false},{"role":"assistant","content":"a","train":true}]}"#)
+        .unwrap();
+    for (width, height) in [(64, 32), (96, 64), (32, 128)] {
+        let rows = (width / VISION_ROW_PIXELS * (height / VISION_ROW_PIXELS)) as usize;
+        let counted = meter.tokens(&with_picture(width, height)).unwrap();
+        // The rows, and the two markers that open and close the run.
+        assert_eq!(counted - text_only, rows + 2, "{width}x{height}");
+    }
 }

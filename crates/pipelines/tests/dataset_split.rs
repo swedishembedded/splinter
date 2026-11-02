@@ -35,9 +35,10 @@ use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, S
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_core::kinds::WORKSPACE_CHANGE;
+use splinter_core::model_ref::ModelRef;
 use splinter_data::{chars_as_tokens, dataset_line, BlockMeasure, Exclusion, Projection, Record};
 use splinter_model::capabilities::overlong_records;
-use splinter_model::fixture::markup_heavy_checkpoint;
+use splinter_model::fixture::{byte_level_checkpoint, markup_heavy_checkpoint};
 use splinter_model::measure::RecordMeter;
 use splinter_model::TokenCounter;
 use splinter_orchestrator::Context;
@@ -131,6 +132,7 @@ fn request(set: SetId, max_block: Option<usize>, split_over_block: bool) -> Buil
         roles: None,
         images: false,
         rl: Default::default(),
+        base: None,
         split_over_block,
     }
 }
@@ -212,6 +214,7 @@ fn a_build_bounds_records_by_the_count_the_trainer_checks_them_by() {
     assert_eq!(
         left_out.block_measure,
         Some(BlockMeasure::Trainer {
+            base: base.clone(),
             first_refusal: None
         })
     );
@@ -240,4 +243,66 @@ fn a_build_without_a_chat_tokenizer_says_it_measured_by_the_floor() {
         panic!("the base has no tokenizer: {:?}", bounded.block_measure);
     };
     assert!(!reason.is_empty());
+}
+
+/// The records are counted for the model the training starts from, not for
+/// the policy a build happens to run under: a campaign trains a base other
+/// than the default policy, and counting by the policy's tokenizer and
+/// template leaves in records the trainer then refuses (or leaves out ones it
+/// reads).
+#[test]
+fn a_build_counts_records_for_the_base_the_training_starts_from() {
+    let (scratch, ctx) = scratch_context("dataset-base", Scripted::new(|_| String::new()), false);
+    let policy = ctx.config().policy_base.clone();
+    std::fs::create_dir_all(&policy).unwrap();
+    markup_heavy_checkpoint(&policy);
+    let trained = scratch.0.join("trained-base");
+    std::fs::create_dir_all(&trained).unwrap();
+    byte_level_checkpoint(&trained);
+    let experience = attempt(&ctx);
+    let set = set_of(&ctx, &experience);
+
+    let (unbounded, _) = project_with(&ctx, &request(set.clone(), None, false), None).unwrap();
+    let line = dataset_line(unbounded.objective, &unbounded.records[0]).unwrap();
+    let by_policy = RecordMeter::for_model(&policy, false, unbounded.packed)
+        .unwrap()
+        .tokens(&line)
+        .unwrap();
+    let by_trained = RecordMeter::for_model(&trained, false, unbounded.packed)
+        .unwrap()
+        .tokens(&line)
+        .unwrap();
+    assert!(
+        by_trained < by_policy,
+        "the case under test: the bases count differently"
+    );
+
+    let bound = by_trained;
+    let for_trained = BuildRequest {
+        base: Some(ModelRef::Local {
+            checkpoint: trained.display().to_string(),
+            adapter: None,
+            context_tokens: None,
+        }),
+        ..request(set.clone(), Some(bound), false)
+    };
+    let (kept, _) = project_with(&ctx, &for_trained, None).unwrap();
+    assert_eq!(kept.records.len(), 1, "it fits the base it is trained on");
+    assert_eq!(
+        kept.block_measure,
+        Some(BlockMeasure::Trainer {
+            base: trained.clone(),
+            first_refusal: None
+        })
+    );
+    let path = written(&scratch.0, &kept);
+    assert!(
+        overlong_records(&path, &trained, false, kept.packed, bound as u32)
+            .unwrap()
+            .is_empty()
+    );
+
+    // Unnamed, the policy counts: the same bound leaves the record out.
+    let (left_out, _) = project_with(&ctx, &request(set, Some(bound), false), None).unwrap();
+    assert!(left_out.records.is_empty());
 }

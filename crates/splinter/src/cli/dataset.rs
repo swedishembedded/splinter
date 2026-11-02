@@ -60,6 +60,13 @@ pub struct BuildArgs {
     /// them; the report says so, or that a floor stood in for it.
     #[arg(long, value_name = "TOKENS", value_parser = positive_count)]
     pub max_block: Option<usize>,
+    /// The model the training that reads the dataset starts from, as
+    /// `train --from` names it: the checkpoint whose tokenizer, chat template
+    /// and vision configuration count the records of `--max-block`. Without
+    /// it, the policy; give it when training another base, or the records are
+    /// counted for the wrong model.
+    #[arg(long, value_parser = model_ref, value_name = "REF", requires = "max_block")]
+    pub from: Option<ModelRef>,
     /// Split a record longer than `--max-block` into consecutive windows
     /// that each fit, keeping every supervised action, instead of leaving
     /// it out; every window repeats the task instruction. A window with no

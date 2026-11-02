@@ -17,6 +17,7 @@ use splinter_core::annotation::Strength;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{Environment, ExperienceId};
+use splinter_core::model_ref::ModelRef;
 use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
 use splinter_data::{
@@ -107,6 +108,19 @@ pub struct BuildRequest {
     /// For the policy-gradient view: how an attempt's reward and its advantage
     /// are made.
     pub rl: RlBuild,
+    /// The model the training that reads the dataset starts from (`train
+    /// --from`): the checkpoint whose tokenizer, chat template and vision
+    /// configuration count the records of a `max_block` bound. `None` is the
+    /// policy, which is also `train`'s default.
+    #[serde(serialize_with = "as_text")]
+    pub base: Option<ModelRef>,
+}
+
+fn as_text<S: serde::Serializer>(model: &Option<ModelRef>, out: S) -> Result<S::Ok, S::Error> {
+    match model {
+        Some(model) => out.collect_str(model),
+        None => out.serialize_none(),
+    }
 }
 
 /// How the policy-gradient view rewards an attempt and reads its advantage;
@@ -526,8 +540,16 @@ fn project_without(
             .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
     }
     if let Some(max_block) = request.max_block {
-        projection =
-            crate::block::within_policy_block(ctx, projection, max_block, request.split_over_block);
+        let base = crate::train::trained_base(
+            ctx,
+            request.base.as_ref().unwrap_or(&ModelRef::policy_default()),
+        )?;
+        projection = crate::block::within_policy_block(
+            &base,
+            projection,
+            max_block,
+            request.split_over_block,
+        );
     }
     if let Some(passages) = passages {
         projection = with_passages(

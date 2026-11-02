@@ -93,7 +93,7 @@ use splinter_model::policy_gradient::TrainedPolicyGradient;
 use splinter_model::train::{
     fine_tune, train_preference, FineTune, PreferenceTune, Trained, TrainedPreference,
 };
-use splinter_model::{ModelSelection, PolicyError};
+use splinter_model::{LocalWeights, ModelSelection, PolicyError};
 
 use crate::datasets::{examples_in, record_dataset_lineage, resolve_dataset};
 use crate::release::probe::split_records;
@@ -306,6 +306,22 @@ pub trait Trainer {
             "this trainer trains adapters only: it cannot merge one into a base".into(),
         ))
     }
+}
+
+/// The local weights a run `--from` `from` trains: the one resolution `train`
+/// and a `dataset build` bound to the training block both read the base by.
+fn trained_weights(ctx: &Context, from: &ModelRef) -> Result<LocalWeights, OrchestratorError> {
+    match ctx.selection(from)? {
+        ModelSelection::Local(weights) => Ok(weights),
+        ModelSelection::Remote(_) => Err(OrchestratorError::Refused(format!(
+            "{from} is reached over the network and cannot be trained here"
+        ))),
+    }
+}
+
+/// The checkpoint directory a run `--from` `from` trains.
+pub(crate) fn trained_base(ctx: &Context, from: &ModelRef) -> Result<PathBuf, OrchestratorError> {
+    Ok(trained_weights(ctx, from)?.base)
 }
 
 /// Trains with brain's LoRA fine-tunes: chat fine-tuning for the
@@ -558,12 +574,7 @@ pub(crate) fn plan_training(
     } else {
         request.tuning.patience.unwrap_or(DEFAULT_PATIENCE)
     };
-    let ModelSelection::Local(weights) = ctx.selection(&request.from)? else {
-        return Err(OrchestratorError::Refused(format!(
-            "{} is reached over the network and cannot be trained here",
-            request.from
-        )));
-    };
+    let weights = trained_weights(ctx, &request.from)?;
     let pin: Option<PolicyPin> = match &request.from {
         ModelRef::Policy(alias) => ctx.policy_pin(alias)?,
         _ => None,

@@ -9,10 +9,11 @@
 //! Bounding a dataset's records to the training block (`dataset build
 //! --max-block`).
 
+use std::path::Path;
+
 use splinter_data::{BlockMeasure, Projection};
 use splinter_model::measure::RecordMeter;
 use splinter_model::TokenCounter;
-use splinter_orchestrator::context::Context;
 
 /// `projection` without the records longer than `max_block` tokens; with
 /// `split`, a longer chat record is split into windows that fit
@@ -20,7 +21,9 @@ use splinter_orchestrator::context::Context;
 ///
 /// A record is measured as the trainer will measure it: written as the
 /// dataset line it will be, read and encoded for the policy base by brain's
-/// chat reader ([`RecordMeter`], the count `train`'s length check refuses by),
+/// chat reader ([`RecordMeter`], the count `train`'s length check refuses by)
+/// for `base`, the checkpoint the training starts from (pictures count the
+/// rows its own vision configuration gives them),
 /// so every record kept passes that check at the same bound. Only where the
 /// trainer's count is unavailable - the policy base has no readable chat
 /// tokenizer, or the objective's records are not chat lines - is a record
@@ -29,12 +32,12 @@ use splinter_orchestrator::context::Context;
 /// measure was used, and why, is recorded on the projection
 /// ([`BlockMeasure`]) for the build report.
 pub(crate) fn within_policy_block(
-    ctx: &Context,
+    base: &Path,
     projection: Projection,
     max_block: usize,
     split: bool,
 ) -> Projection {
-    let (mut projection, measure) = match trainer_measure(ctx, &projection) {
+    let (mut projection, measure) = match trainer_measure(base, &projection) {
         Ok(meter) => {
             let refusal = std::cell::RefCell::new(None::<String>);
             let objective = projection.objective;
@@ -51,10 +54,16 @@ pub(crate) fn within_policy_block(
             };
             let bounded = bounded(projection, max_block, split, &size);
             let first_refusal = refusal.into_inner();
-            (bounded, BlockMeasure::Trainer { first_refusal })
+            (
+                bounded,
+                BlockMeasure::Trainer {
+                    base: base.to_path_buf(),
+                    first_refusal,
+                },
+            )
         }
         Err(reason) => {
-            let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
+            let counter = TokenCounter::for_model(base).ok();
             let tokens = |text: &str| {
                 counter
                     .as_ref()
@@ -88,9 +97,9 @@ fn bounded(
     }
 }
 
-/// The trainer's count of a record of `projection` for the policy base, in the
+/// The trainer's count of a record of `projection` for the base `base`, in the
 /// mode its fine-tune would run in; the reason it cannot be had otherwise.
-fn trainer_measure(ctx: &Context, projection: &Projection) -> Result<RecordMeter, String> {
+fn trainer_measure(base: &Path, projection: &Projection) -> Result<RecordMeter, String> {
     use splinter_data::Format;
     let format = projection.objective.line_format();
     if format != Format::GenericMessagesV2 {
@@ -104,6 +113,5 @@ fn trainer_measure(ctx: &Context, projection: &Projection) -> Result<RecordMeter
         splinter_data::dataset_line(projection.objective, record)
             .is_ok_and(|line| splinter_model::measure::carries_reasoning(&line))
     });
-    RecordMeter::for_model(&ctx.config().policy_base, thinking, projection.packed)
-        .map_err(|e| e.to_string())
+    RecordMeter::for_model(base, thinking, projection.packed).map_err(|e| e.to_string())
 }

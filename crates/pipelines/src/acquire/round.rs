@@ -390,6 +390,7 @@ impl Acquisition<'_> {
                 roles: None,
                 images: false,
                 rl: Default::default(),
+                base: None,
             },
         ) {
             Ok(built) => built,

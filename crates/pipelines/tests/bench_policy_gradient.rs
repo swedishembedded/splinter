@@ -149,6 +149,7 @@ fn reward_options_belong_to_the_policy_gradient_view_alone() {
     let (train, _) = ingest_attempts(&ctx, &scratch.0.join("export"));
     let wrong_view = BuildRequest {
         rl: shaped(),
+        base: None,
         ..sft_request(train.clone())
     };
     let error = build(&ctx, &wrong_view).unwrap_err().to_string();

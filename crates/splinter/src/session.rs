@@ -465,6 +465,7 @@ impl Session {
                     export_only,
                     limit,
                     max_block,
+                    from,
                     split_over_block,
                     pack,
                     control,
@@ -516,6 +517,7 @@ impl Session {
                         fail_ceiling,
                         advantage: advantage.unwrap_or_default(),
                     },
+                    base: from,
                 };
                 // The strip is settled inside the run, which states the seed
                 // `mix:F` picks its subjects by.

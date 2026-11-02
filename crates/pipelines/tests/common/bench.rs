@@ -51,6 +51,7 @@ pub fn sft_request(set: SetId) -> BuildRequest {
         roles: None,
         images: false,
         rl: Default::default(),
+        base: None,
     }
 }
 

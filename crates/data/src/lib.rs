@@ -367,6 +367,11 @@ pub enum BlockMeasure {
     /// read and encoded by the training backend's chat reader. A record
     /// fitting the bound by it is not refused by the trainer's length check.
     Trainer {
+        /// The checkpoint whose tokenizer, chat template and image
+        /// preprocessing counted the records: the base the training starts
+        /// from.
+        #[serde(default)]
+        base: std::path::PathBuf,
         /// The first reason a record could not be measured, if any could not:
         /// the trainer would refuse it too, so it was left out.
         #[serde(default, skip_serializing_if = "Option::is_none")]

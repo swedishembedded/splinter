@@ -496,6 +496,7 @@ fn teach_records(
             roles: None,
             images: false,
             rl: Default::default(),
+            base: None,
         },
         None,
     )?;

@@ -538,8 +538,15 @@ impl Report for Built {
             tally(&self.excluded)
         );
         match &self.block_measure {
-            Some(BlockMeasure::Trainer { first_refusal }) => {
-                out.push_str("  block: records counted as the trainer counts them\n");
+            Some(BlockMeasure::Trainer {
+                base,
+                first_refusal,
+            }) => {
+                let _ = writeln!(
+                    out,
+                    "  block: records counted as the trainer counts them, for the base {}",
+                    base.display()
+                );
                 if let Some(reason) = first_refusal {
                     let _ = writeln!(
                         out,
