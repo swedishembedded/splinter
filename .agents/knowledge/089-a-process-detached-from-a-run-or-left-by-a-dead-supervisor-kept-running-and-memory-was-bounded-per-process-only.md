@@ -30,5 +30,5 @@ environment record only when set, so environments made before keep their identit
 
 Consequence for tests: a program in the namespace reports a pid the host does not know, so a test
 finds its processes by a marker argument in the host's command lines, not by a pid file.
-Spec: `crates/sandbox/tests/process_runner.rs`. Not covered: a host without user namespaces gets
+Spec: `crates/sandbox/tests/it/process_runner.rs`. Not covered: a host without user namespaces gets
 the group and parent-link kill only; container sandboxes use the container's own memory limit.

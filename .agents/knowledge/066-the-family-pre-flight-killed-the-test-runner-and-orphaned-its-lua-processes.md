@@ -24,7 +24,7 @@ the group on timeout; every Lua host sets a kernel CPU limit (10 s) on its
 interpreter, which ends a loop even after its parent is gone, and uses a wall
 timeout of 5 s. Specs: `scripts/tasks/test_runaway.py` (a looping grandchild
 is gone after `run_suite` times out; every host's `lua` has a CPU limit) and
-`crates/sandbox/tests/process_runner.rs` (the runner leaves no looping
+`crates/sandbox/tests/it/process_runner.rs` (the runner leaves no looping
 grandchild).
 
 The runner's group kill alone did not reach a process that moves to a session or group of its

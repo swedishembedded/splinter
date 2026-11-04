@@ -1,0 +1,499 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements training data built from a writer's own
+// text whose held-out measurement cannot leak, for its clients. If your
+// team needs expertise in training a model on a person's voice and proving
+// what it was measured on was never trained on, you can procure our
+// services by sending an email to info@swedishembedded.com.
+
+//! Spec: the `voice` view turns the writer's own text into records of the
+//! shape the policy is trained and asked in, with no model in the loop, and
+//! such a record is held out with the family of the letter it prints.
+//!
+//! Two editions print one letter. A conversation was written from one
+//! print; the other print reaches the training set only through the voice
+//! view. Both records name the same family, so when the conversation's
+//! family is held out, the other print's text is held out with it: the exam
+//! never asks about a letter the policy was trained on, under either name.
+
+// Helpers outside a #[test] fn unwrap too: a panic is the failure report.
+#![allow(clippy::unwrap_used)]
+
+use crate::common;
+
+use std::collections::BTreeSet;
+
+use common::{scratch_context, Scratch, Scripted};
+use splinter_agent::CancelToken;
+use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
+use splinter_core::experience::{Environment, Experience, Provenance, Span, Task};
+use splinter_core::model_ref::ModelRef;
+use splinter_core::prompt::persona_prompt;
+use splinter_core::source::PartRef;
+use splinter_data::holdout::holdout_split_records;
+use splinter_data::Exclusion;
+use splinter_orchestrator::Context;
+use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
+use splinter_pipelines::describe::DescribeRequest;
+use splinter_pipelines::sources::{self, SourceTarget};
+use splinter_store::experiences::ExperienceSet;
+
+/// `i` spelled in letters, so a word carries no digit and the text is prose.
+fn letters(mut i: usize) -> String {
+    let mut out = String::new();
+    loop {
+        out.push(char::from(b'a' + u8::try_from(i % 26).unwrap()));
+        i /= 26;
+        if i == 0 {
+            return out;
+        }
+    }
+}
+
+/// A letter of `n` words no other seed shares, under an address line.
+fn letter(seed: &str, n: usize) -> String {
+    let words: Vec<String> = (0..n).map(|i| format!("{seed}x{}", letters(i))).collect();
+    format!("To a friend\nMonticello, 1800\n\n{}.\n", words.join(" "))
+}
+
+/// The materials: `count` letters, the first printed twice (the second print
+/// with a few words more), captured as one source.
+fn materials(scratch: &Scratch, ctx: &Context, count: usize) -> splinter_core::source::SourceId {
+    let dir = scratch.0.join("letters");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..count {
+        std::fs::write(dir.join(format!("letter-{n}.txt")), letter(&letters(n), 80)).unwrap();
+    }
+    let reprint = format!(
+        "{} and a few words more.\n",
+        letter("a", 80).trim_end_matches(".\n")
+    );
+    std::fs::write(dir.join("letter-0-reprint.txt"), reprint).unwrap();
+    let target = SourceTarget::from_learn_arg(&dir.display().to_string()).unwrap();
+    sources::add(ctx, &target).unwrap().source.id
+}
+
+/// A passed conversation written from `part` of `source`, stored with its
+/// verdict.
+fn conversation(
+    ctx: &Context,
+    source: &splinter_core::source::SourceId,
+    part: &str,
+    n: usize,
+) -> splinter_core::experience::ExperienceId {
+    let found = ctx.sources().get_source(source).unwrap();
+    let found = found.part(part).unwrap();
+    let span = Span::in_part(
+        PartRef {
+            source: source.clone(),
+            name: part.to_string(),
+        },
+        found.content.clone(),
+        0,
+        found.bytes,
+    )
+    .unwrap();
+    let task = Task::new(
+        "converse",
+        vec![span],
+        Environment::closed_book(),
+        format!("What do you make of the matter in letter {n}?"),
+        vec![],
+    )
+    .unwrap();
+    let experience = Experience::answered_without_a_run(
+        task,
+        &format!("What I make of it is in letter {n}."),
+        Provenance::new("scripted/teacher", ctx.clock()),
+    )
+    .unwrap();
+    let store = ctx.experiences();
+    let id = store.put(&experience).unwrap();
+    store
+        .annotate(&Annotation {
+            experience: id.clone(),
+            producer: Producer {
+                name: "scripted/judge".into(),
+                version: "1".into(),
+            },
+            body: AnnotationBody::Verdict {
+                outcome: Outcome::Pass,
+                strength: Strength::Judged,
+                evidence: serde_json::Value::Null,
+            },
+        })
+        .unwrap();
+    id
+}
+
+#[test]
+fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
+    let (scratch, ctx) = scratch_context("voice", Scripted::new(|_| String::new()), false);
+    let source = materials(&scratch, &ctx, 12);
+    // Conversations from the first print of each letter; the reprint of
+    // letter 0 is in no conversation's evidence.
+    let members: Vec<_> = (0..12)
+        .map(|n| conversation(&ctx, &source, &format!("letter-{n}.txt"), n))
+        .collect();
+    let set = ctx
+        .experiences()
+        .put_set(&ExperienceSet {
+            name: "conversations".into(),
+            members,
+        })
+        .unwrap();
+    let prompt = persona_prompt("The Writer");
+    let dialogues = build(
+        &ctx,
+        &BuildRequest {
+            sets: vec![set.clone()],
+            view: ViewName::SftFinal,
+            strip: None,
+            min_strength: Some(Strength::Judged),
+            system_prompt: Some(prompt.clone()),
+            export_only: false,
+            limit: None,
+            voice: VoiceBuild::default(),
+            max_block: None,
+            pack: false,
+            split_over_block: false,
+            control: Default::default(),
+            serialise_calls: false,
+            only_actions: None,
+            roles: None,
+            images: false,
+            rl: Default::default(),
+            base: None,
+        },
+    )
+    .unwrap();
+    let voice = build(
+        &ctx,
+        &BuildRequest {
+            sets: vec![set],
+            view: ViewName::Voice,
+            strip: None,
+            min_strength: None,
+            system_prompt: Some(prompt.clone()),
+            export_only: false,
+            limit: None,
+            voice: VoiceBuild::default(),
+            max_block: None,
+            pack: false,
+            split_over_block: false,
+            control: Default::default(),
+            serialise_calls: false,
+            only_actions: None,
+            roles: None,
+            images: false,
+            rl: Default::default(),
+            base: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(dialogues.records, 12);
+    // Every letter became a record of the writer's own words under the
+    // persona, with the part it prints named and no model's experience
+    // behind it; the reprint of letter 0 is the same family as its first
+    // print, and only one print of a family is projected.
+    assert_eq!(voice.records, 12, "{:?}", voice.excluded);
+    assert_eq!(voice.excluded.get(&Exclusion::Duplicate), Some(&1));
+    let lines: Vec<serde_json::Value> = std::fs::read_to_string(&voice.path)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    for record in &lines {
+        assert_eq!(record["messages"][0]["content"], prompt);
+        assert_eq!(record["messages"][1]["role"], "user");
+        let ask = record["messages"][1]["content"].as_str().unwrap();
+        assert!(
+            ask.starts_with("Write to a friend in 1800 about: "),
+            "{ask}"
+        );
+        assert_eq!(record["messages"][2]["train"], true);
+        assert!(record["metadata"]["experiences"].is_null());
+        assert_eq!(record["metadata"]["sources"].as_array().unwrap().len(), 1);
+        assert_eq!(record["metadata"]["view"], "voice");
+        assert!(record["metadata"]["group"].is_string(), "{record}");
+    }
+    let reprint = lines
+        .iter()
+        .find(|r| {
+            r["messages"][2]["content"]
+                .as_str()
+                .unwrap()
+                .contains("axa ")
+        })
+        .unwrap();
+
+    // The dialogue about letter 0 and both prints of it name one family,
+    // whichever dataset the record is in.
+    let dialogue_lines: Vec<serde_json::Value> = std::fs::read_to_string(&dialogues.path)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let about_zero = dialogue_lines
+        .iter()
+        .find(|r| {
+            r["messages"][1]["content"]
+                .as_str()
+                .unwrap()
+                .contains("letter 0?")
+        })
+        .unwrap();
+    assert_eq!(
+        about_zero["metadata"]["group"],
+        reprint["metadata"]["group"]
+    );
+
+    // Trained together, the split holds the newest families of the
+    // dialogues out, and every print of their letters with them: nothing
+    // trained on prints a held-out letter.
+    let mut records: Vec<String> = Vec::new();
+    records.extend(
+        std::fs::read_to_string(&dialogues.path)
+            .unwrap()
+            .lines()
+            .map(String::from),
+    );
+    records.extend(
+        std::fs::read_to_string(&voice.path)
+            .unwrap()
+            .lines()
+            .map(String::from),
+    );
+    let (train, held) = holdout_split_records(&records).unwrap();
+    let group_of = |line: &String| -> String {
+        serde_json::from_str::<serde_json::Value>(line).unwrap()["metadata"]["group"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let held_families: BTreeSet<String> = held.iter().map(|l| group_of(l)).collect();
+    let trained_families: BTreeSet<String> = train.iter().map(|l| group_of(l)).collect();
+    assert!(
+        held_families.is_disjoint(&trained_families),
+        "{held_families:?}"
+    );
+    assert!(
+        held.iter().any(|l| l.contains("\"view\":\"voice\"")),
+        "the writer's text of a held-out family is held out"
+    );
+    assert!(
+        held.iter().any(|l| l.contains("\"view\":\"sft-final\"")),
+        "the families are the dialogues'"
+    );
+}
+
+#[test]
+fn the_voice_dataset_is_limited_to_a_spread_of_the_corpus() {
+    let (scratch, ctx) = scratch_context("voice-limit", Scripted::new(|_| String::new()), false);
+    let source = materials(&scratch, &ctx, 12);
+    let members = vec![conversation(&ctx, &source, "letter-0.txt", 0)];
+    let set = ctx
+        .experiences()
+        .put_set(&ExperienceSet {
+            name: "one conversation".into(),
+            members,
+        })
+        .unwrap();
+    let voice = build(
+        &ctx,
+        &BuildRequest {
+            sets: vec![set],
+            view: ViewName::Voice,
+            strip: None,
+            min_strength: None,
+            system_prompt: None,
+            export_only: false,
+            limit: Some(5),
+            voice: VoiceBuild::default(),
+            max_block: None,
+            pack: false,
+            split_over_block: false,
+            control: Default::default(),
+            serialise_calls: false,
+            only_actions: None,
+            roles: None,
+            images: false,
+            rl: Default::default(),
+            base: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(voice.records, 5);
+    assert_eq!(voice.excluded.get(&Exclusion::OverLimit), Some(&7));
+}
+
+#[test]
+fn a_known_writer_is_asked_as_under_two_system_turns_within_a_token_budget() {
+    let (scratch, ctx) = scratch_context("voice-writer", Scripted::new(|_| String::new()), false);
+    let source = materials(&scratch, &ctx, 12);
+    let set = ctx
+        .experiences()
+        .put_set(&ExperienceSet {
+            name: "one conversation".into(),
+            members: vec![conversation(&ctx, &source, "letter-0.txt", 0)],
+        })
+        .unwrap();
+    let request = |writer: Option<&str>, system_prompt: Option<String>, budget| BuildRequest {
+        sets: vec![set.clone()],
+        view: ViewName::Voice,
+        strip: None,
+        min_strength: None,
+        system_prompt,
+        export_only: false,
+        limit: None,
+        voice: VoiceBuild {
+            writer: writer.map(String::from),
+            token_budget: budget,
+            ..VoiceBuild::default()
+        },
+        max_block: None,
+        pack: false,
+        split_over_block: false,
+        control: Default::default(),
+        serialise_calls: false,
+        only_actions: None,
+        roles: None,
+        images: false,
+        rl: Default::default(),
+        base: None,
+    };
+    let refused = build(&ctx, &request(Some("The Writer"), Some("p".into()), None));
+    assert!(
+        refused.is_err(),
+        "a system prompt would replace the writer's two"
+    );
+
+    let all = build(&ctx, &request(Some("The Writer"), None, None)).unwrap();
+    let systems: BTreeSet<String> = std::fs::read_to_string(&all.path)
+        .unwrap()
+        .lines()
+        .map(|l| {
+            let record: serde_json::Value = serde_json::from_str(l).unwrap();
+            record["messages"][0]["content"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        systems,
+        BTreeSet::from([
+            persona_prompt("The Writer"),
+            "You are The Writer.".to_string()
+        ]),
+        "half the records carry the persona prompt, half the identity line"
+    );
+
+    // A budget of half the tokens keeps about half the chunks, spread.
+    let half = build(
+        &ctx,
+        &request(Some("The Writer"), None, Some(all.records * 40)),
+    )
+    .unwrap();
+    assert!(half.records < all.records && half.records > 0, "{half:?}");
+}
+
+/// A passage is asked for by what a model says it is about when its
+/// description stands, and by its heading and opening when it does not;
+/// what was written once is not written again.
+#[test]
+fn a_passage_is_asked_by_its_description_unless_the_description_copies_it() {
+    // The model describes every letter in other words but the one that
+    // opens `dxa`, which it can only repeat.
+    let described = Scripted::new(|prompt| {
+        let description = if prompt.contains("dxa dxb") {
+            let words: Vec<String> = (0..30).map(|i| format!("dx{}", letters(i))).collect();
+            words.join(" ")
+        } else {
+            "A friend is told of a matter of weight, in plain words, as the correspondent saw \
+             it that year and what ought to follow from it for everyone concerned."
+                .to_string()
+        };
+        format!(r#"{{"description": "{description}"}}"#)
+    });
+    let (scratch, ctx) = scratch_context("voice-described", described.clone(), false);
+    let source = materials(&scratch, &ctx, 12);
+    let set = ctx
+        .experiences()
+        .put_set(&ExperienceSet {
+            name: "one conversation".into(),
+            members: vec![conversation(&ctx, &source, "letter-0.txt", 0)],
+        })
+        .unwrap();
+    let request = |describe: bool| BuildRequest {
+        sets: vec![set.clone()],
+        view: ViewName::Voice,
+        strip: None,
+        min_strength: None,
+        system_prompt: None,
+        export_only: false,
+        limit: None,
+        voice: VoiceBuild {
+            describe: describe.then(|| DescribeRequest {
+                generator: ModelRef::policy_default(),
+                deadline: None,
+                cancel: CancelToken::new(),
+            }),
+            ..VoiceBuild::default()
+        },
+        max_block: None,
+        pack: false,
+        split_over_block: false,
+        control: Default::default(),
+        serialise_calls: false,
+        only_actions: None,
+        roles: None,
+        images: false,
+        rl: Default::default(),
+        base: None,
+    };
+    let asks = |built: &splinter_pipelines::datasets::Built| -> Vec<String> {
+        std::fs::read_to_string(&built.path)
+            .unwrap()
+            .lines()
+            .map(|l| {
+                let record: serde_json::Value = serde_json::from_str(l).unwrap();
+                let turns = record["messages"].as_array().unwrap();
+                turns[turns.len() - 2]["content"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect()
+    };
+
+    let plain = build(&ctx, &request(false)).unwrap();
+    assert!(plain.described.is_none());
+    assert!(asks(&plain)
+        .iter()
+        .all(|a| a.contains("about: ") && !a.contains("plain words")));
+
+    let built = build(&ctx, &request(true)).unwrap();
+    let report = built.described.clone().unwrap();
+    assert_eq!((report.written, report.reused), (11, 0), "{report:?}");
+    assert_eq!(report.rejected.values().sum::<usize>(), 1, "{report:?}");
+    let asked = asks(&built);
+    assert_eq!(asked.len(), 12);
+    assert_eq!(
+        asked
+            .iter()
+            .filter(|a| a.ends_with("what ought to follow from it for everyone concerned."))
+            .count(),
+        11
+    );
+    let kept = asked.iter().find(|a| a.contains("dxa dxb")).unwrap();
+    assert!(
+        kept.starts_with("Write to a friend in 1800 about: dxa"),
+        "{kept}"
+    );
+
+    // A second build reuses what was written.
+    let again = build(&ctx, &request(true)).unwrap().described.unwrap();
+    assert_eq!((again.written, again.reused), (0, 11), "{again:?}");
+}

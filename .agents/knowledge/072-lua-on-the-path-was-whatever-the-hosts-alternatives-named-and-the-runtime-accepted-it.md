@@ -24,7 +24,7 @@ against the one recorded in `scripts/deps/lua51.sh`, without readline, and
 `--runtime-dir DIR/bin` puts it first on the search path of the runtime and of the
 workspace commands (the confinement reads the directory from that path, so no other
 configuration is needed); `scripts/tasks/families.py check` refuses a family run
-whose `lua` is not 5.1. Spec: `crates/sandbox/tests/runtime_registry.rs`
+whose `lua` is not 5.1. Spec: `crates/sandbox/tests/it/runtime_registry.rs`
 (`the_lua_runtime_is_lua_5_1_and_an_interpreter_that_reports_another_version_is_refused`).
 
 Not covered: the families' own test hosts start `lua` by name from their `PATH`; a

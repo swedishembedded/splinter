@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
-"""Write the SAS transport fixture for crates/knowledge/tests/tabular.rs.
+"""Write the SAS transport fixture for crates/knowledge/tests/it/tabular.rs.
 
 pyreadstat writes `mixed.xpt` (an independent implementation of the format)
 and reads it back into `mixed.json`, the values the Rust reader must

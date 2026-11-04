@@ -204,7 +204,7 @@ What is missing, in the order a user meets it:
    sentence; tool calls and their output are not spoken; the session opens
    with the spoken disclosure. Done and measured on 3 recordings (first sound
    p50 1.2 s). Tools are offered to the model only with `--workspace`
-   (specified in `crates/agent/tests/voice.rs`). Tool use by voice: asked
+   (specified in `crates/agent/tests/it/voice.rs`). Tool use by voice: asked
    aloud "How many files are there in current directory?" over a workspace of
    five files, the persona called sven's `find_file` (the session's audit log
    shows the call and its result) and answered by voice "There are 6 files

@@ -1,0 +1,338 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements leakage-free held-out examinations of what a
+// model learned from a person's writing, for its clients. If your team needs
+// expertise in reserving an exam from overlapping sources before any training
+// data is built, you can procure our services by sending an email to
+// info@swedishembedded.com.
+
+//! Spec: the exam's families are reserved before anything is generated, by a
+//! stable hash of the family's name. The text of a reserved family, every
+//! edition of it, is in no source anything after the reservation reads; the
+//! exam is written from the reserved text alone; and a request that cannot be
+//! honoured is refused with the reason.
+
+// Helpers outside a #[test] fn unwrap too: a panic is the failure report.
+#![allow(clippy::unwrap_used)]
+
+use crate::common;
+
+use std::collections::BTreeSet;
+
+use common::{scratch_context, Scripted};
+use splinter_core::dataset::DatasetId;
+use splinter_core::digest::Digest;
+use splinter_core::rng::Seed;
+use splinter_core::source::SourceId;
+use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata};
+use splinter_orchestrator::Context;
+use splinter_pipelines::datasets::store_dataset;
+use splinter_pipelines::reserve::{reserve, Reservation, ReserveRequest};
+use splinter_pipelines::sources::{add, SourceTarget};
+
+// seed: the spec asserts on which families are reserved, which one fixed seed
+// makes the same on every run.
+const RESERVE_SEED: Seed = Seed::new(1);
+
+/// `n` words no other `seed` shares.
+fn words(seed: &str, n: usize) -> String {
+    (0..n)
+        .map(|i| format!("{seed}w{i}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn run(name: &str, letters: usize, families: usize) -> (common::Scratch, Vec<String>, Reservation) {
+    let (scratch, ctx) = scratch_context(name, Scripted::new(|_| String::new()), false);
+    let dir = scratch.0.join("letters");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..letters {
+        let body = words(&format!("l{n}"), 200);
+        std::fs::write(dir.join(format!("letter-{n:02}.txt")), &body).unwrap();
+        if n < 6 {
+            std::fs::write(
+                dir.join(format!("reprint-{n:02}.txt")),
+                format!("Dear sir, {body} yours"),
+            )
+            .unwrap();
+        }
+    }
+    let id = add(&ctx, &SourceTarget::Path { path: dir })
+        .unwrap()
+        .source
+        .id;
+    let reservation = reserve(
+        &ctx,
+        &ReserveRequest {
+            sources: &[id],
+            families,
+            dev_families: 0,
+            seed: RESERVE_SEED,
+            touched_by: &[],
+        },
+    )
+    .unwrap();
+    let names = |ids: &[SourceId]| -> Vec<String> {
+        ids.iter()
+            .flat_map(|id| ctx.sources().get_source(id).unwrap().parts)
+            .map(|p| p.name)
+            .collect()
+    };
+    let mut both = names(&reservation.training);
+    both.push("|".into());
+    both.extend(names(&reservation.exam));
+    (scratch, both, reservation)
+}
+
+#[test]
+fn a_reserved_family_and_every_edition_of_it_leaves_the_training_source_and_makes_the_exam() {
+    let (_scratch, names, reservation) = run("reserve-split", 40, 8);
+    assert_eq!(reservation.families.len(), 8);
+    let at = names.iter().position(|n| n == "|").unwrap();
+    let (training, exam) = (&names[..at], &names[at + 1..]);
+    // Parts are partitioned: nothing is in both, nothing is lost.
+    let training_set: BTreeSet<_> = training.iter().collect();
+    assert!(exam.iter().all(|n| !training_set.contains(n)));
+    assert_eq!(training.len() + exam.len(), 46);
+    // An edition of a reserved letter goes with it.
+    for n in 0..6 {
+        let letter = format!("letter-{n:02}.txt");
+        let reprint = format!("reprint-{n:02}.txt");
+        assert_eq!(
+            exam.contains(&letter),
+            exam.contains(&reprint),
+            "{letter} and its reprint are one family"
+        );
+        assert_eq!(training.contains(&letter), training.contains(&reprint));
+    }
+    assert_eq!(reservation.total_families, 40);
+}
+
+#[test]
+fn the_same_sources_and_seed_reserve_the_same_families() {
+    let (_a, _, first) = run("reserve-a", 40, 8);
+    let (_b, _, second) = run("reserve-b", 40, 8);
+    assert_eq!(first.families, second.families);
+}
+
+#[test]
+fn too_few_examinable_families_or_too_little_left_to_learn_from_is_refused() {
+    let (scratch, ctx) = scratch_context("reserve-refuse", Scripted::new(|_| String::new()), false);
+    let dir = scratch.0.join("letters");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..10 {
+        std::fs::write(dir.join(format!("l{n}.txt")), words(&format!("l{n}"), 200)).unwrap();
+    }
+    // One too short to write a task from.
+    std::fs::write(dir.join("short.txt"), "a few words").unwrap();
+    let id = add(&ctx, &SourceTarget::Path { path: dir })
+        .unwrap()
+        .source
+        .id;
+    let ask = |families: usize| {
+        reserve(
+            &ctx,
+            &ReserveRequest {
+                sources: std::slice::from_ref(&id),
+                families,
+                dev_families: 0,
+                seed: RESERVE_SEED,
+                touched_by: &[],
+            },
+        )
+        .unwrap_err()
+        .to_string()
+    };
+    let too_many = ask(6);
+    assert!(too_many.contains("at most half"), "{too_many}");
+    // Nothing long enough to write a task from: the shortfall is named.
+    let (scratch, ctx) = scratch_context("reserve-short", Scripted::new(|_| String::new()), false);
+    let dir = scratch.0.join("letters");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..10 {
+        std::fs::write(dir.join(format!("s{n}.txt")), words(&format!("s{n}"), 30)).unwrap();
+    }
+    let id = add(&ctx, &SourceTarget::Path { path: dir })
+        .unwrap()
+        .source
+        .id;
+    let short = reserve(
+        &ctx,
+        &ReserveRequest {
+            sources: &[id],
+            families: 2,
+            dev_families: 0,
+            seed: RESERVE_SEED,
+            touched_by: &[],
+        },
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        short.contains("--exam-families") && short.contains("hold 0"),
+        "{short}"
+    );
+}
+
+#[test]
+fn the_dev_suite_has_families_of_its_own_as_far_from_training_as_the_final_test() {
+    let (scratch, ctx) = scratch_context("reserve-dev", Scripted::new(|_| String::new()), false);
+    let dir = scratch.0.join("letters");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..40 {
+        std::fs::write(
+            dir.join(format!("l{n:02}.txt")),
+            words(&format!("l{n}"), 200),
+        )
+        .unwrap();
+    }
+    let id = add(&ctx, &SourceTarget::Path { path: dir })
+        .unwrap()
+        .source
+        .id;
+    let r = reserve(
+        &ctx,
+        &ReserveRequest {
+            sources: &[id],
+            families: 5,
+            dev_families: 3,
+            seed: RESERVE_SEED,
+            touched_by: &[],
+        },
+    )
+    .unwrap();
+    assert_eq!((r.families.len(), r.dev_families.len()), (5, 3));
+    let part_names = |ids: &[SourceId]| -> BTreeSet<String> {
+        ids.iter()
+            .flat_map(|id| ctx.sources().get_source(id).unwrap().parts)
+            .map(|p| p.name)
+            .collect()
+    };
+    let (training, exam, dev) = (
+        part_names(&r.training),
+        part_names(&r.exam),
+        part_names(&r.dev),
+    );
+    assert_eq!((training.len(), exam.len(), dev.len()), (32, 5, 3));
+    assert!(training.is_disjoint(&exam) && training.is_disjoint(&dev) && exam.is_disjoint(&dev));
+}
+
+/// A context over a source of `letters` letters of 200 words each.
+fn letters(name: &str, letters: usize) -> (common::Scratch, Context, SourceId) {
+    let (scratch, ctx) = scratch_context(name, Scripted::new(|_| String::new()), false);
+    let dir = scratch.0.join("letters");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in 0..letters {
+        std::fs::write(
+            dir.join(format!("letter-{n:02}.txt")),
+            words(&format!("l{n}"), 200),
+        )
+        .unwrap();
+    }
+    let id = add(&ctx, &SourceTarget::Path { path: dir })
+        .unwrap()
+        .source
+        .id;
+    (scratch, ctx, id)
+}
+
+fn reserve_with(ctx: &Context, id: &SourceId, seed: Seed, touched_by: &[DatasetId]) -> Reservation {
+    reserve(
+        ctx,
+        &ReserveRequest {
+            sources: std::slice::from_ref(id),
+            families: 8,
+            dev_families: 0,
+            seed,
+            touched_by,
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_reservation_states_its_seed_and_reserving_again_with_it_chooses_the_same_families() {
+    let (_scratch, ctx, id) = letters("reserve-seed", 40);
+    // seed: two arbitrary seeds; only that the same one repeats and another differs matters.
+    let (first, other) = (Seed::new(11), Seed::new(12));
+    let reserved = reserve_with(&ctx, &id, first, &[]);
+    assert_eq!(reserved.seed, first);
+    assert_eq!(
+        reserve_with(&ctx, &id, reserved.seed, &[]).families,
+        reserved.families
+    );
+    assert_ne!(
+        reserve_with(&ctx, &id, other, &[]).families,
+        reserved.families
+    );
+
+    // A reservation stored before it kept its seed reads as made with 0.
+    // seed: 0 is the seed those reservations were made with
+    let mut stored = serde_json::to_value(&reserved).unwrap();
+    stored.as_object_mut().unwrap().remove("seed");
+    let read: Reservation = serde_json::from_value(stored).unwrap();
+    assert_eq!(read.seed, Seed::new(0));
+}
+
+#[test]
+fn reserving_twice_over_a_lineage_with_fresh_seeds_never_examines_what_was_trained_on() {
+    let (_scratch, ctx, id) = letters("reserve-touched", 40);
+    let parts = ctx.sources().get_source(&id).unwrap().parts;
+    let trained: BTreeSet<Digest> = parts.iter().take(16).map(|p| p.content.clone()).collect();
+    let record = |content: &Digest| Record {
+        body: RecordBody::Text {
+            text: content.to_string(),
+        },
+        metadata: RecordMetadata {
+            experiences: Vec::new(),
+            task: None,
+            sources: vec![content.clone()],
+            group: None,
+            split: None,
+            view: "cpt".into(),
+            objective: Objective::Cpt,
+        },
+    };
+    let dataset = store_dataset(
+        &ctx,
+        &Projection {
+            view: "cpt".into(),
+            objective: Objective::Cpt,
+            strip: None,
+            min_strength: None,
+            records: trained.iter().map(record).collect(),
+            groups: Vec::new(),
+            excluded: Default::default(),
+            system_prompt: None,
+            packed: false,
+            outcome_verified_only: false,
+            block_measure: None,
+            terms: None,
+        },
+        true,
+    )
+    .unwrap();
+    let mut seeds = BTreeSet::new();
+    for _ in 0..2 {
+        let reserved = reserve_with(
+            &ctx,
+            &id,
+            splinter_model::seed::draw(),
+            std::slice::from_ref(&dataset.id),
+        );
+        seeds.insert(reserved.seed);
+        let examined: BTreeSet<Digest> = reserved
+            .exam
+            .iter()
+            .flat_map(|source| ctx.sources().get_source(source).unwrap().parts)
+            .map(|part| part.content)
+            .collect();
+        assert_eq!(examined.len(), 8);
+        assert!(
+            examined.is_disjoint(&trained),
+            "a family trained on was reserved for the exam"
+        );
+    }
+    assert_eq!(seeds.len(), 2, "each reservation drew a seed of its own");
+}

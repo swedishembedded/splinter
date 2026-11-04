@@ -34,5 +34,5 @@ No per-symptom verdict was added; the V2 request says one fault causes all the s
 name may describe only part of a test.
 
 Not measured: the effect of any of this on pass@1. Each is an arm to run under a registered
-amendment (spec: `crates/core/src/prompt.rs`, `crates/agent/tests/workspace.rs`,
+amendment (spec: `crates/core/src/prompt.rs`, `crates/agent/tests/it/workspace.rs`,
 `crates/knowledge/src/tasks/workspace/instruction.rs`).

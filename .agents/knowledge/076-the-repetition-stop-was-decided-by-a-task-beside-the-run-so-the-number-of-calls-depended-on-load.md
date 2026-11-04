@@ -21,7 +21,7 @@ has come back, and when one reaches the bound it cancels the send and never
 answers the request. The transcript the request carries holds every earlier call
 and its answer, so the count is the same on every run. The watcher still counts
 calls for the report and enforces the tool-call cap; it no longer decides
-repetition. Spec: `crates/agent/tests/work.rs`
+repetition. Spec: `crates/agent/tests/it/work.rs`
 (`the_repetition_stop_does_not_wait_for_a_slow_event_consumer`, and the exact
 count of 3 in `a_run_that_repeats_one_call_and_gets_the_same_answer_is_stopped_and_says_so`).
 

@@ -60,7 +60,7 @@ again for the same artifact. Fixed literal seeds are allowed in tests only.
 
 ## PP-02 Port the adapter-manifest spec to brain's current catalog
 
-- **Problem.** `crates/model/tests/adapter_manifest_is_followed.rs` compiles
+- **Problem.** `crates/model/tests/it/adapter_manifest_is_followed.rs` compiles
   only at the stale pin (PF-18).
 - **Evidence.** Test `:50-90` compares `ManifestPoll` values with `assert_eq!`
   and reads `release.path`/`release.digest`; brain

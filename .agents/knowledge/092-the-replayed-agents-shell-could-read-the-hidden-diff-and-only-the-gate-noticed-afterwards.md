@@ -24,5 +24,5 @@ What changes for a run: `git` works inside the tree (its own repository); `/tmp`
 registry are not readable from the agent's shell (the project checks run by the host are not
 affected); a command that reads a path outside the tree now gets an error instead of the content.
 Specs: `samples/repo-replay/tests/confinement_spec.rs` (source repository, mirror, case file) and
-`crates/agent/tests/harness_work.rs` (`a_harness_run_in_a_tree_gets_no_answer_from_a_file_beside_the_tree`,
+`crates/agent/tests/it/harness_work.rs` (`a_harness_run_in_a_tree_gets_no_answer_from_a_file_beside_the_tree`,
 red with an unconfined shell).

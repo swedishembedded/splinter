@@ -712,7 +712,7 @@ Order as in `training-instrumentation.md:26-44`.
 - The gate's retention exam includes the plan's `retention` families when a plan is active.
 - **Negative control.** Plant a sealed family's file content in a source; `learn` refuses, and
   a generator, teacher or rehearsal stage given it refuses.
-- TDD: `crates/pipelines/tests/sealed_everywhere.rs` (red today) and
+- TDD: `crates/pipelines/tests/it/sealed_everywhere.rs` (red today) and
   `experiment_retention_consumed.rs`.
 
 **S8a. Prereg of E5** (the repository-family experiment; "E3" in `tasks/e3-plan.toml` is renamed

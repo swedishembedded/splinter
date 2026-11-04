@@ -131,6 +131,6 @@ Two questions before adding anything:
   supplies the tasks, the serve check's comparison of a served run with the
   in-process one, the CLI's report of the gate, the docs.
 - **A field of an experience:** the vocabulary (`core`), its canonical form and
-  golden test (`crates/store/tests/identity.rs`), ingestion, every projection
+  golden test (`crates/store/tests/it/identity.rs`), ingestion, every projection
   that reads it, and a note on compatibility with what is already stored: an
   address must not change for state that is already there.

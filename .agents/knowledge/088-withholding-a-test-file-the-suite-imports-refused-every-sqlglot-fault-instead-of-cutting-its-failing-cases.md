@@ -20,6 +20,6 @@ not parse or an id is not a method of the module). The overlay is the same (the 
 the cut file is protected, not a hidden path (reading it is no exposure), and the hidden text
 the self-containment and exposure checks use is what the cut tree lacks. The hidden-strength
 measure counts a variant as caught when a removed case, or a withheld file's test, fails.
-Spec: `crates/knowledge/tests/workspace_shared_helpers.rs`. Not covered: a cargo runner's
+Spec: `crates/knowledge/tests/it/workspace_shared_helpers.rs`. Not covered: a cargo runner's
 sources are not cut (the refusal stays), and a test inherited from a base class or generated at
 import time is not found as a method of its module and is refused.

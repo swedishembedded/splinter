@@ -22,9 +22,9 @@ that cannot be rendered is refused (`symptom_not_actionable`); a candidate whose
 the kept tests import is refused (`hidden_imported_by_tree`). The shown values are the one
 disclosure the task makes: the admission check masks them, and the exposure audit counts the
 request as text the solver may see. Spec: `crates/knowledge/src/tasks/workspace/instruction.rs`
-(unit tests) and `crates/knowledge/tests/workspace_tasks.rs`
+(unit tests) and `crates/knowledge/tests/it/workspace_tasks.rs`
 (`a_module_that_tests_in_the_tree_import_is_never_withheld_whole`,
 `a_symptom_too_short_to_act_on_is_rendered_from_the_failed_assertion`,
 `a_short_symptom_whose_assertion_cannot_be_rendered_refuses_the_task_with_a_count`),
-`crates/eval/tests/exposure_audit.rs`. Not covered: only `unittest` failures are read per test
+`crates/eval/tests/it/exposure_audit.rs`. Not covered: only `unittest` failures are read per test
 (a cargo runner's failure message is not), so a cargo task with a short name is refused.

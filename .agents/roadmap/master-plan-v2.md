@@ -119,7 +119,7 @@ Paths are relative to each repo root. "Prod" = a production pipeline or CLI verb
 
 | Item | State | Label | Evidence |
 |---|---|---|---|
-| `splinter doctor` | exists; preflight verdicts | READ-IN-CODE | `crates/splinter/src/cli.rs:106`; `crates/pipelines/src/doctor.rs`; tests `crates/pipelines/tests/doctor.rs:24-125` |
+| `splinter doctor` | exists; preflight verdicts | READ-IN-CODE | `crates/splinter/src/cli.rs:106`; `crates/pipelines/src/doctor.rs`; tests `crates/pipelines/tests/it/doctor.rs:24-125` |
 | Lease kit (`lease/doctor`, `lease/gpu/run`, `slot`, worktrees) | landed | READ-IN-CODE | splinter `17e9202`; `Makefile:174-210`; `scripts/lease/test-lease.py` (12 tests) |
 | Cross-repo test | only `test/e2e/brain-sven`: brain serves Qwen3-0.6B on CPU, sven reads a file with a tool | READ-IN-CODE | `Makefile:97-99`; `scripts/e2e/brain-sven.sh:30-88` |
 | Experience record + training + deployed adapter in one test | **missing** (searched: `#[ignore]` tests, `test/e2e`, `first_run.rs`, `fake_brain`, paper scripts) | READ-IN-CODE | pipeline tests use `FakeTrainer`, scripted agent, `tests/common/fake_brain.rs`; nearest is the paper's manual `flywheel_cycle.py` (closed-book `learn`, no sven tools) |
@@ -143,7 +143,7 @@ Paths are relative to each repo root. "Prod" = a production pipeline or CLI verb
 | Families | 8 own small projects (5 Python, 3 Lua), 132-186 admitted tasks each, plus `config-discovery` (hidden-world, not in catalog) | READ-IN-CODE | `tasks/catalog.toml:8-153`; `tasks/README.md:102-111` |
 | Family unit | the mutated **file** (`family: path`); exam reservation and clustering use it | READ-IN-CODE | `mutate.rs:249`; `release/probe.rs:582-598` |
 | Partitions | per-run exam reserved before rollouts; plan generations + sealed families; no dev/qualification/external roles | READ-IN-CODE | `practice/stages.rs:333`; `experiment/mod.rs:39-70,351-372`; `tasks/e3-plan.toml:30-43` |
-| Paired seeds | exam seed recorded per run | READ-IN-CODE | `crates/pipelines/tests/practice.rs:351` |
+| Paired seeds | exam seed recorded per run | READ-IN-CODE | `crates/pipelines/tests/it/practice.rs:351` |
 | Cost per attempt | **not stored**: no wall/token/tool/GPU field on Task, Experience or Annotation; `WorkReport.tool_calls` transient; local provider `cost_usd: None` | READ-IN-CODE | `crates/core/src/experience.rs:240-306,493-512`; `crates/agent/src/work.rs:142-154`; `crates/model/src/local/events.rs:44-52` |
 | Cost in a sample | `samples/agent/loop` keeps seconds, tokens, tool calls, `Usage{cost_usd, wall_seconds}` | READ-IN-CODE | `samples/agent/loop/src/outcome.rs:56,71-113` |
 | Outcome/decision | `Outcome {Pass, Fail, Abstain}`, strength order, `decide`, `reward` | READ-IN-CODE | `crates/core/src/annotation.rs:77,90-125`; `crates/store/src/decision.rs:34-71` |
@@ -165,10 +165,10 @@ Paths are relative to each repo root. "Prod" = a production pipeline or CLI verb
 | Continual matrix | ACC, BWT, Forgetting, Forward Transfer, `eval matrix` | READ-IN-CODE | `continual-learning.md` CL-P1 done list; `cli.rs:663` |
 | Anchor | 40 general questions; L0 `s-gate` adds `AnchorBound::NetLost` and `ANCHOR_NET_LOST_FOR_200 = 6` (uncommitted) | READ-IN-CODE | `samples/generations/generations.py:232,262`; worktree `s-gate` diff of `crates/eval/src/gate.rs` |
 | Workspace verifier | fail-to-pass, pass-to-pass, hidden overlay, protected/hidden paths fenced; **pass = exit 0, no signal, no timeout; does not prove which tests ran** | READ-IN-CODE + VERIFIED-BY-RUN (read) | `crates/eval/src/verifiers/workspace.rs:9-44,90-117,421-449,600-604` |
-| Canaries | inverted checks; runner tampering beats a plain exit-code grade (test); `release --canaries`; **`practice` never passes canaries** | READ-IN-CODE | `verifiers/workspace_canary.rs:63`; `crates/eval/tests/workspace_verifier.rs:474`; `release/mod.rs:121`; `practice/stages.rs:525` |
+| Canaries | inverted checks; runner tampering beats a plain exit-code grade (test); `release --canaries`; **`practice` never passes canaries** | READ-IN-CODE | `verifiers/workspace_canary.rs:63`; `crates/eval/tests/it/workspace_verifier.rs:474`; `release/mod.rs:121`; `practice/stages.rs:525` |
 | Exposure audit | hidden path read, 12-token shingles, forbidden strings; Constraint verdict | READ-IN-CODE | `crates/eval/src/exposure.rs:1-24,52,212,266`; `pipelines/src/workspace_verify.rs:41-61` |
 | Hidden-suite strength | kill rate on nearby mutants, `WeakHiddenTests` below 0.5 | READ-IN-CODE | `mutate.rs:225-231,265`; finding 048 |
-| Verifier conformance suite | **missing** as a suite; individual tests cover deleting a failing test, canary tampering, exposure | READ-IN-CODE | `crates/eval/tests/workspace_verifier.rs:214-508`; `exposure_audit.rs:77-114` |
+| Verifier conformance suite | **missing** as a suite; individual tests cover deleting a failing test, canary tampering, exposure | READ-IN-CODE | `crates/eval/tests/it/workspace_verifier.rs:214-508`; `exposure_audit.rs:77-114` |
 | Sealing | sealed families refused only under `practice --plan` | READ-IN-CODE | `practice/stages.rs:162-168`; `experiment/mod.rs:368-370` |
 
 ### 2.4 Phase 3: failure taxonomy and interventions
@@ -386,8 +386,8 @@ GPU column: **none**; **S** = shared short (under the lock, minutes); **X** = ex
   `brain_commit`/`splinter_commit` and adds `sven_commit`.
 - The commits are those the binary was built from: the splinter build script embeds `git
   rev-parse HEAD` and the locked sven/brain revisions from `Cargo.lock` (no runtime git call).
-- TDD: `crates/store/tests/run_log.rs` gains a case reading a pre-change run (fields absent,
-  digest unchanged) and a new run (fields present); `crates/pipelines/tests/release_workspace.rs`
+- TDD: `crates/store/tests/it/run_log.rs` gains a case reading a pre-change run (fields absent,
+  digest unchanged) and a new run (fields present); `crates/pipelines/tests/it/release_workspace.rs`
   asserts the manifest names three commits. Red today.
 - Gate: `make build test check`.
 
@@ -462,8 +462,8 @@ GPU column: **none**; **S** = shared short (under the lock, minutes); **X** = ex
 - Metrics in `splinter-eval::competence`: Q = verified / attempted, C = total cost / verified,
   A = verified-without-human / attempted, each with family-cluster bootstrap intervals and the
   raw counts; no scalar collapse.
-- TDD: `crates/eval/tests/competence.rs` (hand-computed Q/C/A with absent costs; an
-  environment failure excluded from the denominator and counted); `crates/store/tests/identity.rs`
+- TDD: `crates/eval/tests/it/competence.rs` (hand-computed Q/C/A with absent costs; an
+  environment failure excluded from the denominator and counted); `crates/store/tests/it/identity.rs`
   golden test unchanged for existing experiences.
 - Deps: V4 for token/tool totals from served runs (works on mock trajectories before it lands).
 
@@ -474,7 +474,7 @@ GPU column: **none**; **S** = shared short (under the lock, minutes); **X** = ex
 - Build cost: a task's tree gets a pre-built `target` dir from its snapshot (built once by
   `profile`, content-addressed by snapshot digest, kept under the state root, garbage-collected
   with the snapshot). DERIVED need: without it every attempt rebuilds the crate.
-- TDD: `crates/knowledge/tests/workspace_tasks.rs` gains a tiny Rust crate fixture: profile
+- TDD: `crates/knowledge/tests/it/workspace_tasks.rs` gains a tiny Rust crate fixture: profile
   qualifies it twice; a seeded fault is caught by exactly the named tests; a test the run did
   not execute is reported missing. Red today (`mutation-seeded tasks need a test runner read per
   test`).
@@ -497,7 +497,7 @@ GPU column: **none**; **S** = shared short (under the lock, minutes); **X** = ex
   splinter `crates/expdb` (no internal dependencies), sven `crates/atif`, `crates/hsm`,
   `crates/config`, brain leaf crates chosen by P0-INV with a suite under 60 s on CPU. Each
   source is captured with `capture_tree` at a pinned revision.
-- TDD: `crates/knowledge/tests/history_tasks.rs`: a fixture repo yields the fix-with-test and
+- TDD: `crates/knowledge/tests/it/history_tasks.rs`: a fixture repo yields the fix-with-test and
   feature-with-test commits as tasks whose hidden tests fail on the parent tree and pass on the
   commit; formatting-only, vendored and merge commits are excluded and counted; the solver's
   tree holds no solution or test evolution; a second pass admits nothing. Green.
@@ -522,7 +522,7 @@ GPU column: **none**; **S** = shared short (under the lock, minutes); **X** = ex
   `experiment check`; every stage that reads a source (learn, practice, generator, teacher,
   rehearsal) refuses them unless the stage runs the qualifying exam itself.
 - Contamination probe (RS-P10) per external family, reported.
-- TDD: `crates/pipelines/tests/sealed_everywhere.rs` (v1 S7), `partition_roles.rs`: a
+- TDD: `crates/pipelines/tests/it/sealed_everywhere.rs` (v1 S7), `partition_roles.rs`: a
   development-only run cannot read a qualification family; a plan whose partitions overlap is
   refused. Red today.
 
@@ -563,13 +563,13 @@ GPU column: **none**; **S** = shared short (under the lock, minutes); **X** = ex
   test to be reported as run and passed, the number of tests run to be at least the baseline's,
   the runner to terminate within limits, and the test runner files and harness configuration to
   be byte-identical to the snapshot's (protected by digest, not by path list alone).
-- TDD in `crates/eval/tests/workspace_verifier.rs`: (1) a patch that makes the runner print
+- TDD in `crates/eval/tests/it/workspace_verifier.rs`: (1) a patch that makes the runner print
   "OK" and exit 0 fails; (2) a patch that deletes the hidden test module fails; (3) a patch that
   edits `conftest`/runner config fails; (4) the existing runner-tampering canary case (:474)
   now fails the cheat at grade time, not only via a canary. Red today on (1)-(4).
 
 **P2-CONF. Verifier conformance suite** (splinter, lane `s-gate`, 8 h, none)
-- `crates/eval/tests/verifier_conformance.rs`, one table per verifier (workspace, formal,
+- `crates/eval/tests/it/verifier_conformance.rs`, one table per verifier (workspace, formal,
   executable code, reference-check): correct, incorrect, equivalent representations (the
   thousands separator of knowledge 060), edge cases, missing evidence, early exits,
   hidden-test disclosure attempts, verifier-config tampering, success-log mimicry. Reports

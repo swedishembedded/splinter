@@ -20,7 +20,7 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       are alive, and can kill one rank while the others run. A launcher
       reopened after the controller died finds the same workers instead of
       starting more. A killed worker that its parent has not reaped is a
-      zombie and reads as gone. Tests: `crates/sandbox/tests/jobs.rs`, with
+      zombie and reads as gone. Tests: `crates/sandbox/tests/it/jobs.rs`, with
       two real ranks and a controller that is dropped and reopened.
 - [x] **Submission is idempotent and updates are fenced.** The specification
       and each record are content-addressed documents; the pointer
@@ -51,7 +51,7 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       `LocalLauncher`; the controller name and the attempt root are
       configuration values (`--job-owner`, `--job-attempt-root`), and the
       binary is the supervisor each worker runs under. Tests:
-      `crates/splinter/tests/jobs_cli.rs` (submit is idempotent, list and show
+      `crates/splinter/tests/it/jobs_cli.rs` (submit is idempotent, list and show
       report it, reconcile completes a clean exit and fails a nonzero one from
       another process, retry launches the next allowed attempt, cancel stops
       the workers).
@@ -62,8 +62,8 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       failed instead of lost, and a worker that outlives the specification's
       wall clock is stopped with its process group and recorded as 124. A
       launch without a supervised exit still reports no exit code rather than
-      inventing one. Tests: `crates/sandbox/tests/jobs.rs` and the wall-clock
-      case in `crates/splinter/tests/jobs_cli.rs`.
+      inventing one. Tests: `crates/sandbox/tests/it/jobs.rs` and the wall-clock
+      case in `crates/splinter/tests/it/jobs_cli.rs`.
 - [x] **A completed job's outputs become artifacts and lineage.** On reconcile,
       a clean exit reads the newest `commit-<8 digit step>.json` in the attempt
       directory, verifies every file it names against the declared length and
@@ -75,7 +75,7 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       fails the job instead. Registration is idempotent: an artifact is
       addressed by its bytes and the document by its canonical form. Tests:
       the module tests in `crates/store/src/job_outputs.rs` and
-      `crates/orchestrator/tests/controller.rs`.
+      `crates/orchestrator/tests/it/controller.rs`.
 - [x] **The checkpoint contract is versioned and held to fixtures.** `JobPlan`
       and `CheckpointManifest` (with `CheckpointFile`, `ManifestPath` and
       `Sha256Sum`) refuse unknown fields, absolute or `..` paths, and
@@ -89,9 +89,9 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       NODE_FAIL and TIMEOUT, CANCELLED and PREEMPTED to the matching outcome.
       A preempted attempt retries only when `retry_on_preemption` is set and
       attempts remain; cancellation is terminal and only a completed outcome
-      completes the job. Tests: `crates/sandbox/tests/jobs.rs`,
-      `crates/sandbox/tests/slurm.rs` and
-      `crates/orchestrator/tests/controller.rs`.
+      completes the job. Tests: `crates/sandbox/tests/it/jobs.rs`,
+      `crates/sandbox/tests/it/slurm.rs` and
+      `crates/orchestrator/tests/it/controller.rs`.
 - [x] **A distributed training job is submitted with its plan.**
       `jobs submit --distributed` writes `job-plan.json` into each attempt
       directory before any worker starts, names the job by the specification
@@ -100,9 +100,9 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       `--job-rank {rank}` to every worker command. The bytes it writes match
       the trainer's plan fixture exactly, a retry writes its own plan with the
       same job identity, and a single-rank job without the flag writes none.
-      Tests: `crates/sandbox/tests/distributed_plan.rs`,
-      `crates/orchestrator/tests/contracts.rs` and
-      `crates/splinter/tests/jobs_distributed_cli.rs` (two stand-in ranks
+      Tests: `crates/sandbox/tests/it/distributed_plan.rs`,
+      `crates/orchestrator/tests/it/contracts.rs` and
+      `crates/splinter/tests/it/jobs_distributed_cli.rs` (two stand-in ranks
       commit files, the controller completes the job, and both files are kept
       as artifacts whose sha256 matches).
 - [x] **A local two-rank Qwen run completes through the controller.** A

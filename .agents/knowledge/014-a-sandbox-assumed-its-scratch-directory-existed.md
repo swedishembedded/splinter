@@ -13,7 +13,7 @@ a fresh state failed before it started. The sandbox's own specs passed because
 each created its root by hand before building the sandbox, which is exactly the
 assumption that was wrong.
 
-The call directory now creates its root. `crates/sandbox/tests/workspace.rs`
+The call directory now creates its root. `crates/sandbox/tests/it/workspace.rs`
 runs a command under a root three levels deep that does not exist, and fails
 with the original error when the creation is removed.
 

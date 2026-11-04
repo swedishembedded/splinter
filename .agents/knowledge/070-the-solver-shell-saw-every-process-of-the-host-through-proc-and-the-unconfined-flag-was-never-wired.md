@@ -3,13 +3,13 @@
 
 # 070. The solver's shell saw every process of the host through /proc, and `--allow-unconfined-workspace` was never wired
 
-Found 2026-10-18 writing the adversarial containment fixtures (`crates/sandbox/tests/containment.rs`).
+Found 2026-10-18 writing the adversarial containment fixtures (`crates/sandbox/tests/it/containment.rs`).
 
 Landlock confinement of a workspace command allowed `/proc` read only, and the suspicion was that a
 command could read `/proc/<pid>/environ` of any process of its own user, the keys in the
 supervisor's environment among them. It cannot: the files that need ptrace access (`environ`,
 `mem`, `maps`) are refused by Landlock's own ptrace check for a process outside the command's
-domain (`crates/sandbox/tests/containment.rs`, `another_process_of_the_user_is_invisible_through_proc`
+domain (`crates/sandbox/tests/it/containment.rs`, `another_process_of_the_user_is_invisible_through_proc`
 shows the refusal and, unconfined, the secret). An earlier version of this entry said the opposite
 and added a non-dumpable supervisor to compensate; that was based on a test that could not tell the
 two causes apart, and it is removed. What Landlock leaves readable is the rest of `/proc`: that
