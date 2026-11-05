@@ -11,7 +11,7 @@ use serde::Serialize;
 use splinter_sdk::ask::Answer;
 use splinter_sdk::critique::Critiqued;
 use splinter_sdk::curriculum::corrections::Corrections;
-use splinter_sdk::datasets::{BlockMeasure, Built, Exported};
+use splinter_sdk::datasets::{BlockMeasure, Built, Exported, GroupKind};
 use splinter_sdk::experiences::{CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList};
 use splinter_sdk::judge::{Calibrated, JudgeMeasured};
 use splinter_sdk::router::Routed;
@@ -562,15 +562,31 @@ impl Report for Built {
             }
             None => {}
         }
+        if !self.groups.is_empty() {
+            let count = |kind: GroupKind| self.groups.iter().filter(|g| g.kind == kind).count();
+            let distilled = self.groups.iter().filter(|g| g.distilled).count();
+            let _ = writeln!(
+                out,
+                "  groups: {} graded, {} all-fail, {} all-pass; {distilled} distilled with a teacher context",
+                count(GroupKind::Graded),
+                count(GroupKind::AllFail),
+                count(GroupKind::AllPass)
+            );
+        }
         for group in &self.groups {
             let _ = writeln!(
                 out,
-                "  group {} v{} by {}: {} trial(s){}",
+                "  group {} v{} by {}: {} trial(s), {}{}",
                 group.task,
                 group.version,
                 group.policy,
                 group.trials.len(),
-                if group.signal { "" } else { ", no signal" }
+                group.kind.name(),
+                match (group.signal, group.distilled) {
+                    (_, true) => ", distilled",
+                    (true, false) => "",
+                    (false, false) => ", no signal",
+                }
             );
             for trial in &group.trials {
                 let _ = writeln!(

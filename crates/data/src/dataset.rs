@@ -53,6 +53,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 
+use crate::TeacherMessage;
 use serde::{Deserialize, Serialize};
 use splinter_core::annotation::Strength;
 use splinter_core::digest::{canonical_json, Digest};
@@ -199,7 +200,17 @@ struct ChatLine<'a> {
     tools: &'a [serde_json::Value],
     #[serde(skip_serializing_if = "Option::is_none")]
     advantage: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    teacher_context: Option<TeacherContextLine<'a>>,
     metadata: &'a RecordMetadata,
+}
+
+/// The teacher context of a chat line as brain reads it: the privileged
+/// turns and the index of the line's message they are inserted before.
+#[derive(Serialize)]
+struct TeacherContextLine<'a> {
+    at: usize,
+    messages: &'a [TeacherMessage],
 }
 
 /// One line of the preference format.
@@ -348,6 +359,34 @@ pub fn dataset_line(objective: Objective, record: &Record) -> Result<String, Vie
     line(objective.line_format(), objective, 0, record)
 }
 
+/// The teacher context of a chat line: the privileged turns go right after
+/// the conversation's first user turn, so every answer of the line is scored
+/// with them in view. A conversation with no user turn has nowhere to put
+/// them and is refused rather than guessed.
+fn teacher_line<'a>(
+    index: usize,
+    messages: &[splinter_core::chat::WireMessage],
+    context: &'a [TeacherMessage],
+) -> Result<Option<TeacherContextLine<'a>>, ViewError> {
+    if context.is_empty() {
+        return Ok(None);
+    }
+    let first_user =
+        messages
+            .iter()
+            .position(|m| m.role == "user")
+            .ok_or(ViewError::Parameter {
+                name: "teacher_context",
+                reason: format!(
+                    "record {index} has a teacher context and no user turn to place it after"
+                ),
+            })?;
+    Ok(Some(TeacherContextLine {
+        at: first_user + 1,
+        messages: context,
+    }))
+}
+
 /// `record` as one line of `format`, refused when its shape does not serve
 /// `objective`.
 fn line(
@@ -370,11 +409,13 @@ fn line(
                 messages,
                 tools,
                 advantage,
+                teacher_context,
             },
         ) => serde_json::to_string(&ChatLine {
             messages,
             tools,
             advantage: *advantage,
+            teacher_context: teacher_line(index, messages, teacher_context)?,
             metadata: &record.metadata,
         })?,
         (

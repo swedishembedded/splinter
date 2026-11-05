@@ -17,7 +17,8 @@ it with its manifest into a directory, and `train` reads it. The guide to using 
 experience sets cite; see [Learn how a person thinks](../guides/personas.md)), `rehearsal` (a model's own answers as it
 gave them, every experience with a final answer that no verifier decided
 wrong, under the default prompt), `policy-gradient` (every action of every graded attempt,
-weighted by the attempt's advantage; see below). `--limit N` keeps at most N records of any
+weighted by the attempt's advantage; see below), `self-distill` (the student's own conversation
+of every attempt with a teacher context built from what the verifier knows; see below). `--limit N` keeps at most N records of any
 view, evenly spread over the projection, the rest counted as `over_limit`. The
 default `--min-strength` is `consistency`; `--strip` defaults to `all`
 (the student sees only the instruction - also for a teacher's solve,
@@ -70,6 +71,26 @@ attempt did against the others at the same task:
 
 `train` trains such a dataset by brain's clipped policy gradient; see
 [Build datasets and train a candidate](../guides/training.md).
+
+#### Self-distillation
+
+Where every attempt at a task failed the advantage is zero. Two ways to use those groups:
+`--view policy-gradient --cliff-distill` distils the groups whose attempts all failed alike (and
+keeps the scalar advantage of every group with a spread of rewards, so one build holds both kinds
+of records), and `--view self-distill` distils every attempt, passed or failed, with no scalar
+advantage. A group is `graded` (its rewards differ), `all-fail` or `all-pass`; the report and
+manifest give each group's kind and whether it was distilled.
+
+A distilled record is the same chat record (the attempt's own conversation, nothing privileged in
+it) with a top-level `teacher_context`: `{"at": <index>, "messages": [{"role": "user", "content":
+...}]}`, the privileged turns inserted before message `at` (right after the first user turn) for
+the teacher only. Brain reads it, renders the teacher's conversation with the model's own chat
+template and refuses a record whose assistant tokens differ between the two renderings. The text
+is built from the experience alone: the task's reference change (privileged kind `Reference`) and
+hidden check commands, the commands the deciding verdict records as failed (phase, exit status,
+failing and missing tests; the verifier keeps digests of its raw output, never the output), and the
+verifier's `verification.reason` that `ingest-bench` copies into the verdict's evidence. An
+attempt with none of these is left out as `no_privileged_context`. The exam seal is unchanged.
 
 The reasoning an agent step recorded (ATIF `reasoning_content`) is the `reasoning_content`
 of the assistant message it becomes, trimmed. Brain's chat template renders it as the

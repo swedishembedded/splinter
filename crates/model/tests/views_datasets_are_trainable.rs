@@ -89,6 +89,7 @@ fn chat(train: bool) -> Projection {
             ],
             tools: Vec::new(),
             advantage: None,
+            teacher_context: Vec::new(),
         },
     )
 }
@@ -204,6 +205,7 @@ fn an_assistant_turns_reasoning_is_accepted_and_rendered_as_its_think_block() {
             ],
             tools: Vec::new(),
             advantage: None,
+            teacher_context: Vec::new(),
         },
     );
     write_dataset(&path, &record, &BrainDatasetCheck).expect("brain accepts reasoning_content");
@@ -233,6 +235,7 @@ fn an_assistant_turns_reasoning_is_accepted_and_rendered_as_its_think_block() {
                 messages: vec![on_a_user_turn, message("assistant", "4", true)],
                 tools: Vec::new(),
                 advantage: None,
+                teacher_context: Vec::new(),
             },
         ),
         &BrainDatasetCheck,

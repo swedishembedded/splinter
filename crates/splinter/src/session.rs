@@ -482,6 +482,7 @@ impl Session {
                     reward_metrics,
                     fail_ceiling,
                     advantage,
+                    cliff_distill,
                 } = *args;
                 let request = BuildRequest {
                     sets: sets
@@ -516,6 +517,7 @@ impl Session {
                         reward_metrics,
                         fail_ceiling,
                         advantage: advantage.unwrap_or_default(),
+                        cliff_distill,
                     },
                     base: from,
                 };

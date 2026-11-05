@@ -104,5 +104,8 @@ pub(super) fn resolved(regime: Regime, named: PolicyGradientOptions) -> PolicyGr
         reference: Some(resolved.reference),
         loss_agg: Some(resolved.loss_agg),
         temperature: Some(resolved.temperature),
+        teacher: Some(resolved.teacher),
+        advantage_bound: resolved.advantage_bound,
+        sequence_advantage_cap: resolved.sequence_advantage_cap,
     }
 }

@@ -170,6 +170,18 @@ pub struct PolicyGradientStep {
     pub ratio_max: f32,
     /// The mean advantage of the step's sequences.
     pub mean_advantage: f32,
+    /// Of the tokens carrying a teacher's per-token advantage
+    /// (self-distillation), after the guards: their mean, the largest
+    /// magnitude and the share the bound clipped. Zero when the step has
+    /// none.
+    #[serde(default)]
+    pub token_advantage_mean: f32,
+    /// See `token_advantage_mean`.
+    #[serde(default)]
+    pub token_advantage_max: f32,
+    /// See `token_advantage_mean`.
+    #[serde(default)]
+    pub token_advantage_clip_fraction: f32,
 }
 
 /// A policy-gradient run's statistics: the series of every step and the

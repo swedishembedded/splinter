@@ -107,6 +107,27 @@ def reinforcement_learns_on_policy_from_the_champion():
     assert args[args.index("--from") + 1] == "local:B+/a/g.safetensors" and "--eval-every" not in args
 
 
+def self_distillation_distils_the_cliff_and_keeps_the_scalar_advantage_elsewhere():
+    train = {**TRAIN, "objective": "self-distill",
+             "reward": {"metrics": {"iou": 0.5}, "fail_ceiling": 0.5, "advantage": "standardised"},
+             "policy_gradient": {"clip_eps": 0.2, "kl_beta": 0.02, "reference": "start", "loss_agg": "token-sum",
+                                 "temperature": 1.0},
+             "self_distill": {"teacher_policy": "base", "advantage_bound": 5.0, "sequence_advantage_cap": 40.0}}
+    states = [{"explore_exports": {"cad": "c0"}}, {"explore_exports": {"cad": "c1"}}]
+    assert loop.learning_exports(train, states, "cad") == ["c1"]  # on-policy: the newest attempts only
+    view = loop.dataset_args(train)
+    assert view[:2] == ["--view", "policy-gradient"] and "--cliff-distill" in view and "--reward-metric" in view
+    args = loop.train_args(train, {"adapter": "/a/g.safetensors"})
+    assert args[args.index("--from") + 1] == "local:B+/a/g.safetensors" and "--eval-every" not in args
+    assert args[args.index("--teacher-policy") + 1] == "base"
+    assert args[args.index("--advantage-bound") + 1] == "5.0"
+    assert args[args.index("--sequence-advantage-cap") + 1] == "40.0"
+    # Every attempt distilled, no scalar advantage and so no reward shape to pass.
+    every = {**train, "self_distill": {**train["self_distill"], "all_attempts": True}}
+    view = loop.dataset_args(every)
+    assert view[:2] == ["--view", "self-distill"] and "--reward-metric" not in view and "--cliff-distill" not in view
+
+
 def an_unknown_objective_is_refused():
     try:
         loop.dataset_args({**TRAIN, "objective": "dpo"})

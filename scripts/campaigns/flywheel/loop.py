@@ -29,7 +29,8 @@ adapter):
    each ``[[train.variant]]`` trains a candidate adapter on its own card, at
    once (``sft-step`` imitates the passing attempts of every generation so far
    from the base; ``policy-gradient`` reinforces this generation's attempts by
-   their advantage and continues the champion's adapter);
+   their advantage and continues the champion's adapter; ``self-distill`` does that and
+   also distils the tasks every attempt failed, from a teacher shown what the verifier knows);
 5. **candidates**: every candidate sits every workload's exam, side by side, on
    its share of the cards (the champion too, when the stack changed since its
    exam);
@@ -345,7 +346,11 @@ def adopted(job: str) -> str:
 
 # --------------------------------------------------------------------------- learning
 
-OBJECTIVES = ("sft-step", "policy-gradient")
+# ``self-distill`` is the policy gradient with the cliff distilled: the groups whose attempts
+# all failed alike (advantage zero) get a teacher's per-token advantage, the others keep
+# GRPO's scalar one (``[train.self_distill] all_attempts = true`` distils every attempt).
+OBJECTIVES = ("sft-step", "policy-gradient", "self-distill")
+ON_POLICY = ("policy-gradient", "self-distill")
 
 
 def objective(train: dict) -> str:
@@ -370,17 +375,20 @@ def learning_exports(train: dict, states: list[dict], workload: str) -> list[str
     """A workload's exploration exports a candidate learns from, oldest first:
     imitation takes every generation's, the policy gradient only the newest."""
     exports = [s["explore_exports"][workload] for s in states if s.get("explore_exports", {}).get(workload)]
-    return exports[-1:] if objective(train) == "policy-gradient" else exports
+    return exports[-1:] if objective(train) in ON_POLICY else exports
 
 
 def dataset_args(train: dict) -> list[str]:
-    view = objective(train)
-    args = ["--view", view]
-    if view == "policy-gradient":
+    name = objective(train)
+    every = name == "self-distill" and train.get("self_distill", {}).get("all_attempts", False)
+    args = ["--view", "self-distill" if every else "policy-gradient" if name in ON_POLICY else name]
+    if name in ON_POLICY and not every:
         reward = train["reward"]
-        for name, weight in reward.get("metrics", {}).items():
-            args += ["--reward-metric", f"{name}={weight}"]
+        for metric, weight in reward.get("metrics", {}).items():
+            args += ["--reward-metric", f"{metric}={weight}"]
         args += ["--fail-ceiling", str(reward["fail_ceiling"]), "--advantage", reward["advantage"]]
+        if name == "self-distill":
+            args.append("--cliff-distill")
     if train.get("images"):
         args.append("--images")
     if train.get("roles"):
@@ -400,8 +408,13 @@ def train_args(train: dict, start: dict) -> list[str]:
                 str(train["patience"]), "--monitor-share", str(train["monitor_share"])]
     pg = train["policy_gradient"]
     origin = f"{train['base']}+{start['adapter']}" if start.get("adapter") else train["base"]
-    return ["--from", origin, *common, "--clip-eps", str(pg["clip_eps"]), "--kl-beta", str(pg["kl_beta"]),
+    args = ["--from", origin, *common, "--clip-eps", str(pg["clip_eps"]), "--kl-beta", str(pg["kl_beta"]),
             "--reference", pg["reference"], "--loss-agg", pg["loss_agg"], "--temperature", str(pg["temperature"])]
+    if objective(train) == "self-distill":
+        sd = train["self_distill"]
+        args += ["--teacher-policy", sd["teacher_policy"], "--advantage-bound", str(sd["advantage_bound"]),
+                 "--sequence-advantage-cap", str(sd["sequence_advantage_cap"])]
+    return args
 
 
 def splinter(campaign: Campaign, gen: Generation, card: int, *args, log_name: str) -> dict:

@@ -106,7 +106,7 @@ pub use dataset::{
     dataset_line, manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest,
     Unchecked, EXPORT_FORMAT,
 };
-pub use record::{Record, RecordBody, RecordMetadata, Side};
+pub use record::{Record, RecordBody, RecordMetadata, Side, TeacherMessage};
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
@@ -117,7 +117,7 @@ pub use views::{
     OutcomeView, PolicyGradient, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep,
     VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
-pub use views::{AdvantageKind, GroupReport, RewardShape, TrialReport};
+pub use views::{AdvantageKind, Distill, GroupKind, GroupReport, RewardShape, TrialReport};
 
 /// The training objective a view's records serve.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -218,6 +218,10 @@ pub enum Exclusion {
     /// The verdict does not record which attempt (trial) of which task it
     /// grades, so the experience belongs to no group.
     NoRollout,
+    /// A self-distillation view found nothing the verifier knows to show the
+    /// teacher: no reference change, no hidden check and no record of what
+    /// failed.
+    NoPrivilegedContext,
     /// A critique whose own decision is not a pass at the minimum strength.
     UnverifiedCritique,
     /// The experience a relation names is not in the corpus.

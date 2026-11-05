@@ -165,6 +165,7 @@ pub fn rollout_dataset(ctx: &Context, topic: &str, advantages: &[f64]) -> Datase
                 ],
                 tools: Vec::new(),
                 advantage: Some(*advantage),
+                teacher_context: Vec::new(),
             },
             metadata: RecordMetadata {
                 group: None,
@@ -241,6 +242,7 @@ fn dataset_made(
                 ],
                 tools: Vec::new(),
                 advantage: None,
+                teacher_context: Vec::new(),
             },
             metadata: RecordMetadata {
                 group: None,

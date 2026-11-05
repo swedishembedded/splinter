@@ -68,6 +68,9 @@ brain's own, left at brain's defaults unless named:
 | `--reference base\|start` | the policy the penalty is taken against: the frozen base, or the adapter the run begins from (`base`) |
 | `--loss-agg seq-mean\|token-sum` | how token terms are normalised (`seq-mean`) |
 | `--temperature` | the temperature the rollouts were sampled at (1.0) |
+| `--teacher-policy base\|start` | self-distillation: the frozen policy that scores the student's tokens in the privileged context (`base`) |
+| `--advantage-bound` | self-distillation: clip each token's advantage to `[-C, C]` (none) |
+| `--sequence-advantage-cap` | self-distillation: scale a sequence's token advantages down together when their magnitudes sum past this (none) |
 
 The plan records every setting, brain's training record keeps the loss, clip fraction, KL and
 importance ratio of each step, and the candidate is released through the same gate as any
@@ -75,6 +78,37 @@ other. The candidate's report carries the same series under `policy_gradient`, w
 last and mean KL to the reference, the mean clip fraction and the mean ratio, and `train` prints
 them as one line. brain also prints the step's KL, clip fraction and ratio on its step log line.
 The KL costs one forward pass over the dataset before the first step, none per step.
+
+### Self-distillation on the cliff
+
+GRPO's advantage is zero where every attempt at a task failed, so the hardest tasks teach it
+nothing. Self-distillation gives those attempts dense credit instead, on the student's own
+distribution. Build the dataset with `--cliff-distill` (the `policy-gradient` view keeps the
+scalar advantage of every group with a spread of rewards and distils each group whose
+attempts all failed alike), or with `--view self-distill` (every attempt of every group,
+passed or failed, distilled):
+
+```sh
+splinter dataset build --view policy-gradient --cliff-distill --roles designer \
+    --max-block 8192 --from local:/models/qwen3.8-27b+round-3.safetensors --drop-leaking TRAIN-SET-ID
+splinter train DATASET-ID --from local:/models/qwen3.8-27b+round-3.safetensors \
+    --teacher-policy base --advantage-bound 5 --sequence-advantage-cap 40 \
+    --kl-beta 0.02 --reference start --base-precision bf16
+```
+
+A distilled record is the attempt's own conversation, exactly as the student saw it, plus a
+`teacher_context`: a turn right after the instruction that only the teacher sees, built from what
+the verifier recorded (the hidden checks that failed and the tests seen to fail, the verifier's own
+statement of why, the task's reference change when the task carries one). It never enters the
+student's messages. An attempt with nothing of that to show is left out and counted as
+`no_privileged_context`. Brain scores the student's own sampled tokens with the frozen model shown
+that context and trains each token with `A_t = log q_teacher(y_t | privileged context, y_<t) - log p_student(y_t)`
+through the same clipped step as any advantage (reverse KL, the dense signal). The guards are named:
+`--advantage-bound` clips each `A_t`, `--sequence-advantage-cap` scales a sequence's advantages
+down so that a few pivot tokens cannot dominate a step, and the KL penalty stays. The step log
+line adds the mean, largest magnitude and clipped share of the token advantages. The teacher's
+rendering is longer than the student's, so `--max-block` counts the longer of the two. The build
+report counts groups by kind (graded, all-fail, all-pass) and says which were distilled.
 
 ## Watching the training and choosing the step
 

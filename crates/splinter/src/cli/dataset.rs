@@ -92,6 +92,14 @@ pub struct BuildArgs {
     /// `mean-centred` (the reward less the group mean).
     #[arg(long, value_parser = advantage, value_name = "KIND")]
     pub advantage: Option<AdvantageKind>,
+    /// For the policy-gradient view: distil the groups whose attempts all
+    /// failed alike (the cliff, where GRPO's advantage is zero and teaches
+    /// nothing) with a teacher context built from what the verifier knows, and
+    /// keep the scalar advantage for every group with a spread of rewards. One
+    /// build then holds both kinds of records, and the report counts the groups
+    /// by kind. The `self-distill` view distils every attempt instead.
+    #[arg(long)]
+    pub cliff_distill: bool,
     /// For the sft-step view: one record per trajectory with every
     /// admitted action supervised, not one record per action.
     #[arg(long)]

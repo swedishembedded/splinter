@@ -96,6 +96,16 @@ pub struct PolicyGradientOptions {
     pub loss_agg: Option<LossAggregation>,
     /// The temperature the rollouts were sampled at.
     pub temperature: Option<f32>,
+    /// For records with a teacher context (self-distillation): the frozen
+    /// policy that scores the student's tokens in the privileged context.
+    pub teacher: Option<Reference>,
+    /// For records with a teacher context: each token's advantage is clipped
+    /// to `[-bound, bound]`.
+    pub advantage_bound: Option<f32>,
+    /// For records with a teacher context: the most the magnitudes of a
+    /// sequence's token advantages may sum to; a sequence over it is scaled
+    /// down, so a few pivot tokens cannot dominate a step.
+    pub sequence_advantage_cap: Option<f32>,
 }
 
 /// The settings with every default made explicit.
@@ -111,6 +121,12 @@ pub struct ResolvedPolicyGradient {
     pub loss_agg: LossAggregation,
     /// See [`PolicyGradientOptions::temperature`].
     pub temperature: f32,
+    /// See [`PolicyGradientOptions::teacher`].
+    pub teacher: Reference,
+    /// See [`PolicyGradientOptions::advantage_bound`]; `None` is no bound.
+    pub advantage_bound: Option<f32>,
+    /// See [`PolicyGradientOptions::sequence_advantage_cap`]; `None` is no cap.
+    pub sequence_advantage_cap: Option<f32>,
 }
 
 impl PolicyGradientOptions {
@@ -124,6 +140,12 @@ impl PolicyGradientOptions {
             (self.reference.is_some(), "--reference"),
             (self.loss_agg.is_some(), "--loss-agg"),
             (self.temperature.is_some(), "--temperature"),
+            (self.teacher.is_some(), "--teacher-policy"),
+            (self.advantage_bound.is_some(), "--advantage-bound"),
+            (
+                self.sequence_advantage_cap.is_some(),
+                "--sequence-advantage-cap",
+            ),
         ]
         .into_iter()
         .filter_map(|(set, flag)| set.then_some(flag))
@@ -140,6 +162,11 @@ impl PolicyGradientOptions {
             reference: self.reference.unwrap_or(defaults.reference),
             loss_agg: self.loss_agg.unwrap_or(defaults.loss_agg),
             temperature: self.temperature.unwrap_or(defaults.temperature),
+            teacher: self.teacher.unwrap_or(defaults.teacher),
+            advantage_bound: self.advantage_bound.or(defaults.advantage_bound),
+            sequence_advantage_cap: self
+                .sequence_advantage_cap
+                .or(defaults.sequence_advantage_cap),
         }
     }
 
@@ -159,6 +186,12 @@ impl PolicyGradientOptions {
                 brain::LossAgg::TokenSum => LossAggregation::TokenSum,
             },
             temperature: config.temperature,
+            teacher: match config.teacher {
+                brain::ReferencePolicy::Base => Reference::Base,
+                brain::ReferencePolicy::StartOfRun => Reference::StartOfRun,
+            },
+            advantage_bound: config.advantage_bound,
+            sequence_advantage_cap: config.sequence_advantage_cap,
         }
     }
 
@@ -176,6 +209,12 @@ impl PolicyGradientOptions {
                 LossAggregation::TokenSum => brain::LossAgg::TokenSum,
             },
             temperature: resolved.temperature,
+            teacher: match resolved.teacher {
+                Reference::Base => brain::ReferencePolicy::Base,
+                Reference::StartOfRun => brain::ReferencePolicy::StartOfRun,
+            },
+            advantage_bound: resolved.advantage_bound,
+            sequence_advantage_cap: resolved.sequence_advantage_cap,
             ..brain::PolicyGradientConfig::default()
         }
     }
@@ -258,6 +297,9 @@ fn summarised(stats: &brain::PolicyGradientStats) -> PolicyGradientSummary {
             ratio_min: s.ratio_min,
             ratio_max: s.ratio_max,
             mean_advantage: s.mean_advantage,
+            token_advantage_mean: s.token_advantage_mean,
+            token_advantage_max: s.token_advantage_max,
+            token_advantage_clip_fraction: s.token_advantage_clip_fraction,
         })
         .collect();
     PolicyGradientSummary::from_steps(steps, stats.steps_skipped_nonfinite)
@@ -390,8 +432,11 @@ mod tests {
             reference: Some(Reference::StartOfRun),
             loss_agg: Some(LossAggregation::TokenSum),
             temperature: Some(0.6),
+            teacher: Some(Reference::StartOfRun),
+            advantage_bound: Some(4.0),
+            sequence_advantage_cap: Some(30.0),
         };
-        assert_eq!(named.named().len(), 5);
+        assert_eq!(named.named().len(), 8);
         let config = named.config();
         assert_eq!(
             (config.clip_eps, config.kl_beta, config.temperature),
@@ -399,6 +444,12 @@ mod tests {
         );
         assert_eq!(config.reference, brain::ReferencePolicy::StartOfRun);
         assert_eq!(config.loss_agg, brain::LossAgg::TokenSum);
+        // The teacher's guards are handed to brain as named.
+        assert_eq!(config.teacher, brain::ReferencePolicy::StartOfRun);
+        assert_eq!(
+            (config.advantage_bound, config.sequence_advantage_cap),
+            (Some(4.0), Some(30.0))
+        );
     }
 
     #[test]

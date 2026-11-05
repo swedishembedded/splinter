@@ -181,6 +181,25 @@ pub struct PolicyGradientArgs {
         PolicyGradientOptions::defaults().temperature
     ))]
     pub temperature: Option<f32>,
+    /// Which frozen policy scores the student's tokens in the privileged
+    /// context of a self-distillation record.
+    #[arg(long, value_name = "base|start", value_parser = clap::value_parser!(Reference), help =
+        "For records with a teacher context (the self-distill view, or policy-gradient \
+         --cliff-distill): the frozen policy that, shown the privileged context, scores the \
+         student's own tokens: the base, or `start`, the adapter the run begins from \
+         [default: base]")]
+    pub teacher_policy: Option<Reference>,
+    /// The bound on each token's teacher advantage.
+    #[arg(long, value_name = "C", value_parser = positive_rate, help =
+        "For records with a teacher context: clip each token's advantage \
+         (log teacher - log student) to [-C, C] [default: none]")]
+    pub advantage_bound: Option<f32>,
+    /// The cap on the summed magnitude of a sequence's token advantages.
+    #[arg(long, value_name = "SUM", value_parser = positive_rate, help =
+        "For records with a teacher context: scale a sequence's token advantages down together \
+         when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a \
+         step [default: none]")]
+    pub sequence_advantage_cap: Option<f32>,
 }
 
 impl PolicyGradientArgs {
@@ -193,6 +212,9 @@ impl PolicyGradientArgs {
             reference: self.reference,
             loss_agg: self.loss_agg,
             temperature: self.temperature,
+            teacher: self.teacher_policy,
+            advantage_bound: self.advantage_bound,
+            sequence_advantage_cap: self.sequence_advantage_cap,
         }
     }
 }

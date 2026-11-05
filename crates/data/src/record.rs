@@ -16,6 +16,16 @@ use splinter_core::experience::ExperienceId;
 
 use crate::Objective;
 
+/// One privileged turn of a record's teacher context: text the student never
+/// saw, shown to the frozen model that scores the student's own tokens.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TeacherMessage {
+    /// `system` or `user`.
+    pub role: String,
+    /// The text.
+    pub content: String,
+}
+
 /// What a record holds; each [`Objective`] has one shape.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "shape", rename_all = "snake_case")]
@@ -38,6 +48,12 @@ pub enum RecordBody {
         /// run. `None` for a record that is imitated.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         advantage: Option<f64>,
+        /// What only the teacher of a self-distillation run is shown, as
+        /// extra turns right after the conversation's first user turn: the
+        /// student's own conversation is [`Self::Chat::messages`] and never
+        /// holds any of it. Empty for a record trained without a teacher.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        teacher_context: Vec<TeacherMessage>,
     },
     /// A shared prompt and two replies to it, the first preferred. DPO.
     Preference {
@@ -79,6 +95,7 @@ impl RecordBody {
             messages,
             tools: Vec::new(),
             advantage: None,
+            teacher_context: Vec::new(),
         }
     }
 
@@ -88,11 +105,35 @@ impl RecordBody {
     pub fn with_advantage(self, advantage: f64) -> Self {
         match self {
             Self::Chat {
-                messages, tools, ..
+                messages,
+                tools,
+                teacher_context,
+                ..
             } => Self::Chat {
                 messages,
                 tools,
                 advantage: Some(advantage),
+                teacher_context,
+            },
+            other => other,
+        }
+    }
+
+    /// This record shown to a teacher with `context` besides, when it is a
+    /// chat record; any other shape has no teacher and is returned as it is.
+    #[must_use]
+    pub fn with_teacher_context(self, context: Vec<TeacherMessage>) -> Self {
+        match self {
+            Self::Chat {
+                messages,
+                tools,
+                advantage,
+                ..
+            } => Self::Chat {
+                messages,
+                tools,
+                advantage,
+                teacher_context: context,
             },
             other => other,
         }

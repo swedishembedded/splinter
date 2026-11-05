@@ -44,6 +44,7 @@ fn record(user: &str, assistant: &str) -> Record {
             ],
             tools: Vec::new(),
             advantage: None,
+            teacher_context: Vec::new(),
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),

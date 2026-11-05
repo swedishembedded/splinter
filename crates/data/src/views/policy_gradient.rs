@@ -36,7 +36,21 @@
 //!   judge nothing here: the reward is the only judge.
 //!
 //! Every group is reported ([`Projection::groups`]), including those that
-//! yielded no records.
+//! yielded no records, with its kind ([`GroupKind`]).
+//!
+//! ## Self-distillation
+//!
+//! A group whose attempts all failed alike has no advantage: GRPO learns
+//! nothing from the cliff. [`Distill`] says what to do instead. For the
+//! attempts it covers the view emits the attempt's own conversation, exactly
+//! as the student saw it, with a teacher context beside it (what the verifier
+//! knows: the hidden checks that failed, the reference change; see
+//! [`privileged`](super::privileged)). The trainer scores the student's own
+//! tokens with the frozen model shown that context, and the difference to
+//! the student's own log-probability is the dense per-token advantage. The
+//! privileged text is never part of the student's messages. An attempt with
+//! nothing privileged to show is counted as
+//! [`Exclusion::NoPrivilegedContext`].
 
 use std::collections::BTreeMap;
 
@@ -45,12 +59,33 @@ use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
 use splinter_core::harness::HarnessConversation;
 use splinter_store::decision::decide;
 
+use super::privileged::teacher_context;
 use super::rendering::{Judgement, Rendering};
-use super::rewards::{AdvantageKind, GroupReport, RewardShape, TrialReport};
+use super::rewards::{AdvantageKind, GroupKind, GroupReport, RewardShape, TrialReport};
 use crate::{Corpus, Entry, Exclusion, Objective, Projection, Provenance, Strip, View, ViewError};
 
 /// The name every policy-gradient record carries.
 const NAME: &str = "policy-gradient";
+
+/// The name of the view that distils every attempt.
+const SELF_DISTILL: &str = "self-distill";
+
+/// Which attempts become self-distillation records (a teacher context) and
+/// which carry the group's scalar advantage.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Distill {
+    /// None: every attempt of a group with advantages carries its scalar
+    /// advantage, any other group yields nothing.
+    #[default]
+    Off,
+    /// The attempts of a group that all failed alike (the cliff) are
+    /// distilled; the groups with advantages keep GRPO's scalar advantage.
+    /// What the campaign runs.
+    Cliff,
+    /// Every attempt of every group is distilled, passed or failed, and none
+    /// carries a scalar advantage.
+    Every,
+}
 
 /// Which attempts are compared: one task version, one policy.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -65,13 +100,27 @@ struct Rollout {
     group: GroupKey,
     trial: String,
     reward: f64,
+    passed: bool,
+    /// The evidence of the deciding verdict: what the verifier recorded.
+    evidence: Value,
 }
 
 /// The conversations of one trial seen so far, and the reward all of them
 /// agree it earned.
 struct TrialSeen {
     reward: f64,
+    passed: bool,
     conversations: usize,
+}
+
+/// What an attempt becomes in the dataset.
+enum Treatment {
+    /// A record carrying the attempt's scalar advantage.
+    Advantage(f64),
+    /// A record with a teacher context.
+    Teacher,
+    /// Nothing: its group says nothing.
+    Nothing,
 }
 
 /// Reinforcement learning from verified rewards: every action of every graded
@@ -82,6 +131,7 @@ pub struct PolicyGradient {
     rendering: Rendering,
     reward: RewardShape,
     advantage: AdvantageKind,
+    distill: Distill,
 }
 
 impl PolicyGradient {
@@ -95,7 +145,14 @@ impl PolicyGradient {
             rendering: Rendering::default(),
             reward: RewardShape::unshaped(),
             advantage: AdvantageKind::default(),
+            distill: Distill::Off,
         }
+    }
+
+    /// The same view distilling the attempts `distill` says.
+    #[must_use]
+    pub fn distilling(self, distill: Distill) -> Self {
+        Self { distill, ..self }
     }
 
     /// The same view earning a reward as `reward` says.
@@ -203,13 +260,19 @@ impl PolicyGradient {
             },
             trial,
             reward,
+            passed: decision.passed,
+            evidence: evidence.clone(),
         }))
     }
 }
 
 impl View for PolicyGradient {
     fn name(&self) -> &str {
-        NAME
+        if self.distill == Distill::Every {
+            SELF_DISTILL
+        } else {
+            NAME
+        }
     }
 
     fn objective(&self) -> Objective {
@@ -218,7 +281,7 @@ impl View for PolicyGradient {
 
     fn project(&self, corpus: &Corpus) -> Result<Projection, ViewError> {
         let mut projection = Projection::new(
-            NAME,
+            self.name(),
             Objective::PolicyGradient,
             Some(self.rendering.strip.clone()),
             Some(self.min_strength),
@@ -247,6 +310,7 @@ impl View for PolicyGradient {
                 .entry(rollout.trial.clone())
                 .or_insert(TrialSeen {
                     reward: rollout.reward,
+                    passed: rollout.passed,
                     conversations: 0,
                 });
             // The conversations of a trial are graded together, so they
@@ -263,7 +327,7 @@ impl View for PolicyGradient {
             seen.conversations += 1;
             placed.push((entry, harness, rollout));
         }
-        let mut advantage_of: BTreeMap<(&GroupKey, &str), f64> = BTreeMap::new();
+        let mut treatment_of: BTreeMap<(&GroupKey, &str), Treatment> = BTreeMap::new();
         for (key, trials) in &groups {
             let rewards: Vec<f64> = trials.values().map(|t| t.reward).collect();
             let advantages = self.advantage.advantages(&rewards);
@@ -277,10 +341,25 @@ impl View for PolicyGradient {
                     conversations: seen.conversations,
                 })
                 .collect();
-            if let Some(advantages) = &advantages {
-                for ((trial, _), advantage) in trials.iter().zip(advantages) {
-                    advantage_of.insert((key, trial), *advantage);
-                }
+            let kind = if advantages.is_some() {
+                GroupKind::Graded
+            } else if trials.values().any(|t| t.passed) {
+                GroupKind::AllPass
+            } else {
+                GroupKind::AllFail
+            };
+            let distilled = match self.distill {
+                Distill::Off => false,
+                Distill::Cliff => kind == GroupKind::AllFail,
+                Distill::Every => true,
+            };
+            for (at, trial) in trials.keys().enumerate() {
+                let treatment = match (&advantages, distilled) {
+                    (_, true) => Treatment::Teacher,
+                    (Some(advantages), false) => Treatment::Advantage(advantages[at]),
+                    (None, false) => Treatment::Nothing,
+                };
+                treatment_of.insert((key, trial), treatment);
             }
             projection.groups.push(GroupReport {
                 task: key.task.clone(),
@@ -288,13 +367,27 @@ impl View for PolicyGradient {
                 policy: key.policy.clone(),
                 trials: reports,
                 signal: advantages.is_some(),
+                kind,
+                distilled,
             });
         }
         for (entry, harness, rollout) in &placed {
-            let Some(&advantage) = advantage_of.get(&(&rollout.group, rollout.trial.as_str()))
-            else {
+            let treatment = treatment_of.get(&(&rollout.group, rollout.trial.as_str()));
+            let Some(treatment @ (Treatment::Advantage(_) | Treatment::Teacher)) = treatment else {
                 projection.exclude(Exclusion::NoGroupSignal);
                 continue;
+            };
+            let teacher = match treatment {
+                Treatment::Teacher => {
+                    match teacher_context(&entry.experience, &rollout.evidence, rollout.passed) {
+                        Ok(context) => Some(context),
+                        Err(reason) => {
+                            projection.exclude(reason);
+                            continue;
+                        }
+                    }
+                }
+                _ => None,
             };
             let conversation = match self.rendering.conversation_of(entry, harness.as_ref()) {
                 Ok(conversation) => conversation,
@@ -311,10 +404,12 @@ impl View for PolicyGradient {
                 .rendering
                 .records(&conversation, &mut projection, |_| Judgement::Admit)
             {
-                projection.push(
-                    record.with_advantage(advantage),
-                    Provenance::of(vec![entry.id.clone()]),
-                );
+                let record = match (treatment, &teacher) {
+                    (Treatment::Advantage(advantage), _) => record.with_advantage(*advantage),
+                    (_, Some(context)) => record.with_teacher_context(context.clone()),
+                    _ => record,
+                };
+                projection.push(record, Provenance::of(vec![entry.id.clone()]));
             }
         }
         Ok(projection)

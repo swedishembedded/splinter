@@ -110,6 +110,7 @@ pub mod release;
 pub mod rerank;
 pub mod reserve;
 pub mod retrieval;
+mod rl_build;
 pub mod router;
 pub mod sealed;
 pub mod sessions;

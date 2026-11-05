@@ -134,6 +134,13 @@ refuses an image of more than 36 megapixels, a longer record than `max_block`, o
 held-out record with pictures when it trains; the dataset check at build time reads the
 pictures only as inline `data:` URLs.
 
+A trial artifact carries the verifier's statement of why it decided as it did
+(`verification.json`'s `reason`); ingestion copies it into the verdict's evidence, where
+the `self-distill` view reads it as privileged context for a teacher. The artifact holds
+no reference change and no test output: a task's reference change reaches a dataset only
+through the task record (a privileged `Reference` item), so attempts of a benchmark task
+whose export names none are distilled from the verifier's reason alone.
+
 ## Splits
 
 The command writes two experience sets, `bench train trials` and `bench eval trials`,
@@ -190,6 +197,9 @@ so a close miss ranks above a far one and any pass above both. `--advantage` def
 `standardised` (GRPO's) and may be `mean-centred`. The report lists each group's trials with
 their reward and advantage; a group of one trial, or whose trials all earned the same, yields
 no record (`no_group_signal`). `--from` names the adapter whose policy ran the trials, so the
-rollouts are close to on-policy. The exam seal is unchanged: `eval` trials never reach the
+rollouts are close to on-policy. Add `--cliff-distill` to give the groups whose attempts all
+failed (where the advantage is zero) dense per-token credit from a teacher that is shown what
+the verifier knows, see [Self-distillation on the cliff](training.md#self-distillation-on-the-cliff).
+The exam seal is unchanged: `eval` trials never reach the
 dataset. See [Datasets reference](../reference/datasets.md#policy-gradient) and
 [Build datasets and train a candidate](training.md#training-on-rollouts).

@@ -21,11 +21,12 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
 use splinter_data::{
-    manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Exclusion, Format, Objective,
-    OutcomeView, PolicyGradient, Preference, Projection, RecordBody, Rehearsal, Retrieval,
-    SftFinal, SftStep, StoredDataset, VerifierView, View, Voice, DEFAULT_MAX_FAMILY_SHARE,
+    manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Distill, Exclusion, Format,
+    Objective, OutcomeView, PolicyGradient, Preference, Projection, RecordBody, Rehearsal,
+    Retrieval, SftFinal, SftStep, StoredDataset, VerifierView, View, Voice,
+    DEFAULT_MAX_FAMILY_SHARE,
 };
-pub use splinter_data::{AdvantageKind, BlockMeasure, GroupReport, RewardShape};
+pub use splinter_data::{AdvantageKind, BlockMeasure, GroupKind, GroupReport, RewardShape};
 pub use splinter_data::{Control, Strip};
 use splinter_knowledge::sections::sections;
 use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
@@ -48,6 +49,7 @@ pub use crate::dataset_views::{
     parse_advantage, parse_reward_metric, parse_strength, parse_strip, StripPolicy, ViewName,
     DEFAULT_MIN_STRENGTH,
 };
+pub use crate::rl_build::{RlBuild, DEFAULT_FAIL_CEILING};
 
 /// One `dataset build`.
 #[derive(Clone, Debug, Serialize)]
@@ -120,50 +122,6 @@ fn as_text<S: serde::Serializer>(model: &Option<ModelRef>, out: S) -> Result<S::
     match model {
         Some(model) => out.collect_str(model),
         None => out.serialize_none(),
-    }
-}
-
-/// How the policy-gradient view rewards an attempt and reads its advantage;
-/// the other views ignore it.
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct RlBuild {
-    /// The metrics a failed attempt's reward is made of, with their weights
-    /// (non-negative, summing to one); none leaves a failure at zero.
-    pub reward_metrics: Vec<(String, f64)>,
-    /// The most a failed attempt can earn, below a pass's one; needs
-    /// `reward_metrics`. `None` is [`DEFAULT_FAIL_CEILING`].
-    pub fail_ceiling: Option<f64>,
-    /// How the advantage is read from the rewards of a group.
-    pub advantage: AdvantageKind,
-}
-
-/// The most a failed attempt earns when metrics shape its reward and no
-/// ceiling is named: half of a pass's.
-pub const DEFAULT_FAIL_CEILING: f64 = 0.5;
-
-impl RlBuild {
-    /// The reward shape this asks for.
-    fn shape(&self) -> Result<RewardShape, OrchestratorError> {
-        let refused = |e: splinter_data::ViewError| OrchestratorError::Refused(e.to_string());
-        match (self.reward_metrics.is_empty(), self.fail_ceiling) {
-            (true, None) => Ok(RewardShape::unshaped()),
-            (true, Some(_)) => Err(OrchestratorError::Refused(
-                "--fail-ceiling bounds what the --reward-metric terms earn a failed attempt; \
-                 name at least one metric"
-                    .into(),
-            )),
-            (false, ceiling) => RewardShape::shaped(
-                ceiling.unwrap_or(DEFAULT_FAIL_CEILING),
-                self.reward_metrics.clone(),
-            )
-            .map_err(refused),
-        }
-    }
-
-    fn is_default(&self) -> bool {
-        self.reward_metrics.is_empty()
-            && self.fail_ceiling.is_none()
-            && self.advantage == AdvantageKind::default()
     }
 }
 
@@ -344,25 +302,41 @@ fn project_without(
             view.as_str()
         )));
     }
-    if request.serialise_calls && !matches!(view, ViewName::SftStep | ViewName::PolicyGradient) {
+    if request.serialise_calls
+        && !matches!(
+            view,
+            ViewName::SftStep | ViewName::PolicyGradient | ViewName::SelfDistill
+        )
+    {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no run to take apart, so --serialise-calls does not apply",
             view.as_str()
         )));
     }
-    let trains_actions = matches!(view, ViewName::SftStep | ViewName::PolicyGradient);
+    let trains_actions = matches!(
+        view,
+        ViewName::SftStep | ViewName::PolicyGradient | ViewName::SelfDistill
+    );
     if request.images && !trains_actions {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no conversations that were shown images, so --images does not apply",
             view.as_str()
         )));
     }
-    if !request.rl.is_default() && view != ViewName::PolicyGradient {
+    let rewards_attempts = matches!(view, ViewName::PolicyGradient | ViewName::SelfDistill);
+    if !request.rl.is_default() && !rewards_attempts {
         return Err(OrchestratorError::Refused(format!(
-            "view {} has no rewards or advantages, so --reward-metric, --fail-ceiling and \
-             --advantage do not apply",
+            "view {} has no rewards or advantages, so --reward-metric, --fail-ceiling, \
+             --advantage and --cliff-distill do not apply",
             view.as_str()
         )));
+    }
+    if request.rl.cliff_distill && view != ViewName::PolicyGradient {
+        return Err(OrchestratorError::Refused(
+            "--cliff-distill distils the all-fail groups of the policy-gradient view; the \
+             self-distill view distils every attempt already"
+                .into(),
+        ));
     }
     if request.min_strength.is_some() && !view.takes_min_strength() {
         return Err(OrchestratorError::Refused(format!(
@@ -408,7 +382,12 @@ fn project_without(
             .only_roles(request.roles.clone().unwrap_or_default())
             .images(request.images)
             .project(&corpus),
-        ViewName::PolicyGradient => PolicyGradient::new(strength)
+        ViewName::PolicyGradient | ViewName::SelfDistill => PolicyGradient::new(strength)
+            .distilling(match (view, request.rl.cliff_distill) {
+                (ViewName::SelfDistill, _) => Distill::Every,
+                (_, true) => Distill::Cliff,
+                (_, false) => Distill::Off,
+            })
             .with_strip(strip)
             .rewards(request.rl.shape()?)
             .advantage(request.rl.advantage)

@@ -104,3 +104,54 @@ fn a_run_on_rollouts_is_set_with_brains_policy_gradient_settings() {
         assert!(parse(&argv).is_err(), "{refused:?}");
     }
 }
+
+#[test]
+fn self_distillation_is_built_from_the_cliff_groups_and_trained_with_named_guards() {
+    let Command::Dataset(DatasetCommand::Build(args)) = command(&[
+        "dataset",
+        "build",
+        "ab12",
+        "--view",
+        "policy-gradient",
+        "--cliff-distill",
+    ]) else {
+        panic!("dataset build");
+    };
+    assert!(args.cliff_distill);
+    // The view that distils every attempt needs no flag.
+    let Command::Dataset(DatasetCommand::Build(every)) =
+        command(&["dataset", "build", "ab12", "--view", "self-distill"])
+    else {
+        panic!("dataset build");
+    };
+    assert_eq!(every.view.as_str(), "self-distill");
+
+    let Command::Train(train) = command(&[
+        "train",
+        "ab12",
+        "--teacher-policy",
+        "start",
+        "--advantage-bound",
+        "5",
+        "--sequence-advantage-cap",
+        "40",
+    ]) else {
+        panic!("train");
+    };
+    let options = train.policy_gradient.options();
+    assert_eq!(options.teacher, Some(Reference::StartOfRun));
+    assert_eq!(
+        (options.advantage_bound, options.sequence_advantage_cap),
+        (Some(5.0), Some(40.0))
+    );
+    for refused in [
+        &["--teacher-policy", "adapter"][..],
+        &["--advantage-bound", "0"],
+        &["--advantage-bound", "-1"],
+        &["--sequence-advantage-cap", "0"],
+    ] {
+        let mut argv = vec!["train", "ab12"];
+        argv.extend_from_slice(refused);
+        assert!(parse(&argv).is_err(), "{refused:?}");
+    }
+}

@@ -93,6 +93,7 @@ fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> R
             ],
             tools: Vec::new(),
             advantage: None,
+            teacher_context: Vec::new(),
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),

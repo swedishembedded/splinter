@@ -141,3 +141,29 @@ inconclusive and more tasks are collected rather than the threshold changed.
   first request's tool list (about 1.4% of requests differ).
 - Done: the reasoning of each step rides on the assistant message as `reasoning_content`
   (brain's `generic-messages-v2` gained the field and renders it through the template).
+
+## On-policy self-distillation with privileged information (2026-11-05)
+
+- Done: `dataset build --view policy-gradient --cliff-distill` keeps GRPO's scalar advantage for every
+  group with a spread of rewards and distils the groups whose attempts all failed alike (advantage zero);
+  `--view self-distill` distils every attempt. A distilled record is the attempt's own conversation plus a
+  `teacher_context` (what the verifier recorded: failed hidden checks, the verifier's reason, the task's
+  reference change when the task carries one) that never enters the student's messages; an attempt with none
+  of it is counted as `no_privileged_context`. The report counts groups by kind (graded, all-fail, all-pass).
+  `train` takes `--teacher-policy`, `--advantage-bound` and `--sequence-advantage-cap` beside brain's
+  existing clip, KL and reference settings; the loop's `self-distill` objective runs the combined build.
+  Spec tests: `crates/data/tests/self_distill.rs`, `crates/pipelines/tests/bench_policy_gradient.rs`, the
+  grammar in `crates/splinter/src/cli/tests/rollouts.rs`, `scripts/campaigns/flywheel/test_loop.py`.
+- Open: the benchmark's trial artifact carries the verifier's reason (`verification.json`) and the agent's
+  patches, but neither the hidden tests' output nor the task's reference change, so a benchmark-ingested
+  attempt is distilled from the verifier's reason alone. Attempts of tasks Splinter generated itself carry
+  the reference change and the check on the task record. The richer context needs the export to carry the
+  reference change (a file listed in the manifest, read at ingestion as a privileged `Reference` item).
+- Open: verified repair. Prefer privileged contexts whose repair is verified: a student attempt whose
+  teacher continuation (`practice --correction`) passed the hidden checks should weigh more, or be the only
+  distilled kind under a flag. The correction stage records the student and its continuation in its report
+  (`CorrectionItem`) but writes no relation between the two experiences; it should write a `RevisionOf`
+  annotation so a view can find a student attempt's verified continuation in the corpus, and the view then
+  takes `--verified-repair-only` and a weight for the unverified rest.
+- Open: not run on the 27B. The per-token advantages, their clip rate and the cap's rate of binding are
+  unmeasured on real weights (brain ledger: `grpo-corrections`).

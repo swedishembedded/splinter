@@ -267,7 +267,7 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     let defaults = PolicyGradientOptions::defaults();
     assert_eq!(plan.tuning.policy_gradient.resolved(), defaults);
     assert!(
-        plan.tuning.policy_gradient.named().len() == 5,
+        plan.tuning.policy_gradient.named().len() == 6,
         "recorded in the plan"
     );
 
@@ -279,6 +279,9 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
                 reference: Some(Reference::StartOfRun),
                 loss_agg: Some(LossAggregation::TokenSum),
                 temperature: Some(0.7),
+                teacher: Some(Reference::StartOfRun),
+                advantage_bound: Some(5.0),
+                sequence_advantage_cap: Some(40.0),
             },
             ..Tuning::default()
         },
@@ -295,6 +298,15 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     assert_eq!(
         (resolved.reference, resolved.loss_agg),
         (Reference::StartOfRun, LossAggregation::TokenSum)
+    );
+    // The self-distillation guards reach the plan as named.
+    assert_eq!(
+        (
+            resolved.teacher,
+            resolved.advantage_bound,
+            resolved.sequence_advantage_cap
+        ),
+        (Reference::StartOfRun, Some(5.0), Some(40.0))
     );
 }
 

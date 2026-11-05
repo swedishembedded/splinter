@@ -57,11 +57,16 @@ pub enum ViewName {
     /// Each action of every graded attempt, with the attempt's advantage over
     /// the other attempts of its task: reinforcement learning from rollouts.
     PolicyGradient,
+    /// The student's own conversation of every attempt, passed or failed, with
+    /// a teacher context built from what the verifier knows (the hidden checks
+    /// that failed, the reference change): on-policy self-distillation, dense
+    /// per-token credit where no group advantage exists.
+    SelfDistill,
 }
 
 impl ViewName {
     /// Every view, in the order `--help` lists them.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::SftFinal,
         Self::SftStep,
         Self::Critic,
@@ -75,6 +80,7 @@ impl ViewName {
         Self::Voice,
         Self::Rehearsal,
         Self::PolicyGradient,
+        Self::SelfDistill,
     ];
 
     /// The name a command line uses.
@@ -94,6 +100,7 @@ impl ViewName {
             Self::Voice => "voice",
             Self::Rehearsal => "rehearsal",
             Self::PolicyGradient => "policy-gradient",
+            Self::SelfDistill => "self-distill",
         }
     }
 

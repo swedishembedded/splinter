@@ -52,7 +52,9 @@ binary = "~/bin/splinter"
 state = "~/campaigns/flywheel/state"
 
 [train]
-objective = "sft-step"                       # or "policy-gradient" (on-policy, continues the champion)
+objective = "sft-step"                       # or "policy-gradient" (on-policy, continues the champion), or "self-distill"
+# self-distill: policy-gradient, plus the tasks every attempt failed get a teacher shown what the verifier knows
+# [train.self_distill]  teacher_policy = "base"; advantage_bound = 5.0; sequence_advantage_cap = 40.0; all_attempts = false
 only_actions = ["edit_file", "write_file"]   # sft-step: supervise the decisive actions only
 images = true                                # records carry the pictures the models were shown
 base = "local:Qwen/Qwen3.8-27B-FP8"

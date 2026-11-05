@@ -211,4 +211,39 @@ pub struct GroupReport {
     /// Whether the group has advantages to train on: more than one attempt,
     /// and not all of them alike.
     pub signal: bool,
+    /// What kind of group it is: the campaign counts groups by kind.
+    #[serde(default)]
+    pub kind: GroupKind,
+    /// Whether its attempts became self-distillation records (a teacher's
+    /// per-token advantage) and not scalar-advantage ones.
+    #[serde(default)]
+    pub distilled: bool,
+}
+
+/// What a group of attempts at one task can teach.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GroupKind {
+    /// The attempts earned different rewards: the group-relative advantage
+    /// says which did better (GRPO's signal).
+    #[default]
+    Graded,
+    /// Every attempt failed and none outranks another: the advantage is zero.
+    /// The cliff, where only privileged information can say what to do.
+    AllFail,
+    /// Every attempt passed alike (or the only attempt did): nothing to
+    /// compare, nothing to correct.
+    AllPass,
+}
+
+impl GroupKind {
+    /// The kind as it is printed.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Graded => "graded",
+            Self::AllFail => "all-fail",
+            Self::AllPass => "all-pass",
+        }
+    }
 }

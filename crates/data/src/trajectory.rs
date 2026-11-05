@@ -183,6 +183,7 @@ impl Conversation {
             messages,
             tools: self.tool_sets[tools].clone(),
             advantage: None,
+            teacher_context: Vec::new(),
         })
     }
 
@@ -193,6 +194,7 @@ impl Conversation {
             messages: self.up_to(action),
             tools: self.tool_sets[action.tools].clone(),
             advantage: None,
+            teacher_context: Vec::new(),
         }
     }
 }
