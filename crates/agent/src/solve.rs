@@ -97,6 +97,12 @@ pub struct SolveOptions {
     /// replaces the messages a correction would continue, so it cannot be
     /// forked at all.
     pub compaction: bool,
+    /// How often sven asks the model again after a failure that may pass (a
+    /// dropped connection, a busy server) before the engine reports an
+    /// error, sven's default when `None`. A caller that retries failed
+    /// episodes itself, within a deadline shorter than sven's pauses, sets
+    /// `Some(0)` so the error reaches it at once.
+    pub transient_retries: Option<u32>,
 }
 
 impl SolveOptions {
@@ -113,7 +119,16 @@ impl SolveOptions {
             sampling: None,
             max_tool_rounds: None,
             compaction: true,
+            transient_retries: None,
         }
+    }
+
+    /// The solve with sven's own repeats of a transient model failure set
+    /// to `retries`.
+    #[must_use]
+    pub fn with_transient_retries(mut self, retries: u32) -> Self {
+        self.transient_retries = Some(retries);
+        self
     }
 
     /// The system prompt the run is under.
@@ -172,6 +187,7 @@ impl SolveOptions {
             // every message and ends at the hard budget gate instead.
             config.agent.compaction_threshold = 1.0;
         }
+        config.agent.transient_retries = self.transient_retries;
         if let Some(limit) = self.stream_idle {
             let limit = limit.min(self.deadline);
             let secs = limit.as_secs() + u64::from(limit.subsec_nanos() > 0);
@@ -479,5 +495,13 @@ mod compaction_tests {
         assert!(options.engine_config().agent.compaction_threshold < 1.0);
         options.compaction = false;
         assert_eq!(options.engine_config().agent.compaction_threshold, 1.0);
+    }
+
+    #[test]
+    fn a_caller_that_retries_itself_switches_the_engines_transient_repeats_off() {
+        let options = SolveOptions::new(Duration::from_secs(60));
+        assert_eq!(options.engine_config().agent.transient_retries, None);
+        let own = options.with_transient_retries(0);
+        assert_eq!(own.engine_config().agent.transient_retries, Some(0));
     }
 }

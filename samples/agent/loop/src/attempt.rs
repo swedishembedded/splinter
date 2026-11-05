@@ -242,7 +242,9 @@ pub fn run_attempt(setup: &Setup<'_>, number: u32, feedback: Option<&str>) -> Re
     let started = Instant::now();
     let mut solve = setup
         .model
-        .solving(SolveOptions::new(Duration::from_secs(attempt_secs)));
+        // The loop retries a failed model call itself (`solve_with_retries`),
+        // so sven's own pauses must not eat the attempt's deadline.
+        .solving(SolveOptions::new(Duration::from_secs(attempt_secs)).with_transient_retries(0));
     solve.max_output_tokens = Some(contract.limits.max_output_tokens);
     solve.cancel = Some(attempt_cancel.clone());
     solve.system = Some(setup.system.to_string());
