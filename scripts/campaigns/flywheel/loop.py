@@ -196,7 +196,7 @@ def port(campaign: Campaign, card: int) -> int:
 
 def stop_serving(campaign: Campaign, card: int) -> None:
     """Stop any brain binary serving `card`, whichever path started it."""
-    pattern = f"/brain[^ /]* --device gpu{card} "
+    pattern = f"/brain[^ /]* --device ([a-z0-9]+,)*gpu{card}[ ,]"
     for pid in subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True).stdout.split():
         os.kill(int(pid), signal.SIGTERM)
     deadline = time.time() + 120
@@ -214,13 +214,28 @@ def served_ids(campaign: Campaign, card: int) -> list[str]:
     return [m["id"] for m in json.load(urllib.request.urlopen(request, timeout=30))["data"]]
 
 
+def servers(campaign: Campaign, cards: list[int]) -> list[list[int]]:
+    """The servers that serve `cards`, each by its cards: one per card, or with
+    `serve.replicas` one over all of them (brain places a replica per card as demand
+    needs and keeps each conversation on the replica holding its prefix)."""
+    return [list(cards)] if campaign["serve"].get("replicas") else [[c] for c in cards]
+
+
+def endpoints(campaign: Campaign, cards: list[int]) -> list[int]:
+    """The ports a model served on `cards` answers on: its servers' first cards'."""
+    return [port(campaign, group[0]) for group in servers(campaign, cards)]
+
+
 def serve(campaign: Campaign, model: dict, cards: list[int]) -> str:
-    """Serve `model` (base, or base + adapter) on each of `cards`; the model id to request."""
+    """Serve `model` (base, or base + adapter) on `cards`; the model id to request."""
     s = campaign["serve"]
     for card in cards:
         stop_serving(campaign, card)
+    for group in servers(campaign, cards):
+        card = group[0]
         ready = campaign.work / f"ready-gpu{card}"
-        argv = [path(s["brain"]), "--device", f"gpu{card}", "--backend", "cuda", "serve", "--max-batch",
+        devices = ",".join(f"gpu{c}" for c in group)
+        argv = [path(s["brain"]), "--device", devices, "--backend", "cuda", "serve", "--max-batch",
                 s["max_batch"], "--speculative", "off", "--openai", f"127.0.0.1:{port(campaign, card)}",
                 "--api-key-file", path(s["key_file"]), "--checkpoint", path(s["checkpoint"]), "--ready-file", ready]
         if model.get("adapter"):
@@ -229,7 +244,7 @@ def serve(campaign: Campaign, model: dict, cards: list[int]) -> str:
             subprocess.Popen(with_env_script(campaign, argv), stdout=out, stderr=out, stdin=subprocess.DEVNULL,
                              start_new_session=True, env={**os.environ, **s.get("env", {})})
     ids = set()
-    for card in cards:
+    for card in (group[0] for group in servers(campaign, cards)):
         ready, deadline = campaign.work / f"ready-gpu{card}", time.time() + 900
         while not ready.exists():
             if time.time() > deadline:
@@ -257,7 +272,7 @@ def profile_text(campaign: Campaign, workload: dict, model_id: str, attempts: in
     """A run profile: every harness role of the workload on `model_id`, served on `cards`."""
     b = campaign["bench"]
     roles = "\n".join(f'{role} = "brain"' for role in ["main", *workload.get("roles", [])])
-    urls = ", ".join(f'"http://127.0.0.1:{port(campaign, c)}/v1"' for c in cards)
+    urls = ", ".join(f'"http://127.0.0.1:{p}/v1"' for p in endpoints(campaign, cards))
     tools = "".join(f'{name} = "{path(tool)}"\n' for name, tool in workload.get("tools", {}).items())
     return (f'[sven]\nbuild = "{path(b["sven"])}"\n\n[run]\nenvironment = "userns"\nattempts = {attempts}\n'
             f'concurrency = {workload["concurrency"]}\n\n[roles]\n{roles}\n\n[upstreams.brain]\n'

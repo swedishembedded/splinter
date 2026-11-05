@@ -125,6 +125,15 @@ def a_profile_spreads_a_workload_over_its_cards():
     assert '[tools]\nvemu = "/v"' in text
 
 
+def with_replicas_one_server_spans_the_cards():
+    one_each = loop.Campaign({"bench": {"sven": "/s"}, "serve": {"base_port": 8800}})
+    assert loop.servers(one_each, [0, 1]) == [[0], [1]] and loop.endpoints(one_each, [0, 1]) == [8800, 8801]
+    spanning = loop.Campaign({"bench": {"sven": "/s"}, "serve": {"base_port": 8800, "replicas": True}})
+    assert loop.servers(spanning, [1, 2, 3]) == [[1, 2, 3]] and loop.endpoints(spanning, [1, 2, 3]) == [8801]
+    text = loop.profile_text(spanning, {"name": "w", "concurrency": 64}, "M", 1, [0, 1, 2, 3])
+    assert 'base_url = ["http://127.0.0.1:8800/v1"]' in text
+
+
 def the_cards_are_shared_among_the_models_served_at_once():
     assert loop.share([0, 1, 2, 3], 1) == [[0, 1, 2, 3]]
     assert loop.share([0, 1, 2, 3], 2) == [[0, 2], [1, 3]]
