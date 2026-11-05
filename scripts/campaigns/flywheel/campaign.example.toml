@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# An improvement-loop campaign (scripts/campaigns/flywheel/loop.py): one model,
+# several workloads, every card. Copy it, point the paths at this machine and run
+# `make campaign/flywheel/run CONFIG=...`. "~" and $VARIABLES expand.
+
+[paths]
+work = "~/campaigns/flywheel"                # generations, jobs, exports, adapters, logs
+
+[serve]
+brain = "~/bin/brain"
+checkpoint = "~/models/Qwen/Qwen3.8-27B-FP8"
+models_dir = "~/models"
+base_model = "Qwen/Qwen3.8-27B-FP8"          # the model id the base is served as
+cards = [0, 1, 2, 3]                         # one server per card; a trial stays on one server
+base_port = 8800                             # card N serves on base_port + N
+key_file = "~/keys/brain"
+max_batch = 48
+env = { BRAIN_BACKEND = "cuda" }
+# env_script = "~/bin/cuda-env.sh"           # sourced before brain and the trainer start
+
+[bench]
+dir = "~/bench"                              # the benchmark checkout
+sven = "~/bin/sven"                          # the agent build every trial runs
+
+[[workload]]
+name = "repo"
+collection = "tasks/repo-families"           # a collection with a train/eval split.toml
+concurrency = 24                             # trials at once, per job
+explore_attempts = 2                         # training-task attempts per generation
+exam_attempts = 2                            # held-out attempts per measured model
+
+[[workload]]
+name = "cad"
+collection = "tasks/cad"
+roles = ["designer", "reviewer", "specifier", "visual"]   # a harness's roles, every one on the served model
+concurrency = 16
+explore_attempts = 2
+exam_attempts = 2
+
+# [[workload]]
+# name = "firmware"
+# collection = "tasks/embedded"
+# tools = { vemu = "~/bin/vemu" }             # host tools the tasks need
+# concurrency = 16
+# explore_attempts = 4
+# exam_attempts = 4
+
+[splinter]
+binary = "~/bin/splinter"
+state = "~/campaigns/flywheel/state"
+
+[train]
+objective = "sft-step"                       # or "policy-gradient" (on-policy, continues the champion)
+only_actions = ["edit_file", "write_file"]   # sft-step: supervise the decisive actions only
+images = true                                # records carry the pictures the models were shown
+base = "local:Qwen/Qwen3.8-27B-FP8"
+base_precision = "fp8"
+max_block = 16384
+rank = 16
+alpha = 32
+lr = 5e-5
+steps = 80
+records_per_step = 4
+eval_every = 10
+patience = 3
+monitor_share = 0.1                          # eval_every, patience, monitor_share: sft-step only
+seed = 20261105
+
+# Each variant is a candidate of its own, trained on its own card at once and examined beside the others.
+[[train.variant]]
+name = "s1"
+[[train.variant]]
+name = "s2"
+seed = 20261106
+
+[promote]
+min_mean_delta = 0.0                         # the chosen candidate's gain over all paired tasks must exceed it
+max_workload_drop = 0.2                      # and no workload's mean may fall by more
+
+# A generation can adopt finished jobs that ran before the loop, per workload:
+# [adopt.0.explore]
+# repo = "~/campaigns/flywheel/jobs/<job>"
+# [adopt.0.exam]
+# repo = "~/campaigns/flywheel/jobs/<job>"

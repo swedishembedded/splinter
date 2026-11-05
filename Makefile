@@ -76,7 +76,7 @@ test:
 	$(CARGO) test $(PROFILE) --workspace
 	python3 samples/adams/test_fetch.py
 	python3 scripts/qualify/test_qualify.py
-	python3 scripts/campaigns/cad/test_loop.py
+	python3 scripts/campaigns/flywheel/test_loop.py
 
 ## test/crate - lists the per-package test targets; tests nothing
 test/crate:
@@ -431,17 +431,17 @@ deps/lock:
 campaign:
 	@bash scripts/make-help.sh campaign
 
-## campaign/cad - lists the CAD campaign targets; runs nothing
-campaign/cad:
-	@bash scripts/make-help.sh campaign/cad
+## campaign/flywheel - lists the improvement-loop campaign targets; runs nothing
+campaign/flywheel:
+	@bash scripts/make-help.sh campaign/flywheel
 
-## campaign/cad/run - run CAD improvement-loop generations from where they stand (CONFIG=campaign.toml, GENERATIONS=N; see scripts/campaigns/cad/loop.py)
-campaign/cad/run:
-	python3 scripts/campaigns/cad/loop.py --config $(CONFIG) --generations $(or $(GENERATIONS),1)
+## campaign/flywheel/run - run improvement-loop generations from where they stand (CONFIG=campaign.toml, GENERATIONS=N; see scripts/campaigns/flywheel/loop.py)
+campaign/flywheel/run:
+	python3 scripts/campaigns/flywheel/loop.py --config $(CONFIG) --generations $(or $(GENERATIONS),1)
 
-## campaign/cad/status - print each CAD generation's finished steps and decision (CONFIG=campaign.toml)
-campaign/cad/status:
-	python3 scripts/campaigns/cad/loop.py --config $(CONFIG) --status
+## campaign/flywheel/status - print each generation's finished steps and decision (CONFIG=campaign.toml)
+campaign/flywheel/status:
+	python3 scripts/campaigns/flywheel/loop.py --config $(CONFIG) --status
 
 ## qualify - lists the qualification targets; runs nothing
 qualify:
@@ -477,7 +477,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/cad campaign/cad/run campaign/cad/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/package fmt \
+.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/package fmt \
 	package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
