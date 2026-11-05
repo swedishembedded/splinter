@@ -517,7 +517,10 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
                                           f"{w['name']}-exam", cards))
 
         concurrently([lambda w=w: explore(w) for w in workloads] + [lambda w=w: exam(w) for w in workloads])
-        gen.record("explore", explore_jobs=explore_jobs, exams=exams, exam_stack=current,
+        # An adopted exam ran on a stack this loop did not record: it is never taken as this stack's.
+        adopted_exams = any(adopt.get("exam", {}).get(w["name"]) for w in workloads)
+        gen.record("explore", explore_jobs=explore_jobs, exams=exams,
+                   exam_stack=None if adopted_exams else current,
                    explore_exports={w: bench_export(campaign, gen, j, f"{w}-explore") for w, j in explore_jobs.items()})
     if stop_before == "learn" and not gen.done("learn"):
         log(f"generation {number}: halted before learn (--stop-before learn)")
@@ -528,6 +531,10 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
         gen.record("learn", candidates=learn(campaign, gen, states, start))
     if not gen.done("candidates"):
         models = dict(gen.state["candidates"])
+        if gen.state.get("exam_stack") != current:
+            # The champion's exam ran on another stack: it sits the exam again beside the
+            # candidates, so the exams compared always ran on one stack.
+            models["champion"] = start
         groups = share(cards, len(models))
         exams: dict[str, dict] = {}
 
@@ -540,8 +547,10 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
             exams[name] = jobs
 
         concurrently([lambda n=n, m=m, g=g: sit(n, m, g) for (n, m), g in zip(models.items(), groups)])
+        again = exams.pop("champion", None)
         gen.record("candidates", candidates={n: {**gen.state["candidates"][n], "exams": e, "exam_stack": current}
-                                             for n, e in exams.items()})
+                                             for n, e in exams.items()},
+                   **({"exams": again, "exam_stack": current} if again else {}))
     if not gen.done("decide"):
         per_candidate: dict[str, dict[str, dict]] = {}
         for name, candidate in gen.state["candidates"].items():
