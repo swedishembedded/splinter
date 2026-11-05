@@ -390,13 +390,10 @@ pub async fn work(config: &HarnessConfig, setup: WorkSetup<'_>) -> Result<Worked
     )
     .await
     .map_err(|e| anyhow::anyhow!("the agent run failed: {e}"))?;
-    let mut trajectory = run
-        .trajectory()
-        .context("the harness run left no trajectory")?;
-    // The supervisor's conversation and the run's trace are not the agent's
-    // record: the supervisor's prompt never reaches a training record.
-    trajectory.subagent_trajectories = None;
-    trajectory.extra = None;
+    let trajectory = crate::case::agent_record(
+        run.trajectory()
+            .context("the harness run left no trajectory")?,
+    )?;
     let corrections: Vec<Correction> = run
         .corrections()
         .unwrap_or_default()

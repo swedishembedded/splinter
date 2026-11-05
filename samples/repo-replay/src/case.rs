@@ -229,11 +229,38 @@ pub fn describe(residual: &Residual) -> String {
     }
 }
 
+/// The conversation of the document's agent task, whose record is the attempt's.
+const AGENT_CONVERSATION: &str = "work";
+
+/// The agent's own record out of a harness run's trajectory: the conversation
+/// of the agent task, alone. The run's top-level steps are the shared thread's
+/// and hold none of the agent's turns; the supervisor's conversation and the
+/// run's trace are not the agent's record either (the supervisor's prompt never
+/// reaches a training record).
+pub fn agent_record(run: Trajectory) -> Result<Trajectory> {
+    let mut record = run
+        .subagent_trajectories
+        .into_iter()
+        .flatten()
+        .find(|t| {
+            t.extra
+                .as_ref()
+                .and_then(|e| e.pointer("/harness/conversation"))
+                .and_then(serde_json::Value::as_str)
+                == Some(AGENT_CONVERSATION)
+        })
+        .context("the harness run left no conversation of the agent")?;
+    record.subagent_trajectories = None;
+    record.extra = None;
+    Ok(record)
+}
+
 fn read_trajectory(file: &Path) -> Result<Trajectory> {
-    serde_json::from_slice(
+    let run: Trajectory = serde_json::from_slice(
         &std::fs::read(file).with_context(|| format!("reading {}", file.display()))?,
     )
-    .context("the trajectory file is malformed")
+    .context("the trajectory file is malformed")?;
+    agent_record(run)
 }
 
 /// The harness document's check gate. Returns the exit status (0 passed,
