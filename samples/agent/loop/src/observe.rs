@@ -185,6 +185,7 @@ impl Observation {
                 tool_name,
                 output,
                 is_error,
+                ..
             } => {
                 let parent = self
                     .inner

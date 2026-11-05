@@ -72,7 +72,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "strum",
+ "strum 0.28.0",
 ]
 
 [[package]]
@@ -86,7 +86,7 @@ dependencies = [
  "once_cell",
  "serde",
  "version_check",
- "zerocopy",
+ "zerocopy 0.8.59",
 ]
 
 [[package]]
@@ -96,6 +96,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "aligned"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee4508988c62edf04abd8d92897fca0c2995d907ce1dfeaf369dac3716a40685"
+dependencies = [
+ "as-slice",
+]
+
+[[package]]
+name = "aligned-vec"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc890384c8602f339876ded803c97ad529f3842aba97f6392b3dba0dd171769b"
+dependencies = [
+ "equator",
 ]
 
 [[package]]
@@ -200,10 +218,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 
 [[package]]
+name = "arg_enum_proc_macro"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ae92a5119aa49cdbcf6b9f893fe4e1d98b04ccbf82ee0584ad948a44a734dea"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
+
+[[package]]
+name = "as-slice"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "516b6b4f0e40d50dcda9365d53964ec74560ad4284da2e7fc97122cd83174516"
+dependencies = [
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "ash"
@@ -213,6 +251,12 @@ checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
 dependencies = [
  "libloading",
 ]
+
+[[package]]
+name = "assert_matches"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
 [[package]]
 name = "async-broadcast"
@@ -262,8 +306,8 @@ dependencies = [
 
 [[package]]
 name = "atif"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "chrono",
  "serde",
@@ -279,10 +323,64 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "atomig"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd0f41f4bb89f5c6450325e283fb78c4a3d042181b54f3855ee2f872919f9863"
+dependencies = [
+ "atomig-macro",
+]
+
+[[package]]
+name = "atomig-macro"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49c98dba06b920588de7d63f6acc23f1e6a9fade5fd6198e564506334fb5a4f5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+
+[[package]]
+name = "av-scenechange"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f321d77c20e19b92c39e7471cf986812cbb46659d2af674adc4331ef3f18394"
+dependencies = [
+ "aligned",
+ "anyhow",
+ "arg_enum_proc_macro",
+ "arrayvec",
+ "log",
+ "num-rational",
+ "num-traits",
+ "pastey",
+ "rayon",
+ "thiserror 2.0.21",
+ "v_frame",
+ "y4m",
+]
+
+[[package]]
+name = "av1-grain"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cfddb07216410377231960af4fcab838eaa12e013417781b78bd95ee22077f8"
+dependencies = [
+ "anyhow",
+ "arrayvec",
+ "log",
+ "nom",
+ "num-rational",
+ "v_frame",
+]
 
 [[package]]
 name = "base64"
@@ -339,6 +437,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
+name = "bitstream-io"
+version = "4.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7eff00be299a18769011411c9def0d827e8f2d7bf0c3dbf53633147a8867fd1f"
+dependencies = [
+ "no_std_io2",
+]
+
+[[package]]
 name = "blake3"
 version = "1.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -358,6 +465,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "block-buffer"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
+dependencies = [
+ "hybrid-array",
 ]
 
 [[package]]
@@ -386,8 +502,8 @@ checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
 
 [[package]]
 name = "brain"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-appopts",
  "brain-arch",
@@ -403,6 +519,7 @@ dependencies = [
  "brain-loader",
  "brain-minimaxmusic3",
  "brain-model",
+ "brain-modelopt",
  "brain-modelref",
  "brain-modelstore",
  "brain-nemotronasr",
@@ -421,8 +538,8 @@ dependencies = [
 
 [[package]]
 name = "brain-appopts"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-gpu-core",
  "brain-seed",
@@ -430,8 +547,8 @@ dependencies = [
 
 [[package]]
 name = "brain-arcface"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-gpu-core",
@@ -449,13 +566,13 @@ dependencies = [
 
 [[package]]
 name = "brain-arch"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 
 [[package]]
 name = "brain-atif"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "chrono",
  "libc",
@@ -467,8 +584,8 @@ dependencies = [
 
 [[package]]
 name = "brain-audio"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-data",
@@ -483,27 +600,27 @@ dependencies = [
 
 [[package]]
 name = "brain-audit"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-data",
  "brain-promote",
  "flate2",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "brain-backend-api"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 
 [[package]]
 name = "brain-backend-cpu"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-api",
  "brain-wgsl-cpu",
@@ -513,20 +630,20 @@ dependencies = [
 
 [[package]]
 name = "brain-backend-cuda"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-api",
  "brain-wgsl-cuda",
  "libloading",
- "sha2",
+ "sha2 0.10.9",
  "tracing",
 ]
 
 [[package]]
 name = "brain-backend-vulkan"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -538,8 +655,8 @@ dependencies = [
 
 [[package]]
 name = "brain-backend-wgpu"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -553,8 +670,8 @@ dependencies = [
 
 [[package]]
 name = "brain-bench"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -576,8 +693,8 @@ dependencies = [
 
 [[package]]
 name = "brain-bisenet"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -593,16 +710,16 @@ dependencies = [
 
 [[package]]
 name = "brain-camera"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "brain-campplus"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -618,8 +735,8 @@ dependencies = [
 
 [[package]]
 name = "brain-capability"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-seed",
  "serde_json",
@@ -627,8 +744,8 @@ dependencies = [
 
 [[package]]
 name = "brain-captioner"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-data",
  "image",
@@ -636,8 +753,8 @@ dependencies = [
 
 [[package]]
 name = "brain-catalog"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-arcface",
  "brain-audio",
@@ -717,8 +834,8 @@ dependencies = [
 
 [[package]]
 name = "brain-checkpoint"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-kernels",
@@ -732,8 +849,8 @@ dependencies = [
 
 [[package]]
 name = "brain-chronos2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-forecast",
@@ -748,8 +865,8 @@ dependencies = [
 
 [[package]]
 name = "brain-clip"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -767,8 +884,8 @@ dependencies = [
 
 [[package]]
 name = "brain-codeformer"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -787,8 +904,8 @@ dependencies = [
 
 [[package]]
 name = "brain-controlnet"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -805,8 +922,8 @@ dependencies = [
 
 [[package]]
 name = "brain-cosyvoice"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -827,8 +944,8 @@ dependencies = [
 
 [[package]]
 name = "brain-data"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-seed",
@@ -847,8 +964,8 @@ dependencies = [
 
 [[package]]
 name = "brain-decide"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -863,8 +980,8 @@ dependencies = [
 
 [[package]]
 name = "brain-decisions"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -879,8 +996,8 @@ dependencies = [
 
 [[package]]
 name = "brain-deepseek2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -897,8 +1014,8 @@ dependencies = [
 
 [[package]]
 name = "brain-deepseek2ocr"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -922,8 +1039,8 @@ dependencies = [
 
 [[package]]
 name = "brain-deepseekocr2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -946,8 +1063,8 @@ dependencies = [
 
 [[package]]
 name = "brain-deepseekvl"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -964,24 +1081,24 @@ dependencies = [
 
 [[package]]
 name = "brain-diffusion"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "brain-dit"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-model",
 ]
 
 [[package]]
 name = "brain-ecapatdnn"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-checkpoint",
@@ -996,8 +1113,8 @@ dependencies = [
 
 [[package]]
 name = "brain-eval"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-checkpoint",
@@ -1012,8 +1129,8 @@ dependencies = [
 
 [[package]]
 name = "brain-events"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-data",
  "brain-forecast",
@@ -1022,8 +1139,8 @@ dependencies = [
 
 [[package]]
 name = "brain-fastvlm"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-captioner",
@@ -1043,16 +1160,16 @@ dependencies = [
 
 [[package]]
 name = "brain-fcbench"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-forecast",
 ]
 
 [[package]]
 name = "brain-fincast"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-forecast",
@@ -1067,8 +1184,8 @@ dependencies = [
 
 [[package]]
 name = "brain-florence2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1087,8 +1204,8 @@ dependencies = [
 
 [[package]]
 name = "brain-flux1"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1109,8 +1226,8 @@ dependencies = [
 
 [[package]]
 name = "brain-flux2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-capability",
@@ -1128,13 +1245,13 @@ dependencies = [
  "brain-vae",
  "bytemuck",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
 name = "brain-forecast"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-seed",
  "serde_json",
@@ -1142,8 +1259,8 @@ dependencies = [
 
 [[package]]
 name = "brain-gemma4"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -1156,8 +1273,8 @@ dependencies = [
 
 [[package]]
 name = "brain-gguf"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-arch",
  "brain-backend-cpu",
@@ -1170,8 +1287,8 @@ dependencies = [
 
 [[package]]
 name = "brain-glmdsa"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1187,8 +1304,8 @@ dependencies = [
 
 [[package]]
 name = "brain-gpt2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -1205,8 +1322,8 @@ dependencies = [
 
 [[package]]
 name = "brain-gpu-core"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-api",
  "brain-backend-cpu",
@@ -1223,8 +1340,8 @@ dependencies = [
 
 [[package]]
 name = "brain-horizon"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1238,13 +1355,13 @@ dependencies = [
  "bytemuck",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
 name = "brain-huginn"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1261,14 +1378,16 @@ dependencies = [
 
 [[package]]
 name = "brain-imaging"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
+ "brain-capability",
  "brain-events",
  "brain-gpu-core",
  "brain-kernels",
+ "brain-videocodec",
  "brain-vision",
  "image",
  "serde_json",
@@ -1276,8 +1395,8 @@ dependencies = [
 
 [[package]]
 name = "brain-imgpipe"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1290,8 +1409,8 @@ dependencies = [
 
 [[package]]
 name = "brain-januspro"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1308,24 +1427,24 @@ dependencies = [
 
 [[package]]
 name = "brain-kernels"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-api",
 ]
 
 [[package]]
 name = "brain-kernels-cuda"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-api",
 ]
 
 [[package]]
 name = "brain-kronos"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-capability",
@@ -1344,8 +1463,8 @@ dependencies = [
 
 [[package]]
 name = "brain-lfm2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1363,8 +1482,8 @@ dependencies = [
 
 [[package]]
 name = "brain-llava"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-captioner",
@@ -1385,8 +1504,8 @@ dependencies = [
 
 [[package]]
 name = "brain-llmserve"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-data",
@@ -1399,8 +1518,8 @@ dependencies = [
 
 [[package]]
 name = "brain-loader"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-arch",
  "brain-capability",
@@ -1415,8 +1534,8 @@ dependencies = [
 
 [[package]]
 name = "brain-lpips"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1431,8 +1550,8 @@ dependencies = [
 
 [[package]]
 name = "brain-ltxv"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1443,6 +1562,7 @@ dependencies = [
  "brain-dit",
  "brain-gemma4",
  "brain-gpu-core",
+ "brain-imaging",
  "brain-kernels",
  "brain-memauth",
  "brain-model",
@@ -1457,13 +1577,13 @@ dependencies = [
 
 [[package]]
 name = "brain-memauth"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 
 [[package]]
 name = "brain-mimi"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1480,8 +1600,8 @@ dependencies = [
 
 [[package]]
 name = "brain-minicpmv"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1502,14 +1622,15 @@ dependencies = [
 
 [[package]]
 name = "brain-minimaxh3"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
  "brain-checkpoint",
  "brain-data",
  "brain-gpu-core",
+ "brain-imaging",
  "brain-kernels",
  "brain-model",
  "brain-modelstore",
@@ -1521,8 +1642,8 @@ dependencies = [
 
 [[package]]
 name = "brain-minimaxmusic3"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1541,8 +1662,8 @@ dependencies = [
 
 [[package]]
 name = "brain-model"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1556,21 +1677,33 @@ dependencies = [
  "pollster",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "brain-modelopt"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
+dependencies = [
+ "brain-data",
+ "brain-gpu-core",
+ "brain-model",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "brain-modelref"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "brain-modelstore"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-arch",
  "brain-capability",
@@ -1578,14 +1711,14 @@ dependencies = [
  "brain-modelref",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "ureq",
 ]
 
 [[package]]
 name = "brain-modernbert"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -1600,8 +1733,8 @@ dependencies = [
 
 [[package]]
 name = "brain-moondream3"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1619,8 +1752,8 @@ dependencies = [
 
 [[package]]
 name = "brain-mvs"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-camera",
  "brain-gpu-core",
@@ -1632,8 +1765,8 @@ dependencies = [
 
 [[package]]
 name = "brain-nemotronasr"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1648,8 +1781,8 @@ dependencies = [
 
 [[package]]
 name = "brain-npu"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-api",
  "brain-checkpoint",
@@ -1682,8 +1815,8 @@ dependencies = [
 
 [[package]]
 name = "brain-ocrserve"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1699,16 +1832,16 @@ dependencies = [
 
 [[package]]
 name = "brain-onnx"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "prost",
 ]
 
 [[package]]
 name = "brain-optim"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-checkpoint",
@@ -1723,8 +1856,8 @@ dependencies = [
 
 [[package]]
 name = "brain-ouro"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -1741,8 +1874,8 @@ dependencies = [
 
 [[package]]
 name = "brain-paramstore"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-gpu-core",
@@ -1754,20 +1887,20 @@ dependencies = [
 
 [[package]]
 name = "brain-promote"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-data",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "brain-pulid"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-arcface",
  "brain-bisenet",
@@ -1787,8 +1920,8 @@ dependencies = [
 
 [[package]]
 name = "brain-qwen3"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-arch",
  "brain-capability",
@@ -1798,6 +1931,7 @@ dependencies = [
  "brain-gpu-core",
  "brain-kernels",
  "brain-model",
+ "brain-modelref",
  "brain-modelstore",
  "brain-optim",
  "brain-paramstore",
@@ -1812,8 +1946,8 @@ dependencies = [
 
 [[package]]
 name = "brain-qwen35"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1842,8 +1976,8 @@ dependencies = [
 
 [[package]]
 name = "brain-qwen35moe"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1865,8 +1999,8 @@ dependencies = [
 
 [[package]]
 name = "brain-qwen3asr"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1882,8 +2016,8 @@ dependencies = [
 
 [[package]]
 name = "brain-qwen3omnimoe"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -1908,8 +2042,8 @@ dependencies = [
 
 [[package]]
 name = "brain-qwen3tts"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
@@ -1932,8 +2066,8 @@ dependencies = [
 
 [[package]]
 name = "brain-qwen3vl"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-captioner",
@@ -1951,8 +2085,8 @@ dependencies = [
 
 [[package]]
 name = "brain-recon"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-camera",
@@ -1968,8 +2102,8 @@ dependencies = [
 
 [[package]]
 name = "brain-residency"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-memauth",
@@ -1978,8 +2112,8 @@ dependencies = [
 
 [[package]]
 name = "brain-rl"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-atif",
  "brain-audit",
@@ -1998,16 +2132,16 @@ dependencies = [
 
 [[package]]
 name = "brain-rlcd"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-data",
 ]
 
 [[package]]
 name = "brain-rrdbnet"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2021,8 +2155,8 @@ dependencies = [
 
 [[package]]
 name = "brain-s3dit"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2042,8 +2176,8 @@ dependencies = [
 
 [[package]]
 name = "brain-s3tokenizer"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-audio",
  "brain-capability",
@@ -2054,8 +2188,8 @@ dependencies = [
 
 [[package]]
 name = "brain-sam1"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -2070,8 +2204,8 @@ dependencies = [
 
 [[package]]
 name = "brain-sam2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2088,8 +2222,8 @@ dependencies = [
 
 [[package]]
 name = "brain-scrfd"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-gpu-core",
@@ -2105,8 +2239,8 @@ dependencies = [
 
 [[package]]
 name = "brain-sdxlunet"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2124,13 +2258,13 @@ dependencies = [
 
 [[package]]
 name = "brain-seed"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 
 [[package]]
 name = "brain-sfm"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-camera",
@@ -2139,8 +2273,8 @@ dependencies = [
 
 [[package]]
 name = "brain-splat"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-camera",
@@ -2153,8 +2287,8 @@ dependencies = [
 
 [[package]]
 name = "brain-stats"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-residency",
@@ -2164,8 +2298,8 @@ dependencies = [
 
 [[package]]
 name = "brain-supir"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2183,13 +2317,13 @@ dependencies = [
 
 [[package]]
 name = "brain-survival"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 
 [[package]]
 name = "brain-t5encoder"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2204,8 +2338,8 @@ dependencies = [
 
 [[package]]
 name = "brain-testutil"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-modelref",
@@ -2215,8 +2349,8 @@ dependencies = [
 
 [[package]]
 name = "brain-timesfm3"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2234,8 +2368,8 @@ dependencies = [
 
 [[package]]
 name = "brain-toyautoencoder"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -2250,8 +2384,8 @@ dependencies = [
 
 [[package]]
 name = "brain-toymoe"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-data",
@@ -2266,8 +2400,8 @@ dependencies = [
 
 [[package]]
 name = "brain-vae"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-checkpoint",
  "brain-gpu-core",
@@ -2277,9 +2411,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "brain-videocodec"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
+dependencies = [
+ "matroska-demuxer",
+ "opus",
+ "rav1d",
+ "rav1e",
+]
+
+[[package]]
 name = "brain-vision"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-gpu-core",
  "brain-model",
@@ -2289,8 +2434,8 @@ dependencies = [
 
 [[package]]
 name = "brain-vqgan"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2306,8 +2451,8 @@ dependencies = [
 
 [[package]]
 name = "brain-vulkan"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -2319,8 +2464,8 @@ dependencies = [
 
 [[package]]
 name = "brain-wan"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-capability",
@@ -2340,13 +2485,13 @@ dependencies = [
 
 [[package]]
 name = "brain-weightset"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 
 [[package]]
 name = "brain-wgsl-cpu"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -2358,16 +2503,16 @@ dependencies = [
 
 [[package]]
 name = "brain-wgsl-cuda"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "naga",
 ]
 
 [[package]]
 name = "brain-wm-core"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-gpu-core",
  "brain-kernels",
@@ -2375,8 +2520,8 @@ dependencies = [
 
 [[package]]
 name = "brain-worldmirror2"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2393,8 +2538,8 @@ dependencies = [
 
 [[package]]
 name = "brain-yolov8"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -2413,8 +2558,8 @@ dependencies = [
 
 [[package]]
 name = "brain-zipdepth"
-version = "3.0.0"
-source = "git+https://github.com/swedishembedded/brain#6baeeaf3df8b87cfa4b0eefc1480d9f341b452d5"
+version = "4.0.0"
+source = "git+https://github.com/swedishembedded/brain#c8a14a75f8e876510936ad2f8fee69cb8890b7ff"
 dependencies = [
  "brain-backend-cpu",
  "brain-capability",
@@ -2452,6 +2597,12 @@ dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
 ]
+
+[[package]]
+name = "built"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c0e531d93d39c34eef561e929e8a7f86d77a5af08aac4f6d6e39976c51858e9"
 
 [[package]]
 name = "bumpalo"
@@ -2576,7 +2727,7 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
 dependencies = [
- "crypto-common",
+ "crypto-common 0.1.7",
  "inout",
 ]
 
@@ -2689,6 +2840,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e8ccc4ea9f6acc32d102c0f6d471d11d913ad15f20c04de743374861fa1d414"
 
 [[package]]
+name = "const-oid"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
+
+[[package]]
 name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2701,6 +2858,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
+]
+
+[[package]]
+name = "core-foundation"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2a6cd9ae233e7f62ba4e9353e81a88df7fc8a5987b8d445b4d90c879bd156f6"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
 ]
 
 [[package]]
@@ -2951,6 +3118,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto-common"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3022,8 +3198,19 @@ version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
- "block-buffer",
- "crypto-common",
+ "block-buffer 0.10.4",
+ "crypto-common 0.1.7",
+]
+
+[[package]]
+name = "digest"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
+dependencies = [
+ "block-buffer 0.12.1",
+ "const-oid",
+ "crypto-common 0.2.2",
 ]
 
 [[package]]
@@ -3202,6 +3389,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "equator"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4711b213838dfee0117e3be6ac926007d7f433d7bbe33595975d4190cb07e6fc"
+dependencies = [
+ "equator-macro",
+]
+
+[[package]]
+name = "equator-macro"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44f23cf4b44bfce11a86ace86f8a73ffdec849c9fd00a386a53d278bd9e81fb3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3214,7 +3421,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3400,6 +3607,16 @@ checksum = "e076045bb43dac435333ed5f04caf35c7463631d0dae2deb2638d94dd0a5b872"
 dependencies = [
  "lazy_static",
  "num",
+]
+
+[[package]]
+name = "fs4"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8640e34b88f7652208ce9e88b1a37a2ae95227d84abec377ccd3c5cfeb141ed4"
+dependencies = [
+ "rustix",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3708,7 +3925,7 @@ dependencies = [
  "cfg-if",
  "crunchy",
  "num-traits",
- "zerocopy",
+ "zerocopy 0.8.59",
 ]
 
 [[package]]
@@ -3941,6 +4158,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
+name = "hybrid-array"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17"
+dependencies = [
+ "typenum",
+]
+
+[[package]]
 name = "hyper"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3973,7 +4199,6 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
- "webpki-roots 1.0.9",
 ]
 
 [[package]]
@@ -4167,7 +4392,7 @@ dependencies = [
  "approx",
  "getrandom 0.2.17",
  "image",
- "itertools",
+ "itertools 0.12.1",
  "nalgebra",
  "num",
  "rand 0.8.8",
@@ -4182,6 +4407,8 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.1",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -4192,6 +4419,17 @@ checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
  "block-padding",
  "generic-array",
+]
+
+[[package]]
+name = "interpolate_name"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c34819042dc3d3971c46c2190835914dfbe0c3c13f61449b2997f4e9722dfa60"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -4211,6 +4449,15 @@ name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -4378,7 +4625,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "strum",
+ "strum 0.28.0",
  "unicode-general-category",
  "uuid-simd",
 ]
@@ -4436,6 +4683,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "landlock"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cca98e95f35b29d469dade6724c6f96cec9236640f745a0e99b0334ec320ab1"
+dependencies = [
+ "enumflags2",
+ "libc",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4446,6 +4704,16 @@ name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+
+[[package]]
+name = "libfuzzer-sys"
+version = "0.4.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9fd2f41a1cba099f79a0b6b6c35656cf7c03351a7bae8ff0f28f25270f929d2"
+dependencies = [
+ "arbitrary",
+ "cc",
+]
 
 [[package]]
 name = "libloading"
@@ -4545,7 +4813,7 @@ dependencies = [
  "rand 0.10.3",
  "rangemap",
  "rayon",
- "sha2",
+ "sha2 0.10.9",
  "stringprep",
  "thiserror 2.0.21",
  "time",
@@ -4561,12 +4829,6 @@ checksum = "234cf4f4a04dc1f57e24b96cc0cd600cf2af460d4161ac5ecdd0af8e1f3b2a38"
 dependencies = [
  "hashbrown 0.15.5",
 ]
-
-[[package]]
-name = "lru-slab"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
 name = "mac"
@@ -4614,13 +4876,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cbf36668475a45a46bf8710e927e7458b7c387e7c46ddb5457ae0c71cf5e817"
 
 [[package]]
+name = "maybe-rayon"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
+dependencies = [
+ "cfg-if",
+ "rayon",
+]
+
+[[package]]
 name = "md-5"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
  "cfg-if",
- "digest",
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -4770,6 +5042,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nasm-rs"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "706bf8a5e8c8ddb99128c3291d31bd21f4bcde17f0f4c20ec678d85c74faa149"
+dependencies = [
+ "jobserver",
+ "log",
+]
+
+[[package]]
 name = "ndk-context"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4804,6 +5086,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+dependencies = [
+ "bitflags 2.13.2",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
+
+[[package]]
+name = "no_std_io2"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "418abd1b6d34fbf6cae440dc874771b0525a604428704c76e48b29a5e67b8003"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "nom"
 version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4811,6 +5114,12 @@ checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "noop_proc_macro"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
 name = "num"
@@ -4858,6 +5167,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
 
 [[package]]
+name = "num-derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4895,6 +5215,25 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
+]
+
+[[package]]
+name = "oauth2"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "getrandom 0.2.17",
+ "http",
+ "rand 0.8.8",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "sha2 0.10.9",
+ "thiserror 1.0.69",
+ "url",
 ]
 
 [[package]]
@@ -4990,6 +5329,12 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "openssl-probe"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 
 [[package]]
 name = "openvino"
@@ -5114,6 +5459,12 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "pastey"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
 name = "pdf-extract"
@@ -5329,7 +5680,7 @@ version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
- "zerocopy",
+ "zerocopy 0.8.59",
 ]
 
 [[package]]
@@ -5363,10 +5714,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "process-wrap"
+version = "10.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f21b97672d2dc848e7b25701ab4535618b92f4861c13cc3f7f7bed52ad3c8da"
+dependencies = [
+ "futures",
+ "indexmap",
+ "nix 0.31.3",
+ "tokio",
+ "tracing",
+ "windows",
+]
+
+[[package]]
 name = "profiling"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
+dependencies = [
+ "profiling-procmacros",
+]
+
+[[package]]
+name = "profiling-procmacros"
+version = "1.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4488a4a36b9a4ba6b9334a32a39971f77c1436ec82c38707bce707699cc3bbcb"
+dependencies = [
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "proptest"
@@ -5404,7 +5782,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -5454,62 +5832,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "quinn"
-version = "0.11.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4051e23e9185c255a7e33ef59cdbca87a22d359052eecd22fc6b901fb37d9d11"
-dependencies = [
- "bytes",
- "cfg_aliases",
- "pin-project-lite",
- "quinn-proto",
- "quinn-udp",
- "rustc-hash 2.1.3",
- "rustls",
- "socket2",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "web-time",
-]
-
-[[package]]
-name = "quinn-proto"
-version = "0.11.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9746dbde176634f4f2f1faf2404e30a31b2bc1e9cafb5329c95d8177a18c9fc"
-dependencies = [
- "bytes",
- "getrandom 0.4.3",
- "lru-slab",
- "rand 0.10.3",
- "rand_pcg",
- "ring",
- "rustc-hash 2.1.3",
- "rustls",
- "rustls-pki-types",
- "slab",
- "thiserror 2.0.21",
- "tinyvec",
- "tracing",
- "web-time",
-]
-
-[[package]]
-name = "quinn-udp"
-version = "0.5.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35a133f956daabe89a61a685c2649f13d82d5aa4bd5d12d1277e1072a21c0694"
-dependencies = [
- "cfg_aliases",
- "libc",
- "once_cell",
- "socket2",
- "tracing",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5620,15 +5942,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rand_pcg"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a"
-dependencies = [
- "rand_core 0.10.1",
-]
-
-[[package]]
 name = "rand_xorshift"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5648,6 +5961,70 @@ name = "rangemap"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a611d15b50743feb4c76b7d03edcb0e64f399c26961e4efe6975bc398be6aa3d"
+
+[[package]]
+name = "rav1d"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1932f060d5e7bd49dc9f8b272c1dc5e9ce0ffe141c28be900265d3989b36c9ed"
+dependencies = [
+ "assert_matches",
+ "atomig",
+ "bitflags 2.13.2",
+ "cc",
+ "cfg-if",
+ "libc",
+ "nasm-rs",
+ "parking_lot",
+ "paste",
+ "raw-cpuid",
+ "strum 0.26.3",
+ "to_method",
+ "zerocopy 0.7.35",
+]
+
+[[package]]
+name = "rav1e"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43b6dd56e85d9483277cde964fd1bdb0428de4fec5ebba7540995639a21cb32b"
+dependencies = [
+ "aligned-vec",
+ "arbitrary",
+ "arg_enum_proc_macro",
+ "arrayvec",
+ "av-scenechange",
+ "av1-grain",
+ "bitstream-io",
+ "built",
+ "cfg-if",
+ "interpolate_name",
+ "itertools 0.14.0",
+ "libc",
+ "libfuzzer-sys",
+ "log",
+ "maybe-rayon",
+ "new_debug_unreachable",
+ "noop_proc_macro",
+ "num-derive",
+ "num-traits",
+ "paste",
+ "profiling",
+ "rand 0.9.5",
+ "rand_chacha 0.9.0",
+ "simd_helpers",
+ "thiserror 2.0.21",
+ "v_frame",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags 2.13.2",
+]
 
 [[package]]
 name = "raw-window-handle"
@@ -5845,11 +6222,11 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "reqwest"
-version = "0.12.28"
+version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
+checksum = "16a1cfa75cc186dd73d5818e510e042e40927bccc9c236b061cea97e1eb08029"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "futures-core",
  "futures-util",
@@ -5863,9 +6240,9 @@ dependencies = [
  "log",
  "percent-encoding",
  "pin-project-lite",
- "quinn",
  "rustls",
  "rustls-pki-types",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -5881,7 +6258,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
- "webpki-roots 1.0.9",
 ]
 
 [[package]]
@@ -5896,6 +6272,36 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rmcp"
+version = "3.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d24a7e92f4bcaa36b97fa93c4fa7ca8f3e669eced949345b3462dba333c7f909"
+dependencies = [
+ "async-trait",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "futures",
+ "http",
+ "indexmap",
+ "libc",
+ "oauth2",
+ "pin-project-lite",
+ "process-wrap",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sse-stream",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -5943,7 +6349,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5962,14 +6368,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-native-certs"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a073f5dc7469f984c52ad2752b63b0807745133b6de880b7b64c1ac4c48aec4"
+dependencies = [
+ "openssl-probe",
+ "rustls-pki-types",
+ "schannel",
+ "security-framework",
+]
+
+[[package]]
 name = "rustls-pki-types"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f4925028c7eb5d1fcdaf196971378ed9d2c1c4efc7dc5d011256f76c99c0a96"
 dependencies = [
- "web-time",
  "zeroize",
 ]
+
+[[package]]
+name = "rustls-platform-verifier"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1167586491e2b18b8bfbb293e8180ec17c201c4f076d7cb3070ca964e7598f98"
+dependencies = [
+ "core-foundation",
+ "core-foundation-sys",
+ "jni",
+ "log",
+ "once_cell",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-platform-verifier-android",
+ "rustls-webpki",
+ "security-framework",
+ "security-framework-sys",
+ "webpki-root-certs",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rustls-platform-verifier-android"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eec689c0bc40ff2458a5977b6619cb718087084a18e02a131c599b62d05e1a5f"
 
 [[package]]
 name = "rustls-webpki"
@@ -6038,6 +6482,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "schannel"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cb23c424d8ee841bb4d813677ca237e2a610067d594fec130f87d6093495ab5"
+dependencies = [
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "schemars"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6067,6 +6520,29 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "security-framework"
+version = "3.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7f4bc775c73d9a02cde8bf7b2ec4c9d12743edf609006c7facc23998404cd1d"
+dependencies = [
+ "bitflags 2.13.2",
+ "core-foundation",
+ "core-foundation-sys",
+ "libc",
+ "security-framework-sys",
+]
+
+[[package]]
+name = "security-framework-sys"
+version = "2.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+]
 
 [[package]]
 name = "semver"
@@ -6142,6 +6618,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_repr"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6200,8 +6687,19 @@ checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
- "digest",
+ "digest 0.10.7",
  "sha2-asm",
+]
+
+[[package]]
+name = "sha2"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47d7069beb7d6ac7b9acd1039986e73443f24234f41074da099d6f994ac9ad19"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
 ]
 
 [[package]]
@@ -6265,6 +6763,15 @@ checksum = "11031e251abf8611c80f460e19dbdeb54a66db918e49c65a7065b46ac7aec520"
 dependencies = [
  "rustc_version",
  "simdutf8",
+]
+
+[[package]]
+name = "simd_helpers"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95890f873bec569a0362c235787f3aca6e1e887302ba4840839bcc6459c42da6"
+dependencies = [
+ "quote",
 ]
 
 [[package]]
@@ -6367,7 +6874,7 @@ dependencies = [
  "futures",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "splinter-sdk",
  "tempfile",
  "tokio",
@@ -6451,7 +6958,7 @@ dependencies = [
  "futures",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror 2.0.21",
 ]
 
@@ -6641,7 +7148,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "sha2",
+ "sha2 0.10.9",
  "splinter-agent",
  "splinter-core",
  "splinter-data",
@@ -6718,7 +7225,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "splinter-core",
  "splinter-expdb",
  "tempfile",
@@ -6765,6 +7272,19 @@ dependencies = [
  "splinter-sdk",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "sse-stream"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c25ac7aff0abd1dbc474536e40416e1102c7dd9bfba0b9861c6d357f835dcfb4"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "http-body",
+ "http-body-util",
+ "pin-project-lite",
 ]
 
 [[package]]
@@ -6823,11 +7343,33 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "strum"
+version = "0.26.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
+dependencies = [
+ "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "strum"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
 dependencies = [
- "strum_macros",
+ "strum_macros 0.28.0",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -6851,7 +7393,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sven-audio"
 version = "1.0.0"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "base64 0.22.1",
  "thiserror 1.0.69",
@@ -6859,8 +7401,8 @@ dependencies = [
 
 [[package]]
 name = "sven-bootstrap"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -6895,6 +7437,7 @@ dependencies = [
  "sven-tools-exec",
  "sven-tools-fs",
  "sven-tools-gdb",
+ "sven-tools-media",
  "sven-tools-web",
  "sven-turn",
  "sven-vocab",
@@ -6907,35 +7450,35 @@ dependencies = [
 
 [[package]]
 name = "sven-chain"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "chrono",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
  "tracing",
 ]
 
 [[package]]
 name = "sven-chunks"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "hex",
  "regex",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "sven-config"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -6947,8 +7490,8 @@ dependencies = [
 
 [[package]]
 name = "sven-control"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "serde",
  "serde_json",
@@ -6959,8 +7502,8 @@ dependencies = [
 
 [[package]]
 name = "sven-cost"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "serde",
  "serde_json",
@@ -6970,8 +7513,8 @@ dependencies = [
 
 [[package]]
 name = "sven-decision"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "hex",
@@ -6979,8 +7522,9 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "sven-config",
+ "sven-http",
  "sven-rt",
  "sven-vocab",
  "thiserror 1.0.69",
@@ -6989,8 +7533,8 @@ dependencies = [
 
 [[package]]
 name = "sven-document"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -7002,7 +7546,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "sven-model",
  "thiserror 1.0.69",
  "tokio",
@@ -7011,8 +7555,8 @@ dependencies = [
 
 [[package]]
 name = "sven-executors"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7022,19 +7566,21 @@ dependencies = [
  "jsonschema",
  "reqwest",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "sven-chain",
  "sven-chunks",
  "sven-control",
  "sven-cost",
  "sven-decision",
  "sven-hsm",
+ "sven-http",
  "sven-kernel",
  "sven-model",
  "sven-model-catalog",
  "sven-rt",
  "sven-tool-api",
  "sven-tool-registry",
+ "sven-tools-fs",
  "sven-turn",
  "sven-vocab",
  "tokio",
@@ -7043,12 +7589,12 @@ dependencies = [
 
 [[package]]
 name = "sven-harness-runtime"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "sven-harness-spec",
  "sven-hsm",
  "sven-vocab",
@@ -7058,20 +7604,21 @@ dependencies = [
 
 [[package]]
 name = "sven-harness-spec"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "serde_yaml",
- "sha2",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "sven-hsm"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "serde",
  "serde_json",
@@ -7083,21 +7630,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "sven-http"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
+dependencies = [
+ "reqwest",
+ "rustls",
+]
+
+[[package]]
 name = "sven-image"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "base64 0.22.1",
  "image",
  "lru",
- "sha2",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "sven-kernel"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -7110,8 +7666,8 @@ dependencies = [
 
 [[package]]
 name = "sven-machines"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "serde",
  "serde_json",
@@ -7122,23 +7678,26 @@ dependencies = [
 
 [[package]]
 name = "sven-mcp-client"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
  "dirs 5.0.1",
- "rand 0.8.8",
+ "fs4",
+ "futures",
  "reqwest",
+ "rmcp",
  "serde",
  "serde_json",
- "sha2",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "sse-stream",
  "sven-config",
+ "sven-http",
  "sven-tool-api",
- "thiserror 1.0.69",
  "tokio",
- "tokio-util",
  "tracing",
  "url",
  "webbrowser",
@@ -7146,8 +7705,8 @@ dependencies = [
 
 [[package]]
 name = "sven-memory"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "atif",
@@ -7159,21 +7718,21 @@ dependencies = [
 
 [[package]]
 name = "sven-memory-api"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "hex",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "sven-memory-sqlite"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "rusqlite",
@@ -7187,15 +7746,16 @@ dependencies = [
 
 [[package]]
 name = "sven-model"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "futures",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "sven-model-catalog",
  "sven-rt",
  "sven-vocab",
@@ -7203,8 +7763,8 @@ dependencies = [
 
 [[package]]
 name = "sven-model-catalog"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -7215,8 +7775,8 @@ dependencies = [
 
 [[package]]
 name = "sven-model-drivers"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7226,14 +7786,15 @@ dependencies = [
  "futures",
  "hex",
  "libc",
- "nix",
+ "nix 0.29.0",
  "reqwest",
  "serde",
  "serde_json",
  "serde_yaml",
- "sha2",
+ "sha2 0.10.9",
  "sven-audio",
  "sven-config",
+ "sven-http",
  "sven-image",
  "sven-memory-api",
  "sven-model",
@@ -7247,8 +7808,8 @@ dependencies = [
 
 [[package]]
 name = "sven-model-mock"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7265,8 +7826,8 @@ dependencies = [
 
 [[package]]
 name = "sven-rt"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "futures",
  "gloo-timers",
@@ -7277,8 +7838,8 @@ dependencies = [
 
 [[package]]
 name = "sven-sdk"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "atif",
@@ -7287,7 +7848,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "sha2",
+ "sha2 0.10.9",
  "sven-bootstrap",
  "sven-chain",
  "sven-harness-runtime",
@@ -7320,8 +7881,8 @@ dependencies = [
 
 [[package]]
 name = "sven-sdk-macros"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7330,8 +7891,8 @@ dependencies = [
 
 [[package]]
 name = "sven-session-model"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "serde",
  "serde_json",
@@ -7344,11 +7905,12 @@ dependencies = [
 
 [[package]]
 name = "sven-session-store"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "atif",
+ "base64 0.22.1",
  "chrono",
  "dirs 5.0.1",
  "libc",
@@ -7356,6 +7918,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2 0.10.9",
  "sven-chain",
  "sven-hsm",
  "sven-model",
@@ -7368,19 +7931,20 @@ dependencies = [
 
 [[package]]
 name = "sven-sources"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "sven-memory-api",
 ]
 
 [[package]]
 name = "sven-tool-api"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "atif",
+ "libc",
  "serde",
  "serde_json",
  "sven-hsm",
@@ -7391,8 +7955,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tool-registry"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "regex",
@@ -7406,8 +7970,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-agent"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7428,15 +7992,15 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-android"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "hex",
  "image",
  "quick-xml",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "sven-hsm",
  "sven-image",
  "sven-tool-api",
@@ -7446,8 +8010,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-ctx"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7468,8 +8032,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-document"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -7485,10 +8049,12 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-exec"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "landlock",
  "libc",
  "serde_json",
  "sven-harness-spec",
@@ -7503,15 +8069,15 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-fs"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
  "regex",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "similar",
  "sven-audio",
  "sven-config",
@@ -7531,8 +8097,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-gdb"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7550,9 +8116,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sven-tools-media"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sven-config",
+ "sven-hsm",
+ "sven-model-drivers",
+ "sven-tool-api",
+ "tokio",
+]
+
+[[package]]
 name = "sven-tools-web"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7561,9 +8146,10 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "sven-config",
  "sven-hsm",
+ "sven-http",
  "sven-tool-api",
  "sven-vocab",
  "tokio",
@@ -7572,8 +8158,8 @@ dependencies = [
 
 [[package]]
 name = "sven-turn"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7596,27 +8182,27 @@ dependencies = [
 
 [[package]]
 name = "sven-vocab"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "clap",
  "hex",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
 name = "sven-workspace"
-version = "4.2.1"
-source = "git+https://github.com/swedishembedded/sven#d219307e3fb49c09be404ad71a4555029c2bff45"
+version = "4.5.1"
+source = "git+https://github.com/swedishembedded/sven#0f29a082336075856c5122cc6259aca40fbe3a4c"
 dependencies = [
  "anyhow",
  "chrono",
  "dirs 5.0.1",
  "serde",
  "serde_yaml",
- "sha2",
+ "sha2 0.10.9",
  "tracing",
 ]
 
@@ -7678,7 +8264,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7802,10 +8388,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
-name = "tokio"
-version = "1.53.1"
+name = "to_method"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
+checksum = "c7c4ceeeca15c8384bbc3e011dbd8fccb7f068a440b752b7d9b32ceb0ca0e2e8"
+
+[[package]]
+name = "tokio"
+version = "1.54.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes",
  "libc",
@@ -8171,6 +8763,7 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -8212,6 +8805,17 @@ checksum = "23b082222b4f6619906941c17eb2297fff4c2fb96cb60164170522942a200bd8"
 dependencies = [
  "outref",
  "vsimd",
+]
+
+[[package]]
+name = "v_frame"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "666b7727c8875d6ab5db9533418d7c764233ac9c0cff1d469aec8fa127597be2"
+dependencies = [
+ "aligned-vec",
+ "num-traits",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -8362,9 +8966,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-streams"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
+checksum = "9d1ec4f6517c9e11ae630e200b2b65d193279042e28edd4a2cda233e46670bbb"
 dependencies = [
  "futures-util",
  "js-sys",
@@ -8441,6 +9045,15 @@ dependencies = [
  "objc2-foundation",
  "url",
  "web-sys",
+]
+
+[[package]]
+name = "webpki-root-certs"
+version = "1.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
@@ -8651,7 +9264,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -8769,6 +9382,15 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]
@@ -8949,6 +9571,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
+name = "y4m"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a5a4b21e1a62b67a2970e6831bc091d7b87e119e7f9791aef9702e3bef04448"
+
+[[package]]
 name = "yoke"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9038,11 +9666,32 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
+dependencies = [
+ "byteorder",
+ "zerocopy-derive 0.7.35",
+]
+
+[[package]]
+name = "zerocopy"
 version = "0.8.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6df92bf3d9227be3d53173901ddbffac2babc27ae50f397776ffd6dc33f800cb"
 dependencies = [
- "zerocopy-derive",
+ "zerocopy-derive 0.8.59",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
