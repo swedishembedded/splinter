@@ -69,6 +69,8 @@ pub struct Trial {
     /// The opening user turn carries a picture beside its text, as an agent
     /// given an attachment records it.
     pub picture: bool,
+    /// The verifier's own statement of why it decided as it did.
+    pub reason: Option<&'static str>,
 }
 
 impl Trial {
@@ -85,6 +87,15 @@ impl Trial {
             pass,
             metrics: json!({"build_success": 1.0}),
             picture: false,
+            reason: None,
+        }
+    }
+
+    /// The same trial with the verifier's `reason` in its `verification.json`.
+    pub fn reason(self, reason: &'static str) -> Self {
+        Self {
+            reason: Some(reason),
+            ..self
         }
     }
 
@@ -164,7 +175,15 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
                 trajectory(t.name, t.picture).into_bytes(),
             ),
             ("model-requests.jsonl".into(), requests(t.name).into_bytes()),
-            ("verification.json".into(), b"{\"ok\": true}".to_vec()),
+            (
+                "verification.json".into(),
+                match t.reason {
+                    Some(reason) => json!({"verdict": "fail", "reason": reason})
+                        .to_string()
+                        .into_bytes(),
+                    None => b"{\"ok\": true}".to_vec(),
+                },
+            ),
             ("submission.patch".into(), b"diff --git a/x b/x\n".to_vec()),
         ];
         if t.picture {

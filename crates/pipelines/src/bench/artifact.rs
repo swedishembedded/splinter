@@ -47,6 +47,9 @@ const TRAJECTORY: &str = "trajectory.atif.json";
 /// The file that holds every request the agent sent its model.
 const REQUESTS: &str = "model-requests.jsonl";
 
+/// The file that holds the verifier's own statement of its verdict.
+const VERIFICATION: &str = "verification.json";
+
 /// The directory of a harness trial's per-conversation trajectories.
 const CONVERSATIONS: &str = "conversations";
 
@@ -225,6 +228,10 @@ pub struct Artifact {
     pub manifest: Manifest,
     /// What becomes experience: one unit, or one per conversation.
     pub units: Vec<Unit>,
+    /// Why the verifier decided as it did, in its own words, when it says
+    /// (`verification.json`'s `reason`): the one thing of what the verifier
+    /// knows that a trial artifact carries.
+    pub verifier_reason: Option<String>,
 }
 
 /// The files of a trial that are read, not only hashed.
@@ -232,6 +239,7 @@ struct Read {
     trajectory: atif::Trajectory,
     requests: Vec<u8>,
     conversations: Vec<(String, atif::Trajectory, String)>,
+    verifier_reason: Option<String>,
 }
 
 /// Reads the rows of `directory`'s `index.jsonl`; a row that does not parse
@@ -310,11 +318,13 @@ pub fn read_trial(export: &Path, row: &IndexRow) -> Result<Artifact, String> {
         .map_err(|e| format!("{MANIFEST} is not a trial manifest: {e}"))?;
     agree(row, &manifest)?;
     let read = verify_files(&dir, &manifest)?;
+    let verifier_reason = read.verifier_reason.clone();
     let units = units_of(&manifest, read)?;
     Ok(Artifact {
         row: row.clone(),
         manifest,
         units,
+        verifier_reason,
     })
 }
 
@@ -686,6 +696,7 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
     let mut trajectory: Option<Vec<u8>> = None;
     let mut requests: Option<Vec<u8>> = None;
     let mut conversations: Vec<(String, atif::Trajectory, String)> = Vec::new();
+    let mut verifier_reason: Option<String> = None;
     for (name, expected) in &manifest.files {
         if !is_listable(name) {
             return Err(format!(
@@ -696,7 +707,8 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
         let unreadable = |e: io::Error| format!("{name}: {e} (partial artifact)");
         // The trajectories and the requests are parsed from the very bytes
         // that were hashed.
-        let parsed = name == TRAJECTORY || name == REQUESTS || is_conversation(name);
+        let parsed =
+            name == TRAJECTORY || name == REQUESTS || name == VERIFICATION || is_conversation(name);
         let found = if parsed {
             let bytes = std::fs::read(&path).map_err(unreadable)?;
             let found = sha256_hex(&bytes);
@@ -705,6 +717,14 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
                     trajectory = Some(bytes);
                 } else if name == REQUESTS {
                     requests = Some(bytes);
+                } else if name == VERIFICATION {
+                    let statement: Value = serde_json::from_slice(&bytes)
+                        .map_err(|e| format!("{VERIFICATION} is not JSON: {e}"))?;
+                    verifier_reason = statement
+                        .get("reason")
+                        .and_then(Value::as_str)
+                        .filter(|r| !r.trim().is_empty())
+                        .map(str::to_string);
                 } else {
                     let parsed: atif::Trajectory = serde_json::from_slice(&bytes)
                         .map_err(|e| format!("{name} is not ATIF: {e}"))?;
@@ -742,6 +762,7 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
         trajectory,
         requests,
         conversations,
+        verifier_reason,
     })
 }
 

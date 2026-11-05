@@ -522,6 +522,7 @@ fn evidence(artifact: &Artifact, unit: &Unit, side: Split, source: SplitSource) 
         "verifier": {"digest": manifest.verifier.digest, "scoring": manifest.verifier.scoring},
         "reward": manifest.grade.reward,
         "metrics": manifest.grade.metrics,
+        "verification": artifact.verifier_reason.as_ref().map(|reason| json!({"reason": reason})),
         "agent": {
             "name": manifest.agent.name,
             "version": manifest.agent.version,
