@@ -241,11 +241,21 @@ impl PolicyGradient {
         let Some(evidence) = deciding else {
             return Ok(Err(Exclusion::NoRollout));
         };
-        let (Some(trial), Some(task)) = (text(evidence, "/trial"), text(evidence, "/task/id"))
-        else {
-            return Ok(Err(Exclusion::NoRollout));
-        };
         let provenance = &entry.experience.provenance;
+        // A benchmark verdict names its trial and task; a workspace verdict
+        // names neither, and the attempt is placed by what the experience
+        // records itself: its task's address and its attempt number.
+        let (trial, task) = match (text(evidence, "/trial"), text(evidence, "/task/id")) {
+            (Some(trial), Some(task)) => (trial, task),
+            (None, None) => match provenance.attempt {
+                Some(attempt) => (
+                    format!("attempt-{attempt}"),
+                    entry.experience.task.id.to_string(),
+                ),
+                None => return Ok(Err(Exclusion::NoRollout)),
+            },
+            _ => return Ok(Err(Exclusion::NoRollout)),
+        };
         let policy = text(evidence, "/model")
             .or_else(|| provenance.policy.clone())
             .unwrap_or_else(|| provenance.solver.clone());
