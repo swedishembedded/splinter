@@ -23,7 +23,11 @@
 //! * An experience of a benchmark task that is not in the benchmark's `train`
 //!   split is refused: it is examination material ([`crate::bench::split`]).
 //!
-//! A family is the file a task's fault was seeded in (its first concept).
+//! A family is the file a task's fault was seeded in (its first concept). A
+//! task of several independent faults has a composite family
+//! ([`splinter_core::family`]) and is as sealed as its most sealed member: an
+//! attempt at it crosses the seal when any one of its families is reserved,
+//! and training on it trains on every one of them.
 
 use std::collections::BTreeSet;
 
@@ -146,7 +150,9 @@ pub fn leaks(
         }
     };
     for entry in &workspace {
-        if let Some(family) = family_of(&entry.experience).filter(|f| exam.contains(*f)) {
+        if let Some(family) = family_of(&entry.experience)
+            .and_then(|family| splinter_core::family::touches(family, &exam))
+        {
             note(
                 &entry.id,
                 format!(
@@ -211,7 +217,9 @@ pub fn seal(
         .iter()
         .filter_map(|record| record.metadata.experiences.first())
         .filter_map(|id| workspace.iter().find(|entry| &entry.id == id))
-        .filter_map(|entry| family_of(&entry.experience).map(str::to_string))
+        .filter_map(|entry| family_of(&entry.experience))
+        .flat_map(splinter_core::family::members)
+        .map(str::to_string)
         .collect();
     if workspace.is_empty() {
         return Ok(());

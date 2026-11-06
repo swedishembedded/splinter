@@ -211,3 +211,27 @@ fn dropping_leaks_from_a_clean_set_drops_nothing() {
     assert!(built.dropped.is_empty());
     assert!(!built.excluded.contains_key(&Exclusion::ExamLeak));
 }
+
+#[test]
+fn an_attempt_at_a_task_of_several_faults_is_an_exam_attempt_when_any_one_fault_is_in_an_exam_family(
+) {
+    let ctx = context("seal-composite");
+    let mixed = attempt(&ctx, "train.py + exam.py", "train.py");
+    let set = set_of(&ctx, &[mixed]);
+    let refused = build_sft_step(&ctx, set).unwrap_err().to_string();
+    assert!(refused.contains("exam.py"), "{refused}");
+    assert!(refused.contains("leakage"), "{refused}");
+    assert!(exam_seal::trained(&ctx).unwrap().is_empty());
+}
+
+#[test]
+fn a_clean_build_over_a_task_of_several_faults_records_every_family_it_trained_on() {
+    let ctx = context("seal-composite-clean");
+    let set = set_of(&ctx, &[attempt(&ctx, "a.py + train.py", "train.py")]);
+    build_sft_step(&ctx, set).unwrap();
+    assert_eq!(
+        exam_seal::trained(&ctx).unwrap(),
+        families(&["a.py", "train.py"]),
+        "a later exam must not be made of what this build trained on"
+    );
+}

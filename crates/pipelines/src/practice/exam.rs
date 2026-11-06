@@ -41,6 +41,7 @@ use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use crate::canaries;
 use crate::exam_seal;
 use crate::family::{family_of_task, rank};
+use splinter_core::family::{members, touches};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -86,6 +87,74 @@ pub(super) fn remembered_seed(ctx: &Context) -> Result<Option<Seed>, Orchestrato
     exam_seal::reserved_seed(ctx)
 }
 
+/// How a run's tasks divide between the exam and training.
+struct Division<T> {
+    /// The families the run's tasks draw on, composite ones taken apart.
+    present: BTreeSet<String>,
+    /// Of those, the ones an earlier run had reserved.
+    already: BTreeSet<String>,
+    /// The ones this run reserves.
+    chosen: BTreeSet<String>,
+    /// The tasks of an exam family.
+    exam: Vec<T>,
+    /// The tasks of no exam family.
+    training: Vec<T>,
+}
+
+/// Divides `tasks` (each with the family it declares, if it declares one),
+/// reserving `asked` families (a quarter of the families, rounded down, when
+/// `None`) on top of those in `before`, none of them a family in `trained`.
+///
+/// A family is a file; a task of several independent faults declares a
+/// composite family ([`splinter_core::family`]) and draws on each of its
+/// files. The exam is chosen among files, and a task goes to the exam when
+/// **any** file it draws on is an exam file: a model trained on it would have
+/// seen that file.
+fn divide<T>(
+    tasks: Vec<(Option<String>, T)>,
+    before: &BTreeSet<String>,
+    trained: &BTreeSet<String>,
+    asked: Option<usize>,
+    seed: Seed,
+) -> Result<Division<T>, OrchestratorError> {
+    let present: BTreeSet<String> = tasks
+        .iter()
+        .filter_map(|(family, _)| family.as_deref())
+        .flat_map(members)
+        .map(str::to_string)
+        .collect();
+    let already: BTreeSet<String> = present.intersection(before).cloned().collect();
+    let wanted = asked.unwrap_or(present.len() / 4);
+    let mut fresh: Vec<&String> = present
+        .difference(&already)
+        .filter(|family| !trained.contains(*family))
+        .collect();
+    fresh.sort_by_cached_key(|family| rank(family, seed));
+    fresh.truncate(wanted.saturating_sub(already.len()));
+    let chosen: BTreeSet<String> = fresh.into_iter().cloned().collect();
+    if already.len() + chosen.len() >= present.len() && !present.is_empty() {
+        return Err(OrchestratorError::Refused(format!(
+            "reserving {} of {} families would leave nothing to train on: name fewer exam \
+             families, or practice on a repository with more files under test",
+            already.len() + chosen.len(),
+            present.len()
+        )));
+    }
+    let exam: BTreeSet<String> = already.union(&chosen).cloned().collect();
+    let (exam_tasks, training): (Vec<_>, Vec<_>) = tasks.into_iter().partition(|(family, _)| {
+        family
+            .as_deref()
+            .is_some_and(|f| touches(f, &exam).is_some())
+    });
+    Ok(Division {
+        present,
+        already,
+        chosen,
+        exam: exam_tasks.into_iter().map(|(_, task)| task).collect(),
+        training: training.into_iter().map(|(_, task)| task).collect(),
+    })
+}
+
 /// Divides `members`, the tasks a run made, into the exam's and the ones to
 /// train on, reserving `asked` families (a quarter of the families, rounded
 /// down, when `None`) on top of those earlier runs reserved, and remembers
@@ -105,35 +174,16 @@ pub(super) fn reserve(
     for entry in members {
         by_family.push((family_of(ctx, &entry)?, entry));
     }
-    let present: BTreeSet<String> = by_family
-        .iter()
-        .filter_map(|(family, _)| family.clone())
-        .collect();
-    let already: BTreeSet<String> = present.intersection(&before).cloned().collect();
-    let wanted = asked.unwrap_or(present.len() / 4);
-    let mut fresh: Vec<&String> = present
-        .difference(&already)
-        .filter(|family| !trained.contains(*family))
-        .collect();
-    fresh.sort_by_cached_key(|family| rank(family, seed));
-    fresh.truncate(wanted.saturating_sub(already.len()));
-    let chosen: BTreeSet<String> = fresh.into_iter().cloned().collect();
-    if already.len() + chosen.len() >= present.len() && !present.is_empty() {
-        return Err(OrchestratorError::Refused(format!(
-            "reserving {} of {} families would leave nothing to train on: name fewer exam \
-             families, or practice on a repository with more files under test",
-            already.len() + chosen.len(),
-            present.len()
-        )));
-    }
-    let exam: BTreeSet<String> = already.union(&chosen).cloned().collect();
+    let Division {
+        present,
+        already,
+        chosen,
+        exam: exam_entries,
+        training,
+    } = divide(by_family, &before, &trained, asked, seed)?;
     exam_seal::remember_reserved(ctx, &chosen, seed)?;
 
-    let (exam_entries, training): (Vec<_>, Vec<_>) = by_family
-        .into_iter()
-        .partition(|(family, _)| family.as_ref().is_some_and(|f| exam.contains(f)));
-    let exam_entries: Vec<TaskEntry> = exam_entries.into_iter().map(|(_, e)| e).collect();
-    let training: Vec<TaskEntry> = training.into_iter().map(|(_, e)| e).collect();
+    let exam: BTreeSet<String> = already.union(&chosen).cloned().collect();
     let exam_task_set = if exam_entries.is_empty() {
         None
     } else {
@@ -176,5 +226,92 @@ pub fn exam_canaries(
     match made.canary_set {
         Some(set) => canaries::load(ctx, &set),
         None => Ok(Vec::new()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn families(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|n| (*n).to_string()).collect()
+    }
+
+    /// Tasks `0..` declaring the given families.
+    fn tasks(declared: &[&str]) -> Vec<(Option<String>, usize)> {
+        declared
+            .iter()
+            .enumerate()
+            .map(|(n, family)| (Some((*family).to_string()), n))
+            .collect()
+    }
+
+    #[test]
+    fn a_task_of_several_faults_is_an_exam_task_when_any_one_of_its_files_is_reserved() {
+        let division = divide(
+            tasks(&[
+                "a.py",
+                "b.py",
+                "c.py",
+                "a.py + c.py",
+                "b.py + c.py",
+                "b.py + d.py",
+            ]),
+            &families(&["c.py"]),
+            &BTreeSet::new(),
+            Some(1),
+            // seed: the exam is already reserved, so no choice depends on it
+            Seed::new(1),
+        )
+        .unwrap();
+        assert_eq!(division.exam, [2, 3, 4]);
+        assert_eq!(division.training, [0, 1, 5]);
+        assert_eq!(
+            division.present,
+            families(&["a.py", "b.py", "c.py", "d.py"])
+        );
+    }
+
+    #[test]
+    fn the_exam_is_chosen_among_files_and_a_composite_family_is_not_one_of_them() {
+        let division = divide(
+            tasks(&["a.py + b.py", "c.py + d.py", "e.py", "f.py"]),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            Some(2),
+            // seed: any seed must choose two files, never a composite name
+            Seed::new(5),
+        )
+        .unwrap();
+        assert_eq!(division.chosen.len(), 2);
+        assert!(division
+            .chosen
+            .iter()
+            .all(|f| !f.contains(family_separator())));
+        // No training task draws on a chosen file.
+        let exam = &division.chosen;
+        let declared = ["a.py + b.py", "c.py + d.py", "e.py", "f.py"];
+        for n in &division.training {
+            assert!(touches(declared[*n], exam).is_none());
+        }
+    }
+
+    #[test]
+    fn a_file_an_earlier_build_trained_on_is_not_reserved_through_a_composite_either() {
+        let division = divide(
+            tasks(&["a.py + b.py", "c.py", "d.py"]),
+            &BTreeSet::new(),
+            &families(&["a.py", "b.py", "c.py"]),
+            Some(1),
+            // seed: only d.py is reservable
+            Seed::new(3),
+        )
+        .unwrap();
+        assert_eq!(division.chosen, families(&["d.py"]));
+        assert_eq!(division.exam, [2]);
+    }
+
+    fn family_separator() -> &'static str {
+        splinter_core::family::COMPOSITE_SEPARATOR
     }
 }

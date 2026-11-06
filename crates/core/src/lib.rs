@@ -39,6 +39,8 @@
 //!   model plays which role in a run.
 //! * [`dataset`], [`release`] and [`training`] - what names a dataset and a
 //!   release, and the record of how a candidate was trained.
+//! * [`family`] - what a task family is, how a task of several is named, and
+//!   how a split ranks families.
 //! * [`kinds`] and [`selfcontained`] - the names tasks travel under, and the
 //!   rule that an instruction must stand on its own.
 //! * [`longitudinal`] - a participant's irregular history as a file states it
@@ -79,6 +81,7 @@ pub mod digest;
 pub mod evidence;
 pub mod experience;
 pub mod extra;
+pub mod family;
 pub mod harness;
 pub mod job;
 pub mod kinds;
