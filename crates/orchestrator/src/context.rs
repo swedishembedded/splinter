@@ -341,12 +341,17 @@ impl Runtime {
             return Ok(held.model.clone());
         }
         let local = selection.local().is_some();
-        let loaded = selection
-            .load(&self.residency)
-            .map_err(|e| OrchestratorError::Model {
-                model: reference.to_string(),
-                detail: format!("{e:#}"),
-            })?;
+        // With brain endpoints a local model is requested from the endpoint
+        // that serves it, never loaded here: a reference it does not serve
+        // is refused by name.
+        let loaded = match (&self.config.brain, local) {
+            (Some(brain), true) => selection.load_served(brain),
+            _ => selection.load(&self.residency),
+        }
+        .map_err(|e| OrchestratorError::Model {
+            model: reference.to_string(),
+            detail: format!("{e:#}"),
+        })?;
         // Local models answer without reasoning unless the configuration lets
         // them reason (see [`Config::thinking`]), and sample as the
         // configuration asks (see [`crate::local_sampling`]).
@@ -356,6 +361,10 @@ impl Runtime {
         {
             Some(sampling) => loaded
                 .resampled(sampling)
+                .map_err(|e| OrchestratorError::Model {
+                    model: reference.to_string(),
+                    detail: format!("{e:#}"),
+                })?
                 .unwrap_or_else(|| loaded.provider()),
             None => loaded.provider(),
         };
@@ -366,7 +375,20 @@ impl Runtime {
         if local {
             model = model.with_stream_idle(LOCAL_STREAM_IDLE);
         }
-        self.lock_models().insert(
+        let mut models = self.lock_models();
+        // An endpoint following a release manifest serves one adapter at a
+        // time: offering this one withdrew the others, so a model held for
+        // another adapter must be resolved again before it is asked.
+        if key.1.is_some()
+            && self
+                .config
+                .brain
+                .as_ref()
+                .is_some_and(|b| b.offers_adapters())
+        {
+            models.retain(|(_, adapter), _| adapter.is_none());
+        }
+        models.insert(
             key,
             Held {
                 model: model.clone(),
@@ -387,10 +409,15 @@ impl Runtime {
         sampling: Sampling,
     ) -> Result<Option<Model>, OrchestratorError> {
         let model = self.model(reference, adapter.clone(), selection)?;
-        let provider = self
-            .lock_models()
-            .get(&(reference.clone(), adapter))
-            .and_then(|held| held.loaded.resampled(sampling));
+        let loaded_for_key = (reference.clone(), adapter);
+        let provider = match self.lock_models().get(&loaded_for_key) {
+            Some(held) => held.loaded.resampled(sampling),
+            None => Ok(None),
+        }
+        .map_err(|e| OrchestratorError::Model {
+            model: reference.to_string(),
+            detail: format!("{e:#}"),
+        })?;
         Ok(provider.map(|provider| {
             let mut resampled = model;
             resampled.provider = provider;

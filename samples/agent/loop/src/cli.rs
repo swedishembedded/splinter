@@ -171,6 +171,7 @@ fn config(cli: &Cli) -> Result<Config> {
         bf16_base: false,
         default_budget: None,
         remote_concurrency: 1,
+        brain: None,
         solve_deadline: splinter_sdk::config::DEFAULT_SOLVE_DEADLINE,
         coding_prompt: Default::default(),
         min_calibration_controls: 1,

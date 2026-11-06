@@ -38,6 +38,7 @@ fn config(dir: &std::path::Path) -> Config {
         bf16_base: false,
         default_budget: None,
         remote_concurrency: 4,
+        brain: None,
         solve_deadline: splinter_orchestrator::config::DEFAULT_SOLVE_DEADLINE,
         coding_prompt: splinter_core::prompt::CodingPrompt::default(),
         min_calibration_controls: 2,

@@ -86,6 +86,11 @@ pub struct Config {
     /// How many requests to a model reached over an API may be in flight at
     /// once. A model run on this machine's device is asked one at a time.
     pub remote_concurrency: usize,
+    /// The brain endpoints every local model reference (`local:...`,
+    /// `policy:...`) is requested from; `None` runs them in this process.
+    /// With endpoints, attempts are asked as many at once as they say
+    /// ([`splinter_model::BrainEndpoints::attempt_concurrency`]).
+    pub brain: Option<splinter_model::BrainEndpoints>,
     /// How long one task's solve may take on the wall clock. A bound for a
     /// stuck episode, not a measure of the solver: under a loaded server it
     /// must leave room for the queue, or a task is failed for the load.
@@ -405,6 +410,7 @@ impl Config {
             served_thinking_budget: None,
             min_calibration_controls: DEFAULT_MIN_CALIBRATION_CONTROLS,
             remote_concurrency: DEFAULT_REMOTE_CONCURRENCY,
+            brain: None,
             solve_deadline: DEFAULT_SOLVE_DEADLINE,
             coding_prompt: CodingPrompt::default(),
             workspace: WorkspaceSettings {

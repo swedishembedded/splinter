@@ -30,8 +30,17 @@ impl Runtime {
     /// things at once would make the requests cancel each other. A caller
     /// that launches a server itself knows its slots and sets them on the
     /// [`Model`](splinter_agent::solve::Model) it asks.
+    ///
+    /// A local reference served by brain endpoints (`--brain-endpoint`) is a
+    /// service with decode slots of its own: it is asked as many attempts at
+    /// once as the endpoints are given
+    /// ([`splinter_model::BrainEndpoints::attempt_concurrency`]), so brain's
+    /// continuous batching decodes them together.
     #[must_use]
     pub fn concurrency_for(&self, model: &ModelRef) -> usize {
+        if let (Some(brain), false) = (&self.config().brain, model.is_remote()) {
+            return brain.attempt_concurrency();
+        }
         if model.is_remote() {
             self.config().remote_concurrency.max(1)
         } else {

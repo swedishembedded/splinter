@@ -108,6 +108,7 @@ pub fn world(reply: impl Fn(&str) -> String + Send + Sync + 'static) -> anyhow::
         bf16_base: false,
         default_budget: None,
         remote_concurrency: 4,
+        brain: None,
         solve_deadline: splinter_orchestrator::config::DEFAULT_SOLVE_DEADLINE,
         min_calibration_controls: 2,
         coding_prompt: splinter_core::prompt::CodingPrompt::default(),

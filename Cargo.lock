@@ -7078,6 +7078,8 @@ dependencies = [
  "brain-gpu-core",
  "brain-testutil",
  "futures",
+ "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "splinter-core",

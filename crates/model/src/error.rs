@@ -93,6 +93,29 @@ pub enum PolicyError {
         /// Why.
         reason: String,
     },
+    /// A brain endpoint could not be configured or reached.
+    #[error("brain endpoint {url}: {reason}")]
+    Endpoint {
+        /// The endpoint's base URL; empty when none was given.
+        url: String,
+        /// Why.
+        reason: String,
+    },
+    /// A brain endpoint does not serve the model asked of it.
+    #[error(
+        "brain endpoint {url} does not serve {wanted}; it serves: {}; {how}",
+        if served.is_empty() { "nothing".to_string() } else { served.join(", ") }
+    )]
+    NotServed {
+        /// The endpoint's base URL.
+        url: String,
+        /// What was asked for.
+        wanted: String,
+        /// The ids the endpoint lists.
+        served: Vec<String>,
+        /// What would make it serve the model.
+        how: String,
+    },
     /// A dataset is not valid trainer input.
     #[error("dataset {path} is not valid trainer input: {reason}")]
     Dataset {

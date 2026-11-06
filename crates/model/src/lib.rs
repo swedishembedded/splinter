@@ -46,6 +46,7 @@ pub mod capabilities;
 pub mod consolidate;
 pub mod device;
 pub mod embed;
+pub mod endpoint;
 pub mod error;
 pub mod exam;
 #[cfg(feature = "scripted")]
@@ -60,6 +61,8 @@ mod progress;
 pub mod report;
 pub mod residency;
 pub mod rl;
+#[cfg(feature = "scripted")]
+pub mod scripted_endpoint;
 pub mod seed;
 pub mod selection;
 pub mod speech;
@@ -70,6 +73,7 @@ pub mod tokens;
 pub mod train;
 
 pub use capabilities::{BrainDatasetCheck, TrainingCapabilities};
+pub use endpoint::BrainEndpoints;
 pub use error::PolicyError;
 pub use local::{LocalWeights, Sampling, AGENT_SAMPLING};
 pub use residency::Residency;

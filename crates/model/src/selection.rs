@@ -21,6 +21,9 @@ use crate::error::PolicyError;
 use crate::local::{LocalQwen, LocalWeights, Sampling};
 use crate::residency::Residency;
 
+mod served;
+use served::Served;
+
 /// How long dropping a [`LoadedModel`] waits for a local generation still
 /// running to stop before the process may exit.
 pub const QUIESCE_GRACE: Duration = Duration::from_secs(60);
@@ -203,6 +206,7 @@ impl ModelSelection {
                     provider: Arc::from(driver),
                     identity,
                     local: None,
+                    served: None,
                 })
             }
             Self::Local(weights) => {
@@ -215,6 +219,7 @@ impl ModelSelection {
                     provider: local.clone(),
                     identity,
                     local: Some(local),
+                    served: None,
                 })
             }
         }
@@ -312,6 +317,7 @@ pub fn served_model_sampled(
         provider: Arc::from(driver),
         identity: format!("{spec}@{base_url}"),
         local: None,
+        served: None,
     })
 }
 
@@ -330,6 +336,18 @@ fn served_config(
     base_url: &str,
     api_key: &str,
     sampling: &ServedSampling,
+) -> Result<sven_sdk::config::Config, PolicyError> {
+    served_config_capped(spec, base_url, api_key, sampling, None)
+}
+
+/// [`served_config`] whose replies are capped at `max_tokens` where a request
+/// names no cap of its own.
+fn served_config_capped(
+    spec: &str,
+    base_url: &str,
+    api_key: &str,
+    sampling: &ServedSampling,
+    max_tokens: Option<u32>,
 ) -> Result<sven_sdk::config::Config, PolicyError> {
     let remote = RemoteModel {
         spec: spec.to_string(),
@@ -356,6 +374,11 @@ fn served_config(
     );
     options.insert("response_format".into(), serde_json::Value::Null);
     config.model.driver_options = serde_json::Value::Object(options);
+    // The reply cap: sven's `max_tokens` is the context window, which the
+    // server states and the driver reads from it.
+    if max_tokens.is_some() {
+        config.model.max_output_tokens = max_tokens;
+    }
     Ok(config)
 }
 
@@ -367,6 +390,7 @@ pub struct LoadedModel {
     provider: Arc<dyn ModelProvider>,
     identity: String,
     local: Option<Arc<LocalQwen>>,
+    served: Option<Served>,
 }
 
 impl LoadedModel {
@@ -402,15 +426,26 @@ impl LoadedModel {
             .map_or_else(Vec::new, |local| local.take_drawn_seeds())
     }
 
-    /// A provider for the same loaded weights sampling as `sampling` says;
-    /// `None` for a model reached over an API, whose sampling is its
-    /// server's. The provider shares the weights: this model must outlive
-    /// its use, as it must outlive [`Self::provider`]'s.
-    #[must_use]
-    pub fn resampled(&self, sampling: Sampling) -> Option<Arc<dyn ModelProvider>> {
-        self.local
-            .as_ref()
-            .map(|local| Arc::new(local.resampled(sampling)) as Arc<dyn ModelProvider>)
+    /// A provider for the same weights sampling as `sampling` says; `None`
+    /// for a model reached over an API under its own name, whose sampling is
+    /// its server's. An in-process provider shares the weights: this model
+    /// must outlive its use, as it must outlive [`Self::provider`]'s. A
+    /// served one sends every request to the endpoint the sampling's seed
+    /// pins it to, so the requests of one attempt share one server's cache.
+    pub fn resampled(
+        &self,
+        sampling: Sampling,
+    ) -> Result<Option<Arc<dyn ModelProvider>>, PolicyError> {
+        if let Some(local) = &self.local {
+            return Ok(Some(Arc::new(local.resampled(sampling))));
+        }
+        match &self.served {
+            Some(served) => {
+                let pin = sampling.seed.map(|seed| seed.to_le_bytes().to_vec());
+                served.provider(&sampling, pin).map(Some)
+            }
+            None => Ok(None),
+        }
     }
 }
 

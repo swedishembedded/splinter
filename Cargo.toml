@@ -77,6 +77,10 @@ anyhow = "1"
 # Content hashing for the experience database.
 blake3 = "1"
 async-trait = "0.1"
+# One GET of an endpoint's model list. The feature sets are sven's own for these two crates
+# (TLS through rustls with the ring provider), so the build links one crypto library.
+reqwest = { version = "0.13", features = ["rustls-no-provider"], default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
 # Process groups, exit polling and resource limits for bounded process runs.
