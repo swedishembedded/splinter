@@ -129,8 +129,16 @@ Order matters; each line is one self-contained piece of work.
   from libtest; doc-tests are not read). Missing: a pre-built `target` per snapshot (every
   attempt rebuilds the crate), the offline dependency path for crates with dependencies, and
   other test runners.
-- Model-written faults and issue text that states the symptom without the fix, validated
-  composites of several faults, and an oracle-strength classification of each task.
+- Model-written faults and issue text that states the symptom without the fix, and an
+  oracle-strength classification of each task.
+- Composites of several faults are done for mutation-seeded tasks (`tasks combine`,
+  `WorkspaceGenerator::combine`): K faults in K different files of one snapshot, admitted on
+  the combined check failing, the union reference passing twice and no member's alone passing;
+  composite family `a.py + b.py`, exam rule by member. Open: pass-to-pass commands are the
+  members' union, so on the combined tree they include the other members' failing tests (they
+  must pass after the change; a combined task is therefore not re-imported by the harbor
+  fixture check, which wants them green on the tree); history-derived and fixture tasks are
+  not combined; V2-worded requests are refused as `unsupported_wording`.
 - Maintainer knowledge as tasks: conventions and "never do X here" from sessions, taken
   through the claim intake and given a verifier; a task nothing can grade is not admitted.
 - Non-code workspaces (documents, configuration trees) as a second user of the same

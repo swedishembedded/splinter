@@ -123,6 +123,16 @@ CPU limit and a wall timeout; a suite that loops is stopped at the generator's t
 Tokenbucket's baseline, re-timed with `families.py check` on a quiet host, is well under the
 checker's limit: the slow reading seen under load was the load, so the family is not slow.
 
+### Multi-fault tasks
+
+`splinter tasks combine <TASKSET> --faults K --per-family N --seed S` makes a task of `K`
+independent faults, in `K` different files of one snapshot, from the admitted single-fault
+tasks of a family's stored set (the eight stores of the regeneration above), re-verifying each
+one: the combined tree fails, the union of the reverse patches passes it twice, and no single
+reverse patch does. Its family is the member files joined (`a.py + b.py + c.py`); a task with
+any reserved file is an exam task. The rules are in
+[Tasks reference](../docs/reference/tasks.md#combining-faults).
+
 ### The E3 plan
 
 `e3-plan.toml` assigns the eight families to the experiment: three generations of two

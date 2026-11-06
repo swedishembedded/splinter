@@ -57,6 +57,40 @@ rest by a stable hash of the seed and each task's family, using the practice exa
 `--family-share F` picks that fraction of the families, `--per-family N` at most that many
 tasks of each. Naming the sets in another order changes nothing.
 
+## Combining faults
+
+`tasks combine TASKSET-ID --faults K --per-family N` makes harder tasks of the admitted
+single-fault workspace tasks of one snapshot: each holds `K` independent faults (2 by
+default), in `K` different files, and is graded by all of their hidden tests at once. Its
+tree is the clean snapshot with every fault applied and none of the hidden tests; its check
+is the union of the members' fail-to-pass and pass-to-pass commands with every hidden file
+laid over; its reference change is the union of the members'; its request lists every
+member's symptoms, says that several independent faults exist, and names no file. Its family
+is the member families sorted and joined with ` + `, and the member task ids are kept as a
+`combined_task` document beside the task (`--json` lists them).
+
+A combination is admitted only when each fail-to-pass command fails on its tree, the reference
+change makes it pass on two runs, and no single member's reference change does, with the
+exposure rules of every task (the request quotes no changed line and no hidden test, and names
+no hidden file). The rest are counted in `refused` by reason (`shared_files`,
+`different_snapshots`, `hidden_overlap`, `leaks_change`, `not_self_contained`, `not_failing`,
+`not_restorable`, `flaky`, `single_suffices`); a single task that cannot be combined at all
+(not a workspace task, no reference change, a request not in the original wording, ...) is
+counted once in `unusable`. A pass-to-pass command is one a member passed on its own snapshot;
+on the combined tree another member's fault can break it, and it is required to pass after
+the change.
+
+`--per-family N` is the most combined tasks any one file takes part in; files and tasks are
+drawn so that every file, and every pair of files, is met about as often as any other, and
+`--max-tasks` (default 64) bounds the whole. The draw is a function of `--seed` (drawn and
+printed when absent) and the tasks, whatever order they are stored in, and the same seed
+admits the same tasks. Three sets are written: all of them, those of the exam, and the rest.
+A combined task is an **exam task when any file it holds a fault of is an exam family**, and
+the exam reservation, the dataset seal and the trained-on record all read a composite family
+that way, so such a task is never trained on. `tasks pick` still treats a composite family as
+a family of its own. A combined task exports with `tasks harbor export` like any workspace
+task.
+
 ## Repository families
 
 Eight small original projects, each learned by `splinter practice` from its own tests, are

@@ -94,6 +94,7 @@ Every command takes these.
   - [splinter tasks history](#splinter-tasks-history) - Read tasks from a repository's history
   - [splinter tasks variants](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
   - [splinter tasks canaries](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
+  - [splinter tasks combine](#splinter-tasks-combine) - Make harder tasks of the admitted single-fault tasks of a task set
   - [splinter tasks pick](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
   - [splinter tasks harbor](#splinter-tasks-harbor) - Harbor tasks
     - [splinter tasks harbor discover](#splinter-tasks-harbor-discover) - List the Harbor tasks under a directory and whether each can be imported, at the revision of the checkout it is in
@@ -837,6 +838,7 @@ Subcommands:
 - [`history`](#splinter-tasks-history) - Read tasks from a repository's history
 - [`variants`](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
 - [`canaries`](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
+- [`combine`](#splinter-tasks-combine) - Make harder tasks of the admitted single-fault tasks of a task set
 - [`pick`](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
 - [`harbor`](#splinter-tasks-harbor) - Harbor tasks
 - [`list`](#splinter-tasks-list) - List the stored task sets
@@ -912,6 +914,25 @@ Arguments:
 Options:
 
 - `--count <N>`: The most canaries made. Default: `20`.
+
+#### splinter tasks combine
+
+Make harder tasks of the admitted single-fault tasks of a task set: each holds several independent faults in different files of one snapshot, is graded by every member's hidden tests, and is admitted only when its reference change makes it pass (twice) and no single member's does. A task with a fault in a file the exam reserved is an exam task. The choice is a function of the seed and the tasks alone. They go into task sets of their own: all of them, the exam's, and the rest
+
+```text
+splinter tasks combine [OPTIONS] --per-family <N> <TASKSET-ID>
+```
+
+Arguments:
+
+- `<TASKSET-ID>` (required): The task set of single-fault tasks, by id or unique prefix.
+
+Options:
+
+- `--faults <K>`: Faults in each task, in as many different files. Default: `2`.
+- `--per-family <N>` (required): The most combined tasks any one file takes part in.
+- `--max-tasks <N>`: The most combined tasks made in all. Default: `64`.
+- `--seed <N>`: The seed that decides which tasks are combined (drawn and printed when not given)
 
 #### splinter tasks pick
 

@@ -7,12 +7,13 @@
 // services by sending an email to info@swedishembedded.com.
 
 //! `tasks ...`: generate task sets from sources or a repository's history,
-//! vary, seed canaries into, pick, list and show them.
+//! vary, seed canaries into, combine, pick, list and show them.
 
 use std::path::PathBuf;
 
 use clap::Subcommand;
 use splinter_sdk::canaries::CANARY_COUNT;
+use splinter_sdk::knowledge::tasks::workspace::{DEFAULT_MAX_TASKS, MIN_COMBINED_FAULTS};
 use splinter_sdk::seed::Seed;
 use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -96,6 +97,34 @@ pub enum TasksCommand {
             value_parser = positive_count)]
         count: usize,
     },
+    /// Make harder tasks of the admitted single-fault tasks of a task set:
+    /// each holds several independent faults in different files of one
+    /// snapshot, is graded by every member's hidden tests, and is admitted
+    /// only when its reference change makes it pass (twice) and no single
+    /// member's does. A task with a fault in a file the exam reserved is an
+    /// exam task. The choice is a function of the seed and the tasks alone.
+    /// They go into task sets of their own: all of them, the exam's, and
+    /// the rest.
+    Combine {
+        /// The task set of single-fault tasks, by id or unique prefix.
+        #[arg(value_name = "TASKSET-ID")]
+        task_set: String,
+        /// Faults in each task, in as many different files.
+        #[arg(long, value_name = "K", default_value_t = MIN_COMBINED_FAULTS,
+            value_parser = fault_count)]
+        faults: usize,
+        /// The most combined tasks any one file takes part in.
+        #[arg(long, value_name = "N", value_parser = positive_count)]
+        per_family: usize,
+        /// The most combined tasks made in all.
+        #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_TASKS,
+            value_parser = positive_count)]
+        max_tasks: usize,
+        /// The seed that decides which tasks are combined (drawn and printed
+        /// when not given).
+        #[arg(long, value_name = "N")]
+        seed: Option<Seed>,
+    },
     /// Divide the union of task sets into a picked set and the rest, by a
     /// stable hash of the seed and the task's family (the practice exam's
     /// ranking): a development holdout, a sample of one task per family, or
@@ -127,4 +156,17 @@ pub enum TasksCommand {
         /// A task set's or a task's id, or a unique prefix of it.
         id: String,
     },
+}
+
+/// A number of faults for a combined task: at least [`MIN_COMBINED_FAULTS`].
+fn fault_count(text: &str) -> Result<usize, String> {
+    let count: usize = text
+        .parse()
+        .map_err(|_| format!("{text:?} is not a number"))?;
+    if count < MIN_COMBINED_FAULTS {
+        return Err(format!(
+            "a combined task holds at least {MIN_COMBINED_FAULTS} faults, not {count}"
+        ));
+    }
+    Ok(count)
 }

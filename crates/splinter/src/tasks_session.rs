@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! `tasks`: generate, vary, seed canaries into, pick from, list and show task
+//! `tasks`: generate, vary, seed canaries into, combine, pick from, list and show task
 //! sets, as recorded runs where they write state.
 
 use serde::Serialize;
@@ -9,10 +9,11 @@ use serde_json::json;
 use splinter_sdk::canaries;
 use splinter_sdk::history;
 use splinter_sdk::knowledge::tasks::workspace::{
-    HistoryRecord, HistoryReport, HistoryRequest, DEFAULT_MAX_COMMITS,
+    CombinePlan, HistoryRecord, HistoryReport, HistoryRequest, DEFAULT_MAX_COMMITS,
 };
 use splinter_sdk::runs::record;
 use splinter_sdk::sources;
+use splinter_sdk::tasks::combine::{combine, CombineRequest};
 use splinter_sdk::tasks::pick::{pick, Quota};
 use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
 use splinter_sdk::variants;
@@ -171,6 +172,38 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                 canaries::make(ctx, &set, Some(count))
             })?;
             emit(json, &made);
+        }
+        TasksCommand::Combine {
+            task_set,
+            faults,
+            per_family,
+            max_tasks,
+            seed,
+        } => {
+            let set = resolve_task_set(ctx, &task_set)?;
+            let arguments = json!({
+                "task_set": set,
+                "faults": faults,
+                "per_family": per_family,
+                "max_tasks": max_tasks,
+                "seed": seed,
+            });
+            let combined = record(ctx, "tasks combine", &arguments, |run| {
+                let seed = run.seed("combine-seed", seed)?;
+                combine(
+                    ctx,
+                    &CombineRequest {
+                        task_set: set.clone(),
+                        plan: CombinePlan {
+                            faults,
+                            per_family,
+                            max_tasks,
+                            seed,
+                        },
+                    },
+                )
+            })?;
+            emit(json, &combined);
         }
         TasksCommand::Pick {
             task_sets,

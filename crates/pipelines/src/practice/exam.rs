@@ -279,7 +279,7 @@ mod tests {
             &BTreeSet::new(),
             &BTreeSet::new(),
             Some(2),
-            // seed: any seed must choose two files, never a composite name
+            // seed: the choice is a pure function of the seed; pinned so a failure reproduces
             Seed::new(5),
         )
         .unwrap();

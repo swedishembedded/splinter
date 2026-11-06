@@ -38,6 +38,32 @@ fn the_release_gate_takes_its_statistical_settings_and_canaries() {
     ));
     assert!(parse(&["tasks", "canaries", "ab12", "--count", "0"]).is_err());
     assert!(matches!(
+        command(&["tasks", "combine", "ab12", "--faults", "3", "--per-family", "6", "--seed", "9"]),
+        Command::Tasks(TasksCommand::Combine { ref task_set, faults: 3, per_family: 6, seed: Some(_), .. })
+            if task_set == "ab12"
+    ));
+    // Pairs unless more are asked for; a task of one fault is a single task;
+    // the number of tasks per file is always named.
+    assert!(matches!(
+        command(&["tasks", "combine", "ab12", "--per-family", "2"]),
+        Command::Tasks(TasksCommand::Combine {
+            faults: 2,
+            seed: None,
+            ..
+        })
+    ));
+    assert!(parse(&[
+        "tasks",
+        "combine",
+        "ab12",
+        "--faults",
+        "1",
+        "--per-family",
+        "2"
+    ])
+    .is_err());
+    assert!(parse(&["tasks", "combine", "ab12", "--faults", "3"]).is_err());
+    assert!(matches!(
         command(&["tasks", "pick", "ab", "cd", "--family-share", "0.25", "--seed", "7"]),
         Command::Tasks(TasksCommand::Pick { ref task_sets, family_share: Some(f), per_family: None, .. })
             if task_sets.len() == 2 && f == 0.25

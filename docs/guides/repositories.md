@@ -257,6 +257,20 @@ signal discriminates from the second release a family is attempted under. The re
 gives the device seconds of the solve and teach attempts against the tasks kept, so the
 strategies can be compared per GPU hour.
 
+## Harder tasks: several faults at once
+
+A solver that fixes nearly every single-fault task of a repository needs harder tasks of the
+same kind to be measured against. `splinter tasks combine <TASKSET> --faults 3 --per-family 6`
+makes them from the admitted tasks of a practised snapshot: each seeds faults in three different
+files at once, is graded by all of the hidden tests that catch them, and is admitted only after
+its tree fails the check, its reference change (the three reverse patches together) passes it on
+two runs, and no one fault's reverse patch passes it alone. Because the tasks are made by the
+same generator as the single-fault ones, the loop and an external benchmark (`tasks harbor
+export`) use identical tasks. A task with a fault in a file the exam reserved is an exam task
+and stays out of every training set, and the sets it writes (all, exam, training) are in the
+report. [Tasks reference](../reference/tasks.md#combining-faults) has the rules and the refusal
+reasons.
+
 ## Related
 
 - Check a plan of which repositories a lineage trains on and which are sealed as the final

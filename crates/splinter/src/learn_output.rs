@@ -366,6 +366,40 @@ impl Report for Picked {
     }
 }
 
+impl Report for splinter_sdk::tasks::combine::Combined {
+    fn human(&self) -> String {
+        use std::fmt::Write as _;
+
+        let mut out = format!(
+            "combined  {} task(s) of {} faults each (seed {}): {} of the exam's files, {} of \
+             training files\n  tried     {} combination(s), refused {}\n",
+            self.admitted,
+            self.faults,
+            self.seed.value(),
+            self.exam_tasks,
+            self.training_tasks,
+            self.attempted,
+            tally(&self.refused)
+        );
+        if !self.unusable.is_empty() {
+            let _ = writeln!(out, "  unusable  {}", tally(&self.unusable));
+        }
+        for (label, set) in [
+            ("set", &self.task_set),
+            ("exam", &self.exam_task_set),
+            ("training", &self.training_task_set),
+        ] {
+            if let Some(set) = set {
+                let _ = writeln!(out, "  {label:<9} {set}");
+            }
+        }
+        for (family, count) in &self.families {
+            let _ = writeln!(out, "  {count:>3}  {family}");
+        }
+        out
+    }
+}
+
 impl Report for LearnPlan {
     fn human(&self) -> String {
         let sources: Vec<String> = self.sources.iter().map(word).collect();
