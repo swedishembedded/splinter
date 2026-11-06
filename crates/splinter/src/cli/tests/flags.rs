@@ -228,3 +228,33 @@ fn the_coding_prompt_is_a_global_flag_naming_a_registered_version() {
     assert_eq!(parse(&["status"]).unwrap().global.coding_prompt, None);
     assert!(parse(&["--coding-prompt", "coding-agent-9", "status"]).is_err());
 }
+
+#[test]
+fn brain_endpoints_are_global_flags_and_repeat() {
+    let cli = parse(&[
+        "--brain-endpoint",
+        "http://127.0.0.1:8805/v1",
+        "--brain-endpoint",
+        "http://127.0.0.1:8806/v1",
+        "--brain-key-file",
+        "/keys/brain",
+        "--brain-adapter-manifest",
+        "/run/brain/release.json",
+        "--attempt-concurrency",
+        "48",
+        "status",
+    ])
+    .unwrap();
+    assert_eq!(
+        cli.global.brain_endpoint,
+        ["http://127.0.0.1:8805/v1", "http://127.0.0.1:8806/v1"]
+    );
+    assert_eq!(
+        cli.global.brain_key_file.as_deref(),
+        Some(std::path::Path::new("/keys/brain"))
+    );
+    assert_eq!(cli.global.attempt_concurrency, Some(48));
+    let none = parse(&["status"]).unwrap();
+    assert!(none.global.brain_endpoint.is_empty() && none.global.attempt_concurrency.is_none());
+    assert!(parse(&["--attempt-concurrency", "0", "status"]).is_err());
+}

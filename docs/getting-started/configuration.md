@@ -82,6 +82,37 @@ A remote reference is refused unless `--allow-remote` is given; that is the
 only way Splinter uses the network. Its key is the one sven holds for the
 provider: store it once with `sven auth set openrouter` (or the provider's id).
 
+## Serving models from a brain endpoint
+
+By default a local model (`local:...`, `policy:...`) is loaded in the process and decodes one attempt at a
+time. Given a `brain serve --openai` endpoint, Splinter loads nothing: every local reference is requested
+from the endpoint by the id it serves it under, and the attempts of `practice`, `learn`, `generation run`,
+`solve` and the release gate run against it at once, which brain's continuous batching decodes together.
+This also serves policies the in-process model cannot load, such as Qwen3.8.
+
+```text
+brain --device gpu3 --backend cuda serve --openai 127.0.0.1:8805 --api-key-file KEY \
+      --checkpoint ~/models/Qwen/Qwen3.8-27B-FP8 --max-batch 48
+splinter --brain-endpoint http://127.0.0.1:8805/v1 --brain-key-file KEY \
+         --attempt-concurrency 48 --policy-base Qwen/Qwen3.8-27B-FP8 solve ...
+```
+
+`--brain-endpoint URL` repeats for more endpoints; an attempt is pinned to one by a stable hash of its
+seed, so its conversation stays cached on one server. `--brain-key-file` names the file holding the key
+(the one word of `brain serve --api-key-file`). `--attempt-concurrency N` is how many attempts are in
+flight in all; set it to the endpoints' `--max-batch`, because brain does not advertise it (16 per endpoint
+when not given).
+
+A base is requested as `<org>/<model>`, the last two components of its checkpoint path, which is how
+brain's model store names it. An adapter is found on the endpoint by the digest of its file. A reference
+the endpoint does not list is refused by name, with what it does list; it is never run in the process
+instead. `--brain-adapter-manifest FILE` names the release manifest the endpoint follows (`brain serve
+--adapter-manifest FILE`): an adapter the endpoint does not list, a release candidate in the gate for
+example, is offered by publishing it there and waited for. A manifest offers one adapter at a time, so
+the gate's two arms are asked one after the other. With endpoints, the gate starts no `brain` of its own:
+its serve check is that each endpoint lists the candidate under the digest the release records.
+Training still loads the base in the process (the endpoint serves inference only).
+
 ## Roles
 
 Stages ask for a model by role, never by name: `policy` (the model being trained), `teacher`,

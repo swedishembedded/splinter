@@ -41,6 +41,10 @@ Every command takes these.
 - `--allow-remote`: Permit models reached over the network (remote:...); without it every model runs locally.
 - `--policy-context-tokens <TOKENS>`: Limit the policy model's context to this many tokens (default: the largest its checkpoint supports); for a policy too large for the card at that size. Another model is limited by its reference, `local:<checkpoint>@<tokens>`.
 - `--remote-concurrency <N>`: How many requests to a model reached over an API may be in flight at once [default: 4]
+- `--brain-endpoint <URL>...`: A brain endpoint (an OpenAI-compatible base URL, `http://HOST:PORT/v1`) every local model reference is requested from instead of being loaded in this process: `local:<checkpoint>[+adapter]` and `policy:<alias>` are asked of it by the id it serves them under, and a reference it does not list is refused. Repeat for more endpoints; an attempt is pinned to one by a stable hash of its id, so its conversation stays cached on that server. Needs `--brain-key-file`.
+- `--brain-key-file <FILE>`: The file holding the API key of the brain endpoints (the one word of the file `brain serve --api-key-file` was given)
+- `--brain-adapter-manifest <FILE>`: The release manifest the brain endpoints follow (`brain serve --adapter-manifest FILE`): an adapter they do not list, such as a release candidate, is offered by publishing it there and waited for. A manifest offers one adapter at a time.
+- `--attempt-concurrency <N>`: How many attempts are asked of the brain endpoints at once, in all (set to their --max-batch) [default: 16 per endpoint]
 - `--solve-deadline <SECONDS>`: How many seconds one task's solve may take on the wall clock [default: 300]
 - `--test-output-cap <BYTES>`: Bytes kept of each output stream of a test run [default: 1048576]
 - `--allow-unconfined-workspace`: Let a project's commands (the solver's shell, the test runs) see the whole filesystem where the kernel cannot confine them to their tree. Without it such a run is refused; the environment record says when it was allowed.

@@ -118,6 +118,46 @@ fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
     config.workspace.cargo_home.clone_from(&global.cargo_home);
 }
 
+/// The brain endpoints the command line names, if it names any. Every flag
+/// that configures them is refused without the endpoints it configures, and
+/// the endpoints without the key they are asked with.
+fn brain_endpoints(
+    global: &cli::Global,
+) -> Result<Option<splinter_sdk::model::BrainEndpoints>, String> {
+    let stray = [
+        (global.brain_key_file.is_some(), "--brain-key-file"),
+        (
+            global.brain_adapter_manifest.is_some(),
+            "--brain-adapter-manifest",
+        ),
+        (
+            global.attempt_concurrency.is_some(),
+            "--attempt-concurrency",
+        ),
+    ];
+    if global.brain_endpoint.is_empty() {
+        return match stray.iter().find(|(given, _)| *given) {
+            Some((_, flag)) => Err(format!(
+                "{flag} configures --brain-endpoint, which is not given"
+            )),
+            None => Ok(None),
+        };
+    }
+    let Some(key_file) = &global.brain_key_file else {
+        return Err("--brain-endpoint needs --brain-key-file".into());
+    };
+    let key = splinter_sdk::model::BrainEndpoints::read_key(key_file).map_err(|e| e.to_string())?;
+    let mut brain = splinter_sdk::model::BrainEndpoints::new(global.brain_endpoint.clone(), key)
+        .map_err(|e| e.to_string())?;
+    if let Some(manifest) = &global.brain_adapter_manifest {
+        brain = brain.with_adapter_manifest(manifest.clone());
+    }
+    if let Some(width) = global.attempt_concurrency {
+        brain = brain.with_attempt_concurrency(width as usize);
+    }
+    Ok(Some(brain))
+}
+
 fn main() -> ExitCode {
     // A worker launched through the local job launcher starts this binary as
     // its supervisor, which runs the worker and records its exit.
@@ -148,6 +188,13 @@ fn main() -> ExitCode {
     config.policy_context_tokens = cli.global.policy_context_tokens;
     if let Some(width) = cli.global.remote_concurrency {
         config.remote_concurrency = width as usize;
+    }
+    match brain_endpoints(&cli.global) {
+        Ok(brain) => config.brain = brain,
+        Err(e) => {
+            output::error(cli.global.json, &splinter_sdk::Error::Refused(e));
+            return session::Exit::Refused.into();
+        }
     }
     config.served_temperature = cli.global.temperature;
     config.served_top_p = cli.global.top_p;

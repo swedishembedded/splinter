@@ -47,3 +47,33 @@ Measured in one campaign on four GH200 cards:
 2. A served chat fine-tune / policy-gradient job in brain (dataset and adapter by fd or digest,
    scheduled by residency); `splinter train` calls it; the in-process model is gone.
 3. The endpoint registry and Slurm launch of brain workers.
+
+## Phase 1 as built
+
+`--brain-endpoint URL` (repeatable) with `--brain-key-file`, `--attempt-concurrency` and
+`--brain-adapter-manifest` make every `local:` and `policy:` reference a request to the endpoint
+(`splinter_model::endpoint`). A base is found by `<org>/<model>`, an adapter by the digest of its file
+in the model list, and a reference the endpoint does not list is refused by name. Attempts of the
+solve stage and of the gate's exam probes run `--attempt-concurrency` at a time (default 16 per
+endpoint: brain does not advertise its `--max-batch` in the model list); an attempt is pinned to an
+endpoint by a stable hash of its seed. The gate starts no `brain` of its own with endpoints: its
+serve check is that each endpoint lists the candidate under its digest, and a candidate is offered
+by publishing the release manifest the endpoint follows (`brain serve --adapter-manifest`), one
+adapter at a time, so the two arms are graded one after the other.
+
+What is not done:
+
+- The in-process inference path (`LocalQwen`, residency-held bases, exams and closed-book answers
+  through `answer`/`exam`, the embedder) is still the path without endpoints, and `exam`,
+  held-out scoring inside training, `ask` and the scripted specs run on it. It goes when the
+  endpoint is the only path and those callers ask through it.
+- Phase 2 (training): a served chat fine-tune / policy-gradient job; the dataset and the adapter
+  move by fd over D-Bus or by blake3 digest in a content-addressed store the job is given. Until
+  then training loads the base in this process, so a Qwen3.8 generation cannot train, only be
+  measured.
+- Phase 3: the endpoint registry and Slurm launch of workers. Endpoints are named on the command
+  line, a conversation is pinned to one by hash (not by the replica holding its prefix), and the
+  key travels as one shared file.
+- A closed-book solve (no workspace) is pinned by model, not by attempt: only workspace attempts
+  carry a per-attempt seed to hash.
+- Per-response thinking budgets are not sent on the served path of a local reference.

@@ -156,6 +156,24 @@ code or the tests is behaviour that is not trained. A call that names a hidden p
 only got a refusal or "no such file" is recorded as a probe (`hidden_path_absent`); a hidden
 path in what a tool returned, hidden content and the state root still fail it.
 
+## Running a repository's attempts on a brain endpoint
+
+`practice`, `learn`, `solve`, `generation run` and the release gate attempt tasks as agents, each
+attempt a conversation of many requests. With `--brain-endpoint` the policy is served by brain and up
+to `--attempt-concurrency` attempts run at once against it, each with the seed it has when run one
+after another, so the experiences recorded are the same ones, in the order of the tasks and attempts
+(see "Serving models from a brain endpoint" in the configuration page). `generation run` against a
+Qwen3.8 policy:
+
+```text
+splinter --brain-endpoint http://127.0.0.1:8805/v1 --brain-key-file KEY --attempt-concurrency 48 \
+         --policy-base Qwen/Qwen3.8-27B-FP8 generation run REPO --experiment NAME
+```
+
+The gate's candidate must be served too: start the endpoint with `--adapter-manifest FILE` and give
+splinter the same file as `--brain-adapter-manifest FILE`; the gate offers each adapter there as it
+grades it.
+
 ## How a solver is run
 
 A solver of a repository works under the coding-agent prompt (look, reproduce, change,
