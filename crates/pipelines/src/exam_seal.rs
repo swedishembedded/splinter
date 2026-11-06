@@ -11,7 +11,8 @@
 //! dataset built from workspace attempts crosses neither way.
 //!
 //! * An experience of a reserved family is refused, naming the family: the
-//!   exam's attempts are never training data.
+//!   exam's attempts are never training data. An answer to a comprehension
+//!   drill is an attempt of the family of the file the drill exercises.
 //! * A supervised action whose tool-call arguments name a file of a reserved
 //!   family is refused: the teacher works in the whole snapshot and could
 //!   write a qualification file's code.
@@ -34,8 +35,9 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 use splinter_core::chat::WireMessage;
 use splinter_core::digest::Digest;
+use splinter_core::experience::PrivilegedKind;
 use splinter_core::experience::{Experience, ExperienceId};
-use splinter_core::kinds::WORKSPACE_CHANGE;
+use splinter_core::kinds::{DRILL_ORIGIN, WORKSPACE_CHANGE};
 use splinter_core::rng::Seed;
 use splinter_data::{Corpus, Projection, RecordBody};
 
@@ -227,12 +229,25 @@ pub fn seal(
     remember_trained(ctx, &trained)
 }
 
+/// The entries whose first concept is a file of a repository: the attempts
+/// at workspace tasks, and the answers to comprehension drills made from a
+/// repository's files, which are as much the exam's when their file is.
 fn workspace_entries(corpus: &Corpus) -> Vec<&splinter_data::Entry> {
     corpus
         .entries()
         .iter()
-        .filter(|entry| entry.experience.task.kind == WORKSPACE_CHANGE)
+        .filter(|entry| {
+            entry.experience.task.kind == WORKSPACE_CHANGE || is_drill(&entry.experience)
+        })
         .collect()
+}
+
+/// Whether `experience` answers a comprehension drill.
+fn is_drill(experience: &Experience) -> bool {
+    experience
+        .privileged
+        .iter()
+        .any(|item| item.kind == PrivilegedKind::Other(DRILL_ORIGIN.to_string()))
 }
 
 /// The family the task of `experience` declares: its first concept.

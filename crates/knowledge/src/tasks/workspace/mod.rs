@@ -32,6 +32,11 @@
 //!   different files, graded by all of their hidden tests, admitted only
 //!   when the union of the reference changes passes and no member's alone
 //!   does.
+//! * [`WorkspaceGenerator::drills`] - comprehension drills, not repairs: closed-book
+//!   tasks that show a program calling one function of the clean snapshot on
+//!   inputs the repository's own tests use, and ask what it prints. The
+//!   reference is what the interpreter printed; no model and no hidden test
+//!   is involved (see the `drills` module).
 //! * [`WorkspaceGenerator::import_fixture`] - a task someone authored
 //!   (a rendered seeded-bug repository, a family's workspace template),
 //!   checked the same way before it is admitted.
@@ -52,6 +57,7 @@
 mod combine;
 pub mod contract;
 mod directory;
+mod drills;
 mod files;
 mod fixtures;
 mod harbor;
@@ -85,6 +91,11 @@ pub use combine::{
     MIN_COMBINED_FAULTS,
 };
 pub use directory::TaskDirectory;
+pub use drills::{
+    touched_lines, Drill, DrillGeneration, DrillOrigin, DrillPlan, DrillReason,
+    Language as DrillLanguage, Touched, DEFAULT_PER_FUNCTION, DRILL_GENERATOR, DRILL_HARBOR_SCHEMA,
+    DRILL_SCHEMA,
+};
 pub use fixtures::Fixture;
 pub use harbor::{discover, Discovered, HarborTask, Oracle, SplinterMeta, SPLINTER_SCHEMA};
 pub use harness::{Harness, SuiteReport};

@@ -24,6 +24,14 @@ pub const EXECUTABLE_CHECK: &str = "executable-check";
 /// check of the solver.
 pub const OUTPUT_CHECK: &str = "output-check";
 
+/// The privileged kind of the record that says a closed-book task is a
+/// comprehension drill made by code from a repository's snapshot: which file
+/// and function it exercises, in what tree, run by which interpreter. Whoever
+/// holds the seal between an exam and the data trained on reads it to know
+/// that the task's first concept is a file of the repository, so a drill of
+/// an exam file is an exam task.
+pub const DRILL_ORIGIN: &str = "drill-origin";
+
 /// The privileged kind a generated test travels as.
 pub const GENERATED_TEST: &str = "generated-test";
 

@@ -61,7 +61,7 @@ pub(super) fn shown(kind: &TaskKind, mut candidate: Candidate) -> Result<Candida
 /// `math.random` prints what the C library's generator draws - and training
 /// a policy to repeat it teaches noise: a Qwen3-4B fine-tuned on six such
 /// answers lost 15 of the 35 other probes it passed.
-fn undefined_by_the_language(runtime: &str) -> &'static [&'static str] {
+pub(super) fn undefined_by_the_language(runtime: &str) -> &'static [&'static str] {
     match runtime {
         "lua" => &[
             "math.random",
@@ -94,7 +94,7 @@ fn undefined_by_the_language(runtime: &str) -> &'static [&'static str] {
 
 /// The most characters a computed reference may have: an answer the solver
 /// is to write out, not a dump.
-const MAX_COMPUTED_OUTPUT: usize = 2_000;
+pub(super) const MAX_COMPUTED_OUTPUT: usize = 2_000;
 
 /// For a kind whose answer is the output of the material, the reference is
 /// what running the material prints, not what the model says it prints: the

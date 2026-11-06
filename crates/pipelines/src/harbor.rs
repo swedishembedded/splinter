@@ -35,7 +35,7 @@ use serde_json::Value;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Provenance};
-use splinter_knowledge::tasks::workspace::{discover, Discovered, HarborTask, Oracle};
+use splinter_knowledge::tasks::workspace::{discover, Discovered, DrillOrigin, HarborTask, Oracle};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::experiences::{ExperienceSet, SetId};
@@ -271,13 +271,14 @@ pub struct Exported {
     pub directory: PathBuf,
 }
 
-/// Writes every workspace task of `set` under `out` as a Harbor task, in a
-/// directory named for the task's address, with a Dockerfile `FROM image`.
+/// Writes every workspace task and comprehension drill of `set` under `out`
+/// as a Harbor task, in a directory named for the task's address, with a
+/// Dockerfile `FROM image`.
 ///
 /// # Errors
 ///
-/// [`OrchestratorError`] when a task is not a workspace task or cannot be
-/// written.
+/// [`OrchestratorError`] when a task is neither a workspace task nor a drill
+/// or cannot be written.
 pub fn export_harbor(
     ctx: &Context,
     set: &TaskSetId,
@@ -297,9 +298,12 @@ pub fn export_harbor(
     for entry in tasks.get_set(set)?.members {
         let task = tasks.get(&entry.task)?;
         let directory = out.join(entry.task.hex());
-        generator
-            .export_harbor(&task, &directory, image)
-            .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
+        let exported = if DrillOrigin::of_task(&task).is_some() {
+            generator.export_drill_harbor(&task, &directory, image)
+        } else {
+            generator.export_harbor(&task, &directory, image)
+        };
+        exported.map_err(|e| OrchestratorError::Refused(e.to_string()))?;
         written.push(Exported {
             task: entry.task.clone(),
             directory,
