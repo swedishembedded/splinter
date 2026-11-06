@@ -138,6 +138,12 @@ def a_pass_fail_reward_names_no_metric_and_no_ceiling():
     assert view[view.index("--advantage") + 1] == "standardised"
 
 
+def a_dataset_can_be_bounded_to_what_the_training_reads():
+    view = loop.dataset_args({**TRAIN, "dataset_limit": 480})
+    assert view[view.index("--limit") + 1] == "480"
+    assert "--limit" not in loop.dataset_args(TRAIN)
+
+
 def an_unknown_objective_is_refused():
     try:
         loop.dataset_args({**TRAIN, "objective": "dpo"})

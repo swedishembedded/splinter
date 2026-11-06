@@ -399,6 +399,10 @@ def dataset_args(train: dict) -> list[str]:
         args += ["--roles", ",".join(train["roles"])]
     if train.get("only_actions"):
         args += ["--only-actions", ",".join(train["only_actions"])]
+    if train.get("dataset_limit"):
+        # Brain prepares every record before the first step (behaviour and teacher passes):
+        # bound the dataset to what the steps read, spread evenly over it.
+        args += ["--limit", str(train["dataset_limit"])]
     block = train.get("dataset_max_block", train["max_block"])
     return [*args, "--from", train["base"], "--max-block", str(block), "--split-over-block"]
 
