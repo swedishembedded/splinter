@@ -53,36 +53,35 @@ impl Withheld {
             self.files.contains(&file) || self.cases.get(&file).is_some_and(|ids| ids.contains(id))
         })
     }
+}
 
-    /// The text of the tests the solver's tree lacks: the files of `hidden`
-    /// whole, and of the others the lines that `solver` no longer has.
-    pub(super) fn text(
-        &self,
-        hidden: &Path,
-        solver: &Path,
-        files: &BTreeSet<String>,
-    ) -> Privileged {
-        let read = |tree: &Path, file: &String| {
-            std::fs::read(tree.join(file))
-                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-                .ok()
-        };
-        let content: String = files
-            .iter()
-            .filter_map(|file| {
-                let original = read(hidden, file)?;
-                match read(solver, file) {
-                    Some(kept) => Some(lines_missing(&original, &kept)),
-                    None => Some(original),
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        Privileged {
-            kind: PrivilegedKind::Other(HIDDEN_TEST.into()),
-            content,
-            span: None,
-        }
+/// The text of the tests the solver's tree lacks: the files of `files` in
+/// `hidden` whole, and of the others the lines that `solver` no longer has.
+pub(in crate::tasks::workspace) fn hidden_text(
+    hidden: &Path,
+    solver: &Path,
+    files: &BTreeSet<String>,
+) -> Privileged {
+    let read = |tree: &Path, file: &String| {
+        std::fs::read(tree.join(file))
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .ok()
+    };
+    let content: String = files
+        .iter()
+        .filter_map(|file| {
+            let original = read(hidden, file)?;
+            match read(solver, file) {
+                Some(kept) => Some(lines_missing(&original, &kept)),
+                None => Some(original),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    Privileged {
+        kind: PrivilegedKind::Other(HIDDEN_TEST.into()),
+        content,
+        span: None,
     }
 }
 

@@ -59,6 +59,8 @@ use withheld::Withheld;
 
 mod withheld;
 
+pub(super) use withheld::hidden_text;
+
 /// The privileged kind of the hidden tests' text, as the self-containment
 /// rule reads it.
 const HIDDEN_TEST: &str = "hidden-test";
@@ -472,7 +474,7 @@ impl WorkspaceGenerator {
                 return Err(Stop::Refuse(Reason::HiddenImportedByTree));
             }
         }
-        let hidden = withheld.text(mutated.path(), solver.path(), &killed.files);
+        let hidden = hidden_text(mutated.path(), solver.path(), &killed.files);
         let files: Vec<String> = killed.files.iter().cloned().collect();
         let staged = self.stage(solver.path(), &[], Some((mutated.path(), &files)))?;
         Ok((staged, hidden))
@@ -621,7 +623,7 @@ fn remember(seen: &mut Seen, request: &str) {
 /// Whether the request `text` may be shown: it quotes no line that the
 /// mutation changed, nothing of the hidden tests, and its symptoms are not a
 /// near duplicate of those of one admitted for the file.
-fn admissible(
+pub(super) fn admissible(
     request: &instruction::Request,
     original: &str,
     mutated: &str,

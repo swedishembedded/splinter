@@ -27,6 +27,11 @@
 //!   is admitted only when its parent fails those tests and the commit
 //!   passes them, reproducibly. Formatting-only, generated, vendored and
 //!   merge commits are excluded and counted.
+//! * [`WorkspaceGenerator::combine`] - harder tasks made of admitted
+//!   mutation-seeded tasks of one snapshot: several independent faults in
+//!   different files, graded by all of their hidden tests, admitted only
+//!   when the union of the reference changes passes and no member's alone
+//!   does.
 //! * [`WorkspaceGenerator::import_fixture`] - a task someone authored
 //!   (a rendered seeded-bug repository, a family's workspace template),
 //!   checked the same way before it is admitted.
@@ -44,6 +49,7 @@
 //! near-duplicate rule, one already made for the family. The family of a mutation-seeded task is the
 //! path of the file that was changed.
 
+mod combine;
 mod directory;
 mod files;
 mod fixtures;
@@ -73,6 +79,10 @@ use splinter_sandbox::{
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::error::StoreError;
 
+pub use combine::{
+    Combination, CombinePlan, CombineReason, Combined, ATTEMPTS_PER_TASK, COMBINED_GENERATOR,
+    MIN_COMBINED_FAULTS,
+};
 pub use directory::TaskDirectory;
 pub use fixtures::Fixture;
 pub use harbor::{discover, Discovered, HarborTask, Oracle, SplinterMeta, SPLINTER_SCHEMA};
