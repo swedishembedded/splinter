@@ -128,6 +128,16 @@ def self_distillation_distils_the_cliff_and_keeps_the_scalar_advantage_elsewhere
     assert view[:2] == ["--view", "self-distill"] and "--reward-metric" not in view and "--cliff-distill" not in view
 
 
+def a_pass_fail_reward_names_no_metric_and_no_ceiling():
+    train = {**TRAIN, "objective": "policy-gradient",
+             "reward": {"metrics": {}, "fail_ceiling": 0.0, "advantage": "standardised"},
+             "policy_gradient": {"clip_eps": 0.2, "kl_beta": 0.02, "reference": "base", "loss_agg": "token-sum",
+                                 "temperature": 1.0}}
+    view = loop.dataset_args(train)
+    assert "--reward-metric" not in view and "--fail-ceiling" not in view, view
+    assert view[view.index("--advantage") + 1] == "standardised"
+
+
 def an_unknown_objective_is_refused():
     try:
         loop.dataset_args({**TRAIN, "objective": "dpo"})

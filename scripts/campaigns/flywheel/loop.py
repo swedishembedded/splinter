@@ -386,7 +386,11 @@ def dataset_args(train: dict) -> list[str]:
         reward = train["reward"]
         for metric, weight in reward.get("metrics", {}).items():
             args += ["--reward-metric", f"{metric}={weight}"]
-        args += ["--fail-ceiling", str(reward["fail_ceiling"]), "--advantage", reward["advantage"]]
+        if reward.get("metrics"):
+            # A failure earns part of the reward from the named metrics, up to the ceiling;
+            # with none named a failure earns nothing (a pass/fail reward).
+            args += ["--fail-ceiling", str(reward["fail_ceiling"])]
+        args += ["--advantage", reward["advantage"]]
         if name == "self-distill":
             args.append("--cliff-distill")
     if train.get("images"):
