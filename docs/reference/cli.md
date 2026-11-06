@@ -100,6 +100,7 @@ Every command takes these.
   - [splinter tasks variants](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
   - [splinter tasks canaries](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
   - [splinter tasks combine](#splinter-tasks-combine) - Make harder tasks of the admitted single-fault tasks of a task set
+  - [splinter tasks drills](#splinter-tasks-drills) - Make comprehension drills from a repository's clean snapshot
   - [splinter tasks pick](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
   - [splinter tasks check-requests](#splinter-tasks-check-requests) - Drop the tasks whose request does not state the contract their hidden check enforces (a returned value or a raised error that no failing test's title speaks of, so the request cannot lead to the fix)
   - [splinter tasks harbor](#splinter-tasks-harbor) - Harbor tasks
@@ -845,6 +846,7 @@ Subcommands:
 - [`variants`](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
 - [`canaries`](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
 - [`combine`](#splinter-tasks-combine) - Make harder tasks of the admitted single-fault tasks of a task set
+- [`drills`](#splinter-tasks-drills) - Make comprehension drills from a repository's clean snapshot
 - [`pick`](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
 - [`check-requests`](#splinter-tasks-check-requests) - Drop the tasks whose request does not state the contract their hidden check enforces (a returned value or a raised error that no failing test's title speaks of, so the request cannot lead to the fix)
 - [`harbor`](#splinter-tasks-harbor) - Harbor tasks
@@ -940,6 +942,27 @@ Options:
 - `--per-family <N>` (required): The most combined tasks any one file takes part in.
 - `--max-tasks <N>`: The most combined tasks made in all. Default: `64`.
 - `--seed <N>`: The seed that decides which tasks are combined (drawn and printed when not given)
+
+#### splinter tasks drills
+
+Make comprehension drills from a repository's clean snapshot: small closed-book tasks that show a program calling one function of the repository on inputs its own tests use, and ask what it prints. The reference is what the interpreter prints against the snapshot (never a task's broken tree, never a hidden test); a candidate is admitted only when it runs, prints something informative and prints the same twice. A drill is tagged with its file and function, and one of a file the practice exam reserved is an exam task. They go into task sets of their own: all of them, the exam's, and the rest
+
+```text
+splinter tasks drills [OPTIONS] <REPO>
+```
+
+Arguments:
+
+- `<REPO>` (required): The git repository: a work tree or a bare repository.
+
+Options:
+
+- `--rev <REV>`: The revision whose snapshot is drilled: anything git resolves to a commit. The tracked files of that commit are the snapshot; uncommitted work is not in it. Default: `HEAD`.
+- `--allow-dirty`: Snapshot the committed files of a revision that is checked out with uncommitted changes, instead of refusing it.
+- `--per-function <N>`: The most drills of any one function. Default: `3`.
+- `--seed <N>`: The seed that chooses among the inputs the tests give (drawn and printed when not given)
+- `--file <PATH>...`: A source file (`.py` or `.lua`), relative to the repository, to drill; repeat for more. Every source file that is not a test without any.
+- `--for-tasks <TASKSET-ID>`: Drill only the functions that contain a line the reference changes of this task set's workspace tasks change (the tasks a policy fails or solves only sometimes), so that it can be trained on the drills before it attempts them again. The revision must be the one the tasks were made from.
 
 #### splinter tasks pick
 

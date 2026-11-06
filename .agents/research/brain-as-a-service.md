@@ -130,5 +130,30 @@ automatic and lives in `splinter learn`:
    learned before and harness failures excluded; release or keep the champion; repeat until the
    goal's exam is mastered or the budget is spent.
 
+### Comprehension drills, and the strategy hook (2026-11-06)
+
+Step 3 of the loop names "comprehension drills where the code is misread". Measured motivation: the
+27B solves most mutation-seeded repair tasks and fails some reliably (it finds the fix, then over-edits a
+neighbouring condition), and on documents the predict-output drills of `learn` lifted held-out probes from
+30% to 60%. The drills are built: `splinter tasks drills REPO --rev REV [--per-function N] [--seed S]
+[--file PATH ...] [--for-tasks TASKSET-ID]` makes closed-book `predict-python` / `predict-lua` tasks by code
+from the clean snapshot (a program that imports the repository's module and calls one function on inputs
+lifted, arguments only, from the module's own tests; the reference is what the pinned interpreter prints;
+admitted when it runs, prints something bounded and informative, and prints the same twice). A drill is
+tagged with its file (its family) and function, so the exam reservation by file applies unchanged: a drill
+of an exam file is an exam task, and an answer to one cannot be built into a dataset.
+
+The hook for the loop is `--for-tasks` (SDK: `splinter_sdk::tasks::drills::drills` with
+`DrillRequest::for_tasks`): given the set of repair tasks a policy fails or solves only sometimes, drills are
+made for exactly the functions that contain a line the tasks' reference changes touch. Next step, not built:
+the loop's strategy selection. After the measure stage classifies a task as sometimes or never solved, a
+"misread" cluster (the policy edits near the fault but the fix is wrong, or it reads the function wrongly in
+a probe) chooses `drills --for-tasks`, trains on the policy's verified drill answers (`sft-final` over
+`SftFinal`, or the policy gradient with the formal verifier's reward over k answers per drill), and the
+repair tasks are attempted again on the same exam; the strategy is kept only if the paired gain per
+GPU-hour beats the alternatives measured in earlier rounds. Open questions that the first campaign must
+answer: how many drills per function help before they displace repair practice, whether drills of the
+functions only (not their neighbours) are enough, and how classification tells a misread from a budget miss.
+
 The bench-driven campaign loop (`scripts/campaigns/flywheel`) is the scaffold where strategies are
 proven at scale; what it proves moves into this loop.

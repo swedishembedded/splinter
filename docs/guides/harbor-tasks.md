@@ -33,6 +33,12 @@ it was dirty, and a digest of the task directory) outside the task, so the addre
 not depend on where it was read; `tasks harbor discover` reads a task repository at its
 revision and writes nothing.
 
+*Export* also writes a [comprehension drill](../reference/tasks.md#comprehension-drills):
+a closed-book task with no repository, whose instruction adds that the answer goes to
+`answer.txt`, whose `tests/test.sh` rewards 1 exactly when that file matches the reference
+(whitespace runs count as one space) and whose reference is kept under `tests/`. A drill is
+not imported back.
+
 *Trials* are read from `result.json` (or `results.json`) and `agent/trajectory.json`
 (ATIF; a trial without one is refused, never reconstructed). The experience's verdict
 is Harbor's: pass at reward 1, fail at any other reward, none for a trial with an

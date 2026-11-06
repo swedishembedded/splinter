@@ -231,3 +231,27 @@ the scripted specs still use it); phase 2 (served training job, datasets and ada
 digest) and phase 3 (endpoint registry, Slurm launch) are in
 `.agents/research/brain-as-a-service.md`; a run on the 27B through an endpoint has not been
 measured here (the cards are in use).
+
+## Comprehension drills (`tasks drills`)
+
+Built: `WorkspaceGenerator::drills` (`crates/knowledge/src/tasks/workspace/drills/`), `tasks drills REPO --rev REV
+[--per-function N] [--seed S] [--file PATH ...] [--for-tasks TASKSET-ID]` and `splinter_sdk::tasks::drills`. A drill is
+a closed-book `predict-python` / `predict-lua` task: a program that imports the repository's module and calls one
+function on inputs lifted (arguments only) from its tests, whose reference is what the pinned interpreter prints on
+the clean snapshot; admitted when it runs, prints something bounded that is not `None`, prints the same under another
+hash seed, and is not a repeat of an earlier drill's output. Tagged with its file (family) and `file::function`; a
+drill of an exam file is an exam task and an answer to one cannot be built into a dataset (`exam_seal`). Exports as a
+Harbor task. `--for-tasks` is the loop's hook: drills for exactly the functions that contain a line the reference
+changes of a task set change. Specs: `crates/knowledge/tests/workspace_drills.rs`,
+`crates/pipelines/tests/task_drills.rs`.
+
+Next (not built): the loop's strategy selection uses the hook (design in `.agents/research/brain-as-a-service.md`):
+classify a repair task as a misread, run `--for-tasks`, train on the policy's verified drill answers (sft or the policy
+gradient), re-attempt the repair tasks, and keep the strategy only on a paired gain per GPU-hour.
+
+Open: only module-level functions and the calls a test makes with literal arguments are inputs, so a family whose
+tests build state through helpers or instances (graphkit's graph builder, class methods) gets few drills; a
+composition of calls and a method on an object built by a drill are not made; Lua modules must follow the one
+`function M.name(...)` / `end` layout and a test must bind the module by `require`, a `MODULE` host helper or a
+`modules` table; whether drills lift held-out repair pass rates on a repository has not been measured.
+Measured with `--seed 7` and the defaults on two of the task families, each committed into a repository of its own: exprcalc (Python) 56 drills of 74 functions (refused: no_test_inputs 50, same_output 5, nondeterministic 1), caldate (Lua) 61 of 64 (no_test_inputs 36, same_output 16); the other six families are not measured.

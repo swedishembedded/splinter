@@ -300,6 +300,27 @@ and stays out of every training set, and the sets it writes (all, exam, training
 report. [Tasks reference](../reference/tasks.md#combining-faults) has the rules and the refusal
 reasons.
 
+## Comprehension drills
+
+A policy that fixes most repair tasks of a repository and fails some reliably often misreads
+part of the code (it finds the fix and over-edits a neighbouring condition). `splinter tasks
+drills REPO --rev REV` makes prerequisite tasks for that: each shows a short program that imports
+the repository's module and calls one function on concrete inputs, and asks what it prints.
+
+```bash
+splinter tasks drills ./shop --rev v1.4 --per-function 3
+splinter tasks drills ./shop --rev v1.4 --file shop/pricing.py
+splinter tasks drills ./shop --rev v1.4 --for-tasks blake3:1ae0f1...
+```
+
+The answer is what the pinned interpreter prints against the clean snapshot of the revision, so
+no model writes a task or its reference, and the inputs come from the repository's own tests
+(arguments only, never an assertion or an expected value). Drills are tagged with the file and
+function they exercise; the ones of a file the practice exam reserved are exam tasks and are
+never trained on. `--for-tasks` drills exactly the functions the reference changes of a set of
+repair tasks touch. [Tasks reference](../reference/tasks.md#comprehension-drills) has the rules,
+the refusal reasons and the export.
+
 ## Related
 
 - Check a plan of which repositories a lineage trains on and which are sealed as the final

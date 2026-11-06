@@ -15,6 +15,7 @@ use splinter_sdk::runs::record;
 use splinter_sdk::sources;
 use splinter_sdk::tasks::check_requests::check_requests;
 use splinter_sdk::tasks::combine::{combine, CombineRequest};
+use splinter_sdk::tasks::drills::{drills, DrillRequest};
 use splinter_sdk::tasks::pick::{pick, Quota};
 use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
 use splinter_sdk::variants;
@@ -213,6 +214,42 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                 )
             })?;
             emit(json, &combined);
+        }
+        TasksCommand::Drills {
+            repository,
+            rev,
+            allow_dirty,
+            per_function,
+            seed,
+            files,
+            for_tasks,
+        } => {
+            let for_tasks = for_tasks.map(|id| resolve_task_set(ctx, &id)).transpose()?;
+            let arguments = json!({
+                "repository": repository,
+                "rev": rev,
+                "allow_dirty": allow_dirty,
+                "per_function": per_function,
+                "seed": seed,
+                "files": files,
+                "for_tasks": for_tasks,
+            });
+            let drilled = record(ctx, "tasks drills", &arguments, |run| {
+                let seed = run.seed("seed", seed)?;
+                drills(
+                    ctx,
+                    &DrillRequest {
+                        repository: repository.clone(),
+                        revision: rev.clone(),
+                        allow_dirty,
+                        per_function,
+                        seed,
+                        files: files.clone(),
+                        for_tasks: for_tasks.clone(),
+                    },
+                )
+            })?;
+            emit(json, &drilled);
         }
         TasksCommand::Pick {
             task_sets,

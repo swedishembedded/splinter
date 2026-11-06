@@ -12,7 +12,7 @@ each is graded by; the checks themselves are described in
 ## Task kinds
 
 
-Task kinds: `recall`, `taught` (something a person told an agent; graded by the terms of its reference sentence an answer carries and adds, see `absorb`), `explain`, `predict`, `construct`, `debug`,
+Task kinds: `recall`, `taught` (something a person told an agent; graded by the terms of its reference sentence an answer carries and adds, see `absorb`), `explain`, `predict` (`predict-python` and `predict-lua` name its runtime), `construct`, `debug`,
 `counterexample`, `transform`, `classify`, `retrieve`, `multi-turn`,
 `combine` (written by the generator model) and `denoise` (a corrupted
 passage to restore, no model needed). Kinds that run code need `python3`.
@@ -95,6 +95,62 @@ the exam reservation, the dataset seal and the trained-on record all read a comp
 that way, so such a task is never trained on. `tasks pick` still treats a composite family as
 a family of its own. A combined task exports with `tasks harbor export` like any workspace
 task.
+
+## Comprehension drills
+
+`tasks drills REPO --rev REV` makes small prerequisite tasks from a repository's clean snapshot,
+so a policy that misreads part of the code can learn what that code does (not the answer to a
+repair task). A drill shows a short program that imports the repository's module and calls one
+of its functions on concrete inputs, and asks what it prints; it is a closed-book task of kind
+`predict-python` (Python files) or `predict-lua` (Lua modules), graded by the formal verifier
+like any predict task: the answer is the output, exactly, in one fenced block.
+
+No model is asked for anything:
+
+- **Functions.** The module-level functions of every source file that is not a test (`--file
+  PATH`, repeated, narrows it). Python is read by the parser; a Lua module is a file that returns
+  a table `M` of `function M.name(...)` declarations at the left margin, closed by `end` at the
+  left margin.
+- **Inputs.** The literals the repository's own tests call each function with, and
+  recombinations of them per argument position, drawn by `--seed` (drawn and printed when
+  absent; the same seed on the same tree makes the same drills). Only arguments are taken from a
+  test, and only when every argument of the call is a literal (a number, a string, a list or
+  table of literals, `None`/`nil`): never an assertion, an expected value, a test's name or text.
+  A function no test calls with literals, and which needs arguments, gets no drill
+  (`no_test_inputs`). A Python test finds a function through `from module import name` or an
+  imported module alias; a Lua test through `M.name(...)` or `wrapper(M.name, ...)` on the module
+  named by `MODULE = "name"` or `local M = require("name")`.
+- **Reference.** What the pinned interpreter (`python3`, or `lua` from `--runtime-dir`) prints
+  when the program shown runs against the clean snapshot of `--rev`: the tracked files of that
+  commit, never a task's broken tree and never a hidden test. Python programs print the result's
+  `repr`, or `raised ErrorType: message`; Lua programs print `pcall`'s results, with a table
+  result printed by a small serialiser the program itself carries (a table's own text is an
+  address).
+- **Admission.** The program runs to completion, prints something non-empty and at most 2,000
+  characters that is not just `None`, prints the same on a second run (Python under another
+  `PYTHONHASHSEED`, so a set of strings is refused), does not read the clock, randomness or the
+  environment, and its output is not one an earlier drill of the same function has (so a
+  function's drills differ in their answers). Each candidate is run in a fresh tree, so a function
+  that writes files leaves nothing behind. The rest are counted in `refused` by reason
+  (`no_test_inputs`, `does_not_run`, `empty_output`, `output_too_long`, `nondeterministic`,
+  `undefined_by_the_language`, `uninformative`, `same_output`).
+
+`--per-function N` (default 3) bounds the drills of a function. A drill's first concept is the
+file it exercises (its family, as a repair task's is) and its second `file::function`; its
+privileged records are the reference and a `drill-origin` record (language, file, function, tree
+id, interpreter version, a digest of the program). A drill of a file the practice exam reserved
+is an **exam drill**: the sets written are all of them, the exam's, and the rest, and an answer
+to an exam drill is refused when a dataset is built, as an attempt at a repair task of that file
+is. `tasks harbor export` writes a drill as a Harbor task whose instruction adds that the answer
+goes to `answer.txt`, whose verifier rewards exactly the reference (whitespace aside) and keeps
+the reference under `tests/`.
+
+`--for-tasks TASKSET-ID` is the hook for a loop that retries repair tasks: drills are made only
+for the functions that contain a line the reference change of each workspace task of the set
+changes (the lines of the clean file, from the change's `+` side), so a policy can be trained on
+its verified answers to them before it attempts those tasks again. The revision must be the one
+the tasks were made from: a change that does not match the revision is refused. Files changed
+outside any function are counted in the report's `scope`.
 
 ## Repository families
 

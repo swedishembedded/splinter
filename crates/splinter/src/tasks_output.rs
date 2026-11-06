@@ -136,6 +136,50 @@ impl Report for Validated {
     }
 }
 
+impl Report for splinter_sdk::tasks::drills::Drilled {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "drills  {} of {} function(s) (seed {}, at most {} each, tree {}): {} of the exam's \
+             files, {} of training files\n  refused {}\n",
+            self.admitted,
+            self.functions,
+            self.seed.value(),
+            self.per_function,
+            &self.tree_id[..self.tree_id.len().min(12)],
+            self.exam_drills,
+            self.training_drills,
+            tally(&self.refused)
+        );
+        if let Some(scope) = &self.scope {
+            let _ = writeln!(
+                out,
+                "  for {} task(s) ({} without a reference change): {} function(s) touched, \
+                 {} file(s) changed outside any function",
+                scope.tasks,
+                scope.without_reference,
+                scope.functions.len(),
+                scope.outside_functions.len()
+            );
+        }
+        if !self.unreadable.is_empty() {
+            let _ = writeln!(out, "  unreadable  {}", self.unreadable.join(", "));
+        }
+        for (label, set) in [
+            ("set", &self.task_set),
+            ("exam", &self.exam_task_set),
+            ("training", &self.training_task_set),
+        ] {
+            if let Some(set) = set {
+                let _ = writeln!(out, "  {label:<9} {set}");
+            }
+        }
+        for (family, count) in &self.families {
+            let _ = writeln!(out, "  {count:>3}  {family}");
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::generator_hint;

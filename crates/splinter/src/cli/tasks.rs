@@ -13,7 +13,9 @@ use std::path::PathBuf;
 
 use clap::Subcommand;
 use splinter_sdk::canaries::CANARY_COUNT;
-use splinter_sdk::knowledge::tasks::workspace::{DEFAULT_MAX_TASKS, MIN_COMBINED_FAULTS};
+use splinter_sdk::knowledge::tasks::workspace::{
+    DEFAULT_MAX_TASKS, DEFAULT_PER_FUNCTION, MIN_COMBINED_FAULTS,
+};
 use splinter_sdk::seed::Seed;
 use splinter_sdk::variants::DEFAULT_VARIANTS_PER_TASK;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -124,6 +126,49 @@ pub enum TasksCommand {
         /// when not given).
         #[arg(long, value_name = "N")]
         seed: Option<Seed>,
+    },
+    /// Make comprehension drills from a repository's clean snapshot: small
+    /// closed-book tasks that show a program calling one function of the
+    /// repository on inputs its own tests use, and ask what it prints. The
+    /// reference is what the interpreter prints against the snapshot (never a
+    /// task's broken tree, never a hidden test); a candidate is admitted only
+    /// when it runs, prints something informative and prints the same twice.
+    /// A drill is tagged with its file and function, and one of a file the
+    /// practice exam reserved is an exam task. They go into task sets of their
+    /// own: all of them, the exam's, and the rest.
+    Drills {
+        /// The git repository: a work tree or a bare repository.
+        #[arg(value_name = "REPO")]
+        repository: PathBuf,
+        /// The revision whose snapshot is drilled: anything git resolves to a
+        /// commit. The tracked files of that commit are the snapshot;
+        /// uncommitted work is not in it.
+        #[arg(long, default_value = "HEAD", value_name = "REV")]
+        rev: String,
+        /// Snapshot the committed files of a revision that is checked out with
+        /// uncommitted changes, instead of refusing it.
+        #[arg(long)]
+        allow_dirty: bool,
+        /// The most drills of any one function.
+        #[arg(long, value_name = "N", default_value_t = DEFAULT_PER_FUNCTION,
+            value_parser = positive_count)]
+        per_function: usize,
+        /// The seed that chooses among the inputs the tests give (drawn and
+        /// printed when not given).
+        #[arg(long, value_name = "N")]
+        seed: Option<Seed>,
+        /// A source file (`.py` or `.lua`), relative to the repository, to
+        /// drill; repeat for more. Every source file that is not a test
+        /// without any.
+        #[arg(long = "file", value_name = "PATH")]
+        files: Vec<String>,
+        /// Drill only the functions that contain a line the reference
+        /// changes of this task set's workspace tasks change (the tasks a
+        /// policy fails or solves only sometimes), so that it can be trained
+        /// on the drills before it attempts them again. The revision must be
+        /// the one the tasks were made from.
+        #[arg(long, value_name = "TASKSET-ID")]
+        for_tasks: Option<String>,
     },
     /// Divide the union of task sets into a picked set and the rest, by a
     /// stable hash of the seed and the task's family (the practice exam's
