@@ -52,6 +52,11 @@ that passes one is refused when the set is given to `release --canaries`.
 
 ## Picking and dividing sets
 
+`tasks check-requests TASKSET-ID` drops the workspace tasks whose request does not state the
+contract the reference change restores (a returned value or a raised error that no title speaks
+of; the same rule refuses such tasks at generation as `unstated_contract`) and writes the rest,
+unchanged, as a task set of their own, with the dropped counted by class.
+
 `tasks pick --seed N TASKSET-ID...` divides the union of task sets into a picked set and the
 rest by a stable hash of the seed and each task's family, using the practice exam's ranking.
 `--family-share F` picks that fraction of the families, `--per-family N` at most that many

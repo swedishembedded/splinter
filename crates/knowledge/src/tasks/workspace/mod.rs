@@ -50,6 +50,7 @@
 //! path of the file that was changed.
 
 mod combine;
+pub mod contract;
 mod directory;
 mod files;
 mod fixtures;
@@ -183,6 +184,10 @@ pub enum Reason {
     /// assertion cannot be rendered as behaviour (see the instruction
     /// module).
     SymptomNotActionable,
+    /// The reference change restores a contract (a returned value, a raised
+    /// error) that no title of the request speaks of, so the request cannot
+    /// lead to the fix (see the contract module).
+    UnstatedContract,
     /// The request is a near duplicate of one admitted for the same family.
     NearDuplicate,
     /// The hidden tests catch fewer than [`MIN_HIDDEN_KILL_RATE`] of the

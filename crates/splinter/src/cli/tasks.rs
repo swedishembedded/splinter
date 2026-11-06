@@ -146,6 +146,17 @@ pub enum TasksCommand {
         #[arg(long, value_name = "N")]
         seed: Seed,
     },
+    /// Drop the tasks whose request does not state the contract their
+    /// hidden check enforces (a returned value or a raised error that no
+    /// failing test's title speaks of, so the request cannot lead to the
+    /// fix). The kept tasks, unchanged, are written as a task set of their
+    /// own; the dropped are counted by what they leave unstated. The same
+    /// rule refuses such tasks when they are generated.
+    CheckRequests {
+        /// The task set, by id or unique prefix.
+        #[arg(value_name = "TASKSET-ID")]
+        task_set: String,
+    },
     /// Harbor tasks: discover, import and export.
     #[command(subcommand)]
     Harbor(HarborCommand),

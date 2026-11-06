@@ -176,3 +176,60 @@ fn a_short_symptom_whose_assertion_cannot_be_rendered_refuses_the_task_with_a_co
         .iter()
         .all(|t| t.family != "shop/flag.py"));
 }
+
+const SNAPSHOT: &str = "\
+def restore(store, entries):
+    for key, value in entries:
+        store[key] = value
+    return len(entries)
+";
+
+const TEST_SNAPSHOT: &str = "\
+import unittest
+
+from shop.snapshot import restore
+
+
+class RestoreTest(unittest.TestCase):
+    def test_restore_puts_each_entry_in_the_store(self):
+        store = {}
+        count = restore(store, [(\"a\", 1), (\"b\", 2)])
+        self.assertEqual(store, {\"a\": 1, \"b\": 2})
+        self.assertEqual(count, 2)
+";
+
+#[test]
+fn a_task_whose_fix_restores_a_return_value_no_title_states_is_refused_with_a_count() {
+    let generation = generate(
+        "unstated",
+        &[
+            ("shop/snapshot.py", SNAPSHOT),
+            ("tests/test_snapshot.py", TEST_SNAPSHOT),
+        ],
+    );
+    assert!(
+        generation.count(Reason::UnstatedContract) >= 1,
+        "refused {:?}",
+        generation.refused
+    );
+    // Whatever of this file is admitted states its contract: its fix does not
+    // restore a returned value that the request leaves unsaid.
+    for task in generation
+        .admitted
+        .iter()
+        .filter(|t| t.family == "shop/snapshot.py")
+    {
+        let reference = task
+            .task
+            .privileged
+            .iter()
+            .find(|p| format!("{:?}", p.kind).contains("Reference"))
+            .unwrap();
+        assert!(
+            !reference.content.contains("+    return len(entries)"),
+            "{}\n{}",
+            task.task.instruction,
+            reference.content
+        );
+    }
+}

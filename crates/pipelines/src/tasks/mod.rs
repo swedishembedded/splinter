@@ -147,6 +147,7 @@ pub struct Generation<'a> {
 }
 
 mod batch;
+pub mod check_requests;
 pub mod combine;
 mod harness;
 pub mod pick;

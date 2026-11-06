@@ -217,6 +217,17 @@ counted, when the tests that stay still cannot all run in the tree
 its module) or when a short symptom cannot be rendered this way (`symptom_not_actionable`). The values shown are the one disclosure a task makes of its
 hidden tests, so the exposure audit counts the request as text the solver may see.
 
+The request is never enriched to make a task solvable: a title that does not say what a fault
+broke stays as it is, and the task is refused instead. A fault can break a contract no title
+states (the fix makes a function return a value again, or raise an error again, and no failing
+test's title speaks of a result or an error), so the code already does everything the titles say
+and the request leads nowhere. Such a candidate is refused and counted (`unstated_contract`).
+The rule reads the request and the reference change only (Python source; the two classes are a
+restored non-boolean `return <value>` and a restored `raise <Error>`; a title naming the result
+or the error, or the exception, satisfies it), so `splinter tasks check-requests TASKSET-ID`
+applies it to a task set that already exists: it writes the tasks that pass, unchanged and with
+the same ids, as a task set of their own and reports how many were dropped for each class.
+
 `practice --instruction-version 2` words the request of the tasks it generates afresh: it also
 lists the source files by directory (never a test, never a withheld file; at most 30 names,
 the rest counted), says that each symptom line is the name of a hidden test written as words,

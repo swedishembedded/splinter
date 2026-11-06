@@ -24,7 +24,8 @@
 //!    as one to fix);
 //! 5. the request, composed from the symptoms, quotes neither a changed
 //!    line nor the hidden tests, and is not a near duplicate of one already
-//!    admitted for the same file;
+//!    admitted for the same file, and states the contract the reference
+//!    change restores ([`super::contract`]);
 //! 6. the hidden tests catch at least [`MIN_HIDDEN_KILL_RATE`] of the other
 //!    faults seeded within a few lines of this one that the whole suite
 //!    catches (the measurement is kept on the task's check);
@@ -258,6 +259,9 @@ impl WorkspaceGenerator {
         }
 
         let fix = self.fix(&env, &views, path, original)?;
+        if super::contract::unstated_contract(&text, &fix).is_some() {
+            return Err(Stop::Refuse(Reason::UnstatedContract));
+        }
         let mut expectations = vec![expecting(base, Phase::FailToPass, &failing)];
         if !passing.is_empty() {
             expectations.push(expecting(base, Phase::PassToPass, &passing));

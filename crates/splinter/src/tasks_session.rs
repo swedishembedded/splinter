@@ -13,6 +13,7 @@ use splinter_sdk::knowledge::tasks::workspace::{
 };
 use splinter_sdk::runs::record;
 use splinter_sdk::sources;
+use splinter_sdk::tasks::check_requests::check_requests;
 use splinter_sdk::tasks::combine::{combine, CombineRequest};
 use splinter_sdk::tasks::pick::{pick, Quota};
 use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
@@ -172,6 +173,14 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                 canaries::make(ctx, &set, Some(count))
             })?;
             emit(json, &made);
+        }
+        TasksCommand::CheckRequests { task_set } => {
+            let set = resolve_task_set(ctx, &task_set)?;
+            let arguments = json!({ "task_set": set });
+            let checked = record(ctx, "tasks check-requests", &arguments, |_| {
+                check_requests(ctx, &set)
+            })?;
+            emit(json, &checked);
         }
         TasksCommand::Combine {
             task_set,

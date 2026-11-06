@@ -101,6 +101,7 @@ Every command takes these.
   - [splinter tasks canaries](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
   - [splinter tasks combine](#splinter-tasks-combine) - Make harder tasks of the admitted single-fault tasks of a task set
   - [splinter tasks pick](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
+  - [splinter tasks check-requests](#splinter-tasks-check-requests) - Drop the tasks whose request does not state the contract their hidden check enforces (a returned value or a raised error that no failing test's title speaks of, so the request cannot lead to the fix)
   - [splinter tasks harbor](#splinter-tasks-harbor) - Harbor tasks
     - [splinter tasks harbor discover](#splinter-tasks-harbor-discover) - List the Harbor tasks under a directory and whether each can be imported, at the revision of the checkout it is in
     - [splinter tasks harbor import](#splinter-tasks-harbor-import) - Import Harbor tasks (each a task directory) as workspace tasks in one task set
@@ -845,6 +846,7 @@ Subcommands:
 - [`canaries`](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
 - [`combine`](#splinter-tasks-combine) - Make harder tasks of the admitted single-fault tasks of a task set
 - [`pick`](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
+- [`check-requests`](#splinter-tasks-check-requests) - Drop the tasks whose request does not state the contract their hidden check enforces (a returned value or a raised error that no failing test's title speaks of, so the request cannot lead to the fix)
 - [`harbor`](#splinter-tasks-harbor) - Harbor tasks
 - [`list`](#splinter-tasks-list) - List the stored task sets
 - [`show`](#splinter-tasks-show) - Show a task set's tasks, or one task
@@ -956,6 +958,18 @@ Options:
 - `--family-share <F>`: Pick this fraction (0 to 1) of the families, every task of each.
 - `--per-family <N>`: Pick at most this many tasks of every family.
 - `--seed <N>` (required): The seed that decides what is picked.
+
+#### splinter tasks check-requests
+
+Drop the tasks whose request does not state the contract their hidden check enforces (a returned value or a raised error that no failing test's title speaks of, so the request cannot lead to the fix). The kept tasks, unchanged, are written as a task set of their own; the dropped are counted by what they leave unstated. The same rule refuses such tasks when they are generated
+
+```text
+splinter tasks check-requests [OPTIONS] <TASKSET-ID>
+```
+
+Arguments:
+
+- `<TASKSET-ID>` (required): The task set, by id or unique prefix.
 
 #### splinter tasks harbor
 

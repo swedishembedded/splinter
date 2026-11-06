@@ -352,6 +352,15 @@ impl Report for CanariesMade {
     }
 }
 
+impl Report for splinter_sdk::tasks::check_requests::RequestsChecked {
+    fn human(&self) -> String {
+        format!(
+            "kept  {}  {} task(s)\ndropped  {} whose request states no returned value the fix restores, {} whose request states no error the fix restores\n",
+            self.kept, self.kept_tasks, self.unstated_return_value, self.unstated_raised_error,
+        )
+    }
+}
+
 impl Report for Picked {
     fn human(&self) -> String {
         format!(

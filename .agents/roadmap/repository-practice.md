@@ -196,6 +196,14 @@ and on the way it got there, projected through the `sft-step` view under the ser
 - The serving prompt is written for a bug report; whether a replay's feature-style plans want
   their own serving prompt (and then their own registered id) is not decided.
 
+## Solvable requests (unstated contracts)
+
+Built: `Reason::UnstatedContract` at mutation-task admission and `tasks check-requests` for stored sets
+(`crates/knowledge/src/tasks/workspace/contract.rs`, `crates/pipelines/src/tasks/check_requests.rs`); requests are
+byte-identical to before. Open: only Python source and two classes (restored non-boolean return, restored raise);
+a changed return value, a restored side effect and cargo tasks are not judged; the rule is a title-word check, so
+it is conservative in both directions; admission rates under it have not been measured on a real corpus.
+
 ## Brain endpoint, phase 2: training as a served job
 
 Built: with `--brain-endpoint`, a supervised fine-tune and a policy-gradient run (teacher contexts

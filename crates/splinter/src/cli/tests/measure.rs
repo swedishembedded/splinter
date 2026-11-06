@@ -38,6 +38,10 @@ fn the_release_gate_takes_its_statistical_settings_and_canaries() {
     ));
     assert!(parse(&["tasks", "canaries", "ab12", "--count", "0"]).is_err());
     assert!(matches!(
+        command(&["tasks", "check-requests", "ab12"]),
+        Command::Tasks(TasksCommand::CheckRequests { ref task_set }) if task_set == "ab12"
+    ));
+    assert!(matches!(
         command(&["tasks", "combine", "ab12", "--faults", "3", "--per-family", "6", "--seed", "9"]),
         Command::Tasks(TasksCommand::Combine { ref task_set, faults: 3, per_family: 6, seed: Some(_), .. })
             if task_set == "ab12"

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (solvable requests)
+- A candidate fault whose reference change restores a returned value or a raised error that no failing test's title speaks of is refused (`unstated_contract`): the request lists only titles, so such a task cannot be solved from it. Requests are not changed. `tasks check-requests TASKSET-ID` applies the same rule to an existing task set and writes the tasks that pass as a set of their own, with counts of those dropped.
+
 ### Added (fp8 frozen base)
 - `train --base-precision fp8` holds the frozen base as block-scaled E4M3, half of bf16 and the native format of an fp8 checkpoint (a bf16 copy of a 27B fp8 base ran a 96 GB card out of memory). Every tier now reaches brain through the one `ChatFineTune::base_format` call (`BasePrecision::brain_format`) in the SFT and policy-gradient paths, replacing the `bf16_base`/`int8_base`/`nf4_base` switches; brain refuses a format the base cannot hold.
 
