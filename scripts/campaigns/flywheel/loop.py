@@ -285,11 +285,21 @@ def bench(campaign: Campaign, *args, log_file: Path) -> str:
     return run([path(campaign["bench"]["dir"]) / "bench", *args], log_file, cwd=path(campaign["bench"]["dir"]))
 
 
+def scaled(campaign: Campaign, workload: dict, cards: list[int]) -> dict:
+    """The workload with its concurrency for a model served on `cards`: a workload's
+    `concurrency` is set for every card of the campaign, and a model on a share of them
+    runs that share of the trials (at least one), so a card never carries more agents
+    than the campaign sized it for (an overloaded server times trials out or refuses them)."""
+    share = len(cards) / len(campaign.cards)
+    return {**workload, "concurrency": max(1, round(workload["concurrency"] * share))}
+
+
 def bench_run(campaign: Campaign, gen: Generation, workload: dict, model_id: str, attempts: int, split: str,
               name: str, cards: list[int]) -> str:
-    """Run the workload's `split` tasks; the job directory."""
+    """Run the workload's `split` tasks on `cards`, at the concurrency their share of the
+    campaign's cards gets; the job directory."""
     prof = gen.dir / f"{name}.toml"
-    prof.write_text(profile_text(campaign, workload, model_id, attempts, cards))
+    prof.write_text(profile_text(campaign, scaled(campaign, workload, cards), model_id, attempts, cards))
     jobs = campaign.work / "jobs" / f"{gen.number:03d}-{name}"
     jobs.mkdir(parents=True, exist_ok=True)
     before = set(jobs.iterdir())

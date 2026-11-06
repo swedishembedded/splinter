@@ -171,6 +171,13 @@ def with_replicas_one_server_spans_the_cards():
     assert 'base_url = ["http://127.0.0.1:8800/v1"]' in text
 
 
+def a_model_on_a_share_of_the_cards_runs_that_share_of_the_trials():
+    campaign = loop.Campaign({"serve": {"cards": [0, 1, 2]}})
+    assert loop.scaled(campaign, {"name": "w", "concurrency": 30}, [0, 1, 2])["concurrency"] == 30
+    assert loop.scaled(campaign, {"name": "w", "concurrency": 30}, [1])["concurrency"] == 10
+    assert loop.scaled(campaign, {"name": "w", "concurrency": 2}, [1])["concurrency"] == 1
+
+
 def the_cards_are_shared_among_the_models_served_at_once():
     assert loop.share([0, 1, 2, 3], 1) == [[0, 1, 2, 3]]
     assert loop.share([0, 1, 2, 3], 2) == [[0, 2], [1, 3]]
