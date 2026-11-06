@@ -154,6 +154,14 @@ pub struct Global {
     /// waited for. A manifest offers one adapter at a time.
     #[arg(long, global = true, value_name = "FILE")]
     pub brain_adapter_manifest: Option<PathBuf>,
+    /// The artifact store the brain endpoints train through
+    /// (`brain serve --training --artifact-store DIR`): a directory both
+    /// they and this machine reach, in which datasets are published, named
+    /// by their BLAKE3 digest, and trained adapters are found. With
+    /// endpoints, a supervised or policy-gradient training run is a job of
+    /// the service and needs it.
+    #[arg(long, global = true, value_name = "DIR")]
+    pub brain_artifact_store: Option<PathBuf>,
     /// How many attempts are asked of the brain endpoints at once, in all
     /// (set to their `--max-batch`).
     #[arg(long, global = true, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),

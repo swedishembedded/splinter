@@ -16,6 +16,8 @@ use splinter_core::training::Regime;
 use splinter_model::policy_gradient::{
     train_policy_gradient, PolicyGradientOptions, PolicyGradientTune, TrainedPolicyGradient,
 };
+use splinter_model::served_train::train_policy_gradient_served;
+use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
 use super::records::{carries_reasoning, combine};
@@ -24,11 +26,12 @@ use super::{default_alpha, TrainPlan, Tuning, DEFAULT_WEIGHT_DECAY};
 
 /// Trains the policy-gradient adapter `plan` describes into `plan.dir`.
 pub(super) fn train(
+    ctx: &Context,
     plan: &TrainPlan,
     cancel: &CancelToken,
 ) -> Result<TrainedPolicyGradient, OrchestratorError> {
     let train = combine(plan)?;
-    train_policy_gradient(&PolicyGradientTune {
+    let request = PolicyGradientTune {
         model_dir: &plan.base,
         train: &train,
         attempt_dir: &plan.dir,
@@ -50,7 +53,11 @@ pub(super) fn train(
         max_block: plan.tuning.max_block,
         thinking: carries_reasoning(&train)?,
         options: plan.tuning.policy_gradient,
-    })
+    };
+    match &ctx.config().brain {
+        Some(brain) => train_policy_gradient_served(brain, &request),
+        None => train_policy_gradient(&request),
+    }
     .map_err(trainer_error)
 }
 

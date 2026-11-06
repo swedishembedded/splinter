@@ -134,6 +134,10 @@ fn brain_endpoints(
             global.attempt_concurrency.is_some(),
             "--attempt-concurrency",
         ),
+        (
+            global.brain_artifact_store.is_some(),
+            "--brain-artifact-store",
+        ),
     ];
     if global.brain_endpoint.is_empty() {
         return match stray.iter().find(|(given, _)| *given) {
@@ -154,6 +158,11 @@ fn brain_endpoints(
     }
     if let Some(width) = global.attempt_concurrency {
         brain = brain.with_attempt_concurrency(width as usize);
+    }
+    if let Some(dir) = &global.brain_artifact_store {
+        let store = splinter_sdk::model::served_train::ArtifactStore::open(dir)
+            .map_err(|e| e.to_string())?;
+        brain = brain.with_artifact_store(store);
     }
     Ok(Some(brain))
 }

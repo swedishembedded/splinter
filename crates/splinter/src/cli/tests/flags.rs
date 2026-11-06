@@ -242,6 +242,8 @@ fn brain_endpoints_are_global_flags_and_repeat() {
         "/run/brain/release.json",
         "--attempt-concurrency",
         "48",
+        "--brain-artifact-store",
+        "/shared/artifacts",
         "status",
     ])
     .unwrap();
@@ -254,6 +256,10 @@ fn brain_endpoints_are_global_flags_and_repeat() {
         Some(std::path::Path::new("/keys/brain"))
     );
     assert_eq!(cli.global.attempt_concurrency, Some(48));
+    assert_eq!(
+        cli.global.brain_artifact_store.as_deref(),
+        Some(std::path::Path::new("/shared/artifacts"))
+    );
     let none = parse(&["status"]).unwrap();
     assert!(none.global.brain_endpoint.is_empty() && none.global.attempt_concurrency.is_none());
     assert!(parse(&["--attempt-concurrency", "0", "status"]).is_err());

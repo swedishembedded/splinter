@@ -111,7 +111,32 @@ instead. `--brain-adapter-manifest FILE` names the release manifest the endpoint
 example, is offered by publishing it there and waited for. A manifest offers one adapter at a time, so
 the gate's two arms are asked one after the other. With endpoints, the gate starts no `brain` of its own:
 its serve check is that each endpoint lists the candidate under the digest the release records.
-Training still loads the base in the process (the endpoint serves inference only).
+
+### Training on a brain endpoint
+
+With endpoints, `train` and the training stage of `learn`, `practice` and `generation run` do not load the
+base in the process either: a supervised fine-tune and a policy-gradient run (self-distillation with
+teacher contexts included) are jobs of the brain service, which schedules them on the cards it serves
+from, taking them from idle serving replicas and giving them back.
+
+```text
+brain serve --openai 0.0.0.0:8805 --api-key-file KEY --models-dir ~/models \
+      --training --artifact-store /shared/artifacts
+splinter --brain-endpoint http://gpu-node:8805/v1 --brain-key-file KEY \
+         --brain-artifact-store /shared/artifacts --policy-base Qwen/Qwen3.8-27B-FP8 train ...
+```
+
+`--brain-artifact-store DIR` is the directory the service was started with as `--artifact-store`: the
+datasets (and the adapter a run continues) are published there as files named by their BLAKE3 digest, the
+job names them by digest, and the trained adapter and its training record come back the same way, so no
+dataset travels through the API and the directory may be on a filesystem several nodes share. The base is
+requested by the id brain's store gives it, as for inference. The datasets are checked here, as for an
+in-process run, before anything is published. A run the service has no room for (every card that could
+hold it is serving a request) is asked again, of every endpoint, until it is placed or the run is
+cancelled; a request the service refuses outright is reported with its reason. Preference (DPO),
+full-parameter runs and adapter merges have no job on the service yet: with endpoints they are refused
+by name, because they would load the model in the process on cards the service is using. Without
+endpoints, training runs in the process as before.
 
 ## Roles
 

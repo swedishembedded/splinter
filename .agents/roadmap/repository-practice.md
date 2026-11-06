@@ -196,6 +196,24 @@ and on the way it got there, projected through the `sft-step` view under the ser
 - The serving prompt is written for a bug report; whether a replay's feature-style plans want
   their own serving prompt (and then their own registered id) is not decided.
 
+## Brain endpoint, phase 2: training as a served job
+
+Built: with `--brain-endpoint`, a supervised fine-tune and a policy-gradient run (teacher contexts
+included) are jobs of `brain serve --training --artifact-store DIR` (`splinter_model::served_train`),
+from `splinter train` and the training stage of `learn`, `practice` and `generation run`. The datasets,
+and an adapter to continue, are published to the artifact store named by `--brain-artifact-store`
+(files named by their BLAKE3, written to a temporary name and renamed) and named to the job by digest;
+the adapter and the training record come back by digest and the adapter is checked against the sha256 brain
+reports. Step frames drive the step hook and the speed clock; a stream that breaks is resumed after the
+last event, a run the service refuses for want of room (429) is asked again of every endpoint, a failure
+carries brain's reason, a cancel stops the job on the service. The settings are the in-process trainers';
+the row length brain reserves memory for is the longest record the trainer would render (or `--max-block`).
+Specs: `crates/model/tests/served_train.rs` against the scripted job endpoint
+(`splinter_model::scripted_jobs`). Open: preference (DPO), full-parameter runs and merges have no job and
+are refused with endpoints; the in-process path is not removed (phase 3); a run on the 27B through the
+service has not been made (the cards are in use); one artifact store is named for all endpoints, so they
+must share it; a queued run is not prioritised over serving traffic beyond brain's admission deadline.
+
 ## Brain endpoint (phase 1 of brain as a service)
 
 Built: `--brain-endpoint`, `--brain-key-file`, `--attempt-concurrency`, `--brain-adapter-manifest`;

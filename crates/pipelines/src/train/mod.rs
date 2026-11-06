@@ -56,6 +56,8 @@ mod full;
 mod keep;
 mod monitoring;
 mod policy_gradient;
+mod served;
+mod supervised;
 pub(crate) use policy_gradient::check_settings as check_policy_gradient_settings;
 mod records;
 mod rehearsal;
@@ -71,7 +73,7 @@ pub use full::{
     DEFAULT_FULL_LEARNING_RATE,
 };
 use keep::{keep_candidate, Finished, Outcome};
-use records::{carries_reasoning, combine, concatenate};
+use records::{combine, concatenate};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
 pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};
 pub use seeds::{record_seed, train_recorded, train_recorded_as, SEED as TRAIN_SEED};
@@ -91,9 +93,7 @@ use splinter_core::training::{Regime, ReplaySample, ReplaySource};
 use splinter_data::holdout::split_dataset_file;
 use splinter_data::{select_replay, Format, Fraction, Objective, ReplayPolicy, StoredDataset};
 use splinter_model::policy_gradient::TrainedPolicyGradient;
-use splinter_model::train::{
-    fine_tune, train_preference, FineTune, PreferenceTune, Trained, TrainedPreference,
-};
+use splinter_model::train::{train_preference, PreferenceTune, Trained, TrainedPreference};
 use splinter_model::{LocalWeights, ModelSelection, PolicyError};
 
 use crate::datasets::{examples_in, record_dataset_lineage, resolve_dataset};
@@ -337,76 +337,20 @@ impl Trainer for BrainTrainer {
 
     fn train(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<Trained, OrchestratorError> {
-        let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
-        let watch = monitoring::plan_monitoring(plan, &split.train)?;
-        let kept = plan
-            .tuning
-            .keep_evaluations
-            .then(|| plan.dir.join(EVALUATIONS_DIR));
-        let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
-        let rehearsed: Vec<(PathBuf, f32)> = plan
-            .rehearsal
-            .iter()
-            .map(|r| (r.fit.clone(), r.share))
-            .collect();
-        fine_tune(&FineTune {
-            max_block: plan.tuning.max_block,
-            model_dir: &plan.base,
-            train: watch.fit.as_deref().unwrap_or(&split.train),
-            held_out: &split.held_out,
-            held_out_text: split.held_out_text.as_deref(),
-            monitor: watch.monitor.as_deref(),
-            eval_every: watch.eval_every,
-            patience: plan.patience,
-            attempt_dir: &plan.dir,
-            steps: plan.steps,
-            rank: plan.rank,
-            alpha: plan
-                .tuning
-                .alpha
-                .unwrap_or_else(|| default_alpha(plan.rank)),
-            weight_decay: plan.tuning.weight_decay.unwrap_or(DEFAULT_WEIGHT_DECAY),
-            replay: &replayed,
-            replay_share: plan.replay_share,
-            weighted_replay: &rehearsed,
-            grad_accum: plan.tuning.records_per_step.unwrap_or(1),
-            continue_from: plan.continue_from.as_deref(),
-            cancel: Some(cancel),
-            base: plan.tuning.base_precision.unwrap_or_else(|| {
-                splinter_model::train::BasePrecision::bf16_if(plan.tuning.bf16_base)
-            }),
-            learning_rate: plan.tuning.learning_rate,
-            seed: plan.seed,
-            // Records that carry the reasoning of their steps (an agent's
-            // trajectory) train the model to reason before it acts, the mode
-            // such an agent is served in; records of bare answers train it for
-            // no-think mode, whatever it is later asked. Rendered the other
-            // way, a reasoning turn cannot follow the no-think prompt and
-            // brain refuses the record.
-            thinking: carries_reasoning(&split.train)?,
-            // Only datasets built packed are kept as one sequence per record; a
-            // dialogue dataset in the same run would otherwise change shape.
-            pack_answers: plan.datasets.iter().all(|d| d.manifest.packed),
-            on_step: None,
-            keep_evaluations: kept.as_deref(),
-        })
-        .map_err(trainer_error)
-        .map(|mut trained| {
-            trained.curve.monitoring_skipped = watch.skipped;
-            trained
-        })
+        supervised::train(ctx, plan, cancel)
     }
 
     fn train_preference(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<TrainedPreference, OrchestratorError> {
+        served::refuse_unserved(ctx, "a preference (DPO) run")?;
         let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
         train_preference(&PreferenceTune {
             model_dir: &plan.base,
@@ -432,29 +376,31 @@ impl Trainer for BrainTrainer {
 
     fn train_policy_gradient(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<TrainedPolicyGradient, OrchestratorError> {
-        policy_gradient::train(plan, cancel)
+        policy_gradient::train(ctx, plan, cancel)
     }
 
     fn train_full(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<ModelCheckpoint, OrchestratorError> {
+        served::refuse_unserved(ctx, "a full-parameter run")?;
         full::train_full(plan, cancel)
     }
 
     fn merge(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         base: &Path,
         adapter: &Path,
         out_dir: &Path,
     ) -> Result<ModelCheckpoint, OrchestratorError> {
+        served::refuse_unserved(ctx, "merging an adapter into a base")?;
         full::merge_into(base, adapter, out_dir)
     }
 }

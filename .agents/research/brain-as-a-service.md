@@ -67,13 +67,45 @@ What is not done:
   through `answer`/`exam`, the embedder) is still the path without endpoints, and `exam`,
   held-out scoring inside training, `ask` and the scripted specs run on it. It goes when the
   endpoint is the only path and those callers ask through it.
-- Phase 2 (training): a served chat fine-tune / policy-gradient job; the dataset and the adapter
-  move by fd over D-Bus or by blake3 digest in a content-addressed store the job is given. Until
-  then training loads the base in this process, so a Qwen3.8 generation cannot train, only be
-  measured.
+- Phase 2 (training) is built, below. Without endpoints training still loads the base in this
+  process.
 - Phase 3: the endpoint registry and Slurm launch of workers. Endpoints are named on the command
   line, a conversation is pinned to one by hash (not by the replica holding its prefix), and the
   key travels as one shared file.
 - A closed-book solve (no workspace) is pinned by model, not by attempt: only workspace attempts
   carry a per-attempt seed to hash.
 - Per-response thinking budgets are not sent on the served path of a local reference.
+
+## Phase 2 as built
+
+brain: `brain serve --training [--artifact-store DIR]` registers the workload `brain/train`
+(`crates/trainjob`), action `train`. It fine-tunes a chat LoRA with `brain::ChatFineTune`'s settings,
+supervised or by the clipped policy gradient (teacher contexts included), as an ordinary action:
+D-Bus `Subscribe`/`Cancel` and HTTP `POST /v1/jobs`, `GET /v1/jobs/{id}/events` (server-sent events,
+`Last-Event-ID` resume), `DELETE`, behind the existing key.
+
+- **Data.** A dataset, or an adapter to continue, is an input blob (a file descriptor over D-Bus) or a
+  blake3 digest of a file in the artifact store the server was started with. A digest is exactly 64
+  lowercase hex digits, so a caller never names a path; the server copies the file into the job's private
+  directory while it hashes it and refuses one that does not hash to its name. The trained adapter and the
+  training record are published to the store and returned by digest (and as blobs when asked, for the
+  bus). The base is a `<vendor>/<repo>` in the model store.
+- **Frames.** One `step` frame per optimiser step with loss, rate, gradient norm and, for a policy
+  gradient, clip fraction, KL, importance ratio, advantage statistics and scoring seconds. The report is
+  one small message of totals; every step's series is in the record.
+- **Scheduling.** The run is a transient workload of the residency executor: it reserves its footprint
+  (the base at its tier, the activations of one row of `max_block` tokens, the adapter and optimiser state,
+  a margin), takes the card with the most room or evicts the least valuable idle serving instances on the
+  best candidate, never an instance a request is running on, waits for the surface's admission deadline
+  and is then refused with a 429, is refused at once when it needs more than the largest card, and returns
+  its card when it ends. One run per card; the qwen35 trainer is one card per run.
+- **Splinter.** `--brain-artifact-store DIR` names that directory. `splinter-model`'s `served_train` is the
+  client: it checks the datasets as the in-process path does, publishes them, creates the job on the
+  endpoint its seed pins (the others when that one has no room), follows the events, resumes a broken
+  stream, fetches and verifies the adapter and the record, and returns the same `Trained` /
+  `TrainedPolicyGradient` the in-process trainers return. `BrainTrainer` chooses by whether the run has
+  endpoints; regimes without a job (DPO, full-parameter, merge) are refused with endpoints.
+
+Not done: the in-process training path is still there (phase 3 removes it, with the endpoint registry
+and the Slurm launch); preference and full-parameter jobs; multi-card runs of one job; a run of the 27B
+through the service.

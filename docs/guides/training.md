@@ -16,6 +16,11 @@ splinter train 9d41e7b3 --rehearsal 2b6c88f0 --rehearsal-share 0.25
 splinter select 4a77d1c5 --exam-set 8e10b2f6
 ```
 
+Training runs in the process unless the run has brain endpoints (`--brain-endpoint`): then a supervised
+or policy-gradient run is a job of the brain service, which schedules it on the cards it serves from, and
+the datasets and the adapter move through the artifact store `--brain-artifact-store` names. See
+[Training on a brain endpoint](../getting-started/configuration.md#training-on-a-brain-endpoint).
+
 ## Defaults
 
 Unless `--steps` is given a run's step budget
