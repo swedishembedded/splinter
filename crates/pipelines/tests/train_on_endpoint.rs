@@ -45,7 +45,7 @@ fn plan(dir: &Path, regime: Regime) -> TrainPlan {
         beta: 0.1,
         tuning: Tuning::default(),
         train_precision: None,
-        seed: 1,
+        seed: 1, // seed: the scripted endpoint answers the same whatever the seed; any value
         eval_every: 0,
         patience: 0,
         monitor_share: 0.0,
