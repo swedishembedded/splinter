@@ -167,3 +167,20 @@ inconclusive and more tasks are collected rather than the threshold changed.
   takes `--verified-repair-only` and a weight for the unverified rest.
 - Open: not run on the 27B. The per-token advantages, their clip rate and the cap's rate of binding are
   unmeasured on real weights (brain ledger: `grpo-corrections`).
+
+## Rollout objectives in `practice` and `generation run` (2026-11-06)
+
+- Done: `--objective sft-step|policy-gradient|self-distill` (default `sft-step`, unchanged). The rollout
+  objectives build the canonical `policy-gradient` view over every graded attempt of the solve stage
+  (`self-distill` = `--cliff-distill`) and train it with the canonical trainer on the champion's adapter, with
+  `train`'s clip, KL, reference, loss, teacher, advantage-bound and cap flags and defaults, plus
+  `--base-precision`. The importance-ratio temperature is the pass@k `--temperature`. The view places a
+  workspace attempt by task address, policy and attempt number (a workspace verdict names no trial). The report's
+  `rollouts` counts the exposure-failed attempts left out, the solves that left no experience, and the groups by
+  kind (graded, all-pass, all-fail, distilled), so the frontier's omissions are visible. `--teacher`,
+  `--correction`, `--rebuild`, `--replay`, the monitoring flags and a stray policy-gradient setting under
+  `sft-step` are refused before any attempt; a generation under a rollout objective replays nothing and records
+  `none`. Spec tests: `crates/pipelines/tests/practice_objectives.rs`, `generations.rs`,
+  `crates/data/tests/policy_gradient_attempts.rs`, the grammar in `crates/splinter/src/practice_request.rs`.
+- Open: not run on the 27B. Group sizes, the share of all-fail tasks, the distilled records' token advantages
+  and the objective's effect on the exam are unmeasured on real weights.

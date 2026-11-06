@@ -578,7 +578,7 @@ impl Session {
                         max_block: args.max_block,
                         seed: args.seed,
                         base_precision: args.base_precision,
-                        policy_gradient: args.policy_gradient.options(),
+                        policy_gradient: args.policy_gradient.options(args.temperature),
                         ..Tuning::default()
                     }),
                 };

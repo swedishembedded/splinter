@@ -79,7 +79,7 @@ fn a_run_on_rollouts_is_set_with_brains_policy_gradient_settings() {
     ]) else {
         panic!("train");
     };
-    let options = train.policy_gradient.options();
+    let options = train.policy_gradient.options(train.temperature);
     assert_eq!(
         (options.clip_eps, options.kl_beta, options.temperature),
         (Some(0.2), Some(0.02), Some(0.7))
@@ -90,7 +90,11 @@ fn a_run_on_rollouts_is_set_with_brains_policy_gradient_settings() {
     let Command::Train(plain) = command(&["train", "ab12"]) else {
         panic!("train");
     };
-    assert!(plain.policy_gradient.options().named().is_empty());
+    assert!(plain
+        .policy_gradient
+        .options(plain.temperature)
+        .named()
+        .is_empty());
     for refused in [
         &["--clip-eps", "1.5"][..],
         &["--clip-eps", "0"],
@@ -138,7 +142,7 @@ fn self_distillation_is_built_from_the_cliff_groups_and_trained_with_named_guard
     ]) else {
         panic!("train");
     };
-    let options = train.policy_gradient.options();
+    let options = train.policy_gradient.options(train.temperature);
     assert_eq!(options.teacher, Some(Reference::StartOfRun));
     assert_eq!(
         (options.advantage_bound, options.sequence_advantage_cap),

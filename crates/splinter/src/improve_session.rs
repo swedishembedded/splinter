@@ -20,6 +20,7 @@ use splinter_sdk::improve::{
     fixed_comparison, improve, parse_experiment, FixedComparison, ImprovementReport, SolveArms,
 };
 use splinter_sdk::measure::intervention::Decision;
+use splinter_sdk::practice::PracticeObjective;
 use splinter_sdk::runs::Recorded;
 use splinter_sdk::tasks::resolve_set;
 use splinter_sdk::{Context, Error};
@@ -172,18 +173,34 @@ impl Report for splinter_sdk::generations::GenerationReport {
 }
 
 /// How a generation carries the earlier experience, given the `--replay`
-/// policy named and whether it rebuilds from the base.
-fn replay_choice(replay: Option<ReplayArg>, rebuild: bool) -> ReplayChoice {
-    if rebuild {
-        return ReplayChoice::RebuildFromBase;
+/// policy named, whether it rebuilds from the base and the objective it
+/// trains by. A rollout objective continues the champion's adapter on its own
+/// rollouts and replays nothing, so a replay named beside it is refused
+/// instead of dropped.
+fn replay_choice(
+    replay: Option<ReplayArg>,
+    rebuild: bool,
+    objective: PracticeObjective,
+) -> Result<ReplayChoice, Error> {
+    if objective.learns_from_groups() {
+        return match (replay, rebuild) {
+            (None, false) => Ok(ReplayChoice::None),
+            _ => Err(Error::Refused(format!(
+                "--objective {objective} trains the champion's adapter on its own rollouts \
+                 and replays no earlier record: drop --replay and --rebuild"
+            ))),
+        };
     }
-    match replay {
+    if rebuild {
+        return Ok(ReplayChoice::RebuildFromBase);
+    }
+    Ok(match replay {
         None | Some(ReplayArg::Uniform) => ReplayChoice::Uniform,
         Some(ReplayArg::None) => ReplayChoice::None,
         Some(ReplayArg::Balanced) => ReplayChoice::CapabilityBalanced,
         Some(ReplayArg::FailureTargeted) => ReplayChoice::FailureTargeted,
         Some(ReplayArg::LearningProgress) => ReplayChoice::LearningProgress,
-    }
+    })
 }
 
 /// Runs a `generation` command.
@@ -196,7 +213,8 @@ pub fn generation_command(
     match command {
         GenerationCommand::Run(args) => {
             let mut practice = args.practice;
-            let replay = replay_choice(practice.replay.take(), practice.rebuild);
+            let replay =
+                replay_choice(practice.replay.take(), practice.rebuild, practice.objective)?;
             practice.rebuild = false;
             let defaults = Limits::default();
             let request = GenerationRequest {
@@ -234,6 +252,46 @@ pub fn generation_command(
             )?;
             emit(json, &shown);
             Ok(Exit::Ok)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn imitation_keeps_its_replay_choices() {
+        let imitate = PracticeObjective::SftStep;
+        assert_eq!(
+            replay_choice(None, false, imitate).unwrap(),
+            ReplayChoice::Uniform
+        );
+        assert_eq!(
+            replay_choice(Some(ReplayArg::Balanced), false, imitate).unwrap(),
+            ReplayChoice::CapabilityBalanced
+        );
+        assert_eq!(
+            replay_choice(None, true, imitate).unwrap(),
+            ReplayChoice::RebuildFromBase
+        );
+    }
+
+    #[test]
+    fn a_rollout_objective_replays_nothing_and_refuses_a_replay_it_would_drop() {
+        for objective in [
+            PracticeObjective::PolicyGradient,
+            PracticeObjective::SelfDistill,
+        ] {
+            assert_eq!(
+                replay_choice(None, false, objective).unwrap(),
+                ReplayChoice::None
+            );
+            for (replay, rebuild) in [(Some(ReplayArg::Uniform), false), (None, true)] {
+                assert!(replay_choice(replay, rebuild, objective)
+                    .unwrap_err()
+                    .is_refusal());
+            }
         }
     }
 }

@@ -38,9 +38,48 @@ order:
 | `correction` | only with `--correction`: the attempts that failed or got stuck (a failed verdict, or an episode stopped for repeating a call or spending its calls) are continued by the teacher from the state the student actually reached: the student's recorded transcript is replayed into a fresh copy of the snapshot by sven's fork, which refuses unless every replayed observation, the workspace it reaches and the transcript hash match the recording, and the teacher then takes the next turn under the same system prompt, tools and remaining step budget. The continuation is graded by the same hidden checks and exposure audit as an attempt; only verified ones are trained on, with the student's prefix as context and the teacher's actions supervised. One correction per task, at most `--corrections` in a run |
 | `teach` | only with `--teacher`: each task no graded attempt solved is given to the teacher, which is `reference` (the task's own reference change, the inverse of the seeded fault, replayed as an agent's actions through sven's tools: read the file, edit it by the patch's hunks) or a model (`remote:`/`local:`) that solves the task as an agent. Either is graded by the same workspace verifier and exposure audit as the policy's attempts and never grades itself; the exam's tasks are never given to it. A demonstration names the file without searching for it |
 | `frontier` | keeps the tasks the policy solves sometimes (pass@k), and with a teacher the never-solved tasks whose demonstration was verified |
-| `dataset` | the passing attempts, action by action (`sft-step`), with the tools the agent was offered (an action a labeller marked good is also admitted from an experience nobody verified or whose verdict failed, unless `--control outcome-verified` is given; the manifest records it); `--max-block TOKENS` leaves out and counts records longer than the card fits, and `--split-over-block` splits such a record into windows that each fit instead, keeping every supervised action and repeating the instruction in each; the dataset is checked to hold no family of the exam |
-| `train` | a candidate from the champion with earlier releases' records replayed (`--replay none|uniform|balanced`; `--rebuild` trains a fresh adapter on the base from every earlier release's records and the new ones instead of continuing the champion) |
+| `dataset` | by `--objective` (below). For `sft-step`, the passing attempts, action by action, with the tools the agent was offered (an action a labeller marked good is also admitted from an experience nobody verified or whose verdict failed, unless `--control outcome-verified` is given; the manifest records it); `--max-block TOKENS` leaves out and counts records longer than the card fits, and `--split-over-block` splits such a record into windows that each fit instead, keeping every supervised action and repeating the instruction in each; the dataset is checked to hold no family of the exam |
+| `train` | a candidate from the champion; for `sft-step` with earlier releases' records replayed (`--replay none|uniform|balanced`; `--rebuild` trains a fresh adapter on the base from every earlier release's records and the new ones instead of continuing the champion); for the other objectives by brain's clipped policy gradient on the champion's adapter. `--base-precision fp32|bf16|int8|nf4|fp8` holds the frozen base as `train --base-precision` does |
 | `release` | the gate, over the exam this run reserved (`--no-release` stops at the candidate): the champion and the candidate attempt the exam's tasks as agents, under the bounds and seeds of `solve`, graded as `verify` grades; paired outcomes are counted by family in the sign test; each earlier release is held to the exam of its own run; the anchor suite is held (a frozen suite with no coding-agent task is decided on the tasks it holds, and the report says it holds none); the candidate is served by `brain serve --adapter-manifest` and must be graded as it was in-process on at least three quarters of a sample of the exam. A blocked candidate is not released and the run stops with the reason of each check that failed; `practice` gives the gate the bounds it solved under, and `splinter release` on such a candidate probes with the default ones |
+
+### Training objectives
+
+`--objective sft-step|policy-gradient|self-distill` chooses what the run trains on; `sft-step`
+is the default and is what the stages above describe.
+
+- `policy-gradient` makes the `--k` attempts the solve stage made at a task a group, through
+  the canonical `policy-gradient` dataset view (the view `splinter dataset build` has): the
+  reward of an attempt is 1 for a verified pass and 0 otherwise, every action of every attempt
+  is weighed by its attempt's advantage over the others, and brain's clipped policy gradient
+  continues the champion's adapter with a KL penalty. It uses every graded attempt of the solve
+  stage, not the frontier's selection of tasks, so a task every attempt passed or every attempt
+  failed is a group of its own kind, counted and shown in the report's `rollouts` (graded,
+  all-pass, all-fail) and not dropped unseen; it carries no advantage, so it trains nothing
+  under this objective. An attempt the exposure audit failed is left out whole, because its
+  conversation quotes what only the grader holds, and counted; a solve that the model server or
+  the environment cut short left no experience and is counted as not completed. The attempts
+  are on-policy by construction (the champion made them), and the importance ratio is taken at
+  the temperature they were sampled at, which is `--temperature` (the pass@k temperature, brain's
+  agent default when absent), never a separate setting that could disagree with it.
+- `self-distill` is the same, and also distils the groups whose attempts all failed (where the
+  advantage is zero) as `splinter dataset build --view policy-gradient --cliff-distill` does:
+  the attempt's own conversation, scored per token by the frozen model shown what the
+  workspace verifier recorded for that task (the hidden checks that failed, their exit status
+  and the tests seen to fail, and the task's reference change, which a repository task carries
+  on its record and every in-store attempt inherits). That text never enters the student's
+  messages. An attempt with none of it is left out and counted as `no_privileged_context` in the
+  dataset's exclusions.
+
+The clip, KL, reference, loss-aggregation, teacher-policy and advantage settings are
+`train`'s, with the same names and defaults (`--clip-eps`, `--kl-beta`, `--reference`,
+`--loss-agg`, `--teacher-policy`, `--advantage-bound`, `--sequence-advantage-cap`;
+[Training on rollouts](training.md#training-on-rollouts)). A rollout objective holds nothing
+out and monitors nothing, and replays nothing, so these are refused with it, before any
+attempt is made: `--teacher` and `--correction` (their demonstrations are imitated), `--rebuild`,
+`--replay` and the monitoring flags. The settings of the objective with `--objective sft-step`
+are refused too, so none is dropped. The exam reservation, the exposure audit and the release
+gate are the same for every objective; a release made by a rollout objective is not replayed
+into the supervised records of a later `sft-step` generation.
 
 Where no container is configured, the commands the agent works with run on
 the host, bounded but not isolated, and every environment record says
@@ -178,7 +217,9 @@ candidate when a protected family falls by more than `--max-family-drop`, the me
 than `--max-mean-drop` or it gains no more than `--min-new-gain` on the new exam, and otherwise
 releases it through the gate. Every generation, accepted or not, is in the experiment's ledger.
 `--replay none|uniform|balanced|failure-targeted|learning-progress` and `--rebuild` choose how the earlier
-experience is carried forward. `splinter generation matrix --experiment NAME` prints the ledger
+experience is carried forward under `--objective sft-step`; a rollout objective (`policy-gradient`,
+`self-distill`) replays nothing, records `none` in the ledger, and refuses both flags. The protected
+families, the exam reservation and the retention and regression limits apply to every objective. `splinter generation matrix --experiment NAME` prints the ledger
 and the full retention matrix of the lineage: the base as generation 0 and every generation on
 every protected task, with ACC, BWT, forgetting, forward transfer and learning gain.
 

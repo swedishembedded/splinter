@@ -79,6 +79,11 @@ last and mean KL to the reference, the mean clip fraction and the mean ratio, an
 them as one line. brain also prints the step's KL, clip fraction and ratio on its step log line.
 The KL costs one forward pass over the dataset before the first step, none per step.
 
+`splinter practice` and `splinter generation run` train this way too with `--objective
+policy-gradient` or `self-distill`, from the k attempts of their own solve stage; see
+[Training objectives](repositories.md#training-objectives). They take the flags above except
+`--temperature`, which is the temperature of their pass@k attempts.
+
 ### Self-distillation on the cliff
 
 GRPO's advantage is zero where every attempt at a task failed, so the hardest tasks teach it

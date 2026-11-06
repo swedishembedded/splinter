@@ -8,8 +8,11 @@
 
 //! The `practice` request the command line asks for.
 
+use splinter_sdk::data::ReplayPolicy;
 use splinter_sdk::experiment::ExperimentPlan;
-use splinter_sdk::practice::{CorrectionPlan, HistorySource, PlanSlot, PracticeRequest};
+use splinter_sdk::practice::{
+    CorrectionPlan, HistorySource, PlanSlot, PracticeObjective, PracticeRequest,
+};
 use splinter_sdk::train::Tuning;
 use splinter_sdk::Error;
 
@@ -56,11 +59,8 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
             teacher,
             max: args.corrections,
         }),
-        replay_policy: args
-            .replay
-            .map(ReplayArg::policy)
-            .transpose()?
-            .unwrap_or_default(),
+        objective: args.objective,
+        replay_policy: replay_policy(args.objective, args.replay)?,
         rebuild: args.rebuild,
         curriculum: args.curriculum.strategy(),
         progress: args.curriculum.params(),
@@ -76,9 +76,33 @@ pub(crate) fn practice_request(args: PracticeArgs) -> Result<PracticeRequest, Er
             keep_evaluations: args.monitoring.keep_evaluations,
             seed: args.seed,
             max_block: args.max_block,
+            base_precision: args.base_precision,
+            // The importance ratios are taken at the temperature the pass@k
+            // attempts are sampled at (`--temperature`), which the request
+            // carries.
+            policy_gradient: args.policy_gradient.options(None),
             ..Tuning::default()
         }),
     })
+}
+
+/// The replay the command line asks for. A rollout objective replays
+/// nothing, so a policy named beside it is refused instead of dropped.
+fn replay_policy(
+    objective: PracticeObjective,
+    replay: Option<ReplayArg>,
+) -> Result<ReplayPolicy, Error> {
+    match (objective.learns_from_groups(), replay) {
+        (true, Some(_)) => Err(Error::Refused(format!(
+            "--objective {objective} trains the champion's adapter on its own rollouts and \
+             replays no earlier record: drop --replay"
+        ))),
+        (true, None) => Ok(ReplayPolicy::None),
+        (false, replay) => Ok(replay
+            .map(ReplayArg::policy)
+            .transpose()?
+            .unwrap_or_default()),
+    }
 }
 
 #[cfg(test)]
@@ -233,5 +257,67 @@ mod tests {
         assert!(asked.gate.alpha_spending);
         assert_eq!(asked.gate.target_effect, Some(0.25));
         assert_eq!(request(&["./shop"]).gate, Default::default());
+    }
+
+    #[test]
+    fn the_objective_defaults_to_imitation_and_a_rollout_objective_reaches_the_request() {
+        let plain = request(&["./shop"]);
+        assert_eq!(plain.objective, PracticeObjective::SftStep);
+        assert!(plain.tuning.policy_gradient.named().is_empty());
+        assert_eq!(plain.tuning.base_precision, None);
+
+        let asked = request(&[
+            "./shop",
+            "--objective",
+            "self-distill",
+            "--clip-eps",
+            "0.15",
+            "--kl-beta",
+            "0.05",
+            "--teacher-policy",
+            "start",
+            "--advantage-bound",
+            "2",
+            "--base-precision",
+            "fp8",
+        ]);
+        assert_eq!(asked.objective, PracticeObjective::SelfDistill);
+        // A rollout objective replays nothing.
+        assert_eq!(asked.replay_policy, ReplayPolicy::None);
+        let options = asked.tuning.policy_gradient;
+        assert_eq!(
+            (options.clip_eps, options.kl_beta),
+            (Some(0.15), Some(0.05))
+        );
+        assert_eq!(options.advantage_bound, Some(2.0));
+        assert_eq!(
+            asked.tuning.base_precision,
+            Some(splinter_sdk::model::train::BasePrecision::Fp8)
+        );
+        assert!(
+            Cli::try_parse_from(["splinter", "practice", "./shop", "--objective", "sft"]).is_err()
+        );
+    }
+
+    #[test]
+    fn a_replay_named_beside_a_rollout_objective_is_refused_not_dropped() {
+        let argv = [
+            "splinter",
+            "practice",
+            "./shop",
+            "--objective",
+            "policy-gradient",
+        ];
+        let with = |extra: &[&str]| {
+            let Some(Command::Practice(args)) = Cli::try_parse_from(argv.iter().chain(extra))
+                .unwrap()
+                .command
+            else {
+                panic!("not a practice");
+            };
+            practice_request(*args)
+        };
+        assert!(with(&[]).is_ok());
+        assert!(with(&["--replay", "uniform"]).unwrap_err().is_refusal());
     }
 }

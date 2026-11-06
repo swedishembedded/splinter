@@ -329,6 +329,7 @@ Options:
 - `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
 - `--correction <REF>`: Continue the attempts that failed or got stuck with this model, from the state the student actually reached, and train on the continuations its own hidden checks verify (`remote:`/`local:`). The teacher sees the student's transcript and workspace, never the grading material.
 - `--corrections <N>`: The most attempts the correction stage continues. Default: `8`.
+- `--objective <OBJECTIVE>`: What the run trains on and how: sft-step imitates the passing attempts of the tasks the policy solves sometimes; policy-gradient groups the k attempts at a task (reward: a verified pass) and reinforces by the clipped policy gradient; self-distill also distils the tasks whose attempts all failed with what the workspace verifier knows. The rollout objectives continue the champion's adapter, replay nothing and refuse --teacher, --correction, --rebuild and --replay. Default: `sft-step`.
 - `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`, `learning-progress`.
 - `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
 - `--curriculum <STRATEGY>`: The order tasks are solved and taught in (`--budget` may end the run before all are reached): the order they were admitted in, or by learning progress (the change in a family's verified pass rate between releases, per GPU second it cost) Default: `frontier`. Values: `frontier`, `learning-progress`, `gain-ranked`.
@@ -342,9 +343,17 @@ Options:
 - `--steps <N>`: The step budget of the training: the most steps it may take.
 - `--rank <N>`: LoRA rank of the adapter [default: 8]
 - `--max-block <TOKENS>`: The longest training record, in tokens, the card fits: a longer record is left out of the dataset and counted, instead of stopping the training.
+- `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8, nf4 or fp8 [default: fp32]
 - `--lr <LR>`: The peak learning rate [default: 0.0002]
 - `--alpha <A>`: The LoRA alpha, the update scaled by alpha / rank [default: 2 x the rank]
 - `--weight-decay <WD>`: The AdamW weight decay on the adapter's matrices [default: 0]
+- `--clip-eps <EPS>`: For a dataset of rollouts (the policy-gradient view): the half-width of the clip band of the importance ratio, in (0, 1) [default: 0.2]
+- `--kl-beta <BETA>`: For a dataset of rollouts: the coefficient of the KL penalty to the reference policy; 0 puts none in the loss [default: 0.02]
+- `--reference <base|start>`: For a dataset of rollouts: the policy the KL penalty keeps the adapter close to: the frozen base, or `start`, the adapter the run begins from (--from) [default: base]
+- `--loss-agg <seq-mean|token-sum>`: For a dataset of rollouts: how the token terms of the loss are normalised, per sequence or over all tokens of a step [default: seq-mean]
+- `--teacher-policy <base|start>`: For records with a teacher context (the self-distill view, or policy-gradient --cliff-distill): the frozen policy that, shown the privileged context, scores the student's own tokens: the base, or `start`, the adapter the run begins from [default: base]
+- `--advantage-bound <C>`: For records with a teacher context: clip each token's advantage (log teacher - log student) to [-C, C] [default: none]
+- `--sequence-advantage-cap <SUM>`: For records with a teacher context: scale a sequence's token advantages down together when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a step [default: none]
 - `--records-per-step <N>`: Records averaged into one optimizer step.
 - `--seed <N>`: The seed of the adapter's initialisation and the batch order (drawn, printed and recorded if not given)
 - `--eval-every <N>`: Steps between evaluations of the monitoring records; 0 monitors nothing and the candidate carries its last step [default: 16 evaluations over the step budget]
@@ -637,6 +646,7 @@ Options:
 - `--teacher <reference|REF>`: Who demonstrates the tasks the policy never solves, so they are not dropped: `reference` replays each task's own reference change as an agent's actions, or a model that solves them as an agent (`remote:`/`local:`). Either is graded by the same independent verifier as the policy's attempts; it never grades itself.
 - `--correction <REF>`: Continue the attempts that failed or got stuck with this model, from the state the student actually reached, and train on the continuations its own hidden checks verify (`remote:`/`local:`). The teacher sees the student's transcript and workspace, never the grading material.
 - `--corrections <N>`: The most attempts the correction stage continues. Default: `8`.
+- `--objective <OBJECTIVE>`: What the run trains on and how: sft-step imitates the passing attempts of the tasks the policy solves sometimes; policy-gradient groups the k attempts at a task (reward: a verified pass) and reinforces by the clipped policy gradient; self-distill also distils the tasks whose attempts all failed with what the workspace verifier knows. The rollout objectives continue the champion's adapter, replay nothing and refuse --teacher, --correction, --rebuild and --replay. Default: `sft-step`.
 - `--replay <POLICY>`: Which of the earlier releases' records are replayed beside the new ones (default uniform): none, uniform over every record, or balanced over capabilities. Values: `none`, `uniform`, `balanced`, `failure-targeted`, `learning-progress`.
 - `--rebuild`: Train a fresh adapter on the frozen base from the records of every earlier release and the new ones, instead of continuing the champion.
 - `--curriculum <STRATEGY>`: The order tasks are solved and taught in (`--budget` may end the run before all are reached): the order they were admitted in, or by learning progress (the change in a family's verified pass rate between releases, per GPU second it cost) Default: `frontier`. Values: `frontier`, `learning-progress`, `gain-ranked`.
@@ -650,9 +660,17 @@ Options:
 - `--steps <N>`: The step budget of the training: the most steps it may take.
 - `--rank <N>`: LoRA rank of the adapter [default: 8]
 - `--max-block <TOKENS>`: The longest training record, in tokens, the card fits: a longer record is left out of the dataset and counted, instead of stopping the training.
+- `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8, nf4 or fp8 [default: fp32]
 - `--lr <LR>`: The peak learning rate [default: 0.0002]
 - `--alpha <A>`: The LoRA alpha, the update scaled by alpha / rank [default: 2 x the rank]
 - `--weight-decay <WD>`: The AdamW weight decay on the adapter's matrices [default: 0]
+- `--clip-eps <EPS>`: For a dataset of rollouts (the policy-gradient view): the half-width of the clip band of the importance ratio, in (0, 1) [default: 0.2]
+- `--kl-beta <BETA>`: For a dataset of rollouts: the coefficient of the KL penalty to the reference policy; 0 puts none in the loss [default: 0.02]
+- `--reference <base|start>`: For a dataset of rollouts: the policy the KL penalty keeps the adapter close to: the frozen base, or `start`, the adapter the run begins from (--from) [default: base]
+- `--loss-agg <seq-mean|token-sum>`: For a dataset of rollouts: how the token terms of the loss are normalised, per sequence or over all tokens of a step [default: seq-mean]
+- `--teacher-policy <base|start>`: For records with a teacher context (the self-distill view, or policy-gradient --cliff-distill): the frozen policy that, shown the privileged context, scores the student's own tokens: the base, or `start`, the adapter the run begins from [default: base]
+- `--advantage-bound <C>`: For records with a teacher context: clip each token's advantage (log teacher - log student) to [-C, C] [default: none]
+- `--sequence-advantage-cap <SUM>`: For records with a teacher context: scale a sequence's token advantages down together when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a step [default: none]
 - `--records-per-step <N>`: Records averaged into one optimizer step.
 - `--seed <N>`: The seed of the adapter's initialisation and the batch order (drawn, printed and recorded if not given)
 - `--eval-every <N>`: Steps between evaluations of the monitoring records; 0 monitors nothing and the candidate carries its last step [default: 16 evaluations over the step budget]
@@ -1339,10 +1357,10 @@ Options:
 - `--kl-beta <BETA>`: For a dataset of rollouts: the coefficient of the KL penalty to the reference policy; 0 puts none in the loss [default: 0.02]
 - `--reference <base|start>`: For a dataset of rollouts: the policy the KL penalty keeps the adapter close to: the frozen base, or `start`, the adapter the run begins from (--from) [default: base]
 - `--loss-agg <seq-mean|token-sum>`: For a dataset of rollouts: how the token terms of the loss are normalised, per sequence or over all tokens of a step [default: seq-mean]
-- `--temperature <T>`: For a dataset of rollouts: the temperature they were sampled at [default: 1]
 - `--teacher-policy <base|start>`: For records with a teacher context (the self-distill view, or policy-gradient --cliff-distill): the frozen policy that, shown the privileged context, scores the student's own tokens: the base, or `start`, the adapter the run begins from [default: base]
 - `--advantage-bound <C>`: For records with a teacher context: clip each token's advantage (log teacher - log student) to [-C, C] [default: none]
 - `--sequence-advantage-cap <SUM>`: For records with a teacher context: scale a sequence's token advantages down together when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a step [default: none]
+- `--temperature <T>`: For a dataset of rollouts: the temperature they were sampled at [default: 1]
 - `--records-per-step <N>`: Records averaged into one optimizer step (default: one when the steps are named, else from the size of the dataset)
 - `--seed <N>`: The seed of a fresh adapter's initialisation, the batch order and the draw of the records replayed (drawn, printed and recorded in the run and the candidate if not given)
 - `--rehearsal <DATASET-ID>`: A rehearsal dataset (`rehearse`, or any chat dataset of the base's own answers) mixed into training at --rehearsal-share of the draws, never held out, a share of it in the monitoring set.

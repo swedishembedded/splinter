@@ -11,7 +11,7 @@
 
 use std::fmt::Write as _;
 
-use splinter_sdk::practice::PracticeReport;
+use splinter_sdk::practice::{PracticeReport, Rollouts};
 
 use crate::output::Report;
 
@@ -78,6 +78,23 @@ fn own(stage: &str, report: &impl serde::Serialize) -> String {
         .unwrap_or_default()
 }
 
+impl Report for Rollouts {
+    fn human(&self) -> String {
+        let groups = match self.groups {
+            Some(g) => format!(
+                "{} graded, {} all-fail, {} all-pass; {} distilled with a teacher context",
+                g.graded, g.all_fail, g.all_pass, g.distilled
+            ),
+            None => "not measured: no dataset was made".to_string(),
+        };
+        format!(
+            "objective {}: {} attempt(s) grouped by task; {} left out because the exposure audit \
+             failed them; {} not completed (no experience)\ngroups: {groups}\n",
+            self.objective, self.attempts, self.exposed, self.not_attempted
+        )
+    }
+}
+
 impl Report for PracticeReport {
     fn human(&self) -> String {
         let mut out = String::new();
@@ -124,6 +141,9 @@ impl Report for PracticeReport {
         }
         if let Some(r) = &self.frontier {
             stage(&mut out, "frontier", r.human());
+        }
+        if let Some(r) = &self.rollouts {
+            stage(&mut out, "rollouts", r.human());
         }
         if let Some(r) = &self.dataset {
             stage(&mut out, "dataset", r.human());

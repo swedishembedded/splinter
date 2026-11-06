@@ -17,13 +17,15 @@ use splinter_sdk::curriculum::progress::Params as ProgressParams;
 use splinter_sdk::curriculum::repository_teacher::RepositoryTeacher;
 use splinter_sdk::curriculum::schedule::Strategy;
 use splinter_sdk::knowledge::tasks::workspace::InstructionVersion;
+use splinter_sdk::model::train::BasePrecision;
 use splinter_sdk::practice::{
-    DEFAULT_FOLLOW_UPS, DEFAULT_MAX_CORRECTIONS, DEFAULT_MAX_REPEATED_RESULTS,
+    PracticeObjective, DEFAULT_FOLLOW_UPS, DEFAULT_MAX_CORRECTIONS, DEFAULT_MAX_REPEATED_RESULTS,
     DEFAULT_MAX_TOOL_CALLS,
 };
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::DEFAULT_LORA_RANK;
 
+use super::train::PolicyGradientArgs;
 use super::{budget, GateArgs, MonitoringArgs, OptimiserArgs, PassAtKArgs};
 use splinter_sdk::data::ReplayPolicy;
 
@@ -140,6 +142,22 @@ pub struct PracticeArgs {
     /// The most attempts the correction stage continues.
     #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CORRECTIONS)]
     pub corrections: usize,
+    /// What the run trains on and how: `sft-step` imitates the passing
+    /// attempts of the tasks the policy solves sometimes; `policy-gradient`
+    /// makes the k attempts at a task a group (reward: a verified pass) and
+    /// reinforces by the clipped policy gradient; `self-distill` also distils
+    /// the tasks whose attempts all failed with what the workspace verifier
+    /// knows. The rollout objectives continue the champion's adapter, replay
+    /// nothing and refuse --teacher, --correction, --rebuild and --replay.
+    #[arg(long, value_name = "OBJECTIVE", value_parser = clap::value_parser!(PracticeObjective),
+        default_value_t = PracticeObjective::default(),
+        help = "What the run trains on and how: sft-step imitates the passing attempts of the \
+         tasks the policy solves sometimes; policy-gradient groups the k attempts at a task \
+         (reward: a verified pass) and reinforces by the clipped policy gradient; self-distill \
+         also distils the tasks whose attempts all failed with what the workspace verifier \
+         knows. The rollout objectives continue the champion's adapter, replay nothing and \
+         refuse --teacher, --correction, --rebuild and --replay")]
+    pub objective: PracticeObjective,
     /// Which of the earlier releases' records are replayed beside the new
     /// ones (default uniform): none, uniform over every record, or balanced
     /// over capabilities.
@@ -167,9 +185,21 @@ pub struct PracticeArgs {
     /// the training.
     #[arg(long, value_name = "TOKENS", value_parser = clap::value_parser!(u32).range(1..))]
     pub max_block: Option<u32>,
+    /// How the frozen base is held while the adapter trains; the adapter and
+    /// its optimizer stay fp32. NF4 and fp8 are `qwen35` (27B) tiers; fp8 is
+    /// the native format of an fp8 checkpoint.
+    #[arg(long, value_name = "TIER", value_parser = clap::value_parser!(BasePrecision),
+        help = "How the frozen base is held while the adapter trains: fp32, bf16, int8, nf4 or fp8 \
+                [default: fp32]")]
+    pub base_precision: Option<BasePrecision>,
     /// The learning rate, alpha and weight decay of the training.
     #[command(flatten)]
     pub optimiser: OptimiserArgs,
+    /// The clipped policy gradient's settings, for the rollout objectives.
+    /// The temperature its importance ratios are taken at is the pass@k
+    /// attempts' own: `--temperature`.
+    #[command(flatten)]
+    pub policy_gradient: PolicyGradientArgs,
     /// Records averaged into one optimizer step.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     pub records_per_step: Option<u32>,

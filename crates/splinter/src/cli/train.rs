@@ -147,7 +147,9 @@ fn clip_eps(text: &str) -> Result<f32, String> {
 
 /// The objective of a run on rollout records: what the clipped policy
 /// gradient is set with. Each names brain's own setting; what is left out is
-/// brain's default.
+/// brain's default. The temperature the rollouts were sampled at is not here:
+/// `train` takes it as `--temperature`, and a `practice` samples the rollouts
+/// itself, at its own `--temperature`.
 #[derive(Debug, Default, Clone, Copy, Args)]
 pub struct PolicyGradientArgs {
     /// Half-width of the clip band `[1 - eps, 1 + eps]` of the importance
@@ -175,12 +177,6 @@ pub struct PolicyGradientArgs {
         "For a dataset of rollouts: how the token terms of the loss are normalised, per \
          sequence or over all tokens of a step [default: seq-mean]")]
     pub loss_agg: Option<LossAggregation>,
-    /// The temperature the rollouts were sampled at.
-    #[arg(long, value_name = "T", value_parser = positive_rate, help = format!(
-        "For a dataset of rollouts: the temperature they were sampled at [default: {}]",
-        PolicyGradientOptions::defaults().temperature
-    ))]
-    pub temperature: Option<f32>,
     /// Which frozen policy scores the student's tokens in the privileged
     /// context of a self-distillation record.
     #[arg(long, value_name = "base|start", value_parser = clap::value_parser!(Reference), help =
@@ -203,15 +199,16 @@ pub struct PolicyGradientArgs {
 }
 
 impl PolicyGradientArgs {
-    /// The objective's settings as the training run takes them.
+    /// The objective's settings as the training run takes them, for rollouts
+    /// sampled at `temperature` (`None`: brain's default).
     #[must_use]
-    pub fn options(self) -> PolicyGradientOptions {
+    pub fn options(self, temperature: Option<f32>) -> PolicyGradientOptions {
         PolicyGradientOptions {
             clip_eps: self.clip_eps,
             kl_beta: self.kl_beta,
             reference: self.reference,
             loss_agg: self.loss_agg,
-            temperature: self.temperature,
+            temperature,
             teacher: self.teacher_policy,
             advantage_bound: self.advantage_bound,
             sequence_advantage_cap: self.sequence_advantage_cap,
@@ -266,6 +263,12 @@ pub struct TrainArgs {
     /// The clipped policy gradient's settings, for a dataset of rollouts.
     #[command(flatten)]
     pub policy_gradient: PolicyGradientArgs,
+    /// The temperature the rollouts of a dataset were sampled at.
+    #[arg(long, value_name = "T", value_parser = positive_rate, help = format!(
+        "For a dataset of rollouts: the temperature they were sampled at [default: {}]",
+        PolicyGradientOptions::defaults().temperature
+    ))]
+    pub temperature: Option<f32>,
     /// Records averaged into one optimizer step (default: one when the steps
     /// are named, else from the size of the dataset).
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
