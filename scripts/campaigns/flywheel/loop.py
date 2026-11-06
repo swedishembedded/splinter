@@ -19,7 +19,8 @@ adapter):
 
 1. **serve** the champion with brain on every card (one server per card; an
    agent's trial stays on one server, so its conversation prefix stays cached);
-2. **explore** every workload's training tasks and sit every workload's exam,
+2. **explore** every workload's training tasks (or another pool's,
+   ``explore_collection``; none with ``explore_attempts = 0``) and sit every workload's exam,
    side by side; every graded trial is exported. An exam the champion already
    sat under the same stack (agent build, serving build, benchmark commit) is
    not repeated;
@@ -294,6 +295,18 @@ def scaled(campaign: Campaign, workload: dict, cards: list[int]) -> dict:
     return {**workload, "concurrency": max(1, round(workload["concurrency"] * share))}
 
 
+def exploration(workload: dict) -> dict | None:
+    """How a workload practises: its training tasks, `explore_attempts` times each, at
+    its `concurrency`; or the training tasks of `explore_collection` (a pool other than
+    the exam's, such as the tasks an earlier generation did not always solve) at
+    `explore_concurrency`. None when `explore_attempts` is 0: the workload is examined only."""
+    attempts = workload["explore_attempts"]
+    if attempts == 0:
+        return None
+    return {**workload, "collection": workload.get("explore_collection", workload["collection"]),
+            "concurrency": workload.get("explore_concurrency", workload["concurrency"]), "attempts": attempts}
+
+
 def bench_run(campaign: Campaign, gen: Generation, workload: dict, model_id: str, attempts: int, split: str,
               name: str, cards: list[int]) -> str:
     """Run the workload's `split` tasks on `cards`, at the concurrency their share of the
@@ -551,8 +564,10 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
             if adopt.get("explore", {}).get(w["name"]):
                 explore_jobs[w["name"]] = adopted(adopt["explore"][w["name"]])
                 return
-            explore_jobs[w["name"]] = bench_run(campaign, gen, w, model_id, w["explore_attempts"], "train",
-                                                f"{w['name']}-explore", cards)
+            practice = exploration(w)
+            if practice is not None:
+                explore_jobs[w["name"]] = bench_run(campaign, gen, practice, model_id, practice["attempts"], "train",
+                                                    f"{w['name']}-explore", cards)
 
         def exam(w: dict) -> None:
             if adopt.get("exam", {}).get(w["name"]):

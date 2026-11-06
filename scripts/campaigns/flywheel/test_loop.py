@@ -178,6 +178,15 @@ def a_model_on_a_share_of_the_cards_runs_that_share_of_the_trials():
     assert loop.scaled(campaign, {"name": "w", "concurrency": 2}, [1])["concurrency"] == 1
 
 
+def a_workload_can_practise_on_another_pool_than_its_exam_or_not_at_all():
+    plain = {"name": "repo", "collection": "c", "concurrency": 20, "explore_attempts": 2, "exam_attempts": 2}
+    assert loop.exploration(plain) == {**plain, "attempts": 2}
+    frontier = {**plain, "explore_collection": "pool", "explore_concurrency": 36, "explore_attempts": 8}
+    got = loop.exploration(frontier)
+    assert got["collection"] == "pool" and got["concurrency"] == 36 and got["attempts"] == 8
+    assert loop.exploration({**plain, "explore_attempts": 0}) is None, "0 attempts: examined only"
+
+
 def the_cards_are_shared_among_the_models_served_at_once():
     assert loop.share([0, 1, 2, 3], 1) == [[0, 1, 2, 3]]
     assert loop.share([0, 1, 2, 3], 2) == [[0, 2], [1, 3]]

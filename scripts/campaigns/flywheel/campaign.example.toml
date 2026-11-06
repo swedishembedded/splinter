@@ -30,6 +30,10 @@ collection = "tasks/repo-families"           # a collection with a train/eval sp
 concurrency = 24                             # trials at once, per job
 explore_attempts = 2                         # training-task attempts per generation
 exam_attempts = 2                            # held-out attempts per measured model
+# explore_collection = "pool"                # practise on another collection's train set (e.g. a frontier pool
+#                                            # of the tasks an earlier generation did not always solve)
+# explore_concurrency = 36                   # trials at once while practising (default: concurrency)
+#                                            # explore_attempts = 0 examines the workload without practising it
 
 [[workload]]
 name = "cad"
