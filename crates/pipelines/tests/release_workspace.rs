@@ -79,6 +79,11 @@ fn build() -> BuildInfo {
 /// practising agent, whose base arm - the champion before any release - does
 /// nothing, and whose `brain` is `brain`.
 fn context(test: &str, brain: Brain) -> (Scratch, Context) {
+    context_with(test, brain, Model::new(Mender::new(false), "scripted/idle"))
+}
+
+/// [`context`] whose base arm is `base`.
+fn context_with(test: &str, brain: Brain, base: Model) -> (Scratch, Context) {
     let scratch = Scratch::new(test);
     let mut config = config(&scratch);
     config.brain_binary = match brain {
@@ -86,7 +91,7 @@ fn context(test: &str, brain: Brain) -> (Scratch, Context) {
         other => Some(fake_brain(&scratch.0, other)),
     };
     config.build = build();
-    let base = arm(&config, None);
+    let base_ref = arm(&config, None);
     let ctx = Context::new(config, false)
         .unwrap()
         .with_clock(Box::new(FixedClock::new(NOW)))
@@ -94,7 +99,7 @@ fn context(test: &str, brain: Brain) -> (Scratch, Context) {
             ModelRef::policy_default(),
             Model::new(Agent::new(), "scripted/agent-1"),
         )
-        .with_model(base, Model::new(Mender::new(false), "scripted/idle"));
+        .with_model(base_ref, base);
     put_base(&ctx);
     // The anchor suite is general closed-book tasks; both arms fail them alike.
     anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
@@ -536,4 +541,58 @@ fn a_project_with_no_brain_is_not_measured_rather_than_released() {
     let serve = &blocked.gate.serve;
     assert!(!serve.passed && serve.measured.is_none());
     assert!(serve.reason.as_deref().unwrap().contains("not measured"));
+}
+
+/// A model that answers as `inner` does after a pause, and counts the most
+/// requests waiting on it at once.
+struct Overlap {
+    inner: std::sync::Arc<Mender>,
+    waiting: std::sync::atomic::AtomicUsize,
+    most: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl sven_sdk::model::ModelProvider for Overlap {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+    fn model_name(&self) -> &str {
+        "overlap-1"
+    }
+    async fn complete(
+        &self,
+        req: sven_sdk::model::CompletionRequest,
+    ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
+        use std::sync::atomic::Ordering::SeqCst;
+        let now = self.waiting.fetch_add(1, SeqCst) + 1;
+        self.most.fetch_max(now, SeqCst);
+        tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+        let reply = self.inner.complete(req).await;
+        self.waiting.fetch_sub(1, SeqCst);
+        reply
+    }
+}
+
+#[test]
+fn the_attempts_of_an_arm_at_the_exam_run_at_once_when_its_model_takes_them() {
+    let most = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let slow = Overlap {
+        inner: Mender::new(false),
+        waiting: std::sync::atomic::AtomicUsize::new(0),
+        most: most.clone(),
+    };
+    // A model that declares four decode slots is attempted at four at a time.
+    let base = Model::new(std::sync::Arc::new(slow), "scripted/idle").with_slots(4);
+    let (scratch, ctx) = context_with("workspace-release-wide", Brain::Honest, base);
+
+    let (_, report) = first_release(&ctx, &scratch);
+
+    assert!(
+        most.load(std::sync::atomic::Ordering::SeqCst) >= 2,
+        "the champion's exam attempts overlapped"
+    );
+    // The decision is the one attempts made one after another reach.
+    let improvement = report.release.unwrap().gate.improvement.measured.unwrap();
+    assert_eq!(improvement.comparison.baseline_wins, 0);
+    assert!(improvement.comparison.candidate_wins > 0);
 }

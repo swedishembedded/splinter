@@ -42,6 +42,7 @@
 use splinter_agent::solve::{Model, SolveError, SolveOptions};
 use splinter_agent::work::WorkProtocol;
 use splinter_agent::CancelToken;
+use splinter_core::concurrency::fan_out_blocking;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Provenance, Task};
 use splinter_eval::gate::{AgenticConfig, AgenticProbe, Withheld};
@@ -84,6 +85,14 @@ impl Attempt {
 }
 
 /// `arm`'s probe of every task of `tasks`, in order, under `config`.
+///
+/// Every attempt at every task is an independent episode with a seed of its
+/// own ([`attempt_seed`]), so they run as many at once as the arm's model
+/// takes ([`Model::slots`]): against a served model that keeps its decode
+/// slots full, against a model run in this process it is one at a time. The
+/// probes are what one attempt after another would have made: results are
+/// gathered per task in attempt order, and the first failure in that order is
+/// the one reported.
 pub(crate) fn grade(
     ctx: &Context,
     arm: &Arm<'_>,
@@ -91,25 +100,29 @@ pub(crate) fn grade(
     config: &AgenticConfig,
     cancel: &CancelToken,
 ) -> Result<Vec<Probe>, OrchestratorError> {
+    let attempts = config.attempts.max(1);
+    let jobs: Vec<(usize, u32)> = (0..tasks.len())
+        .flat_map(|task| (0..attempts).map(move |attempt| (task, attempt)))
+        .collect();
+    let made = fan_out_blocking(&jobs, arm.model.slots(), |&(task, attempt)| {
+        attempt_at(ctx, arm, tasks[task], attempt, config, cancel)
+    });
+    let mut made = made.into_iter();
     tasks
         .iter()
-        .map(|task| probe_task(ctx, arm, task, config, cancel))
+        .map(|_| probe_of(made.by_ref().take(attempts as usize)))
         .collect()
 }
 
-/// `task` attempted [`AgenticConfig::attempts`] times.
-fn probe_task(
-    ctx: &Context,
-    arm: &Arm<'_>,
-    task: &Task,
-    config: &AgenticConfig,
-    cancel: &CancelToken,
+/// The probe of a task from its attempts, in order.
+fn probe_of(
+    attempts: impl Iterator<Item = Result<Attempt, OrchestratorError>>,
 ) -> Result<Probe, OrchestratorError> {
     let mut graded = Vec::new();
     let mut withheld = Withheld::default();
     let mut answer = None;
-    for attempt in 0..config.attempts.max(1) {
-        let made = attempt_at(ctx, arm, task, attempt, config, cancel)?;
+    for made in attempts {
+        let made = made?;
         answer = answer.or(made.patch);
         match made.outcome {
             Outcome::Graded(passed) => graded.push(passed),
