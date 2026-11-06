@@ -52,9 +52,13 @@
 //! verdicts agree with the in-process ones.
 //!
 //! Without a `brain` binary, or when it does not start, the check is not
-//! measured - and the gate fails.
+//! measured - and the gate fails. When the gate runs on brain endpoints
+//! (`--brain-endpoint`) none is started: the candidate was served by the
+//! endpoint all along, and the check is that it lists the candidate under its
+//! digest ([`endpoint`]).
 
 mod compare;
+mod endpoint;
 pub mod workspace;
 
 use std::path::Path;
@@ -107,6 +111,9 @@ pub fn check(
     request: &ServeCheck<'_>,
     cancel: &CancelToken,
 ) -> Result<Check<Serve>, OrchestratorError> {
+    if let Some(brain) = &ctx.config().brain {
+        return Ok(endpoint::check(brain, request));
+    }
     if request.sample.workspace_tasks() > 0 {
         return workspace::check(ctx, request, cancel);
     }
