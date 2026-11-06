@@ -262,6 +262,7 @@ impl Report for GateReport {
             let compared = match m.agreement {
                 Agreement::Answers => "re-answered alike",
                 Agreement::Verdicts => "graded as they were in-process",
+                Agreement::Listed => "answered by the endpoint that serves the candidate",
             };
             let _ = writeln!(
                 out,
@@ -291,6 +292,7 @@ impl Report for GateReport {
                         grade(d.in_process_verdict),
                         grade(d.served_verdict)
                     ),
+                    Agreement::Listed => Ok(()),
                 };
             }
         }

@@ -48,3 +48,22 @@ fn a_served_agent_is_held_to_its_verdicts_and_the_report_says_so() {
         .passed
     );
 }
+
+#[test]
+fn a_candidate_the_endpoint_lists_under_its_digest_passes_with_nothing_to_compare() {
+    // Every answer of the gate came from the endpoint, so there is no
+    // in-process run to agree with: the check is that the endpoint serves
+    // the candidate and no other adapter.
+    let listed = Serve {
+        agreement: Agreement::Listed,
+        ..measured(0, 0)
+    };
+    assert!(serve(listed.clone()).passed);
+    let other = Serve {
+        served_digest: "sha256:b".into(),
+        ..listed
+    };
+    let check = serve(other);
+    assert!(!check.passed);
+    assert!(check.reason.unwrap().contains("sha256:b"));
+}

@@ -438,6 +438,10 @@ pub enum Agreement {
     /// whose runs share no text worth comparing: what matters is whether the
     /// work the served agent left is graded as the in-process agent's was.
     Verdicts,
+    /// Nothing: every answer of the gate came from the brain endpoint that
+    /// serves the candidate, so there is no in-process run to agree with.
+    /// The check is that the endpoint lists the candidate under its digest.
+    Listed,
 }
 
 /// The serve check's numbers.
@@ -733,12 +737,15 @@ pub fn serve(measured: Serve) -> Check<Serve> {
     let differently = match measured.agreement {
         Agreement::Answers => "answered differently from",
         Agreement::Verdicts => "was graded differently from",
+        Agreement::Listed => "differed from",
     };
     let failure = if measured.served_digest != measured.expected_digest {
         Some(format!(
             "brain serve reported adapter {} but the candidate is {}",
             measured.served_digest, measured.expected_digest
         ))
+    } else if measured.agreement == Agreement::Listed {
+        None
     } else if measured.sampled == 0 {
         return Check::unmeasured("no held-out task to re-answer through the served endpoint");
     } else if measured.agreed * 100 < measured.sampled * SERVE_AGREEMENT_PERCENT {
