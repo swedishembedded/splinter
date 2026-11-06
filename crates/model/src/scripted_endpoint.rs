@@ -243,7 +243,13 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
         let _ = respond(&mut stream, "401 Unauthorized", "application/json", "{}");
         return;
     }
-    if crate::scripted_jobs::route(&mut stream, &shared.jobs, &request_line, last_event_id, &body) {
+    if crate::scripted_jobs::route(
+        &mut stream,
+        &shared.jobs,
+        &request_line,
+        last_event_id,
+        &body,
+    ) {
         return;
     }
     if request_line.starts_with("GET /v1/models") {

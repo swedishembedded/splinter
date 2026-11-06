@@ -133,8 +133,7 @@ fn a_fine_tune_is_a_job_whose_data_goes_by_digest_and_whose_adapter_comes_back_c
     );
     records(&train, false);
     records(&held_out, false);
-    let service = ScriptedEndpoint::start(vec![])
-        .with_training(JobScript::over(rig.store.clone()));
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
     let brain = endpoints(&service, &rig);
     let steps: RefCell<Vec<(u32, u32)>> = RefCell::new(Vec::new());
     let hook = |s: &StepReport| steps.borrow_mut().push((s.step, s.steps));
@@ -150,14 +149,21 @@ fn a_fine_tune_is_a_job_whose_data_goes_by_digest_and_whose_adapter_comes_back_c
     assert_eq!(params["base"], "Qwen/Toy");
     assert_eq!(params["objective"], "sft");
     assert_eq!(
-        (params["steps"].as_u64(), params["rank"].as_u64(), params["grad_accum"].as_u64(), params["seed"].as_u64()),
+        (
+            params["steps"].as_u64(),
+            params["rank"].as_u64(),
+            params["grad_accum"].as_u64(),
+            params["seed"].as_u64()
+        ),
         (Some(3), Some(4), Some(2), Some(7))
     );
-    assert_eq!((params["base_format"].as_str(), params["thinking"].as_bool()), (Some("bf16"), Some(false)));
+    assert_eq!(
+        (params["base_format"].as_str(), params["thinking"].as_bool()),
+        (Some("bf16"), Some(false))
+    );
     assert!(params["max_block"].as_u64().unwrap() >= 64);
     assert_eq!(
-        params["adapter_id"],
-        "Qwen/Toy:splinter:candidate:attempt-1",
+        params["adapter_id"], "Qwen/Toy:splinter:candidate:attempt-1",
         "the candidate's card id is brain's adapter grammar over the base's id in its store"
     );
     // The datasets travelled by digest, and the store holds exactly them (and what the job published).
@@ -173,18 +179,33 @@ fn a_fine_tune_is_a_job_whose_data_goes_by_digest_and_whose_adapter_comes_back_c
     assert_eq!(trained.adapter, attempt.join("adapter.safetensors"));
     assert_eq!(
         trained.adapter_digest,
-        Digest::sha256_of_reader(std::fs::File::open(&trained.adapter).unwrap()).unwrap().to_string()
+        Digest::sha256_of_reader(std::fs::File::open(&trained.adapter).unwrap())
+            .unwrap()
+            .to_string()
     );
     assert!(trained.training_record.is_file());
     assert_eq!((trained.records, trained.block), (6, 128));
-    assert_eq!((trained.base.loss, trained.tuned.loss), (Some(2.0), Some(1.5)));
-    assert_eq!((trained.curve.steps, trained.curve.steps_completed, trained.curve.selected_step), (3, 3, 3));
+    assert_eq!(
+        (trained.base.loss, trained.tuned.loss),
+        (Some(2.0), Some(1.5))
+    );
+    assert_eq!(
+        (
+            trained.curve.steps,
+            trained.curve.steps_completed,
+            trained.curve.selected_step
+        ),
+        (3, 3, 3)
+    );
 }
 
 #[test]
 fn a_policy_gradient_run_sends_only_the_settings_named_and_reads_its_series_from_the_record() {
     let rig = rig();
-    let (train, attempt) = (rig.dir.path().join("rollouts.jsonl"), rig.dir.path().join("attempt-pg"));
+    let (train, attempt) = (
+        rig.dir.path().join("rollouts.jsonl"),
+        rig.dir.path().join("attempt-pg"),
+    );
     records(&train, true);
     let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
     let brain = endpoints(&service, &rig);
@@ -216,8 +237,17 @@ fn a_policy_gradient_run_sends_only_the_settings_named_and_reads_its_series_from
 
     let params = &service.jobs().created()[0];
     assert_eq!(params["objective"], "policy_gradient");
-    assert_eq!((params["kl_beta"].as_f64().map(|v| (v * 10.0).round()), params["reference"].as_str()), (Some(1.0), Some("start")));
-    assert!(params.get("clip_eps").is_none() && params.get("lr").is_none(), "brain's defaults are brain's to apply: {params}");
+    assert_eq!(
+        (
+            params["kl_beta"].as_f64().map(|v| (v * 10.0).round()),
+            params["reference"].as_str()
+        ),
+        (Some(1.0), Some("start"))
+    );
+    assert!(
+        params.get("clip_eps").is_none() && params.get("lr").is_none(),
+        "brain's defaults are brain's to apply: {params}"
+    );
     assert_eq!(params["max_block"], 256);
     assert_eq!(trained.records, 3);
     let kls: Vec<Option<f32>> = trained.statistics.steps.iter().map(|s| s.kl).collect();
@@ -229,13 +259,20 @@ fn a_policy_gradient_run_sends_only_the_settings_named_and_reads_its_series_from
 #[test]
 fn a_run_the_service_has_no_room_for_is_asked_again_until_it_is_placed() {
     let rig = rig();
-    let (train, held_out, attempt) = (rig.dir.path().join("t.jsonl"), rig.dir.path().join("h.jsonl"), rig.dir.path().join("a1"));
+    let (train, held_out, attempt) = (
+        rig.dir.path().join("t.jsonl"),
+        rig.dir.path().join("h.jsonl"),
+        rig.dir.path().join("a1"),
+    );
     records(&train, false);
     records(&held_out, false);
     let mut script = JobScript::over(rig.store.clone());
     script.refuse_first = 2;
     let service = ScriptedEndpoint::start(vec![]).with_training(script);
-    let trained = fine_tune_served(&endpoints(&service, &rig), &fine_tune_request(&rig, &attempt, &train, &held_out));
+    let trained = fine_tune_served(
+        &endpoints(&service, &rig),
+        &fine_tune_request(&rig, &attempt, &train, &held_out),
+    );
     assert!(trained.is_ok(), "{trained:?}");
     assert_eq!(service.jobs().refusals(), 2);
     assert_eq!(service.jobs().created().len(), 1);
@@ -244,7 +281,11 @@ fn a_run_the_service_has_no_room_for_is_asked_again_until_it_is_placed() {
 #[test]
 fn a_stream_that_breaks_is_resumed_after_the_last_event_so_no_step_is_lost_or_repeated() {
     let rig = rig();
-    let (train, held_out, attempt) = (rig.dir.path().join("t.jsonl"), rig.dir.path().join("h.jsonl"), rig.dir.path().join("a1"));
+    let (train, held_out, attempt) = (
+        rig.dir.path().join("t.jsonl"),
+        rig.dir.path().join("h.jsonl"),
+        rig.dir.path().join("a1"),
+    );
     records(&train, false);
     records(&held_out, false);
     let mut script = JobScript::over(rig.store.clone());
@@ -257,33 +298,60 @@ fn a_stream_that_breaks_is_resumed_after_the_last_event_so_no_step_is_lost_or_re
     request.on_step = Some(StepHook(&hook));
     fine_tune_served(&endpoints(&service, &rig), &request).unwrap();
     assert_eq!(*seen.borrow(), vec![1, 2, 3]);
-    assert_eq!(service.jobs().streams(), vec![None, Some(3)], "the second connection asked for what followed event 3");
+    assert_eq!(
+        service.jobs().streams(),
+        vec![None, Some(3)],
+        "the second connection asked for what followed event 3"
+    );
 }
 
 #[test]
 fn a_job_that_fails_fails_the_run_with_brains_reason_and_a_request_it_refuses_is_not_retried() {
     let rig = rig();
-    let (train, held_out, attempt) = (rig.dir.path().join("t.jsonl"), rig.dir.path().join("h.jsonl"), rig.dir.path().join("a1"));
+    let (train, held_out, attempt) = (
+        rig.dir.path().join("t.jsonl"),
+        rig.dir.path().join("h.jsonl"),
+        rig.dir.path().join("a1"),
+    );
     records(&train, false);
     records(&held_out, false);
     let mut script = JobScript::over(rig.store.clone());
     script.fail_with = Some("train: the device failed during the run (see the server log)".into());
     let service = ScriptedEndpoint::start(vec![]).with_training(script);
-    let error = fine_tune_served(&endpoints(&service, &rig), &fine_tune_request(&rig, &attempt, &train, &held_out)).unwrap_err();
-    assert!(matches!(&error, PolicyError::Train { reason, .. } if reason.contains("the device failed")), "{error}");
+    let error = fine_tune_served(
+        &endpoints(&service, &rig),
+        &fine_tune_request(&rig, &attempt, &train, &held_out),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&error, PolicyError::Train { reason, .. } if reason.contains("the device failed")),
+        "{error}"
+    );
 
     // A service that does not hold a published dataset refuses the job at the door (400): no retry.
-    let blind = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.dir.path().join("elsewhere")));
+    let blind = ScriptedEndpoint::start(vec![])
+        .with_training(JobScript::over(rig.dir.path().join("elsewhere")));
     std::fs::create_dir_all(rig.dir.path().join("elsewhere")).unwrap();
-    let error = fine_tune_served(&endpoints(&blind, &rig), &fine_tune_request(&rig, &attempt, &train, &held_out)).unwrap_err();
-    assert!(matches!(&error, PolicyError::Train { reason, .. } if reason.contains("not in the artifact store")), "{error}");
+    let error = fine_tune_served(
+        &endpoints(&blind, &rig),
+        &fine_tune_request(&rig, &attempt, &train, &held_out),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&error, PolicyError::Train { reason, .. } if reason.contains("not in the artifact store")),
+        "{error}"
+    );
     assert!(blind.jobs().created().is_empty());
 }
 
 #[test]
 fn cancelling_stops_the_job_on_the_service() {
     let rig = rig();
-    let (train, held_out, attempt) = (rig.dir.path().join("t.jsonl"), rig.dir.path().join("h.jsonl"), rig.dir.path().join("a1"));
+    let (train, held_out, attempt) = (
+        rig.dir.path().join("t.jsonl"),
+        rig.dir.path().join("h.jsonl"),
+        rig.dir.path().join("a1"),
+    );
     records(&train, false);
     records(&held_out, false);
     let mut script = JobScript::over(rig.store.clone());
@@ -302,19 +370,28 @@ fn cancelling_stops_the_job_on_the_service() {
     request.cancel = Some(&token);
     let error = fine_tune_served(&endpoints(&service, &rig), &request).unwrap_err();
     assert!(matches!(error, PolicyError::Cancelled { .. }), "{error}");
-    assert!(service.jobs().was_cancelled(), "the DELETE reached the service");
+    assert!(
+        service.jobs().was_cancelled(),
+        "the DELETE reached the service"
+    );
     assert!(stepped.get() >= 1);
 }
 
 #[test]
 fn training_on_an_endpoint_needs_the_artifact_store_and_says_which_flag() {
     let rig = rig();
-    let (train, held_out, attempt) = (rig.dir.path().join("t.jsonl"), rig.dir.path().join("h.jsonl"), rig.dir.path().join("a1"));
+    let (train, held_out, attempt) = (
+        rig.dir.path().join("t.jsonl"),
+        rig.dir.path().join("h.jsonl"),
+        rig.dir.path().join("a1"),
+    );
     records(&train, false);
     records(&held_out, false);
     let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
     let bare = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY).unwrap();
-    let error = fine_tune_served(&bare, &fine_tune_request(&rig, &attempt, &train, &held_out)).unwrap_err().to_string();
+    let error = fine_tune_served(&bare, &fine_tune_request(&rig, &attempt, &train, &held_out))
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("--brain-artifact-store"), "{error}");
     assert!(service.jobs().created().is_empty());
 }
@@ -322,12 +399,24 @@ fn training_on_an_endpoint_needs_the_artifact_store_and_says_which_flag() {
 #[test]
 fn a_dataset_the_trainer_would_refuse_is_refused_here_before_anything_is_sent() {
     let rig = rig();
-    let (train, held_out, attempt) = (rig.dir.path().join("t.jsonl"), rig.dir.path().join("h.jsonl"), rig.dir.path().join("a1"));
+    let (train, held_out, attempt) = (
+        rig.dir.path().join("t.jsonl"),
+        rig.dir.path().join("h.jsonl"),
+        rig.dir.path().join("a1"),
+    );
     std::fs::write(&train, "{\"not\": \"a chat record\"}\n").unwrap();
     records(&held_out, false);
     let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
-    let error = fine_tune_served(&endpoints(&service, &rig), &fine_tune_request(&rig, &attempt, &train, &held_out)).unwrap_err();
+    let error = fine_tune_served(
+        &endpoints(&service, &rig),
+        &fine_tune_request(&rig, &attempt, &train, &held_out),
+    )
+    .unwrap_err();
     assert!(matches!(error, PolicyError::Dataset { .. }), "{error}");
     assert!(service.jobs().created().is_empty());
-    assert_eq!(std::fs::read_dir(&rig.store).unwrap().count(), 0, "nothing was published for a run that cannot start");
+    assert_eq!(
+        std::fs::read_dir(&rig.store).unwrap().count(),
+        0,
+        "nothing was published for a run that cannot start"
+    );
 }

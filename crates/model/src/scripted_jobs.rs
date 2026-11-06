@@ -155,7 +155,13 @@ fn digests_of(data: &Value) -> Vec<String> {
             found.push(d.to_string());
         }
     };
-    for name in ["train", "held_out", "held_out_text", "monitor", "start_adapter"] {
+    for name in [
+        "train",
+        "held_out",
+        "held_out_text",
+        "monitor",
+        "start_adapter",
+    ] {
         take(&data[name]);
     }
     for entry in data["replay"].as_array().into_iter().flatten() {
@@ -175,7 +181,11 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
     }
     if jobs.refused.load(Ordering::SeqCst) < script.refuse_first {
         jobs.refused.fetch_add(1, Ordering::SeqCst);
-        error(stream, "429 Too Many Requests", "every card is busy serving");
+        error(
+            stream,
+            "429 Too Many Requests",
+            "every card is busy serving",
+        );
         return;
     }
     let params = call["params"].clone();
@@ -232,8 +242,16 @@ fn train(script: &JobScript, params: &Value) -> (Vec<(u64, String, Value)>, Valu
     let record = json!({"policy_gradient": {"steps": step_series}});
     let record_digest = publish(record.to_string().as_bytes());
     let mut frames: Vec<(u64, String, Value)> = vec![
-        (1, "frame".into(), json!({"type": "stage", "stage": "staging the datasets"})),
-        (2, "frame".into(), json!({"type": "stage", "stage": "loading the base and training"})),
+        (
+            1,
+            "frame".into(),
+            json!({"type": "stage", "stage": "staging the datasets"}),
+        ),
+        (
+            2,
+            "frame".into(),
+            json!({"type": "stage", "stage": "loading the base and training"}),
+        ),
     ];
     for s in 1..=script.steps {
         let mut frame = json!({"type": "step", "step": s, "steps": script.steps, "loss": 1.0 / f64::from(s), "lr": 0.0003, "seconds": f64::from(s)});
@@ -269,11 +287,7 @@ fn events(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, last_event_id
     let frames = jobs.events.lock().unwrap().clone().unwrap_or_default();
     let mut sse = String::new();
     let after = last_event_id.unwrap_or(0);
-    for (sent, (id, name, data)) in frames
-        .iter()
-        .filter(|(id, _, _)| *id > after)
-        .enumerate()
-    {
+    for (sent, (id, name, data)) in frames.iter().filter(|(id, _, _)| *id > after).enumerate() {
         if first_stream && script.break_stream_after.is_some_and(|n| sent >= n) {
             // The connection ends here, with no `done` event.
             let _ = respond(stream, "200 OK", "text/event-stream", &sse);
@@ -294,7 +308,10 @@ fn events(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, last_event_id
         while !jobs.deleted.load(Ordering::SeqCst) {
             std::thread::sleep(Duration::from_millis(10));
         }
-        let tail = format!("id: {last}\nevent: done\ndata: {}\n\n", json!({"status": "cancelled"}));
+        let tail = format!(
+            "id: {last}\nevent: done\ndata: {}\n\n",
+            json!({"status": "cancelled"})
+        );
         let _ = std::io::Write::write_all(&mut stream_ref, tail.as_bytes());
         return;
     } else if let Some(reason) = &script.fail_with {

@@ -42,8 +42,8 @@ use splinter_core::digest::Digest;
 
 use crate::error::PolicyError;
 use crate::local::LocalWeights;
-use crate::served_train::ArtifactStore;
 use crate::selection::local_model_name;
+use crate::served_train::ArtifactStore;
 
 /// How many attempts are asked of each endpoint at once when the command
 /// line names no width: the `--max-batch` plain `brain serve` decodes

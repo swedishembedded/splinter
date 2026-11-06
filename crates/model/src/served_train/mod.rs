@@ -39,7 +39,9 @@ use std::path::Path;
 
 use serde_json::Value;
 use splinter_core::digest::Digest;
-use splinter_core::training::{CurvePoint, HeldOutScore, PolicyGradientStep, PolicyGradientSummary, Selection, TrainingCurve};
+use splinter_core::training::{
+    CurvePoint, HeldOutScore, PolicyGradientStep, PolicyGradientSummary, Selection, TrainingCurve,
+};
 
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
@@ -63,15 +65,22 @@ pub fn fine_tune_served(
     let records = check_request(request)?;
     let params = request::fine_tune_params(brain, request)?;
     let clock = StepClock::start();
-    let report = run(brain, request.attempt_dir, request.seed, &params, request.cancel, &mut |frame| {
-        if let Some(step) = step_of(frame) {
-            clock.tick(step.step);
-            eprintln!("{}", step_line(frame));
-            if let Some(hook) = request.on_step {
-                (hook.0)(&step);
+    let report = run(
+        brain,
+        request.attempt_dir,
+        request.seed,
+        &params,
+        request.cancel,
+        &mut |frame| {
+            if let Some(step) = step_of(frame) {
+                clock.tick(step.step);
+                eprintln!("{}", step_line(frame));
+                if let Some(hook) = request.on_step {
+                    (hook.0)(&step);
+                }
             }
-        }
-    })?;
+        },
+    )?;
     let failed = |reason: String| PolicyError::Train {
         dir: request.attempt_dir.to_path_buf(),
         reason,
@@ -124,11 +133,18 @@ pub fn train_policy_gradient_served(
     request: &PolicyGradientTune<'_>,
 ) -> Result<TrainedPolicyGradient, PolicyError> {
     let (params, records) = request::policy_gradient_params(brain, request)?;
-    let report = run(brain, request.attempt_dir, request.seed, &params, request.cancel, &mut |frame| {
-        if step_of(frame).is_some() {
-            eprintln!("{}", step_line(frame));
-        }
-    })?;
+    let report = run(
+        brain,
+        request.attempt_dir,
+        request.seed,
+        &params,
+        request.cancel,
+        &mut |frame| {
+            if step_of(frame).is_some() {
+                eprintln!("{}", step_line(frame));
+            }
+        },
+    )?;
     let failed = |reason: String| PolicyError::Train {
         dir: request.attempt_dir.to_path_buf(),
         reason,
@@ -136,13 +152,14 @@ pub fn train_policy_gradient_served(
     let delivered = deliver(brain, request.attempt_dir, &report)?;
     // The series of every step is in the training record (a frame is droppable
     // on the bus and the report is one message), so it is read from there.
-    let record: Value = serde_json::from_slice(
-        &std::fs::read(&delivered.record).map_err(|source| PolicyError::Io {
-            path: delivered.record.clone(),
-            source,
-        })?,
-    )
-    .map_err(|e| failed(format!("the training record: {e}")))?;
+    let record: Value =
+        serde_json::from_slice(&std::fs::read(&delivered.record).map_err(|source| {
+            PolicyError::Io {
+                path: delivered.record.clone(),
+                source,
+            }
+        })?)
+        .map_err(|e| failed(format!("the training record: {e}")))?;
     let steps: Vec<PolicyGradientStep> =
         serde_json::from_value(record["policy_gradient"]["steps"].clone())
             .map_err(|e| failed(format!("the record's policy-gradient steps: {e}")))?;

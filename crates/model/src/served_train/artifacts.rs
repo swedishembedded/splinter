@@ -84,9 +84,8 @@ impl ArtifactStore {
             std::io::copy(&mut source, &mut out).map_err(Self::io(&temp))?;
             out.sync_all().map_err(Self::io(&temp))?;
             drop(out);
-            let digest =
-                Digest::of_reader(std::fs::File::open(&temp).map_err(Self::io(&temp))?)
-                    .map_err(Self::io(&temp))?;
+            let digest = Digest::of_reader(std::fs::File::open(&temp).map_err(Self::io(&temp))?)
+                .map_err(Self::io(&temp))?;
             let dest = self.root.join(digest.hex());
             std::fs::rename(&temp, &dest).map_err(Self::io(&dest))?;
             Ok(digest)

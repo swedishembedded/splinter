@@ -17,7 +17,9 @@ use serde_json::{json, Map, Value};
 use crate::capabilities::overlong_records;
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
-use crate::policy_gradient::{LossAggregation, PolicyGradientOptions, PolicyGradientTune, Reference};
+use crate::policy_gradient::{
+    LossAggregation, PolicyGradientOptions, PolicyGradientTune, Reference,
+};
 use crate::selection::local_model_name;
 use crate::train::{candidate_adapter_id, FineTune};
 use crate::train_checks::datasets_of;
@@ -110,7 +112,11 @@ pub(super) fn fine_tune_params(
     set(&mut params, "pack_answers", request.pack_answers);
     set(&mut params, "eval_every", request.eval_every);
     set(&mut params, "patience", request.patience);
-    set(&mut params, "keep_evaluations", request.keep_evaluations.is_some());
+    set(
+        &mut params,
+        "keep_evaluations",
+        request.keep_evaluations.is_some(),
+    );
     set(
         &mut params,
         "adapter_id",
@@ -266,7 +272,13 @@ mod tests {
     #[test]
     fn a_row_a_caller_bounded_is_that_row_and_never_shorter_than_brain_allows() {
         let none: [&Path; 0] = [];
-        assert_eq!(row_length(&none, Path::new("."), true, false, Some(4096)).unwrap(), 4096);
-        assert_eq!(row_length(&none, Path::new("."), true, false, Some(8)).unwrap(), MIN_BLOCK);
+        assert_eq!(
+            row_length(&none, Path::new("."), true, false, Some(4096)).unwrap(),
+            4096
+        );
+        assert_eq!(
+            row_length(&none, Path::new("."), true, false, Some(8)).unwrap(),
+            MIN_BLOCK
+        );
     }
 }

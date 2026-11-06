@@ -289,7 +289,10 @@ impl Api<'_> {
     async fn follow(&self, url: &str, id: &str, frames: &Sender<Value>) -> Result<(), JobError> {
         let (mut last, mut broken) = (None::<u64>, 0u32);
         loop {
-            match self.read_events(url, id, &mut last, &mut broken, frames).await? {
+            match self
+                .read_events(url, id, &mut last, &mut broken, frames)
+                .await?
+            {
                 Step::Ended(Ended::Succeeded) => return Ok(()),
                 Step::Ended(Ended::Cancelled) => return Err(JobError::Cancelled),
                 Step::Ended(Ended::Failed(why)) => return Err(JobError::Failed(why)),
@@ -476,13 +479,18 @@ mod tests {
                 &Event {
                     id: Some(9),
                     name: "done".into(),
-                    data: format!("{{\"status\":\"{status}\",\"error\":{{\"message\":\"{error}\"}}}}"),
+                    data: format!(
+                        "{{\"status\":\"{status}\",\"error\":{{\"message\":\"{error}\"}}}}"
+                    ),
                 },
                 &frames,
             )
         };
         assert_eq!(done("succeeded", ""), Some(Ended::Succeeded));
         assert_eq!(done("cancelled", ""), Some(Ended::Cancelled));
-        assert_eq!(done("failed", "no room"), Some(Ended::Failed("no room".into())));
+        assert_eq!(
+            done("failed", "no room"),
+            Some(Ended::Failed("no room".into()))
+        );
     }
 }
