@@ -109,3 +109,26 @@ D-Bus `Subscribe`/`Cancel` and HTTP `POST /v1/jobs`, `GET /v1/jobs/{id}/events` 
 Not done: the in-process training path is still there (phase 3 removes it, with the endpoint registry
 and the Slurm launch); preference and full-parameter jobs; multi-card runs of one job; a run of the 27B
 through the service.
+
+## The goal the phases serve: data and a goal in, a trained model out
+
+Decided 2026-11-06. What a user provides is a trove of data (repositories, documents, logs) and what to
+get good at; what comes out is a released, trained model and its record. Everything between is
+automatic and lives in `splinter learn`:
+
+1. **Read the data** into fair, machine-verifiable tasks: repository faults and multi-fault tasks,
+   comprehension drills from the code itself (predict what a function returns, which branch runs),
+   predict/construct tasks from documents. A task whose request does not state the contract its
+   check enforces is refused; requests are never enriched to make a task easier.
+2. **Measure** the champion on everything; classify tasks as always, sometimes or never solved and
+   why (a misread of the code, over-editing, the budget).
+3. **Choose how to improve** per failure cluster from the gain per GPU-hour strategies earned in
+   earlier rounds: on-policy RL on the frontier (k attempts per sometimes-solved task), privileged
+   self-distillation on all-fail tasks, comprehension drills where the code is misread, more
+   practice. A strategy shown to work in a campaign is added here, not run by hand.
+4. **Train** as brain service jobs; **gate** on a paired held-out exam with retention of everything
+   learned before and harness failures excluded; release or keep the champion; repeat until the
+   goal's exam is mastered or the budget is spent.
+
+The bench-driven campaign loop (`scripts/campaigns/flywheel`) is the scaffold where strategies are
+proven at scale; what it proves moves into this loop.
