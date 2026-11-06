@@ -439,6 +439,13 @@ fn builtin_kinds() -> Vec<TaskKind> {
         })
         .collect();
     kinds.extend(lua);
+    // `predict` is Python already; the drills of a repository's Python code
+    // carry the name that says so, beside `predict-lua`.
+    let predict = kinds.iter().find(|k| k.name == "predict").cloned();
+    kinds.extend(predict.map(|k| TaskKind {
+        name: "predict-python".into(),
+        ..k
+    }));
     kinds
 }
 
@@ -764,6 +771,17 @@ mod tests {
             assert_eq!(&renamed, lua);
             assert!(lua.validate().is_ok());
         }
+    }
+
+    /// `predict-python` is `predict` under the name that says its runtime.
+    #[test]
+    fn predict_python_is_predict_named_for_its_runtime() {
+        let catalogue = Catalogue::builtin();
+        let named = catalogue.get("predict-python").unwrap();
+        let predict = catalogue.get("predict").unwrap();
+        assert_eq!(named.runtime.as_deref(), Some(DEFAULT_CODE_RUNTIME));
+        assert_eq!(named.verifiers, predict.verifiers);
+        assert_eq!(named.brief, predict.brief);
     }
 
     #[test]
