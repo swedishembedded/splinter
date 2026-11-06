@@ -84,6 +84,7 @@ struct Shared {
     manifest: Mutex<Option<(PathBuf, String)>>,
     delay: Mutex<Duration>,
     reply: Mutex<Arc<Reply>>,
+    jobs: crate::scripted_jobs::Jobs,
     in_flight: AtomicUsize,
     peak: AtomicUsize,
     seen: Mutex<Vec<Seen>>,
@@ -108,6 +109,7 @@ impl ScriptedEndpoint {
             manifest: Mutex::new(None),
             delay: Mutex::new(Duration::ZERO),
             reply: Mutex::new(Arc::new(|_: &Seen| "an answer".to_string())),
+            jobs: crate::scripted_jobs::Jobs::default(),
             in_flight: AtomicUsize::new(0),
             peak: AtomicUsize::new(0),
             seen: Mutex::new(Vec::new()),
@@ -149,6 +151,20 @@ impl ScriptedEndpoint {
     pub fn following(self, path: PathBuf, id: &str) -> Self {
         *self.shared.manifest.lock().unwrap() = Some((path, id.to_string()));
         self
+    }
+
+    /// Serves training jobs as `script` says (`POST /v1/jobs` and the rest of
+    /// brain's job routes), over the artifact store the script names.
+    #[must_use]
+    pub fn with_training(self, script: crate::scripted_jobs::JobScript) -> Self {
+        *self.shared.jobs.script.lock().unwrap() = Some(script);
+        self
+    }
+
+    /// What the training service saw.
+    #[must_use]
+    pub fn jobs(&self) -> &crate::scripted_jobs::Jobs {
+        &self.shared.jobs
     }
 
     /// The base URL a client names: `http://127.0.0.1:<port>/v1`.
@@ -200,6 +216,7 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
         return;
     }
     let mut length = 0usize;
+    let mut last_event_id = None;
     let mut bearer = String::new();
     loop {
         let mut line = String::new();
@@ -209,6 +226,9 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
         let lower = line.to_ascii_lowercase();
         if let Some(value) = lower.strip_prefix("content-length:") {
             length = value.trim().parse().unwrap_or(0);
+        }
+        if let Some(value) = lower.strip_prefix("last-event-id:") {
+            last_event_id = value.trim().parse().ok();
         }
         if lower.starts_with("authorization:") {
             bearer = line["authorization:".len()..]
@@ -221,6 +241,9 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
     reader.read_exact(&mut body).unwrap();
     if bearer != SCRIPTED_KEY {
         let _ = respond(&mut stream, "401 Unauthorized", "application/json", "{}");
+        return;
+    }
+    if crate::scripted_jobs::route(&mut stream, &shared.jobs, &request_line, last_event_id, &body) {
         return;
     }
     if request_line.starts_with("GET /v1/models") {
@@ -299,7 +322,7 @@ fn chat(stream: &mut TcpStream, shared: &Shared, body: &[u8], bearer: String) {
     shared.in_flight.fetch_sub(1, Ordering::SeqCst);
 }
 
-fn respond(
+pub(crate) fn respond(
     stream: &mut TcpStream,
     status: &str,
     content_type: &str,

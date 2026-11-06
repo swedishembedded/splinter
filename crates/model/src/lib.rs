@@ -27,6 +27,9 @@
 //!   into a checkpoint directory that is a base like any other
 //! * [`train`] - one LoRA fine-tune, supervised (chat) or by DPO
 //!   (preference pairs), scored on held-out records.
+//! * [`served_train`] - the same fine-tunes and the policy-gradient run as
+//!   jobs of a brain service, their data moving by digest through an
+//!   artifact store.
 //! * [`capabilities`] - which dataset formats brain trains, and the check of a
 //!   dataset file against brain's own parser before it is stored.
 //! * [`stats`] - brain's paired sign test, which a release decision rests
@@ -63,14 +66,18 @@ pub mod residency;
 pub mod rl;
 #[cfg(feature = "scripted")]
 pub mod scripted_endpoint;
+#[cfg(feature = "scripted")]
+pub mod scripted_jobs;
 pub mod seed;
 pub mod selection;
+pub mod served_train;
 pub mod speech;
 pub mod stats;
 pub mod store;
 pub mod timeline;
 pub mod tokens;
 pub mod train;
+mod train_checks;
 
 pub use capabilities::{BrainDatasetCheck, TrainingCapabilities};
 pub use endpoint::BrainEndpoints;

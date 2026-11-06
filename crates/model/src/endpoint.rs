@@ -42,6 +42,7 @@ use splinter_core::digest::Digest;
 
 use crate::error::PolicyError;
 use crate::local::LocalWeights;
+use crate::served_train::ArtifactStore;
 use crate::selection::local_model_name;
 
 /// How many attempts are asked of each endpoint at once when the command
@@ -76,6 +77,8 @@ pub struct BrainEndpoints {
     key: String,
     adapter_manifest: Option<PathBuf>,
     attempt_concurrency: Option<usize>,
+    artifact_store: Option<ArtifactStore>,
+    refused_wait: Duration,
 }
 
 impl std::fmt::Debug for BrainEndpoints {
@@ -85,6 +88,7 @@ impl std::fmt::Debug for BrainEndpoints {
             .field("urls", &self.urls)
             .field("adapter_manifest", &self.adapter_manifest)
             .field("attempt_concurrency", &self.attempt_concurrency)
+            .field("artifact_store", &self.artifact_store)
             .finish_non_exhaustive()
     }
 }
@@ -115,6 +119,8 @@ impl BrainEndpoints {
             key: key.into(),
             adapter_manifest: None,
             attempt_concurrency: None,
+            artifact_store: None,
+            refused_wait: crate::served_train::REFUSED_WAIT,
         })
     }
 
@@ -140,6 +146,43 @@ impl BrainEndpoints {
     pub fn with_adapter_manifest(mut self, manifest: PathBuf) -> Self {
         self.adapter_manifest = Some(manifest);
         self
+    }
+
+    /// These endpoints, trained through the artifact store `store`: the
+    /// directory they were started with (`brain serve --artifact-store`), in
+    /// which datasets are published and trained adapters are found, by digest.
+    #[must_use]
+    pub fn with_artifact_store(mut self, store: ArtifactStore) -> Self {
+        self.artifact_store = Some(store);
+        self
+    }
+
+    /// These endpoints, leaving a training run alone for `wait` after every one
+    /// of them refused it for want of room (the default is
+    /// [`crate::served_train::REFUSED_WAIT`]).
+    #[must_use]
+    pub fn with_refused_wait(mut self, wait: Duration) -> Self {
+        self.refused_wait = wait;
+        self
+    }
+
+    /// How long a training run waits after every endpoint refused it.
+    #[must_use]
+    pub fn refused_wait(&self) -> Duration {
+        self.refused_wait
+    }
+
+    /// The artifact store training goes through, or the refusal that says to
+    /// name one: a training job takes its data by digest, so without a store
+    /// there is nothing to name it by.
+    pub fn artifact_store(&self) -> Result<&ArtifactStore, PolicyError> {
+        self.artifact_store.as_ref().ok_or_else(|| {
+            refused(
+                self.urls.first().map_or("", String::as_str),
+                "training on a brain endpoint needs --brain-artifact-store, the directory \
+                 the endpoint was started with as --artifact-store",
+            )
+        })
     }
 
     /// These endpoints, asked `width` attempts at once in all.

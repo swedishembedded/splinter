@@ -148,6 +148,8 @@ mod tests {
             steps: 3,
             loss: 1.5,
             lr: 1e-4,
+            grad_norm: None,
+            metrics: Vec::new(),
         };
         step(&progress(1));
         assert!(!brain_cancel.is_cancelled());

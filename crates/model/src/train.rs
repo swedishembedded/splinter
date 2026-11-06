@@ -35,11 +35,10 @@ use splinter_core::training::{
     CurvePoint, HeldOutScore, PreferenceScore, Selection, TrainingCurve,
 };
 
-use crate::capabilities::overlong_records;
 use crate::error::PolicyError;
 use crate::local::{closed_think_pairs, opens_think_block};
-use crate::pictures::validate_dataset_on;
 use crate::progress::{poll, StepClock};
+use crate::train_checks::check_request;
 
 /// The DPO temperature `beta` a preference fine-tune uses when its caller
 /// names none: brain's default.
@@ -321,42 +320,6 @@ pub fn validate_preference_dataset(
         })
 }
 
-/// Names every record of every chat dataset the run trains or scores that
-/// is longer than `max_block`, as the failure reason; `Ok` when none is.
-fn refuse_overlong(request: &FineTune<'_>, max_block: u32) -> Result<(), String> {
-    let datasets = [
-        Some(request.train),
-        Some(request.held_out),
-        request.held_out_text,
-        request.monitor,
-    ]
-    .into_iter()
-    .flatten()
-    .chain(request.replay.iter().map(PathBuf::as_path))
-    .chain(request.weighted_replay.iter().map(|(p, _)| p.as_path()));
-    let mut named = Vec::new();
-    for dataset in datasets {
-        let found = overlong_records(
-            dataset,
-            request.model_dir,
-            request.thinking,
-            request.pack_answers,
-            max_block,
-        )
-        .map_err(|e| e.to_string())?;
-        named.extend(found.iter().map(ToString::to_string));
-    }
-    if named.is_empty() {
-        Ok(())
-    } else {
-        Err(format!(
-            "{} record(s) longer than max_block {max_block}; shorten or drop them: {}",
-            named.len(),
-            named.join("; ")
-        ))
-    }
-}
-
 /// Fine-tunes a LoRA on `request.train` and scores base and tuned on the
 /// held-out records.
 pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
@@ -364,25 +327,8 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         dir: request.attempt_dir.to_path_buf(),
         reason,
     };
-    let trained_on = validate_dataset_on(request.train, request.model_dir)?;
-    let held_out_summary = validate_dataset_on(request.held_out, request.model_dir)?;
+    let records = check_request(request)?;
     let (weights, base_id) = base_weights(request.model_dir)?;
-    for replayed in request.replay {
-        validate_dataset_on(replayed, request.model_dir)?;
-    }
-    for (weighted, _) in request.weighted_replay {
-        validate_dataset_on(weighted, request.model_dir)?;
-    }
-    if let Some(monitor) = request.monitor {
-        validate_dataset_on(monitor, request.model_dir)?;
-    } else if request.eval_every > 0 {
-        return Err(failed(
-            "the run was asked to evaluate as it trains but given no monitoring records".into(),
-        ));
-    }
-    if let Some(max_block) = request.max_block {
-        refuse_overlong(request, max_block).map_err(failed)?;
-    }
     let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
         .device(crate::device::selected().spec())
         .dataset(request.train)
@@ -409,7 +355,6 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         fine_tune = fine_tune.monitor(monitor);
     }
     if let Some(text) = request.held_out_text {
-        validate_dataset(text)?;
         fine_tune = fine_tune.held_out_text(text);
     }
     if let Some(dir) = request.keep_evaluations {
@@ -481,7 +426,7 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
         training_record: outcome
             .record
             .ok_or_else(|| incomplete("training record"))?,
-        records: trained_on.records + held_out_summary.records,
+        records,
         block: outcome.block,
         base: outcome
             .base_score
