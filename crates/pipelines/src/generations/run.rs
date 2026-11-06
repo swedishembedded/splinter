@@ -436,6 +436,13 @@ pub fn run_generation(
 ) -> Result<Recorded<GenerationReport>, OrchestratorError> {
     request.limits.validate()?;
     pointer_of(&request.experiment)?;
+    if request.practice.objective.learns_from_groups() && request.replay != ReplayChoice::None {
+        return Err(OrchestratorError::Refused(format!(
+            "--objective {} trains the champion's adapter on its own rollouts and replays no \
+             earlier record; the replay {:?} would be dropped",
+            request.practice.objective, request.replay
+        )));
+    }
     if request.practice.exam_families == Some(0) {
         return Err(OrchestratorError::Refused(
             "a generation is judged on the exam it reserves: --exam-families 0 reserves none"

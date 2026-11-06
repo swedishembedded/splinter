@@ -56,6 +56,7 @@ mod full;
 mod keep;
 mod monitoring;
 mod policy_gradient;
+pub(crate) use policy_gradient::check_settings as check_policy_gradient_settings;
 mod records;
 mod rehearsal;
 mod seeds;

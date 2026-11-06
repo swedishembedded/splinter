@@ -52,7 +52,7 @@ use splinter_pipelines::generations::{
     read_ledger, retention_matrix, run_generation, GenerationReport, GenerationRequest, Limits,
     Outcome, ReplayChoice,
 };
-use splinter_pipelines::practice::PracticeRequest;
+use splinter_pipelines::practice::{PracticeObjective, PracticeRequest};
 use splinter_pipelines::release::{anchor, arm};
 use splinter_pipelines::train::{TrainPlan, Trainer};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
@@ -172,6 +172,20 @@ impl Trainer for Learner {
         cancel: &CancelToken,
     ) -> Result<splinter_model::train::TrainedPreference, OrchestratorError> {
         self.inner.train_preference(ctx, plan, cancel)
+    }
+
+    fn train_policy_gradient(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<splinter_model::policy_gradient::TrainedPolicyGradient, OrchestratorError> {
+        let trained = self.inner.train_policy_gradient(ctx, plan, cancel)?;
+        ctx.add_model(
+            arm(ctx.config(), Some(&trained.adapter)),
+            Model::new(Arc::new(UpTo { limit: self.limit }), "scripted/up-to"),
+        );
+        Ok(trained)
     }
 }
 
@@ -512,4 +526,40 @@ fn a_learning_progress_replay_is_weighted_by_the_panels_history_and_recorded_as_
         }
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn a_generation_trained_by_policy_gradient_is_decided_by_the_same_gate_and_replays_nothing() {
+    let (scratch, ctx) = context("generations-policy-gradient");
+    let learner = Learner::up_to(MODULES);
+    let mut asked = generation(&first_project(&scratch), EXAM_FAMILIES, ReplayChoice::None);
+    asked.practice.objective = PracticeObjective::PolicyGradient;
+
+    // A replay that the objective would drop is refused, not recorded.
+    let replaying = GenerationRequest {
+        replay: ReplayChoice::Uniform,
+        ..asked.clone()
+    };
+    let refused = run_generation(&ctx, &replaying, &learner, &CancelToken::new()).unwrap_err();
+    assert!(refused.is_refusal(), "{refused}");
+    assert!(learner.plans().is_empty());
+
+    let report = run(&ctx, &asked, &learner);
+    // The candidate was trained by the clipped objective on the practice's
+    // groups, then measured on the protected families and the new exam and
+    // released through the gate like any other.
+    assert_eq!(
+        *learner.inner.called.lock().unwrap(),
+        [Regime::PolicyGradient]
+    );
+    assert!(
+        matches!(report.record.outcome, Outcome::Accepted { .. }),
+        "{:#?}",
+        report.record
+    );
+    assert!(report.record.assessment.is_some());
+    assert_eq!(report.record.replay, ReplayChoice::None);
+    let rollouts = report.practice.rollouts.as_ref().unwrap();
+    assert_eq!(rollouts.objective, PracticeObjective::PolicyGradient);
+    assert!(rollouts.groups.unwrap().graded > 0);
 }

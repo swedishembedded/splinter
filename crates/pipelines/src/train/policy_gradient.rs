@@ -57,7 +57,7 @@ pub(super) fn train(
 /// Refuses settings a run of `regime` cannot honour, so none is dropped
 /// silently: the objective's own settings belong to a policy-gradient run, and
 /// that run holds nothing out and monitors nothing.
-pub(super) fn check_settings(regime: Regime, tuning: &Tuning) -> Result<(), OrchestratorError> {
+pub(crate) fn check_settings(regime: Regime, tuning: &Tuning) -> Result<(), OrchestratorError> {
     let refused =
         |what: String, why: &str| Err(OrchestratorError::Refused(format!("{what} {why}")));
     if regime != Regime::PolicyGradient {

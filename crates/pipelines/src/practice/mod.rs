@@ -62,12 +62,23 @@
 //! * **frontier** - pass@k keeps the tasks the policy solves sometimes: it
 //!   has an attempt that passed and one that did not, and, with a teacher,
 //!   the never-solved tasks whose demonstration was verified.
-//! * **dataset** - the passing attempts, action by action (`sft-step`),
-//!   with the tools the agent was offered; records longer than the block the
-//!   trainer fits are left out, counted, and the dataset is checked to hold
-//!   no family of the exam.
-//! * **train** - from the champion, with earlier releases' records
-//!   replayed.
+//! * **dataset** - by the run's objective ([`PracticeObjective`]). Under
+//!   `sft-step`, the passing attempts, action by action, with the tools the
+//!   agent was offered. Under `policy-gradient` and `self-distill`, every
+//!   graded attempt of the solve stage (not only the frontier's), through
+//!   the canonical policy-gradient view: the k attempts at a task are a
+//!   group, a verified pass earns one and anything else zero, the attempts
+//!   the exposure audit failed are left out and counted, and the groups are
+//!   reported by kind (graded, all passed, all failed) so no group's
+//!   information is dropped unseen; `self-distill` also distils the groups
+//!   whose attempts all failed, with a teacher context built from what the
+//!   workspace verifier recorded and the task's reference change. Records
+//!   longer than the block the trainer fits are left out, counted, and the
+//!   dataset is checked to hold no family of the exam.
+//! * **train** - from the champion: under `sft-step`, with earlier
+//!   releases' records replayed; under the other objectives, by brain's
+//!   clipped policy gradient on the champion's adapter, which holds
+//!   nothing out and replays nothing.
 //! * **release** - the gate, as for any candidate, over the exam this run
 //!   reserved: the champion and the candidate attempt the exam's tasks as
 //!   agents under the same bounds and seeds the solve stage used, graded by
@@ -79,7 +90,9 @@
 mod exam;
 pub(crate) mod held;
 pub(crate) use held::{held_tasks, keep_tasks};
+mod objective;
 mod report;
+mod rollouts;
 mod stages;
 
 use std::time::{Duration, Instant};
@@ -102,6 +115,8 @@ use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::runs::{record, Recorded};
 
 pub use exam::{exam_canaries, ExamReserved};
+pub use objective::PracticeObjective;
+pub use rollouts::{GroupCounts, Rollouts};
 
 /// How a run corrects the attempts that failed or got stuck: a teacher
 /// continues each from the state the student actually reached, and only the
@@ -238,6 +253,9 @@ pub struct PracticeRequest {
     /// The experiment plan this run is a generation of; the repository must be
     /// a family the plan trains in that generation, and never a sealed one.
     pub experiment: Option<PlanSlot>,
+    /// What the run trains on and how; supervised imitation of the passing
+    /// attempts by default.
+    pub objective: PracticeObjective,
 }
 
 /// Where in an [`ExperimentPlan`] a run is.

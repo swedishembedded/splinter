@@ -16,6 +16,7 @@ use splinter_knowledge::tasks::workspace::{HistoryReport, Reason};
 use splinter_store::tasks::TaskSetId;
 
 use super::exam::ExamReserved;
+use super::rollouts::Rollouts;
 use crate::curriculum::corrections::Corrections;
 use crate::curriculum::frontier::Frontier;
 use crate::curriculum::schedule::{ScheduleReport, Yield};
@@ -109,6 +110,11 @@ pub struct PracticeReport {
     pub yield_: Option<Yield>,
     /// The dataset stage: the agent's actions in the passing attempts.
     pub dataset: Option<Built>,
+    /// What a rollout objective (`policy-gradient`, `self-distill`) made of
+    /// the solve stage's attempts; absent under `sft-step`, and absent when
+    /// the run stopped before the dataset stage.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rollouts: Option<Rollouts>,
     /// The candidate trained.
     pub candidate: Option<Candidate>,
     /// The release gate on it, and the release when it passed.

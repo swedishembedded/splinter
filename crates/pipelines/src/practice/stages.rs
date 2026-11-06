@@ -36,6 +36,7 @@ use splinter_store::tasks::{TaskSet, TaskSetId};
 use super::exam::{exam_canaries, remembered_seed, reserve};
 use super::held::{held_tasks, keep_tasks};
 use super::report::{PracticeReport, Profiled, Snapshotted, TasksMade};
+use super::rollouts::{self, GroupCounts, Rollouts};
 use super::PracticeRequest;
 use crate::curriculum::corrections::{correct, CorrectionsRequest};
 use crate::curriculum::frontier::select_frontier;
@@ -47,7 +48,7 @@ use crate::learn::PolicyUsed;
 use crate::release::exams::{self, ExamRecord};
 use crate::release::{release_recorded, ReleaseRequest};
 use crate::solving::{solve_tasks, SolveRequest};
-use crate::train::{train_recorded, Trainer, Tuning, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
+use crate::train::{train_recorded, Trainer, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};
 use crate::verify::{verify_set, Grading};
 use splinter_core::annotation::Strength;
 use splinter_eval::gate::GateConfig;
@@ -108,7 +109,8 @@ pub(super) fn validate(request: &PracticeRequest) -> Result<(), OrchestratorErro
         ));
     }
     request.progress.validate()?;
-    request.pass_at_k.validate()
+    request.pass_at_k.validate()?;
+    rollouts::validate(request)
 }
 
 /// The stages of `practice`, in order.
@@ -575,7 +577,11 @@ fn frontier_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_
         .correction
         .as_ref()
         .is_some_and(|corrections| corrections.corrections.iter().any(|item| item.admitted));
-    if distribution.kept() == 0 && !corrected {
+    // A rollout objective learns from the groups the frontier does not keep
+    // too (an all-failed task is what self-distill distils): its dataset
+    // stage decides, and reports the groups by kind.
+    let learns_from_groups = st.practice.request.objective.learns_from_groups();
+    if distribution.kept() == 0 && !corrected && !learns_from_groups {
         return Ok(StageEnd::stop(
             summary,
             format!(
@@ -592,16 +598,42 @@ fn frontier_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_
 }
 
 fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>) -> Done {
-    let Some(attempts) = st.attempts.clone() else {
-        unreachable!("the dataset stage follows the frontier stage")
+    let request = st.practice.request;
+    let objective = request.objective;
+    let mut rollout_counts = None;
+    let (sets, view, rl) = if objective.learns_from_groups() {
+        // Every graded attempt of the solve stage forms the groups, not the
+        // frontier's selection of tasks; the exposed ones are left out.
+        let Some(solved) = st.report.solve.as_ref() else {
+            unreachable!("the dataset stage follows the solve stage")
+        };
+        let (attempts, total, exposed) = rollouts::unexposed(ctx, &solved.experience_set)?;
+        rollout_counts = Some(Rollouts {
+            objective,
+            attempts: total,
+            exposed,
+            not_attempted: solved.skipped.len(),
+            groups: None,
+        });
+        (
+            vec![attempts],
+            ViewName::PolicyGradient,
+            rollouts::rl_build(objective),
+        )
+    } else {
+        let Some(attempts) = st.attempts.clone() else {
+            unreachable!("the dataset stage follows the frontier stage")
+        };
+        let mut sets = vec![attempts];
+        sets.extend(st.corrections.clone());
+        (sets, ViewName::SftStep, Default::default())
     };
-    let mut sets = vec![attempts];
-    sets.extend(st.corrections.clone());
+    st.report.rollouts = rollout_counts;
     let built = match build(
         ctx,
         &BuildRequest {
             sets,
-            view: ViewName::SftStep,
+            view,
             strip: None,
             // The workspace verifier's executable verdict, which no weaker
             // check can stand in for.
@@ -609,7 +641,7 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
             system_prompt: None,
             export_only: false,
             limit: None,
-            max_block: st.practice.request.tuning.max_block.map(|b| b as usize),
+            max_block: request.tuning.max_block.map(|b| b as usize),
             pack: false,
             split_over_block: false,
             control: Default::default(),
@@ -617,20 +649,33 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
             only_actions: None,
             roles: None,
             images: false,
-            rl: Default::default(),
+            rl,
             base: None,
             voice: VoiceBuild::default(),
         },
     ) {
         Ok(built) => built,
-        Err(OrchestratorError::View(splinter_data::ViewError::Empty { .. })) => {
-            return Ok(StageEnd::halt(
+        Err(OrchestratorError::View(splinter_data::ViewError::Empty { excluded })) => {
+            return Ok(StageEnd::halt(if objective.learns_from_groups() {
+                format!(
+                    "no attempt made a {objective} record (attempts left out, by reason: \
+                     {excluded:?}); the frontier counts what the tasks' attempts were: {}",
+                    st.report
+                        .frontier
+                        .as_ref()
+                        .map_or_else(String::new, |f| format!("{:?}", f.distribution))
+                )
+            } else {
                 "no attempt passed verification untouched by the exposure audit, so there is \
-                 nothing to train on",
-            ));
+                 nothing to train on"
+                    .to_string()
+            }));
         }
         Err(e) => return Err(e),
     };
+    if let Some(rollouts) = st.report.rollouts.as_mut() {
+        rollouts.groups = Some(GroupCounts::of(&built));
+    }
     // The gate measures what this dataset trains on the exam reserved
     // against it, and every later release is held to it.
     exams::record(
@@ -706,10 +751,7 @@ fn train_stage(ctx: &Context, run: &mut Recorder<'_>, st: &mut PracticeState<'_>
             steps: request.steps,
             rank: request.rank.unwrap_or(DEFAULT_LORA_RANK),
             beta: None,
-            tuning: Tuning {
-                restart: request.rebuild,
-                ..request.tuning
-            },
+            tuning: rollouts::tuning(request),
         },
         st.practice.trainer,
     )?;
