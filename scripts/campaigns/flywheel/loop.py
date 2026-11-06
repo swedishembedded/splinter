@@ -633,6 +633,9 @@ def main() -> int:
         state = json.loads((gen_dir / "state.json").read_text())
         first = int(gen_dir.name) + (1 if "decide" in state.get("done", []) else 0)
     for number in range(first, first + args.generations):
+        # The campaign file is read again for every generation, so a change to it (a
+        # newer build, another recipe) takes effect at the next generation boundary.
+        campaign = Campaign(tomllib.loads(args.config.read_text()))
         if not generation(campaign, number, args.stop_before):
             break
     return 0
