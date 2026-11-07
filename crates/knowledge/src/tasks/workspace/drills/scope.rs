@@ -140,7 +140,7 @@ diff --git a/pkg/mod.py b/pkg/mod.py
      return a + b
 \x20
 \x20
-";  // \x20: the diff's context lines of an empty source line are one space
+"; // \x20: the diff's context lines of an empty source line are one space
 
     #[test]
     fn a_change_is_numbered_in_the_file_it_produces() {
