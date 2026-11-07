@@ -71,3 +71,11 @@ on: the primary outcome is pass@1 (as above); the co-primary efficiency outcome 
 of completion tokens per solved trial against the previous champion and against the base, paired by task,
 one-sided sign test, Holm-corrected over the workloads. A generation counts as an improvement if it is not
 worse on pass@1 (paired mean >= 0) and either outcome passes.
+
+2026-11-07 21:20 (before S1/S2 run; lease n442, one GH200): **S1 and S2 as measured.** S1's log-probability
+comparison needs a scorer the serving CLI does not expose; S1 is measured by its second half (the candidate's
+trajectories differ from the champion's, paired) and by the served model id naming the trained adapter.
+S2 trains on verified solutions of *training* tasks and examines those same training tasks (the exam seal
+correctly refuses held-out tasks as training data); it is still a control that the trained update reaches
+the served model and changes outcomes, never reported as a gain. Model for S0-S4: Qwen3-8B (brain
+69b1834fa, sven 2ac91b02).
