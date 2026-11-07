@@ -306,6 +306,10 @@ def proto6_metrics(record):
     return {k: record[k] for k in keys if k in record}
 
 
+class NoParser(Exception):
+    """A run whose metric prefix names no log shape this script reads: its values cannot be re-extracted."""
+
+
 def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
@@ -368,10 +372,12 @@ def parse_log(prefix, text):
         loss = re.search(r"loss ([\d.]+) -> ([\d.]+)", text)
         if loss:
             m.update(loss_first=loss.group(1), loss_last=loss.group(2))
-    else:
+    elif prefix.startswith("thr."):
         m["tokens_per_s"] = int(re.search(r"PROBE warm_tokens_per_s=(\d+)", text).group(1))
         m["step_s"] = re.findall(r"step=3 .*?step_s=([\d.]+)", text)[0]
         m["peak_mib"] = int(re.search(r"PROBE peak_mib=(\d+)", text).group(1))
+    else:
+        raise NoParser(f"no parser reads the log shape of metric prefix {prefix!r}")
     return m
 
 
@@ -391,7 +397,12 @@ def check_evidence_dir(evidence, problems):
             problems.append(f"{name}: sha256 of {run['log']} differs from data/measurements.json")
             continue
         text = path.read_text(encoding="utf-8")
-        if parse_log(run["metric_prefix"], text) != run["metrics"]:
+        try:
+            extracted = parse_log(run["metric_prefix"], text)
+        except NoParser as error:
+            problems.append(f"{name}: {error}; its values are not re-checked against {run['log']}")
+            continue
+        if extracted != run["metrics"]:
             problems.append(f"{name}: values extracted from {run['log']} differ from data/measurements.json")
         if run["metric_prefix"].startswith("e4."):
             if f"# commit: {run['brain_commit']}" not in text or f"# command: {run['command']}" not in text:

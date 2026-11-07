@@ -86,6 +86,17 @@ class ProbeParsers(unittest.TestCase):
                          (42, 16, 1, 0.0001373291015625))
         self.assertEqual((m["adapter_verified"], m["base_verified"]), (30, 13))
 
+    def test_a_log_of_a_shape_no_parser_reads_is_named_not_guessed(self):
+        # Before: an unknown prefix fell through to the throughput probe's regex and crashed the check.
+        with self.assertRaises(build_data.NoParser) as raised:
+            build_data.parse_log("lua.sgr2", json.dumps({"arm": "self-generate", "rounds": []}))
+        self.assertIn("lua.sgr2", str(raised.exception))
+
+    def test_a_flat_metrics_record_is_its_own_metrics(self):
+        flat = {"g0_sd_wins": 16, "g0_sd_mean_delta": "0.034"}
+        self.assertEqual(build_data.parse_log("gen27b", json.dumps(flat)), flat)
+        self.assertEqual(build_data.parse_log("gen27b.tw", json.dumps(flat)), flat)
+
 
 if __name__ == "__main__":
     unittest.main()
