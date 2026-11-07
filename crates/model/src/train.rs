@@ -35,6 +35,7 @@ use splinter_core::training::{
     CurvePoint, HeldOutScore, PreferenceScore, Selection, TrainingCurve,
 };
 
+use crate::device::contain_device_panic;
 use crate::error::PolicyError;
 use crate::local::{closed_think_pairs, opens_think_block};
 use crate::progress::{poll, StepClock};
@@ -196,14 +197,8 @@ pub fn score_chat(
     // brain reports a device failure (an allocation the card cannot hold) as
     // a panic; scoring is a measurement a caller may do without, so the
     // failure is returned and the caller decides.
-    std::panic::catch_unwind(|| brain::score_chat(base, adapter, dataset))
-        .map_err(|panic| {
-            failed(format!(
-                "device panic while scoring {}: {}",
-                dataset.display(),
-                crate::local::panic_message(&*panic)
-            ))
-        })?
+    contain_device_panic(|| brain::score_chat(base, adapter, dataset))
+        .map_err(|e| failed(format!("scoring {}: {e}", dataset.display())))?
         .map(held_out_score)
         .map_err(|e| failed(format!("scoring {}: {e}", dataset.display())))
 }
@@ -380,12 +375,14 @@ pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
     }
     let brain_cancel = brain::CancelToken::armed();
     let clock = StepClock::start();
-    let outcome = fine_tune
-        .run_with(
+    let outcome = contain_device_panic(|| {
+        fine_tune.run_with(
             &brain_cancel,
             poll(request.cancel, &brain_cancel, request.on_step, Some(&clock)),
         )
-        .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
+    })
+    .and_then(|run| run.map_err(|e| e.to_string()))
+    .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
             dir: request.attempt_dir.to_path_buf(),
@@ -593,12 +590,14 @@ pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreferenc
         fine_tune = fine_tune.continue_from(adapter);
     }
     let brain_cancel = brain::CancelToken::armed();
-    let outcome = fine_tune
-        .run_with(
+    let outcome = contain_device_panic(|| {
+        fine_tune.run_with(
             &brain_cancel,
             poll(request.cancel, &brain_cancel, None, None),
         )
-        .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
+    })
+    .and_then(|run| run.map_err(|e| e.to_string()))
+    .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
             dir: request.attempt_dir.to_path_buf(),

@@ -15,6 +15,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::device::contain_device_panic;
 use crate::error::PolicyError;
 use crate::train::{base_weights, validate_dataset, StepHook, StepReport};
 
@@ -128,8 +129,8 @@ pub fn full_fine_tune(request: &FullTune<'_>) -> Result<Checkpoint, PolicyError>
     let brain_cancel = brain::CancelToken::armed();
     let on_step = request.on_step;
     let cancel = request.cancel;
-    let outcome = tune
-        .run_with(&brain_cancel, |progress| {
+    let outcome = contain_device_panic(|| {
+        tune.run_with(&brain_cancel, |progress| {
             if let Some(StepHook(report)) = on_step {
                 report(&StepReport {
                     step: progress.step,
@@ -141,7 +142,9 @@ pub fn full_fine_tune(request: &FullTune<'_>) -> Result<Checkpoint, PolicyError>
                 brain_cancel.cancel();
             }
         })
-        .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
+    })
+    .and_then(|run| run.map_err(|e| e.to_string()))
+    .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
     if brain_cancel.is_cancelled() || outcome.status != brain::FineTuneStatus::Completed {
         return Err(PolicyError::Cancelled {
             dir: request.attempt_dir.to_path_buf(),
@@ -170,13 +173,15 @@ pub fn merge(base: &Path, adapter: &Path, out_dir: &Path) -> Result<Checkpoint, 
         reason,
     };
     let (weights, _) = base_weights(base)?;
-    let merged = brain::merge_adapter(weights.as_str(), adapter, out_dir).map_err(|e| {
-        failed(format!(
-            "merging {} into {}: {e}",
-            adapter.display(),
-            base.display()
-        ))
-    })?;
+    let merged = contain_device_panic(|| brain::merge_adapter(weights.as_str(), adapter, out_dir))
+        .and_then(|run| run.map_err(|e| e.to_string()))
+        .map_err(|e| {
+            failed(format!(
+                "merging {} into {}: {e}",
+                adapter.display(),
+                base.display()
+            ))
+        })?;
     Ok(Checkpoint {
         dir: merged.dir,
         weights: merged.weights,

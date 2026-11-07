@@ -431,6 +431,9 @@ impl futures::Stream for Events {
 
 /// A panic payload as text, however it was constructed.
 pub(crate) fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    if let Some(oom) = panic.downcast_ref::<gpu_core::DeviceOutOfMemory>() {
+        return oom.to_string();
+    }
     panic
         .downcast_ref::<String>()
         .cloned()

@@ -26,6 +26,7 @@ use serde::Serialize;
 use splinter_core::training::{PolicyGradientStep, PolicyGradientSummary};
 
 use crate::capabilities::overlong_records;
+use crate::device::contain_device_panic;
 use crate::error::PolicyError;
 use crate::pictures::validate_dataset_on;
 use crate::precision::BasePrecision;
@@ -361,17 +362,19 @@ pub fn train_policy_gradient(
         fine_tune = fine_tune.continue_from(adapter);
     }
     let brain_cancel = brain::CancelToken::armed();
-    let outcome = fine_tune
-        .run_with(
+    let outcome = contain_device_panic(|| {
+        fine_tune.run_with(
             &brain_cancel,
             poll(request.cancel, &brain_cancel, None, None),
         )
-        .map_err(|e| {
-            failed(format!(
-                "policy-gradient training on {}: {e}",
-                request.train.display()
-            ))
-        })?;
+    })
+    .and_then(|run| run.map_err(|e| e.to_string()))
+    .map_err(|e| {
+        failed(format!(
+            "policy-gradient training on {}: {e}",
+            request.train.display()
+        ))
+    })?;
     if brain_cancel.is_cancelled() {
         return Err(PolicyError::Cancelled {
             dir: request.attempt_dir.to_path_buf(),
