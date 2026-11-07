@@ -321,7 +321,7 @@ def parse_log(prefix, text):
         d = json.loads(text)
         ex = d.get("excluded") or {}
         return {"records": d["records"], **{k: ex.get(k, 0) for k in ("failed", "repeated_action", "compacted", "over_block")}}
-    if prefix.startswith("ce8.shape"):
+    if prefix.startswith(("ce8.shape", "gen27b")):
         # the arm-shape summary is written flat, so the file IS the metrics dict
         return json.loads(text)
     if prefix.startswith("ce8."):
@@ -458,6 +458,7 @@ def metrics():
     m.update(prefixed_metrics("rcv."))
     m.update(prefixed_metrics("gen2."))
     m.update(prefixed_metrics("lua."))
+    m.update(prefixed_metrics("gen27b"))
     return m
 
 

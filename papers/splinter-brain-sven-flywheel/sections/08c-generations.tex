@@ -1,0 +1,103 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Several generations of a 27B model on its own experience}\label{sec:generations}
+
+The experiments above train a smaller model on a larger one's trajectories, or a small model on
+tasks it writes itself. This section asks the question the loop exists for at full scale: does
+Qwen3.8-27B, trained only on its own verified attempts, become a better agent generation after
+generation, on tasks it never trained on? No stronger model takes part, and the base is the only
+starting point.
+
+\subsection{Workloads}
+
+Four kinds of task are attempted by the same model in every generation, each with a training
+partition the generation practises on and a held-out partition it is examined on; the partitions
+are whole families and are fixed before the base attempts anything.
+\begin{itemize}
+\item \textbf{Repository faults} (\cref{sec:protocol}): one seeded fault per task in the eight
+  authored repositories; the exam is the reserved files of six repositories and every file of the
+  two sealed ones (mdrender, graphkit), so the exam measures transfer to repositories never trained on.
+\item \textbf{Several faults at once}: \code{splinter tasks combine} joins three admitted
+  single-fault tasks of one snapshot whose faults lie in different files into one task (the union
+  of their checks and reference changes, one merged report); it is admitted only if no member's
+  reference alone repairs it, and a combined task with any reserved file is an exam task.
+\item \textbf{Embedded firmware}: defects in small firmware services for Cortex-M and nRF5340
+  boards, built with the vendor toolchain and graded by running the image in an emulator against
+  hidden behavioural checks.
+\item \textbf{Mechanical design}: a part drawing to a manufacturable solid, graded by geometry
+  against a reference.
+\end{itemize}
+
+\subsection{One generation}
+
+Each generation starts from the champion (the base, then the last promoted adapter) and runs four
+steps; every step records its result before the next starts.
+\begin{enumerate}
+\item \textbf{Explore.} The champion attempts every training task $k$ times ($k=4$ for the
+  repository workloads) under the model family's recommended sampling; a separate verifier grades
+  each attempt and an exposure audit fails any attempt that reached hidden material.
+\item \textbf{Learn.} The graded attempts are admitted as experience (held-out families are
+  refused by the exam seal) and become on-policy training records, one per model call. Each
+  candidate continues from the champion:
+  \begin{itemize}
+  \item \emph{GRPO}: an attempt's advantage is its reward (1 verified, 0 not) less its task
+    group's mean over the group's standard deviation; the clipped surrogate with a $k_3$ KL to the
+    base trains the adapter (clip 0.2, $\beta=0.02$).
+  \item \emph{GRPO with privileged self-distillation}: the same, and every task whose attempts all
+    failed (a group with no reward signal) is distilled instead: the same base model is shown what
+    the verifier knows (the failing checks and their output, the reference change where the task
+    has one) and each token the student wrote gets the advantage
+    $A_t=\mathrm{clip}(\log q(y_t\mid\text{privileged},y_{<t})-\log\pi_{\text{old}}(y_t\mid y_{<t}),\pm 5)$,
+    with a cap of 40 on its sum over a sequence, through the same clipped step.
+  \end{itemize}
+\item \textbf{Examine.} Every candidate and the champion attempt every held-out task under the
+  same agent build, serving build, benchmark revision and load per card.
+\item \textbf{Decide.} Each candidate is paired task by task with the champion on every workload;
+  the candidate with the largest gain over all paired tasks replaces the champion when that gain is
+  positive and no workload's mean falls by more than 0.2. The decision, the paired counts and the
+  sign test are recorded whether or not the champion changes.
+\end{enumerate}
+
+\subsection{What the harness must not decide}\label{sec:generations-harness}
+
+A comparison of agents is only a comparison of models if the software around them fails neither
+arm. Two failures of that kind were found while running the loop and are part of the protocol now.
+First, a wall-clock limit per trial makes the server's load part of the outcome: with about a
+hundred agents on one card, per-stream decoding slowed until correct trajectories were cut off, and
+the base's held-out repository pass rate read 46\,\% against 94\,\% at a fifth of the load. The loop
+therefore gives a model examined on a share of the cards that share of a workload's trials.
+Second, a serving engine that ran out of device memory for one prefill round failed every request
+of that round; it now returns the sequences to its queue and narrows admission instead. An exam in
+which any trial was ended by the server, the environment or the harness decides nothing.
+
+\subsection{Results}
+
+% Filled from the run records only; every number below is a claim in the ledger.
+
+\paragraph{Generation 0.} The base explored the training tasks of single faults, firmware and
+mechanical design, and two candidates were trained on its attempts; the generation was decided on
+three workloads with the deviations of \cref{app:deviations}. Against the pooled exams the
+self-distilling candidate won more held-out tasks than it lost and replaced the base.\cl{G2701} The GRPO candidate gained on both repository workloads but lost on firmware, so the
+rule preferred the self-distilling one even before the firmware loss is weighed.\cl{G2702} Nearly
+all of the exam was already solved by the base: the gain is made on the few held-out tasks it
+solved only sometimes, and most of what first looked like failures of the base were trials the
+serving engine or the per-trial limit ended (\cref{sec:generations-harness}).
+
+\paragraph{Generation 1.} Exploring every training task again teaches little: in generation 0,
+114 of 138 single-fault training tasks were solved by every attempt, and a group whose attempts all
+earn the same reward has no advantage to learn from. Generation 1 therefore practises a frontier:
+the training tasks the base did not always solve and the training tasks with several faults it had
+never attempted, with the promoted champion. Its GRPO candidate was promoted on a gain that is
+not significant.\cl{G2704}
+
+\paragraph{One measurement of all three.} The generation-0 decision compared the candidates with
+a base exam taken on an older serving build, part of which the serving engine had ended. When the
+base sat the same exam on generation 1's stack, the generation-0 champion no longer beat
+it,\cl{G2703} and after two generations no gain over the base is measured.\cl{G2704} The exams are
+near their ceiling for this model: the base already solves about nine held-out tasks in ten, so the
+few tasks it solves only sometimes carry the whole comparison, and two promotions on small
+positive means were not enough to move it. Self-improvement across generations is therefore not
+shown by these runs; what they establish is the loop itself, run end to end without a stronger
+model, and the conditions an exam must meet before its decision means anything
+(\cref{sec:generations-harness}).
