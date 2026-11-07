@@ -97,7 +97,10 @@ base sat the same exam on generation 1's stack, the generation-0 champion no lon
 it,\cl{G2703} and after two generations no gain over the base is measured.\cl{G2704} The exams are
 near their ceiling for this model: the base already solves about nine held-out tasks in ten, so the
 few tasks it solves only sometimes carry the whole comparison, and two promotions on small
-positive means were not enough to move it. Self-improvement across generations is therefore not
-shown by these runs; what they establish is the loop itself, run end to end without a stronger
+positive means were not enough to move it. The generations did change the model, in one direction: on the tasks both solved, the
+generation-1 champion needed about a tenth fewer completion tokens per solved task than the base on every
+workload.\cl{G2705} That was found after the data and over several comparisons, so it is exploratory; it
+is registered as a co-primary outcome for the next runs (\code{prereg/recursive-improvement.md}).
+Self-improvement in pass rate across generations is therefore not shown by these runs; what they establish is the loop itself, run end to end without a stronger
 model, and the conditions an exam must meet before its decision means anything
 (\cref{sec:generations-harness}).
