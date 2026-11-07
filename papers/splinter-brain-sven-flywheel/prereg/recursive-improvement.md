@@ -60,3 +60,14 @@ Nothing here is claimed until a stage passes on its registered criterion. A fail
 its numbers.
 
 ## Amendments
+
+2026-11-07 18:08 (before any RSI1 run): **H-EFF, registered from an exploratory finding.** On the held-out exams
+the base, gen001-grpo-sd and gen002-frontier-grpo sat on one stack, completion tokens per solved trial (paired
+by task, tasks solved by both) fell base > gen1 > gen2: gen2 vs base x0.905 on single faults (59 fewer / 38
+more, one-sided sign p = 0.021), x0.896 on three faults (61 / 22, p < 0.0001), x0.873 on firmware (12 / 3,
+p = 0.018); evidence gen27b/efficiency-three-way.json in the flywheel evidence dataset. This was found after
+the data and over several comparisons, so it is exploratory. Registered for every RSI1 generation from S4
+on: the primary outcome is pass@1 (as above); the co-primary efficiency outcome is the geometric-mean ratio
+of completion tokens per solved trial against the previous champion and against the base, paired by task,
+one-sided sign test, Holm-corrected over the workloads. A generation counts as an improvement if it is not
+worse on pass@1 (paired mean >= 0) and either outcome passes.
