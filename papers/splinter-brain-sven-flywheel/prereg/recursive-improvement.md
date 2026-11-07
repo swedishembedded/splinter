@@ -1,0 +1,62 @@
+<!--
+SPDX-License-Identifier: CC-BY-4.0
+Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+-->
+
+# Registration of RSI1: recursive self-improvement, validated link by link
+
+Written on 2026-11-07, before any run of RSI1 exists. Anything changed after the first run of a stage is a
+dated amendment below the line "Amendments", and a stage's outcome is reported whatever it is.
+
+## Why a new registration
+
+The 27B generations of 2026-11-05..07 (section 08c) promoted two candidates, yet on one measurement on one
+stack neither beats the base (gen-1 champion vs base 13 won / 16 lost; gen-2 vs base 17 / 14). Three causes
+fit the records and are tested here instead of assumed:
+
+1. **The policy hardly moved.** Generation 1 trained 120 steps x 4 records, LoRA rank 16, lr 2e-5, ending at
+   KL ~0.007 to the reference: possibly too small an update to change agent behaviour.
+2. **The exam could not see a gain.** The base solved ~90 % of the held-out tasks; only 20-30 of 206 paired
+   tasks are discordant, so a 2-3 point gain is below the exam's power.
+3. **Little signal per step.** 114 of 138 generation-0 training tasks were solved by every attempt (no group
+   advantage), and the frontier pool got 3-4 attempts per task instead of 8.
+
+The teacher-free 8B Lua loop, which had headroom, did improve (25 -> 49 of 82 sealed probes, p = 0.0065), so
+the loop is not shown to be unable to learn; the 27B setup may have been unable to show it.
+
+## Design, informed by current work on verifier-driven self-improvement
+
+- **Expert iteration as the primary update** (STaR, ReST-EM, rejection-sampling fine-tuning): each
+  generation fine-tunes on its own verified successes. It moves the policy far more per GPU-hour than a
+  near-KL-bounded policy gradient and has the best record of multi-iteration gains with a fixed verifier.
+- **Policy gradient done the way recent recipes do it** (DAPO, Dr. GRPO) as the second arm: dynamic
+  sampling (only groups with mixed outcomes enter a batch, refilled until full), clip-higher (asymmetric
+  clip, e.g. 0.2 / 0.28), token-level loss, no length normalisation, k = 8 per task, and a learning rate
+  swept until the trained tasks actually move (stage 3).
+- **A curriculum at the frontier the model sets itself** (Absolute Zero, Self-Challenging agents, R-Zero):
+  splinter generates new mutation tasks from the repositories, admits only those the current policy
+  solves sometimes (pass rate 0.2-0.8 at k = 8) and drills the functions failed tasks touch
+  (`splinter tasks drills --for-tasks`). The pool is rebuilt every generation from the new policy.
+- **An exam that can see a gain:** held-out tasks whose base pass rate lies in 0.2-0.8 at k = 8, sized by a
+  power calculation for a 5-point paired gain (alpha 0.05, power 0.8), every model on one stack, the
+  base re-measured with every generation.
+
+## Stages (each must pass before the next is run)
+
+| Stage | Question | Pass criterion | Cost |
+|---|---|---|---|
+| S1 | Is the trained adapter what is served? | Served log-probabilities of 50 training records equal the trainer's within 1e-2 mean abs; the candidate's trajectories differ from the champion's (tokens/turns/edits, paired test) | minutes, 1 card |
+| S2 | Can training move the exam at all? | SFT on the exam tasks' own verified solutions (deliberate leakage, a control never reported as a gain) raises the exam pass rate by >= 20 points | ~1 h, 1 card |
+| S3 | Does an update learn its own tasks? | Expert iteration and the DAPO-style arm, each on ~30 tasks with base pass 0.2-0.8, raise pass@1 on those same tasks by >= 10 points (paired, k = 8) | hours, 1-2 cards |
+| S4 | Does it transfer? | Same update, held-out mid-difficulty exam: paired gain > 0 with one-sided p < 0.05 | hours, 2-4 cards |
+| S5 | Is it recursive? | Three generations, each trained only on its own verified attempts and self-set frontier: every generation's champion beats the base on the same-stack exam (p < 0.05), and generation 3 beats generation 1 | 1-2 days |
+
+Scale: S1-S4 first on Qwen3-4B (or 8B) on tasks whose base pass rate is checked to lie in 0.2-0.8, then the
+27B on a mid-difficulty exam. A stage that fails stops the chain and its cause is fixed and recorded first.
+
+## What is not claimed
+
+Nothing here is claimed until a stage passes on its registered criterion. A failed stage is reported with
+its numbers.
+
+## Amendments
