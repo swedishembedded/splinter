@@ -79,3 +79,19 @@ S2 trains on verified solutions of *training* tasks and examines those same trai
 correctly refuses held-out tasks as training data); it is still a control that the trained update reaches
 the served model and changes outcomes, never reported as a gain. Model for S0-S4: Qwen3-8B (brain
 69b1834fa, sven 2ac91b02).
+
+2026-11-07 23:30 (before any Lua run of RSI1; lease n442, four GH200): **S0 result and the closed-book arm.**
+S0 measured Qwen3-8B (brain 69b1834fa, sven 2ac91b02) on the repository workloads at k = 4: repo-families
+25 passed of 530 graded trials, repo-hard 0 of 479. No task lies in the 0.2-0.8 band at usable numbers, so
+S3-S5 cannot run there for an 8B; S2 stopped on a device out-of-memory in training (a defect, not an
+outcome). S3-S5 therefore run first in the closed-book arm where a small model is known to learn: the
+teacher-free Lua 5.1 loop (`splinter learn --self-generate --reference-teacher --kinds predict-lua`,
+structural skill graph, full fine-tune lr 1e-6 x 6 steps, three manual chapters 5.4-5.6, splinter b688e3ee7),
+Qwen3-4B, four replicates (one per card). **Generations** are explicit: generation 1 is one learn run from the
+base; generation k+1 is one learn run whose `--policy-base` is generation k's final checkpoint and whose skill
+graph and probes are generation 1's (`--probes-from`). Each run measures the same sealed final probes before
+and after. **Primary outcome:** final-probe passes of generation k against generation k-1 and against the
+base, per replicate, combined over replicates (paired over skills: one-sided sign test; over replicates:
+the mean gain and its one-sided t-test). **RSI is shown** if, over the replicates, generation 2 beats
+generation 1 and generation 3 beats generation 2 on the final probes (p < 0.05 each), and the last
+generation beats the base. Anything less is reported as measured.
