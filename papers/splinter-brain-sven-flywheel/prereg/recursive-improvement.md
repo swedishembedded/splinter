@@ -182,3 +182,8 @@ replaced: every attempt of an iteration's mixed groups (items answered right 1..
 is a record with its standardised advantage, right ones pushed up and wrong ones down; the adapter (rank 32)
 continues the policy that sampled them (on-policy), clip 0.2, k3 KL 0.02 to the base, lr 1e-6, thinking on.
 Same pools, measurement and criterion as arm R, on its own files (rsi1/rl/pg-*), cards 1-3, three iterations.
+
+2026-11-08 16:40 (before arm P runs) **Arm P sampling.** Policy-gradient rollouts are sampled from the full softmax
+at temperature 1.0 (no top-k), and the trainer's temperature is 1.0, so the behaviour likelihoods brain scores are
+those of the distribution the rollouts were drawn from (a truncated top-k sampler would make the importance ratio
+inexact).
