@@ -1,0 +1,96 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
+
+# Recursive self-improvement: what failed, why, and the plan that closes the gaps
+
+Scope: proving that a model improves itself across generations with splinter, brain and sven (registered as
+RSI1 in `papers/splinter-brain-sven-flywheel/prereg/recursive-improvement.md`), the causes found when it did
+not, and the work that removes them.
+
+Status is recorded here and in the registration's dated amendments; the run records and analyses are in the
+flywheel evidence dataset (`gen27b/`, `rsi1-lua/`) and the curated 27B dataset (`qwen38-27b-flywheel`).
+
+## What has been measured (2026-11-05 .. 11-08)
+
+| Experiment | Result | Why it does not show recursive improvement |
+|---|---|---|
+| 27B agent loop, 2 generations (repo, repo-hard, firmware) | Gen-0 promotion (+0.034, p 0.047) did not reproduce; on one stack gen-1 vs base 13/16, gen-2 vs base 17/14 | Exam near ceiling (base ~0.9); generation 0 compared against a base exam run on another brain build whose OOMs ended base trials; tiny updates (KL ~0.007); 114 of 138 training tasks always solved (no group signal) |
+| 27B efficiency (exploratory) | Tokens per solved task fell base > gen1 > gen2 (~10-13 %, sign p 0.02 / <0.0001 / 0.02) | Found after the data; registered as co-primary H-EFF, not yet confirmed |
+| 8B agent on repo tasks (S0) | 25/530 repo, 0/479 repo-hard | No headroom for a small agent model on these tasks |
+| Lua closed-book arm A (4B, 4 replicates) | Gen1 +8.75, gen2 +4.75 (p .001), gen3 -0.5 | Plateau; and see the re-grade below |
+| Lua arm B (starvation fix c7d11d932) | Gen1 +11, then ~+1, ~0 | Same plateau, reached faster |
+| Neutral re-grade of A/B | Base ~57-61 % (no thinking) / ~71 % (thinking, pass@16 80-84 %) on the same probes vs ~40 % under splinter's probing; champions ~= base | **The A/B gains were adaptation to splinter's probing protocol, not added competence.** The paper's earlier Lua claims (SL20-SL23, 8B 25 -> 49) need the same re-grade |
+| Arm H (exam = 889 code-written items the base never answered, neutral grading) | Gen-1 champions 38 / 31 / 34 of 889 (base 0), 19 families, 12 items learned by all three replicates | First gain that survives a neutral measurement; generations 2-3 decide recursion |
+
+## Root causes (ranked by evidence)
+
+1. **Measuring the wrong thing.** Exams at ceiling (27B), and a probing protocol the model can adapt to (Lua A/B).
+   Every claim needs a neutral measurement of the same items, the base measured identically, and an exam drawn
+   from what the base cannot do.
+2. **No frontier.** Most tasks were always solved or never solved; a group-advantage or self-imitation signal
+   exists only on tasks solved sometimes.
+3. **Narrow sampling.** 2-4 attempts per task; mixed groups were rare.
+4. **Search switched off.** All Lua runs trained and measured without thinking; the model could only learn an
+   input-to-output mapping. With thinking the same base answers ~71 % of the probes.
+5. **Training on answers, not procedures.** Acquisition keeps one verified final answer per task (the shortest)
+   as `SftFinal`; reasoning, intermediate states and repairs are discarded.
+6. **Tiny or noisy updates.** Lua: lr 1e-6 x 6 steps with 3-4 records per round; round acceptance on 3-4 dev
+   probes per skill; retention bound 0.5 (default 0.25).
+7. **Starved self-generation** (fixed in c7d11d932): 66 % of proposals refused, mostly repeats; a round stopped
+   at the first barren request and later rounds were not told what earlier rounds had admitted.
+
+Not a cause: relabelling from execution already exists (a mispredicted program is admitted with the
+interpreter's output, since 81c611b70; b39782f43 records and counts it).
+
+## Plan
+
+### In flight (2026-11-08)
+
+- **Arm H** (registered 11d5f77ff, accfaeabc): the arm-B loop measured on the 889-item base-never exam; criterion
+  gen1 > base, gen2 > gen1, gen3 > gen2 (pooled sign test p < 0.05, no replicate falling).
+- **Arm R** (registered 53135019e): frontier tasks (solved 1..15 of 16), 16 samples per task with thinking, training
+  on the model's own verified reasoning traces, adapter retrained from the base on all traces so far (ReST-EM),
+  measured on fresh items of trained families, six never-trained families and the arm-H exam.
+- **brain: policy-gradient training on qwen3 bases** (rollouts with advantages, negative rewards push down) —
+  today refused ("wired for qwen35 bases, not qwen3"). Then a **policy-gradient arm** (GRPO/DAPO: dynamic sampling
+  of mixed groups, clip-higher, token-level loss, k = 16, thinking on) on arm R's pools.
+
+### splinter
+
+- [ ] Promote arm R's driver (`rsi1/rl/star.py`, a script today) into `splinter learn` as an automatic strategy:
+  frontier selection by measured pass@k, wide sampling, thinking-on traces, ReST-EM retraining, plateau detection.
+- [ ] Dataset views beyond `sft-final`: `sft-repair` (wrong attempt + feedback -> fix), `sft-diagnose`,
+  `sft-execute` (predict intermediate state), `sft-verify`, `policy-trajectory`; keep more than the shortest answer.
+- [ ] Procedure data from the environment: interpreter-derived execution traces (each sub-call's value) as
+  reasoning targets; counterexample generation for stuck skills.
+- [ ] Measurement: power-sized dev and confirmation suites (24-64 items per skill), pass@1 / pass@16 / pass@64,
+  held-out families and unseen compositions, the base re-measured with every generation under a neutral protocol,
+  and the protocol a model is used with measured beside it.
+- [ ] Separate exploration from the champion: an explorer policy (base, earlier checkpoints, higher temperature)
+  feeding a shared verified store; promotion only through an independent gate.
+- [ ] Stricter round acceptance (no promotion on one dev probe) and the 0.25 retention default restored.
+- [ ] A plateau controller that switches strategy (task distribution, external evidence, repair training,
+  exploration breadth, objective) when the discovery rate per GPU-hour falls.
+- [ ] Re-grade the paper's Lua claims (SL20-SL23, the 8B run) under a neutral protocol before keeping them.
+
+### brain
+
+- [ ] Policy-gradient rollouts on qwen3 (in flight), then on any base the trainer supports.
+- [ ] The 8B bf16 fine-tune ran out of device memory during held-out scoring on an otherwise empty 96 GB card
+  (S2, 2026-11-07): reproduce and fix the scoring memory sizing.
+- [ ] `ChatFineTune::run_with` should return a typed error, not unwind, on device OOM.
+- [ ] LFM3-1.7B (`LiquidAI/LFM3-1.7B`, `-Base`): serving and full fine-tuning from the published files, so the
+  arm-R and policy-gradient experiments can run on a small non-Qwen model with full training.
+- [ ] Replica routing: drop a finished job of a long-lived open group from `running_jobs`.
+
+### sven / harness
+
+- [ ] Record executable failures, corrections and independent retests as structured experience (for the repair
+  and diagnose views).
+- [ ] Agent trials must not reach the benchmark's snapshot store (an agent unpacked the workspace snapshot bundles from `<benchmark-root>/snapshots`).
+
+### Open questions to answer with numbers
+
+- Does RL (with negative rewards) raise pass@64 on unseen families and compositions where self-imitation does not?
+- Does a small model (LFM3-1.7B, full fine-tune) improve reliably across generations and discover answers its base
+  never produced at pass@16 with thinking?

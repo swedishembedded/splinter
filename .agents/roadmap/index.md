@@ -32,6 +32,7 @@ which fails when this index has drifted or a ledger has no scope.
 | [`persona-program`](persona-program.md) | Persona program: learn to think, act and write like a person | the persona program (learn to think, act and write like a person): its goal and the index and order of its work. |
 | [`persona-seeds-and-health`](persona-seeds-and-health.md) | Persona program: seed policy and build health | the persona program's seed policy and build health. |
 | [`persona-study`](persona-study.md) | Persona program: the study, the records and the real authors | the persona study, its records and the real authors it is run on. |
+| [`recursive-improvement`](recursive-improvement.md) | Recursive self-improvement: what failed, why, and the plan that closes the gaps | proving that a model improves itself across generations with splinter, brain and sven (registered as |
 | [`repository-practice`](repository-practice.md) | Learning a repository from executable tasks | learning a git repository from executable tasks (`practice`), from snapshot to gated release. |
 | [`research-upgrades`](research-upgrades.md) | research-to-stack - splinter share | Splinter's share of the research-to-stack upgrades: true training sources, exams strong enough to see an effect, and rollouts spent where they teach. |
 | [`speech`](speech.md) | Speech roadmap: a persona you can talk to, then a persona that hears and speaks natively | speech for personas: the cascade voice loop (`samples/voice-loop`) and the speech-native model after it. |
