@@ -187,3 +187,14 @@ Same pools, measurement and criterion as arm R, on its own files (rsi1/rl/pg-*),
 at temperature 1.0 (no top-k), and the trainer's temperature is 1.0, so the behaviour likelihoods brain scores are
 those of the distribution the rollouts were drawn from (a truncated top-k sampler would make the importance ratio
 inexact).
+
+2026-11-08 17:50 **Outcome of arm H (registered analysis rsi1/hard/analysis-h.py; evidence rsi1-hard/ in the flywheel
+evidence dataset): the criterion is met.** On the 889 code-written Lua items the base never answered (base greedy
+0 of 889), measured greedily without thinking under the neutral request, token-wise grading, the champions of
+three replicates scored: generation 1 38 / 31 / 34, generation 2 60 / 63 / 49, generation 3 67 / 83 / 59. Pooled
+over the replicates' item pairs: generation 1 vs base 103 wins / 0 losses (one-sided sign p 1e-31), generation 2 vs
+generation 1 95 / 26 (p 1e-10), generation 3 vs generation 2 103 / 66 (p 0.0027); no replicate's accuracy fell
+between consecutive generations. Each generation was trained only on tasks its own model wrote, graded by the Lua
+interpreter (splinter learn --self-generate --reference-teacher, full fine-tune, splinter b39782f43), and no exam
+item was shown to any run. Gains spread over 19 of 25 families; 12 items were learned by all three replicates in
+generation 1. Losses between generations (26, then 66) show forgetting beside the gains.
