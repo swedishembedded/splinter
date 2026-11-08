@@ -51,7 +51,7 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
 - **Arm R** (registered 53135019e): frontier tasks (solved 1..15 of 16), 16 samples per task with thinking, training
   on the model's own verified reasoning traces, adapter retrained from the base on all traces so far (ReST-EM),
   measured on fresh items of trained families, six never-trained families and the arm-H exam.
-- **brain: policy-gradient training on qwen3 bases** (rollouts with advantages, negative rewards push down) —
+- **brain: policy-gradient training on qwen3 bases** (rollouts with advantages, negative rewards push down) -
   today refused ("wired for qwen35 bases, not qwen3"). Then a **policy-gradient arm** (GRPO/DAPO: dynamic sampling
   of mixed groups, clip-higher, token-level loss, k = 16, thinking on) on arm R's pools.
 
@@ -74,6 +74,11 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
 - [ ] Re-grade the paper's Lua claims (SL20-SL23, the 8B run) under a neutral protocol before keeping them.
 
 ### brain
+
+Rule for everything below: training is architecture-generic. SFT, policy gradient, self-distillation, full
+fine-tune vs adapter, and anything beyond one model or one card live in shared paths an architecture gets by
+implementing a contract; a missing capability is refused by name, never an architecture.
+
 
 - [ ] Policy-gradient rollouts on qwen3 (in flight), then on any base the trainer supports.
 - [ ] The 8B bf16 fine-tune ran out of device memory during held-out scoring on an otherwise empty 96 GB card
