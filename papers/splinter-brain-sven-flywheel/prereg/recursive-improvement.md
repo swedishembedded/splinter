@@ -225,3 +225,10 @@ non-thinking samples (token-wise grading); the base is re-measured greedily as g
 measurement and criterion exactly as arm H (gen1 > base, gen2 > gen1, gen3 > gen2, pooled one-sided sign test
 p < 0.05 each, no replicate falling). Starts when arm P2 frees cards 1-3; the exam selection runs on card 0 after arm
 R's iteration 3 is measured (arm R then stops; its later iterations would be descriptive only).
+
+2026-11-08 21:20 **Arm R outcome: criterion not met.** test-held (never-trained families) pass@1 over iterations 0-3:
+0.410 / 0.446 / 0.474 / 0.448, pass@4 0.550 / 0.574 / 0.611 / 0.597; test-seen pass@1 0.732 / 0.707 / 0.706 / 0.724,
+pass@4 0.817 / 0.794 / 0.822 / 0.830; arm-H exam (no thinking) 0 / 17 / 25 / 21 of 889. Iteration 1 vs base was not
+significant (items up/down 40/28, p 0.09) and iteration 3 fell below iteration 2, so the registered monotone
+criterion fails. Iteration 3 remains above the base on the never-trained families (pass@1 +0.038, pass@4 +0.047).
+Arm R stops here (its sequencer then selects arm HP's exam on card 0).
