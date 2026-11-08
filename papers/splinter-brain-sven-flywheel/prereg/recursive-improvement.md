@@ -215,3 +215,13 @@ so lr 1e-6 over ~300 steps is imperceptible (arm P's runs: KL to the base ~0.01,
 1.003), and steps x grad_accum covered about half of each iteration's rollouts. Arm P2 is arm P with lr 5e-6 and
 every rollout read once per iteration (steps = rollouts / 4 at grad_accum 4), from the base, files rsi1/rl/pg2-*,
 cards 1-3, three iterations, same pools, measurement and criterion.
+
+2026-11-08 21:15 (before any run of it) **Arm HP: arm H in a second domain (Python).** Same design as arm H, a
+different language and documentation: sources are the interpreter's own reference text for str, list, dict and math
+(`python3 -m pydoc`, rsi1/py/sources), kinds predict-python, the pinned python3 interpreter as the only grader.
+Exam: 1164 code-written Python programs from 21 templates (rsi1/py/make_exam.py, seed 20261108; reference = what
+the interpreter prints, equal under two hash seeds); the exam is the items Qwen3-4B never answered in 4 neutral,
+non-thinking samples (token-wise grading); the base is re-measured greedily as generation 0. Loop, replicates (three),
+measurement and criterion exactly as arm H (gen1 > base, gen2 > gen1, gen3 > gen2, pooled one-sided sign test
+p < 0.05 each, no replicate falling). Starts when arm P2 frees cards 1-3; the exam selection runs on card 0 after arm
+R's iteration 3 is measured (arm R then stops; its later iterations would be descriptive only).
