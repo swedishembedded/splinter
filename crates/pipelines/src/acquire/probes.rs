@@ -26,7 +26,9 @@ use splinter_core::experience::{PrivilegedKind, Task};
 use splinter_knowledge::concepts::ConceptResolver;
 use splinter_knowledge::skills::{uses_symbol, Skill};
 use splinter_knowledge::tasks::dedup::Seen;
-use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
+use splinter_knowledge::tasks::{
+    relabelled_from_execution, DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS,
+};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use crate::curriculum::frontier::tally;
@@ -103,6 +105,9 @@ pub struct Written {
     pub repeated: Vec<String>,
     /// The tasks refused, by reason.
     pub refused: BTreeMap<String, usize>,
+    /// Of [`Self::tasks`], those whose reference is what their program
+    /// printed after the generator claimed another output.
+    pub relabelled: usize,
     /// What each request for tasks proposed, in the order asked.
     pub batches: Vec<ProposalBatch>,
 }
@@ -116,6 +121,9 @@ pub struct ProposalBatch {
     pub written: usize,
     /// Tasks refused, by reason.
     pub refused: BTreeMap<String, usize>,
+    /// Of the admitted, tasks relabelled from execution: their reference is
+    /// what their program printed, not what the generator claimed.
+    pub relabelled: usize,
 }
 
 /// How often and how long [`write_until`] asks the generator.
@@ -186,6 +194,7 @@ pub fn write_for(
         instructions: Vec::new(),
         repeated: Vec::new(),
         refused: generated.rejected.clone(),
+        relabelled: 0,
         batches: Vec::new(),
     };
     for entry in ctx.tasks().get_set(&generated.task_set)?.members {
@@ -211,6 +220,7 @@ pub fn write_for(
                 }
             }
             None => {
+                written.relabelled += usize::from(relabelled_from_execution(&task));
                 seen.admit(&task.instruction);
                 written.instructions.push(task.instruction);
                 written.tasks.push(entry);
@@ -221,6 +231,7 @@ pub fn write_for(
         proposed: written.tasks.len() + written.refused.values().sum::<usize>(),
         written: written.tasks.len(),
         refused: written.refused.clone(),
+        relabelled: written.relabelled,
     });
     Ok(written)
 }
@@ -258,6 +269,7 @@ pub fn write_until(
         for (why, n) in more.refused {
             *written.refused.entry(why).or_default() += n;
         }
+        written.relabelled += more.relabelled;
         written.batches.extend(more.batches);
         written.repeated.extend(more.repeated);
         if more.tasks.is_empty() && plan.stop_when_barren {

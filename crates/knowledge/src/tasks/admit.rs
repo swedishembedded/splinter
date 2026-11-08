@@ -15,7 +15,9 @@ use std::collections::BTreeSet;
 use splinter_core::annotation::Outcome;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Span, Task};
-use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK};
+use splinter_core::kinds::{
+    EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK, RELABELLED_FROM_EXECUTION,
+};
 use splinter_core::selfcontained::check_self_contained;
 use splinter_eval::verifiers::executable::{
     program_text, ExecutableCheck, ExecutableVerifier, Expectation, ExpectedStdout,
@@ -288,7 +290,7 @@ impl Admission {
                 "the reference is not a passage of its evidence word for word".into(),
             ));
         }
-        let privileged = match privileged(context, &candidate, &evidence) {
+        let mut privileged = match privileged(context, &candidate, &evidence) {
             Ok(privileged) => privileged,
             Err(refusal) => return refuse(refusal),
         };
@@ -311,6 +313,20 @@ impl Admission {
         let dropped: Vec<&Privileged> = hidden.iter().chain(&privileged).collect();
         if let Err(why) = check_self_contained(&candidate.instruction, &dropped) {
             return refuse((Rejection::NotSelfContained, why.to_string()));
+        }
+
+        // Added after the check above: the record repeats the model's wrong
+        // claim, which the instruction need not avoid.
+        if let Some(claimed) = &candidate.claimed {
+            privileged.push(Privileged {
+                kind: PrivilegedKind::Other(RELABELLED_FROM_EXECUTION.to_string()),
+                content: serde_json::json!({
+                    "claimed": claimed,
+                    "executed": candidate.reference,
+                })
+                .to_string(),
+                span: None,
+            });
         }
 
         if kind.dialogue && !speaks_to_the_writer(&candidate.instruction) {
@@ -623,6 +639,15 @@ fn is_passage_of(reference: &str, texts: &[String]) -> bool {
     texts
         .iter()
         .any(|text| locate_passage(reference, text).is_some())
+}
+
+/// Whether `task`'s reference is what its program printed, after the model
+/// that wrote it claimed something else.
+#[must_use]
+pub fn relabelled_from_execution(task: &Task) -> bool {
+    task.privileged
+        .iter()
+        .any(|p| p.kind == PrivilegedKind::Other(RELABELLED_FROM_EXECUTION.to_string()))
 }
 
 /// The candidate's privileged items: its reference, hints, checks and

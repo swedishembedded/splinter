@@ -101,7 +101,9 @@ pub(super) const MAX_COMPUTED_OUTPUT: usize = 2_000;
 /// runtime is the oracle, and a small model that mispredicts its own
 /// program would otherwise have a sound task refused. The material must run
 /// to completion, print something of a bounded size, and print the same on
-/// a second run (no clock, no unseeded randomness).
+/// a second run (no clock, no unseeded randomness). A claim the run
+/// disproves is kept in [`Candidate::claimed`], so the task can say it was
+/// relabelled.
 pub(super) fn computed(
     kind: &TaskKind,
     runtime: Option<&RuntimeEnvironment>,
@@ -147,6 +149,14 @@ pub(super) fn computed(
     }
     if runtime.run(&call)?.stdout.trim_end() != printed {
         return refused("the material prints something else when run again".into());
+    }
+    // Whitespace is not a disagreement: the grading normalises it too.
+    let agrees = candidate
+        .reference
+        .split_whitespace()
+        .eq(printed.split_whitespace());
+    if !agrees {
+        candidate.claimed = Some(std::mem::take(&mut candidate.reference));
     }
     candidate.reference = printed;
     Ok(Ok(candidate))

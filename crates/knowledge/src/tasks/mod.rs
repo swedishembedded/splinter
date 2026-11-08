@@ -73,6 +73,7 @@ use serde::Serialize;
 use splinter_core::digest::Digest;
 use splinter_core::experience::Task;
 
+pub use admit::relabelled_from_execution;
 pub use generator::{
     GenerateError, ModelTaskGenerator, SourceIdentity, SourceText, GENERATION_METHOD,
     MAX_LISTED_CHARS, MAX_LISTED_INSTRUCTIONS,

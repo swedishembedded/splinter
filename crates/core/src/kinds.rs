@@ -24,6 +24,12 @@ pub const EXECUTABLE_CHECK: &str = "executable-check";
 /// check of the solver.
 pub const OUTPUT_CHECK: &str = "output-check";
 
+/// The privileged kind of the record that says a task's reference is what
+/// its program printed when run, not what the model that wrote the task
+/// claimed it prints; the content is JSON with the `claimed` and the
+/// `executed` output.
+pub const RELABELLED_FROM_EXECUTION: &str = "relabelled-from-execution";
+
 /// The privileged kind of the record that says a closed-book task is a
 /// comprehension drill made by code from a repository's snapshot: which file
 /// and function it exercises, in what tree, run by which interpreter. Whoever

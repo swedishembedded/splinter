@@ -113,6 +113,10 @@ pub struct Round {
     pub written: usize,
     /// Tasks written that were refused, by reason.
     pub refused: BTreeMap<String, usize>,
+    /// Of the written, tasks relabelled from execution: a predict task whose
+    /// program printed something other than the generator claimed, admitted
+    /// with what it printed as the reference.
+    pub relabelled: usize,
     /// What each request to the generator proposed, admitted and refused, in
     /// the order asked: a round asks again until it has the tasks it wants or
     /// the requests it may make are spent.
@@ -254,6 +258,7 @@ impl Acquisition<'_> {
             proposed: 0,
             written: 0,
             refused: BTreeMap::new(),
+            relabelled: 0,
             batches: Vec::new(),
             attempts: 0,
             graded: 0,
@@ -316,6 +321,7 @@ impl Acquisition<'_> {
         report.written = written.tasks.len();
         report.proposed = report.written + written.refused.values().sum::<usize>();
         report.refused = written.refused;
+        report.relabelled = written.relabelled;
         report.batches = written.batches;
         if written.tasks.is_empty() {
             skip(

@@ -28,7 +28,7 @@ use common::{about, entry, generator, python, reply, stored, Scratch, Scripted, 
 use serde_json::json;
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, PrivilegedKind};
-use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST};
+use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST, RELABELLED_FROM_EXECUTION};
 use splinter_core::source::{CapturedSource, Origin, PartContent, Revision};
 use splinter_knowledge::tasks::{Catalogue, Rejection, SourceText, TaskKind};
 use splinter_store::sources::SourceStore;
@@ -279,6 +279,22 @@ async fn a_predicted_output_is_what_running_the_shown_code_prints() {
         })
         .collect();
     assert_eq!(references, ["10", "1"]);
+
+    // Only the task whose claimed output was corrected carries the record of
+    // it, with both outputs; the one the model predicted right carries none.
+    let relabelled = |at: usize| {
+        report.admitted[at]
+            .task
+            .privileged
+            .iter()
+            .find(|p| p.kind == PrivilegedKind::Other(RELABELLED_FROM_EXECUTION.into()))
+            .map(|p| serde_json::from_str::<serde_json::Value>(&p.content).unwrap())
+    };
+    assert_eq!(relabelled(0), None);
+    assert_eq!(
+        relabelled(1),
+        Some(json!({ "claimed": "0", "executed": "1" }))
+    );
 }
 
 #[tokio::test]

@@ -68,6 +68,12 @@ pub struct Candidate {
     pub(crate) checks: Vec<Check>,
     #[serde(default)]
     pub(crate) tests: Vec<Check>,
+    /// The output the model claimed its material prints, set by admission
+    /// when running the material proved the claim wrong and the reference
+    /// became what it printed. Never read from a reply.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub(crate) claimed: Option<String>,
 }
 
 /// Where in the sections a candidate says its answer comes from.

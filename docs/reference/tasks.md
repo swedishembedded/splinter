@@ -23,6 +23,15 @@ about - so that it has exactly one answer; a kind whose instruction shows
 its material or whose answer is computed by running code carries what its
 answer depends on and names none.
 
+A `predict` task's reference is what the pinned interpreter prints when the generator's program
+runs, never what the generator claims it prints: a program that runs to completion, prints
+something non-empty and at most 2,000 characters, and prints the same on a second run is admitted
+with its executed output as the reference, whatever the claim; any other program is refused as
+`checks_failed`. When the claim differs (ignoring whitespace), the task carries a privileged
+`relabelled-from-execution` record, JSON with the `claimed` and the `executed` output, and an
+acquisition round counts such tasks in `relabelled`, beside `refused`, in its record and in each of
+its `batches`. Only `predict` kinds are relabelled; the record never reaches the student.
+
 ## Concepts
 
 A task's concepts: those it declares; otherwise the (source, section)
