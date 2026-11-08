@@ -174,3 +174,11 @@ iterations 1..3, each iteration's pass@1 on test-held is above the previous one'
 sign test on per-item pass counts, p < 0.05), and iteration 3 is above the base on test-held and on test-seen.
 Reported as measured either way. A policy-gradient arm with negative rewards follows when brain trains rollouts
 on qwen3 bases.
+
+2026-11-08 16:10 (before any run of it) **Arm P: policy gradient with negative rewards.** brain 95c1a48d4 trains
+rollouts on any base whose trainer declares policy-gradient support (qwen3 included; checked on a GPU: ratio
+and KL behave at lr 1e-6, while lr 2e-5 with contradictory signs diverges). Arm P is arm R with the update
+replaced: every attempt of an iteration's mixed groups (items answered right 1..15 of 16 times, thinking on)
+is a record with its standardised advantage, right ones pushed up and wrong ones down; the adapter (rank 32)
+continues the policy that sampled them (on-policy), clip 0.2, k3 KL 0.02 to the base, lr 1e-6, thinking on.
+Same pools, measurement and criterion as arm R, on its own files (rsi1/rl/pg-*), cards 1-3, three iterations.
