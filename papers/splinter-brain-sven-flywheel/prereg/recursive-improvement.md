@@ -106,3 +106,15 @@ refused (1101 repeats or duplicates, 516 failed checks), leaving 3-4 training re
 ceiling (math.sqrt 14/14) and skills whose proposals collapse into repeats (math.frexp: 14 of 16 refused in a
 round, 2/11 final probes throughout) stop moving. Any change made because of this is a new, separately
 registered arm; generations 4-5 of this arm continue and are reported as descriptive only.
+
+2026-11-08 04:45 (before any run of it) **Closed-book arm B: self-generation that does not starve.** Arm A's
+generations 4-5 (descriptive) stayed flat (r1 40 -> 40 -> 40 of 57; r3 41 -> 43 of 68); arm A is stopped.
+Arm B differs from arm A in the splinter build only: c7d11d932 (a round keeps asking past a request that
+admitted nothing, up to 6 requests for 12 admitted tasks, and every request is shown what earlier rounds of the
+skill admitted or refused as repeats; the probes are never shown), which also carries the other splinter
+changes since b688e3ee7. Everything else is arm A's: Qwen3-4B, the same four replicates' skill graphs and sealed
+probes (`--probes-from` each replicate's arm-A generation-1 run, so arm B's generation-1 baseline is the base on
+the same probes), the same training recipe and budgets, explicit generations as in arm A. **Criterion (arm B
+alone):** over the four replicates, generation 2 beats generation 1 and generation 3 beats generation 2 (mean
+gain > 0, one-sided t-test p < 0.05 each), and generation 3 beats the base. Reported as measured either way;
+arm A vs arm B per generation is reported descriptively (the builds differ in more than the fix).
