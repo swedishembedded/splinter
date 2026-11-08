@@ -198,3 +198,13 @@ between consecutive generations. Each generation was trained only on tasks its o
 interpreter (splinter learn --self-generate --reference-teacher, full fine-tune, splinter b39782f43), and no exam
 item was shown to any run. Gains spread over 19 of 25 families; 12 items were learned by all three replicates in
 generation 1. Losses between generations (26, then 66) show forgetting beside the gains.
+
+2026-11-08 20:10 **Arm P outcome (criterion not met) and arm R interim.** Arm P (policy gradient with negative
+rewards, lr 1e-6, three iterations; rsi1/rl/pg-eval-*.json): test-held pass@1 0.441 / 0.438 / 0.421 / 0.424 (items
+up/down vs previous 29/31, 28/34, 30/30), test-seen 0.724 / 0.734 / 0.732 / 0.736, arm-H exam 0 / 3 / 5 / 4 of 889:
+no iteration improves; the update at lr 1e-6 is too small to move the policy (lr 2e-5 with mixed signs diverged in
+the GPU check). Arm R (self-imitation of verified reasoning, iterations 0-2 of 3; rsi1/rl/eval-*.json): test-held
+pass@1 0.410 / 0.446 / 0.474 and pass@4 0.550 / 0.574 / 0.611 (never-trained families); items up/down 40/28 (p 0.09)
+then 43/26 (p 0.027); test-seen pass@1 0.732 / 0.707 / 0.706, pass@4 0.817 / 0.794 / 0.822; arm-H exam (measured
+without thinking) 0 / 17 / 25 of 889. Iteration 3 decides arm R's criterion. The runs moved node mid-iteration
+(container restart, 19:5x); both resumed from their state files.
