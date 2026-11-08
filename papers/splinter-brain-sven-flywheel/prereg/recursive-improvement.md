@@ -151,3 +151,8 @@ per replicate. *Criterion:* pooled over the replicates' item pairs (an item that
 win, right to wrong a loss), generation 1 beats generation 0, generation 2 beats generation 1 and generation 3
 beats generation 2, each by a one-sided sign test p < 0.05, and no replicate's accuracy falls between
 consecutive generations. Reported as measured either way.
+
+2026-11-08 11:25 (before any arm-H measurement of a trained model) **Arm H grading.** Lua's `print` separates
+values with tabs and a model writes spaces; exact matching per line would make the exam measure tab characters.
+Arm H's grading compares answers token by token per line (whitespace runs collapsed, blank lines ignored),
+for the selection of the exam and for every measurement. The exam is selected again under this grading.
