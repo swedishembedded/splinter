@@ -156,3 +156,21 @@ consecutive generations. Reported as measured either way.
 values with tabs and a model writes spaces; exact matching per line would make the exam measure tab characters.
 Arm H's grading compares answers token by token per line (whitespace runs collapsed, blank lines ignored),
 for the selection of the exam and for every measurement. The exam is selected again under this grading.
+
+2026-11-08 15:20 (before any run of it) **Arm R: self-improvement by the model's own verified reasoning on the
+frontier.** Closes the gaps arms A, B and H left: tasks at the frontier, wide sampling, thinking on, training on
+procedures (the model's reasoning, not only its final output), the interpreter as the only source of reward,
+and a measurement that cannot be protocol adaptation. *Pools* (rsi1/rl; code-written by make_exam.py, seeds 31
+and 32, never overlapping arm H's exam): train 1613 items of 19 families; test-seen 534 fresh items of the same
+families; test-held 211 items of six families never trained on (math.frexp, string.gsub, table.remove, tonumber,
+select/unpack, string.format q). *Iteration* (rsi1/rl/star.py): the policy (Qwen3-4B, then Qwen3-4B with the
+latest adapter; brain 69b1834fa) answers 400 random training items 16 times with thinking at temperature 1.0;
+an item answered right 1..15 times is on the frontier and up to two of its distinct verified traces (the model's
+own reasoning and answer, right by the interpreter's output, token-wise per line) are kept; a LoRA adapter
+(rank 32) is retrained from the base on every trace kept so far with brain's served trainer. *Measurement*,
+the same for the base (iteration 0) and every iteration: test-seen and test-held, neutral request, thinking on,
+4 samples at temperature 0.6 (pass@1 and pass@4), and arm H's exam greedily without thinking. *Criterion:* over
+iterations 1..3, each iteration's pass@1 on test-held is above the previous one's (paired by item, one-sided
+sign test on per-item pass counts, p < 0.05), and iteration 3 is above the base on test-held and on test-seen.
+Reported as measured either way. A policy-gradient arm with negative rewards follows when brain trains rollouts
+on qwen3 bases.
