@@ -95,3 +95,14 @@ base, per replicate, combined over replicates (paired over skills: one-sided sig
 the mean gain and its one-sided t-test). **RSI is shown** if, over the replicates, generation 2 beats
 generation 1 and generation 3 beats generation 2 on the final probes (p < 0.05 each), and the last
 generation beats the base. Anything less is reported as measured.
+
+2026-11-08 04:20 **Outcome of the closed-book arm (registered analysis, rsi1/lua/analysis.py).** Four replicates,
+Qwen3-4B, final-probe passes summed per replicate. Generation 1 vs base +9, +7, +9, +10 (mean +8.75, one-sided
+t p = 0.0004); generation 2 vs generation 1 +6, +5, +4, +4 (mean +4.75, p = 0.001); generation 3 vs generation 2
+-2, +3, 0, -3 (mean -0.5, p = 0.63); generation 3 vs base +13, +15, +13, +11 (p = 0.0003). Two consecutive
+generations improve significantly, the third does not: **the registered RSI criterion (generation 3 beats
+generation 2) is not met.** Diagnosis from the run records (not a test): 1884 of 2862 self-proposed tasks were
+refused (1101 repeats or duplicates, 516 failed checks), leaving 3-4 training records per round; skills at
+ceiling (math.sqrt 14/14) and skills whose proposals collapse into repeats (math.frexp: 14 of 16 refused in a
+round, 2/11 final probes throughout) stop moving. Any change made because of this is a new, separately
+registered arm; generations 4-5 of this arm continue and are reported as descriptive only.
