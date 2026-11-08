@@ -208,3 +208,10 @@ pass@1 0.410 / 0.446 / 0.474 and pass@4 0.550 / 0.574 / 0.611 (never-trained fam
 then 43/26 (p 0.027); test-seen pass@1 0.732 / 0.707 / 0.706, pass@4 0.817 / 0.794 / 0.822; arm-H exam (measured
 without thinking) 0 / 17 / 25 of 889. Iteration 3 decides arm R's criterion. The runs moved node mid-iteration
 (container restart, 19:5x); both resumed from their state files.
+
+2026-11-08 21:00 (before any run of it) **Arm P2.** Brain's check of the policy-gradient update scale (brain b3972f033,
+an FP64 reference; no defect) showed why arm P could not move: AdamW moves each adapter element by about lr per step,
+so lr 1e-6 over ~300 steps is imperceptible (arm P's runs: KL to the base ~0.01, clip fraction < 1 %, mean ratio
+1.003), and steps x grad_accum covered about half of each iteration's rollouts. Arm P2 is arm P with lr 5e-6 and
+every rollout read once per iteration (steps = rollouts / 4 at grad_accum 4), from the base, files rsi1/rl/pg2-*,
+cards 1-3, three iterations, same pools, measurement and criterion.
