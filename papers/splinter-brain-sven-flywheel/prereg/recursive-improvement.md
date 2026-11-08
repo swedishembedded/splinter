@@ -239,3 +239,9 @@ now the same reference material as Markdown, generated from the interpreter's ow
 method (rsi1/py/sources-md: str 47, list 11, dict 11, math 57 sections). Four replicates instead of three (r3 on card 0
 beside the evaluator, splinter --vram-budget 60); the criterion is computed over the four. Exam selected as registered:
 820 of 1164 candidates never answered by the base in 4 samples; the base re-measured greedily answers 2 of 820.
+
+2026-11-09 00:00 **Arm P2 outcome: criterion not met (held-out families flat; trained families improve).** pass@1 / pass@4
+over iterations 0-3: test-held (never-trained families) 0.442/0.578, 0.447/0.574, 0.446/0.569, 0.441/0.569 (items
+up/down vs previous 28/29, 26/29, 29/28); test-seen (fresh items of the trained families) 0.721/0.818, 0.741/0.832,
+0.737/0.830, 0.756/0.846; arm-H exam 0 / 6 / 8 / 12 of 889. Policy gradient at an update scale that moves the policy
+improves the families it practises (+3.5 points pass@1, +2.8 pass@4) but does not transfer to families it never saw.
