@@ -118,3 +118,19 @@ the same probes), the same training recipe and budgets, explicit generations as 
 alone):** over the four replicates, generation 2 beats generation 1 and generation 3 beats generation 2 (mean
 gain > 0, one-sided t-test p < 0.05 each), and generation 3 beats the base. Reported as measured either way;
 arm A vs arm B per generation is reported descriptively (the builds differ in more than the fix).
+
+2026-11-08 11:00 **Arm B outcome and a validity check of both arms (rsi1/lua/passk).** Arm B: generation 1 vs
+base +11, +12, +13, +9; generation 2 vs 1 0, 0, +2, +2; generation 3 vs 2 +2, 0, -1 (r3 pending): two-generation
+criterion not met, the plateau reached after one generation. **Validity check, not registered in advance and
+reported because it changes how both arms must be read:** the sealed final probes were re-graded outside
+splinter's probing protocol (a neutral request "answer with exactly what it prints, in one fenced code block",
+the same exact-match grading for every model, brain 69b1834fa). Without thinking, greedy: replicate r0 base
+43 of 75, its arm-B champion 45 of 75; r1 base 0.611, champion 0.542. Sampled (T 0.8, 16 per probe), no
+thinking: pass@1 base 0.57 / 0.61 / 0.50 (r0/r1/r2), champions 0.60 / 0.53; with thinking: base pass@1 0.71 /
+0.73 / 0.71 and pass@16 0.80 / 0.82 / 0.84, champions 0.73 / 0.74 and 0.85 / 0.86. Under splinter's own
+protocol the same base scored about 40 % and the champions about 60 %. **So most of the gain both arms measured
+is adaptation to the probing protocol, not added Lua competence, and it does not transfer to a neutral
+request;** the base with thinking already answers about three probes in four. The plateau is where that
+adaptation is complete. Consequences for the next registration: measure every model under the protocol it
+is used with and under a neutral one, allow thinking, and draw the exam from what the base cannot do even at
+pass@16 with thinking.
