@@ -66,7 +66,7 @@ pub use competence::{wilson, CompetenceGraph, SkillCompetence};
 pub use cost::StageCost;
 pub use graph::{plan, Planned, PlannedBy};
 pub use intake::{intake, is_url, Fetched, Intaken};
-pub use probes::{ProbeScore, SkillProbes};
+pub use probes::{ProbeScore, ProposalBatch, SkillProbes};
 pub use round::{Change, Outcome, Round, MAX_ROUND_WRITES, ROUND_TASKS_WANTED};
 pub use select::{next_skill, Selection, Targets};
 
@@ -154,6 +154,12 @@ pub struct AcquireRequest {
     /// are written once before any training by the configured generator
     /// either way.
     pub self_generate: bool,
+    /// A round asks the generator for its training tasks again until it has
+    /// admitted this many (`0`: one request, as asked once).
+    pub min_tasks_per_round: usize,
+    /// The most requests a round makes for its training tasks; each draws a
+    /// new sampling seed and is shown what the earlier ones came to.
+    pub max_proposal_batches: usize,
     /// Read the skill graph from the sources' structure instead of asking
     /// the planner.
     pub structural_graph: bool,
@@ -199,6 +205,8 @@ impl AcquireRequest {
             keep_candidates: false,
             replay_fraction: DEFAULT_REPLAY_FRACTION,
             self_generate: false,
+            min_tasks_per_round: ROUND_TASKS_WANTED,
+            max_proposal_batches: MAX_ROUND_WRITES,
             structural_graph: false,
             reference_teacher: false,
             probes_from: None,
@@ -236,6 +244,12 @@ impl AcquireRequest {
                 "{} probe(s) per half cannot rest a competence on {} graded probe(s)",
                 self.probes_per_skill, self.min_probes
             )));
+        }
+        if self.max_proposal_batches == 0 {
+            return Err(OrchestratorError::Refused(
+                "a round makes at least one request for its tasks: max_proposal_batches is 0"
+                    .into(),
+            ));
         }
         if self.max_rounds == 0 || self.max_rounds_per_skill == 0 {
             return Err(OrchestratorError::Refused(
@@ -358,6 +372,13 @@ pub(super) struct Acquisition<'a> {
     pub(super) probes: BTreeMap<String, SkillProbes>,
     pub(super) probe_ids: BTreeSet<Digest>,
     pub(super) seen: Seen,
+    /// The instructions of the exam: every one written as a probe, whether
+    /// kept or not. The generator of a round is never shown them.
+    pub(super) exam: Seen,
+    /// The instructions earlier rounds of each skill admitted or were refused
+    /// for repeating, by skill: what a later round's generator is told not to
+    /// write again.
+    pub(super) tried: BTreeMap<String, Vec<String>>,
     pub(super) competence: CompetenceGraph,
     pub(super) competence_address: Digest,
     /// Who attempts the round's tasks and is measured next: the policy the
@@ -465,7 +486,9 @@ pub fn acquire(
             graph: planned.graph.clone(),
             probes: BTreeMap::new(),
             probe_ids: BTreeSet::new(),
+            exam: probes::fresh_seen(),
             seen,
+            tried: BTreeMap::new(),
             competence: CompetenceGraph {
                 graph: planned.address.clone(),
                 parent: None,
@@ -511,6 +534,9 @@ impl Acquisition<'_> {
             }
             None => self.write_probes(&cancel)?,
         };
+        // Everything seen so far is the exam, written or not made a probe:
+        // what the generator is never shown.
+        self.exam = self.seen.clone();
         let assessable: Vec<SkillProbes> = probe_list
             .iter()
             .filter(|p| p.assessable(self.request.min_probes))
@@ -663,6 +689,7 @@ impl Acquisition<'_> {
                     ),
                     deadline: self.deadline,
                     cancel: cancel.clone(),
+                    hidden: None,
                 },
                 self.request.probes_per_skill,
                 &mut self.seen,

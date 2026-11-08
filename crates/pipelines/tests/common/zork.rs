@@ -111,6 +111,27 @@ pub fn writing_tasks_in_batches(per_call: usize) -> Scripted {
     })
 }
 
+/// [`model`] as a generator that writes `per_call` new training tasks a
+/// request, numbered on from the last, except its second request for a
+/// topic, which copies the topic's probes, as a small generator does that is
+/// shown them.
+pub fn writing_tasks_with_a_batch_of_probe_copies(per_call: usize) -> Scripted {
+    let written =
+        std::sync::Mutex::new(std::collections::BTreeMap::<String, (usize, usize)>::new());
+    let probes = |_: &str| (0..8).collect();
+    writer_with(&[], probes, move |topic| {
+        let mut written = written.lock().unwrap();
+        let (requests, from) = written.entry(topic.to_string()).or_insert((0, 10));
+        *requests += 1;
+        if *requests == 2 {
+            return (0..8).collect();
+        }
+        let numbers = (*from..*from + per_call).collect();
+        *from += per_call;
+        numbers
+    })
+}
+
 fn writer(
     numbers: std::ops::Range<usize>,
     knows: &[&str],

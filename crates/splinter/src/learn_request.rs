@@ -43,6 +43,12 @@ pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
     request.keep_candidates = named.keep_candidates;
     request.replay_fraction = named.replay_fraction.unwrap_or(request.replay_fraction);
     request.self_generate = named.self_generate;
+    request.min_tasks_per_round = named
+        .min_tasks_per_round
+        .unwrap_or(request.min_tasks_per_round);
+    request.max_proposal_batches = named
+        .max_proposal_batches
+        .unwrap_or(request.max_proposal_batches);
     request.structural_graph = named.structural_graph;
     request.reference_teacher = named.reference_teacher;
     request.probes_from = named.probes_from;

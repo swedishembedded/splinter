@@ -31,7 +31,7 @@ use splinter_knowledge::skills::Skill;
 
 use super::competence::SkillCompetence;
 use super::cost::StageCost;
-use super::probes::{score, set_of, write_until, Ask, ProbeScore};
+use super::probes::{score, set_of, write_until, Ask, ProbeScore, ProposalBatch, WritePlan};
 use super::Acquisition;
 use crate::curriculum::frontier::{select_frontier, tally};
 use crate::curriculum::repository_teacher::{
@@ -113,6 +113,10 @@ pub struct Round {
     pub written: usize,
     /// Tasks written that were refused, by reason.
     pub refused: BTreeMap<String, usize>,
+    /// What each request to the generator proposed, admitted and refused, in
+    /// the order asked: a round asks again until it has the tasks it wants or
+    /// the requests it may make are spent.
+    pub batches: Vec<ProposalBatch>,
     /// Attempts the incumbent made at the admitted tasks.
     pub attempts: usize,
     /// Of those, attempts with a decided verdict.
@@ -174,10 +178,11 @@ impl Trained {
 /// The training tasks a round asks the generator for before it attempts
 /// them: a 4B generator admits none or one of eight in a request once its
 /// skill's probes are taken, and a round with fewer than two records cannot
-/// train.
+/// train. The default of [`AcquireRequest::min_tasks_per_round`].
 pub const ROUND_TASKS_WANTED: usize = 12;
 
-/// The most requests one round's tasks take.
+/// The most requests one round's tasks take. The default of
+/// [`AcquireRequest::max_proposal_batches`].
 pub const MAX_ROUND_WRITES: usize = 6;
 
 /// The verified answers of `set` a round trains on: one per task, the
@@ -249,6 +254,7 @@ impl Acquisition<'_> {
             proposed: 0,
             written: 0,
             refused: BTreeMap::new(),
+            batches: Vec::new(),
             attempts: 0,
             graded: 0,
             verified_passes: 0,
@@ -276,7 +282,11 @@ impl Acquisition<'_> {
         // The generator is never shown the skill's probes: a 4B generator
         // shown them as tasks not to repeat copied them (69 of 84 training
         // tasks of a Lua run were exact probes), and the exam is not material
-        // a training task may be written from. A repeat is refused after.
+        // a training task may be written from. A repeat is refused after. It
+        // is shown what earlier rounds of the skill admitted and what they
+        // were refused for repeating: it does not remember its answers, and
+        // asked about the same section again it writes them again.
+        let earlier = self.tried.get(&skill.id).cloned().unwrap_or_default();
         let written = write_until(
             ctx,
             skill,
@@ -286,15 +296,27 @@ impl Acquisition<'_> {
                 goal: goal_of(&self.request.objective, skill),
                 deadline: self.deadline,
                 cancel: cancel.clone(),
+                hidden: Some(&self.exam),
             },
-            &[],
-            ROUND_TASKS_WANTED,
-            MAX_ROUND_WRITES,
+            &earlier,
+            WritePlan {
+                want: self.request.min_tasks_per_round,
+                max_writes: self.request.max_proposal_batches,
+                stop_when_barren: false,
+            },
             &mut self.seen,
         )?;
+        self.tried.entry(skill.id.clone()).or_default().extend(
+            written
+                .instructions
+                .iter()
+                .chain(&written.repeated)
+                .cloned(),
+        );
         report.written = written.tasks.len();
         report.proposed = report.written + written.refused.values().sum::<usize>();
         report.refused = written.refused;
+        report.batches = written.batches;
         if written.tasks.is_empty() {
             skip(
                 &mut report,

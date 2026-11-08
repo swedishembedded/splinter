@@ -58,6 +58,7 @@ pub enum Repeat {
 }
 
 /// The instructions admitted so far in a batch.
+#[derive(Clone)]
 pub struct Seen {
     shingle_words: usize,
     max_overlap: f64,

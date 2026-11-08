@@ -86,6 +86,9 @@ fn not_exercising(
     Ok((!uses).then_some("does_not_use_the_skill"))
 }
 
+/// Why a task is refused when it repeats one admitted or a probe.
+const REPEATS_ANOTHER_TASK: &str = "repeats_another_task";
+
 /// Tasks written from a skill's sections that exercise it and repeat nothing
 /// in `seen`; each admitted instruction is added to `seen`.
 pub struct Written {
@@ -93,8 +96,40 @@ pub struct Written {
     pub tasks: Vec<TaskEntry>,
     /// The instructions of [`Self::tasks`], in the same order.
     pub instructions: Vec<String>,
+    /// The instructions refused for repeating a task already admitted, bar
+    /// those that repeat something the generator must not be shown
+    /// ([`Ask::hidden`]): what a model that is asked again must be told not
+    /// to write once more.
+    pub repeated: Vec<String>,
     /// The tasks refused, by reason.
     pub refused: BTreeMap<String, usize>,
+    /// What each request for tasks proposed, in the order asked.
+    pub batches: Vec<ProposalBatch>,
+}
+
+/// What one request for a skill's tasks came to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ProposalBatch {
+    /// Tasks the generator proposed, admitted or not.
+    pub proposed: usize,
+    /// Tasks admitted.
+    pub written: usize,
+    /// Tasks refused, by reason.
+    pub refused: BTreeMap<String, usize>,
+}
+
+/// How often and how long [`write_until`] asks the generator.
+#[derive(Clone, Copy, Debug)]
+pub struct WritePlan {
+    /// Ask again while fewer tasks than this are admitted.
+    pub want: usize,
+    /// The most requests made.
+    pub max_writes: usize,
+    /// Stop at the first request that admits nothing. A round's tasks go on
+    /// asking: a request that was all repeats is not a reason to believe the
+    /// next one is, since the generator is shown what it repeated and draws
+    /// a new seed.
+    pub stop_when_barren: bool,
 }
 
 /// What `generate` is asked for a skill.
@@ -109,6 +144,10 @@ pub struct Ask<'a> {
     pub deadline: Option<Instant>,
     /// Stops generation.
     pub cancel: CancelToken,
+    /// What the generator is never shown, even as a task not to repeat: the
+    /// skill's probes, which a small generator copies. A task that repeats
+    /// one is refused all the same.
+    pub hidden: Option<&'a Seen>,
 }
 
 /// Writes tasks for `skill` and keeps those that exercise it and are new to
@@ -145,7 +184,9 @@ pub fn write_for(
     let mut written = Written {
         tasks: Vec::new(),
         instructions: Vec::new(),
+        repeated: Vec::new(),
         refused: generated.rejected.clone(),
+        batches: Vec::new(),
     };
     for entry in ctx.tasks().get_set(&generated.task_set)?.members {
         let task = ctx.tasks().get(&entry.task)?;
@@ -154,12 +195,21 @@ pub fn write_for(
             None if seen.repeats(&task.instruction).is_some()
                 || seen.leaks(&task.instruction).is_some() =>
             {
-                Some("repeats_another_task")
+                Some(REPEATS_ANOTHER_TASK)
             }
             None => None,
         };
         match why {
-            Some(why) => *written.refused.entry(why.into()).or_default() += 1,
+            Some(why) => {
+                *written.refused.entry(why.into()).or_default() += 1;
+                if why == REPEATS_ANOTHER_TASK
+                    && !ask
+                        .hidden
+                        .is_some_and(|h| h.leaks(&task.instruction).is_some())
+                {
+                    written.repeated.push(task.instruction);
+                }
+            }
             None => {
                 seen.admit(&task.instruction);
                 written.instructions.push(task.instruction);
@@ -167,6 +217,11 @@ pub fn write_for(
             }
         }
     }
+    written.batches.push(ProposalBatch {
+        proposed: written.tasks.len() + written.refused.values().sum::<usize>(),
+        written: written.tasks.len(),
+        refused: written.refused.clone(),
+    });
     Ok(written)
 }
 
@@ -177,33 +232,35 @@ pub fn fresh_seen() -> Seen {
 }
 
 /// Writes tasks for `skill` as [`write_for`] does, asking again while fewer
-/// than `want` are admitted, up to `max_writes` requests and only while each
-/// request adds a task. Every request is shown `already` and what the
-/// earlier requests admitted, so it writes something else.
+/// than `plan.want` are admitted, up to `plan.max_writes` requests. Every
+/// request is shown `already`, what the earlier requests admitted and what
+/// they were refused for repeating, so it writes something else.
 pub fn write_until(
     ctx: &Context,
     skill: &Skill,
     ask: &Ask<'_>,
     already: &[String],
-    want: usize,
-    max_writes: usize,
+    plan: WritePlan,
     seen: &mut Seen,
 ) -> Result<Written, OrchestratorError> {
     let mut written = write_for(ctx, skill, ask, already, seen)?;
-    for _ in 1..max_writes {
-        if written.tasks.len() >= want || ask.deadline.is_some_and(|d| Instant::now() >= d) {
+    for _ in 1..plan.max_writes {
+        if written.tasks.len() >= plan.want || ask.deadline.is_some_and(|d| Instant::now() >= d) {
             break;
         }
         let shown: Vec<String> = already
             .iter()
             .chain(&written.instructions)
+            .chain(&written.repeated)
             .cloned()
             .collect();
         let more = write_for(ctx, skill, ask, &shown, seen)?;
         for (why, n) in more.refused {
             *written.refused.entry(why).or_default() += n;
         }
-        if more.tasks.is_empty() {
+        written.batches.extend(more.batches);
+        written.repeated.extend(more.repeated);
+        if more.tasks.is_empty() && plan.stop_when_barren {
             break;
         }
         written.tasks.extend(more.tasks);
@@ -229,7 +286,18 @@ pub fn probes_for(
     per_half: usize,
     seen: &mut Seen,
 ) -> Result<SkillProbes, OrchestratorError> {
-    let mut written = write_until(ctx, skill, ask, &[], 2 * per_half, MAX_PROBE_WRITES, seen)?;
+    let mut written = write_until(
+        ctx,
+        skill,
+        ask,
+        &[],
+        WritePlan {
+            want: 2 * per_half,
+            max_writes: MAX_PROBE_WRITES,
+            stop_when_barren: true,
+        },
+        seen,
+    )?;
     written.tasks.sort_by(|a, b| a.task.cmp(&b.task));
     let mut probes = SkillProbes {
         skill: skill.id.clone(),

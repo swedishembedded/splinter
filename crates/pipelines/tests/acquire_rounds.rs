@@ -339,12 +339,17 @@ fn every_round_reports_what_it_explored_and_what_that_cost() {
     let run = read_run(ctx.workspace(), &recorded.run).unwrap();
     for round in &recorded.report.rounds {
         // 8 tasks admitted, fewer than a round wants, so the generator is
-        // asked again; it writes the same 8, refused whole, and the round
-        // goes on with them: 2 attempts at each, none solved by a policy
-        // that knows nothing, all of them taught.
+        // asked again until the requests a round may make are spent; it
+        // writes the same 8 each time, refused whole, and the round goes on
+        // with the first 8: 2 attempts at each, none solved by a policy that
+        // knows nothing, all of them taught.
+        assert_eq!(
+            round.batches.len(),
+            splinter_pipelines::acquire::MAX_ROUND_WRITES
+        );
         assert_eq!(
             (round.proposed, round.written, round.attempts, round.graded),
-            (16, 8, 16, 16)
+            (48, 8, 16, 16)
         );
         assert_eq!((round.verified_passes, round.worth_training), (0, 8));
         assert!(round.records.unwrap() > 0);
@@ -441,4 +446,152 @@ fn a_round_asks_a_generator_that_writes_one_task_a_request_again() {
         "{first:?}"
     );
     assert_eq!(first.outcome, Outcome::Accepted, "{first:?}");
+}
+
+/// The prompts the generator was sent for training tasks.
+fn training_prompts(prompts: &Mutex<Vec<String>>) -> Vec<String> {
+    prompts
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|p| p.contains("You write training tasks") && p.contains("(training)"))
+        .cloned()
+        .collect()
+}
+
+#[test]
+fn a_round_asks_again_after_a_request_that_admitted_nothing_and_is_never_shown_the_probes() {
+    let model = common::zork::writing_tasks_with_a_batch_of_probe_copies(3);
+    let prompts = model.prompts.clone();
+    let (scratch, ctx) = common::scratch_context("acquire-round-barren", model, false);
+    common::gate::put_base(&ctx);
+    let manual = write_manual(&scratch);
+    let report = acquire(
+        &ctx,
+        &AcquireRequest {
+            min_tasks_per_round: 6,
+            ..request(&manual)
+        },
+        &Learner,
+    )
+    .unwrap()
+    .report;
+    let first = &report.rounds[0];
+    // Every request is on record: the probe copies in the middle admitted
+    // nothing, and the round asked on after them.
+    let counts: Vec<_> = first
+        .batches
+        .iter()
+        .map(|b| (b.proposed, b.written))
+        .collect();
+    assert_eq!(counts, [(3, 3), (8, 0), (3, 3)], "{first:?}");
+    assert_eq!(first.written, 6);
+    assert_eq!(first.proposed, 14);
+    assert_eq!(first.refused.values().sum::<usize>(), 8);
+    // Asked again, the generator was told what it had repeated, but never
+    // the probes it copied.
+    let asked = training_prompts(&prompts);
+    assert!(asked.len() >= 3);
+    for prompt in &asked {
+        for probe in 0..8 {
+            let copied = common::gate::question(common::zork::topic_of(prompt).unwrap(), probe);
+            assert!(!prompt.contains(&copied), "{copied}");
+        }
+    }
+}
+
+#[test]
+fn a_round_asks_until_it_has_the_tasks_it_wants_or_the_requests_it_may_make_are_spent() {
+    let run = |min_tasks, max_batches| {
+        let (scratch, ctx) = common::scratch_context(
+            &format!("acquire-round-bounds-{min_tasks}-{max_batches}"),
+            common::zork::writing_tasks_in_batches(1),
+            false,
+        );
+        common::gate::put_base(&ctx);
+        let manual = write_manual(&scratch);
+        let recorded = acquire(
+            &ctx,
+            &AcquireRequest {
+                min_tasks_per_round: min_tasks,
+                max_proposal_batches: max_batches,
+                ..request(&manual)
+            },
+            &Learner,
+        )
+        .unwrap();
+        let stored = read_run(ctx.workspace(), &recorded.run).unwrap();
+        let stage = stored
+            .stages
+            .iter()
+            .find(|s| s.stage == "round-1")
+            .unwrap()
+            .summary
+            .clone();
+        (recorded.report.rounds[0].clone(), stage)
+    };
+    let (wanted, stage) = run(3, 6);
+    assert_eq!((wanted.written, wanted.batches.len()), (3, 3));
+    assert!(wanted
+        .batches
+        .iter()
+        .all(|b| (b.proposed, b.written) == (1, 1)));
+    assert_eq!(stage["batches"].as_array().unwrap().len(), 3, "{stage}");
+
+    let (spent, _) = run(5, 2);
+    assert_eq!((spent.written, spent.batches.len()), (2, 2));
+
+    let (once, _) = run(0, 6);
+    assert_eq!(once.batches.len(), 1);
+}
+
+#[test]
+fn a_round_makes_at_least_one_request_for_its_tasks() {
+    let (scratch, ctx) = context("acquire-round-no-batches");
+    let manual = write_manual(&scratch);
+    let refused = acquire(
+        &ctx,
+        &AcquireRequest {
+            max_proposal_batches: 0,
+            ..request(&manual)
+        },
+        &Learner,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(refused, OrchestratorError::Refused(_)),
+        "{refused}"
+    );
+}
+
+#[test]
+fn a_later_round_of_a_skill_is_told_what_its_earlier_rounds_admitted() {
+    let model = common::zork::model();
+    let prompts = model.prompts.clone();
+    let (scratch, ctx) = common::scratch_context("acquire-round-memory", model, false);
+    common::gate::put_base(&ctx);
+    let manual = write_manual(&scratch);
+    // One request a round and a trainer whose candidates are rejected, so a
+    // skill is tried again: only an earlier round can have told the generator
+    // about the tasks of the skill.
+    let trainer = FullLearner::new(true);
+    acquire(
+        &ctx,
+        &AcquireRequest {
+            min_tasks_per_round: 0,
+            ..full_request(&manual)
+        },
+        &trainer,
+    )
+    .unwrap();
+    let asked = training_prompts(&prompts);
+    let told: Vec<_> = asked
+        .iter()
+        .filter(|p| p.contains("already written"))
+        .collect();
+    assert!(!told.is_empty(), "{} request(s)", asked.len());
+    for prompt in told {
+        let topic = common::zork::topic_of(prompt).unwrap();
+        assert!(prompt.contains(&common::gate::question(topic, 10)));
+    }
 }

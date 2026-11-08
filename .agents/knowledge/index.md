@@ -91,3 +91,4 @@ in the same commit.
 | [103](103-a-sign-test-p-value-was-read-from-the-reverse-tail.md) | A sign test's p-value was read from the reverse tail |
 | [104](104-the-harness-edit-tests-author-documents-the-v2-compiler-refuses.md) | The harness-edit tests author documents the v2 compiler refuses |
 | [105](105-a-development-gain-did-not-replicate-on-the-registered-set.md) | A development gain did not replicate on the registered set |
+| [106](106-a-round-stopped-asking-for-tasks-at-its-first-barren-request.md) | A round stopped asking for tasks at its first barren request |
