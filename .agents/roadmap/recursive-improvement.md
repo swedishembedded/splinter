@@ -20,7 +20,7 @@ flywheel evidence dataset (`gen27b/`, `rsi1-lua/`) and the curated 27B dataset (
 | Lua closed-book arm A (4B, 4 replicates) | Gen1 +8.75, gen2 +4.75 (p .001), gen3 -0.5 | Plateau; and see the re-grade below |
 | Lua arm B (starvation fix c7d11d932) | Gen1 +11, then ~+1, ~0 | Same plateau, reached faster |
 | Neutral re-grade of A/B | Base ~57-61 % (no thinking) / ~71 % (thinking, pass@16 80-84 %) on the same probes vs ~40 % under splinter's probing; champions ~= base | **The A/B gains were adaptation to splinter's probing protocol, not added competence.** The paper's earlier Lua claims (SL20-SL23, 8B 25 -> 49) need the same re-grade |
-| Arm H (exam = 889 code-written items the base never answered, neutral grading) | Gen-1 champions 38 / 31 / 34 of 889 (base 0), 19 families, 12 items learned by all three replicates | First gain that survives a neutral measurement; generations 2-3 decide recursion |
+| Arm H (exam = 889 code-written items the base never answered, neutral grading) | **Criterion met (2026-11-08 17:50):** gen1 38/31/34, gen2 60/63/49, gen3 67/83/59 of 889 (base 0); pooled sign tests gen1 vs base 103/0 p 1e-31, gen2 vs gen1 95/26 p 1e-10, gen3 vs gen2 103/66 p 0.0027; no replicate fell | Shown: three self-taught generations, each significantly better on what the base could not do. Open: forgetting (26 then 66 losses), absolute level still low (7-9 %), thinking off; arms R and P test search, procedures and negative rewards |
 
 ## Root causes (ranked by evidence)
 
