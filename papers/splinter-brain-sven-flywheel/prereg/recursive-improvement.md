@@ -134,3 +134,20 @@ request;** the base with thinking already answers about three probes in four. Th
 adaptation is complete. Consequences for the next registration: measure every model under the protocol it
 is used with and under a neutral one, allow thinking, and draw the exam from what the base cannot do even at
 pass@16 with thinking.
+
+2026-11-08 11:10 (before any run of it) **Arm H: the loop measured on what the base cannot do, under a neutral
+protocol.** Arm B's r3 generation 3 was stopped (arm B's criterion had already failed). *Exam:* 1484 Lua 5.1
+standard-library programs written by code from 25 templates over randomised and edge-case arguments
+(rsi1/hard/make_exam.py, seed 20261108); the reference is what the pinned interpreter prints (twice, equal); no
+model writes or answers an exam item. Every item is asked of the base (Qwen3-4B, brain 69b1834fa) with the
+neutral request "What does the following Lua code print? ... Answer with exactly what it prints, in one fenced
+code block", no thinking, 4 samples at temperature 0.8; **the exam is the items the base never answered** (exact
+match, whitespace-normalised). The exam is never shown to any run. *Loop:* arm B's recipe and build (splinter
+b39782f43, which only adds relabel counting to c7d11d932), three replicates r0-r2 (their own skill graphs and
+probes), explicit generations as before, each generation's champion kept until it is measured. *Measurement:*
+the base (generation 0, re-measured on the exam to avoid regression to the mean from the selection) and every
+generation's champion answer every exam item greedily under the same neutral protocol, no thinking; accuracy
+per replicate. *Criterion:* pooled over the replicates' item pairs (an item that turns from wrong to right is a
+win, right to wrong a loss), generation 1 beats generation 0, generation 2 beats generation 1 and generation 3
+beats generation 2, each by a one-sided sign test p < 0.05, and no replicate's accuracy falls between
+consecutive generations. Reported as measured either way.
