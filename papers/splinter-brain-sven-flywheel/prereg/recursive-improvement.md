@@ -232,3 +232,10 @@ pass@4 0.817 / 0.794 / 0.822 / 0.830; arm-H exam (no thinking) 0 / 17 / 25 / 21 
 significant (items up/down 40/28, p 0.09) and iteration 3 fell below iteration 2, so the registered monotone
 criterion fails. Iteration 3 remains above the base on the never-trained families (pass@1 +0.038, pass@4 +0.047).
 Arm R stops here (its sequencer then selects arm HP's exam on card 0).
+
+2026-11-08 23:55 (before any trained model of arm HP exists) **Arm HP amendment.** The first launch stopped at once:
+splinter refused the pydoc text ("the sources state no skill: no section has a heading and a body"). The sources are
+now the same reference material as Markdown, generated from the interpreter's own docstrings with one section per
+method (rsi1/py/sources-md: str 47, list 11, dict 11, math 57 sections). Four replicates instead of three (r3 on card 0
+beside the evaluator, splinter --vram-budget 60); the criterion is computed over the four. Exam selected as registered:
+820 of 1164 candidates never answered by the base in 4 samples; the base re-measured greedily answers 2 of 820.
