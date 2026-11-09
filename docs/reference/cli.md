@@ -237,6 +237,7 @@ Options:
 - `--max-rounds <N>`: Training rounds in all [default: 8]
 - `--max-rounds-per-skill <N>`: Training rounds one skill may take [default: 2]
 - `--retention-drop <SHARE>`: How far a skill measured earlier may fall in a round before its candidate is rejected [default: 0.25]
+- `--pooled-retention-drop <SHARE>`: How far the passes of all the other skills taken together may fall in a round, as a share of their graded dev probes, before its candidate is rejected; the per-skill bound lets a loss spread over many skills through [default: 0: any net loss rejects]
 - `--full-fine-tune`: Train every weight in each round instead of a LoRA adapter.
 - `--train-precision <SPEC>`: brain's training precision of a full fine-tune, e.g. state=int8,sr=on [default: brain's: fp32 everywhere]
 - `--keep-candidates`: Keep the checkpoints of rejected and superseded full-fine-tune rounds.
@@ -247,6 +248,7 @@ Options:
 - `--structural-graph`: Read the skill graph from the sources' structure, one skill per section, instead of asking a planner model.
 - `--reference-teacher`: Teach a task the policy never solves with the task's own reference answer (the output the runtime computed, a reference program), graded like any answer, instead of asking the teacher model.
 - `--probes-from <RUN-ID>`: Take the skill graph and probes of this earlier learn --source run (its id is in `splinter runs list`) instead of planning and generating them; refused unless that run used the same sources. The baseline, rounds and assessment are still this run's.
+- `--replay-from <RUN-ID>...`: Train beside the datasets of the accepted rounds of this earlier learn --source run, in the order given (repeatable); the datasets that run itself replayed come with it, so a chain of generations needs only the previous run. Refused if a run or dataset is missing. Independent of --probes-from.
 - `--goal <TEXT>`: What the learner is after; steers the tasks generated.
 - `--task-harness <PATH>`: The invent harness (a directory): agents read each window of the sources and write task directories - instruction, environment, reference solution, hidden tests, the task's own solving process - in place of one call to the generator model. Each admitted task is a workspace task graded by its own tests, and is solved by its own process.
 - `--solve-harness <PATH>`: The generic solve harness (a directory holding `harness.yaml`): it solves a task that brings no process of its own and is the template the invent harness adapts a task's process from.

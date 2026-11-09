@@ -50,6 +50,7 @@ use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::acquire::{acquire, intake, plan, AcquireRequest, Outcome, PlannedBy};
 use splinter_pipelines::train::{TrainPlan, Trainer};
 use splinter_store::runs::{read_run, RunStatus};
+use std::sync::Mutex;
 
 #[test]
 fn documentation_becomes_skills_probes_rounds_and_an_assessment_that_decided_nothing() {
@@ -585,4 +586,165 @@ fn probes_are_not_taken_from_a_run_that_is_unknown_or_was_written_from_other_sou
     )
     .unwrap();
     assert_eq!(reused.report.probes, first.report.probes);
+}
+
+/// Training whose candidates know the topics of everything trained on, and
+/// that lists the datasets of each plan it was given.
+struct Recording {
+    plans: Mutex<Vec<Vec<String>>>,
+    /// Whether a candidate knows only the topics of the newest dataset:
+    /// training that forgets what earlier rounds taught.
+    forgets: bool,
+}
+
+impl Recording {
+    fn new(forgets: bool) -> Self {
+        Self {
+            plans: Mutex::new(Vec::new()),
+            forgets,
+        }
+    }
+}
+
+impl Trainer for Recording {
+    fn train(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<Trained, OrchestratorError> {
+        self.plans
+            .lock()
+            .unwrap()
+            .push(plan.datasets.iter().map(|d| d.id.to_string()).collect());
+        let mut seen = plan.clone();
+        if self.forgets {
+            seen.datasets = vec![plan.datasets.last().unwrap().clone()];
+        }
+        let topics = common::zork::topics_in(&seen);
+        let known: Vec<&str> = topics.iter().map(String::as_str).collect();
+        FakeTrainer::knowing(&known).train(ctx, plan, cancel)
+    }
+
+    fn train_preference(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<TrainedPreference, OrchestratorError> {
+        FakeTrainer::knowing(&[]).train_preference(ctx, plan, cancel)
+    }
+}
+
+#[test]
+fn a_later_generation_replays_the_accepted_datasets_of_the_runs_it_names() {
+    let (scratch, ctx) = context("acquire-replay");
+    let manual = write_manual(&scratch);
+    let earlier = Recording::new(false);
+    let first = acquire(&ctx, &request(&manual), &earlier).unwrap();
+    let accepted: Vec<String> = first
+        .report
+        .rounds
+        .iter()
+        .filter(|r| r.outcome == Outcome::Accepted)
+        .map(|r| r.dataset.clone().unwrap())
+        .collect();
+    assert_eq!(accepted.len(), 3);
+    assert_eq!(
+        earlier.plans.lock().unwrap()[0].len(),
+        1,
+        "nothing to replay"
+    );
+
+    let later = Recording::new(false);
+    let second = acquire(
+        &ctx,
+        &AcquireRequest {
+            replay_from: vec![first.run.clone(), first.run.clone()],
+            ..request(&manual)
+        },
+        &later,
+    )
+    .unwrap();
+    let first_plan = later.plans.lock().unwrap()[0].clone();
+    for dataset in &accepted {
+        assert!(
+            first_plan
+                .iter()
+                .any(|d| dataset.starts_with(d.as_str()) || d.starts_with(dataset.as_str())),
+            "{first_plan:?}"
+        );
+    }
+    assert!(first_plan.len() >= 3, "{first_plan:?}");
+    let mut once = first_plan.clone();
+    once.dedup();
+    assert_eq!(once, first_plan, "each dataset once");
+
+    // The seeding is recorded, and a third generation needs only the second.
+    let stages = read_run(ctx.workspace(), &second.run).unwrap().stages;
+    let replay = stages.iter().find(|s| s.stage == "replay").unwrap();
+    assert_eq!(replay.summary["datasets"].as_array().unwrap().len(), 3);
+    let third = Recording::new(false);
+    acquire(
+        &ctx,
+        &AcquireRequest {
+            replay_from: vec![second.run.clone()],
+            ..request(&manual)
+        },
+        &third,
+    )
+    .unwrap();
+    assert!(third.plans.lock().unwrap()[0].len() >= 3);
+}
+
+#[test]
+fn replay_from_a_run_that_is_missing_is_refused() {
+    let (scratch, ctx) = context("acquire-replay-refused");
+    let manual = write_manual(&scratch);
+    let refused = acquire(
+        &ctx,
+        &AcquireRequest {
+            replay_from: vec!["no-such-run".into()],
+            ..request(&manual)
+        },
+        &Learner,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(refused.contains("no-such-run"), "{refused}");
+}
+
+#[test]
+fn a_candidate_that_loses_passes_across_the_other_skills_is_rejected_though_each_stays_within_its_bound(
+) {
+    let (scratch, ctx) = context("acquire-pooled");
+    let manual = write_manual(&scratch);
+    // Each skill may lose everything on its own; only the pooled bound
+    // speaks. Every candidate knows only what its own round taught.
+    let report = acquire(
+        &ctx,
+        &AcquireRequest {
+            retention_drop: 1.0,
+            ..request(&manual)
+        },
+        &Recording::new(true),
+    )
+    .unwrap()
+    .report;
+    let reasons: Vec<&String> = report
+        .rounds
+        .iter()
+        .filter_map(|r| match &r.outcome {
+            Outcome::Rejected { reasons } => Some(reasons),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    assert!(
+        reasons
+            .iter()
+            .any(|why| why.contains("fell from 3 to 0 of 6")),
+        "{:#?}",
+        report.rounds
+    );
 }

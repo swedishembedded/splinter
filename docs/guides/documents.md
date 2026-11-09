@@ -144,7 +144,9 @@ write different tasks. A round's task request is never shown the skill's probes 
 generator shown them copies them - so a training task that repeats a probe is refused after it is
 written. Rounds train the skill expected to benefit most,
 prerequisites first; a candidate is accepted when its skill improved on the dev probes and no skill measured
-before fell by more than `--retention-drop`; the competence graph is kept revision by revision.
+before fell by more than `--retention-drop` and the other skills together did not lose passes beyond
+`--pooled-retention-drop` (default 0: any net loss of passes pooled over the other skills' dev probes
+rejects, which catches a loss spread thinly over many skills); the competence graph is kept revision by revision.
 The run ends when every skill is mastered (`--mastery`), no skill can be chosen (a skill has
 `--max-rounds-per-skill`), `--max-rounds` or `--budget` is spent, and is accepted only if every
 assessed skill reaches the target on the final probes. `--no-release` stops before the gate;
@@ -184,6 +186,13 @@ and is refused when that run does not exist, recorded no probes, or read other s
 still measures its own baseline, trains its own rounds and assesses on the same final probes. To
 measure two arms on one exam, copy the state root (`cp -r`) and run each arm in its own copy with
 the same `--probes-from`.
+
+`--replay-from <RUN-ID>` (repeatable) chains generations: the run trains each round beside the
+datasets of the accepted rounds of the named earlier runs, in the order given and once each, and
+records them in a `replay` stage. The datasets an earlier run itself replayed come with it, so a
+third generation names only the second. It is refused when a run or one of its datasets is missing,
+and it does not take probes (`--probes-from` is separate). Runs recorded before rounds noted their
+dataset cannot be replayed from.
 
 The Lua families and the `lua` runtime are Lua 5.1 and no other: `make deps/lua LUA_DIR=<dir>`
 builds the pinned interpreter, `--runtime-dir <dir>/bin` puts it first, and the runtime refuses

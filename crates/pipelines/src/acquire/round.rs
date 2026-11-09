@@ -134,6 +134,9 @@ pub struct Round {
     pub worth_training: usize,
     /// Records in the round's dataset.
     pub records: Option<usize>,
+    /// The round's dataset, when one was built. A later run replays the
+    /// datasets of this run's accepted rounds from it (`replay_from`).
+    pub dataset: Option<String>,
     /// What the incumbent's attempts (solving and verifying) cost.
     pub solve: Option<StageCost>,
     /// What training the candidate cost; no device time is reported for it.
@@ -266,6 +269,7 @@ impl Acquisition<'_> {
             frontier: None,
             worth_training: 0,
             records: None,
+            dataset: None,
             solve: None,
             train: None,
             candidate: None,
@@ -432,6 +436,7 @@ impl Acquisition<'_> {
             Err(e) => return Err(e),
         };
         report.records = Some(built.records);
+        report.dataset = Some(built.dataset.to_string());
         if built.records < splinter_data::holdout::MIN_SAMPLES {
             skip(
                 &mut report,
@@ -506,6 +511,9 @@ impl Acquisition<'_> {
                 ));
             }
         }
+        if let Some(reason) = self.pooled_loss(&report.others) {
+            reasons.push(reason);
+        }
         if reasons.is_empty() {
             report.outcome = Outcome::Accepted;
             self.incumbent = tuned;
@@ -526,6 +534,27 @@ impl Acquisition<'_> {
             self.dispose(candidate);
         }
         self.close(run, report, skill)
+    }
+
+    /// Why the other skills, taken together, lost more than the pooled
+    /// retention bound, if they did. Each skill's own bound lets a loss
+    /// spread thinly over many skills through; the passes summed over all of
+    /// them do not.
+    fn pooled_loss(&self, others: &BTreeMap<String, Change>) -> Option<String> {
+        let (mut graded, mut before, mut after) = (0usize, 0usize, 0usize);
+        for change in others.values() {
+            graded += change.before.graded;
+            before += change.before.passes;
+            after += change.after.passes;
+        }
+        let lost = before.saturating_sub(after);
+        let bound = self.request.pooled_retention_drop;
+        (graded > 0 && lost as f64 > bound * graded as f64).then(|| {
+            format!(
+                "the other skills' passes fell from {before} to {after} of {graded} graded \
+                 dev probes, more than the pooled retention bound {bound}"
+            )
+        })
     }
 
     /// Trains the round's candidate on `dataset`: an adapter retrained from

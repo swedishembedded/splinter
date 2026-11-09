@@ -38,6 +38,9 @@ pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
         .max_rounds_per_skill
         .unwrap_or(request.max_rounds_per_skill);
     request.retention_drop = named.retention_drop.unwrap_or(request.retention_drop);
+    request.pooled_retention_drop = named
+        .pooled_retention_drop
+        .unwrap_or(request.pooled_retention_drop);
     request.full_fine_tune = named.full_fine_tune;
     request.train_precision = named.train_precision;
     request.keep_candidates = named.keep_candidates;
@@ -52,6 +55,7 @@ pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
     request.structural_graph = named.structural_graph;
     request.reference_teacher = named.reference_teacher;
     request.probes_from = named.probes_from;
+    request.replay_from = named.replay_from;
     request.budget = args.budget;
     request.no_release = args.no_release;
     request.gate = args.gate.plan();

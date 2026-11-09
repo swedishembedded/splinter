@@ -9,7 +9,7 @@ use std::time::Duration;
 use clap::Args;
 use splinter_sdk::acquire::{
     DEFAULT_MASTERY, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_ROUNDS_PER_SKILL, DEFAULT_MIN_PROBES,
-    DEFAULT_RETENTION_DROP, MAX_ROUND_WRITES, ROUND_TASKS_WANTED,
+    DEFAULT_POOLED_RETENTION_DROP, DEFAULT_RETENTION_DROP, MAX_ROUND_WRITES, ROUND_TASKS_WANTED,
 };
 use splinter_sdk::exam_set::{DEFAULT_DEV_TASKS_PER_FAMILY, DEFAULT_TASKS_PER_FAMILY};
 use splinter_sdk::learn::{DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
@@ -54,6 +54,13 @@ pub struct AcquireArgs {
         help = format!("How far a skill measured earlier may fall in a round before its \
         candidate is rejected [default: {DEFAULT_RETENTION_DROP}]"))]
     pub retention_drop: Option<f64>,
+    /// How far the other skills together may fall in a round.
+    #[arg(long, value_name = "SHARE", value_parser = voice_share, requires = "source",
+        help = format!("How far the passes of all the other skills taken together may fall in \
+        a round, as a share of their graded dev probes, before its candidate is rejected; the \
+        per-skill bound lets a loss spread over many skills through [default: \
+        {DEFAULT_POOLED_RETENTION_DROP}: any net loss rejects]"))]
+    pub pooled_retention_drop: Option<f64>,
     /// Train every weight in each round instead of a LoRA adapter.
     #[arg(long, requires = "source")]
     pub full_fine_tune: bool,
@@ -108,6 +115,17 @@ pub struct AcquireArgs {
         used the same sources. The baseline, rounds and assessment are still this run's"
     )]
     pub probes_from: Option<String>,
+    /// Replay the accepted rounds' datasets of earlier acquisition runs.
+    #[arg(
+        long,
+        value_name = "RUN-ID",
+        requires = "source",
+        help = "Train beside the datasets of the accepted rounds of this earlier learn --source \
+        run, in the order given (repeatable); the datasets that run itself replayed come with it, \
+        so a chain of generations needs only the previous run. Refused if a run or dataset is \
+        missing. Independent of --probes-from"
+    )]
+    pub replay_from: Vec<String>,
 }
 
 /// The flywheel harnesses, run as `sven harness run` against a model server

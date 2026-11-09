@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (learn generations)
+- `learn --source ... --replay-from RUN` (repeatable) trains each round beside the datasets of the accepted rounds of earlier acquisition runs (the datasets that run itself replayed come with it), recorded in a `replay` stage; a missing run or dataset is refused. `--pooled-retention-drop SHARE` (default 0) rejects a candidate when the passes of all the other skills taken together fall by more than that share of their graded dev probes, which the per-skill `--retention-drop` lets through when the loss is spread over many skills.
+
 ### Added (solvable requests)
 - A candidate fault whose reference change restores a returned value or a raised error that no failing test's title speaks of is refused (`unstated_contract`): the request lists only titles, so such a task cannot be solved from it. Requests are not changed. `tasks check-requests TASKSET-ID` applies the same rule to an existing task set and writes the tasks that pass as a set of their own, with counts of those dropped.
 

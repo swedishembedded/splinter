@@ -47,6 +47,7 @@ mod cost;
 mod graph;
 mod intake;
 mod probes;
+mod replay;
 mod reuse;
 mod round;
 mod select;
@@ -98,6 +99,15 @@ pub const DEFAULT_MAX_ROUNDS: usize = 8;
 /// candidate is rejected, when a request names none.
 pub const DEFAULT_RETENTION_DROP: f64 = 0.25;
 
+/// How far the other skills' passes, pooled, may fall in a round before its
+/// candidate is rejected, when a request names none. Zero: any net loss of
+/// passes across the skills the round did not target rejects it. A skill has
+/// only a few dev probes, so a per-skill bound loose enough to tolerate
+/// measurement noise lets a candidate trade one family of skills for another
+/// unnoticed; pooled over every other skill the noise averages out, and a
+/// net loss is a real cost the target's gain must not be bought with.
+pub const DEFAULT_POOLED_RETENTION_DROP: f64 = 0.0;
+
 /// One acquisition.
 #[derive(Clone, Debug, Serialize)]
 pub struct AcquireRequest {
@@ -122,6 +132,12 @@ pub struct AcquireRequest {
     pub max_rounds: usize,
     /// How far a skill may fall in a round.
     pub retention_drop: f64,
+    /// How far the passes of all the other skills taken together may fall
+    /// in a round, as a share of their graded dev probes, before its
+    /// candidate is rejected. `retention_drop` judges each skill alone and
+    /// lets a loss spread over many skills through. The default is
+    /// [`DEFAULT_POOLED_RETENTION_DROP`].
+    pub pooled_retention_drop: f64,
     /// Wall-clock time the whole run may take.
     pub budget: Option<Duration>,
     /// Stop with the final candidate: do not run the release gate.
@@ -173,6 +189,13 @@ pub struct AcquireRequest {
     /// baseline, trains its own rounds and assesses. Runs that take the same
     /// run's probes are measured on one exam.
     pub probes_from: Option<String>,
+    /// Earlier acquisition runs, recorded in the same state root, whose
+    /// accepted rounds' datasets seed this run's replay list, in the order
+    /// given and deduplicated: the run trains beside them from its first
+    /// round, as a later generation must to keep what earlier ones taught.
+    /// An earlier run's own `replay_from` datasets come with it, so a chain
+    /// needs only the previous run. Independent of `probes_from`.
+    pub replay_from: Vec<String>,
     /// How training runs.
     pub tuning: Tuning,
     /// The models named for roles.
@@ -195,6 +218,7 @@ impl AcquireRequest {
             max_rounds_per_skill: DEFAULT_MAX_ROUNDS_PER_SKILL,
             max_rounds: DEFAULT_MAX_ROUNDS,
             retention_drop: DEFAULT_RETENTION_DROP,
+            pooled_retention_drop: DEFAULT_POOLED_RETENTION_DROP,
             budget: None,
             no_release: false,
             gate: GatePlan::default(),
@@ -210,6 +234,7 @@ impl AcquireRequest {
             structural_graph: false,
             reference_teacher: false,
             probes_from: None,
+            replay_from: Vec::new(),
             tuning: Tuning::default(),
             roles: RoleOverrides::default(),
         }
@@ -237,6 +262,7 @@ impl AcquireRequest {
         };
         share("the mastery target", self.mastery)?;
         share("the retention bound", self.retention_drop)?;
+        share("the pooled retention bound", self.pooled_retention_drop)?;
         share("the replay fraction", self.replay_fraction)?;
         self.validate_training()?;
         if self.probes_per_skill < self.min_probes || self.min_probes == 0 {
@@ -384,7 +410,8 @@ pub(super) struct Acquisition<'a> {
     /// Who attempts the round's tasks and is measured next: the policy the
     /// run began with, then the last accepted candidate.
     pub(super) incumbent: ModelRef,
-    /// The datasets of the rounds accepted so far.
+    /// The datasets replayed from earlier runs, then those of the rounds
+    /// accepted so far.
     pub(super) datasets: Vec<String>,
     pub(super) last_candidate: Option<Candidate>,
     /// The checkpoint the incumbent is, when every weight is trained.
@@ -454,6 +481,13 @@ pub fn acquire(
         let cancel = run.cancel_token();
         let sources = intake(ctx, &request.sources)?;
         run.stage("sources", &sources)?;
+        let replayed = replay::seed(ctx, &request.replay_from)?;
+        if !request.replay_from.is_empty() {
+            run.stage(
+                "replay",
+                &serde_json::json!({ "replay_from": request.replay_from, "datasets": replayed }),
+            )?;
+        }
         let ids: Vec<_> = sources.iter().map(|s| s.source.clone()).collect();
         let mut seen = probes::fresh_seen();
         let (planned, reused) = match &request.probes_from {
@@ -499,7 +533,7 @@ pub fn acquire(
             },
             competence_address: planned.address.clone(),
             incumbent: ModelRef::policy_default(),
-            datasets: Vec::new(),
+            datasets: replayed,
             last_candidate: None,
             checkpoint: None,
         };
