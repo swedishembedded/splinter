@@ -73,10 +73,14 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
   and the protocol a model is used with measured beside it.
 - [ ] Separate exploration from the champion: an explorer policy (base, earlier checkpoints, higher temperature)
   feeding a shared verified store; promotion only through an independent gate.
-- [ ] Forgetting gate: a candidate is also measured on items earlier champions solved (a growing retention set beside
-  the probes); arms H and HP lost 50-66 such items at generation 3 while their probes rose.
-  The Python losses are family trades, not uniform decay: r0 gained `list * and +=` and lost `format spec`, r2 the
-  reverse (17 of its 24 losses in `list * and +=`), so the gate must cover every family solved so far.
+- [x] Forgetting controls (65c60a2a2): cross-generation replay (`--replay-from RUN`; before it every generation started
+  with an empty replay list, so generation N never replayed generations 1..N-1's accepted data) and a pooled retention
+  gate (`--pooled-retention-drop`, default 0: any net loss of passes over the other skills rejects; the per-skill
+  bound let a loss spread over many skills through). Arms H and HP lost 50-66 items at generation 3 while their
+  probes rose; their losses are family trades (r0 gained `list * and +=` and lost `format spec`, r2 the reverse).
+- [ ] Arm HR (next lease, register first): arm HP's design with `--replay-from <previous generation>` and the pooled
+  gate, 4 replicates x 3 generations from the base (about 10-11 h on 4 GH200s; the arm-HP runs predate the dataset
+  field in round records and cannot be replayed from). Criterion as arm H; the decisive comparison is generation 3.
 - [ ] Ablation: arm H without interpreter relabelling of mispredicted programs, to test whether the corrected answers
   to the model's own mistakes are what drives arms H and HP.
 - [ ] Stricter round acceptance (no promotion on one dev probe) and the 0.25 retention default restored.
