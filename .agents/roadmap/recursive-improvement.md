@@ -46,6 +46,10 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
 
 ### In flight (2026-11-08)
 
+- **Arm HP** (registered 758ea640e, 7835c9bfe; restarted 71493424b): the arm-H recipe on Python (126 skills from
+  Markdown sources), 4 replicates, exam 820 items the base never answered (base greedy 2/820). The first runs spent
+  their budget writing probes; generations 1-3 now reuse those probes (`--probes-from`) with 3 h each.
+
 - **Arm H** (registered 11d5f77ff, accfaeabc): the arm-B loop measured on the 889-item base-never exam; criterion
   gen1 > base, gen2 > gen1, gen3 > gen2 (pooled sign test p < 0.05, no replicate falling).
 - **Arm R** (registered 53135019e): frontier tasks (solved 1..15 of 16), 16 samples per task with thinking, training
