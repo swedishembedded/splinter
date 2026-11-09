@@ -260,3 +260,16 @@ generations 2 and 3 (its champion is unchanged since generation 1). Every measur
 evidence dataset `rsi1-py/`. Arms H and HP agree: two self-taught generations improve significantly on items the base
 never answered, in two languages; at the third generation forgetting (Lua 66 lost, Python 50 lost) matches or outweighs
 the gains, and the loop's own probes do not detect it.
+
+2026-11-09 16:55 (before any run of it) **Arm HR: arm HP with the forgetting controls.** Arms H and HP lost 66 and 50
+exam items at generation 3 while their own probes rose. Two causes were found in splinter and fixed in 65c60a2a2: every
+generation started with an empty replay list (generation N never replayed the accepted datasets of generations
+1..N-1), and the retention bound judged each skill alone on its 3-4 dev probes, letting a loss spread over many skills
+through. Arm HR is arm HP (same sources, kinds, exam of 820 items, grading, base measurement 2/820, four replicates,
+each replicate's probe run reused with `--probes-from`) run with splinter e9b442535: generation g > 1 passes
+`--replay-from` the run of generation g-1, every generation `--pooled-retention-drop 0`. Budget 2 h 45 min per
+generation (to fit generation 1 in the current lease; generations 2-3 run in the next lease from the recorded
+generation-1 runs and champions). Each generation's champion is measured greedily on the exam on its own card
+(rsi1/py/hr/evalhr.py; a generation that accepts no round keeps its champion). Criterion as arm H: gen1 > base,
+gen2 > gen1, gen3 > gen2, pooled one-sided sign test p < 0.05 each, no replicate falling. The decisive comparison is
+generation 3 vs 2, where arms H and HP forgot.
