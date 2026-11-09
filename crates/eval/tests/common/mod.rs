@@ -5,7 +5,7 @@
 //! environment in the process sandbox, and reading a verdict back.
 
 // Each spec binary uses a subset of these helpers.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::unwrap_used)]
 
 pub mod conformance;
 pub mod workspace;

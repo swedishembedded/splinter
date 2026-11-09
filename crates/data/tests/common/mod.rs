@@ -5,7 +5,7 @@
 //! ATIF trajectories, and the annotations that grade and relate them.
 
 // Each spec uses a different subset of the builders.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::unwrap_used)]
 
 use std::hash::BuildHasher as _;
 use std::path::PathBuf;

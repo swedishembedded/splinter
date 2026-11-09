@@ -9,7 +9,7 @@
 //! the fake `sven` the flywheel harness specs run ([`fake_sven`]).
 
 // Each spec binary uses a subset of these helpers.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::unwrap_used)]
 
 pub mod bench;
 pub mod fake_brain;

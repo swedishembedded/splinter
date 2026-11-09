@@ -6,7 +6,7 @@
 //! generator wired to them.
 
 // Each spec binary uses a subset of these helpers.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::unwrap_used)]
 
 use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
