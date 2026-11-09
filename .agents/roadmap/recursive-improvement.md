@@ -75,6 +75,8 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
   feeding a shared verified store; promotion only through an independent gate.
 - [ ] Forgetting gate: a candidate is also measured on items earlier champions solved (a growing retention set beside
   the probes); arms H and HP lost 50-66 such items at generation 3 while their probes rose.
+  The Python losses are family trades, not uniform decay: r0 gained `list * and +=` and lost `format spec`, r2 the
+  reverse (17 of its 24 losses in `list * and +=`), so the gate must cover every family solved so far.
 - [ ] Ablation: arm H without interpreter relabelling of mispredicted programs, to test whether the corrected answers
   to the model's own mistakes are what drives arms H and HP.
 - [ ] Stricter round acceptance (no promotion on one dev probe) and the 0.25 retention default restored.
