@@ -251,3 +251,12 @@ yield 126 skills (Lua: ~18); every replicate's first run spent its 2-hour budget
 ended "the budget was spent" with no training round. Those runs are kept as each replicate's probe run
 (rsi1/py/rK/probe-run); generations 1-3 run from the base and then from each champion with `--probes-from` that run
 (the same skill graph and sealed probes) and a 3-hour budget each. Nothing else changes.
+
+2026-11-09 14:30 **Arm HP outcome: criterion not met (generations 1 and 2 met it; generation 3 did not).** Correct
+answers of 820 per replicate r0-r3: base 2; gen1 33 / 5 / 8 / 4; gen2 69 / 5 / 41 / 10; gen3 60 / 5 / 53 / 16. Pooled
+one-sided sign tests: gen1 vs base 49/7, p 3.7e-9; gen2 vs gen1 83/8, p 3.8e-17 (no replicate fell); gen3 vs gen2 59/50,
+p 0.22, and r0 fell (12 won, 21 lost) although its own probes rose 76 -> 78 of 105. r1 accepted no round in
+generations 2 and 3 (its champion is unchanged since generation 1). Every measurement had 0 failed requests. Records:
+evidence dataset `rsi1-py/`. Arms H and HP agree: two self-taught generations improve significantly on items the base
+never answered, in two languages; at the third generation forgetting (Lua 66 lost, Python 50 lost) matches or outweighs
+the gains, and the loop's own probes do not detect it.

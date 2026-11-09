@@ -21,6 +21,7 @@ flywheel evidence dataset (`gen27b/`, `rsi1-lua/`) and the curated 27B dataset (
 | Lua arm B (starvation fix c7d11d932) | Gen1 +11, then ~+1, ~0 | Same plateau, reached faster |
 | Neutral re-grade of A/B | Base ~57-61 % (no thinking) / ~71 % (thinking, pass@16 80-84 %) on the same probes vs ~40 % under splinter's probing; champions ~= base | **The A/B gains were adaptation to splinter's probing protocol, not added competence.** The paper's earlier Lua claims (SL20-SL23, 8B 25 -> 49) need the same re-grade |
 | Arm H (exam = 889 code-written items the base never answered, neutral grading) | **Criterion met (2026-11-08 17:50):** gen1 38/31/34, gen2 60/63/49, gen3 67/83/59 of 889 (base 0); pooled sign tests gen1 vs base 103/0 p 1e-31, gen2 vs gen1 95/26 p 1e-10, gen3 vs gen2 103/66 p 0.0027; no replicate fell | Shown: three self-taught generations, each significantly better on what the base could not do. Open: forgetting (26 then 66 losses), absolute level still low (7-9 %), thinking off; arms R and P test search, procedures and negative rewards |
+| Arm HP (arm H on Python, 4 replicates, 820-item exam, base 2) | Gen1 vs base 49/7 (p 4e-9), gen2 vs gen1 83/8 (p 4e-17); **gen3 vs gen2 59/50 (p 0.22), r0 fell** - criterion not met (2026-11-09) | Two generations of self-improvement replicate in a second language; the third generation forgets as much as it gains, invisible to the loop's own probes. One replicate (r1) never got past generation 1 |
 
 ## Root causes (ranked by evidence)
 
@@ -72,6 +73,10 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
   and the protocol a model is used with measured beside it.
 - [ ] Separate exploration from the champion: an explorer policy (base, earlier checkpoints, higher temperature)
   feeding a shared verified store; promotion only through an independent gate.
+- [ ] Forgetting gate: a candidate is also measured on items earlier champions solved (a growing retention set beside
+  the probes); arms H and HP lost 50-66 such items at generation 3 while their probes rose.
+- [ ] Ablation: arm H without interpreter relabelling of mispredicted programs, to test whether the corrected answers
+  to the model's own mistakes are what drives arms H and HP.
 - [ ] Stricter round acceptance (no promotion on one dev probe) and the 0.25 retention default restored.
 - [ ] A plateau controller that switches strategy (task distribution, external evidence, repair training,
   exploration breadth, objective) when the discovery rate per GPU-hour falls.
