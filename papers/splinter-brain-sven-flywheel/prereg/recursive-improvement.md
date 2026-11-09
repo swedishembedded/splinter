@@ -245,3 +245,9 @@ over iterations 0-3: test-held (never-trained families) 0.442/0.578, 0.447/0.574
 up/down vs previous 28/29, 26/29, 29/28); test-seen (fresh items of the trained families) 0.721/0.818, 0.741/0.832,
 0.737/0.830, 0.756/0.846; arm-H exam 0 / 6 / 8 / 12 of 889. Policy gradient at an update scale that moves the policy
 improves the families it practises (+3.5 points pass@1, +2.8 pass@4) but does not transfer to families it never saw.
+
+2026-11-09 04:00 (before any trained model of arm HP exists) **Arm HP: generation 1 restarted.** The Python sources
+yield 126 skills (Lua: ~18); every replicate's first run spent its 2-hour budget writing and grading the probes and
+ended "the budget was spent" with no training round. Those runs are kept as each replicate's probe run
+(rsi1/py/rK/probe-run); generations 1-3 run from the base and then from each champion with `--probes-from` that run
+(the same skill graph and sealed probes) and a 3-hour budget each. Nothing else changes.
