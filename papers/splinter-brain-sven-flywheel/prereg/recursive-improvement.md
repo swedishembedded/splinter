@@ -284,3 +284,13 @@ and no replicate improved in two consecutive generations; the controls stop forg
 improving repeatedly, so arm HR is not evidence of recursive improvement within a lineage. Deviation: the generation
 driver stopped replicate r0 after a complete generation 2 (splinter exits 1 when the final assessment is not accepted)
 and was restarted 37 minutes later; nothing else changed. Records: evidence dataset `rsi1-hr/`.
+
+2026-11-10 05:20 (before any run of it) **Arm HL: arm H repeated, judged per lineage.** An exploratory reading of arm
+H (not its registered test) found one lineage, r1, significantly better at each of three consecutive generations
+(31/0, 40/8, 49/29 items won/lost; p 5e-10, 2e-6, 0.015), and the other two significant at generations 1 and 2 only.
+Arm HL tests that claim as registered. Recipe exactly arm H's (splinter b39782f43, the same Lua sources, kinds,
+training settings and 2 h 45 min budget per generation; each replicate writes its own probes in generation 1 and
+reuses them after), four fresh replicates, measured on arm H's exam (889 code-written Lua items the base never
+answered; base 0) under arm H's protocol. **Criterion:** a lineage succeeds when each of its three steps (gen1 vs base,
+gen2 vs gen1, gen3 vs gen2) wins more items than it loses with a one-sided sign test within the lineage p < 0.05; the
+arm meets the criterion when at least two of the four lineages succeed. The pooled tests are reported beside it.
