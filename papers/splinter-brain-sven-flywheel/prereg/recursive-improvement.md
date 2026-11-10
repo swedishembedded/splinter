@@ -294,3 +294,10 @@ reuses them after), four fresh replicates, measured on arm H's exam (889 code-wr
 answered; base 0) under arm H's protocol. **Criterion:** a lineage succeeds when each of its three steps (gen1 vs base,
 gen2 vs gen1, gen3 vs gen2) wins more items than it loses with a one-sided sign test within the lineage p < 0.05; the
 arm meets the criterion when at least two of the four lineages succeed. The pooled tests are reported beside it.
+
+2026-11-10 05:35 (before any run of arm HL) **Arm HL correction.** Two statements of the arm-HL entry about arm H's
+recipe were wrong: arm H's budget was 2 hours per generation (its generations ended "the budget was spent" after
+about 2 h 13 min), not 2 h 45 min; and arm H's replicates reused the skill graphs and probes of earlier runs in
+their own state roots (`--probes-from`), they did not write them in generation 1. Arm HL uses the 2-hour budget.
+Its four fresh replicates have no earlier run, so each writes its own skill graph and probes in a first run that is
+not a generation (as arm HP's probe runs), and generations 1-3 reuse them; nothing else changes.
