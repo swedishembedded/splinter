@@ -273,3 +273,14 @@ generation-1 runs and champions). Each generation's champion is measured greedil
 (rsi1/py/hr/evalhr.py; a generation that accepts no round keeps its champion). Criterion as arm H: gen1 > base,
 gen2 > gen1, gen3 > gen2, pooled one-sided sign test p < 0.05 each, no replicate falling. The decisive comparison is
 generation 3 vs 2, where arms H and HP forgot.
+
+2026-11-10 04:40 **Arm HR outcome: the registered criterion is met, but not by any one lineage improving twice.**
+Correct answers of 820 per replicate r0-r3: base 2; gen1 64 / 2 / 2 / 2; gen2 64 / 2 / 2 / 17; gen3 64 / 2 / 24 / 17
+(a generation that accepted no round keeps its champion). Pooled one-sided sign tests: gen1 vs base 66/4, p 8.3e-16;
+gen2 vs gen1 16/1, p 1.4e-4; gen3 vs gen2 25/3, p 1.4e-5; no replicate fell. Forgetting is controlled: 4, 1 and 3 items
+lost per step against arm HP's 7, 8 and 50. But each step's gain comes from one replicate (gen1 r0, gen2 r3, gen3 r2),
+and no replicate improved in two consecutive generations; the controls stop forgetting mostly by accepting fewer rounds
+(HR accepted 11 rounds in 12 generation runs, HP 35). The pooled test cannot tell staggered single gains from one model
+improving repeatedly, so arm HR is not evidence of recursive improvement within a lineage. Deviation: the generation
+driver stopped replicate r0 after a complete generation 2 (splinter exits 1 when the final assessment is not accepted)
+and was restarted 37 minutes later; nothing else changed. Records: evidence dataset `rsi1-hr/`.

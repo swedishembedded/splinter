@@ -22,6 +22,7 @@ flywheel evidence dataset (`gen27b/`, `rsi1-lua/`) and the curated 27B dataset (
 | Neutral re-grade of A/B | Base ~57-61 % (no thinking) / ~71 % (thinking, pass@16 80-84 %) on the same probes vs ~40 % under splinter's probing; champions ~= base | **The A/B gains were adaptation to splinter's probing protocol, not added competence.** The paper's earlier Lua claims (SL20-SL23, 8B 25 -> 49) need the same re-grade |
 | Arm H (exam = 889 code-written items the base never answered, neutral grading) | **Criterion met (2026-11-08 17:50):** gen1 38/31/34, gen2 60/63/49, gen3 67/83/59 of 889 (base 0); pooled sign tests gen1 vs base 103/0 p 1e-31, gen2 vs gen1 95/26 p 1e-10, gen3 vs gen2 103/66 p 0.0027; no replicate fell | Shown: three self-taught generations, each significantly better on what the base could not do. Open: forgetting (26 then 66 losses), absolute level still low (7-9 %), thinking off; arms R and P test search, procedures and negative rewards |
 | Arm HP (arm H on Python, 4 replicates, 820-item exam, base 2) | Gen1 vs base 49/7 (p 4e-9), gen2 vs gen1 83/8 (p 4e-17); **gen3 vs gen2 59/50 (p 0.22), r0 fell** - criterion not met (2026-11-09) | Two generations of self-improvement replicate in a second language; the third generation forgets as much as it gains, invisible to the loop's own probes. One replicate (r1) never got past generation 1 |
+| Arm HR (arm HP + replay + pooled gate) | Registered criterion met (66/4, 16/1, 25/3; no replicate fell); losses per step 4/1/3 vs HP 7/8/50 | Forgetting fixed, but each step's gain is a different replicate (r0, r3, r2) and no lineage improved twice; HR accepted 11 rounds in 12 runs vs HP 35. The criterion must be per lineage: the same replicate better at gen1, gen2 and gen3 |
 
 ## Root causes (ranked by evidence)
 
@@ -78,9 +79,12 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
   gate (`--pooled-retention-drop`, default 0: any net loss of passes over the other skills rejects; the per-skill
   bound let a loss spread over many skills through). Arms H and HP lost 50-66 items at generation 3 while their
   probes rose; their losses are family trades (r0 gained `list * and +=` and lost `format spec`, r2 the reverse).
-- [ ] Arm HR (next lease, register first): arm HP's design with `--replay-from <previous generation>` and the pooled
+- [x] Arm HR (ran 2026-11-09/10, outcome above): arm HP's design with `--replay-from <previous generation>` and the pooled
   gate, 4 replicates x 3 generations from the base (about 10-11 h on 4 GH200s; the arm-HP runs predate the dataset
   field in round records and cannot be replayed from). Criterion as arm H; the decisive comparison is generation 3.
+- [ ] Learn more per generation without the forgetting: most rejections are a flat target on 3-4 dev probes or
+  the per-skill bound, not the pooled gate. Power the dev probes (more per skill) so real gains pass, and register
+  the next arm's criterion per lineage (each replicate better at every generation, sign test within the lineage).
 - [ ] Ablation: arm H without interpreter relabelling of mispredicted programs, to test whether the corrected answers
   to the model's own mistakes are what drives arms H and HP.
 - [ ] Stricter round acceptance (no promotion on one dev probe) and the 0.25 retention default restored.
