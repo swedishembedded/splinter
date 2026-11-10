@@ -301,3 +301,11 @@ about 2 h 13 min), not 2 h 45 min; and arm H's replicates reused the skill graph
 their own state roots (`--probes-from`), they did not write them in generation 1. Arm HL uses the 2-hour budget.
 Its four fresh replicates have no earlier run, so each writes its own skill graph and probes in a first run that is
 not a generation (as arm HP's probe runs), and generations 1-3 reuse them; nothing else changes.
+
+2026-11-10 13:00 **Arm HL outcome: not evaluated.** Every replicate's run ended on the project disk's inode quota
+("Disk quota exceeded", os error 122) before its third generation: r0 in its probe run (08:10), r3 and r2 in
+generation 1 (09:48, 10:01), r1 in generation 2 (11:15). The work was then paused for another campaign and the
+replicates' state deleted to free the disk. The one champion measured, r1 generation 1, answers 46 of the 889 items
+(base 0; 46 wins, 0 losses, one-sided sign test p = 1.4e-14), a first step only. The per-lineage criterion was
+never evaluated, so arm HL is neither a success nor a failure of it; a replication needs a fresh run on a disk with
+headroom. Records: `rsi1-hl/` of the evidence repository.
