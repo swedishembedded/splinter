@@ -565,7 +565,7 @@ fn check_expression(expr: &Value, declared: &BTreeSet<String>) -> Result<(), Str
 }
 
 /// The numbers in `text` as the claims normalise them: no thousands comma, no trailing zeros.
-fn quote_numbers(text: &str) -> BTreeSet<String> {
+pub(crate) fn quote_numbers(text: &str) -> BTreeSet<String> {
     let chars: Vec<char> = text.chars().collect();
     let mut found = BTreeSet::new();
     let mut i = 0;

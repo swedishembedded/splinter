@@ -148,7 +148,8 @@ impl Group {
     fn instructions(self) -> &'static str {
         match self {
             Group::Conditions => {
-                "Extract every sentence that sets a limit, states a condition with its consequence, or makes an exception. A limit on a number (more than, at most, at least, within) \
+                "Extract every sentence that sets a limit, states a condition with its consequence, or makes an exception. A sentence that only says what a value IS (\"The X of Y is 400 hours\") \
+                 is a fact, not a limit: leave it. A limit on a number (more than, at most, at least, within) that the text says has a consequence or must not be crossed \
                  is a threshold: var, op, value, outcome (what follows), label, vars; limit=true when it is a ceiling a draft must stay within. A condition without a number is a rule: \
                  when, outcome, vars. 'Unless', 'except if' and 'does not apply if' make an exception: overrides (the id of the rule it qualifies, which you also give), when, outcome, vars. \
                  Two thresholds in one sentence are two objects with the same quote."
@@ -447,17 +448,28 @@ pub fn unify_variable_types(proposals: &mut [ProposedObject]) {
     }
 }
 
-/// How much one kind of object says compared with another that has the same quote: a formula says more than a limit it contains, a period more
-/// than a rule restating it, an ordered step more than the fact or rule that repeats it. Higher dominates lower.
-fn dominates(higher: &str, lower: &str) -> bool {
-    matches!(
-        (higher, lower),
+/// Whether `higher` says more than `lower` about the same sentence, so that `lower` only restates it: a formula over the limit or fact it contains, an
+/// ordered step over the rule or fact that repeats it, a period over a fact, a plain statement ("The X of Y is V.") over a limit read into it, and a
+/// limit or rule over a fact only when the sentence is not a plain statement. What is not listed (a period and a limit in one sentence) is kept: two
+/// objects of one quote are not duplicates when each says something the other does not.
+fn dominates(higher: &ProposedObject, lower: &ProposedObject) -> bool {
+    let statement = is_statement(&higher.quote) || is_statement(&lower.quote);
+    match (higher.kind.as_str(), lower.kind.as_str()) {
         ("computation", "threshold" | "rule" | "fact" | "definition")
-            | ("deadline", "threshold" | "rule" | "fact")
-            | ("exception", "fact")
-            | ("threshold" | "rule", "fact")
-            | ("procedure_step", "threshold" | "rule" | "fact")
-    )
+        | ("procedure_step", "threshold" | "rule" | "fact")
+        | ("deadline" | "exception", "fact") => true,
+        ("fact", "threshold" | "rule") => statement,
+        ("threshold" | "rule", "fact") => !statement,
+        _ => false,
+    }
+}
+
+/// Whether a quote is one of the two plain statement forms, "The X of Y is V." or "When X, a Y client Z.": a sentence that states a value or a habit
+/// and says nothing about what follows from it.
+fn is_statement(quote: &str) -> bool {
+    let q = quote.trim();
+    (q.starts_with("The ") && q.contains(" of ") && q.contains(" is "))
+        || (q.starts_with("When ") && q.contains(", a ") && q.contains(" client "))
 }
 
 /// Drops the objects that only restate a dominating object of the same quote: the same numbers or fewer, from a quote that overlaps it.
@@ -470,6 +482,14 @@ pub fn arbitrate(proposals: &mut Vec<ProposedObject>) {
                 set.insert(n);
             }
         });
+        if p.kind == "fact" {
+            // A fact states its value as written ("250 hours"): what it says in numbers is in its quote.
+            set.extend(
+                super::quote_numbers(&p.quote)
+                    .into_iter()
+                    .filter(|n| n != "0" && n != "1"),
+            );
+        }
         set
     };
     let overlap = |a: &str, b: &str| a.contains(b) || b.contains(a);
@@ -479,7 +499,7 @@ pub fn arbitrate(proposals: &mut Vec<ProposedObject>) {
         .map(|(i, lower)| {
             !proposals.iter().enumerate().any(|(j, higher)| {
                 j != i
-                    && dominates(&higher.kind, &lower.kind)
+                    && dominates(higher, lower)
                     && overlap(&higher.quote, &lower.quote)
                     && numbers(lower).is_subset(&numbers(higher))
             })
@@ -656,7 +676,7 @@ mod tests {
                 "fee",
                 "computation",
                 fee,
-                json!({"expr": ["pct", ["var", "rent"], ["const", "2"]], "name": "fee", "when": {}}),
+                json!({"expr": ["pct", ["var", "rent"], ["min", ["const", "2"], ["const", "10"]]], "name": "fee", "when": {}}),
             ),
             object(
                 "cap",
@@ -669,12 +689,46 @@ mod tests {
         ];
         arbitrate(&mut all);
         let kept: Vec<&str> = all.iter().map(|p| p.id.as_str()).collect();
-        // The cap's 10 is in the computation only through its expression's constants: the threshold carries a number the computation lacks here.
         assert_eq!(
             kept,
-            ["fee", "cap", "other"],
-            "the fact restates the computation; the unrelated threshold stays"
+            ["fee", "other"],
+            "the fact and the cap restate the formula; the unrelated threshold stays"
         );
+    }
+
+    #[test]
+    fn a_plain_statement_beats_a_limit_read_into_it_but_a_limit_beats_a_fact_that_restates_it() {
+        let statement = "The service interval of Alder pump 3 is 250 hours.";
+        let mut all = vec![
+            object("fact", "fact", statement, json!({"value": "250 hours"})),
+            object("limit", "threshold", statement, json!({"value": 250})),
+        ];
+        arbitrate(&mut all);
+        assert_eq!(
+            all.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(),
+            ["fact"]
+        );
+        let sentence = "If the seller delivers more than 14 days after the agreed date, the buyer may terminate.";
+        let mut all = vec![
+            object("limit", "threshold", sentence, json!({"value": 14})),
+            object("fact", "fact", sentence, json!({"value": "14 days"})),
+        ];
+        arbitrate(&mut all);
+        assert_eq!(
+            all.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(),
+            ["limit"]
+        );
+    }
+
+    #[test]
+    fn a_limit_and_a_period_of_one_sentence_are_both_kept() {
+        let sentence = "The notice must be given within 30 days after the delay became known.";
+        let mut all = vec![
+            object("period", "deadline", sentence, json!({"offset": 30})),
+            object("limit", "threshold", sentence, json!({"value": 30})),
+        ];
+        arbitrate(&mut all);
+        assert_eq!(all.len(), 2);
     }
 
     #[test]

@@ -530,8 +530,8 @@ Options:
 - `--pack-id <ID>`: The pack's name. Default: `pack`.
 - `--outcomes <NAME,...>...`: The outcomes a rule may conclude, comma separated; open when absent.
 - `--repairs <N>`: How many times a reply with refused proposals is sent back, per document. Default: `2`.
-- `--per-kind`: One pass per family of kinds (limits and exceptions, formulas, periods and steps, facts and tables, behaviour), each with its own instructions.
-- `--examples`: Show the model a worked example, from an unrelated domain, in each pass.
+- `--single-pass`: Ask for every kind in one pass instead of one pass per family of kinds (limits and exceptions, formulas, periods and steps, facts and tables, behaviour). One pass per family finds far more; one pass is quicker.
+- `--no-examples`: Leave out the worked example, from an unrelated domain, that each pass shows the model.
 - `--chunk-words <WORDS>`: Put each document in runs of paragraphs of at most this many words, one run at a time.
 - `--policy <REF>`: The model asked. Default: `policy:default`.
 

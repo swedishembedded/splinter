@@ -89,13 +89,13 @@ pub fn run(
         outcomes,
         repairs,
         policy,
-        per_kind,
-        examples,
+        single_pass,
+        no_examples,
         chunk_words,
     } = command;
     let strategy = splinter_sdk::knowledge::objects::propose::Strategy {
-        per_kind,
-        examples,
+        per_kind: !single_pass,
+        examples: !no_examples,
         chunk_words,
     };
     let proposed = propose(
