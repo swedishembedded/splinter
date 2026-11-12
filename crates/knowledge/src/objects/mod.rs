@@ -47,7 +47,15 @@ use serde_json::Value;
 use crate::tasks::grounding::content_words;
 
 mod aligned;
+mod arbitrate;
+mod brief;
 pub mod propose;
+mod resolve;
+mod shape;
+
+use resolve::resolve;
+pub use resolve::superseded_ids;
+use shape::{check_identifiers, check_shape};
 
 pub use aligned::resolve_aligned;
 
@@ -287,7 +295,7 @@ pub fn admit(pack_id: &str, documents: &[Document], proposals: &[ProposedObject]
     }
 }
 
-fn provenance_of<'a>(documents: &'a [Document], id: &str) -> Option<&'a Provenance> {
+pub(super) fn provenance_of<'a>(documents: &'a [Document], id: &str) -> Option<&'a Provenance> {
     documents.iter().find(|d| d.id == id).map(|d| &d.provenance)
 }
 
@@ -422,151 +430,6 @@ fn admit_one(
     })
 }
 
-fn is_identifier(name: &str) -> bool {
-    let mut chars = name.chars();
-    chars.next().is_some_and(|c| c.is_ascii_lowercase())
-        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-}
-
-/// Names the ruleset is built from are identifiers, not sentences: the vocabulary step's check, after normalisation has had its say.
-fn check_identifiers(data: &serde_json::Map<String, Value>) -> Result<(), String> {
-    let mut names: Vec<String> = data
-        .get("vars")
-        .and_then(Value::as_object)
-        .map(|v| v.keys().cloned().collect())
-        .unwrap_or_default();
-    for key in ["var", "event", "from", "outcome"] {
-        if let Some(name) = data.get(key).and_then(Value::as_str) {
-            names.push(name.to_string());
-        }
-    }
-    let bad: Vec<String> = names.into_iter().filter(|n| !is_identifier(n)).collect();
-    if bad.is_empty() {
-        return Ok(());
-    }
-    let listed: Vec<String> = bad.iter().map(|n| format!("'{n}'")).collect();
-    Err(format!(
-        "names [{}] are not identifiers (lower-case words joined by underscores)",
-        listed.join(", ")
-    ))
-}
-
-fn check_shape(kind: &str, data: &serde_json::Map<String, Value>) -> Result<(), String> {
-    let mut declared: BTreeSet<String> = BTreeSet::new();
-    if let Some(vars) = data.get("vars").and_then(Value::as_object) {
-        for (name, ty) in vars {
-            if !ty.as_str().is_some_and(|t| VARIABLE_TYPES.contains(&t)) {
-                return Err("unknown variable type".to_string());
-            }
-            declared.insert(name.clone());
-        }
-    }
-    match kind {
-        "threshold" => {
-            let var = data["var"]
-                .as_str()
-                .ok_or("threshold var is not a string")?;
-            declared.insert(var.to_string());
-            check_condition(
-                &serde_json::json!({"var": data["var"], "op": data["op"], "value": data["value"]}),
-                &declared,
-            )
-        }
-        "rule" | "exception" => check_condition(&data["when"], &declared),
-        "computation" => {
-            check_condition(&data["when"], &declared)?;
-            check_expression(&data["expr"], &declared)
-        }
-        "deadline" => {
-            let unit_ok = matches!(
-                data["unit"].as_str(),
-                Some("calendar_days" | "business_days")
-            );
-            if !unit_ok || !data["offset"].is_i64() {
-                return Err("bad deadline".to_string());
-            }
-            Ok(())
-        }
-        "trait" => {
-            let keywords = data["keywords"]
-                .as_array()
-                .filter(|k| !k.is_empty() && k.iter().all(Value::is_string));
-            keywords
-                .map(|_| ())
-                .ok_or_else(|| "a trait needs keywords".to_string())
-        }
-        "table" => {
-            let width = data["columns"].as_array().map_or(0, Vec::len);
-            let rows = data["rows"].as_array().filter(|r| !r.is_empty());
-            let ok = width > 0
-                && rows.is_some_and(|rows| {
-                    rows.iter()
-                        .all(|r| r.as_array().is_some_and(|r| r.len() == width))
-                });
-            if ok {
-                Ok(())
-            } else {
-                Err("a table needs columns and rows of the same width".to_string())
-            }
-        }
-        "fact" => {
-            let text = |k: &str| data[k].as_str().is_some_and(|s| !s.is_empty());
-            if text("key") && text("value") {
-                Ok(())
-            } else {
-                Err("a fact needs a key and a value".to_string())
-            }
-        }
-        _ => Ok(()),
-    }
-}
-
-fn check_condition(cond: &Value, declared: &BTreeSet<String>) -> Result<(), String> {
-    let object = cond.as_object().ok_or("condition is not an object")?;
-    if let Some(list) = object.get("all").or_else(|| object.get("any")) {
-        return list
-            .as_array()
-            .ok_or("all/any is not a list")?
-            .iter()
-            .try_for_each(|c| check_condition(c, declared));
-    }
-    if let Some(inner) = object.get("not") {
-        return check_condition(inner, declared);
-    }
-    let op_ok = object
-        .get("op")
-        .and_then(Value::as_str)
-        .is_some_and(|op| OPERATORS.contains(&op));
-    let var = object.get("var").and_then(Value::as_str);
-    if !op_ok || var.is_none() || !object.contains_key("value") {
-        return Err(format!("bad condition {cond}"));
-    }
-    match var {
-        Some(v) if declared.contains(v) => Ok(()),
-        Some(v) => Err(format!("undeclared variable {v}")),
-        None => Err("bad condition".to_string()),
-    }
-}
-
-fn check_expression(expr: &Value, declared: &BTreeSet<String>) -> Result<(), String> {
-    let list = expr
-        .as_array()
-        .filter(|l| !l.is_empty())
-        .ok_or("expression is not a list")?;
-    match list[0].as_str() {
-        Some("const") if list.len() == 2 => Ok(()),
-        Some("var") if list.len() == 2 => match list[1].as_str() {
-            Some(v) if declared.contains(v) => Ok(()),
-            _ => Err(format!("undeclared variable {}", list[1])),
-        },
-        Some(op) if ARITHMETIC.contains(&op) && list.len() == 3 => {
-            check_expression(&list[1], declared)?;
-            check_expression(&list[2], declared)
-        }
-        _ => Err(format!("bad expression {expr}")),
-    }
-}
-
 /// The numbers in `text` as the claims normalise them: no thousands comma, no trailing zeros.
 pub(crate) fn quote_numbers(text: &str) -> BTreeSet<String> {
     let chars: Vec<char> = text.chars().collect();
@@ -636,191 +499,6 @@ pub(crate) fn claimed_numbers(node: &Value, key: Option<&str>, sink: &mut dyn Fn
         }
         _ => {}
     }
-}
-
-/// What makes two objects state the same thing; objects of kinds without such a key never disagree.
-fn conflict_key(object: &Object) -> Option<Vec<String>> {
-    let text = |k: &str| object.data[k].as_str().unwrap_or_default().to_string();
-    match object.kind.as_str() {
-        "threshold" => Some(vec!["threshold".into(), text("var"), text("outcome")]),
-        "deadline" => Some(vec!["deadline".into(), text("event"), text("from")]),
-        "computation" => Some(vec!["computation".into(), text("name")]),
-        "fact" => Some(vec!["fact".into(), text("key")]),
-        "definition" => Some(vec!["definition".into(), text("term")]),
-        "table" => Some(vec!["table".into(), text("name")]),
-        _ => None,
-    }
-}
-
-/// The claim of an object without its descriptive fields.
-fn content(object: &Object) -> String {
-    let mut data = object.data.clone();
-    if let Some(map) = data.as_object_mut() {
-        for key in ["terms", "label", "vars", "supersedes"] {
-            map.remove(key);
-        }
-    }
-    data.to_string()
-}
-
-/// The digits of a document's title: chapter 11 and chapter 12 are different texts.
-fn title_digits(documents: &[Document], id: &str) -> BTreeSet<String> {
-    let title = documents
-        .iter()
-        .find(|d| d.id == id)
-        .map_or("", |d| d.title.as_str());
-    let mut out = BTreeSet::new();
-    let mut run = String::new();
-    for c in title.chars().chain(std::iter::once(' ')) {
-        if c.is_ascii_digit() {
-            run.push(c);
-        } else if !run.is_empty() {
-            out.insert(std::mem::take(&mut run));
-        }
-    }
-    out
-}
-
-/// The sets of objects that can disagree with each other: those of one key, except that objects of documents numbered differently in their titles
-/// never compete; an unnumbered document competes with every number.
-fn compete<'a>(
-    groups: Vec<(Vec<String>, Vec<&'a Object>)>,
-    documents: &[Document],
-) -> Vec<(Vec<String>, Vec<&'a Object>)> {
-    let mut out = Vec::new();
-    for (key, group) in groups {
-        let mut numbered: Vec<(BTreeSet<String>, Vec<&Object>)> = Vec::new();
-        let mut loose: Vec<&Object> = Vec::new();
-        for object in group {
-            let digits = title_digits(documents, &object.document);
-            if digits.is_empty() {
-                loose.push(object);
-            } else if let Some((_, members)) = numbered.iter_mut().find(|(d, _)| *d == digits) {
-                members.push(object);
-            } else {
-                numbered.push((digits, vec![object]));
-            }
-        }
-        if numbered.is_empty() {
-            out.push((key, loose));
-            continue;
-        }
-        for (_, mut members) in numbered {
-            members.extend(loose.iter().copied());
-            out.push((key.clone(), members));
-        }
-    }
-    out
-}
-
-fn basis_of(winner: &Provenance, loser: &Provenance) -> &'static str {
-    if winner.authority != loser.authority {
-        "authority"
-    } else if winner.date.as_deref().unwrap_or("") != loser.date.as_deref().unwrap_or("") {
-        "date"
-    } else if winner.version != loser.version {
-        "version"
-    } else {
-        "tie"
-    }
-}
-
-fn resolve(objects: &[Object], documents: &[Document]) -> (Vec<Resolution>, Vec<Flag>) {
-    let provenance = |o: &Object| {
-        provenance_of(documents, &o.document)
-            .cloned()
-            .unwrap_or_default()
-    };
-    let mut resolutions = Vec::new();
-    let mut superseded: BTreeSet<String> = BTreeSet::new();
-    for object in objects {
-        if let Some(target) = object.data.get("supersedes").and_then(Value::as_str) {
-            superseded.insert(target.to_string());
-            let old_document = objects
-                .iter()
-                .find(|o| o.id == target)
-                .map_or("", |o| o.document.as_str());
-            resolutions.push(Resolution {
-                kind: "amendment".into(),
-                winner: object.id.clone(),
-                superseded: vec![target.to_string()],
-                basis: "amendment".into(),
-                bases: BTreeMap::from([(target.to_string(), "amendment".to_string())]),
-                detail: format!("{} amends {old_document}", object.document),
-            });
-        }
-    }
-    let mut groups: Vec<(Vec<String>, Vec<&Object>)> = Vec::new();
-    for object in objects {
-        let (Some(key), false) = (conflict_key(object), superseded.contains(&object.id)) else {
-            continue;
-        };
-        match groups.iter_mut().find(|(k, _)| *k == key) {
-            Some((_, group)) => group.push(object),
-            None => groups.push((key, vec![object])),
-        }
-    }
-    let groups = compete(groups, documents);
-    let mut flags = Vec::new();
-    for (key, group) in groups {
-        if group
-            .iter()
-            .map(|o| content(o))
-            .collect::<BTreeSet<_>>()
-            .len()
-            < 2
-        {
-            continue;
-        }
-        let mut ordered = group.clone();
-        ordered.sort_by(|a, b| provenance(b).rank().cmp(&provenance(a).rank()));
-        // Documents that agree with the top one do not dispute it: the
-        // strongest competitor is the best of those that say something else.
-        let top = ordered[0];
-        let Some(second) = ordered.iter().copied().find(|o| content(o) != content(top)) else {
-            continue;
-        };
-        let detail = format!("{} {}", key[0], key[1..].join(" / "));
-        if provenance(top).rank() > provenance(second).rank() && content(top) != content(second) {
-            let losers: Vec<&Object> = ordered[1..]
-                .iter()
-                .copied()
-                .filter(|o| content(o) != content(top))
-                .collect();
-            resolutions.push(Resolution {
-                kind: "conflict".into(),
-                winner: top.id.clone(),
-                superseded: losers.iter().map(|o| o.id.clone()).collect(),
-                basis: basis_of(&provenance(top), &provenance(second)).into(),
-                bases: losers
-                    .iter()
-                    .map(|o| {
-                        (
-                            o.id.clone(),
-                            basis_of(&provenance(top), &provenance(o)).to_string(),
-                        )
-                    })
-                    .collect(),
-                detail,
-            });
-        } else {
-            flags.push(Flag {
-                kind: "conflict".into(),
-                objects: group.iter().map(|o| o.id.clone()).collect(),
-                reason: format!("{detail} is stated differently"),
-            });
-        }
-    }
-    (resolutions, flags)
-}
-
-/// The ids a pack supersedes.
-#[must_use]
-pub fn superseded_ids(pack: &Pack) -> BTreeSet<String> {
-    pack.resolutions
-        .iter()
-        .flat_map(|r| r.superseded.iter().cloned())
-        .collect()
 }
 
 #[cfg(test)]
