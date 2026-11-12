@@ -277,6 +277,15 @@ impl World {
     }
 }
 
+fn document(id: String, provenance: Provenance, text: String) -> Document {
+    Document {
+        title: id.clone(),
+        id,
+        text,
+        provenance,
+    }
+}
+
 fn key(form: Form, attribute: &str, entity: &str) -> FactKey {
     FactKey {
         form,
@@ -387,11 +396,7 @@ pub fn generate(spec: &Spec) -> Corpus {
                 .collect::<Vec<_>>()
                 .join("\n");
             (
-                Document {
-                    id,
-                    provenance: p,
-                    body,
-                },
+                document(id, p, body),
                 units.iter().map(|&u| label(u)).collect::<Vec<_>>(),
             )
         };
@@ -471,11 +476,7 @@ pub fn generate(spec: &Spec) -> Corpus {
                 authority: if n % 2 == 0 { 3 } else { 2 },
             };
             emit(
-                Document {
-                    id: format!("{}-manual-{n}", topic.name),
-                    provenance: p,
-                    body,
-                },
+                document(format!("{}-manual-{n}", topic.name), p, body),
                 vec![Label::Irrelevant; chunk.len()],
                 &mut labels,
             );
@@ -488,11 +489,7 @@ pub fn generate(spec: &Spec) -> Corpus {
             NOISE[(n + 2) % NOISE.len()]
         );
         emit(
-            Document {
-                id: format!("notes-{n}"),
-                provenance: Provenance::default(),
-                body,
-            },
+            document(format!("notes-{n}"), Provenance::default(), body),
             vec![Label::Irrelevant],
             &mut labels,
         );
@@ -586,7 +583,7 @@ mod tests {
         let facts: usize = a
             .documents
             .iter()
-            .map(|d| PatternFacts.facts(&d.body).len())
+            .map(|d| PatternFacts.facts(&d.text).len())
             .sum();
         assert!(facts > 100, "{facts}");
     }

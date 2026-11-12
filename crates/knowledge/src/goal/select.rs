@@ -588,6 +588,42 @@ mod tests {
     }
 
     #[test]
+    fn two_sections_no_header_separates_are_both_left_out() {
+        let twins = candidates(&[
+            doc("a", 3, "2026-06-01", CURRENT),
+            doc(
+                "b",
+                3,
+                "2026-06-01",
+                &CURRENT.replace("400 hours", "500 hours"),
+            ),
+        ]);
+        let gaps = gap_on(
+            &twins,
+            "What is the service interval of alder pump 3?",
+            "400 hours",
+        );
+        let open = Open {
+            gaps: &gaps,
+            objective: "",
+        };
+        let s = select(
+            &twins,
+            &BTreeSet::new(),
+            &open,
+            &Vocabulary::of(&twins),
+            &Knows(vec![]),
+            &PatternFacts,
+            &Config::with_budget(1000),
+        );
+        assert!(s.chosen.is_empty(), "{s:?}");
+        assert!(s
+            .decisions
+            .iter()
+            .all(|d| matches!(d.verdict, Verdict::Contested { .. })));
+    }
+
+    #[test]
     fn a_learned_section_is_not_chosen_again_and_its_duplicate_is_refused() {
         let mut twin = corpus();
         twin.push(Candidate {

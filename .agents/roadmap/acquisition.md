@@ -83,10 +83,37 @@ Scripted reader (best-ranked passage wins, no date/authority reasoning), 10 seed
 | selective | 1.00 (precision 1.00, recall 1.00, 1357 words) | 1.00 (388 words) |
 | random, same words | 0.32 | 0.28 |
 | all (8561 / 5277 words) | 0.43 | 0.43 |
+| all, each section shown with its authority, date and version | 1.00 (8561 words) | 1.00 (5277 words) |
 | oracle-relevant | 1.00 | 1.00 |
 | selective without conflict check | 0.39 (harmful share 0.61) | 0.42 |
 | selective without novelty check | 1.00 (precision 0.70, 1939 words) | 1.00 (517 words) |
 | selective without the objective | 1.00 | 0.63 |
+
+Real model (Qwen3.8-27B-FP8 on a brain server, one request at a time, reader answers from the 3 best
+BM25 sections it is shown, reasoning closed, `goal-selection --reader model`, evidence in
+`~/project/shared/goal-selection/` outside the repository; 3 seeds each, 2 goal topics x 4 units for properties,
+one client type x 6 units for behaviour, 12-20 held-out questions per corpus, no confidence interval claimed):
+
+| arm | property held-out (3 corpora) | behaviour held-out = persona fidelity (3 corpora) |
+|---|---|---|
+| none (closed book, invented corpus) | 0.00 | 0.00 |
+| selective | 1.00 on all 3 (about 515 words, 96 questions put to the model to decide) | 1.00 on all 3 (about 385 words, 48 questions) |
+| random, same words | 0.15 (0.30, 0.00, 0.15) | 0.25 (0.25, 0.33, 0.17) |
+| all | 0.00 (the model answers unknown when the passages disagree) | 0.00 |
+| all, with provenance headers | 1.00 on all 3 (about 2590 words) | 0.92 (0.83, 1.00, 0.92; about 2560 words) |
+| oracle-relevant | 1.00 | 1.00 |
+| selective without conflict check (1 corpus) | 0.15, harmful share 0.75 | |
+| selective without novelty check (1 corpus) | 1.00 | |
+| selective without the objective (1 corpus) | 1.00, precision 0.67, 780 words | |
+
+Read plainly: selection beats nothing, everything-as-is and random on questions it never saw, and equals the
+oracle. A reader that is shown each section's provenance and told how to weigh it matches selection on
+accuracy and pays 5x the words (and prompt tokens) for it, so the gain of selection over a metadata-aware
+reader is cost, not accuracy, and it grows with corpus size (retrieval depth was 3 in every arm); for training
+the participant on the material, which cannot weigh headers at answer time, the accuracy gap is the one that
+stands. The conflict check decides accuracy, the novelty check decides words and precision (scripted corpora
+where the participant knows part of the topic; a model knows none of an invented corpus, so its novelty check
+had nothing to remove), the objective decides precision where gap words alone are ambiguous.
 
 The world is saturated for lexical selection (selective equals the oracle), so these numbers are a
 regression spec and an ablation of what each check contributes (conflicts decide accuracy, novelty
@@ -96,6 +123,11 @@ dominated by attribute and entity-number words (fixed by corpus rarity and dropp
 relevance summed over gaps capped a section at its gap's share (floor now on the best single gap, rank on
 the weighted sum); stopping when dev probes passed learned only probed entities (gaps stay open); a
 corpus ordered current-first let a first-wins reader look good (documents shuffled).
+
+Interface with the typed knowledge objects: documents and their headers are `objects::Document` and
+`Provenance` (one definition, the same authority, date, version order). Not yet reused: an admitted pack's
+resolutions and `superseded_ids` could give the Superseded verdict directly, and its fact and behaviour
+objects could be the `FactExtractor`, instead of the two sentence patterns.
 
 Not done: selection is lexical (no embedding signal, no model-judged relevance); novelty is accuracy,
 not loss (brain log-probabilities of the section's items would sharpen it); facts are two sentence

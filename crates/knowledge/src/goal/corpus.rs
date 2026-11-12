@@ -9,12 +9,11 @@
 //! A raw corpus: documents with the little provenance they carry, cut into
 //! the sections selection chooses among.
 //!
-//! A document is Markdown with an optional front matter block of
-//! `key: value` lines between `---` fences: `date` (ISO, compared as
-//! text), `version` and `authority` (integers, higher is more
-//! authoritative). A document without them has no date, version 0 and the
-//! neutral authority [`NEUTRAL_AUTHORITY`]. Nothing here knows what a
-//! section is worth; that is [`super::select`]'s decision.
+//! A document is the knowledge objects' [`Document`]: Markdown with an
+//! optional header of `authority`, `version` and `date` between `---`
+//! fences, which says how far it is believed against another document.
+//! Nothing here knows what a section is worth; that is [`super::select`]'s
+//! decision.
 
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
@@ -24,83 +23,7 @@ use serde::{Deserialize, Serialize};
 use super::facts::words;
 use crate::sections::{sections, MARKDOWN};
 
-/// The authority of a document that does not state one.
-pub const NEUTRAL_AUTHORITY: u8 = 2;
-
-/// What a document says about itself.
-#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct Provenance {
-    /// ISO date it was written, when stated.
-    pub date: Option<String>,
-    /// Its version, 0 when not stated.
-    pub version: u32,
-    /// How much it is to be believed against another document.
-    pub authority: u8,
-}
-
-/// One raw document.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Document {
-    /// Its name in the corpus.
-    pub id: String,
-    /// What it says about itself.
-    pub provenance: Provenance,
-    /// Its body, front matter removed.
-    pub body: String,
-}
-
-impl Document {
-    /// A document parsed from `text`, named `id`.
-    #[must_use]
-    pub fn parse(id: &str, text: &str) -> Self {
-        let mut provenance = Provenance {
-            date: None,
-            version: 0,
-            authority: NEUTRAL_AUTHORITY,
-        };
-        let body = match text
-            .strip_prefix("---\n")
-            .and_then(|r| r.split_once("\n---\n"))
-        {
-            Some((head, body)) => {
-                for line in head.lines() {
-                    let Some((key, value)) = line.split_once(':') else {
-                        continue;
-                    };
-                    let value = value.trim();
-                    match key.trim() {
-                        "date" => provenance.date = Some(value.to_string()),
-                        "version" => provenance.version = value.parse().unwrap_or(0),
-                        "authority" => {
-                            provenance.authority = value.parse().unwrap_or(NEUTRAL_AUTHORITY);
-                        }
-                        _ => {}
-                    }
-                }
-                body
-            }
-            None => text,
-        };
-        Self {
-            id: id.to_string(),
-            provenance,
-            body: body.to_string(),
-        }
-    }
-
-    /// The document as text, with the front matter [`Document::parse`] reads.
-    #[must_use]
-    pub fn render(&self) -> String {
-        let mut head = format!(
-            "authority: {}\nversion: {}\n",
-            self.provenance.authority, self.provenance.version
-        );
-        if let Some(date) = &self.provenance.date {
-            head.push_str(&format!("date: {date}\n"));
-        }
-        format!("---\n{head}---\n{}", self.body)
-    }
-}
+pub use crate::objects::{Document, Provenance, NEUTRAL_AUTHORITY};
 
 /// Where a section is: its document and its position among the document's
 /// sections.
@@ -143,7 +66,7 @@ pub fn candidates(documents: &[Document]) -> Vec<Candidate> {
     documents
         .iter()
         .flat_map(|doc| {
-            sections(&doc.body, MARKDOWN)
+            sections(&doc.text, MARKDOWN)
                 .into_iter()
                 .enumerate()
                 .filter_map(|(at, s)| {
@@ -153,7 +76,7 @@ pub fn candidates(documents: &[Document]) -> Vec<Candidate> {
                             section: at,
                         },
                         provenance: doc.provenance.clone(),
-                        text: s.text(&doc.body)?.to_string(),
+                        text: s.text(&doc.text)?.to_string(),
                     })
                 })
         })
@@ -225,7 +148,6 @@ mod tests {
         let found = candidates(std::slice::from_ref(&doc));
         assert_eq!(found.len(), 2);
         assert_eq!(found[1].id.to_string(), "d1#1");
-        assert_eq!(Document::parse("d1", &doc.render()), doc);
     }
 
     #[test]

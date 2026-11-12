@@ -21,6 +21,8 @@ const MAX_ANSWER_TOKENS: u32 = 48;
 
 const INSTRUCTION: &str = "Answer the question with the value only, in as few words as possible. \
 If passages are given, answer from them when they bear on the question. \
+If passages disagree, trust the one whose header shows the higher authority, then the later \
+date, then the higher version; a passage without a header counts for nothing against one with. \
 If you do not know, answer: unknown.";
 
 /// Asks a model one query at a time and counts what that cost. A failed

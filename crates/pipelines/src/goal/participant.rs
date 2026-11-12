@@ -47,6 +47,7 @@ pub trait Participant: Examinee {
 pub struct InContext<R> {
     reader: R,
     memory: Vec<Candidate>,
+    provenance: bool,
 }
 
 impl<R: Reader> InContext<R> {
@@ -56,7 +57,17 @@ impl<R: Reader> InContext<R> {
         Self {
             reader,
             memory: Vec::new(),
+            provenance: false,
         }
+    }
+
+    /// Shows the reader each section under a header with its document's
+    /// authority, date and version, as [`header`] writes it, so that a
+    /// reader that can weigh them is able to settle a disagreement itself.
+    #[must_use]
+    pub fn showing_provenance(mut self) -> Self {
+        self.provenance = true;
+        self
     }
 
     /// The sections it remembers.
@@ -81,7 +92,14 @@ impl<R: Reader> Examinee for InContext<R> {
                 material: index
                     .search(question, SHOWN_SECTIONS)
                     .into_iter()
-                    .map(|hit| self.memory[hit.passage].text.clone())
+                    .map(|hit| {
+                        let section = &self.memory[hit.passage];
+                        if self.provenance {
+                            format!("{}\n{}", header(section), section.text)
+                        } else {
+                            section.text.clone()
+                        }
+                    })
                     .collect(),
             })
             .collect();
@@ -95,11 +113,24 @@ impl<R: Reader> Participant for InContext<R> {
     }
 }
 
+/// The line that heads a section shown with its provenance.
+#[must_use]
+pub fn header(section: &Candidate) -> String {
+    let p = &section.provenance;
+    format!(
+        "[authority {}, date {}, version {}]",
+        p.authority,
+        p.date.as_deref().unwrap_or("unknown"),
+        p.version
+    )
+}
+
 /// A stand-in reader for tests and for runs with no model: it answers from
-/// the first shown section that states the asked fact, else from what it
-/// "knew" before, else says it does not know. It does not weigh a section's
-/// date or authority; when two shown sections disagree the better ranked
-/// one wins, as it would for a reader that trusts what it is shown first.
+/// the shown section that states the asked fact, else from what it "knew"
+/// before, else says it does not know. When shown sections disagree it takes
+/// the one whose [`header`] stands highest (authority, then date, then
+/// version) and, where the sections carry no header, the better ranked one,
+/// as a reader would that trusts what it is shown first.
 pub struct ScriptedReader {
     known: Vec<splinter_knowledge::goal::facts::Fact>,
 }
@@ -112,17 +143,52 @@ impl ScriptedReader {
     }
 }
 
+/// What a [`header`] line says: authority, date, version; all zero or empty
+/// when the section has no header.
+fn standing(section: &str) -> (u8, String, u32) {
+    let Some(line) = section
+        .lines()
+        .next()
+        .filter(|l| l.starts_with("[authority "))
+    else {
+        return (0, String::new(), 0);
+    };
+    let field = |name: &str| {
+        line.trim_matches(['[', ']'])
+            .split(", ")
+            .find_map(|part| part.strip_prefix(name))
+            .map(str::trim)
+    };
+    (
+        field("authority ")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0),
+        field("date ").unwrap_or("").to_string(),
+        field("version ").and_then(|v| v.parse().ok()).unwrap_or(0),
+    )
+}
+
 impl Reader for ScriptedReader {
     fn read_all(&self, queries: &[Query]) -> Vec<String> {
         use splinter_knowledge::goal::facts::{FactExtractor, PatternFacts};
         queries
             .iter()
             .map(|q| {
+                // The first of the best-standing sections that states it:
+                // `max_by_key` keeps the last of equals, so rank in reverse.
                 let shown = q
                     .material
                     .iter()
-                    .flat_map(|m| PatternFacts.facts(m))
-                    .find(|f| f.question() == q.question);
+                    .enumerate()
+                    .flat_map(|(rank, m)| {
+                        PatternFacts
+                            .facts(m)
+                            .into_iter()
+                            .filter(|f| f.question() == q.question)
+                            .map(move |f| (standing(m), std::cmp::Reverse(rank), f))
+                    })
+                    .max_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)))
+                    .map(|(_, _, f)| f);
                 let own = || self.known.iter().find(|f| f.question() == q.question);
                 shown
                     .or_else(|| own().cloned())

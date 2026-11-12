@@ -47,6 +47,12 @@ fn fresh(corpus: &Corpus) -> Box<dyn Participant> {
     )))
 }
 
+fn aware(corpus: &Corpus) -> Box<dyn Participant> {
+    Box::new(
+        InContext::new(ScriptedReader::knowing(corpus.base_knowledge.clone())).showing_provenance(),
+    )
+}
+
 fn run(seed: u64, form: Form) -> (Corpus, Vec<Arm>) {
     let corpus = generate(&Spec::new(seed, form));
     let arms = compare(
@@ -56,6 +62,7 @@ fn run(seed: u64, form: Form) -> (Corpus, Vec<Arm>) {
         &PLAN,
         seed,
         true,
+        Some(&|| aware(&corpus)),
     );
     (corpus, arms)
 }
@@ -108,6 +115,14 @@ fn what_it_learned_beats_nothing_everything_and_the_same_words_at_random() {
                 && selective.held_out_pass > all.held_out_pass
                 && selective.held_out_pass > random.held_out_pass;
             wins += usize::from(better);
+            // A reader that settles disagreements from the headers does as well
+            // as selection on accuracy and pays for it in words.
+            let aware = arm(&arms, "all-with-provenance");
+            assert!(selective.held_out_pass + 0.05 >= aware.held_out_pass);
+            assert!(
+                selective.words * 4 < aware.words,
+                "{form:?} {seed}: {aware:?}"
+            );
             assert!(
                 selective.words * 2 < all.words,
                 "{form:?} {seed}: it reads a fraction of the corpus"
@@ -146,7 +161,15 @@ fn a_counterpart_persona_from_selected_behaviour_predicts_held_out_behaviour_of_
     let mut spec = Spec::new(3, Form::Behaviour); // seed: any corpus
     (spec.goal_topics, spec.other_topics) = (1, 7);
     let corpus = generate(&spec);
-    let arms = compare(&corpus, &|| fresh(&corpus), &PatternFacts, &PLAN, 3, false); // seed: random arm
+    let arms = compare(
+        &corpus,
+        &|| fresh(&corpus),
+        &PatternFacts,
+        &PLAN,
+        3,
+        false,
+        None,
+    ); // seed: random arm
     let cands = candidates(&corpus.documents);
     let subject = corpus.goal.probes[0]
         .id

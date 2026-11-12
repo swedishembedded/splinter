@@ -192,7 +192,18 @@ fn main() -> anyhow::Result<()> {
         let reader = Rc::new(ModelReader::new(ctx, model.provider));
         let fresh =
             || -> Box<dyn Participant> { Box::new(InContext::new(Shared(Rc::clone(&reader)))) };
-        let arms = compare(&corpus, &fresh, &PatternFacts, &plan, seed, cli.ablate);
+        let aware = || -> Box<dyn Participant> {
+            Box::new(InContext::new(Shared(Rc::clone(&reader))).showing_provenance())
+        };
+        let arms = compare(
+            &corpus,
+            &fresh,
+            &PatternFacts,
+            &plan,
+            seed,
+            cli.ablate,
+            Some(&aware),
+        );
         let fidelity = fidelity_of(
             &arms,
             &corpus,
@@ -221,7 +232,18 @@ fn main() -> anyhow::Result<()> {
         let fresh = || -> Box<dyn Participant> {
             Box::new(InContext::new(ScriptedReader::knowing(known.clone())))
         };
-        let arms = compare(&corpus, &fresh, &PatternFacts, &plan, seed, cli.ablate);
+        let aware = || -> Box<dyn Participant> {
+            Box::new(InContext::new(ScriptedReader::knowing(known.clone())).showing_provenance())
+        };
+        let arms = compare(
+            &corpus,
+            &fresh,
+            &PatternFacts,
+            &plan,
+            seed,
+            cli.ablate,
+            Some(&aware),
+        );
         let fidelity = fidelity_of(
             &arms,
             &corpus,
@@ -267,6 +289,8 @@ fn fidelity_of(
         return Vec::new();
     };
     arms.iter()
+        // A persona carries no provenance: that arm has no persona of its own.
+        .filter(|a| a.name != "all-with-provenance")
         .filter_map(|a| {
             Some((
                 a.name.clone(),

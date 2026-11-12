@@ -107,7 +107,9 @@ fn arm(
 
 /// Runs every arm on `corpus`, each with a fresh participant from
 /// `fresh`. `seed` draws the random arm's sections; `ablate` adds the arms
-/// that run the loop with one check off.
+/// that run the loop with one check off; `aware` makes a participant that is
+/// shown each section's provenance, which reads everything (a reader that
+/// settles disagreements itself, the strongest way to use all of it).
 pub fn compare(
     corpus: &Corpus,
     fresh: &dyn Fn() -> Box<dyn Participant>,
@@ -115,6 +117,7 @@ pub fn compare(
     plan: &Plan,
     seed: u64,
     ablate: bool,
+    aware: Option<&dyn Fn() -> Box<dyn Participant>>,
 ) -> Vec<Arm> {
     let cands = candidates(&corpus.documents);
     let mut selective = fresh();
@@ -201,5 +204,16 @@ pub fn compare(
         arm("oracle-relevant", corpus, &cands, fresh(), &oracle, 0, None),
     ];
     arms.extend(ablations);
+    if let Some(aware) = aware {
+        arms.push(arm(
+            "all-with-provenance",
+            corpus,
+            &cands,
+            aware(),
+            &all,
+            0,
+            None,
+        ));
+    }
     arms
 }
