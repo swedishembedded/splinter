@@ -21,6 +21,10 @@ MODELS_DIR ?= $(HOME)/.local/share/brain/models
 
 CARGO ?= cargo
 
+# The tests a `make test` runs at once. Each one writes scratch directories and starts runtimes, and the default (one per
+# core) exhausts the disk quota and starves the timing assertions on a many-core shared node.
+TEST_THREADS ?= 16
+
 # Shared-node lease kit (scripts/lease). One root holds the lane worktrees, the
 # per-lane cargo targets and the lock files.
 LEASE_ROOT ?= $(HOME)/project/shared/containers
@@ -73,7 +77,7 @@ $(BUILD_CRATE_TARGETS): build/crate/%:
 
 ## test - default: run every test (no model, no GPU needed)
 test:
-	$(CARGO) test $(PROFILE) --workspace
+	$(CARGO) test $(PROFILE) --workspace -- --test-threads=$(TEST_THREADS)
 	python3 samples/adams/test_fetch.py
 	python3 scripts/qualify/test_qualify.py
 	python3 scripts/campaigns/flywheel/test_loop.py
