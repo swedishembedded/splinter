@@ -223,6 +223,30 @@ fn a_session_records_an_attempt_and_the_evaluations_and_links_about_it() {
 }
 
 #[test]
+fn a_rollback_after_a_refresh_forgets_what_is_pending_and_does_not_panic() {
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let mut session = open(&db, 0);
+    session
+        .put_entity(&Entity::new("task", serde_json::json!("kept")))
+        .unwrap();
+    let mark = session.begin();
+    let flushed = session
+        .put_entity(&Entity::new("task", serde_json::json!("flushed")))
+        .unwrap();
+    session.refresh().unwrap();
+    let pending = session
+        .put_entity(&Entity::new("task", serde_json::json!("pending")))
+        .unwrap();
+    session.rollback(mark);
+    assert_eq!(session.entity(&pending).unwrap(), None);
+    assert!(
+        session.entity(&flushed).unwrap().is_some(),
+        "what was made durable stays"
+    );
+}
+
+#[test]
 fn a_write_that_fails_halfway_leaves_nothing_behind() {
     let scratch = Scratch::new();
     let db = scratch.open();

@@ -46,6 +46,7 @@ pub struct Session {
     refresh_every: usize,
     base_size: usize,
     delta_bytes: usize,
+    refreshes: u64,
 }
 
 /// How much of a session's own writes it keeps in memory before it refreshes,
@@ -60,6 +61,8 @@ pub struct Mark {
     evaluations: usize,
     retracted: usize,
     delta_bytes: usize,
+    /// The session's refreshes when the mark was taken: a refresh restarts every log the mark indexes.
+    refreshes: u64,
 }
 
 impl Session {
@@ -75,6 +78,7 @@ impl Session {
             base,
             entities: HashMap::new(),
             entity_log: Vec::new(),
+            refreshes: 0,
             by_class: HashMap::new(),
             evaluations: Vec::new(),
             retracted: HashSet::new(),
@@ -123,13 +127,31 @@ impl Session {
             evaluations: self.evaluations.len(),
             retracted: self.retracted_log.len(),
             delta_bytes: self.delta_bytes,
+            refreshes: self.refreshes,
         }
     }
 
     /// Forgets everything written since `mark`: it will not be committed and
-    /// the session no longer reads it. Only valid while nothing was flushed
-    /// since the mark was taken.
+    /// the session no longer reads it. What a refresh since the mark already
+    /// made durable and part of the base cannot be forgotten; a rollback
+    /// after one (a guarded write that refreshed, then failed on the disk)
+    /// forgets what is still pending and does not panic, so the caller still
+    /// returns the error that made it roll back.
     pub fn rollback(&mut self, mark: Mark) {
+        // A refresh since the mark made what preceded it durable and restarted the logs: everything still pending
+        // was written after the mark.
+        let mark = if mark.refreshes == self.refreshes {
+            mark
+        } else {
+            Mark {
+                writer: (0, 0),
+                entities: 0,
+                evaluations: 0,
+                retracted: 0,
+                delta_bytes: 0,
+                refreshes: self.refreshes,
+            }
+        };
         self.collector.rollback(mark.writer);
         for id in self.entity_log.split_off(mark.entities) {
             if let Some((_, entity)) = self.entities.remove(&id) {
@@ -174,6 +196,7 @@ impl Session {
         self.retracted.clear();
         self.retracted_log.clear();
         self.delta_bytes = 0;
+        self.refreshes += 1;
         Ok(())
     }
 
