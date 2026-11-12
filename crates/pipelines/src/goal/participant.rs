@@ -18,11 +18,12 @@
 use splinter_knowledge::goal::corpus::Candidate;
 use splinter_knowledge::goal::select::Examinee;
 use std::cell::RefCell;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use splinter_knowledge::goal::corpus::SectionId;
+use splinter_knowledge::goal::facts::words;
 use splinter_knowledge::goal::hard::canonical;
 use splinter_knowledge::retrieve::{fuse, Bm25, Dense, Embedder, Hit, Passage};
 
@@ -59,6 +60,9 @@ pub struct InContext<R> {
     retrieval: Retrieval,
     /// What embeds, when retrieval is by meaning.
     embedder: Option<Rc<dyn Embedder>>,
+    /// Whether the sentences of what is found that share a word with the
+    /// question are used to look again (for answers that take two steps).
+    feedback: bool,
     /// The vectors of remembered sections, made once.
     vectors: RefCell<HashMap<SectionId, Vec<f32>>>,
 }
@@ -84,6 +88,7 @@ impl<R: Reader> InContext<R> {
             memory: Vec::new(),
             provenance: false,
             retrieval: Retrieval::Lexical,
+            feedback: false,
             embedder: None,
             vectors: RefCell::new(HashMap::new()),
         }
@@ -96,6 +101,15 @@ impl<R: Reader> InContext<R> {
     pub fn retrieving(mut self, retrieval: Retrieval, embedder: Rc<dyn Embedder>) -> Self {
         self.retrieval = retrieval;
         self.embedder = Some(embedder);
+        self
+    }
+
+    /// Looks again with the sentences of what was found that share a rare
+    /// word with the question: a link found in one section names the unit
+    /// whose facts are in another. The first finds keep their places.
+    #[must_use]
+    pub fn looking_again(mut self) -> Self {
+        self.feedback = true;
         self
     }
 
@@ -132,7 +146,37 @@ impl<R: Reader> InContext<R> {
             (Retrieval::Fused, Some(e)) => fuse(&[lexical(), semantic(e)], SHOWN_SECTIONS),
             _ => lexical(),
         };
-        hits.into_iter().map(|h| h.passage).collect()
+        let mut found: Vec<usize> = hits.into_iter().map(|h| h.passage).collect();
+        if self.feedback {
+            // The question's words that few remembered sections have: the name that
+            // points at the link, not the words every section shares.
+            let rare: BTreeSet<String> = words(question)
+                .into_iter()
+                .filter(|w| {
+                    !FUNCTION_WORDS.contains(&w.as_str())
+                        && self
+                            .memory
+                            .iter()
+                            .filter(|c| words(&c.text).contains(w))
+                            .count()
+                            <= RARE_IN_MEMORY
+                })
+                .collect();
+            let again: String = found
+                .iter()
+                .flat_map(|i| self.memory[*i].text.split_inclusive(['.', '\n']))
+                .filter(|sentence| words(sentence).iter().any(|w| rare.contains(w)))
+                .collect::<Vec<_>>()
+                .join(" ");
+            if !again.is_empty() {
+                for hit in bm25.search(&again, SHOWN_SECTIONS) {
+                    if !found.contains(&hit.passage) {
+                        found.push(hit.passage);
+                    }
+                }
+            }
+        }
+        found
     }
 
     /// Shows the reader each section under a header with its document's
@@ -260,36 +304,65 @@ fn standing(section: &str) -> (u8, String, u32) {
     )
 }
 
+impl ScriptedReader {
+    /// The best-standing statement among `material` of what `question` asks,
+    /// else what the reader knew before.
+    fn lookup(
+        &self,
+        question: &str,
+        material: &[String],
+    ) -> Option<splinter_knowledge::goal::facts::Fact> {
+        use splinter_knowledge::goal::facts::{FactExtractor, PatternFacts};
+        // The first of the best-standing sections that states it:
+        // `max_by` keeps the last of equals, so rank in reverse.
+        let shown = material
+            .iter()
+            .enumerate()
+            .flat_map(|(rank, m)| {
+                PatternFacts
+                    .facts(m)
+                    .into_iter()
+                    .filter(|f| same(&f.question(), question, &self.lexicon))
+                    .map(move |f| (standing(m), std::cmp::Reverse(rank), f))
+            })
+            .max_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)))
+            .map(|(_, _, f)| f);
+        shown.or_else(|| {
+            self.known
+                .iter()
+                .find(|f| same(&f.question(), question, &self.lexicon))
+                .cloned()
+        })
+    }
+
+    /// A question through a site (`What is the A of the unit installed at S?`)
+    /// is answered in two steps: which unit is at S, then that unit's A.
+    fn answer(&self, query: &Query) -> Option<String> {
+        const THROUGH: &str = " of the unit installed at ";
+        let Some((head, site)) = query.question.split_once(THROUGH) else {
+            return self
+                .lookup(&query.question, &query.material)
+                .map(|f| f.value);
+        };
+        let attribute = head.strip_prefix("What is the ")?;
+        let site = site.trim_end_matches('?');
+        let unit = self.lookup(
+            &format!("Which unit is installed at {site}?"),
+            &query.material,
+        )?;
+        self.lookup(
+            &format!("What is the {attribute} of {}?", unit.value.to_lowercase()),
+            &query.material,
+        )
+        .map(|f| f.value)
+    }
+}
+
 impl Reader for ScriptedReader {
     fn read_all(&self, queries: &[Query]) -> Vec<String> {
-        use splinter_knowledge::goal::facts::{FactExtractor, PatternFacts};
         queries
             .iter()
-            .map(|q| {
-                // The first of the best-standing sections that states it:
-                // `max_by_key` keeps the last of equals, so rank in reverse.
-                let shown = q
-                    .material
-                    .iter()
-                    .enumerate()
-                    .flat_map(|(rank, m)| {
-                        PatternFacts
-                            .facts(m)
-                            .into_iter()
-                            .filter(|f| same(&f.question(), &q.question, &self.lexicon))
-                            .map(move |f| (standing(m), std::cmp::Reverse(rank), f))
-                    })
-                    .max_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)))
-                    .map(|(_, _, f)| f);
-                let own = || {
-                    self.known
-                        .iter()
-                        .find(|f| same(&f.question(), &q.question, &self.lexicon))
-                };
-                shown
-                    .or_else(|| own().cloned())
-                    .map_or_else(|| "unknown".to_string(), |f| f.value)
-            })
+            .map(|q| self.answer(q).unwrap_or_else(|| "unknown".to_string()))
             .collect()
     }
 }
@@ -307,6 +380,9 @@ const FUNCTION_WORDS: [&str; 14] = [
     "what", "is", "the", "of", "a", "does", "do", "when", "client", "this", "about", "an", "to",
     "and",
 ];
+
+/// A word is rare in memory, for looking again, if at most this many sections have it.
+const RARE_IN_MEMORY: usize = 2;
 
 /// The dimensions of a [`LexiconEmbedder`] vector.
 const LEXICON_DIMENSIONS: usize = 512;

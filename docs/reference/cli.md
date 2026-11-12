@@ -130,6 +130,8 @@ Every command takes these.
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
   - [splinter dataset conversations](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
   - [splinter dataset export](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
+- [splinter goal](#splinter-goal) - Goal-directed learning
+  - [splinter goal admit](#splinter-goal-admit) - Admit documents into a selection of learning material
 - [splinter train](#splinter-train) - Train a candidate adapter on datasets
 - [splinter rehearse](#splinter-rehearse) - Build a rehearsal dataset
 - [splinter release](#splinter-release) - Run the release gate on a candidate and release it if every check passes
@@ -206,6 +208,7 @@ Subcommands:
 - [`judge`](#splinter-judge) - Measure a judge against labelled experiences
 - [`experiences`](#splinter-experiences) - Inspect experience sets and experiences
 - [`dataset`](#splinter-dataset) - Build datasets from experience sets, and export them
+- [`goal`](#splinter-goal) - Goal-directed learning
 - [`train`](#splinter-train) - Train a candidate adapter on datasets
 - [`rehearse`](#splinter-rehearse) - Build a rehearsal dataset
 - [`release`](#splinter-release) - Run the release gate on a candidate and release it if every check passes
@@ -1454,6 +1457,34 @@ Arguments:
 Options:
 
 - `--out <DIR>` (required): The directory to copy into.
+
+### splinter goal
+
+Goal-directed learning: what may enter a selection of material
+
+```text
+splinter goal [OPTIONS] <COMMAND>
+```
+
+Subcommands:
+
+- [`admit`](#splinter-goal-admit) - Admit documents into a selection of learning material
+
+#### splinter goal admit
+
+Admit documents into a selection of learning material. Public or simulated documents (`--open`) enter as they are. Recordings of real people (`--live`) enter only with the person's consent (`--consent`) and after the scrub of the current detectors (`--scrub` runs it): an unscrubbed, unconsented or still-identifying document is refused and reported, and the command then exits with an error. Admitted documents are written to `--out` as Markdown with their header
+
+```text
+splinter goal admit [OPTIONS] --out <DIR>
+```
+
+Options:
+
+- `--open <FILE>...`: Documents with no person in them (a file each)
+- `--live <FILE>...`: Recordings of real people (a file each)
+- `--consent`: The people agreed to the use of their recordings as training material.
+- `--scrub`: Scrub the live documents (secrets, addresses, accounts, contact data) first.
+- `--out <DIR>` (required): The directory the admitted documents are written to.
 
 ### splinter train
 

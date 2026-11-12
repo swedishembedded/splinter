@@ -96,6 +96,13 @@ struct Cli {
     /// How many corpora, each its own seed.
     #[arg(long, default_value_t = 10)]
     corpora: u64,
+    /// Ask the goal only through the sites of a register (property form): a
+    /// question needs the register and then the unit's facts.
+    #[arg(long)]
+    hops: bool,
+    /// With an embedder, do not align the keys of paraphrased statements.
+    #[arg(long)]
+    no_align: bool,
     /// Add the difficulties lexical selection is weak against: paraphrase,
     /// near-copies, partly stale manuals, decoys.
     #[arg(long)]
@@ -284,12 +291,19 @@ fn main() -> anyhow::Result<()> {
         if cli.hard {
             spec.hard = Hardness::ALL;
         }
+        spec.hard.hops = cli.hops;
         let corpus = generate(&spec);
         let cands = candidates(&corpus.documents);
-        let source = PackSource::from_sentences(&corpus.documents, &cands);
         let embedder: Rc<dyn Embedder> = served_embedder
             .clone()
             .unwrap_or_else(|| Rc::new(LexiconEmbedder::new(corpus.lexicon.clone())));
+        // With an embedder, statements that paraphrase each other are compared.
+        let source = if signal == Signal::Lexical || cli.no_align {
+            PackSource::from_sentences(&corpus.documents, &cands)
+        } else {
+            PackSource::from_sentences_aligned(&corpus.documents, &cands, &*embedder)
+                .context("aligning the keys")?
+        };
         let semantic = (signal != Signal::Lexical)
             .then(|| Semantic::new(&*embedder, &cands))
             .transpose()
@@ -307,6 +321,11 @@ fn main() -> anyhow::Result<()> {
                 participant
             } else {
                 participant.retrieving(retrieval, Rc::clone(&embedder))
+            };
+            let participant = if cli.hops {
+                participant.looking_again()
+            } else {
+                participant
             };
             Box::new(if provenance {
                 participant.showing_provenance()
@@ -437,6 +456,33 @@ fn diagnose(
             answer: "unknown".into(),
         })
         .collect();
+    // How well the embedder aligned the keys of paraphrased statements, against the synonym table.
+    {
+        use splinter_sdk::knowledge::goal::align::align_keys;
+        use splinter_sdk::knowledge::goal::hard::canonical;
+        let pack = PackSource::sentence_pack(&corpus.documents);
+        let aligned = align_keys(&pack, &**embedder).context("aligning")?;
+        let (mut right, mut wrong) = (0, 0);
+        for (raw, shared) in &aligned {
+            let (a, b) = (
+                canonical(raw, &corpus.lexicon),
+                canonical(shared, &corpus.lexicon),
+            );
+            if a == b {
+                right += 1
+            } else {
+                wrong += 1
+            }
+        }
+        let paraphrased = pack
+            .objects
+            .iter()
+            .filter_map(|o| o.data["key"].as_str())
+            .filter(|k| canonical(k, &corpus.lexicon) != k.to_lowercase())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        println!("alignment: {right} keys aligned to the same fact, {wrong} to another, of {paraphrased} paraphrased keys");
+    }
     let vocabulary = Vocabulary::of(cands);
     let gaps = analyse(&results, &vocabulary);
     let semantic = Semantic::new(&**embedder, cands).context("embedding the corpus")?;

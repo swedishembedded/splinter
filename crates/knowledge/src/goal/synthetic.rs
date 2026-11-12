@@ -176,6 +176,8 @@ const TYPES: [&str; 8] = [
     "anxious",
     "dismissive",
 ];
+const SITE_ONSETS: [&str; 8] = ["kel", "tar", "vor", "mun", "pel", "sar", "dov", "fen"];
+const SITE_CODAS: [&str; 8] = ["nis", "dor", "lek", "vash", "rem", "tuk", "bor", "zel"];
 const PROSE: [&str; 8] = [
     "Staff should read this page before they act on it.",
     "It was written for the people who work with the line every day.",
@@ -232,7 +234,7 @@ impl World {
         };
         let units = (0..units)
             .map(|u| match self.form {
-                Form::Property => {
+                Form::Property | Form::Link => {
                     let kind = self.rng.pick(&KINDS).copied().unwrap_or("pump");
                     let entity = format!("{name} {kind} {}", u + 1);
                     PROPERTIES
@@ -262,7 +264,7 @@ impl World {
     fn value(&mut self, key: &FactKey, not: &[&str]) -> String {
         loop {
             let v = match key.form {
-                Form::Property => {
+                Form::Property | Form::Link => {
                     let (_, unit, low, high) = PROPERTIES
                         .iter()
                         .find(|p| p.0 == key.attribute)
@@ -303,7 +305,9 @@ fn key(form: Form, attribute: &str, entity: &str) -> FactKey {
 
 fn sentence(key: &FactKey, value: &str) -> String {
     match key.form {
-        Form::Property => format!("The {} of {} is {value}.", key.attribute, key.entity),
+        Form::Property | Form::Link => {
+            format!("The {} of {} is {value}.", key.attribute, key.entity)
+        }
         Form::Behaviour => format!("When {}, a {} client {value}.", key.attribute, key.entity),
     }
 }
@@ -317,7 +321,7 @@ fn section(
     form: Form,
 ) -> String {
     let heading = match form {
-        Form::Property => unit[0].entity.clone(),
+        Form::Property | Form::Link => unit[0].entity.clone(),
         Form::Behaviour => format!("Observed behaviour of {} clients", topic.name),
     };
     let mut text = format!("## {heading}\n\n");
@@ -580,6 +584,71 @@ pub fn generate(spec: &Spec) -> Corpus {
         );
     }
 
+    // Hops: where a unit is installed lives in a register of its own; a
+    // question about the site needs the register and then the unit's facts.
+    let mut hop_dev: Vec<Probe> = Vec::new();
+    let mut hop_held: Vec<Probe> = Vec::new();
+    if spec.hard.hops && spec.form == Form::Property {
+        let mut used: BTreeSet<String> = names.iter().cloned().collect();
+        for topic in goal_topics {
+            let mut sites = Vec::new();
+            for _ in &topic.units {
+                loop {
+                    let name = format!(
+                        "{}{}",
+                        SITE_ONSETS[w.rng.below(SITE_ONSETS.len())],
+                        SITE_CODAS[w.rng.below(SITE_CODAS.len())]
+                    );
+                    if used.insert(name.clone()) {
+                        sites.push(name);
+                        break;
+                    }
+                }
+            }
+            let provenance = Provenance {
+                date: Some("2026-06-01".into()),
+                version: 5,
+                authority: 3,
+            };
+            for (n, chunk) in sites.chunks(3).enumerate() {
+                let mut body = String::new();
+                for (i, site) in chunk.iter().enumerate() {
+                    let unit = &topic.units[n * 3 + i];
+                    body.push_str(&format!(
+                        "## Site register {n}.{i}\n\nThis register lists where {} units are installed.\nThe unit installed at {site} is {}.\n\n",
+                        topic.name, unit[0].entity
+                    ));
+                }
+                emit(
+                    document(
+                        format!("{}-sites-{n}", topic.name),
+                        provenance.clone(),
+                        body,
+                    ),
+                    vec![Label::Relevant; chunk.len()],
+                    &mut labels,
+                );
+            }
+            for (u, site) in sites.iter().enumerate() {
+                let k = &topic.units[u][0];
+                let probe = Probe {
+                    id: format!("{}-hop-{u}", topic.name),
+                    question: format!(
+                        "What is the {} of the unit installed at {site}?",
+                        k.attribute
+                    ),
+                    expected: truth[k].clone(),
+                    skill: None,
+                };
+                if u < spec.probes_per_topic {
+                    hop_dev.push(probe);
+                } else {
+                    hop_held.push(probe);
+                }
+            }
+        }
+    }
+
     // No order of the corpus tells a reader which document is current.
     w.rng.shuffle(&mut documents);
 
@@ -607,13 +676,22 @@ pub fn generate(spec: &Spec) -> Corpus {
             }
         }
     }
+    if !hop_dev.is_empty() {
+        // The goal is asked only through the register; the topics are not named.
+        probes = hop_dev;
+        held_out.extend(hop_held);
+    }
     let (role, objective) = match spec.form {
-        Form::Property => (
+        Form::Property | Form::Link => (
             "service technician".to_string(),
-            format!(
-                "Service the {} equipment lines correctly.",
-                goal_names(goal_topics)
-            ),
+            if spec.hard.hops {
+                "Service the equipment correctly.".to_string()
+            } else {
+                format!(
+                    "Service the {} equipment lines correctly.",
+                    goal_names(goal_topics)
+                )
+            },
         ),
         Form::Behaviour => (
             "tenant".to_string(),

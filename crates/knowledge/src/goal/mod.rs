@@ -9,6 +9,7 @@
 //! Goal-directed selection: from a raw corpus and a goal to the sections
 //! worth learning, each choice with its reason.
 //!
+//! * [`align`] - which fact keys are one fact stated in other words.
 //! * [`corpus`] - documents with provenance, cut into candidate sections.
 //! * [`facts`] - the keyed values a section states.
 //! * [`hard`] - what makes a synthetic corpus hard for lexical selection:
@@ -26,6 +27,7 @@
 //! comparison against the other ways to spend a budget, is a pipeline's
 //! (`splinter-pipelines`); nothing here runs a model.
 
+pub mod align;
 pub mod corpus;
 pub mod facts;
 pub mod gaps;

@@ -29,7 +29,7 @@ use std::cell::Cell;
 
 use serde::Serialize;
 use splinter_knowledge::goal::corpus::{Candidate, SectionId, Vocabulary};
-use splinter_knowledge::goal::gaps::{analyse, pass_rate, Goal, ProbeResult};
+use splinter_knowledge::goal::gaps::{analyse, dependent_gaps, pass_rate, Goal, ProbeResult};
 use splinter_knowledge::goal::select::{select, Config, Examinee, Open, Selection, Signal};
 use splinter_knowledge::goal::semantic::Semantic;
 use splinter_knowledge::goal::source::FactSource;
@@ -48,6 +48,8 @@ pub struct Checks {
     pub novelty: bool,
     /// Use the goal's objective to name the domain.
     pub objective: bool,
+    /// Let what was learned open the gaps it depends on.
+    pub expansion: bool,
 }
 
 impl Checks {
@@ -56,6 +58,7 @@ impl Checks {
         conflicts: true,
         novelty: true,
         objective: true,
+        expansion: true,
     };
 }
 
@@ -199,7 +202,16 @@ pub fn learn_goal(
             break;
         }
         let remembered: Vec<ProbeResult> = failed.values().cloned().collect();
-        let gaps = analyse(&remembered, &vocabulary);
+        let mut gaps = analyse(&remembered, &vocabulary);
+        if plan.checks.expansion && !learned_set.is_empty() {
+            let failing: Vec<&ProbeResult> = results.iter().filter(|r| !r.passed()).collect();
+            let known: Vec<&Candidate> = candidates
+                .iter()
+                .filter(|c| learned_set.contains(&c.id))
+                .collect();
+            let opened = dependent_gaps(&gaps, &failing, &known, &vocabulary);
+            gaps.extend(opened);
+        }
         let config = Config {
             check_conflicts: plan.checks.conflicts,
             signal: plan.signal,

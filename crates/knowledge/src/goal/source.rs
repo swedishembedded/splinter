@@ -22,14 +22,16 @@
 //! synthetic corpora use; a model proposer's pack goes through
 //! [`PackSource::new`] the same way.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde_json::json;
 
+use super::align::align_keys;
 use super::corpus::{Candidate, Document, SectionId};
 use super::facts::{Fact, FactKey, Form, PatternFacts};
 use super::select::Verdict;
-use crate::objects::{admit, Object, Pack, ProposedObject};
+use crate::objects::{admit, resolve_aligned, Object, Pack, ProposedObject};
+use crate::retrieve::{EmbedError, Embedder};
 
 /// What selection asks about a section.
 pub trait FactSource {
@@ -56,6 +58,18 @@ impl PackSource {
     /// The source of `pack` over `candidates`.
     #[must_use]
     pub fn new(pack: &Pack, candidates: &[Candidate]) -> Self {
+        Self::aligned(pack, candidates, &BTreeMap::new())
+    }
+
+    /// [`PackSource::new`] with fact keys read through `aligned` (see
+    /// [`super::align::align_keys`]): statements that paraphrase each other
+    /// are compared, and their rulings follow the headers and the stated values.
+    #[must_use]
+    pub fn aligned(
+        pack: &Pack,
+        candidates: &[Candidate],
+        aligned: &BTreeMap<String, String>,
+    ) -> Self {
         let mut by_object: HashMap<&str, SectionId> = HashMap::new();
         let mut objects: BTreeSet<SectionId> = BTreeSet::new();
         let mut facts: HashMap<SectionId, Vec<Fact>> = HashMap::new();
@@ -65,12 +79,17 @@ impl PackSource {
             };
             by_object.insert(object.id.as_str(), section.clone());
             objects.insert(section.clone());
-            if let Some(fact) = fact_of(object) {
+            if let Some(fact) = fact_of(object, aligned) {
                 facts.entry(section).or_default().push(fact);
             }
         }
         let mut rulings: HashMap<SectionId, Verdict> = HashMap::new();
-        for resolution in &pack.resolutions {
+        let (resolutions, flags) = if aligned.is_empty() {
+            (pack.resolutions.clone(), pack.flags.clone())
+        } else {
+            resolve_aligned(pack, aligned)
+        };
+        for resolution in &resolutions {
             let Some(winner) = by_object.get(resolution.winner.as_str()) else {
                 continue;
             };
@@ -89,7 +108,7 @@ impl PackSource {
                 rulings.entry(loser.clone()).or_insert(verdict);
             }
         }
-        for flag in &pack.flags {
+        for flag in &flags {
             let sections: BTreeSet<&SectionId> = flag
                 .objects
                 .iter()
@@ -121,6 +140,32 @@ impl PackSource {
         let proposals: Vec<ProposedObject> =
             documents.iter().flat_map(sentence_proposals).collect();
         Self::new(&admit("goal", documents, &proposals), candidates)
+    }
+
+    /// The pack admitted from the sentence forms of `documents`.
+    #[must_use]
+    pub fn sentence_pack(documents: &[Document]) -> Pack {
+        let proposals: Vec<ProposedObject> =
+            documents.iter().flat_map(sentence_proposals).collect();
+        admit("goal", documents, &proposals)
+    }
+
+    /// [`PackSource::from_sentences`] with the keys of paraphrased statements
+    /// aligned by `embedder` and checked by code.
+    ///
+    /// # Errors
+    ///
+    /// When the embedder fails.
+    pub fn from_sentences_aligned(
+        documents: &[Document],
+        candidates: &[Candidate],
+        embedder: &dyn Embedder,
+    ) -> Result<Self, EmbedError> {
+        let proposals: Vec<ProposedObject> =
+            documents.iter().flat_map(sentence_proposals).collect();
+        let pack = admit("goal", documents, &proposals);
+        let aligned = align_keys(&pack, embedder)?;
+        Ok(Self::aligned(&pack, candidates, &aligned))
     }
 }
 
@@ -155,20 +200,25 @@ fn sentence_proposals(document: &Document) -> Vec<ProposedObject> {
             data: json!({
                 "key": format!("{} | {}", fact.key.attribute, fact.key.entity),
                 "value": fact.value,
-                "form": match fact.key.form { Form::Property => "property", Form::Behaviour => "behaviour" },
+                "form": match fact.key.form { Form::Property => "property", Form::Behaviour => "behaviour", Form::Link => "link" },
             }),
         });
     }
     found
 }
 
-fn fact_of(object: &Object) -> Option<Fact> {
+fn fact_of(object: &Object, aligned: &BTreeMap<String, String>) -> Option<Fact> {
     if object.kind != "fact" {
         return None;
     }
-    let (attribute, entity) = object.data["key"].as_str()?.split_once('|')?;
+    let raw = object.data["key"].as_str()?;
+    let (attribute, entity) = aligned
+        .get(raw)
+        .map_or(raw, String::as_str)
+        .split_once('|')?;
     let form = match object.data["form"].as_str() {
         Some("behaviour") => Form::Behaviour,
+        Some("link") => Form::Link,
         _ => Form::Property,
     };
     Some(Fact {

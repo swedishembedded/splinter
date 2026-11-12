@@ -17,9 +17,14 @@
 //! alone does not vouch for text. Material of any other origin (public
 //! documents, simulated data) is not held to this.
 
+use std::fmt;
+use std::path::{Path, PathBuf};
+
+use serde::Serialize;
 use serde_json::{json, Value};
 use splinter_data::pii::{Scrubber, DETECTORS_VERSION};
 use splinter_knowledge::goal::corpus::Document;
+use splinter_orchestrator::error::OrchestratorError;
 
 /// Where a document came from.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,7 +50,7 @@ pub struct Intake {
 }
 
 /// Why a document did not enter.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum Refusal {
     /// A live document whose person did not consent.
     NoConsent,
@@ -53,6 +58,94 @@ pub enum Refusal {
     NotScrubbed,
     /// A live document the detectors still find something in.
     Residue,
+}
+
+impl fmt::Display for Refusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::NoConsent => "its person did not consent",
+            Self::NotScrubbed => "no scrub of the current detectors ran on it",
+            Self::Residue => "the detectors still find personal data in it",
+        })
+    }
+}
+
+/// What `goal admit` did.
+#[derive(Clone, Debug, Serialize)]
+pub struct Admission {
+    /// The documents written to the output directory.
+    pub admitted: Vec<String>,
+    /// The documents refused, with the reason.
+    pub refused: Vec<(String, Refusal)>,
+    /// The directory the admitted documents were written to.
+    pub out: PathBuf,
+}
+
+fn read(path: &Path) -> Result<Document, OrchestratorError> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| OrchestratorError::Refused(format!("{}: {e}", path.display())))?;
+    let id = path.file_stem().map_or_else(
+        || "document".to_string(),
+        |s| s.to_string_lossy().into_owned(),
+    );
+    Ok(Document::parse(&id, &text))
+}
+
+/// Reads `open` (public or simulated documents) and `live` (recordings of
+/// real people), admits what may enter a selection and writes it to `out`
+/// as Markdown with its header. A live document is scrubbed first when
+/// `scrub` says so; without consent, or unscrubbed, it is refused.
+///
+/// # Errors
+///
+/// When a file cannot be read or the output cannot be written.
+pub fn admit_paths(
+    open: &[PathBuf],
+    live: &[PathBuf],
+    consent: bool,
+    scrub: bool,
+    out: &Path,
+) -> Result<Admission, OrchestratorError> {
+    let scrubber = Scrubber::new();
+    let mut intakes = Vec::new();
+    for path in open {
+        intakes.push(Intake {
+            document: read(path)?,
+            origin: Origin::Open,
+        });
+    }
+    for path in live {
+        let document = read(path)?;
+        intakes.push(if scrub {
+            Intake::live_scrubbed(&document, consent, &scrubber)
+        } else {
+            Intake {
+                document,
+                origin: Origin::Live {
+                    consent,
+                    scrub: None,
+                },
+            }
+        });
+    }
+    let (documents, refused) = admit(&intakes);
+    std::fs::create_dir_all(out)
+        .map_err(|e| OrchestratorError::Refused(format!("{}: {e}", out.display())))?;
+    for document in &documents {
+        let p = &document.provenance;
+        let mut header = format!("authority: {}\nversion: {}\n", p.authority, p.version);
+        if let Some(date) = &p.date {
+            header.push_str(&format!("date: {date}\n"));
+        }
+        let file = out.join(format!("{}.md", document.id));
+        std::fs::write(&file, format!("---\n{header}---\n{}", document.text))
+            .map_err(|e| OrchestratorError::Refused(format!("{}: {e}", file.display())))?;
+    }
+    Ok(Admission {
+        admitted: documents.iter().map(|d| d.id.clone()).collect(),
+        refused,
+        out: out.to_path_buf(),
+    })
 }
 
 impl Intake {
@@ -108,6 +201,37 @@ pub fn admit(intakes: &[Intake]) -> (Vec<Document>, Vec<(String, Refusal)>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn files_are_admitted_to_a_directory_and_the_live_one_only_scrubbed_and_consented() {
+        let dir = tempfile::tempdir().unwrap();
+        let (open, live, out) = (
+            dir.path().join("public.md"),
+            dir.path().join("note.md"),
+            dir.path().join("admitted"),
+        );
+        std::fs::write(&open, "---\nauthority: 3\n---\nPublic text.\n").unwrap();
+        std::fs::write(&live, NOTE).unwrap();
+        let refused = admit_paths(
+            std::slice::from_ref(&open),
+            std::slice::from_ref(&live),
+            true,
+            false,
+            &out,
+        )
+        .unwrap();
+        assert_eq!(
+            refused.refused,
+            vec![("note".to_string(), Refusal::NotScrubbed)]
+        );
+        assert_eq!(refused.admitted, vec!["public".to_string()]);
+        let admitted = admit_paths(&[open], std::slice::from_ref(&live), true, true, &out).unwrap();
+        assert!(admitted.refused.is_empty(), "{:?}", admitted.refused);
+        let written = std::fs::read_to_string(out.join("note.md")).unwrap();
+        assert!(!written.contains("example.com") && written.contains("authority: 2"));
+        let nobody = admit_paths(&[], &[dir.path().join("note.md")], false, true, &out).unwrap();
+        assert_eq!(nobody.refused[0].1, Refusal::NoConsent);
+    }
 
     // Synthetic personal data.
     const NOTE: &str = "When the rent is late, a hesitant client writes to anna.test@example.com and asks for a payment plan.\n";

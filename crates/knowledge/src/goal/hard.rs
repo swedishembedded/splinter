@@ -18,6 +18,8 @@
 //!   wrong value in every section: as relevant as the original to any words.
 //! * **Partial staleness** - the current manual covers only part of a topic;
 //!   the older manual is the only source for the rest, and right about it.
+//! * **Hops** - a question names a site; a register says which unit is
+//!   installed there; the unit's own facts are in other documents.
 //! * **Decoys** - prose that names the goal's topics and uses its
 //!   vocabulary but states nothing.
 
@@ -36,6 +38,9 @@ pub struct Hardness {
     pub partial_stale: bool,
     /// Factless prose that uses the goal's names and words.
     pub decoys: bool,
+    /// Where each unit is installed is stated in a register of its own, and
+    /// the goal is asked only through the sites (property form).
+    pub hops: bool,
 }
 
 impl Hardness {
@@ -45,6 +50,7 @@ impl Hardness {
         mirrors: true,
         partial_stale: true,
         decoys: true,
+        hops: false,
     };
 }
 

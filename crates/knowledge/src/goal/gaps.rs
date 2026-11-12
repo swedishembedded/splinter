@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::corpus::Vocabulary;
+use super::corpus::{Candidate, Vocabulary};
 use super::facts::{states, words};
 
 /// More probes than this are not clustered pairwise.
@@ -224,6 +224,76 @@ fn cosine(a: &BTreeMap<String, f64>, b: &BTreeMap<String, f64>, norm: f64) -> f6
         .filter_map(|(w, x)| b.get(w).map(|y| x * y))
         .sum::<f64>()
         / norm
+}
+
+/// The weight at which a word counts as naming something: rarer than a third
+/// of the corpus.
+pub const RARE_WEIGHT: f64 = 1.0;
+
+/// The gaps that what was learned opens: a learned section that mentions
+/// something a still-failing probe asks about names other things (the unit
+/// at a site, the part a manual refers to), and the facts about those are
+/// now wanted for the same probe. One dependent gap per still-failing probe that has
+/// such sentences; its words are theirs, and its questions are the probes' beside
+/// the sentences that matched.
+#[must_use]
+pub fn dependent_gaps(
+    gaps: &[Gap],
+    failing: &[&ProbeResult],
+    learned: &[&Candidate],
+    vocabulary: &Vocabulary,
+) -> Vec<Gap> {
+    let rare = |w: &String| vocabulary.weight(w).is_some_and(|x| x >= RARE_WEIGHT);
+    let mut opened = Vec::new();
+    for gap in gaps {
+        for result in failing.iter().filter(|r| gap.probes.contains(&r.probe.id)) {
+            // What the probe is about: its rarest words, not the ones many sections share.
+            let probe_words: Vec<String> = words(&result.probe.question)
+                .into_iter()
+                .filter(rare)
+                .collect();
+            let top = probe_words
+                .iter()
+                .filter_map(|w| vocabulary.weight(w))
+                .fold(0.0, f64::max);
+            let asked: BTreeSet<String> = probe_words
+                .into_iter()
+                .filter(|w| vocabulary.weight(w).is_some_and(|x| x >= top / 2.0))
+                .collect();
+            let in_question: BTreeSet<String> = words(&result.probe.question).into_iter().collect();
+            let mut terms: BTreeMap<String, f64> = BTreeMap::new();
+            let mut sentences = Vec::new();
+            for section in learned {
+                for sentence in section.text.split_inclusive(['.', '\n']) {
+                    let in_sentence: BTreeSet<String> = words(sentence).into_iter().collect();
+                    if asked.iter().any(|w| in_sentence.contains(w)) {
+                        sentences.push(sentence.trim().to_string());
+                        terms.extend(
+                            in_sentence
+                                .into_iter()
+                                .filter(|w| rare(w) && !in_question.contains(w))
+                                .map(|w| (w, 1.0)),
+                        );
+                    }
+                }
+            }
+            if terms.is_empty() {
+                continue;
+            }
+            opened.push(Gap {
+                id: format!("{}+", result.probe.id),
+                probes: vec![result.probe.id.clone()],
+                questions: sentences
+                    .iter()
+                    .map(|s| format!("{} {s}", result.probe.question))
+                    .take(4)
+                    .collect(),
+                terms,
+                weight: gap.weight / gap.probes.len().max(1) as f64,
+            });
+        }
+    }
+    opened
 }
 
 #[cfg(test)]

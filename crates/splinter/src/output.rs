@@ -778,3 +778,20 @@ impl Report for Answer {
         out
     }
 }
+
+impl Report for splinter_sdk::goal::intake::Admission {
+    fn human(&self) -> String {
+        let mut out = format!(
+            "admitted {} document(s) to {}\n",
+            self.admitted.len(),
+            self.out.display()
+        );
+        for id in &self.admitted {
+            let _ = writeln!(out, "  admitted {id}");
+        }
+        for (id, reason) in &self.refused {
+            let _ = writeln!(out, "  refused  {id}: {reason}");
+        }
+        out
+    }
+}

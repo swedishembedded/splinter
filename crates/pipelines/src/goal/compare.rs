@@ -156,6 +156,7 @@ pub fn compare(
             without("without-conflict-check", |c| c.conflicts = false),
             without("without-novelty-check", |c| c.novelty = false),
             without("without-objective", |c| c.objective = false),
+            without("without-expansion", |c| c.expansion = false),
         ]
     } else {
         Vec::new()

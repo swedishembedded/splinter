@@ -38,6 +38,10 @@ pub enum Form {
     Property,
     /// "When `<attribute>`, a `<entity>` client `<value>`."
     Behaviour,
+    /// "The unit installed at `<site>` is `<unit>`." The site is the entity,
+    /// the unit the value: a link from one name to another, which a question
+    /// about the site follows to the unit's own facts.
+    Link,
 }
 
 /// A value stated for a key.
@@ -60,6 +64,7 @@ impl Fact {
                 "What does a {} client do when {}?",
                 self.key.entity, self.key.attribute
             ),
+            Form::Link => format!("Which unit is installed at {}?", self.key.entity),
         }
     }
 }
@@ -82,7 +87,14 @@ impl FactExtractor for PatternFacts {
     }
 }
 
+/// The attribute of a [`Form::Link`] fact.
+pub const LINK_ATTRIBUTE: &str = "unit installed at";
+
 fn fact_of(sentence: &str) -> Option<Fact> {
+    if let Some(rest) = sentence.strip_prefix("The unit installed at ") {
+        let (site, unit) = rest.split_once(" is ")?;
+        return fact(Form::Link, LINK_ATTRIBUTE, site, unit);
+    }
     if let Some(rest) = sentence.strip_prefix("The ") {
         let (attribute, rest) = rest.split_once(" of ")?;
         let (entity, value) = rest.split_once(" is ")?;

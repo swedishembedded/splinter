@@ -262,7 +262,11 @@ fn hard_run(seed: u64, form: Form, signal: Signal) -> Vec<Arm> {
         &Inputs {
             fresh: &|| make(false),
             aware: Some(&|| make(true)),
-            source: &source_of(&corpus),
+            source: &if signal == Signal::Lexical {
+                PackSource::from_sentences(&corpus.documents, &cands)
+            } else {
+                PackSource::from_sentences_aligned(&corpus.documents, &cands, &*embedder).unwrap()
+            },
             semantic: Some(&semantic),
         },
         &plan,
@@ -296,8 +300,13 @@ fn on_hard_corpora_selection_with_provenance_beats_reading_everything_with_it() 
         let gain = best.held_out.mean - everything.held_out.mean;
         assert!(gain > 0.05, "{form:?}: {gain} {best:?} {everything:?}");
         assert!(best.words.mean * 3.0 < everything.words.mean);
-        // And it is no longer the oracle: the hard corpora are not saturated.
-        assert!(summary(&all, "selective").held_out.mean < 0.95, "{form:?}");
+        // Without an embedder to align paraphrases, the corpus is not saturated; with one it nearly is.
+        let selective = summary(&all, "selective").held_out.mean;
+        if signal == Signal::Lexical {
+            assert!(selective < 0.95, "{form:?}: {selective}");
+        } else {
+            assert!(selective > 0.9, "{form:?}: {selective}");
+        }
     }
 }
 
@@ -313,4 +322,78 @@ fn where_the_corpus_is_paraphrased_meaning_finds_what_words_miss() {
         f.recall
     );
     assert!(f.held_out.mean >= l.held_out.mean - 0.02);
+}
+
+/// Corpora where the goal is asked only through the sites of a register.
+fn hop_runs(corpora: u64) -> Vec<Vec<Arm>> {
+    use splinter_knowledge::goal::hard::Hardness;
+    (0..corpora)
+        .map(|i| {
+            let mut spec = Spec::new(4000 + i, Form::Property); // seed: each corpus its own draw
+            spec.hard = Hardness {
+                hops: true,
+                ..Hardness::default()
+            };
+            let corpus = generate(&spec);
+            let make = |provenance: bool| -> Box<dyn Participant> {
+                let p = InContext::new(ScriptedReader::knowing(Vec::new())).looking_again();
+                Box::new(if provenance {
+                    p.showing_provenance()
+                } else {
+                    p
+                })
+            };
+            compare(
+                &corpus,
+                &Inputs {
+                    fresh: &|| make(false),
+                    aware: Some(&|| make(true)),
+                    source: &source_of(&corpus),
+                    semantic: None,
+                },
+                &Plan {
+                    round_words: 1500,
+                    total_words: 6000,
+                    ..PLAN
+                },
+                4000 + i, // seed: the random arm
+                true,
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn a_learned_link_opens_the_gap_for_the_facts_it_names() {
+    let runs = hop_runs(8);
+    let summary = summarise(&runs, "selective", 4000); // seed: the intervals' resampling
+    let with = summary.iter().find(|s| s.name == "selective").unwrap();
+    let without = summary
+        .iter()
+        .find(|s| s.name == "without-expansion")
+        .unwrap();
+    let oracle = summary
+        .iter()
+        .find(|s| s.name == "oracle-relevant")
+        .unwrap();
+    // The register is found by the questions' words; the units' facts only by what the register names.
+    assert!(without.recall.mean < 0.9, "{:?}", without.recall);
+    assert!(
+        with.recall.mean > without.recall.mean + 0.2,
+        "{:?} {:?}",
+        with.recall,
+        without.recall
+    );
+    assert!(
+        with.held_out.mean > without.held_out.mean + 0.2,
+        "{:?} {:?}",
+        with.held_out,
+        without.held_out
+    );
+    assert!(
+        with.held_out.mean + 0.15 >= oracle.held_out.mean,
+        "{:?} {:?}",
+        with.held_out,
+        oracle.held_out
+    );
 }
