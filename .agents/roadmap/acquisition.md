@@ -41,6 +41,68 @@ GPU run must still show. Update this file in the same commit that finishes or ch
   digest written before the first check); BLOCKED is never a pass; an unmeasured assertion
   fails; an ablation states its measured effect.
 
+## Goal-directed selection of raw material (built 2026-11-12)
+
+Scope: a participant with a goal (role, objective, probes) given a raw corpus that is mostly
+irrelevant, outdated, contradicted or misleading finds the sections worth learning, the way a person
+with a goal finds what to read. `splinter_knowledge::goal` (pure code, no model) and
+`splinter_pipelines::goal` (the loop, the comparison, the counterpart persona);
+`samples/goal-selection` runs it. `acquire` chooses a skill to train from documentation it is
+told to use; this chooses which documentation sections to use at all, and composes with it.
+
+- **Gap analysis** (`goal::gaps`): probe the participant, cluster the failed probes into gaps by
+  corpus-rarity-weighted cosine of their words (a named `skill` is the cluster; numbers and words only
+  one probe uses never link). A gap stays open after its probes pass, until no new material relevant
+  to it is left: a probe samples a capability, it does not bound it.
+- **Selection** (`goal::select`): one decision with a reason per section, in order: relevance to the
+  open gaps (rarity-squared coverage of the gap's words, weighted by the share of its probes that use
+  them) with the goal's objective naming the domain; conflicts over fact keys across the whole corpus
+  (authority, then date, then version: Contradicted / Superseded / Contested); novelty (the
+  participant is asked the question each section fact answers: Known); duplicates; a word budget by
+  value per word. Facts are read by a `FactExtractor` (pattern default; a model can replace it).
+- **Loop** (`pipelines::goal::learn_goal`): probe, gaps, select, learn, re-probe; stops on goal met,
+  nothing worth learning, budget or rounds. The participant is a trait (`Participant`); `InContext` learns
+  by remembering sections and answers by showing a `Reader` the top BM25 sections (learning without weights,
+  what a machine with no free card can do); a participant that trains an adapter on the compiled material
+  implements the same trait. Counts every question put to it.
+- **Counterpart roles** (`goal::behaviour`): the same loop with a counterpart goal ("behave as a realistic
+  hesitant tenant"), material that describes behaviour, and the artifact is a persona and a `SeatSpec`
+  (parsed by sven's own type); fidelity is the share of held-out situations of that type a reader acting from
+  the persona alone gets right.
+- **Labelled corpora** (`goal::synthetic`): relevant / known / outdated / misleading / irrelevant sections,
+  labels apart from documents, two forms (equipment properties, client behaviour), dev probes and held-out
+  questions on disjoint facts, document order shuffled so no order tells which is current.
+- **Comparison** (`goal::compare`): selective vs nothing vs everything vs the same words at random vs
+  the relevant-only oracle, and the loop with the conflict check, the novelty check and the objective each off.
+
+Scripted reader (best-ranked passage wins, no date/authority reasoning), 10 seeds each, deterministic:
+
+| arm | property held-out | behaviour held-out (one client type, persona fidelity) |
+|---|---|---|
+| none | 0.30 | 0.24 |
+| selective | 1.00 (precision 1.00, recall 1.00, 1357 words) | 1.00 (388 words) |
+| random, same words | 0.32 | 0.28 |
+| all (8561 / 5277 words) | 0.43 | 0.43 |
+| oracle-relevant | 1.00 | 1.00 |
+| selective without conflict check | 0.39 (harmful share 0.61) | 0.42 |
+| selective without novelty check | 1.00 (precision 0.70, 1939 words) | 1.00 (517 words) |
+| selective without the objective | 1.00 | 0.63 |
+
+The world is saturated for lexical selection (selective equals the oracle), so these numbers are a
+regression spec and an ablation of what each check contributes (conflicts decide accuracy, novelty
+decides words and precision, the objective decides recall where gap words alone are ambiguous), not a
+claim about difficulty. Defects found on the way, each now a test: the gap vocabulary was
+dominated by attribute and entity-number words (fixed by corpus rarity and dropping numbers);
+relevance summed over gaps capped a section at its gap's share (floor now on the best single gap, rank on
+the weighted sum); stopping when dev probes passed learned only probed entities (gaps stay open); a
+corpus ordered current-first let a first-wins reader look good (documents shuffled).
+
+Not done: selection is lexical (no embedding signal, no model-judged relevance); novelty is accuracy,
+not loss (brain log-probabilities of the section's items would sharpen it); facts are two sentence
+patterns until a model extractor is admitted by code; the participant that trains on the chosen sections
+(waits for a card, and the material compiler's task families); sections that are relevant but share
+no word with the goal or probes are missed; live-user behaviour data goes through the scrubber first.
+
 ## What GPU runs must show (hand-off to the run owner)
 
 1. **Teacher**: `practice --teacher reference` on a repository whose policy solves little

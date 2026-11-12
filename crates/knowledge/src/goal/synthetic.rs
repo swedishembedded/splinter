@@ -98,6 +98,8 @@ pub struct Corpus {
     pub held_out: Vec<Probe>,
     /// What the participant knows before it learns anything.
     pub base_knowledge: Vec<Fact>,
+    /// The names of the goal's topics (the equipment lines or client types).
+    pub goal_topics: Vec<String>,
 }
 
 const ONSETS: [&str; 14] = [
@@ -496,6 +498,9 @@ pub fn generate(spec: &Spec) -> Corpus {
         );
     }
 
+    // No order of the corpus tells a reader which document is current.
+    w.rng.shuffle(&mut documents);
+
     // Goal: probes on a sample of the goal facts, the rest held out.
     let mut probes = Vec::new();
     let mut held_out = Vec::new();
@@ -543,6 +548,7 @@ pub fn generate(spec: &Spec) -> Corpus {
         },
         held_out,
         base_knowledge,
+        goal_topics: goal_topics.iter().map(|t| t.name.clone()).collect(),
     }
 }
 

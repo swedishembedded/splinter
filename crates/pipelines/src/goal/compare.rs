@@ -47,6 +47,8 @@ pub struct Arm {
     /// Share of learned sections labelled outdated or misleading; `None`
     /// when none learned.
     pub harmful: Option<f64>,
+    /// The sections it learned, in corpus order.
+    pub learned: Vec<SectionId>,
     /// The loop's own report, for the selective arm.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<Report>,
@@ -92,6 +94,7 @@ fn arm(
         name: name.to_string(),
         sections: sections.len(),
         words: sections.iter().map(Candidate::words).sum(),
+        learned: sections.iter().map(|c| c.id.clone()).collect(),
         questions,
         dev_pass: pass_rate(&probe(&corpus.goal, &*participant)).unwrap_or(0.0),
         held_out_pass: held_out_pass(&*participant, &corpus.held_out),
@@ -103,41 +106,35 @@ fn arm(
 }
 
 /// Runs every arm on `corpus`, each with a fresh participant from
-/// `fresh`. `seed` draws the random arm's sections.
+/// `fresh`. `seed` draws the random arm's sections; `ablate` adds the arms
+/// that run the loop with one check off.
 pub fn compare(
     corpus: &Corpus,
     fresh: &dyn Fn() -> Box<dyn Participant>,
     extractor: &dyn FactExtractor,
     plan: &Plan,
     seed: u64,
+    ablate: bool,
 ) -> Vec<Arm> {
     let cands = candidates(&corpus.documents);
     let mut selective = fresh();
     let report = learn_goal(&cands, &corpus.goal, &mut *selective, extractor, plan);
+    let without = |name: &'static str, off: fn(&mut Checks)| {
+        let mut checks = plan.checks;
+        off(&mut checks);
+        (name, checks)
+    };
+    let ablated = if ablate {
+        vec![
+            without("without-conflict-check", |c| c.conflicts = false),
+            without("without-novelty-check", |c| c.novelty = false),
+            without("without-objective", |c| c.objective = false),
+        ]
+    } else {
+        Vec::new()
+    };
     let mut ablations = Vec::new();
-    for (name, checks) in [
-        (
-            "without-conflict-check",
-            Checks {
-                conflicts: false,
-                ..plan.checks
-            },
-        ),
-        (
-            "without-novelty-check",
-            Checks {
-                novelty: false,
-                ..plan.checks
-            },
-        ),
-        (
-            "without-objective",
-            Checks {
-                objective: false,
-                ..plan.checks
-            },
-        ),
-    ] {
+    for (name, checks) in ablated {
         let mut participant = fresh();
         let report = learn_goal(
             &cands,

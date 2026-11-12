@@ -49,7 +49,14 @@ fn fresh(corpus: &Corpus) -> Box<dyn Participant> {
 
 fn run(seed: u64, form: Form) -> (Corpus, Vec<Arm>) {
     let corpus = generate(&Spec::new(seed, form));
-    let arms = compare(&corpus, &|| fresh(&corpus), &PatternFacts, &PLAN, seed);
+    let arms = compare(
+        &corpus,
+        &|| fresh(&corpus),
+        &PatternFacts,
+        &PLAN,
+        seed,
+        true,
+    );
     (corpus, arms)
 }
 
@@ -128,4 +135,55 @@ fn the_loop_stops_when_the_goal_is_met_or_nothing_is_left_to_learn() {
     );
     assert!(report.final_pass_rate > report.rounds[0].pass_rate);
     assert!(report.words <= PLAN.total_words);
+}
+
+#[test]
+fn a_counterpart_persona_from_selected_behaviour_predicts_held_out_behaviour_of_its_type() {
+    use splinter_knowledge::goal::corpus::Candidate;
+    use splinter_pipelines::goal::behaviour::{behaviour_of, learned_fidelity, persona, seat_spec};
+
+    // One client type is the goal; seven others describe the same situations.
+    let mut spec = Spec::new(3, Form::Behaviour); // seed: any corpus
+    (spec.goal_topics, spec.other_topics) = (1, 7);
+    let corpus = generate(&spec);
+    let arms = compare(&corpus, &|| fresh(&corpus), &PatternFacts, &PLAN, 3, false); // seed: random arm
+    let cands = candidates(&corpus.documents);
+    let subject = corpus.goal.probes[0]
+        .id
+        .split('-')
+        .next()
+        .unwrap()
+        .to_string();
+    let reader = ScriptedReader::knowing(corpus.base_knowledge.clone());
+    let fidelity_of = |name: &str| {
+        learned_fidelity(
+            &subject,
+            &cands,
+            &arm(&arms, name).learned,
+            &PatternFacts,
+            &reader,
+            &corpus.held_out,
+        )
+        .unwrap()
+    };
+    let (selective, all, random, none) = (
+        fidelity_of("selective"),
+        fidelity_of("all"),
+        fidelity_of("random-same-words"),
+        fidelity_of("none"),
+    );
+    assert!(
+        selective > all && selective > random && selective > none,
+        "{selective} {all} {random} {none}"
+    );
+    assert!(selective >= 0.8, "{selective}");
+
+    // The persona becomes a seat specification sven accepts.
+    let sections: Vec<&Candidate> = cands
+        .iter()
+        .filter(|c| arm(&arms, "selective").learned.contains(&c.id))
+        .collect();
+    let text = persona(&subject, &behaviour_of(&subject, &sections, &PatternFacts));
+    let seat = seat_spec("tenant", &corpus.goal.role, &corpus.goal.objective, &text).unwrap();
+    assert_eq!(seat.persona, text);
 }

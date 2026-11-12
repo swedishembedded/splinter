@@ -39,7 +39,7 @@
 //!   [`sources`], [`sessions`], [`claims`], [`absorb`], [`tasks`], [`timeline`],
 //!   [`solving`], [`verify`], [`validate`], [`critique`], [`datasets`],
 //!   [`train`], [`release`], [`eval`], [`lineage`], [`status`], [`doctor`], [`state`],
-//!   [`router`] and the rest - with their requests and reports.
+//!   [`router`], [`goal`] and the rest - with their requests and reports.
 //! * `absorb::consolidate` takes a generation of a policy's claims into the
 //!   weights, and [`generation`] is what a release records of the generation
 //!   it belongs to.
@@ -76,10 +76,10 @@ pub use splinter_orchestrator::{Config, Context, OrchestratorError as Error, Run
 pub use splinter_pipelines::{
     absorb, acquire, ask, bench, brain_server, budget, canaries, checkpoints, claim_quality,
     claims, compare, conversation_policy_gradient, critique, curriculum, datasets, describe,
-    dialogue, doctor, eval, exam, exam_set, experiences, experiment, generations, graded, harbor,
-    harness_opt, history, improve, judge, learn, lineage, objects, plan, powered, practice, raft,
-    rehearsal, release, rerank, reserve, retrieval, router, sealed, sessions, solving, sources,
-    state, status, tasks, timeline, train, validate, variants, verify,
+    dialogue, doctor, eval, exam, exam_set, experiences, experiment, generations, goal, graded,
+    harbor, harness_opt, history, improve, judge, learn, lineage, objects, plan, powered, practice,
+    raft, rehearsal, release, rerank, reserve, retrieval, router, sealed, sessions, solving,
+    sources, state, status, tasks, timeline, train, validate, variants, verify,
 };
 
 // The layers, each under one name.

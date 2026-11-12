@@ -19,6 +19,7 @@
 //! role into a seat specification and measures how well it predicts held-out
 //! behaviour.
 
+pub mod behaviour;
 pub mod compare;
 pub mod participant;
 

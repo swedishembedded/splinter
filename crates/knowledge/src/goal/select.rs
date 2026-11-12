@@ -72,7 +72,7 @@ pub const MIN_RELEVANCE: f64 = 0.5;
 pub const MIN_NOVELTY: f64 = 0.25;
 /// A word of the goal's objective names its domain when at most this share
 /// of the sections have it.
-pub const DOMAIN_TERM_SHARE: f64 = 0.25;
+pub const DOMAIN_TERM_SHARE: f64 = 0.5;
 /// The most relevance a section can have that mentions none of the
 /// objective's domain words; below [`MIN_RELEVANCE`], so it is left out.
 pub const OFF_DOMAIN: f64 = 0.4;

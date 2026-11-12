@@ -7075,6 +7075,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-goal-selection"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "splinter-sdk",
+]
+
+[[package]]
 name = "splinter-health"
 version = "0.2.0"
 dependencies = [

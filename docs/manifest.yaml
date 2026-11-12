@@ -88,6 +88,9 @@ navigation:
       - source: samples/agent/loop/README.md
         path: examples/agent-loop.md
         title: agent-loop
+      - source: samples/goal-selection/README.md
+        path: examples/goal-selection.md
+        title: goal-selection
       - source: samples/health/README.md
         path: examples/health.md
         title: health
