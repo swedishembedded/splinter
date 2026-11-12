@@ -35,7 +35,10 @@ make one dataset until `--system-prompt` writes them all under one. Chat views a
 brain's `generic-messages-v2`, `preference` as brain's
 `generic-preference-v1` (one pair per line: the student's prompt, the
 chosen and the rejected answer), each checked by brain's own parser.
-Objectives brain cannot train (contrastive, reward, raw text) need
+The `cpt` view (continued pretraining on the text of sources) is written as
+`generic-messages-v2` too: each text is one assistant turn with nothing before
+it, supervised whole, so training minimises the next-token loss over all of its
+tokens. Objectives brain cannot train (contrastive, reward) need
 `--export-only`.
 
 ### Policy gradient
@@ -57,7 +60,7 @@ attempt did against the others at the same task:
 - A group is the attempts at one task version made by one policy (the model recorded on the
   verdict); each trial counts once however many conversations it had. The advantage of an
   attempt is `(reward - mean) / (std + 1e-6)` over its group (population standard deviation;
-  GRPO's), or with `--advantage mean-centred` the reward less the mean. A group of one
+  GRPO's), or with `--advantage mean-centred` the reward less the mean, or with `--advantage positive` GRPO's advantage for the attempts that beat their group and no record for the rest (nothing is pushed down: a wrong answer shares most of its tokens with a right one, and pushing it down damages those). A group of one
   attempt, or whose attempts all earned the same, teaches nothing and its experiences are
   counted as `no_group_signal`.
 - Each action of each conversation of an attempt with an advantage is one record, rendered

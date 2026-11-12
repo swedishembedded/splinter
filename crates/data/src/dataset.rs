@@ -23,7 +23,10 @@
 //!   never trained on, the two candidates always are. It is checked by
 //!   brain's own preference parser the same way before it is moved into
 //!   place.
-//! * Contrastive triples, rewarded trajectories and raw text have no
+//! * A raw text corpus (continued pretraining) is written as chat lines: each
+//!   text is one assistant turn with nothing before it, supervised whole, so
+//!   the loss is the next-token loss over every token of the text.
+//! * Contrastive triples and rewarded trajectories have no
 //!   trainer in brain's public SDK. The writer refuses them with
 //!   [`ViewError::ObjectiveNotTrainable`] unless the caller sets
 //!   [`WriteOptions::export_only`], and then writes Splinter's export
@@ -31,8 +34,7 @@
 //!   object per line, `{"format":"splinter-export-v1","shape":<shape>,
 //!   <the shape's fields>,"metadata":{...}}`, the shapes and their fields
 //!   being [`RecordBody`]'s variants in snake case (`contrastive`: `query`,
-//!   `positive`, `negatives`; `rewarded`: `messages`, `reward`; `text`:
-//!   `text`). Messages are `generic-messages-v2` messages. No file brain
+//!   `positive`, `negatives`; `rewarded`: `messages`, `reward`). Messages are `generic-messages-v2` messages. No file brain
 //!   would misread is ever written: the export format is neither of
 //!   brain's, and brain's parsers refuse it.
 //!
@@ -285,6 +287,8 @@ pub fn write_dataset(
             .iter()
             .map(|record| match &record.body {
                 RecordBody::Chat { messages, .. } => messages.iter().filter(|m| m.train).count(),
+                // A text is written as one supervised assistant turn.
+                RecordBody::Text { .. } => 1,
                 _ => 0,
             })
             .sum()
@@ -431,6 +435,28 @@ fn line(
             rejected: (&**rejected).into(),
             metadata: &record.metadata,
         })?,
+        // Continued pretraining on a text: the text is one assistant turn
+        // with nothing before it, supervised whole, which is the next-token
+        // loss over every token of it. The chat template frames the turn
+        // exactly as it frames any answer.
+        (Format::GenericMessagesV2, RecordBody::Text { text }) => {
+            let message = splinter_core::chat::WireMessage {
+                role: "assistant".into(),
+                content: text.clone(),
+                images: Vec::new(),
+                tool_calls: Vec::new(),
+                tool_call_id: None,
+                reasoning_content: None,
+                train: true,
+            };
+            serde_json::to_string(&ChatLine {
+                messages: std::slice::from_ref(&message),
+                tools: &[],
+                advantage: None,
+                teacher_context: None,
+                metadata: &record.metadata,
+            })?
+        }
         // A record serving an objective brain trains is written in that
         // objective's format, so the shapes above are the only ones brain's
         // formats see; anything else is exported.

@@ -170,10 +170,15 @@ fn a_preference_dataset_is_read_pair_for_pair() {
 #[test]
 fn only_the_objectives_brain_trains_from_a_file_are_trainable() {
     let brain = TrainingCapabilities::BRAIN;
-    for objective in [Objective::Sft, Objective::Classification, Objective::Dpo] {
+    for objective in [
+        Objective::Sft,
+        Objective::Classification,
+        Objective::Dpo,
+        Objective::Cpt,
+    ] {
         assert!(brain.require(objective).is_ok(), "{objective:?}");
     }
-    for objective in [Objective::Contrastive, Objective::Reward, Objective::Cpt] {
+    for objective in [Objective::Contrastive, Objective::Reward] {
         assert!(
             matches!(
                 brain.require(objective),

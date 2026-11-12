@@ -37,10 +37,11 @@ pub struct TrainingCapabilities {
 }
 
 impl TrainingCapabilities {
-    /// What brain's public SDK trains from a dataset file: chat fine-tuning,
-    /// preference fine-tuning and subject timelines. It has no trainer that
-    /// reads contrastive triples for the policy model, rewarded trajectories
-    /// or a raw text corpus.
+    /// What brain's public SDK trains from a dataset file: chat fine-tuning
+    /// (which also trains a raw text corpus, written as one supervised
+    /// assistant turn per text), preference fine-tuning and subject
+    /// timelines. It has no trainer that reads contrastive triples for the
+    /// policy model or rewarded trajectories.
     pub const BRAIN: Self = Self {
         chat_sft: true,
         preference: true,

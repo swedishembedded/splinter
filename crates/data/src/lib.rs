@@ -147,17 +147,20 @@ pub enum Objective {
 
 impl Objective {
     /// The line format this objective's records are written in: chat lines
-    /// for SFT and classification (rendered as SFT), preference pairs for
-    /// DPO, and Splinter's own export format for the objectives whose
-    /// records no trainer reads as a dataset file (contrastive triples,
-    /// rewarded trajectories, a raw text corpus). Whether a backend trains a
+    /// for SFT and classification (rendered as SFT) and for continued
+    /// pretraining (a text is one supervised assistant turn), preference
+    /// pairs for DPO, and Splinter's own export format for the objectives
+    /// whose records no trainer reads as a dataset file (contrastive
+    /// triples, rewarded trajectories). Whether a backend trains a
     /// format is that backend's to say.
     #[must_use]
     pub fn line_format(self) -> Format {
         match self {
-            Self::Sft | Self::Classification | Self::PolicyGradient => Format::GenericMessagesV2,
+            Self::Sft | Self::Classification | Self::PolicyGradient | Self::Cpt => {
+                Format::GenericMessagesV2
+            }
             Self::Dpo => Format::GenericPreferenceV1,
-            Self::Contrastive | Self::Reward | Self::Cpt => Format::SplinterExportV1,
+            Self::Contrastive | Self::Reward => Format::SplinterExportV1,
         }
     }
 }

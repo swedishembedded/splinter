@@ -215,7 +215,6 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
                 reward: 1.0,
             },
         ),
-        (Objective::Cpt, RecordBody::Text { text: "t".into() }),
     ];
     let scratch = Scratch::new("export");
     for (objective, body) in bodies {
@@ -254,6 +253,48 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
     let sft = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
     let dataset = write_dataset(&scratch.0.join("sft.jsonl"), &sft, &Unchecked).unwrap();
     assert_eq!(dataset.format, Format::GenericMessagesV2);
+}
+
+#[test]
+fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised_whole() {
+    let projection = Projection {
+        view: "hand-built".into(),
+        objective: Objective::Cpt,
+        strip: None,
+        min_strength: None,
+        records: vec![Record {
+            body: RecordBody::Text { text: "abc=bcd".into() },
+            metadata: RecordMetadata {
+                group: None,
+                split: None,
+                experiences: Vec::new(),
+                task: None,
+                sources: Vec::new(),
+                view: "hand-built".into(),
+                objective: Objective::Cpt,
+            },
+        }],
+        groups: Vec::new(),
+        excluded: BTreeMap::new(),
+        system_prompt: None,
+        packed: false,
+        outcome_verified_only: false,
+        block_measure: None,
+        terms: None,
+    };
+    assert_eq!(Objective::Cpt.line_format(), Format::GenericMessagesV2);
+    let scratch = Scratch::new("cpt-text-lines");
+    let path = scratch.0.join("cpt.jsonl");
+    let dataset = write_dataset(&path, &projection, &Unchecked).unwrap();
+    assert_eq!((dataset.format, dataset.trained_messages), (Format::GenericMessagesV2, Some(1)));
+    let line: serde_json::Value =
+        serde_json::from_str(std::fs::read_to_string(&path).unwrap().trim_end()).unwrap();
+    let messages = line["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        (messages[0]["role"].as_str(), messages[0]["content"].as_str(), messages[0]["train"].as_bool()),
+        (Some("assistant"), Some("abc=bcd"), Some(true))
+    );
 }
 
 #[test]
