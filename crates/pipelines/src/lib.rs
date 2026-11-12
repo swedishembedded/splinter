@@ -34,6 +34,11 @@
 //! * [`generations`] - generations of a coding policy: the protected panel,
 //!   the full retention matrix, replay policies, and one generation decided
 //!   on retention and regression limits before the gate.
+//! * [`goal`] - goal-directed learning: probe the participant, find its
+//!   gaps, choose the raw material expected to close them under a budget
+//!   with a reason for every section, learn it, probe again; and the
+//!   comparison against reading everything, nothing or the same words at
+//!   random.
 //! * [`improve`] - which way of improving an agent on a target capability
 //!   (more samples, another harness, a trained candidate, no change) is
 //!   worth its cost, decided from what each was measured to do.
@@ -92,6 +97,7 @@ pub mod experiences;
 pub mod experiment;
 pub mod family;
 pub mod generations;
+pub mod goal;
 pub mod graded;
 pub mod grouping;
 pub mod harbor;

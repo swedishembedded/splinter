@@ -25,6 +25,8 @@
 //!   evidence.
 //! * [`denoise`] - a passage of a source part, corrupted, as a task to
 //!   restore it: the first task generator feeding the experience store.
+//! * [`goal`] - which sections of a raw corpus to learn from for a goal,
+//!   chosen under a budget with the reason for each decision.
 //! * [`objects`] - typed knowledge objects (rules, thresholds, deadlines,
 //!   exceptions, procedure steps, behaviour traits) proposed by a model with the
 //!   quote each rests on, and admitted by code: every number traceable to the
@@ -59,6 +61,7 @@ pub mod codebook;
 pub mod concepts;
 pub mod denoise;
 pub mod gates;
+pub mod goal;
 pub mod harmonize;
 pub mod material;
 pub mod objects;
