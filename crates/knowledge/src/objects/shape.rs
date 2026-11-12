@@ -154,3 +154,49 @@ fn check_expression(expr: &Value, declared: &BTreeSet<String>) -> Result<(), Str
         _ => Err(format!("bad expression {expr}")),
     }
 }
+
+/// Whether a quote counts a period from an event ("within 30 days", "at least 60 days before", "30 days after the invoice date"): what a deadline is.
+/// "More than 14 days after the agreed date" says how late something may be before a right arises, which is a limit and not a deadline.
+pub(super) fn period_from_event(quote: &str) -> bool {
+    let lower = quote.to_lowercase();
+    let tokens: Vec<&str> = lower
+        .split_whitespace()
+        .map(|t| t.trim_matches(|c: char| !c.is_alphanumeric() && c != '.'))
+        .collect();
+    let is_number = |t: &str| {
+        !t.is_empty()
+            && t.chars().all(|c| c.is_ascii_digit() || c == '.')
+            && t.chars().any(|c| c.is_ascii_digit())
+    };
+    tokens.iter().enumerate().any(|(i, token)| {
+        if !is_number(token) {
+            return false;
+        }
+        let before = |n: usize| {
+            i.checked_sub(n)
+                .and_then(|j| tokens.get(j))
+                .copied()
+                .unwrap_or("")
+        };
+        if before(1) == "within" || (before(1) == "least" && before(2) == "at") {
+            return true;
+        }
+        if (before(2) == "more" || before(2) == "less") && before(1) == "than"
+            || before(1) == "over"
+            || before(1) == "under"
+        {
+            return false;
+        }
+        let mut next = i + 1;
+        if matches!(tokens.get(next), Some(&"business" | &"calendar")) {
+            next += 1;
+        }
+        matches!(
+            tokens.get(next),
+            Some(&("day" | "days" | "week" | "weeks" | "month" | "months"))
+        ) && matches!(
+            tokens.get(next + 1),
+            Some(&("after" | "before" | "from" | "of"))
+        )
+    })
+}

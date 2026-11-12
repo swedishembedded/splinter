@@ -55,7 +55,7 @@ mod shape;
 
 use resolve::resolve;
 pub use resolve::superseded_ids;
-use shape::{check_identifiers, check_shape};
+use shape::{check_identifiers, check_shape, period_from_event};
 
 pub use aligned::resolve_aligned;
 
@@ -328,6 +328,9 @@ fn admit_one(
     }
     check_shape(&proposal.kind, data)?;
     check_identifiers(data)?;
+    if proposal.kind == "deadline" && !period_from_event(&proposal.quote) {
+        return Err("a deadline is a period counted from an event (within N days, N days after/before ...); a limit on how late something is a threshold".to_string());
+    }
     let allowed = quote_numbers(&proposal.quote);
     let mut untraced: BTreeSet<String> = BTreeSet::new();
     claimed_numbers(&proposal.data, None, &mut |n| {

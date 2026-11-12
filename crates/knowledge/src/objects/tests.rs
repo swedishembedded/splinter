@@ -302,3 +302,15 @@ fn chapters_numbered_differently_never_compete_but_an_unnumbered_forum_post_comp
         ["t-c", "t-c"]
     );
 }
+
+#[test]
+fn a_deadline_is_a_period_counted_from_an_event_and_not_a_limit_on_lateness() {
+    let mut late = one("notice-window");
+    late.quote = one("terminate-late").quote;
+    late.data["offset"] = json!(14);
+    let rejected = admit("t", &documents(), &[late]).rejected;
+    assert!(
+        rejected[0].reason.contains("period counted from an event"),
+        "{rejected:?}"
+    );
+}

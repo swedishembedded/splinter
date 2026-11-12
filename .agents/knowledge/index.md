@@ -117,3 +117,4 @@ in the same commit.
 | [129](129-an-objective-that-shares-a-word-with-one-kind-of-document-gates-the-others-out.md) | An objective that shares a word with one kind of document gated the others out |
 | [130](130-a-base-exam-measured-under-another-jobs-load-scored-0.854-and-the-same-base-measured-alone-scored-0.938.md) | A base exam measured under another job's load scored 0.854; the same base alone scored 0.938 |
 | [131](131-bench-ingested-rollouts-carry-no-behaviour-log-probabilities-so-policy-gradient-needs-behaviour-start.md) | Bench-ingested rollouts carry no behaviour log-probabilities; policy-gradient training needs --behaviour start |
+| [132](132-a-deadline-object-read-from-a-lateness-limit-fails-every-task-that-asks-for-it.md) | A deadline object read from a lateness limit fails every task that asks for it |
