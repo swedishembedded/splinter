@@ -50,6 +50,15 @@ use splinter_sdk::model::BrainEndpoints;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::{Config, Splinter};
 
+impl FormArg {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Property => "property",
+            Self::Behaviour => "behaviour",
+        }
+    }
+}
+
 #[derive(Clone, Copy, ValueEnum)]
 enum FormArg {
     /// Properties of equipment lines.
@@ -168,6 +177,15 @@ struct Cli {
     /// words alone and to meaning alone when nothing is known.
     #[arg(long)]
     diagnose: bool,
+    /// Topics whose documents no arm is given; their passages become reading
+    /// questions in `--export-eval`.
+    #[arg(long, default_value_t = 0)]
+    reserve_topics: usize,
+    /// Where to write each corpus's exam (`<form>-<seed>/eval.json`): the held-out
+    /// questions to answer from memory and, from the reserve topics, passages to
+    /// read with a question each. The exam is a bench task collection's input.
+    #[arg(long)]
+    export_eval: Option<PathBuf>,
     /// Where to write each corpus's training records by arm
     /// (`<seed>/<arm>/train.jsonl`, one question and its stated answer per fact
     /// the arm's sections state, in brain's chat format) and the held-out
@@ -307,6 +325,7 @@ fn main() -> anyhow::Result<()> {
             spec.hard = Hardness::ALL;
         }
         spec.hard.hops = cli.hops;
+        spec.reserve_topics = cli.reserve_topics;
         let corpus = generate(&spec);
         let cands = candidates(&corpus.documents);
         let embedder: Rc<dyn Embedder> = served_embedder
@@ -366,6 +385,17 @@ fn main() -> anyhow::Result<()> {
         );
         if cli.diagnose && i == 0 {
             diagnose(&corpus, &cands, &source, &embedder)?;
+        }
+        if let Some(dir) = &cli.export_eval {
+            let dir = dir.join(format!("{}-{}", cli.form.name(), base + i));
+            std::fs::create_dir_all(&dir).with_context(|| dir.display().to_string())?;
+            let item = |p: &splinter_sdk::knowledge::goal::gaps::Probe| serde_json::json!({"id": p.id, "question": p.question, "expected": p.expected});
+            let exam = serde_json::json!({
+                "form": cli.form.name(), "seed": base + i,
+                "recall": corpus.held_out.iter().map(item).collect::<Vec<_>>(),
+                "reading": corpus.reading,
+            });
+            std::fs::write(dir.join("eval.json"), serde_json::to_string_pretty(&exam)?)?;
         }
         if let Some(dir) = &cli.export_chat {
             export_chat(dir, base + i, &corpus, &cands, &arms, &source)?;

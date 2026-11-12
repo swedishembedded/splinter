@@ -63,6 +63,9 @@ struct Cli {
     /// Seed of the adapter and the batch order; drawn and printed when not given.
     #[arg(long)]
     seed: Option<u64>,
+    /// Where to keep the adapter the job delivered.
+    #[arg(long)]
+    adapter_out: Option<PathBuf>,
     /// Where to write the result as JSON.
     #[arg(long)]
     out: PathBuf,
@@ -113,6 +116,9 @@ fn main() -> anyhow::Result<()> {
         "seed": seed, "steps": cli.steps, "records": trained.records,
         "base": trained.base, "tuned": trained.tuned,
     });
+    if let Some(path) = &cli.adapter_out {
+        std::fs::copy(&trained.adapter, path).with_context(|| path.display().to_string())?;
+    }
     std::fs::write(&cli.out, serde_json::to_string_pretty(&result)?)?;
     println!("{result}");
     Ok(())

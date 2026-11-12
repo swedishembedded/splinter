@@ -70,6 +70,9 @@ pub struct Spec {
     pub probes_per_topic: usize,
     /// Which difficulties the corpus has; none by default.
     pub hard: Hardness,
+    /// Topics whose documents no arm is given: material to read, to see that
+    /// learning did not damage reading. None by default.
+    pub reserve_topics: usize,
 }
 
 impl Spec {
@@ -85,6 +88,7 @@ impl Spec {
             known_share: 0.3,
             probes_per_topic: 6,
             hard: Hardness::default(),
+            reserve_topics: 0,
         }
     }
 }
@@ -107,6 +111,23 @@ pub struct Corpus {
     /// Variants and the words they stand for, as a normalising proposer or an
     /// embedder would know them; empty unless the corpus is paraphrased.
     pub lexicon: BTreeMap<String, String>,
+    /// Passages of the reserve topics with a question each: reading, not
+    /// recall. No arm ever learns these documents.
+    #[serde(default)]
+    pub reading: Vec<Reading>,
+}
+
+/// A passage, a question about it and the answer it states.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Reading {
+    /// Names the item.
+    pub id: String,
+    /// The passage to read.
+    pub passage: String,
+    /// The question.
+    pub question: String,
+    /// What the passage states.
+    pub expected: String,
 }
 
 const ONSETS: [&str; 14] = [
@@ -359,9 +380,10 @@ pub fn generate(spec: &Spec) -> Corpus {
         rng: SplitMix64::new(spec.seed),
         form: spec.form,
     };
-    let names = w.topic_names(spec.goal_topics + spec.other_topics);
+    let names = w.topic_names(spec.goal_topics + spec.other_topics + spec.reserve_topics);
     let topics: Vec<Topic> = names.iter().map(|n| w.topic(n, spec.units)).collect();
-    let (goal_topics, other_topics) = topics.split_at(spec.goal_topics);
+    let (goal_topics, rest) = topics.split_at(spec.goal_topics);
+    let (other_topics, reserve_topics) = rest.split_at(spec.other_topics);
 
     let mut documents = Vec::new();
     let mut labels = BTreeMap::new();
@@ -665,6 +687,30 @@ pub fn generate(spec: &Spec) -> Corpus {
         }
     }
 
+    // The reserve: passages no arm learns, each with a question it answers.
+    let mut reading = Vec::new();
+    for topic in reserve_topics {
+        let values: BTreeMap<FactKey, String> = topic
+            .units
+            .iter()
+            .flatten()
+            .map(|k| (k.clone(), w.value(k, &[])))
+            .collect();
+        for (u, unit) in topic.units.iter().enumerate() {
+            let passage = section(topic, unit, &values, prose(&mut w), spec.form);
+            let fact = Fact {
+                key: unit[0].clone(),
+                value: values[&unit[0]].clone(),
+            };
+            reading.push(Reading {
+                id: format!("{}-read-{u}", topic.name),
+                passage,
+                question: fact.question(),
+                expected: fact.value,
+            });
+        }
+    }
+
     // No order of the corpus tells a reader which document is current.
     w.rng.shuffle(&mut documents);
 
@@ -730,6 +776,7 @@ pub fn generate(spec: &Spec) -> Corpus {
         } else {
             BTreeMap::new()
         },
+        reading,
     }
 }
 
