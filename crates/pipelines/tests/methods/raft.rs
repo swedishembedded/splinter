@@ -26,7 +26,11 @@ fn rejection_sampling_on_own_verified_answers_improves_held_out_prompts() {
     let split = split();
     let warm = lab.warm_adapter(&split.train[..60], 200);
     let held_out = lab.dir.path().join("held_out.jsonl");
-    dataset(&SftFinal::new(Strength::Executable), &demonstrations(&split.held_out), &held_out);
+    dataset(
+        &SftFinal::new(Strength::Executable),
+        &demonstrations(&split.held_out),
+        &held_out,
+    );
 
     let before = lab.accuracy(Some(&warm), &split.held_out);
     // Two rounds of expert iteration: the second samples from the model the first produced.
@@ -34,10 +38,28 @@ fn rejection_sampling_on_own_verified_answers_improves_held_out_prompts() {
     for round in 1..=2u64 {
         let attempts = lab.rollouts(Some(&adapter), "self", &split.train[60..], 16, 0.6, round);
         let train = lab.dir.path().join(format!("raft-{round}.jsonl"));
-        let kept = dataset(&SftFinal::new(Strength::Executable), &crate::lab::corpus(attempts), &train);
+        let kept = dataset(
+            &SftFinal::new(Strength::Executable),
+            &crate::lab::corpus(attempts),
+            &train,
+        );
         assert!(!kept.records.is_empty(), "the model passes some prompts");
-        adapter = lab.sft(&format!("raft-{round}"), &train, &held_out, 200, Some(&adapter));
+        adapter = lab.sft(
+            &format!("raft-{round}"),
+            &train,
+            &held_out,
+            200,
+            Some(&adapter),
+        );
     }
     let after = lab.accuracy(Some(&adapter), &split.held_out);
-    Outcome { method: "Rejection-sampling FT", metric: "held-out exact match", before, after, min_gain: 0.15, note: "" }.conclude();
+    Outcome {
+        method: "Rejection-sampling FT",
+        metric: "held-out exact match",
+        before,
+        after,
+        min_gain: 0.15,
+        note: "",
+    }
+    .conclude();
 }

@@ -263,7 +263,9 @@ fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised
         strip: None,
         min_strength: None,
         records: vec![Record {
-            body: RecordBody::Text { text: "abc=bcd".into() },
+            body: RecordBody::Text {
+                text: "abc=bcd".into(),
+            },
             metadata: RecordMetadata {
                 group: None,
                 split: None,
@@ -286,13 +288,20 @@ fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised
     let scratch = Scratch::new("cpt-text-lines");
     let path = scratch.0.join("cpt.jsonl");
     let dataset = write_dataset(&path, &projection, &Unchecked).unwrap();
-    assert_eq!((dataset.format, dataset.trained_messages), (Format::GenericMessagesV2, Some(1)));
+    assert_eq!(
+        (dataset.format, dataset.trained_messages),
+        (Format::GenericMessagesV2, Some(1))
+    );
     let line: serde_json::Value =
         serde_json::from_str(std::fs::read_to_string(&path).unwrap().trim_end()).unwrap();
     let messages = line["messages"].as_array().unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(
-        (messages[0]["role"].as_str(), messages[0]["content"].as_str(), messages[0]["train"].as_bool()),
+        (
+            messages[0]["role"].as_str(),
+            messages[0]["content"].as_str(),
+            messages[0]["train"].as_bool()
+        ),
         (Some("assistant"), Some("abc=bcd"), Some(true))
     );
 }

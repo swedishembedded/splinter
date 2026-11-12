@@ -18,7 +18,10 @@ pub const HELD_OUT: usize = 100;
 
 /// The answer to `prompt`: every letter moves one place on, `h` wrapping to `a`.
 pub fn cipher(prompt: &str) -> String {
-    prompt.chars().map(|c| char::from((c as u8 - b'a' + 1) % 8 + b'a')).collect()
+    prompt
+        .chars()
+        .map(|c| char::from((c as u8 - b'a' + 1) % 8 + b'a'))
+        .collect()
 }
 
 /// The verifier: whether `reply` answers `prompt`.
@@ -30,7 +33,11 @@ pub fn is_correct(prompt: &str, reply: &str) -> bool {
 /// shapes a failed attempt's reward by it can learn from.
 pub fn letters_right(prompt: &str, reply: &str) -> f64 {
     let answer = cipher(prompt);
-    let right = answer.chars().zip(reply.chars()).filter(|(a, b)| a == b).count();
+    let right = answer
+        .chars()
+        .zip(reply.chars())
+        .filter(|(a, b)| a == b)
+        .count();
     right as f64 / answer.chars().count() as f64
 }
 
@@ -38,19 +45,36 @@ pub fn letters_right(prompt: &str, reply: &str) -> f64 {
 pub struct Split {
     pub train: Vec<String>,
     pub held_out: Vec<String>,
+    /// Prompts nobody has answered: neither trained on nor scored on. A method that learns from its own attempts draws
+    /// its prompts from here, a fresh slice each round, so it is not rewarded for memorising the ones it saw.
+    pub pool: Vec<String>,
 }
 
 /// The fixed split: all 512 prompts in a fixed shuffle, so every run of every method sees the same.
 pub fn split() -> Split {
-    let mut all: Vec<String> = (0..512u32).map(|i| [i / 64, i / 8 % 8, i % 8].iter().map(|d| char::from(b'a' + *d as u8)).collect()).collect();
+    let mut all: Vec<String> = (0..512u32)
+        .map(|i| {
+            [i / 64, i / 8 % 8, i % 8]
+                .iter()
+                .map(|d| char::from(b'a' + *d as u8))
+                .collect()
+        })
+        .collect();
     let mut state = 12345u64;
     for i in (1..all.len()).rev() {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         all.swap(i, (state >> 33) as usize % (i + 1));
     }
     let held_out = all[TRAIN..TRAIN + HELD_OUT].to_vec();
+    let pool = all[TRAIN + HELD_OUT..].to_vec();
     all.truncate(TRAIN);
-    Split { train: all, held_out }
+    Split {
+        train: all,
+        held_out,
+        pool,
+    }
 }
 
 #[test]
@@ -64,4 +88,8 @@ fn the_held_out_prompts_are_not_among_the_training_prompts() {
     let split = split();
     assert_eq!((split.train.len(), split.held_out.len()), (TRAIN, HELD_OUT));
     assert!(split.held_out.iter().all(|p| !split.train.contains(p)));
+    assert!(split
+        .pool
+        .iter()
+        .all(|p| !split.train.contains(p) && !split.held_out.contains(p)));
 }

@@ -25,24 +25,62 @@ fn a_student_fine_tuned_on_a_teachers_answers_to_unlabelled_prompts_learns_the_t
     let split = split();
     // The teacher: the base after supervised learning on the first prompts (its own, separate, training).
     let teacher_set = lab.dir.path().join("teacher.jsonl");
-    dataset(&SftFinal::new(Strength::Executable), &demonstrations(&split.train), &teacher_set);
+    dataset(
+        &SftFinal::new(Strength::Executable),
+        &demonstrations(&split.train),
+        &teacher_set,
+    );
     let teacher = lab.sft("teacher", &teacher_set, &teacher_set, 500, None);
     let policy = lab.policy(Some(&teacher), splinter_model::answer::Decoding::Greedy);
 
     // Unlabelled prompts: the held-out ones are not among them. The teacher's answers are the only supervision.
     let unlabelled = &split.train[..100];
     let replies: Vec<String> = unlabelled.iter().map(|p| policy.reply(p)).collect();
-    let right = unlabelled.iter().zip(&replies).filter(|(p, r)| is_correct(p, r)).count();
-    println!("distillation: the teacher answers {right} of {} unlabelled prompts right", replies.len());
-    let answers: Vec<_> = unlabelled.iter().zip(&replies).enumerate().map(|(i, (p, r))| judged_attempt("teacher", p, r, i as u32, Outcome::Pass, Strength::Judged, serde_json::json!({}))).collect();
+    let right = unlabelled
+        .iter()
+        .zip(&replies)
+        .filter(|(p, r)| is_correct(p, r))
+        .count();
+    println!(
+        "distillation: the teacher answers {right} of {} unlabelled prompts right",
+        replies.len()
+    );
+    let answers: Vec<_> = unlabelled
+        .iter()
+        .zip(&replies)
+        .enumerate()
+        .map(|(i, (p, r))| {
+            judged_attempt(
+                "teacher",
+                p,
+                r,
+                i as u32,
+                Outcome::Pass,
+                Strength::Judged,
+                serde_json::json!({}),
+            )
+        })
+        .collect();
     drop(policy);
 
     let train = lab.dir.path().join("student.jsonl");
     dataset(&SftFinal::new(Strength::Judged), &corpus(answers), &train);
     let held_out = lab.dir.path().join("held_out.jsonl");
-    dataset(&SftFinal::new(Strength::Executable), &demonstrations(&split.held_out), &held_out);
+    dataset(
+        &SftFinal::new(Strength::Executable),
+        &demonstrations(&split.held_out),
+        &held_out,
+    );
     let before = lab.accuracy(None, &split.held_out);
     let student = lab.sft("student", &train, &held_out, 500, None);
     let after = lab.accuracy(Some(&student), &split.held_out);
-    Result { method: "Distillation (teacher answers)", metric: "held-out exact match", before, after, min_gain: 0.7, note: "" }.conclude();
+    Result {
+        method: "Distillation (teacher answers)",
+        metric: "held-out exact match",
+        before,
+        after,
+        min_gain: 0.7,
+        note: "",
+    }
+    .conclude();
 }

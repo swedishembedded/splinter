@@ -22,8 +22,12 @@ use splinter_data::{write_dataset, Corpus, Projection, SftFinal, View};
 use splinter_model::answer::{Answerer, Decoding};
 use splinter_model::capabilities::BrainDatasetCheck;
 use splinter_model::fixture::toy_chat_checkpoint;
-use splinter_model::policy_gradient::{train_policy_gradient, Behaviour, PolicyGradientOptions, PolicyGradientTune, Reference};
-use splinter_model::train::{fine_tune, train_preference, BasePrecision, FineTune, PreferenceTune, DEFAULT_DPO_BETA};
+use splinter_model::policy_gradient::{
+    train_policy_gradient, Behaviour, PolicyGradientOptions, PolicyGradientTune, Reference,
+};
+use splinter_model::train::{
+    fine_tune, train_preference, BasePrecision, FineTune, PreferenceTune, DEFAULT_DPO_BETA,
+};
 
 use crate::world::{cipher, is_correct, letters_right};
 
@@ -55,20 +59,31 @@ impl Lab {
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().join("base");
         toy_chat_checkpoint(&base, 5).unwrap();
-        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         Self { dir, base, runtime }
     }
 
     /// A policy: the base with `adapter` attached, decoding as `decoding` says.
     pub fn policy(&self, adapter: Option<&Path>, decoding: Decoding) -> Policy<'_> {
-        let answerer = Answerer::load_with(&self.base, adapter, Some(CONTEXT_TOKENS), "toy", decoding).unwrap();
-        Policy { lab: self, answerer }
+        let answerer =
+            Answerer::load_with(&self.base, adapter, Some(CONTEXT_TOKENS), "toy", decoding)
+                .unwrap();
+        Policy {
+            lab: self,
+            answerer,
+        }
     }
 
     /// The share of `prompts` the policy answers correctly, greedily.
     pub fn accuracy(&self, adapter: Option<&Path>, prompts: &[String]) -> f64 {
         let policy = self.policy(adapter, Decoding::Greedy);
-        let right = prompts.iter().filter(|p| is_correct(p, &policy.reply(p))).count();
+        let right = prompts
+            .iter()
+            .filter(|p| is_correct(p, &policy.reply(p)))
+            .count();
         right as f64 / prompts.len() as f64
     }
 
@@ -80,7 +95,10 @@ impl Lab {
     /// The share of `cases` (prompt, expected answer) the policy answers as expected, greedily.
     pub fn exact_match(&self, adapter: Option<&Path>, cases: &[(String, String)]) -> f64 {
         let policy = self.policy(adapter, Decoding::Greedy);
-        let right = cases.iter().filter(|(prompt, expected)| policy.reply(prompt) == *expected).count();
+        let right = cases
+            .iter()
+            .filter(|(prompt, expected)| policy.reply(prompt) == *expected)
+            .count();
         right as f64 / cases.len() as f64
     }
 
@@ -92,12 +110,27 @@ impl Lab {
     }
 
     /// Fine-tunes the base (or continues `from`) on `train`, scoring the held-out records beside it, and returns the adapter.
-    pub fn sft(&self, name: &str, train: &Path, held_out: &Path, steps: u32, from: Option<&Path>) -> PathBuf {
+    pub fn sft(
+        &self,
+        name: &str,
+        train: &Path,
+        held_out: &Path,
+        steps: u32,
+        from: Option<&Path>,
+    ) -> PathBuf {
         self.sft_at(name, train, held_out, steps, 5e-3, from)
     }
 
     /// [`Lab::sft`] at a learning rate of the caller's choosing.
-    pub fn sft_at(&self, name: &str, train: &Path, held_out: &Path, steps: u32, learning_rate: f32, from: Option<&Path>) -> PathBuf {
+    pub fn sft_at(
+        &self,
+        name: &str,
+        train: &Path,
+        held_out: &Path,
+        steps: u32,
+        learning_rate: f32,
+        from: Option<&Path>,
+    ) -> PathBuf {
         let attempt = self.attempt(name);
         let trained = fine_tune(&FineTune {
             model_dir: &self.base,
@@ -120,6 +153,7 @@ impl Lab {
             base: BasePrecision::Fp32,
             learning_rate: Some(learning_rate),
             weight_decay: 0.0,
+            // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
             seed: 1,
             max_block: None,
             thinking: false,
@@ -132,7 +166,14 @@ impl Lab {
     }
 
     /// Continues (or starts) a DPO run on the preference pairs in `train`, scoring `held_out` pairs beside it.
-    pub fn dpo(&self, name: &str, train: &Path, held_out: &Path, run: Preference, from: Option<&Path>) -> PathBuf {
+    pub fn dpo(
+        &self,
+        name: &str,
+        train: &Path,
+        held_out: &Path,
+        run: Preference,
+        from: Option<&Path>,
+    ) -> PathBuf {
         let attempt = self.attempt(name);
         train_preference(&PreferenceTune {
             model_dir: &self.base,
@@ -146,6 +187,7 @@ impl Lab {
             nll_weight: run.nll_weight,
             grad_accum: 4,
             learning_rate: Some(run.learning_rate),
+            // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
             seed: 1,
             continue_from: from,
             cancel: None,
@@ -155,29 +197,67 @@ impl Lab {
     }
 
     /// Continues (or starts) a clipped policy-gradient run on rollout records carrying advantages.
-    pub fn policy_gradient(&self, name: &str, train: &Path, steps: u32, learning_rate: f32, from: Option<&Path>) -> PathBuf {
+    pub fn policy_gradient(
+        &self,
+        name: &str,
+        train: &Path,
+        steps: u32,
+        learning_rate: f32,
+        from: Option<&Path>,
+    ) -> PathBuf {
+        // The rollouts were drawn from the adapter this run starts from, so its own log-probabilities are the sampler's.
+        let options = PolicyGradientOptions {
+            kl_beta: Some(0.0),
+            clip_eps: Some(0.5),
+            reference: Some(Reference::StartOfRun),
+            behaviour: Some(Behaviour::StartOfRun),
+            temperature: Some(SAMPLING_TEMPERATURE),
+            ..PolicyGradientOptions::default()
+        };
+        self.policy_gradient_with(
+            name,
+            train,
+            PolicyGradientRun {
+                steps,
+                learning_rate,
+                grad_accum: 4,
+            },
+            from,
+            options,
+        )
+        .adapter
+    }
+
+    /// [`Lab::policy_gradient`] with the objective's settings given, returning what the run measured.
+    pub fn policy_gradient_with(
+        &self,
+        name: &str,
+        train: &Path,
+        run: PolicyGradientRun,
+        from: Option<&Path>,
+        options: PolicyGradientOptions,
+    ) -> splinter_model::policy_gradient::TrainedPolicyGradient {
         let attempt = self.attempt(name);
-        let trained = train_policy_gradient(&PolicyGradientTune {
+        train_policy_gradient(&PolicyGradientTune {
             model_dir: &self.base,
             train,
             attempt_dir: &attempt,
-            steps,
+            steps: run.steps,
             rank: 16,
             alpha: 64.0,
             weight_decay: 0.0,
-            grad_accum: 4,
+            grad_accum: run.grad_accum,
             continue_from: from,
             cancel: None,
             base: BasePrecision::Fp32,
-            learning_rate: Some(learning_rate),
+            learning_rate: Some(run.learning_rate),
+            // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
             seed: 1,
             max_block: None,
             thinking: false,
-            // The rollouts were drawn from the adapter this run starts from, so its own log-probabilities are the sampler's.
-            options: PolicyGradientOptions { kl_beta: Some(0.0), clip_eps: Some(0.5), reference: Some(Reference::StartOfRun), behaviour: Some(Behaviour::StartOfRun), temperature: Some(SAMPLING_TEMPERATURE), ..PolicyGradientOptions::default() },
+            options,
         })
-        .unwrap();
-        trained.adapter
+        .unwrap()
     }
 }
 
@@ -185,7 +265,15 @@ impl Lab {
     /// `draws` samples per prompt from the base with `adapter`, each graded by the verifier and stored as the
     /// experience Splinter stores for a graded rollout. `round` and the prompt and draw numbers seed the sampler, so
     /// a rerun draws the same rollouts.
-    pub fn rollouts(&self, adapter: Option<&Path>, policy: &str, prompts: &[String], draws: u32, temperature: f32, round: u64) -> Vec<(Experience, Annotation)> {
+    pub fn rollouts(
+        &self,
+        adapter: Option<&Path>,
+        policy: &str,
+        prompts: &[String],
+        draws: u32,
+        temperature: f32,
+        round: u64,
+    ) -> Vec<(Experience, Annotation)> {
         let model = self.policy(adapter, Decoding::Greedy);
         let mut attempts = Vec::new();
         for (i, prompt) in prompts.iter().enumerate() {
@@ -204,7 +292,11 @@ impl Lab {
     /// that learns from the model's own attempts needs.
     pub fn warm_adapter(&self, prompts: &[String], steps: u32) -> PathBuf {
         let train = self.dir.path().join("warm-train.jsonl");
-        dataset(&SftFinal::new(Strength::Executable), &demonstrations(prompts), &train);
+        dataset(
+            &SftFinal::new(Strength::Executable),
+            &demonstrations(prompts),
+            &train,
+        );
         self.sft("warm", &train, &train, steps, None)
     }
 }
@@ -212,7 +304,15 @@ impl Lab {
 /// A reply's answer: its text up to the end of the turn or the end of the line, trimmed. A model pretrained on a
 /// document goes on writing the document after it has answered; the answer is the first line.
 fn first_line(reply: &str) -> String {
-    reply.split(END_OF_TURN).next().unwrap_or_default().lines().next().unwrap_or_default().trim().to_string()
+    reply
+        .split(END_OF_TURN)
+        .next()
+        .unwrap_or_default()
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_string()
 }
 
 /// How hard a DPO run pushes.
@@ -224,6 +324,15 @@ pub struct Preference {
     pub nll_weight: f32,
 }
 
+/// How long and how hard a policy-gradient run trains.
+#[derive(Clone, Copy)]
+pub struct PolicyGradientRun {
+    pub steps: u32,
+    pub learning_rate: f32,
+    /// Records averaged into one optimizer step.
+    pub grad_accum: u32,
+}
+
 /// A model answering prompts.
 pub struct Policy<'a> {
     lab: &'a Lab,
@@ -233,24 +342,44 @@ pub struct Policy<'a> {
 impl Policy<'_> {
     /// One draw at `temperature` under `seed`: the same seed draws the same reply from the same weights.
     pub fn sample(&self, prompt: &str, temperature: f32, seed: u64) -> String {
-        self.lab.runtime.block_on(self.sample_async(prompt, temperature, seed))
+        self.lab
+            .runtime
+            .block_on(self.sample_async(prompt, temperature, seed))
     }
 
     /// The model as a sven provider that samples at `temperature` under `seed`, for an agent to run on.
-    pub fn provider_sampled(&self, temperature: f32, seed: u64) -> std::sync::Arc<dyn sven_sdk::model::ModelProvider> {
-        self.answerer.provider_with(Decoding::Sampled { temperature, seed: Some(seed) })
+    pub fn provider_sampled(
+        &self,
+        temperature: f32,
+        seed: u64,
+    ) -> std::sync::Arc<dyn sven_sdk::model::ModelProvider> {
+        self.answerer.provider_with(Decoding::Sampled {
+            temperature,
+            seed: Some(seed),
+        })
     }
 
     /// [`Policy::sample`] for a caller already running on the lab's runtime.
     pub async fn sample_async(&self, prompt: &str, temperature: f32, seed: u64) -> String {
-        let decoding = Decoding::Sampled { temperature, seed: Some(seed) };
-        let reply = self.answerer.ask_decoding(decoding, "", prompt, REPLY_TOKENS).await.unwrap();
+        let decoding = Decoding::Sampled {
+            temperature,
+            seed: Some(seed),
+        };
+        let reply = self
+            .answerer
+            .ask_decoding(decoding, "", prompt, REPLY_TOKENS)
+            .await
+            .unwrap();
         first_line(&reply.text)
     }
 
     /// The model's answer to `prompt`: its reply up to the end of the turn, trimmed.
     pub fn reply(&self, prompt: &str) -> String {
-        let reply = self.lab.runtime.block_on(self.answerer.ask("", prompt, REPLY_TOKENS)).unwrap();
+        let reply = self
+            .lab
+            .runtime
+            .block_on(self.answerer.ask("", prompt, REPLY_TOKENS))
+            .unwrap();
         first_line(&reply.text)
     }
 }
@@ -261,7 +390,10 @@ pub fn task_of(prompt: &str) -> Task {
     Task::new(
         "cipher",
         Vec::new(),
-        Environment::new(Environment::BENCH, json!({"task": {"id": format!("cipher/{prompt}"), "version": "1"}})),
+        Environment::new(
+            Environment::BENCH,
+            json!({"task": {"id": format!("cipher/{prompt}"), "version": "1"}}),
+        ),
         prompt,
         Vec::new(),
     )
@@ -270,14 +402,39 @@ pub fn task_of(prompt: &str) -> Task {
 
 /// One attempt of `policy` at `prompt` that answered `reply`, with the verifier's verdict on it: the experience
 /// Splinter stores for a graded rollout. `attempt` numbers the rollouts of one prompt.
-pub fn graded_attempt(policy: &str, prompt: &str, reply: &str, attempt: u32) -> (Experience, Annotation) {
-    let outcome = if is_correct(prompt, reply) { Outcome::Pass } else { Outcome::Fail };
-    judged_attempt(policy, prompt, reply, attempt, outcome, Strength::Executable, json!({"letters": letters_right(prompt, reply)}))
+pub fn graded_attempt(
+    policy: &str,
+    prompt: &str,
+    reply: &str,
+    attempt: u32,
+) -> (Experience, Annotation) {
+    let outcome = if is_correct(prompt, reply) {
+        Outcome::Pass
+    } else {
+        Outcome::Fail
+    };
+    judged_attempt(
+        policy,
+        prompt,
+        reply,
+        attempt,
+        outcome,
+        Strength::Executable,
+        json!({"letters": letters_right(prompt, reply)}),
+    )
 }
 
 /// [`graded_attempt`] with the verdict given: a teacher's answer admitted at the strength of a judgement, not of the
 /// verifier, is how a distillation set is made when no reference answer exists.
-pub fn judged_attempt(policy: &str, prompt: &str, reply: &str, attempt: u32, outcome: Outcome, strength: Strength, metrics: serde_json::Value) -> (Experience, Annotation) {
+pub fn judged_attempt(
+    policy: &str,
+    prompt: &str,
+    reply: &str,
+    attempt: u32,
+    outcome: Outcome,
+    strength: Strength,
+    metrics: serde_json::Value,
+) -> (Experience, Annotation) {
     let step = |n, origin, text: &str| TraceStep::new(n, origin, text);
     let trajectory = Trajectory {
         steps: vec![
@@ -285,21 +442,39 @@ pub fn judged_attempt(policy: &str, prompt: &str, reply: &str, attempt: u32, out
             step(2, StepOrigin::User, prompt),
             step(3, StepOrigin::Agent, reply),
         ],
-        ..Trajectory::new("ATIF-v1.7", atif::AgentProfile { name: "toy".into(), version: "1".into(), model_name: None, tool_definitions: None, extra: None })
+        ..Trajectory::new(
+            "ATIF-v1.7",
+            atif::AgentProfile {
+                name: "toy".into(),
+                version: "1".into(),
+                model_name: None,
+                tool_definitions: None,
+                extra: None,
+            },
+        )
     };
     let mut trajectory = trajectory;
-    trajectory.extra = Some(json!({"splinter_harness": {"conversation": "solver", "role": "solver", "role_source": "export", "shown_images": false}}));
+    trajectory.extra = Some(
+        json!({"splinter_harness": {"conversation": "solver", "role": "solver", "role_source": "export", "shown_images": false}}),
+    );
     let at = format!("2026-11-12T00:00:00.{:03}Z", attempt % 1000);
     let experience = Experience::new(
         task_of(prompt),
         trajectory,
         Some(reply.into()),
-        Provenance { policy: Some(policy.into()), attempt: Some(attempt), ..Provenance::new("toy/solver", &FixedClock::new(&at)) },
+        Provenance {
+            policy: Some(policy.into()),
+            attempt: Some(attempt),
+            ..Provenance::new("toy/solver", &FixedClock::new(&at))
+        },
     )
     .unwrap();
     let verdict = Annotation {
         experience: experience.id().unwrap(),
-        producer: Producer { name: "cipher-verifier".into(), version: "1".into() },
+        producer: Producer {
+            name: "cipher-verifier".into(),
+            version: "1".into(),
+        },
         body: AnnotationBody::Verdict {
             outcome,
             strength,
@@ -316,7 +491,23 @@ pub fn judged_attempt(policy: &str, prompt: &str, reply: &str, attempt: u32, out
 
 /// Worked examples of `(prompt, answer)` pairs as a corpus of passed attempts, for a supervised view.
 pub fn worked_examples(cases: &[(String, String)]) -> Corpus {
-    corpus(cases.iter().enumerate().map(|(i, (prompt, answer))| judged_attempt("reference", prompt, answer, i as u32, Outcome::Pass, Strength::Executable, json!({}))).collect())
+    corpus(
+        cases
+            .iter()
+            .enumerate()
+            .map(|(i, (prompt, answer))| {
+                judged_attempt(
+                    "reference",
+                    prompt,
+                    answer,
+                    i as u32,
+                    Outcome::Pass,
+                    Strength::Executable,
+                    json!({}),
+                )
+            })
+            .collect(),
+    )
 }
 
 /// A corpus of graded attempts.
@@ -338,5 +529,11 @@ pub fn dataset(view: &dyn View, corpus: &Corpus, path: &Path) -> Projection {
 /// The reference answers to `prompts` as a corpus of passed attempts: demonstrations a supervised view turns into
 /// records. The reference is the verifier's own cipher, standing in for a person's worked examples.
 pub fn demonstrations(prompts: &[String]) -> Corpus {
-    corpus(prompts.iter().enumerate().map(|(i, p)| graded_attempt("reference", p, &cipher(p), i as u32)).collect())
+    corpus(
+        prompts
+            .iter()
+            .enumerate()
+            .map(|(i, p)| graded_attempt("reference", p, &cipher(p), i as u32))
+            .collect(),
+    )
 }

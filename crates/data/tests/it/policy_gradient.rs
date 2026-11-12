@@ -343,7 +343,11 @@ fn positive_advantages_reinforce_only_the_attempts_that_beat_their_group() {
         .unwrap();
     // Each trial of the fixture is two actions: three trials, six records, of which the winner's two remain.
     let everything = view().project(&corpus).unwrap();
-    assert_eq!((everything.records.len(), projection.records.len()), (6, 2), "the failures are left out");
+    assert_eq!(
+        (everything.records.len(), projection.records.len()),
+        (6, 2),
+        "the failures are left out"
+    );
     let RecordBody::Chat { advantage, .. } = &projection.records[0].body else {
         panic!("a rollout record, got {:?}", projection.records[0]);
     };

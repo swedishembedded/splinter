@@ -37,7 +37,9 @@ use common::gate::{
 use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
 use splinter_core::training::Regime;
-use splinter_model::policy_gradient::{Behaviour, LossAggregation, PolicyGradientOptions, Reference};
+use splinter_model::policy_gradient::{
+    Behaviour, LossAggregation, PolicyGradientOptions, Reference,
+};
 use splinter_model::train::BasePrecision;
 use splinter_orchestrator::Context;
 use splinter_pipelines::release::anchor;

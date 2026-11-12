@@ -14,8 +14,8 @@
 #![allow(clippy::unwrap_used)]
 
 use sven_sdk::search::{
-    search, CandidateEnvironment, EvalLimits, Proposal, ProposalStep, Proposer, SearchBudget, SearchError, SearchEvaluation, SearchRng,
-    Strategy, VerifierVerdict,
+    search, CandidateEnvironment, EvalLimits, Proposal, ProposalStep, Proposer, SearchBudget,
+    SearchError, SearchEvaluation, SearchRng, Strategy, VerifierVerdict,
 };
 
 use crate::lab::{Lab, Policy, SAMPLING_TEMPERATURE};
@@ -29,9 +29,18 @@ struct Sampler<'a> {
 }
 
 impl Proposer<String> for Sampler<'_> {
-    async fn propose(&self, _parent: &String, step: &ProposalStep, rng: &mut SearchRng) -> Result<Proposal<String>, SearchError> {
+    async fn propose(
+        &self,
+        _parent: &String,
+        step: &ProposalStep,
+        rng: &mut SearchRng,
+    ) -> Result<Proposal<String>, SearchError> {
         let seed = rng.next_u64() ^ step.index;
-        Ok(Proposal::free(self.policy.sample_async(self.prompt, SAMPLING_TEMPERATURE, seed).await))
+        Ok(Proposal::free(
+            self.policy
+                .sample_async(self.prompt, SAMPLING_TEMPERATURE, seed)
+                .await,
+        ))
     }
 }
 
@@ -41,11 +50,25 @@ struct InverseCheck<'a> {
 }
 
 impl CandidateEnvironment<String> for InverseCheck<'_> {
-    async fn evaluate(&self, candidate: &String, _limits: &EvalLimits) -> Result<SearchEvaluation, SearchError> {
-        let undone: String = candidate.chars().map(|c| char::from((c as u8).wrapping_sub(b'a' + 1) % 8 + b'a')).collect();
-        let held = candidate.chars().count() == self.prompt.chars().count() && undone == self.prompt;
+    async fn evaluate(
+        &self,
+        candidate: &String,
+        _limits: &EvalLimits,
+    ) -> Result<SearchEvaluation, SearchError> {
+        let undone: String = candidate
+            .chars()
+            .map(|c| char::from((c as u8).wrapping_sub(b'a' + 1) % 8 + b'a'))
+            .collect();
+        let held =
+            candidate.chars().count() == self.prompt.chars().count() && undone == self.prompt;
         Ok(SearchEvaluation {
-            terminal: Some(if held { VerifierVerdict::Passed } else { VerifierVerdict::Failed { reason: format!("{candidate:?} does not undo to {:?}", self.prompt) } }),
+            terminal: Some(if held {
+                VerifierVerdict::Passed
+            } else {
+                VerifierVerdict::Failed {
+                    reason: format!("{candidate:?} does not undo to {:?}", self.prompt),
+                }
+            }),
             utility: if held { 1.0 } else { 0.0 },
             signals: Default::default(),
             tokens: 0,
@@ -56,25 +79,58 @@ impl CandidateEnvironment<String> for InverseCheck<'_> {
 
 #[test]
 #[ignore = "trains a toy model: make test/methods runs it"]
-fn best_of_n_against_a_check_the_model_can_run_beats_its_single_answer() {
+fn best_of_n_against_a_check_the_model_can_run_beats_its_greedy_answer() {
     let lab = Lab::new();
     let split = split();
     let warm = lab.warm_adapter(&split.train[..60], 200);
     let policy = lab.policy(Some(&warm), splinter_model::answer::Decoding::Greedy);
 
-    let budget = SearchBudget { max_evaluations: 16, max_tokens: None, max_wall: None, stop_on_verified: true, parallelism: 1 };
-    let (mut single, mut searched, mut greedy) = (0usize, 0usize, 0usize);
+    // The search starts from the model's greedy answer and spends the rest of its budget on samples, so it can only
+    // add to what greedy decoding had: the comparison is greedy decoding against greedy decoding plus search.
+    let budget = SearchBudget {
+        max_evaluations: 48,
+        max_tokens: None,
+        max_wall: None,
+        stop_on_verified: true,
+        parallelism: 1,
+    };
+    let (mut greedy, mut searched, mut sampled) = (0usize, 0usize, 0usize);
     for (i, prompt) in split.held_out.iter().enumerate() {
-        // The model as an agent runs it samples; the single answer is one such draw, and the search starts from it.
-        let first = policy.sample(prompt, SAMPLING_TEMPERATURE, 1 << 40 | i as u64);
-        single += usize::from(crate::world::is_correct(prompt, &first));
-        greedy += usize::from(crate::world::is_correct(prompt, &policy.reply(prompt)));
-        let report = lab.block_on(search(Strategy::BestOfN, first, &Sampler { policy: &policy, prompt }, &InverseCheck { prompt }, &budget, i as u64)).unwrap();
+        let first = policy.reply(prompt);
+        greedy += usize::from(crate::world::is_correct(prompt, &first));
+        sampled += usize::from(crate::world::is_correct(
+            prompt,
+            &policy.sample(prompt, SAMPLING_TEMPERATURE, 1 << 40 | i as u64),
+        ));
+        let report = lab
+            .block_on(search(
+                Strategy::BestOfN,
+                first,
+                &Sampler {
+                    policy: &policy,
+                    prompt,
+                },
+                &InverseCheck { prompt },
+                &budget,
+                i as u64,
+            ))
+            .unwrap();
         // The answer given: the one the check passed, else the model's own first answer.
-        let given = report.best_verified().map_or_else(|| report.trace[0].candidate.clone(), |entry| entry.candidate.clone());
+        let given = report.best_verified().map_or_else(
+            || report.trace[0].candidate.clone(),
+            |entry| entry.candidate.clone(),
+        );
         searched += usize::from(crate::world::is_correct(prompt, &given));
     }
     let n = split.held_out.len() as f64;
-    println!("search: one sample {single}, best-of-16 {searched}, greedy decoding {greedy} of {}", split.held_out.len());
-    Outcome { method: "Test-time search (best-of-16, visible check)", metric: "held-out exact match", before: single as f64 / n, after: searched as f64 / n, min_gain: 0.2, note: &format!("baseline is one sampled answer; greedy decoding scores {:.2}", greedy as f64 / n) }.conclude();
+    let note = format!("greedy answer vs greedy plus best-of-48 against the model's own check; one sampled answer scores {:.2}", sampled as f64 / n);
+    Outcome {
+        method: "Test-time search (best-of-48, visible check)",
+        metric: "held-out exact match",
+        before: greedy as f64 / n,
+        after: searched as f64 / n,
+        min_gain: 0.1,
+        note: &note,
+    }
+    .conclude();
 }

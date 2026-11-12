@@ -204,12 +204,19 @@ mod tests {
             attempt("c1", "b", 0.0, &TALK),
         ];
         let projection = project("You are a lawyer.", &attempts, AdvantageKind::Positive);
-        assert_eq!(projection.records.len(), 2, "only the better attempt's turns");
+        assert_eq!(
+            projection.records.len(),
+            2,
+            "only the better attempt's turns"
+        );
         assert!(projection.records.iter().all(|r| matches!(
             &r.body,
             RecordBody::Chat { advantage: Some(a), .. } if *a > 0.9
         )));
-        assert!(projection.groups[0].trials[1].advantage < 0.0, "still reported");
+        assert!(
+            projection.groups[0].trials[1].advantage < 0.0,
+            "still reported"
+        );
     }
 
     #[test]

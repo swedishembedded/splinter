@@ -25,9 +25,9 @@ use sven_sdk::seat::{converse, SeatSpec, SimulatedSeat};
 use sven_sdk::{Engine, Toolset};
 
 use crate::lab::{Lab, REPLY_TOKENS, SAMPLING_TEMPERATURE};
-use futures::StreamExt;
 use crate::report::Outcome;
 use crate::world::{cipher, is_correct, split};
+use futures::StreamExt;
 
 /// The role prompt the learner is trained under.
 const ROLE: &str = "Answer the question.";
@@ -48,7 +48,10 @@ impl ModelProvider for Canned {
         "seat"
     }
     async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
-        Ok(Box::pin(futures::stream::iter(vec![Ok(ResponseEvent::TextDelta(self.reply.clone())), Ok(ResponseEvent::Done)])))
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta(self.reply.clone())),
+            Ok(ResponseEvent::Done),
+        ])))
     }
 }
 
@@ -81,8 +84,16 @@ fn seat_for(prompt: &str, leaks: bool) -> SimulatedSeat {
         "id: case-{prompt}\npersona: A user asking for the cipher of a word.\ngoals: [get the cipher]\nopening: \"{prompt}\"\nanswer_key: [\"{answer_line}\"]\nseed: 1\n"
     );
     let (spec, sha) = SeatSpec::parse(&spec).unwrap();
-    let reply = if leaks { format!("Well, {answer_line}. [END]") } else { "[END]".to_string() };
-    let engine = Engine::builder().model_provider(Arc::new(Canned { reply })).toolset(Toolset::none()).build().unwrap();
+    let reply = if leaks {
+        format!("Well, {answer_line}. [END]")
+    } else {
+        "[END]".to_string()
+    };
+    let engine = Engine::builder()
+        .model_provider(Arc::new(Canned { reply }))
+        .toolset(Toolset::none())
+        .build()
+        .unwrap();
     SimulatedSeat::new(&engine, spec, sha)
 }
 
@@ -105,18 +116,35 @@ fn a_learner_trained_on_its_own_admitted_conversations_with_a_seat_answers_held_
                 // One conversation in twenty is held with a seat whose model gives the answer away.
                 let leaks = (i as u64 * 8 + draw).is_multiple_of(20);
                 let counted = usize::from(leaks);
-                
+
                 let seed = round << 32 | (i as u64) << 8 | draw;
-                let provider: Arc<dyn ModelProvider> = if leaks { Arc::new(Canned { reply: "xyz".into() }) } else { Arc::new(Bounded(policy.provider_sampled(SAMPLING_TEMPERATURE, seed))) };
-                let engine = Engine::builder().model_provider(provider).toolset(Toolset::none()).build().unwrap();
+                let provider: Arc<dyn ModelProvider> = if leaks {
+                    Arc::new(Canned {
+                        reply: "xyz".into(),
+                    })
+                } else {
+                    Arc::new(Bounded(policy.provider_sampled(SAMPLING_TEMPERATURE, seed)))
+                };
+                let engine = Engine::builder()
+                    .model_provider(provider)
+                    .toolset(Toolset::none())
+                    .build()
+                    .unwrap();
                 let mut learner = engine.agent("agent");
                 // A learner that answers nothing twice running fails its run: that conversation has no record to train on.
-                let Ok(record) = lab.block_on(converse(&mut learner, &seat_for(prompt, leaks), 3)) else {
+                let Ok(record) = lab.block_on(converse(&mut learner, &seat_for(prompt, leaks), 3))
+                else {
                     silent += 1;
                     continue;
                 };
                 leaky += counted;
-                let said = record.exchanges.iter().rev().find(|e| format!("{:?}", e.speaker) == "Learner").map(|e| e.text.trim().to_string()).unwrap_or_default();
+                let said = record
+                    .exchanges
+                    .iter()
+                    .rev()
+                    .find(|e| format!("{:?}", e.speaker) == "Learner")
+                    .map(|e| e.text.trim().to_string())
+                    .unwrap_or_default();
                 graded.push(Graded {
                     case: prompt.clone(),
                     policy: "self".into(),
@@ -128,12 +156,30 @@ fn a_learner_trained_on_its_own_admitted_conversations_with_a_seat_answers_held_
         }
         let (projection, report) = build(ROLE, &graded, AdvantageKind::Positive);
         println!("self-play round {round}: {report:?}, {silent} silent runs without a record");
-        assert_eq!(report.refused.get("AnswerKeyLeak").copied().unwrap_or(0), leaky, "every conversation with a leaking seat is refused");
+        assert_eq!(
+            report.refused.get("AnswerKeyLeak").copied().unwrap_or(0),
+            leaky,
+            "every conversation with a leaking seat is refused"
+        );
         assert_eq!(report.admitted, graded.len() - leaky);
         let records = lab.dir.path().join(format!("selfplay-{round}.jsonl"));
         write_dataset(&records, &projection, &BrainDatasetCheck).unwrap();
-        adapter = lab.policy_gradient(&format!("selfplay-{round}"), &records, 200, 3e-3, Some(&adapter));
+        adapter = lab.policy_gradient(
+            &format!("selfplay-{round}"),
+            &records,
+            200,
+            3e-3,
+            Some(&adapter),
+        );
     }
     let after = lab.accuracy(Some(&adapter), &split.held_out);
-    Outcome { method: "Conversation self-play (user seat)", metric: "held-out exact match", before, after, min_gain: 0.15, note: "" }.conclude();
+    Outcome {
+        method: "Conversation self-play (user seat)",
+        metric: "held-out exact match",
+        before,
+        after,
+        min_gain: 0.15,
+        note: "",
+    }
+    .conclude();
 }

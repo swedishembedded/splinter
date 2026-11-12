@@ -366,7 +366,9 @@ impl View for PolicyGradient {
             for (at, trial) in trials.keys().enumerate() {
                 let treatment = match (&advantages, distilled) {
                     (_, true) => Treatment::Teacher,
-                    (Some(advantages), false) if self.advantage.drops(advantages[at]) => Treatment::Nothing,
+                    (Some(advantages), false) if self.advantage.drops(advantages[at]) => {
+                        Treatment::Nothing
+                    }
                     (Some(advantages), false) => Treatment::Advantage(advantages[at]),
                     (None, false) => Treatment::Nothing,
                 };

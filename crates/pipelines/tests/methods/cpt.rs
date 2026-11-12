@@ -34,10 +34,21 @@ fn document(sources: &SourceStore, prompts: &[String]) -> Corpus {
         .map(|(i, chunk)| PartContent {
             name: format!("paragraph-{i}.txt"),
             media_type: "text/plain".into(),
-            bytes: chunk.iter().map(|p| format!("{p}={}\n", cipher(p))).collect::<String>().into_bytes(),
+            bytes: chunk
+                .iter()
+                .map(|p| format!("{p}={}\n", cipher(p)))
+                .collect::<String>()
+                .into_bytes(),
         })
         .collect();
-    let captured = CapturedSource::new(Origin::Document { path: "/notes/cipher.txt".into() }, parts, &FixedClock::new("2026-11-12T00:00:00.000Z")).unwrap();
+    let captured = CapturedSource::new(
+        Origin::Document {
+            path: "/notes/cipher.txt".into(),
+        },
+        parts,
+        &FixedClock::new("2026-11-12T00:00:00.000Z"),
+    )
+    .unwrap();
     let mut corpus = Corpus::new();
     corpus.add_source(sources.put_source(&captured).unwrap());
     corpus
@@ -48,11 +59,16 @@ fn document(sources: &SourceStore, prompts: &[String]) -> Corpus {
 fn continued_pretraining_on_a_raw_document_completes_prompts_that_are_not_in_it() {
     let lab = Lab::new();
     let split = split();
-    let sources = SourceStore::new(&Workspace::at(&StateRoot::new(lab.dir.path().join("state"))));
+    let sources = SourceStore::new(&Workspace::at(&StateRoot::new(
+        lab.dir.path().join("state"),
+    )));
     let view = Cpt::new(&sources);
     let train = lab.dir.path().join("cpt.jsonl");
     let projected = dataset(&view, &document(&sources, &split.train), &train);
-    println!("CPT: {} text records from one document", projected.records.len());
+    println!(
+        "CPT: {} text records from one document",
+        projected.records.len()
+    );
     // The held-out prompts' own lines, scored as text beside the run; they are never trained on.
     let held_out = lab.dir.path().join("held_out.jsonl");
     dataset(&view, &document(&sources, &split.held_out), &held_out);
@@ -60,5 +76,13 @@ fn continued_pretraining_on_a_raw_document_completes_prompts_that_are_not_in_it(
     let before = lab.accuracy(None, &split.held_out);
     let adapter = lab.sft("cpt", &train, &held_out, 3000, None);
     let after = lab.accuracy(Some(&adapter), &split.held_out);
-    Outcome { method: "Continued pretraining (raw text)", metric: "held-out exact match", before, after, min_gain: 0.5, note: "" }.conclude();
+    Outcome {
+        method: "Continued pretraining (raw text)",
+        metric: "held-out exact match",
+        before,
+        after,
+        min_gain: 0.5,
+        note: "",
+    }
+    .conclude();
 }

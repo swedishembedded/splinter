@@ -29,15 +29,22 @@ See the table `make test/methods` prints; the figures of the last full run are r
 
 ## Findings that changed the code
 
-- GRPO as configured by default did not move the held-out score on this task: two-sided advantages (the
-  default) went 0.39 -> 0.38..0.44 at the learning rates that were stable and to 0 at the ones that were not, with
-  shaped (partial-credit) rewards, mean-centred advantages, a KL penalty to the start policy and 6 short on-policy
-  rounds all tried. The same machinery on the right answers alone (policy gradient with advantage 1 on the
-  rejection-sampled records) went 0.39 -> 0.55 in one round, so the objective, the behaviour proxy and the clip are
-  sound. A wrong answer shares most of its tokens with a right one, so pushing it down pushes down the right tokens in it.
-  Added `--advantage positive` (`AdvantageKind::Positive`): GRPO's standardised advantage for the attempts that beat
-  their group, no record for the rest. The GRPO and self-play smokes use it. The two-sided variant is the default
-  and is unproven here.
+- GRPO with the default two-sided advantage first failed to move the held-out score (0.39 -> 0.38..0.44, or collapse
+  at higher rates) and the cause was measured, not guessed. Step 0 of every run has importance ratio 1.000 (the
+  start-of-run proxy is exact for on-policy rollouts) and brain's gradcheck covers the objective, so the loss and
+  the ratio are right. What the numbers show (held-out loss, token accuracy, exact match, 16 draws per prompt on the
+  same 90 prompts): negative advantages alone drive the held-out loss from 2.93 to 5.9 and the accuracy to 0 at
+  1e-3, while positive advantages alone improve it (loss 2.68, exact 0.50). The two-sided run sums to nothing on the
+  tokens right and wrong answers share, but each wrong answer's own tokens are pushed down only for that prompt:
+  with the same 90 prompts revisited the negatives memorise them (8 rounds on reused prompts: 0.39, 0.41, 0.43, 0.42,
+  0.44, 0.42, 0.37, 0.34 as the held-out loss climbs again), while on a fresh slice of prompts each round the same
+  default objective improves every round (0.39, 0.44, 0.46, 0.49, 0.49, 0.50, 0.53; held-out loss 2.93 -> 2.78;
+  mean ratio about 1, a quarter of tokens clipped). Larger groups (64 draws) at the same prompts helped little, and a
+  higher rate or larger clip band made it worse. The smoke now follows that recipe (`split.pool`, five rounds of 40
+  fresh prompts, 24 draws, partial-credit reward shaping, lr 1e-3, clip 0.2, 32 records per step) and passes with the
+  default advantage (0.39 -> 0.50). No defect in the objective was found, so there is no code fix to test; the
+  regression is the smoke. `--advantage positive` stays as a variant (policy gradient on the right answers only, the
+  rejection-sampling limit) and is not the method the smoke proves.
 - The policy-gradient objective could not be run from Splinter on rollouts that carry no sampler log-probabilities
   (the records Splinter's views write never do): brain refused every token. `--behaviour start` /
   `PolicyGradientOptions::behaviour` selects brain's start-of-run proxy, exact for on-policy rounds.

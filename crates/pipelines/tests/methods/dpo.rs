@@ -29,19 +29,51 @@ fn dpo_on_verified_right_and_wrong_answers_improves_held_out_prompts() {
 
     // Held-out pairs are scored beside each run; they are the held-out prompts' own right and wrong answers.
     let held_pairs = lab.dir.path().join("held_pairs.jsonl");
-    dataset(&Preference::new(Strength::Executable), &corpus(lab.rollouts(Some(&warm), "warm", &split.held_out[..30], 8, 0.6, 9)), &held_pairs);
+    dataset(
+        &Preference::new(Strength::Executable),
+        &corpus(lab.rollouts(Some(&warm), "warm", &split.held_out[..30], 8, 0.6, 9)),
+        &held_pairs,
+    );
 
     let mut adapter = warm.clone();
     for round in 1..=3u64 {
         let attempts = lab.rollouts(Some(&adapter), "self", &split.train[60..], 16, 0.6, round);
         let pairs = lab.dir.path().join(format!("pairs-{round}.jsonl"));
-        let projected = dataset(&Preference::new(Strength::Executable), &corpus(attempts), &pairs);
-        assert!(!projected.records.is_empty(), "some prompts have both a right and a wrong answer");
-        println!("DPO round {round}: {} preference pairs", projected.records.len());
+        let projected = dataset(
+            &Preference::new(Strength::Executable),
+            &corpus(attempts),
+            &pairs,
+        );
+        assert!(
+            !projected.records.is_empty(),
+            "some prompts have both a right and a wrong answer"
+        );
+        println!(
+            "DPO round {round}: {} preference pairs",
+            projected.records.len()
+        );
         // The anchor on the chosen answer keeps plain DPO from lowering both answers together, which on a model this
         // small collapses it to 1% within a hundred steps.
-        adapter = lab.dpo(&format!("dpo-{round}"), &pairs, &held_pairs, DpoRun { steps: 250, learning_rate: 8e-3, nll_weight: 2.0 }, Some(&adapter));
+        adapter = lab.dpo(
+            &format!("dpo-{round}"),
+            &pairs,
+            &held_pairs,
+            DpoRun {
+                steps: 250,
+                learning_rate: 8e-3,
+                nll_weight: 2.0,
+            },
+            Some(&adapter),
+        );
     }
     let after = lab.accuracy(Some(&adapter), &split.held_out);
-    Outcome { method: "DPO", metric: "held-out exact match", before, after, min_gain: 0.15, note: "" }.conclude();
+    Outcome {
+        method: "DPO",
+        metric: "held-out exact match",
+        before,
+        after,
+        min_gain: 0.15,
+        note: "",
+    }
+    .conclude();
 }

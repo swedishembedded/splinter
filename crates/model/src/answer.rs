@@ -234,7 +234,10 @@ impl Answerer {
         max_tokens: u32,
         on_text: &mut dyn FnMut(&str),
     ) -> anyhow::Result<Reply> {
-        Self::complete(&self.model, system, user, max_tokens, |piece| on_text(piece)).await
+        Self::complete(&self.model, system, user, max_tokens, |piece| {
+            on_text(piece)
+        })
+        .await
     }
 
     /// Generic in the callback so that a caller handing a `Send` one gets a
