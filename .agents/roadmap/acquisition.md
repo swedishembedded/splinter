@@ -230,6 +230,20 @@ when the detectors run again; a marker alone does not vouch for the text. Not ye
 - **27B adapter comparison** is queued and not started (the training card belongs to the RL lane); `queue-27b.sh`
   is verified up to model loading (`splinter learn` reaches `could not be loaded` with a nonexistent models directory).
 
+### Fourth round (2026-11-12): do not ship what hurts one form
+
+- **Why the chosen material was read differently with and without headers** (multi-hop, 0.16 against 0.88): the compiler's
+  numbered-title rule had disabled the rulings of corpora whose titles carried chunk numbers, so stale and wrong sections were
+  chosen (finding 133). With plain titles every stale or wrong section is ruled out, and scripted selective held-out without
+  headers is 0.98 (was 0.49), equal to with headers; the corpora now assert it.
+- **Alignment that abstains** (findings 134, 135): only statements about identified things (a number in the entity name) are
+  evidence; entity names are never aligned. Real 27B reader, served embedder, 5 fresh corpora per form (seeds 7100-7104), the same
+  corpora aligned and unaligned: property 0.94 [0.88,0.99] against 0.78 [0.68,0.88], paired +0.162 [0.058,0.277]; behaviour identical
+  per corpus (0.80 both, difference 0.000 [0.000,0.000]): no harm by construction. Earlier seeds 7000-7004: property 0.97 against 0.67.
+  A paraphrased class (a client type) is still not recognised across paraphrase; there provenance headers do the work.
+- **Open**: in the multi-hop corpora the dependent gaps still choose 21 to 36 sections of other topics (precision about 0.6, held-out
+  unaffected at 0.98); cause not found.
+
 Not done: no model-judged relevance; novelty is accuracy,
 not loss (brain log-probabilities of the section's items would sharpen it); facts come from two sentence
 patterns through the compiler's admission (a model proposer is untested here); the participant that trains on the chosen sections

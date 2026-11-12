@@ -168,6 +168,12 @@ struct Cli {
     /// words alone and to meaning alone when nothing is known.
     #[arg(long)]
     diagnose: bool,
+    /// Where to write each corpus's training records by arm
+    /// (`<seed>/<arm>/train.jsonl`, one question and its stated answer per fact
+    /// the arm's sections state, in brain's chat format) and the held-out
+    /// questions as records (`<seed>/held-out.jsonl`), for `goal-train`.
+    #[arg(long)]
+    export_chat: Option<PathBuf>,
     /// Where to write each corpus's material by arm (`<seed>/<arm>.md`, the
     /// sections an arm learned, in corpus order) and its held-out questions
     /// (`<seed>/held-out.jsonl`), for training a model on each arm's material.
@@ -360,6 +366,9 @@ fn main() -> anyhow::Result<()> {
         );
         if cli.diagnose && i == 0 {
             diagnose(&corpus, &cands, &source, &embedder)?;
+        }
+        if let Some(dir) = &cli.export_chat {
+            export_chat(dir, base + i, &corpus, &cands, &arms, &source)?;
         }
         if let Some(dir) = &cli.export {
             export(dir, base + i, &corpus, &cands, &arms)?;
@@ -564,5 +573,46 @@ fn alignment_quality(
             .len();
         println!("alignment: {right} keys aligned to the same fact, {wrong} to another, of {paraphrased} paraphrased keys");
     }
+    Ok(())
+}
+
+/// One chat record: the question, and the answer supervised.
+fn chat_line(question: &str, answer: &str) -> String {
+    serde_json::json!({"messages": [
+        {"role": "user", "content": question, "train": false},
+        {"role": "assistant", "content": answer, "train": true},
+    ]})
+    .to_string()
+}
+
+/// Writes each arm's facts as question-and-answer records and the held-out
+/// questions as records, for a trainer.
+fn export_chat(
+    dir: &std::path::Path,
+    seed: u64,
+    corpus: &splinter_sdk::knowledge::goal::synthetic::Corpus,
+    cands: &[splinter_sdk::knowledge::goal::corpus::Candidate],
+    arms: &[Arm],
+    source: &dyn splinter_sdk::knowledge::goal::source::FactSource,
+) -> anyhow::Result<()> {
+    let dir = dir.join(seed.to_string());
+    for arm in arms.iter().filter(|a| !a.learned.is_empty()) {
+        let arm_dir = dir.join(&arm.name);
+        std::fs::create_dir_all(&arm_dir).with_context(|| arm_dir.display().to_string())?;
+        let lines: Vec<String> = cands
+            .iter()
+            .filter(|c| arm.learned.contains(&c.id))
+            .flat_map(|c| source.facts(c))
+            .map(|f| chat_line(&f.question(), &f.value))
+            .collect();
+        std::fs::write(arm_dir.join("train.jsonl"), lines.join("\n") + "\n")?;
+    }
+    let held: Vec<String> = corpus
+        .held_out
+        .iter()
+        .map(|p| chat_line(&p.question, &p.expected))
+        .collect();
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("held-out.jsonl"), held.join("\n") + "\n")?;
     Ok(())
 }

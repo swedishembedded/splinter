@@ -1,0 +1,8 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
+
+# 133. The compiler's numbered-title rule silently disabled every ruling of a corpus whose titles carried chunk numbers
+
+`objects::resolve` lets documents numbered differently in their titles never compete (chapter 11 against chapter 12). The synthetic corpora titled their documents with their ids (`alquor-manual-0`, `alquor-manual-2024-0`), so the current manual and the 2024 edition had different digit sets and never competed. After that rule landed, in a plain corpus (seed 6500, 2 topics x 12 units) 0 of 24 Outdated sections and 3 of 12 Misleading ones had a ruling; the selector chose 24 Outdated and 9 to 11 Misleading sections, and on the multi-hop corpora the real 27B reader scored 0.16 without provenance headers against 0.88 with them on the same chosen material (the headers disambiguated the stale sections that should never have been chosen). With titles that carry no chunk number (`alquor manual`, the 2024 edition keeping its year) every Outdated and Misleading section is ruled (test `every_stale_or_wrong_section_of_a_plain_corpus_is_ruled_out_by_the_headers`) and the scripted selective held-out without headers went from 0.49 to 0.98, equal to the run with headers.
+
+Rule: a generator must title documents as a reader would, and a test must assert that the rulings it relies on exist (count the ruled sections), because the selection quietly degrades to "choose the stale one" when they do not. A title parsed from the first line of a body that holds a data sentence carries its digits too. Evidence: splinter 973deb0d0, `crates/knowledge/src/objects/resolve.rs` (`compete`).

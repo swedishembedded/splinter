@@ -118,3 +118,6 @@ in the same commit.
 | [130](130-a-base-exam-measured-under-another-jobs-load-scored-0.854-and-the-same-base-measured-alone-scored-0.938.md) | A base exam measured under another job's load scored 0.854; the same base alone scored 0.938 |
 | [131](131-bench-ingested-rollouts-carry-no-behaviour-log-probabilities-so-policy-gradient-needs-behaviour-start.md) | Bench-ingested rollouts carry no behaviour log-probabilities; policy-gradient training needs --behaviour start |
 | [132](132-a-deadline-object-read-from-a-lateness-limit-fails-every-task-that-asks-for-it.md) | A deadline object read from a lateness limit fails every task that asks for it |
+| [133](133-a-compiler-rule-on-numbered-titles-silently-disabled-every-ruling-of-a-corpus.md) | The compiler's numbered-title rule silently disabled every ruling of a corpus whose titles carried chunk numbers |
+| [134](134-value-coincidence-is-no-evidence-that-two-phrases-are-one.md) | Value coincidence is no evidence that two phrases are one |
+| [135](135-attribute-alignment-is-evidence-only-through-identified-things.md) | Attribute alignment is evidence only through identified things, and a class is left alone |
