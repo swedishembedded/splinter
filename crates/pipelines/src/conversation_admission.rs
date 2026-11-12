@@ -70,9 +70,12 @@ pub fn admit(record: &Value, scrubbed: bool) -> Result<Pool, Refusal> {
             let violations = record["checks"]["violations"]
                 .as_array()
                 .ok_or(Refusal::Unmeasured)?;
-            let leaked = violations
-                .iter()
-                .any(|v| v[1]["kind"].as_str() == Some("answer_key_leak"));
+            let leaked = violations.iter().any(|v| {
+                matches!(
+                    v[1]["kind"].as_str(),
+                    Some("answer_key_leak" | "answer_key_paraphrase")
+                )
+            });
             if leaked {
                 return Err(Refusal::AnswerKeyLeak);
             }
@@ -108,6 +111,11 @@ mod tests {
     fn a_leaking_or_unmeasured_simulated_conversation_is_refused() {
         let leak = json!([[1, {"kind": "answer_key_leak", "detail": "k"}]]);
         assert_eq!(admit(&simulated(leak), false), Err(Refusal::AnswerKeyLeak));
+        let paraphrase = json!([[0, {"kind": "answer_key_paraphrase", "detail": "k"}]]);
+        assert_eq!(
+            admit(&simulated(paraphrase), false),
+            Err(Refusal::AnswerKeyLeak)
+        );
         let unmeasured = json!({"provenance": {"kind": "simulated"}, "checks": null});
         assert_eq!(admit(&unmeasured, false), Err(Refusal::Unmeasured));
     }
