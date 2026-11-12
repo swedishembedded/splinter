@@ -75,11 +75,11 @@ pub use splinter_orchestrator::{Config, Context, OrchestratorError as Error, Run
 // The commands.
 pub use splinter_pipelines::{
     absorb, acquire, ask, bench, brain_server, budget, canaries, checkpoints, claim_quality,
-    claims, compare, critique, curriculum, datasets, describe, dialogue, doctor, eval, exam,
-    exam_set, experiences, experiment, generations, graded, harbor, harness_opt, history, improve,
-    judge, learn, lineage, plan, powered, practice, raft, rehearsal, release, rerank, reserve,
-    retrieval, router, sealed, sessions, solving, sources, state, status, tasks, timeline, train,
-    validate, variants, verify,
+    claims, compare, conversation_policy_gradient, critique, curriculum, datasets, describe,
+    dialogue, doctor, eval, exam, exam_set, experiences, experiment, generations, graded, harbor,
+    harness_opt, history, improve, judge, learn, lineage, plan, powered, practice, raft, rehearsal,
+    release, rerank, reserve, retrieval, router, sealed, sessions, solving, sources, state, status,
+    tasks, timeline, train, validate, variants, verify,
 };
 
 // The layers, each under one name.

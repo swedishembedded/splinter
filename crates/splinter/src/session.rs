@@ -52,6 +52,7 @@ use crate::cli::{
     RunsCommand, SourceCommand, StateCommand,
 };
 use crate::compare_session;
+use crate::conversation_dataset;
 use crate::exam_session;
 use crate::harness_session;
 use crate::learn_output;
@@ -553,6 +554,11 @@ impl Session {
                     })?,
                 );
             }
+            Command::Dataset(DatasetCommand::Conversations {
+                input,
+                system_prompt,
+                advantage,
+            }) => conversation_dataset::run(ctx, json, &input, &system_prompt, advantage)?,
             Command::Dataset(DatasetCommand::Export { id, out }) => {
                 emit(json, &export(ctx, &id, &out)?);
             }

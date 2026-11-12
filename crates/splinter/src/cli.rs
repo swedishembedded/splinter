@@ -567,6 +567,23 @@ impl StrataArgs {
 pub enum DatasetCommand {
     /// Project experience sets through a view into a stored dataset.
     Build(Box<BuildArgs>),
+    /// Build a policy-gradient dataset from graded conversations with a
+    /// counterpart (a client, a student): each line of the input names the
+    /// case, the model that played the learner, the reward the case's grade
+    /// earned and the conversation record. Only conversations the admission
+    /// rules accept are used; the learner's turns are the actions.
+    Conversations {
+        /// The input: one JSON object per line (`case`, `policy`, `trial`,
+        /// `reward`, `record`).
+        #[arg(value_name = "GRADED.JSONL")]
+        input: PathBuf,
+        /// The role prompt the learner played under, which opens every record.
+        #[arg(long, required = true, value_name = "TEXT")]
+        system_prompt: String,
+        /// How an attempt's advantage is read from the rewards of its case.
+        #[arg(long, value_parser = advantage, value_name = "KIND")]
+        advantage: Option<AdvantageKind>,
+    },
     /// Copy a dataset and its manifest into a directory.
     Export {
         /// The dataset, by id or unique prefix.

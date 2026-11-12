@@ -75,6 +75,7 @@ pub mod claim_quality;
 pub mod claims;
 pub mod compare;
 pub mod conversation_admission;
+pub mod conversation_policy_gradient;
 pub mod critique;
 pub mod curriculum;
 pub mod dataset_ref;

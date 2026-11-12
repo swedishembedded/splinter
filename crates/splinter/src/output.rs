@@ -525,6 +525,25 @@ impl Report for Replayed {
     }
 }
 
+impl Report for splinter_sdk::conversation_policy_gradient::Stored {
+    fn human(&self) -> String {
+        let r = &self.report;
+        let mut out = self.dataset.human();
+        let _ = writeln!(
+            out,
+            "  conversations: {} read, {} admitted, refused {}\n  groups: {} ({} with signal), mean reward {:.3}, mean within-group std {:.3}",
+            r.read,
+            r.admitted,
+            tally(&r.refused),
+            r.groups,
+            r.groups_with_signal,
+            r.mean_reward,
+            r.mean_group_std
+        );
+        out
+    }
+}
+
 impl Report for Built {
     fn human(&self) -> String {
         let mut out = format!(

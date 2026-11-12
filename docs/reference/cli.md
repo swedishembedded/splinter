@@ -126,6 +126,7 @@ Every command takes these.
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
+  - [splinter dataset conversations](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
   - [splinter dataset export](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 - [splinter train](#splinter-train) - Train a candidate adapter on datasets
 - [splinter rehearse](#splinter-rehearse) - Build a rehearsal dataset
@@ -1337,6 +1338,7 @@ splinter dataset [OPTIONS] <COMMAND>
 Subcommands:
 
 - [`build`](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
+- [`conversations`](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
 - [`export`](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 
 #### splinter dataset build
@@ -1379,6 +1381,23 @@ Options:
 - `--token-limit <N>`: For the voice view: keep at most this many tokens of the writer's text, evenly spread over all of it.
 - `--max-family-share <SHARE>`: For the voice view: the most of the tokens one family may supply.
 - `--describe-with <REF>`: For the voice view: the model that writes, for each passage, a description of what it is about, which its request carries in place of the passage's opening (a passage with no admitted description keeps the opening)
+
+#### splinter dataset conversations
+
+Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student): each line of the input names the case, the model that played the learner, the reward the case's grade earned and the conversation record. Only conversations the admission rules accept are used; the learner's turns are the actions
+
+```text
+splinter dataset conversations [OPTIONS] --system-prompt <TEXT> <GRADED.JSONL>
+```
+
+Arguments:
+
+- `<GRADED.JSONL>` (required): The input: one JSON object per line (`case`, `policy`, `trial`, `reward`, `record`)
+
+Options:
+
+- `--system-prompt <TEXT>` (required): The role prompt the learner played under, which opens every record.
+- `--advantage <KIND>`: How an attempt's advantage is read from the rewards of its case.
 
 #### splinter dataset export
 
