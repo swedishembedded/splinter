@@ -77,6 +77,7 @@ mod markers;
 pub mod overlap;
 pub mod partition;
 pub mod pii;
+pub mod process;
 mod record;
 mod render;
 mod replay;

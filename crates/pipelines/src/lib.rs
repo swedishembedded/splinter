@@ -123,6 +123,7 @@ mod rl_build;
 pub mod router;
 pub mod sealed;
 pub mod sessions;
+pub mod skill_library;
 pub mod solving;
 pub mod sources;
 pub mod state;

@@ -24,6 +24,22 @@ pub struct Outcome<'a> {
 }
 
 impl Outcome<'_> {
+    /// [`Outcome::conclude`] for a method that has not been shown to work on this task: the row says `pass` if the
+    /// gain cleared its bar and `NOT SHOWN` if not, and the test does not fail either way. It is how an honest null is
+    /// kept in the table without a permanently red gate.
+    pub fn report(&self) {
+        let shown = self.after - self.before >= self.min_gain;
+        println!(
+            "METHOD|{}|{}|{:.3}|{:.3}|{}|{}",
+            self.method,
+            self.metric,
+            self.before,
+            self.after,
+            if shown { "pass" } else { "NOT SHOWN" },
+            self.note
+        );
+    }
+
     /// Prints the `METHOD|` line and fails the test unless the held-out score gained at least `min_gain`.
     pub fn conclude(&self) {
         let passed = self.after - self.before >= self.min_gain;

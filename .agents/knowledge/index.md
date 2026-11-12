@@ -101,3 +101,9 @@ in the same commit.
 | [113](113-a-reader-given-all-the-material-answers-unknown-when-passages-conflict.md) | A reader given all the material answers unknown when passages conflict |
 | [114](114-selecting-by-words-and-by-meaning-each-miss-what-the-other-finds.md) | Selecting material by words and by meaning each miss what the other finds |
 | [115](115-plain-dpo-collapses-a-small-model-without-an-anchor-on-the-chosen-answer.md) | Plain DPO collapses a small model without an anchor on the chosen answer |
+| [116](116-a-policy-gradient-could-not-run-on-records-that-carry-no-sampler-log-probabilities.md) | A policy gradient could not run on records that carry no sampler log-probabilities |
+| [117](117-best-of-n-sampling-adds-little-to-greedy-decoding-of-an-underconfident-model.md) | Best-of-N sampling adds little to greedy decoding of an under-confident model |
+| [118](118-the-cpt-view-wrote-a-corpus-no-trainer-read.md) | The cpt view wrote a corpus no trainer read |
+| [119](119-an-agent-on-a-model-that-never-stops-retries-the-same-empty-reply.md) | An agent on a model that never stops retries the same empty reply |
+| [120](120-step-labels-teach-slightly-more-than-an-outcome-check-and-neither-beats-the-start-at-toy-scale.md) | Step labels teach slightly more than an outcome check, and neither beats the start at toy scale |
+| [121](121-a-library-of-verified-sub-solutions-solves-compound-tasks-with-fewer-tokens.md) | A library of verified sub-solutions solves compound tasks with fewer tokens |

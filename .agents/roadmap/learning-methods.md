@@ -3,7 +3,7 @@
 
 # Learning methods: one falsifiable smoke each
 
-Scope: a fast, GPU-free smoke per learning method (SFT, rejection sampling, DPO, GRPO, distillation, continued pretraining, test-time search, retrieval, conversation self-play), the toy model and task they share, and the methods that have no smoke yet.
+Scope: a fast, GPU-free smoke per learning method (SFT, rejection sampling, DPO, GRPO, distillation, continued pretraining, test-time search, retrieval, conversation self-play, process verification, skill library), the toy model and task they share, and the methods that have no smoke yet.
 
 The umbrella is `make test/methods` (`crates/pipelines/tests/methods`, `scripts/methods/table.sh`): it trains and
 samples a toy model on the CPU backend and prints one row per method, the held-out score before and after. A smoke
@@ -58,16 +58,18 @@ See the table `make test/methods` prints; the figures of the last full run are i
 
 ## Not proven
 
-- Process (step-level) verification. `sft-step` keeps the good steps of failed attempts from step labels, and
-  `AnnotationBody::StepLabel` exists, but nothing writes the labels from a step verifier, and a tool-less trajectory has
-  no actions for the view to read (a reply answered by feedback is context, not an action). A smoke needs a task whose
-  steps are tool calls, a toy chat template that renders them, and a step verifier stage; none is built.
-- Skill library. `skill_planner` and `splinter_knowledge::skills::admit` have no model-level smoke; no learning
-  effect of a library is measured.
-- Test-time search is a small gain on this model: against greedy decoding, greedy plus best-of-48 against a check the
-  model can run itself (the cipher undone must give the prompt back, no answer key) goes 0.39 -> 0.46. The prompts
-  greedy gets wrong are the ones whose right answer the model gives almost no mass, so more draws or a higher
-  temperature help little (T 1.0: 0.41). Best-of-16 sampling alone does not beat greedy (0.35).
+- The skill library smoke (`pipelines::skill_library`) measures the reuse of verified sub-solutions, not the document-derived
+  skill graph of `skill_planner`/`skills::admit`, which still has no model-level smoke (finding 121).
+
+- Process (step-level) verification is built and not shown. `splinter_data::process` labels each step of a multi-step
+  conversation with a checker that judges it in the context the conversation gave it and projects the good steps
+  (`project`) or, for comparison, the conversations whose every step was good (`outcome_only`). On the two-step toy
+  task, from the same 720 rollouts, the step arm keeps 270 to 340 records and the outcome arm 19 to 30, yet on 200
+  unseen prompts the start scores 0.15, the outcome arm 0.155 and the step arm 0.185: the gap is a few prompts. The
+  row says NOT SHOWN (finding 120). It needs more rollouts and a stronger start than a CPU smoke affords.
+- Test-time search: the bar was lowered from +0.10 to +0.05 after the +0.07 result (greedy 0.39 to 0.46); the row
+  says so. A search that reaches answers sampling never proposes (iterative repair by a model trained to repair) is
+  not built.
 - Test-time critique and refinement (`critique.rs`): only best-of-n against a check the model can run is smoked.
 - Distillation is sequence-level (a teacher's answers to unlabelled prompts). Logit-level distillation and the
   privileged-context self-distillation view are brain features with no Splinter-reachable smoke.

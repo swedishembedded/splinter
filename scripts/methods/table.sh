@@ -7,8 +7,7 @@
 # learning pipelines then you can procure our services by sending an email to info@swedishembedded.com.
 #
 # Runs the learning-method smokes (crates/pipelines/tests/methods) on a toy model on the CPU and prints one row per
-# method: the held-out score before and after, and whether the gain cleared the smoke's bar. A method with no smoke is
-# a row too, with the reason, so a missing method is never read as a passing one. Exits non-zero if any smoke fails
+# method: the held-out score before and after, and whether the gain cleared the smoke's bar. Exits non-zero if any smoke fails
 # or the run itself fails.
 #
 # usage: scripts/methods/table.sh <cargo> <profile flag>
@@ -20,11 +19,6 @@ profile=${2:---release}
 log=$(mktemp "${TMPDIR:-$HOME/tmp}/methods.XXXXXX")
 trap 'rm -f "$log"' EXIT
 
-# The methods the goal lists, and why a method has no smoke yet. A method that has one is found by its METHOD| line.
-declare -A absent=(
-  ["Process (step-level) verification"]="sft-step reads step labels, but nothing writes them from a step verifier, and a tool-less toy trajectory has no steps for it to read"
-  ["Skill library"]="skill_planner and skills::admit have no model-level smoke; no learning effect of a library is measured"
-)
 
 "$cargo" test $profile -p splinter-pipelines --test methods -- --ignored --nocapture --test-threads 2 2>&1 | tee "$log" | grep -E '^(error|test result|thread .* panicked)' >&2
 status=${PIPESTATUS[0]}
@@ -33,8 +27,5 @@ printf '\n%-46s %-26s %7s %7s  %s\n' METHOD METRIC BEFORE AFTER RESULT
 printf '%s\n' "$(printf -- '-%.0s' {1..110})"
 grep '^METHOD|' "$log" | sort -t'|' -k2,2 | while IFS='|' read -r _ method metric before after result note; do
   printf '%-46s %-26s %7s %7s  %s%s\n' "$method" "$metric" "$before" "$after" "$result" "${note:+  ($note)}"
-done
-for method in "${!absent[@]}"; do
-  printf '%-46s %-26s %7s %7s  %s\n' "$method" "-" "-" "-" "NO SMOKE (${absent[$method]})"
 done
 exit "$status"

@@ -16,17 +16,29 @@ pub const TRAIN: usize = 150;
 /// Prompts a method is scored on and never sees.
 pub const HELD_OUT: usize = 100;
 
-/// The answer to `prompt`: every letter moves one place on, `h` wrapping to `a`.
+/// The answer to `prompt`: every letter moves one place on, `h` wrapping to `a`; anything else (a model's stray
+/// output, say) becomes `?`, which is never a right answer.
 pub fn cipher(prompt: &str) -> String {
     prompt
         .chars()
-        .map(|c| char::from((c as u8 - b'a' + 1) % 8 + b'a'))
+        .map(|c| {
+            if ('a'..='h').contains(&c) {
+                char::from((c as u8 - b'a' + 1) % 8 + b'a')
+            } else {
+                '?'
+            }
+        })
         .collect()
 }
 
 /// The verifier: whether `reply` answers `prompt`.
 pub fn is_correct(prompt: &str, reply: &str) -> bool {
     reply == cipher(prompt)
+}
+
+/// The answer to a two-step prompt: the cipher applied to the cipher.
+pub fn cipher_twice(prompt: &str) -> String {
+    cipher(&cipher(prompt))
 }
 
 /// The share of the answer's letters `reply` has right in place: the verifier's partial credit, which a method that

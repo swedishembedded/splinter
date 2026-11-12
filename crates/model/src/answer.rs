@@ -222,6 +222,35 @@ impl Answerer {
         Self::complete(&model, system, user, max_tokens, |_| {}).await
     }
 
+    /// The model's reply to a conversation of `turns` (role, text) pairs, roles `system`, `user` or `assistant`, decoding
+    /// as `decoding` says: how a later step of a multi-step conversation is asked in the context of the earlier ones.
+    ///
+    /// # Errors
+    /// A role that is none of the three, or the generation failed on the device.
+    pub async fn ask_turns(
+        &self,
+        decoding: Decoding,
+        turns: &[(&str, &str)],
+        max_tokens: u32,
+    ) -> anyhow::Result<Reply> {
+        let mut messages = Vec::with_capacity(turns.len());
+        for (role, text) in turns {
+            let role = match *role {
+                "system" => Role::System,
+                "user" => Role::User,
+                "assistant" => Role::Assistant,
+                other => anyhow::bail!("{other:?} is not a role: system, user or assistant"),
+            };
+            messages.push(Message {
+                role,
+                content: MessageContent::Text((*text).to_string()),
+                reasoning: None,
+            });
+        }
+        let model = self.model.resampled(decoding.sampling());
+        Self::complete_messages(&model, messages, max_tokens, |_| {}).await
+    }
+
     /// [`Self::ask`], handing `on_text` each piece of the reply as it is
     /// written.
     ///
@@ -247,15 +276,25 @@ impl Answerer {
         system: &str,
         user: &str,
         max_tokens: u32,
-        mut on_text: impl FnMut(&str),
+        on_text: impl FnMut(&str),
     ) -> anyhow::Result<Reply> {
         let message = |role, text: &str| Message {
             role,
             content: MessageContent::Text(text.to_string()),
             reasoning: None,
         };
+        let messages = vec![message(Role::System, system), message(Role::User, user)];
+        Self::complete_messages(model, messages, max_tokens, on_text).await
+    }
+
+    async fn complete_messages(
+        model: &LocalQwen,
+        messages: Vec<Message>,
+        max_tokens: u32,
+        mut on_text: impl FnMut(&str),
+    ) -> anyhow::Result<Reply> {
         let request = CompletionRequest {
-            messages: vec![message(Role::System, system), message(Role::User, user)],
+            messages,
             max_output_tokens_override: Some(max_tokens),
             ..CompletionRequest::default()
         };

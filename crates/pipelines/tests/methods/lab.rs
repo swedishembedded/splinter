@@ -347,6 +347,21 @@ impl Policy<'_> {
             .block_on(self.sample_async(prompt, temperature, seed))
     }
 
+    /// The reply to a multi-turn conversation, `turns` being (role, text) pairs: greedy when `sampling` is `None`, else
+    /// a draw at that temperature under that seed.
+    pub fn reply_turns(&self, turns: &[(&str, &str)], sampling: Option<(f32, u64)>) -> String {
+        let decoding = sampling.map_or(Decoding::Greedy, |(temperature, seed)| Decoding::Sampled {
+            temperature,
+            seed: Some(seed),
+        });
+        let reply = self
+            .lab
+            .runtime
+            .block_on(self.answerer.ask_turns(decoding, turns, REPLY_TOKENS))
+            .unwrap();
+        first_line(&reply.text)
+    }
+
     /// The model as a sven provider that samples at `temperature` under `seed`, for an agent to run on.
     pub fn provider_sampled(
         &self,
