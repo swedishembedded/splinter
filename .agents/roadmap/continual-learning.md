@@ -131,7 +131,10 @@ sven owns the pluggable counterpart (`sven_sdk::seat`, sven ADR 0007): a live pe
 agent behind one interface, each conversation recorded under a provenance. Splinter owns what the
 record may be used for: `splinter_pipelines::conversation_admission::admit` admits a simulated
 conversation only if its seat was measured and the answer key never leaked, admits a live one only with
-recorded consent and after a scrub, and returns the pool (`Simulated` or `Live`) so the two are
-reported separately and never summed. Open: the scrub itself (secrets/customer data) is not written;
-until it is, no live record reaches training. Bench owns the case specs and the simulator's fidelity
+recorded consent, after `splinter_data::pii::Scrubber::scrub_record` ran on it (typed placeholders for
+emails, phones, personnummer/organisationsnummer, IBAN and bank accounts, street addresses, keys and
+tokens, plus a caller's names list; counts and detector version recorded in the record) and with nothing
+left for the detectors to find, and returns the pool (`Simulated` or `Live`) so the two are
+reported separately and never summed. The scrub is deterministic and checksum-based; free-text names are found only via the names list, so a
+live record stays out of training until a human has reviewed a sample of its scrub (open: no live data yet). Bench owns the case specs and the simulator's fidelity
 validation beyond sven's string checks (diversity, paraphrase leaks).

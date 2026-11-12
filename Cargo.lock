@@ -6967,6 +6967,7 @@ name = "splinter-data"
 version = "0.2.0"
 dependencies = [
  "atif",
+ "regex",
  "serde",
  "serde_json",
  "splinter-core",
