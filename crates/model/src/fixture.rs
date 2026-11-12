@@ -45,6 +45,19 @@ pub fn markup_heavy_checkpoint(dir: &Path) {
     );
 }
 
+/// Writes into `dir` a randomly initialised checkpoint small enough to train and sample on the CPU in seconds, with
+/// the byte-level tokenizer and the bare chat template of brain's toy model: a user turn reads `text=` and an
+/// assistant turn `text<|im_end|>`, system turns are dropped. For specs that must see a held-out score move.
+///
+/// # Errors
+/// `dir` cannot be written.
+pub fn toy_chat_checkpoint(dir: &Path, seed: u64) -> Result<(), crate::PolicyError> {
+    brain::toy::write_toy_chat_checkpoint(dir, seed).map_err(|e| crate::PolicyError::Load {
+        path: dir.to_path_buf(),
+        reason: e.to_string(),
+    })
+}
+
 /// The image geometry of [`vision_checkpoint`]: a picture is scaled to
 /// multiples of 32 pixels (a 16-pixel patch, merged 2 x 2), and each 32 x 32
 /// block of it is one row of the decoder's sequence.

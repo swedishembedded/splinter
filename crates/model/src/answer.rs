@@ -204,6 +204,24 @@ impl Answerer {
             .await
     }
 
+    /// [`Self::ask`], decoding as `decoding` says instead of as the answerer
+    /// was loaded: the weights are shared, so many draws under seeds of the
+    /// caller's choosing load nothing again, and the same seed draws the same
+    /// reply.
+    ///
+    /// # Errors
+    /// The generation failed on the device.
+    pub async fn ask_decoding(
+        &self,
+        decoding: Decoding,
+        system: &str,
+        user: &str,
+        max_tokens: u32,
+    ) -> anyhow::Result<Reply> {
+        let model = self.model.resampled(decoding.sampling());
+        Self::complete(&model, system, user, max_tokens, |_| {}).await
+    }
+
     /// [`Self::ask`], handing `on_text` each piece of the reply as it is
     /// written.
     ///
@@ -216,6 +234,18 @@ impl Answerer {
         max_tokens: u32,
         on_text: &mut dyn FnMut(&str),
     ) -> anyhow::Result<Reply> {
+        Self::complete(&self.model, system, user, max_tokens, |piece| on_text(piece)).await
+    }
+
+    /// Generic in the callback so that a caller handing a `Send` one gets a
+    /// `Send` future (a search drives it from sven's `Send` proposer).
+    async fn complete(
+        model: &LocalQwen,
+        system: &str,
+        user: &str,
+        max_tokens: u32,
+        mut on_text: impl FnMut(&str),
+    ) -> anyhow::Result<Reply> {
         let message = |role, text: &str| Message {
             role,
             content: MessageContent::Text(text.to_string()),
@@ -227,7 +257,7 @@ impl Answerer {
             ..CompletionRequest::default()
         };
         let started = Instant::now();
-        let mut stream = self.model.complete(request).await?;
+        let mut stream = model.complete(request).await?;
         let mut reply = Reply::default();
         while let Some(event) = stream.next().await {
             match event? {
