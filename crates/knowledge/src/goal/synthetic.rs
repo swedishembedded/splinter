@@ -451,7 +451,9 @@ pub fn generate(spec: &Spec) -> Corpus {
                 version: 5,
                 authority: 3,
             };
-            let paraphrased = spec.hard.paraphrase && n % 2 == 1;
+            // Whether a document is paraphrased is a coin: with few units there
+            // is one live document per topic, and a rule by position would never fire.
+            let paraphrased = spec.hard.paraphrase && w.rng.coin();
             let (d, l) = make(
                 &mut w,
                 format!("{}-manual-{n}", topic.name),

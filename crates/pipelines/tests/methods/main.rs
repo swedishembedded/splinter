@@ -25,5 +25,6 @@ mod grpo;
 mod raft;
 mod retrieval;
 mod search;
+mod selection;
 mod selfplay;
 mod sft;

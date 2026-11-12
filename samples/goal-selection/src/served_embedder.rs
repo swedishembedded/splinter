@@ -32,6 +32,9 @@ pub struct Served {
 impl Served {
     /// The model `model` at `base_url` (ending in `/v1`), asked with `key`.
     pub fn new(ctx: Context, base_url: &str, key: &str, model: &str) -> Self {
+        // The workspace builds reqwest without a TLS provider; one is installed
+        // once for the process (a second install is ignored).
+        let _ = rustls::crypto::ring::default_provider().install_default();
         Self {
             ctx,
             client: reqwest::Client::new(),

@@ -86,6 +86,11 @@ pub const OFF_DOMAIN: f64 = 0.4;
 /// The least relevance a section that mentions the objective's domain
 /// words has; the floor, so it is kept.
 pub const IN_DOMAIN: f64 = MIN_RELEVANCE;
+/// How far a section must stand out for a gap, among the corpus, by an
+/// embedder, to count as relevant. Lower than the words' floor: an
+/// embedder's scores spread over a narrow band, and a paraphrase of the gap
+/// stands out less than a repetition of its words.
+pub const MIN_STANDOUT: f64 = 0.2;
 /// The novelty assumed, for ranking only, of a section stating nothing the
 /// participant can be asked about: it is worth less than one shown to be new.
 pub const UNMEASURED_NOVELTY: f64 = 0.5;
@@ -332,8 +337,10 @@ fn relevance_of(
     if let (Some(semantic), true) = (open.semantic, signal != Signal::Lexical) {
         for gap in open.gaps {
             for (m, stands_out) in meaning.iter_mut().zip(semantic.standout(gap)) {
-                m.coverage = m.coverage.max(stands_out);
-                m.weighted += gap.weight * stands_out;
+                // Read against the floor for words: a section at the standout floor is at the relevance floor.
+                let scaled = (stands_out * MIN_RELEVANCE / MIN_STANDOUT).min(1.0);
+                m.coverage = m.coverage.max(scaled);
+                m.weighted += gap.weight * scaled;
             }
         }
     }
@@ -369,6 +376,13 @@ fn lexical_relevance(
         let weights: Vec<(&str, f64)> = gap
             .terms
             .iter()
+            .filter(|(_, support)| {
+                // A word one probe of several asks with says which probe it
+                // was, not what the gap is about; many of them together would
+                // outweigh the topic they were asked about.
+                let asked = (**support * gap.questions.len() as f64).round();
+                asked >= 2.0 || gap.questions.len() < 3
+            })
             .filter_map(|(t, support)| {
                 Some((t.as_str(), vocabulary.weight(t)? * support * support))
             })

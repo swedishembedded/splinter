@@ -151,6 +151,15 @@ struct Cli {
     /// JSON object a line.
     #[arg(long)]
     transcript: Option<PathBuf>,
+    /// Print, for the first corpus, how relevant each kind of section looks to
+    /// words alone and to meaning alone when nothing is known.
+    #[arg(long)]
+    diagnose: bool,
+    /// Where to write each corpus's material by arm (`<seed>/<arm>.md`, the
+    /// sections an arm learned, in corpus order) and its held-out questions
+    /// (`<seed>/held-out.jsonl`), for training a model on each arm's material.
+    #[arg(long)]
+    export: Option<PathBuf>,
     /// Where to write the full result as JSON.
     #[arg(long)]
     out: Option<PathBuf>,
@@ -317,6 +326,12 @@ fn main() -> anyhow::Result<()> {
             base + i,
             cli.ablate,
         );
+        if cli.diagnose && i == 0 {
+            diagnose(&corpus, &cands, &source, &embedder)?;
+        }
+        if let Some(dir) = &cli.export {
+            export(dir, base + i, &corpus, &cands, &arms)?;
+        }
         println!("corpus {} done ({} sections)", base + i, cands.len());
         runs.push(arms);
     }
@@ -359,6 +374,110 @@ fn main() -> anyhow::Result<()> {
         });
         std::fs::write(path, serde_json::to_string_pretty(&result)?)
             .with_context(|| path.display().to_string())?;
+    }
+    Ok(())
+}
+
+/// Writes each arm's learned sections and the held-out questions of a corpus.
+fn export(
+    dir: &std::path::Path,
+    seed: u64,
+    corpus: &splinter_sdk::knowledge::goal::synthetic::Corpus,
+    cands: &[splinter_sdk::knowledge::goal::corpus::Candidate],
+    arms: &[Arm],
+) -> anyhow::Result<()> {
+    let dir = dir.join(seed.to_string());
+    std::fs::create_dir_all(&dir).with_context(|| dir.display().to_string())?;
+    for arm in arms {
+        let text: Vec<&str> = cands
+            .iter()
+            .filter(|c| arm.learned.contains(&c.id))
+            .map(|c| c.text.as_str())
+            .collect();
+        std::fs::write(dir.join(format!("{}.md", arm.name)), text.join("\n\n"))?;
+    }
+    let lines: Vec<String> = corpus
+        .held_out
+        .iter()
+        .map(|p| {
+            serde_json::json!({"id": p.id, "question": p.question, "expected": p.expected})
+                .to_string()
+        })
+        .collect();
+    std::fs::write(dir.join("held-out.jsonl"), lines.join("\n"))?;
+    Ok(())
+}
+
+/// Nothing is known: every question is answered "unknown".
+struct Ignorant;
+
+impl splinter_sdk::knowledge::goal::select::Examinee for Ignorant {
+    fn answer_all(&self, questions: &[String]) -> Vec<String> {
+        questions.iter().map(|_| "unknown".to_string()).collect()
+    }
+}
+
+/// Prints, per label, the share of sections the first round would take as
+/// relevant by words alone and by meaning alone, and their mean relevance.
+fn diagnose(
+    corpus: &splinter_sdk::knowledge::goal::synthetic::Corpus,
+    cands: &[splinter_sdk::knowledge::goal::corpus::Candidate],
+    source: &PackSource,
+    embedder: &Rc<dyn Embedder>,
+) -> anyhow::Result<()> {
+    use splinter_sdk::knowledge::goal::corpus::Vocabulary;
+    use splinter_sdk::knowledge::goal::gaps::{analyse, ProbeResult};
+    use splinter_sdk::knowledge::goal::select::{select, Config, Open};
+    let results: Vec<ProbeResult> = corpus
+        .goal
+        .probes
+        .iter()
+        .map(|p| ProbeResult {
+            probe: p.clone(),
+            answer: "unknown".into(),
+        })
+        .collect();
+    let vocabulary = Vocabulary::of(cands);
+    let gaps = analyse(&results, &vocabulary);
+    let semantic = Semantic::new(&**embedder, cands).context("embedding the corpus")?;
+    for signal in [Signal::Lexical, Signal::Semantic] {
+        let open = Open {
+            gaps: &gaps,
+            semantic: Some(&semantic),
+            objective: &corpus.goal.objective,
+        };
+        let config = Config {
+            signal,
+            check_conflicts: false,
+            check_novelty: false,
+            ..Config::with_budget(usize::MAX)
+        };
+        let selection = select(
+            cands,
+            &Default::default(),
+            &open,
+            &vocabulary,
+            &Ignorant,
+            source,
+            &config,
+        );
+        let mut by_label: std::collections::BTreeMap<String, (usize, usize, f64)> =
+            Default::default();
+        for d in &selection.decisions {
+            let entry = by_label
+                .entry(format!("{:?}", corpus.labels[&d.section]))
+                .or_default();
+            entry.0 += 1;
+            entry.1 +=
+                usize::from(d.relevance >= splinter_sdk::knowledge::goal::select::MIN_RELEVANCE);
+            entry.2 += d.relevance;
+        }
+        for (label, (n, pass, sum)) in by_label {
+            println!(
+                "relevance by {signal:?}: {label:<11} {pass}/{n} pass the floor, mean {:.2}",
+                sum / n as f64
+            );
+        }
     }
     Ok(())
 }
