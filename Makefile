@@ -97,6 +97,10 @@ test/families:
 	python3 scripts/tasks/families.py mutate
 	python3 scripts/tasks/test_runaway.py
 
+## test/methods - one falsifiable smoke per learning method (SFT, rejection sampling, DPO, GRPO, distillation, continued pretraining, test-time search, retrieval, self-play) on a toy model on the CPU, printed as a table of held-out scores before and after (no GPU, minutes)
+test/methods:
+	bash scripts/methods/table.sh "$(CARGO)" "$(PROFILE)"
+
 ## test/e2e - lists the end-to-end targets, which need built brain and sven binaries; runs nothing
 test/e2e:
 	@bash scripts/make-help.sh test/e2e
@@ -477,7 +481,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/package fmt \
+.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package fmt \
 	package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

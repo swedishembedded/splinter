@@ -7,6 +7,7 @@
 make test                          # every test; no model, GPU or network needed
 make test/crate/splinter-pipelines # one package; `make test/crate` lists them
 make test/families                 # the repository task families: baselines, conventions, fault detection
+make test/methods                  # one smoke per learning method on a toy model, with held-out scores before and after
 make test/e2e                      # lists the end-to-end targets
 ```
 
