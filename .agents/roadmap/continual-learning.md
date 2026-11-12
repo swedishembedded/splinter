@@ -124,3 +124,14 @@ budget declared in advance.
 Training a neural-memory architecture (HOPE, Titans, TTT variants) from scratch, and
 world-model learning: neither has a measured path on the hardware and models this project
 runs. Revisit only if brain's persisted-state work shows a measurable benefit.
+
+## User seat: what may become training data (2026-11-12)
+
+sven owns the pluggable counterpart (`sven_sdk::seat`, sven ADR 0007): a live person or a simulated
+agent behind one interface, each conversation recorded under a provenance. Splinter owns what the
+record may be used for: `splinter_pipelines::conversation_admission::admit` admits a simulated
+conversation only if its seat was measured and the answer key never leaked, admits a live one only with
+recorded consent and after a scrub, and returns the pool (`Simulated` or `Live`) so the two are
+reported separately and never summed. Open: the scrub itself (secrets/customer data) is not written;
+until it is, no live record reaches training. Bench owns the case specs and the simulator's fidelity
+validation beyond sven's string checks (diversity, paraphrase leaks).

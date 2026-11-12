@@ -74,6 +74,7 @@ pub mod checkpoints;
 pub mod claim_quality;
 pub mod claims;
 pub mod compare;
+pub mod conversation_admission;
 pub mod critique;
 pub mod curriculum;
 pub mod dataset_ref;
