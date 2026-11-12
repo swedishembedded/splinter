@@ -48,8 +48,8 @@ use crate::absorb_session;
 use crate::baseline_report;
 use crate::cli::{
     BuildArgs, Cli, Command, ControlKind, DatasetCommand, EvalArgs, EvalCommand,
-    ExperiencesCommand, ExperimentCommand, Global, GoalCommand, JudgeCommand, ReleaseCommand,
-    RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
+    ExperiencesCommand, ExperimentCommand, Global, JudgeCommand, ReleaseCommand, RetrieveArgs,
+    RunsCommand, SourceCommand, StateCommand,
 };
 use crate::compare_session;
 use crate::conversation_dataset;
@@ -560,17 +560,8 @@ impl Session {
                 system_prompt,
                 advantage,
             }) => conversation_dataset::run(ctx, json, &input, &system_prompt, advantage)?,
-            Command::Goal(GoalCommand::Admit {
-                open,
-                live,
-                consent,
-                scrub,
-                out,
-            }) => {
-                let admission =
-                    splinter_sdk::goal::intake::admit_paths(&open, &live, consent, scrub, &out)?;
-                emit(json, &admission);
-                if !admission.refused.is_empty() {
+            Command::Goal(command) => {
+                if !crate::goal_session::run(json, command)? {
                     return Ok(Exit::Refused);
                 }
             }

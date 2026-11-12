@@ -29,6 +29,7 @@ mod compare_session;
 mod consolidate_output;
 mod continual_output;
 mod conversation_dataset;
+mod goal_session;
 mod corrections_session;
 mod curriculum_output;
 mod doctor_output;
