@@ -720,7 +720,12 @@ fn resolve(objects: &[Object], documents: &[Document]) -> (Vec<Resolution>, Vec<
         }
         let mut ordered = group.clone();
         ordered.sort_by(|a, b| provenance(b).rank().cmp(&provenance(a).rank()));
-        let (top, second) = (ordered[0], ordered[1]);
+        // Documents that agree with the top one do not dispute it: the
+        // strongest competitor is the best of those that say something else.
+        let top = ordered[0];
+        let Some(second) = ordered.iter().copied().find(|o| content(o) != content(top)) else {
+            continue;
+        };
         let detail = format!("{} {}", key[0], key[1..].join(" / "));
         if provenance(top).rank() > provenance(second).rank() && content(top) != content(second) {
             let losers: Vec<&Object> = ordered[1..]

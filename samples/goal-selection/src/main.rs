@@ -31,7 +31,8 @@ use splinter_sdk::goal::behaviour::learned_fidelity;
 use splinter_sdk::goal::compare::{compare, Arm};
 use splinter_sdk::goal::{Checks, InContext, Participant, Plan, Query, Reader, ScriptedReader};
 use splinter_sdk::knowledge::goal::corpus::candidates;
-use splinter_sdk::knowledge::goal::facts::{Form, PatternFacts};
+use splinter_sdk::knowledge::goal::facts::Form;
+use splinter_sdk::knowledge::goal::source::{FactSource, PackSource};
 use splinter_sdk::knowledge::goal::synthetic::{generate, Spec};
 use splinter_sdk::model::BrainEndpoints;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -156,6 +157,7 @@ fn main() -> anyhow::Result<()> {
         cli.known_share
     };
     let corpus = generate(&spec);
+    let source = PackSource::from_sentences(&corpus.documents, &candidates(&corpus.documents));
     let plan = Plan {
         checks: Checks::ALL,
         rounds: cli.rounds,
@@ -198,7 +200,7 @@ fn main() -> anyhow::Result<()> {
         let arms = compare(
             &corpus,
             &fresh,
-            &PatternFacts,
+            &source,
             &plan,
             seed,
             cli.ablate,
@@ -207,6 +209,7 @@ fn main() -> anyhow::Result<()> {
         let fidelity = fidelity_of(
             &arms,
             &corpus,
+            &source,
             &Shared(Rc::clone(&reader)),
             form,
             cli.goal_topics,
@@ -238,7 +241,7 @@ fn main() -> anyhow::Result<()> {
         let arms = compare(
             &corpus,
             &fresh,
-            &PatternFacts,
+            &source,
             &plan,
             seed,
             cli.ablate,
@@ -247,6 +250,7 @@ fn main() -> anyhow::Result<()> {
         let fidelity = fidelity_of(
             &arms,
             &corpus,
+            &source,
             &ScriptedReader::knowing(known.clone()),
             form,
             cli.goal_topics,
@@ -277,6 +281,7 @@ fn main() -> anyhow::Result<()> {
 fn fidelity_of(
     arms: &[Arm],
     corpus: &splinter_sdk::knowledge::goal::synthetic::Corpus,
+    source: &dyn FactSource,
     reader: &dyn Reader,
     form: Form,
     goal_topics: usize,
@@ -298,7 +303,7 @@ fn fidelity_of(
                     subject,
                     &cands,
                     &a.learned,
-                    &PatternFacts,
+                    source,
                     reader,
                     &corpus.held_out,
                 )?,

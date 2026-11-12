@@ -19,8 +19,8 @@ use std::collections::BTreeSet;
 use serde::Serialize;
 use splinter_core::rng::SplitMix64;
 use splinter_knowledge::goal::corpus::{candidates, Candidate, SectionId};
-use splinter_knowledge::goal::facts::FactExtractor;
 use splinter_knowledge::goal::gaps::{pass_rate, Goal, Probe};
+use splinter_knowledge::goal::source::FactSource;
 use splinter_knowledge::goal::synthetic::{Corpus, Label};
 
 use super::{learn_goal, probe, Checks, Participant, Plan, Report};
@@ -113,7 +113,7 @@ fn arm(
 pub fn compare(
     corpus: &Corpus,
     fresh: &dyn Fn() -> Box<dyn Participant>,
-    extractor: &dyn FactExtractor,
+    source: &dyn FactSource,
     plan: &Plan,
     seed: u64,
     ablate: bool,
@@ -121,7 +121,7 @@ pub fn compare(
 ) -> Vec<Arm> {
     let cands = candidates(&corpus.documents);
     let mut selective = fresh();
-    let report = learn_goal(&cands, &corpus.goal, &mut *selective, extractor, plan);
+    let report = learn_goal(&cands, &corpus.goal, &mut *selective, source, plan);
     let without = |name: &'static str, off: fn(&mut Checks)| {
         let mut checks = plan.checks;
         off(&mut checks);
@@ -143,7 +143,7 @@ pub fn compare(
             &cands,
             &corpus.goal,
             &mut *participant,
-            extractor,
+            source,
             &Plan { checks, ..*plan },
         );
         let chosen: BTreeSet<SectionId> = report.learned.iter().cloned().collect();

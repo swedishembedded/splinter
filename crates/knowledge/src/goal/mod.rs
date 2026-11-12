@@ -12,6 +12,8 @@
 //! * [`corpus`] - documents with provenance, cut into candidate sections.
 //! * [`facts`] - the keyed values a section states.
 //! * [`gaps`] - a goal, its probes, and the gaps its failed probes show.
+//! * [`source`] - the admitted knowledge objects selection takes its facts
+//!   and conflict rulings from.
 //! * [`select`] - relevance to the gaps, conflicts, novelty to the
 //!   participant, duplicates and a word budget, one decision per section.
 //! * [`synthetic`] - labelled corpora (relevant, irrelevant, outdated,
@@ -25,4 +27,5 @@ pub mod corpus;
 pub mod facts;
 pub mod gaps;
 pub mod select;
+pub mod source;
 pub mod synthetic;

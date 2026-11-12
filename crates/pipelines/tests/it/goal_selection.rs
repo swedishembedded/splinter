@@ -27,8 +27,9 @@
 #![allow(clippy::unwrap_used)]
 
 use splinter_knowledge::goal::corpus::candidates;
-use splinter_knowledge::goal::facts::{Form, PatternFacts};
+use splinter_knowledge::goal::facts::Form;
 use splinter_knowledge::goal::select::Verdict;
+use splinter_knowledge::goal::source::PackSource;
 use splinter_knowledge::goal::synthetic::{generate, Corpus, Spec};
 use splinter_pipelines::goal::compare::{compare, Arm};
 use splinter_pipelines::goal::{Checks, InContext, Participant, Plan, ScriptedReader, Stop};
@@ -47,6 +48,10 @@ fn fresh(corpus: &Corpus) -> Box<dyn Participant> {
     )))
 }
 
+fn source_of(corpus: &Corpus) -> PackSource {
+    PackSource::from_sentences(&corpus.documents, &candidates(&corpus.documents))
+}
+
 fn aware(corpus: &Corpus) -> Box<dyn Participant> {
     Box::new(
         InContext::new(ScriptedReader::knowing(corpus.base_knowledge.clone())).showing_provenance(),
@@ -58,7 +63,7 @@ fn run(seed: u64, form: Form) -> (Corpus, Vec<Arm>) {
     let arms = compare(
         &corpus,
         &|| fresh(&corpus),
-        &PatternFacts,
+        &source_of(&corpus),
         &PLAN,
         seed,
         true,
@@ -164,7 +169,7 @@ fn a_counterpart_persona_from_selected_behaviour_predicts_held_out_behaviour_of_
     let arms = compare(
         &corpus,
         &|| fresh(&corpus),
-        &PatternFacts,
+        &source_of(&corpus),
         &PLAN,
         3,
         false,
@@ -183,7 +188,7 @@ fn a_counterpart_persona_from_selected_behaviour_predicts_held_out_behaviour_of_
             &subject,
             &cands,
             &arm(&arms, name).learned,
-            &PatternFacts,
+            &source_of(&corpus),
             &reader,
             &corpus.held_out,
         )
@@ -206,7 +211,7 @@ fn a_counterpart_persona_from_selected_behaviour_predicts_held_out_behaviour_of_
         .iter()
         .filter(|c| arm(&arms, "selective").learned.contains(&c.id))
         .collect();
-    let text = persona(&subject, &behaviour_of(&subject, &sections, &PatternFacts));
+    let text = persona(&subject, &behaviour_of(&subject, &sections, &source_of(&corpus)));
     let seat = seat_spec("tenant", &corpus.goal.role, &corpus.goal.objective, &text).unwrap();
     assert_eq!(seat.persona, text);
 }

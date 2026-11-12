@@ -237,6 +237,7 @@ mod tests {
                     section: 0,
                 },
                 provenance: Default::default(),
+                range: 0..t.len(),
                 text: (*t).to_string(),
             })
             .collect();

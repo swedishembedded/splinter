@@ -24,8 +24,9 @@
 
 use splinter_agent::sven::seat::SeatSpec;
 use splinter_knowledge::goal::corpus::{Candidate, SectionId};
-use splinter_knowledge::goal::facts::{Fact, FactExtractor, Form};
+use splinter_knowledge::goal::facts::{Fact, Form};
 use splinter_knowledge::goal::gaps::{pass_rate, Probe, ProbeResult};
+use splinter_knowledge::goal::source::FactSource;
 
 use super::participant::{Query, Reader};
 
@@ -33,15 +34,11 @@ use super::participant::{Query, Reader};
 /// every [`Form::Behaviour`] fact about that type, as the sentence it was
 /// written in.
 #[must_use]
-pub fn behaviour_of(
-    subject: &str,
-    sections: &[&Candidate],
-    extractor: &dyn FactExtractor,
-) -> Vec<Fact> {
+pub fn behaviour_of(subject: &str, sections: &[&Candidate], source: &dyn FactSource) -> Vec<Fact> {
     let subject = subject.to_lowercase();
     sections
         .iter()
-        .flat_map(|c| extractor.facts(&c.text))
+        .flat_map(|c| source.facts(c))
         .filter(|f| f.key.form == Form::Behaviour && f.key.entity == subject)
         .collect()
 }
@@ -108,7 +105,7 @@ pub fn learned_fidelity(
     subject: &str,
     candidates: &[Candidate],
     learned: &[SectionId],
-    extractor: &dyn FactExtractor,
+    source: &dyn FactSource,
     reader: &dyn Reader,
     held_out: &[Probe],
 ) -> Option<f64> {
@@ -118,7 +115,7 @@ pub fn learned_fidelity(
         .collect();
     fidelity(
         reader,
-        &persona(subject, &behaviour_of(subject, &sections, extractor)),
+        &persona(subject, &behaviour_of(subject, &sections, source)),
         held_out,
     )
 }

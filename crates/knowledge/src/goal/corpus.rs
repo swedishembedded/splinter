@@ -17,6 +17,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
+use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +49,8 @@ pub struct Candidate {
     pub id: SectionId,
     /// What its document says about itself.
     pub provenance: Provenance,
+    /// Where it lies in its document's text, in bytes.
+    pub range: Range<usize>,
     /// Its text.
     pub text: String,
 }
@@ -76,6 +79,7 @@ pub fn candidates(documents: &[Document]) -> Vec<Candidate> {
                             section: at,
                         },
                         provenance: doc.provenance.clone(),
+                        range: s.range.clone(),
                         text: s.text(&doc.text)?.to_string(),
                     })
                 })

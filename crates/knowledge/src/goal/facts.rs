@@ -13,8 +13,10 @@
 //! contradict each other; a section's facts are also the items a
 //! participant is asked about to measure what it already knows. How facts
 //! are found is a [`FactExtractor`]; [`PatternFacts`] reads the two
-//! sentence forms the corpora this crate measures selection on use, and a
-//! model-backed extractor can replace it behind the same trait.
+//! sentence forms the corpora this crate measures selection on use. Selection
+//! itself does not extract: it asks a [`super::source::FactSource`], whose
+//! facts are the admitted objects of the material compiler, proposed here
+//! from sentences or by a model.
 
 use serde::{Deserialize, Serialize};
 

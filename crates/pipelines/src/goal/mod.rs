@@ -27,9 +27,9 @@ use std::cell::Cell;
 
 use serde::Serialize;
 use splinter_knowledge::goal::corpus::{Candidate, SectionId, Vocabulary};
-use splinter_knowledge::goal::facts::FactExtractor;
 use splinter_knowledge::goal::gaps::{analyse, pass_rate, Goal, ProbeResult};
 use splinter_knowledge::goal::select::{select, Config, Examinee, Open, Selection};
+use splinter_knowledge::goal::source::FactSource;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use participant::{InContext, Participant, Query, Reader, ScriptedReader};
@@ -144,7 +144,7 @@ pub fn learn_goal(
     candidates: &[Candidate],
     goal: &Goal,
     participant: &mut dyn Participant,
-    extractor: &dyn FactExtractor,
+    source: &dyn FactSource,
     plan: &Plan,
 ) -> Report {
     let vocabulary = Vocabulary::of(candidates);
@@ -199,7 +199,7 @@ pub fn learn_goal(
             },
             &vocabulary,
             &counter,
-            extractor,
+            source,
             &config,
         );
         questions += counter.asked.get();

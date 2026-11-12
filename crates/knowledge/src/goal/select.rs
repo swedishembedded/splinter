@@ -18,10 +18,10 @@
 //!    A section that names none of the words the goal's objective names its
 //!    domain with (words few sections have) is capped below the floor; one
 //!    that names some is at least at the floor.
-//! 2. **Conflict** - sections that state different values for one fact key
-//!    (anywhere in the corpus, learned sections included) are ranked by
-//!    document authority, then date, then version. A section whose fact
-//!    loses is [`Verdict::Contradicted`] when the winner has higher
+//! 2. **Conflict** - the rulings of a [`FactSource`] (for a pack of knowledge
+//!    objects: sections that state different values for one fact key are
+//!    ranked by document authority, then date, then version). A section whose
+//!    fact loses is [`Verdict::Contradicted`] when the winner has higher
 //!    authority and [`Verdict::Superseded`] when it is newer; a tie is
 //!    [`Verdict::Contested`].
 //! 3. **Novelty** - the participant is asked the question each fact of the
@@ -35,13 +35,14 @@
 //! Value is relevance times novelty. The participant's answers are the
 //! only model work; relevance, conflicts and the budget are code.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 
 use super::corpus::{Candidate, SectionId, Vocabulary};
-use super::facts::{states, words, Fact, FactExtractor, FactKey};
+use super::facts::{states, words, Fact, FactKey};
 use super::gaps::Gap;
+use super::source::FactSource;
 
 /// Something that answers questions: the participant being measured.
 pub trait Examinee {
@@ -164,15 +165,6 @@ impl Selection {
     }
 }
 
-/// How strongly one section's claim on a fact key is believed.
-fn standing(c: &Candidate) -> (u8, Option<&str>, u32) {
-    (
-        c.provenance.authority,
-        c.provenance.date.as_deref(),
-        c.provenance.version,
-    )
-}
-
 /// What is open: the gaps the probes showed, and the goal's own statement,
 /// which names the domain the gaps are in.
 #[derive(Clone, Copy, Debug)]
@@ -191,16 +183,17 @@ pub fn select(
     open: &Open<'_>,
     vocabulary: &Vocabulary,
     examinee: &dyn Examinee,
-    extractor: &dyn FactExtractor,
+    source: &dyn FactSource,
     config: &Config,
 ) -> Selection {
-    let facts: Vec<Vec<Fact>> = candidates
-        .iter()
-        .map(|c| extractor.facts(&c.text))
-        .collect();
+    let facts: Vec<Vec<Fact>> = candidates.iter().map(|c| source.facts(c)).collect();
     let relevance = relevance_of(candidates, vocabulary, open);
-    let conflicts = if config.check_conflicts {
-        conflicts_of(candidates, &facts)
+    let conflicts: HashMap<usize, Verdict> = if config.check_conflicts {
+        candidates
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| Some((i, source.ruling(c)?)))
+            .collect()
     } else {
         HashMap::new()
     };
@@ -368,60 +361,6 @@ struct Relevance {
     weighted: f64,
 }
 
-/// The verdict of every candidate (by index) that loses a fact it states.
-fn conflicts_of(candidates: &[Candidate], facts: &[Vec<Fact>]) -> HashMap<usize, Verdict> {
-    let mut claims: BTreeMap<&FactKey, Vec<(usize, &str)>> = BTreeMap::new();
-    for (i, fs) in facts.iter().enumerate() {
-        for f in fs {
-            claims
-                .entry(&f.key)
-                .or_default()
-                .push((i, f.value.as_str()));
-        }
-    }
-    let mut verdicts = HashMap::new();
-    for claimants in claims.values() {
-        let values: BTreeSet<&str> = claimants.iter().map(|(_, v)| *v).collect();
-        if values.len() < 2 {
-            continue;
-        }
-        let Some(top) = claimants
-            .iter()
-            .map(|(i, _)| standing(&candidates[*i]))
-            .max()
-        else {
-            continue;
-        };
-        let leaders: Vec<(usize, &str)> = claimants
-            .iter()
-            .copied()
-            .filter(|(i, _)| standing(&candidates[*i]) == top)
-            .collect();
-        let leading: BTreeSet<&str> = leaders.iter().map(|(_, v)| *v).collect();
-        let Some(&winner) = leaders.first() else {
-            continue;
-        };
-        let contested = leading.len() > 1;
-        for &(i, value) in claimants {
-            let by = candidates[winner.0].id.clone();
-            let verdict = if contested && standing(&candidates[i]) == top {
-                let with = leaders.iter().find(|(_, v)| *v != value).map_or(i, |l| l.0);
-                Verdict::Contested {
-                    with: candidates[with].id.clone(),
-                }
-            } else if !contested && value == winner.1 {
-                continue;
-            } else if standing(&candidates[i]).0 < top.0 {
-                Verdict::Contradicted { by }
-            } else {
-                Verdict::Superseded { by }
-            };
-            verdicts.entry(i).or_insert(verdict);
-        }
-    }
-    verdicts
-}
-
 /// Per section index in `open`, the share of its facts the examinee does not
 /// answer as the section states; `None` for a section with no fact.
 fn novelty_of(
@@ -460,8 +399,8 @@ fn novelty_of(
 mod tests {
     use super::*;
     use crate::goal::corpus::{candidates, Document};
-    use crate::goal::facts::PatternFacts;
     use crate::goal::gaps::{analyse, Probe, ProbeResult};
+    use crate::goal::source::PackSource;
 
     /// Knows exactly the answers in `known`, else says nothing.
     struct Knows(Vec<(String, String)>);
@@ -504,14 +443,18 @@ mod tests {
 
     const CURRENT: &str = "## Alder pump 1\n\nAlder pump service notes.\nThe service interval of alder pump 1 is 400 hours.\n";
 
-    fn corpus() -> Vec<Candidate> {
-        candidates(&[
+    fn docs() -> Vec<Document> {
+        vec![
             doc("current", 3, "2026-06-01", CURRENT),
             doc("old", 3, "2024-01-01", "## Alder pump 1\n\nAlder pump service notes.\nThe service interval of alder pump 1 is 250 hours.\n"),
             doc("forum", 1, "2026-09-01", "## Alder pump 1\n\nAlder pump service notes.\nThe service interval of alder pump 1 is 90 hours.\n"),
             doc("other", 3, "2026-06-01", "## Brisk fan 2\n\nBrisk fan notes only.\nThe service interval of brisk fan 2 is 700 hours.\n"),
             doc("known", 3, "2026-06-01", "## Alder pump 5\n\nAlder pump service notes.\nThe service interval of alder pump 5 is 100 hours.\n"),
-        ])
+        ]
+    }
+
+    fn corpus() -> Vec<Candidate> {
+        candidates(&docs())
     }
 
     fn run(knows: Vec<(&str, &str)>, budget: usize) -> Selection {
@@ -535,7 +478,7 @@ mod tests {
             },
             &Vocabulary::of(&corpus()),
             &examinee,
-            &PatternFacts,
+            &PackSource::from_sentences(&docs(), &corpus()),
             &Config::with_budget(budget),
         )
     }
@@ -589,7 +532,7 @@ mod tests {
 
     #[test]
     fn two_sections_no_header_separates_are_both_left_out() {
-        let twins = candidates(&[
+        let pair = [
             doc("a", 3, "2026-06-01", CURRENT),
             doc(
                 "b",
@@ -597,7 +540,8 @@ mod tests {
                 "2026-06-01",
                 &CURRENT.replace("400 hours", "500 hours"),
             ),
-        ]);
+        ];
+        let twins = candidates(&pair);
         let gaps = gap_on(
             &twins,
             "What is the service interval of alder pump 3?",
@@ -613,7 +557,7 @@ mod tests {
             &open,
             &Vocabulary::of(&twins),
             &Knows(vec![]),
-            &PatternFacts,
+            &PackSource::from_sentences(&pair, &twins),
             &Config::with_budget(1000),
         );
         assert!(s.chosen.is_empty(), "{s:?}");
@@ -625,20 +569,19 @@ mod tests {
 
     #[test]
     fn a_learned_section_is_not_chosen_again_and_its_duplicate_is_refused() {
-        let mut twin = corpus();
-        twin.push(Candidate {
-            id: SectionId {
-                document: "copy".into(),
-                section: 0,
-            },
-            ..twin[0].clone()
-        });
+        let mut all = docs();
+        all.push(doc("copy", 3, "2026-06-01", CURRENT));
+        let twin = candidates(&all);
         let gaps = gap_on(
             &corpus(),
             "What is the service interval of alder pump 3?",
             "400 hours",
         );
-        let learned: BTreeSet<SectionId> = [twin[0].id.clone()].into();
+        let learned: BTreeSet<SectionId> = [SectionId {
+            document: "current".into(),
+            section: 0,
+        }]
+        .into();
         let s = select(
             &twin,
             &learned,
@@ -648,10 +591,15 @@ mod tests {
             },
             &Vocabulary::of(&twin),
             &Knows(vec![]),
-            &PatternFacts,
+            &PackSource::from_sentences(&all, &twin),
             &Config::with_budget(1000),
         );
-        assert!(s.decision(&twin[0].id).is_none());
+        assert!(s
+            .decision(&SectionId {
+                document: "current".into(),
+                section: 0
+            })
+            .is_none());
         assert_eq!(verdict(&s, "copy"), Verdict::Duplicate);
     }
 }
