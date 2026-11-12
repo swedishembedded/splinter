@@ -291,6 +291,7 @@ fn summary<'a>(all: &'a [Summary], name: &str) -> &'a Summary {
 fn on_hard_corpora_selection_with_provenance_beats_reading_everything_with_it() {
     for (form, signal) in [
         (Form::Property, Signal::Lexical),
+        (Form::Property, Signal::Fused),
         (Form::Behaviour, Signal::Fused),
     ] {
         let all = hard_summary(form, signal, 10);
@@ -300,12 +301,12 @@ fn on_hard_corpora_selection_with_provenance_beats_reading_everything_with_it() 
         let gain = best.held_out.mean - everything.held_out.mean;
         assert!(gain > 0.05, "{form:?}: {gain} {best:?} {everything:?}");
         assert!(best.words.mean * 3.0 < everything.words.mean);
-        // Without an embedder to align paraphrases, the corpus is not saturated; with one it nearly is.
+        // Without an embedder to align paraphrases the property corpus is not saturated, with one it
+        // nearly is; the behaviour corpus has nothing to align (a class has open-ended attributes).
         let selective = summary(&all, "selective").held_out.mean;
-        if signal == Signal::Lexical {
-            assert!(selective < 0.95, "{form:?}: {selective}");
-        } else {
-            assert!(selective > 0.9, "{form:?}: {selective}");
+        match (form, signal) {
+            (Form::Property, Signal::Fused) => assert!(selective > 0.9, "{selective}"),
+            _ => assert!(selective < 0.95, "{form:?} {signal:?}: {selective}"),
         }
     }
 }
@@ -396,4 +397,60 @@ fn a_learned_link_opens_the_gap_for_the_facts_it_names() {
         with.held_out,
         oracle.held_out
     );
+}
+
+#[test]
+fn every_stale_or_wrong_section_of_a_plain_corpus_is_ruled_out_by_the_headers() {
+    use splinter_knowledge::goal::hard::Hardness;
+    use splinter_knowledge::goal::source::FactSource;
+    use splinter_knowledge::goal::synthetic::Label;
+    for hops in [false, true] {
+        let mut spec = Spec::new(6500, Form::Property); // seed: any corpus
+        spec.hard = Hardness {
+            hops,
+            ..Hardness::default()
+        };
+        let corpus = generate(&spec);
+        let cands = candidates(&corpus.documents);
+        let source = PackSource::from_sentences(&corpus.documents, &cands);
+        for label in [Label::Outdated, Label::Misleading] {
+            let of_label: Vec<_> = cands
+                .iter()
+                .filter(|c| corpus.labels[&c.id] == label)
+                .collect();
+            let ruled = of_label
+                .iter()
+                .filter(|c| source.ruling(c).is_some())
+                .count();
+            // Every one of them states a value another, better-headed document states otherwise.
+            assert_eq!(
+                ruled,
+                of_label.len(),
+                "hops {hops}: {label:?} ruled {ruled} of {}",
+                of_label.len()
+            );
+        }
+    }
+}
+
+#[test]
+fn keys_are_aligned_through_identified_things_only() {
+    use splinter_knowledge::goal::align::align_keys;
+    use splinter_knowledge::goal::hard::Hardness;
+    use splinter_pipelines::goal::LexiconEmbedder;
+    for (form, any) in [(Form::Property, true), (Form::Behaviour, false)] {
+        let mut spec = Spec::new(7000, form); // seed: any corpus
+        spec.hard = Hardness::ALL;
+        let corpus = generate(&spec);
+        let pack = PackSource::sentence_pack(&corpus.documents);
+        let aligned = align_keys(&pack, &LexiconEmbedder::new(corpus.lexicon.clone())).unwrap();
+        // A pump has one set of attributes, so a phrase that replaces another is a
+        // paraphrase; a type of client has an open-ended set of situations, so nothing is.
+        assert_eq!(
+            !aligned.is_empty(),
+            any,
+            "{form:?}: {} keys aligned",
+            aligned.len()
+        );
+    }
 }

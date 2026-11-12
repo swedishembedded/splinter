@@ -286,9 +286,25 @@ impl World {
     }
 }
 
+/// A document's title is its name without the chunk number its id carries
+/// (`alquor-manual-3` is "alquor manual"; the 2024 edition keeps its year): the
+/// compiler lets documents numbered differently in their titles never compete,
+/// and the chunks of one manual are not different documents.
+fn title_of(id: &str) -> String {
+    let mut parts: Vec<&str> = id.split('-').collect();
+    if parts.len() > 1
+        && parts
+            .last()
+            .is_some_and(|p| p.chars().all(|c| c.is_ascii_digit()) && *p != "2024")
+    {
+        parts.pop();
+    }
+    parts.join(" ")
+}
+
 fn document(id: String, provenance: Provenance, text: String) -> Document {
     Document {
-        title: id.clone(),
+        title: title_of(&id),
         id,
         text,
         provenance,

@@ -12,8 +12,7 @@
 //! Admission keeps a key in the words of its quote, so `The maintenance
 //! period of alder pump 3 is 250 hours` and `The service interval of alder
 //! pump 3 is 400 hours` are two facts to it, and the older never meets the
-//! newer. An embedder proposes which attribute phrases and which entity names
-//! mean the same; code decides whether to believe it. A pair of phrases is
+//! newer. An embedder proposes which attribute phrases mean the same; code decides whether to believe it. A pair of phrases is
 //! aligned only if
 //!
 //! * their cosine reaches [`MIN_COSINE`];
@@ -21,8 +20,14 @@
 //!   one other, and not when another is nearly as close);
 //! * no document uses both: a document that says two things in two phrasings
 //!   means two things;
-//! * for an entity name, neither contains a digit: a name with a number is an
-//!   identifier, and `pump 3` is not `pump 4`.
+//! * entity names are never aligned, only attributes: `hesitant` and `reluctant`
+//!   look alike to an embedder and so do `hesitant` and `anxious`, and a false
+//!   merge turns two facts into a ruled conflict;
+//! * only what is stated about identified things (an entity with a number in
+//!   its name) is evidence for an attribute pair. A thing with an identifier
+//!   has one set of attributes; a class, such as a type of client, has an
+//!   open-ended set, and two of its situations stated in different documents
+//!   are two situations. Where there is no such evidence nothing is aligned.
 //!
 //! The alignment decides only which statements are compared. Which one
 //! stands is still the documents' headers and the stated values
@@ -134,7 +139,6 @@ pub fn align_keys(
     embedder: &dyn Embedder,
 ) -> Result<BTreeMap<String, String>, EmbedError> {
     let mut attributes: Uses = BTreeMap::new();
-    let mut entities: Uses = BTreeMap::new();
     let mut keys: BTreeSet<String> = BTreeSet::new();
     for object in pack.objects.iter().filter(|o| o.kind == "fact") {
         let Some(key) = object.data["key"].as_str() else {
@@ -144,19 +148,18 @@ pub fn align_keys(
             continue;
         };
         keys.insert(key.to_string());
-        attributes
-            .entry(attribute)
-            .or_default()
-            .insert(object.document.clone());
-        if !entity.chars().any(|c| c.is_ascii_digit()) {
-            entities
-                .entry(entity)
+        // Only what is stated about an identified thing is evidence: it has one
+        // set of attributes, so a phrase that replaces another across documents
+        // is a paraphrase. A class (a type of client) has an open-ended set of
+        // them, and two situations stated in different documents are just two.
+        if entity.chars().any(|c| c.is_ascii_digit()) {
+            attributes
+                .entry(attribute)
                 .or_default()
                 .insert(object.document.clone());
         }
     }
     let attribute_of = pair_up(&attributes, embedder)?;
-    let entity_of = pair_up(&entities, embedder)?;
     let mut aligned = BTreeMap::new();
     for key in keys {
         let Some((attribute, entity)) = split(&key) else {
@@ -165,7 +168,7 @@ pub fn align_keys(
         let shared = format!(
             "{} | {}",
             attribute_of.get(&attribute).unwrap_or(&attribute),
-            entity_of.get(&entity).unwrap_or(&entity)
+            entity
         );
         if shared != key {
             aligned.insert(key, shared);
@@ -210,11 +213,15 @@ mod tests {
     }
 
     fn documents() -> Vec<Document> {
-        let doc =
-            |id: &str, body: &str| Document::parse(id, &format!("---\nauthority: 3\n---\n{body}"));
+        let doc = |id: &str, date: &str, body: &str| {
+            Document::parse(
+                id,
+                &format!("---\nauthority: 3\ndate: {date}\n---\n# Pump manual\n\n{body}"),
+            )
+        };
         vec![
-            doc("old", "The service interval of pump 3 is 250 hours.\nThe rated torque of pump 3 is 30 newton metres.\n"),
-            doc("new", "The maintenance period of pump 3 is 400 hours.\nThe nominal force of pump 3 is 30 newton metres.\n"),
+            doc("old", "2024-01-01", "The service interval of pump 3 is 250 hours.\nThe rated torque of pump 3 is 30 newton metres.\n"),
+            doc("new", "2026-01-01", "The maintenance period of pump 3 is 400 hours.\nThe nominal force of pump 3 is 30 newton metres.\n"),
         ]
     }
 
@@ -244,12 +251,17 @@ mod tests {
             "maintenance period | pump 3"
         );
         assert_eq!(aligned["rated torque | pump 3"], "nominal force | pump 3");
-        // The ruling is the documents' and the values': the older statement
-        // loses to the newer one of equal authority only if the headers say so.
+        // The ruling is the documents' and the values': the newer document of equal
+        // authority supersedes the older on the interval, and nothing is ruled on the torque.
         let (resolutions, flags) = crate::objects::resolve_aligned(&pack, &aligned);
-        assert!(
-            resolutions.is_empty() && flags.len() == 1,
-            "{resolutions:?} {flags:?}"
+        assert!(flags.is_empty(), "{flags:?}");
+        assert_eq!(resolutions.len(), 1, "{resolutions:?}");
+        assert_eq!(
+            (
+                resolutions[0].winner.as_str(),
+                resolutions[0].superseded.as_slice()
+            ),
+            ("c", ["a".to_string()].as_slice())
         );
     }
 

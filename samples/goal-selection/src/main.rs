@@ -161,6 +161,9 @@ struct Cli {
     /// JSON object a line.
     #[arg(long)]
     transcript: Option<PathBuf>,
+    /// Only print how well the embedder aligns the keys of each corpus.
+    #[arg(long)]
+    alignment_only: bool,
     /// Print, for the first corpus, how relevant each kind of section looks to
     /// words alone and to meaning alone when nothing is known.
     #[arg(long)]
@@ -310,6 +313,10 @@ fn main() -> anyhow::Result<()> {
             PackSource::from_sentences_aligned(&corpus.documents, &cands, &*embedder)
                 .context("aligning the keys")?
         };
+        if cli.alignment_only {
+            alignment_quality(&corpus, &embedder)?;
+            continue;
+        }
         let semantic = (signal != Signal::Lexical)
             .then(|| Semantic::new(&*embedder, &cands))
             .transpose()
@@ -357,7 +364,21 @@ fn main() -> anyhow::Result<()> {
         if let Some(dir) = &cli.export {
             export(dir, base + i, &corpus, &cands, &arms)?;
         }
-        println!("corpus {} done ({} sections)", base + i, cands.len());
+        if let Some(selective) = arms.iter().find(|a| a.name == "selective") {
+            let mut by_label: std::collections::BTreeMap<String, usize> = Default::default();
+            for id in &selective.learned {
+                *by_label
+                    .entry(format!("{:?}", corpus.labels[id]))
+                    .or_default() += 1;
+            }
+            println!(
+                "corpus {} done ({} sections); selective learned {by_label:?}",
+                base + i,
+                cands.len()
+            );
+        } else {
+            println!("corpus {} done ({} sections)", base + i, cands.len());
+        }
         runs.push(arms);
     }
 
@@ -462,33 +483,7 @@ fn diagnose(
             answer: "unknown".into(),
         })
         .collect();
-    // How well the embedder aligned the keys of paraphrased statements, against the synonym table.
-    {
-        use splinter_sdk::knowledge::goal::align::align_keys;
-        use splinter_sdk::knowledge::goal::hard::canonical;
-        let pack = PackSource::sentence_pack(&corpus.documents);
-        let aligned = align_keys(&pack, &**embedder).context("aligning")?;
-        let (mut right, mut wrong) = (0, 0);
-        for (raw, shared) in &aligned {
-            let (a, b) = (
-                canonical(raw, &corpus.lexicon),
-                canonical(shared, &corpus.lexicon),
-            );
-            if a == b {
-                right += 1
-            } else {
-                wrong += 1
-            }
-        }
-        let paraphrased = pack
-            .objects
-            .iter()
-            .filter_map(|o| o.data["key"].as_str())
-            .filter(|k| canonical(k, &corpus.lexicon) != k.to_lowercase())
-            .collect::<std::collections::BTreeSet<_>>()
-            .len();
-        println!("alignment: {right} keys aligned to the same fact, {wrong} to another, of {paraphrased} paraphrased keys");
-    }
+    alignment_quality(corpus, embedder)?;
     let vocabulary = Vocabulary::of(cands);
     let gaps = analyse(&results, &vocabulary);
     let semantic = Semantic::new(&**embedder, cands).context("embedding the corpus")?;
@@ -530,6 +525,44 @@ fn diagnose(
                 sum / n as f64
             );
         }
+    }
+    Ok(())
+}
+
+/// Prints how well the embedder aligned the keys of paraphrased statements,
+/// against the corpus's synonym table.
+fn alignment_quality(
+    corpus: &splinter_sdk::knowledge::goal::synthetic::Corpus,
+    embedder: &Rc<dyn Embedder>,
+) -> anyhow::Result<()> {
+    {
+        use splinter_sdk::knowledge::goal::align::align_keys;
+        use splinter_sdk::knowledge::goal::hard::canonical;
+        let pack = PackSource::sentence_pack(&corpus.documents);
+        let aligned = align_keys(&pack, &**embedder).context("aligning")?;
+        let (mut right, mut wrong) = (0, 0);
+        for (raw, shared) in &aligned {
+            let (a, b) = (
+                canonical(raw, &corpus.lexicon),
+                canonical(shared, &corpus.lexicon),
+            );
+            if a == b {
+                right += 1
+            } else {
+                wrong += 1;
+                if wrong <= 3 {
+                    println!("  wrong: {raw}  ~  {shared}");
+                }
+            }
+        }
+        let paraphrased = pack
+            .objects
+            .iter()
+            .filter_map(|o| o.data["key"].as_str())
+            .filter(|k| canonical(k, &corpus.lexicon) != k.to_lowercase())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        println!("alignment: {right} keys aligned to the same fact, {wrong} to another, of {paraphrased} paraphrased keys");
     }
     Ok(())
 }
