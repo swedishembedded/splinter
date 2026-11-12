@@ -37,7 +37,7 @@ use common::gate::{
 use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
 use splinter_core::training::Regime;
-use splinter_model::policy_gradient::{LossAggregation, PolicyGradientOptions, Reference};
+use splinter_model::policy_gradient::{Behaviour, LossAggregation, PolicyGradientOptions, Reference};
 use splinter_model::train::BasePrecision;
 use splinter_orchestrator::Context;
 use splinter_pipelines::release::anchor;
@@ -267,7 +267,7 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     let defaults = PolicyGradientOptions::defaults();
     assert_eq!(plan.tuning.policy_gradient.resolved(), defaults);
     assert!(
-        plan.tuning.policy_gradient.named().len() == 6,
+        plan.tuning.policy_gradient.named().len() == 7,
         "recorded in the plan"
     );
 
@@ -277,6 +277,7 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
                 clip_eps: Some(0.1),
                 kl_beta: Some(0.0),
                 reference: Some(Reference::StartOfRun),
+                behaviour: Some(Behaviour::StartOfRun),
                 loss_agg: Some(LossAggregation::TokenSum),
                 temperature: Some(0.7),
                 teacher: Some(Reference::StartOfRun),

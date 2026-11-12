@@ -18,7 +18,7 @@ use crate::capabilities::overlong_records;
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 use crate::policy_gradient::{
-    LossAggregation, PolicyGradientOptions, PolicyGradientTune, Reference,
+    Behaviour, LossAggregation, PolicyGradientOptions, PolicyGradientTune, Reference,
 };
 use crate::selection::local_model_name;
 use crate::train::{candidate_adapter_id, FineTune};
@@ -217,6 +217,16 @@ fn options(params: &mut Map<String, Value>, options: &PolicyGradientOptions) {
     if let Some(v) = options.reference {
         set(params, "reference", reference(v));
     }
+    if let Some(v) = options.behaviour {
+        set(
+            params,
+            "behaviour",
+            match v {
+                Behaviour::Recorded => "recorded",
+                Behaviour::StartOfRun => "start_of_run_proxy",
+            },
+        );
+    }
     if let Some(v) = options.loss_agg {
         set(
             params,
@@ -256,6 +266,7 @@ mod tests {
                 clip_eps: Some(0.3),
                 kl_beta: Some(0.0),
                 reference: Some(Reference::StartOfRun),
+                behaviour: Some(Behaviour::StartOfRun),
                 loss_agg: Some(LossAggregation::TokenSum),
                 temperature: Some(0.6),
                 teacher: Some(Reference::Base),
@@ -265,8 +276,9 @@ mod tests {
         );
         assert_eq!(params["reference"], "start");
         assert_eq!(params["loss_agg"], "token-sum");
+        assert_eq!(params["behaviour"], "start_of_run_proxy");
         assert_eq!(params["teacher"], "base");
-        assert_eq!(params.len(), 8);
+        assert_eq!(params.len(), 9);
     }
 
     #[test]

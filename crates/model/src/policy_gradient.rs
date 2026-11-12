@@ -56,6 +56,33 @@ impl std::str::FromStr for Reference {
     }
 }
 
+/// Where the behaviour log-probabilities of the importance ratio come from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Behaviour {
+    /// The sampler's own, recorded with each rollout: every supervised token
+    /// must have one, and the ratio is the true importance ratio.
+    Recorded,
+    /// Where none was recorded, the log-probability under the policy the run
+    /// starts from. Exact only when the rollouts were sampled from that policy
+    /// (on-policy rounds are); otherwise a proxy, which the run's record says.
+    StartOfRun,
+}
+
+impl std::str::FromStr for Behaviour {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        match text {
+            "recorded" => Ok(Self::Recorded),
+            "start" => Ok(Self::StartOfRun),
+            other => Err(format!(
+                "{other:?} is not a behaviour source: recorded or start"
+            )),
+        }
+    }
+}
+
 /// How the token terms of the loss are normalised.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -93,6 +120,8 @@ pub struct PolicyGradientOptions {
     pub kl_beta: Option<f32>,
     /// The policy the KL term is taken against.
     pub reference: Option<Reference>,
+    /// Where the behaviour log-probabilities come from.
+    pub behaviour: Option<Behaviour>,
     /// How the token terms are normalised.
     pub loss_agg: Option<LossAggregation>,
     /// The temperature the rollouts were sampled at.
@@ -118,6 +147,8 @@ pub struct ResolvedPolicyGradient {
     pub kl_beta: f32,
     /// See [`PolicyGradientOptions::reference`].
     pub reference: Reference,
+    /// See [`PolicyGradientOptions::behaviour`].
+    pub behaviour: Behaviour,
     /// See [`PolicyGradientOptions::loss_agg`].
     pub loss_agg: LossAggregation,
     /// See [`PolicyGradientOptions::temperature`].
@@ -139,6 +170,7 @@ impl PolicyGradientOptions {
             (self.clip_eps.is_some(), "--clip-eps"),
             (self.kl_beta.is_some(), "--kl-beta"),
             (self.reference.is_some(), "--reference"),
+            (self.behaviour.is_some(), "--behaviour"),
             (self.loss_agg.is_some(), "--loss-agg"),
             (self.temperature.is_some(), "--temperature"),
             (self.teacher.is_some(), "--teacher-policy"),
@@ -161,6 +193,7 @@ impl PolicyGradientOptions {
             clip_eps: self.clip_eps.unwrap_or(defaults.clip_eps),
             kl_beta: self.kl_beta.unwrap_or(defaults.kl_beta),
             reference: self.reference.unwrap_or(defaults.reference),
+            behaviour: self.behaviour.unwrap_or(defaults.behaviour),
             loss_agg: self.loss_agg.unwrap_or(defaults.loss_agg),
             temperature: self.temperature.unwrap_or(defaults.temperature),
             teacher: self.teacher.unwrap_or(defaults.teacher),
@@ -181,6 +214,10 @@ impl PolicyGradientOptions {
             reference: match config.reference {
                 brain::ReferencePolicy::Base => Reference::Base,
                 brain::ReferencePolicy::StartOfRun => Reference::StartOfRun,
+            },
+            behaviour: match config.behaviour {
+                brain::BehaviourSource::Recorded => Behaviour::Recorded,
+                brain::BehaviourSource::StartOfRunProxy => Behaviour::StartOfRun,
             },
             loss_agg: match config.loss_agg {
                 brain::LossAgg::SeqMean => LossAggregation::SeqMean,
@@ -204,6 +241,10 @@ impl PolicyGradientOptions {
             reference: match resolved.reference {
                 Reference::Base => brain::ReferencePolicy::Base,
                 Reference::StartOfRun => brain::ReferencePolicy::StartOfRun,
+            },
+            behaviour: match resolved.behaviour {
+                Behaviour::Recorded => brain::BehaviourSource::Recorded,
+                Behaviour::StartOfRun => brain::BehaviourSource::StartOfRunProxy,
             },
             loss_agg: match resolved.loss_agg {
                 LossAggregation::SeqMean => brain::LossAgg::SeqMean,
@@ -433,13 +474,14 @@ mod tests {
             clip_eps: Some(0.3),
             kl_beta: Some(0.0),
             reference: Some(Reference::StartOfRun),
+            behaviour: Some(Behaviour::StartOfRun),
             loss_agg: Some(LossAggregation::TokenSum),
             temperature: Some(0.6),
             teacher: Some(Reference::StartOfRun),
             advantage_bound: Some(4.0),
             sequence_advantage_cap: Some(30.0),
         };
-        assert_eq!(named.named().len(), 8);
+        assert_eq!(named.named().len(), 9);
         let config = named.config();
         assert_eq!(
             (config.clip_eps, config.kl_beta, config.temperature),
@@ -447,6 +489,12 @@ mod tests {
         );
         assert_eq!(config.reference, brain::ReferencePolicy::StartOfRun);
         assert_eq!(config.loss_agg, brain::LossAgg::TokenSum);
+        assert_eq!(config.behaviour, brain::BehaviourSource::StartOfRunProxy);
+        assert_eq!(
+            PolicyGradientOptions::default().config().behaviour,
+            brain::BehaviourSource::Recorded,
+            "an unnamed behaviour source is brain's: the sampler's own, recorded"
+        );
         // The teacher's guards are handed to brain as named.
         assert_eq!(config.teacher, brain::ReferencePolicy::StartOfRun);
         assert_eq!(

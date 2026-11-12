@@ -109,6 +109,7 @@ pub(super) fn resolved(regime: Regime, named: PolicyGradientOptions) -> PolicyGr
         clip_eps: Some(resolved.clip_eps),
         kl_beta: Some(resolved.kl_beta),
         reference: Some(resolved.reference),
+        behaviour: Some(resolved.behaviour),
         loss_agg: Some(resolved.loss_agg),
         temperature: Some(resolved.temperature),
         teacher: Some(resolved.teacher),

@@ -7,7 +7,9 @@
 use clap::Args;
 use splinter_sdk::learn::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::measure::memorisation::MEMORISATION_GAP_RATIO;
-use splinter_sdk::model::policy_gradient::{LossAggregation, PolicyGradientOptions, Reference};
+use splinter_sdk::model::policy_gradient::{
+    Behaviour, LossAggregation, PolicyGradientOptions, Reference,
+};
 use splinter_sdk::model::train::BasePrecision;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{
@@ -172,6 +174,13 @@ pub struct PolicyGradientArgs {
         "For a dataset of rollouts: the policy the KL penalty keeps the adapter close to: the \
          frozen base, or `start`, the adapter the run begins from (--from) [default: base]")]
     pub reference: Option<Reference>,
+    /// Where the importance ratio's behaviour log-probabilities come from.
+    #[arg(long, value_name = "recorded|start", value_parser = clap::value_parser!(Behaviour), help =
+        "For a dataset of rollouts: where the behaviour log-probabilities of the importance ratio \
+         come from: `recorded`, the sampler's own, required on every trained token, or `start`, the \
+         adapter the run begins from (--from), exact only for rollouts sampled from it \
+         [default: recorded]")]
+    pub behaviour: Option<Behaviour>,
     /// How the token terms of the loss are normalised.
     #[arg(long, value_name = "seq-mean|token-sum", value_parser = clap::value_parser!(LossAggregation), help =
         "For a dataset of rollouts: how the token terms of the loss are normalised, per \
@@ -207,6 +216,7 @@ impl PolicyGradientArgs {
             clip_eps: self.clip_eps,
             kl_beta: self.kl_beta,
             reference: self.reference,
+            behaviour: self.behaviour,
             loss_agg: self.loss_agg,
             temperature,
             teacher: self.teacher_policy,
