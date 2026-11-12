@@ -96,3 +96,8 @@ in the same commit.
 | [108](108-one-variable-typed-two-ways-collapses-the-task-yield.md) | One variable typed two ways collapses the task yield |
 | [109](109-conflicts-grouped-by-key-alone-resolve-unrelated-chapters.md) | Conflicts grouped by key alone resolve unrelated chapters against each other |
 | [110](110-an-amendment-must-reuse-the-variables-of-what-it-replaces.md) | An amendment must reuse the variables of what it replaces |
+| [111](111-the-unreliable-pipelines-tests-were-a-full-disk-quota-and-too-many-test-threads.md) | The "unreliable" pipelines tests were a full disk quota and too many test threads |
+| [112](112-an-expdb-rollback-after-a-refresh-panicked-and-hid-the-io-error-that-caused-it.md) | An expdb rollback after a refresh panicked and hid the I/O error that caused it |
+| [113](113-a-reader-given-all-the-material-answers-unknown-when-passages-conflict.md) | A reader given all the material answers unknown when passages conflict |
+| [114](114-selecting-by-words-and-by-meaning-each-miss-what-the-other-finds.md) | Selecting material by words and by meaning each miss what the other finds |
+| [115](115-plain-dpo-collapses-a-small-model-without-an-anchor-on-the-chosen-answer.md) | Plain DPO collapses a small model without an anchor on the chosen answer |
