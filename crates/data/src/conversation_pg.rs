@@ -70,7 +70,11 @@ fn actions(system_prompt: &str, record: &Value) -> Vec<Vec<WireMessage>> {
 /// played): groups with a spread of rewards become records, the rest are
 /// counted as [`Exclusion::NoGroupSignal`] (one count per attempt).
 #[must_use]
-pub fn project(system_prompt: &str, attempts: &[Attempt], advantage: AdvantageKind) -> Projection {
+pub fn project(
+    system_prompt: &str,
+    attempts: &[Attempt],
+    advantage_kind: AdvantageKind,
+) -> Projection {
     let mut projection = Projection::new(VIEW, Objective::PolicyGradient, None, None);
     projection.system_prompt = Some(system_prompt.to_string());
     let mut groups: BTreeMap<(&str, &str), Vec<&Attempt>> = BTreeMap::new();
@@ -82,7 +86,7 @@ pub fn project(system_prompt: &str, attempts: &[Attempt], advantage: AdvantageKi
     }
     for ((case, policy), members) in groups {
         let rewards: Vec<f64> = members.iter().map(|a| a.reward).collect();
-        let advantages = advantage.advantages(&rewards);
+        let advantages = advantage_kind.advantages(&rewards);
         let kind = if rewards.iter().all(|r| *r >= 1.0) {
             GroupKind::AllPass
         } else if advantages.is_none() && rewards.iter().all(|r| *r <= 0.0) {
@@ -116,6 +120,9 @@ pub fn project(system_prompt: &str, attempts: &[Attempt], advantage: AdvantageKi
             continue;
         };
         for (attempt, advantage) in members.iter().zip(advantages) {
+            if advantage_kind.drops(advantage) {
+                continue;
+            }
             for messages in actions(system_prompt, &attempt.record) {
                 projection.records.push(Record {
                     body: RecordBody::chat(messages).with_advantage(advantage),
@@ -188,6 +195,21 @@ mod tests {
         };
         assert!(worse.unwrap() < -0.9);
         assert!(projection.groups[0].signal);
+    }
+
+    #[test]
+    fn positive_advantages_leave_out_the_conversations_that_did_not_beat_their_group() {
+        let attempts = [
+            attempt("c1", "a", 1.0, &TALK),
+            attempt("c1", "b", 0.0, &TALK),
+        ];
+        let projection = project("You are a lawyer.", &attempts, AdvantageKind::Positive);
+        assert_eq!(projection.records.len(), 2, "only the better attempt's turns");
+        assert!(projection.records.iter().all(|r| matches!(
+            &r.body,
+            RecordBody::Chat { advantage: Some(a), .. } if *a > 0.9
+        )));
+        assert!(projection.groups[0].trials[1].advantage < 0.0, "still reported");
     }
 
     #[test]

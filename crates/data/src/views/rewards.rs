@@ -154,6 +154,14 @@ pub enum AdvantageKind {
     Standardised,
     /// The reward less the group mean.
     MeanCentred,
+    /// [`Self::Standardised`] for the attempts that beat their group's mean,
+    /// and no record at all for the rest: only what did better than the
+    /// group is reinforced, and nothing is pushed down. Wrong answers share
+    /// most of their tokens with right ones, so pushing a wrong answer down
+    /// also pushes down the tokens that were right in it; this keeps the
+    /// group-relative signal without that damage, and loses the signal
+    /// of what to avoid.
+    Positive,
 }
 
 impl AdvantageKind {
@@ -174,13 +182,19 @@ impl AdvantageKind {
         let n = rewards.len() as f64;
         let mean = rewards.iter().sum::<f64>() / n;
         let spread = match self {
-            Self::Standardised => {
+            Self::Standardised | Self::Positive => {
                 (rewards.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / n).sqrt()
                     + SPREAD_EPSILON
             }
             Self::MeanCentred => 1.0,
         };
         Some(rewards.iter().map(|r| (r - mean) / spread).collect())
+    }
+
+    /// Whether an attempt with `advantage` is left out of the dataset: under
+    /// [`Self::Positive`], one that did no better than its group.
+    pub(crate) fn drops(self, advantage: f64) -> bool {
+        self == Self::Positive && advantage <= 0.0
     }
 }
 

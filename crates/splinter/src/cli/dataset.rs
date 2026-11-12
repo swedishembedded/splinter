@@ -89,7 +89,9 @@ pub struct BuildArgs {
     /// For the policy-gradient view: how an attempt's advantage is read from
     /// the rewards of the attempts at its task: `standardised` (GRPO's: the
     /// reward less the group mean over its standard deviation, the default) or
-    /// `mean-centred` (the reward less the group mean).
+    /// `mean-centred` (the reward less the group mean) or `positive` (the
+    /// standardised advantage of the attempts that beat their group, and no
+    /// record for the rest: nothing is pushed down).
     #[arg(long, value_parser = advantage, value_name = "KIND")]
     pub advantage: Option<AdvantageKind>,
     /// For the policy-gradient view: distil the groups whose attempts all

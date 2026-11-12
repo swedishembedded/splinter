@@ -331,6 +331,29 @@ fn mean_centred_advantages_are_not_divided_by_the_spread() {
 }
 
 #[test]
+fn positive_advantages_reinforce_only_the_attempts_that_beat_their_group() {
+    let corpus = corpus(&[
+        Trial::pass("t1"),
+        Trial::fail("t2", &[]),
+        Trial::fail("t3", &[]),
+    ]);
+    let projection = view()
+        .advantage(AdvantageKind::Positive)
+        .project(&corpus)
+        .unwrap();
+    // Each trial of the fixture is two actions: three trials, six records, of which the winner's two remain.
+    let everything = view().project(&corpus).unwrap();
+    assert_eq!((everything.records.len(), projection.records.len()), (6, 2), "the failures are left out");
+    let RecordBody::Chat { advantage, .. } = &projection.records[0].body else {
+        panic!("a rollout record, got {:?}", projection.records[0]);
+    };
+    let std = (2.0f64 / 9.0).sqrt();
+    assert!(close(advantage.unwrap(), (2.0 / 3.0) / (std + 1e-6)));
+    // The group's report still shows every attempt's own advantage.
+    assert!(projection.groups[0].trials[1].advantage < 0.0);
+}
+
+#[test]
 fn a_group_without_a_spread_of_rewards_teaches_nothing() {
     // Three passes: nobody did better than anybody. One lone trial: nothing
     // to compare it with.
