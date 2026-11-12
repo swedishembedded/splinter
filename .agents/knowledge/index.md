@@ -107,3 +107,11 @@ in the same commit.
 | [119](119-an-agent-on-a-model-that-never-stops-retries-the-same-empty-reply.md) | An agent on a model that never stops retries the same empty reply |
 | [120](120-step-labels-teach-slightly-more-than-an-outcome-check-and-neither-beats-the-start-at-toy-scale.md) | Step labels teach slightly more than an outcome check, and neither beats the start at toy scale |
 | [121](121-a-library-of-verified-sub-solutions-solves-compound-tasks-with-fewer-tokens.md) | A library of verified sub-solutions solves compound tasks with fewer tokens |
+| [122](122-words-one-probe-asks-with-outweigh-the-topic-they-were-asked-about.md) | Words only one probe asks with outweighed the topic they were asked about |
+| [123](123-a-fact-key-grounded-in-its-quote-never-meets-its-paraphrase.md) | A fact key grounded in its quote never meets its paraphrase, so stale statements were chosen |
+| [124](124-phrase-embeddings-alone-cannot-tell-a-paraphrase-from-a-neighbouring-attribute.md) | Phrase embeddings alone cannot tell a paraphrase from a neighbouring attribute |
+| [125](125-a-corpus-ordered-current-first-made-a-first-wins-reader-look-right.md) | A corpus ordered current-first made a first-wins reader look right |
+| [126](126-cargo-compiled-a-crate-against-a-stale-sibling-in-a-shared-target-directory.md) | Cargo compiled a crate against a stale sibling in a shared target directory |
+| [127](127-a-tie-among-documents-that-agree-was-flagged-as-a-conflict.md) | A tie among documents that agree was flagged as a conflict by the compiler's resolution |
+| [128](128-a-paraphrase-chosen-by-position-never-fired-with-few-units.md) | A paraphrase chosen by document position never fired with few units |
+| [129](129-an-objective-that-shares-a-word-with-one-kind-of-document-gates-the-others-out.md) | An objective that shares a word with one kind of document gated the others out |
