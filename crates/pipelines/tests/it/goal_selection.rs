@@ -28,14 +28,16 @@
 
 use splinter_knowledge::goal::corpus::candidates;
 use splinter_knowledge::goal::facts::Form;
-use splinter_knowledge::goal::select::Verdict;
+use splinter_knowledge::goal::select::{Signal, Verdict};
 use splinter_knowledge::goal::source::PackSource;
 use splinter_knowledge::goal::synthetic::{generate, Corpus, Spec};
-use splinter_pipelines::goal::compare::{compare, Arm};
+use splinter_pipelines::goal::compare::{compare, Arm, Inputs};
+use splinter_pipelines::goal::report::{summarise, Summary};
 use splinter_pipelines::goal::{Checks, InContext, Participant, Plan, ScriptedReader, Stop};
 
 const PLAN: Plan = Plan {
     checks: Checks::ALL,
+    signal: Signal::Lexical,
     rounds: 6,
     round_words: 400,
     total_words: 4000,
@@ -62,12 +64,15 @@ fn run(seed: u64, form: Form) -> (Corpus, Vec<Arm>) {
     let corpus = generate(&Spec::new(seed, form));
     let arms = compare(
         &corpus,
-        &|| fresh(&corpus),
-        &source_of(&corpus),
+        &Inputs {
+            fresh: &|| fresh(&corpus),
+            aware: Some(&|| aware(&corpus)),
+            source: &source_of(&corpus),
+            semantic: None,
+        },
         &PLAN,
         seed,
         true,
-        Some(&|| aware(&corpus)),
     );
     (corpus, arms)
 }
@@ -168,12 +173,15 @@ fn a_counterpart_persona_from_selected_behaviour_predicts_held_out_behaviour_of_
     let corpus = generate(&spec);
     let arms = compare(
         &corpus,
-        &|| fresh(&corpus),
-        &source_of(&corpus),
+        &Inputs {
+            fresh: &|| fresh(&corpus),
+            aware: None,
+            source: &source_of(&corpus),
+            semantic: None,
+        },
         &PLAN,
         3,
         false,
-        None,
     ); // seed: random arm
     let cands = candidates(&corpus.documents);
     let subject = corpus.goal.probes[0]
@@ -211,7 +219,98 @@ fn a_counterpart_persona_from_selected_behaviour_predicts_held_out_behaviour_of_
         .iter()
         .filter(|c| arm(&arms, "selective").learned.contains(&c.id))
         .collect();
-    let text = persona(&subject, &behaviour_of(&subject, &sections, &source_of(&corpus)));
+    let text = persona(
+        &subject,
+        &behaviour_of(&subject, &sections, &source_of(&corpus)),
+    );
     let seat = seat_spec("tenant", &corpus.goal.role, &corpus.goal.objective, &text).unwrap();
     assert_eq!(seat.persona, text);
+}
+
+fn hard_run(seed: u64, form: Form, signal: Signal) -> Vec<Arm> {
+    use splinter_knowledge::goal::hard::Hardness;
+    use splinter_knowledge::goal::semantic::Semantic;
+    use splinter_pipelines::goal::{LexiconEmbedder, Retrieval};
+    use std::rc::Rc;
+    let mut spec = Spec::new(seed, form);
+    spec.hard = Hardness::ALL;
+    let corpus = generate(&spec);
+    let embedder: Rc<dyn splinter_knowledge::retrieve::Embedder> =
+        Rc::new(LexiconEmbedder::new(corpus.lexicon.clone()));
+    let cands = candidates(&corpus.documents);
+    let semantic = Semantic::new(&*embedder, &cands).unwrap();
+    let retrieval = match signal {
+        Signal::Lexical => Retrieval::Lexical,
+        Signal::Semantic => Retrieval::Semantic,
+        Signal::Fused => Retrieval::Fused,
+    };
+    let make = |provenance: bool| -> Box<dyn Participant> {
+        let p = InContext::new(
+            ScriptedReader::knowing(corpus.base_knowledge.clone())
+                .understanding(corpus.lexicon.clone()),
+        )
+        .retrieving(retrieval, Rc::clone(&embedder));
+        Box::new(if provenance {
+            p.showing_provenance()
+        } else {
+            p
+        })
+    };
+    let plan = Plan { signal, ..PLAN };
+    compare(
+        &corpus,
+        &Inputs {
+            fresh: &|| make(false),
+            aware: Some(&|| make(true)),
+            source: &source_of(&corpus),
+            semantic: Some(&semantic),
+        },
+        &plan,
+        seed,
+        false,
+    )
+}
+
+/// The summaries of `corpora` hard corpora of `form` found with `signal`.
+fn hard_summary(form: Form, signal: Signal, corpora: u64) -> Vec<Summary> {
+    let runs: Vec<Vec<Arm>> = (0..corpora)
+        .map(|i| hard_run(1000 + i, form, signal)) // seed: ten corpora, each its own draw
+        .collect();
+    summarise(&runs, "selective", 1000) // seed: the intervals' resampling
+}
+
+fn summary<'a>(all: &'a [Summary], name: &str) -> &'a Summary {
+    all.iter().find(|s| s.name == name).unwrap()
+}
+
+#[test]
+fn on_hard_corpora_selection_with_provenance_beats_reading_everything_with_it() {
+    for (form, signal) in [
+        (Form::Property, Signal::Lexical),
+        (Form::Behaviour, Signal::Fused),
+    ] {
+        let all = hard_summary(form, signal, 10);
+        let best = summary(&all, "selective-with-provenance");
+        let everything = summary(&all, "all-with-provenance");
+        // Paired over the corpora: the gain's interval excludes zero, at a fraction of the words.
+        let gain = best.held_out.mean - everything.held_out.mean;
+        assert!(gain > 0.05, "{form:?}: {gain} {best:?} {everything:?}");
+        assert!(best.words.mean * 3.0 < everything.words.mean);
+        // And it is no longer the oracle: the hard corpora are not saturated.
+        assert!(summary(&all, "selective").held_out.mean < 0.95, "{form:?}");
+    }
+}
+
+#[test]
+fn where_the_corpus_is_paraphrased_meaning_finds_what_words_miss() {
+    let lexical = hard_summary(Form::Behaviour, Signal::Lexical, 10);
+    let fused = hard_summary(Form::Behaviour, Signal::Fused, 10);
+    let (l, f) = (summary(&lexical, "selective"), summary(&fused, "selective"));
+    assert!(
+        f.recall.mean > l.recall.mean + 0.05,
+        "{:?} {:?}",
+        l.recall,
+        f.recall
+    );
+    assert!(f.held_out.mean >= l.held_out.mean - 0.02);
 }

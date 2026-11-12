@@ -39,10 +39,15 @@ pub trait FactSource {
     /// Whether another section's statement beats one of this section's,
     /// as a verdict that leaves it out; `None` when none does.
     fn ruling(&self, section: &Candidate) -> Option<Verdict>;
+
+    /// Whether anything at all was made of the section: a section no object
+    /// can be made of gives a gap nothing to be closed with.
+    fn has_content(&self, section: &Candidate) -> bool;
 }
 
 /// A pack's objects laid over the sections of the corpus it came from.
 pub struct PackSource {
+    objects: BTreeSet<SectionId>,
     facts: HashMap<SectionId, Vec<Fact>>,
     rulings: HashMap<SectionId, Verdict>,
 }
@@ -52,12 +57,14 @@ impl PackSource {
     #[must_use]
     pub fn new(pack: &Pack, candidates: &[Candidate]) -> Self {
         let mut by_object: HashMap<&str, SectionId> = HashMap::new();
+        let mut objects: BTreeSet<SectionId> = BTreeSet::new();
         let mut facts: HashMap<SectionId, Vec<Fact>> = HashMap::new();
         for object in &pack.objects {
             let Some(section) = section_of(object, pack, candidates) else {
                 continue;
             };
             by_object.insert(object.id.as_str(), section.clone());
+            objects.insert(section.clone());
             if let Some(fact) = fact_of(object) {
                 facts.entry(section).or_default().push(fact);
             }
@@ -98,11 +105,17 @@ impl PackSource {
                 }
             }
         }
-        Self { facts, rulings }
+        Self {
+            objects,
+            facts,
+            rulings,
+        }
     }
 
     /// A pack proposed from the sentence forms of the corpus's documents and
-    /// admitted, laid over `candidates`.
+    /// admitted, laid over `candidates`. A key stays in the words the quote
+    /// uses: admission requires it, so statements that paraphrase each other
+    /// are not recognised as disagreeing.
     #[must_use]
     pub fn from_sentences(documents: &[Document], candidates: &[Candidate]) -> Self {
         let proposals: Vec<ProposedObject> =
@@ -118,6 +131,10 @@ impl FactSource for PackSource {
 
     fn ruling(&self, section: &Candidate) -> Option<Verdict> {
         self.rulings.get(&section.id).cloned()
+    }
+
+    fn has_content(&self, section: &Candidate) -> bool {
+        self.objects.contains(&section.id)
     }
 }
 

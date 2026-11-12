@@ -23,7 +23,8 @@ use splinter_knowledge::goal::gaps::{pass_rate, Goal, Probe};
 use splinter_knowledge::goal::source::FactSource;
 use splinter_knowledge::goal::synthetic::{Corpus, Label};
 
-use super::{learn_goal, probe, Checks, Participant, Plan, Report};
+use super::{learn_goal, probe, Checks, Evidence, Participant, Plan, Report};
+use splinter_knowledge::goal::semantic::Semantic;
 
 /// One arm's result.
 #[derive(Clone, Debug, Serialize)]
@@ -105,6 +106,20 @@ fn arm(
     }
 }
 
+/// What the arms are made from.
+#[derive(Clone, Copy)]
+pub struct Inputs<'a> {
+    /// Makes a participant that has learned nothing.
+    pub fresh: &'a dyn Fn() -> Box<dyn Participant>,
+    /// Makes one that is shown each section's provenance, which adds the arms
+    /// that settle disagreements from it.
+    pub aware: Option<&'a dyn Fn() -> Box<dyn Participant>>,
+    /// Facts and rulings.
+    pub source: &'a dyn FactSource,
+    /// The sections as vectors, when meaning is used.
+    pub semantic: Option<&'a Semantic<'a>>,
+}
+
 /// Runs every arm on `corpus`, each with a fresh participant from
 /// `fresh`. `seed` draws the random arm's sections; `ablate` adds the arms
 /// that run the loop with one check off; `aware` makes a participant that is
@@ -112,16 +127,25 @@ fn arm(
 /// settles disagreements itself, the strongest way to use all of it).
 pub fn compare(
     corpus: &Corpus,
-    fresh: &dyn Fn() -> Box<dyn Participant>,
-    source: &dyn FactSource,
+    inputs: &Inputs<'_>,
     plan: &Plan,
     seed: u64,
     ablate: bool,
-    aware: Option<&dyn Fn() -> Box<dyn Participant>>,
 ) -> Vec<Arm> {
+    let Inputs {
+        fresh,
+        aware,
+        source,
+        semantic,
+    } = *inputs;
     let cands = candidates(&corpus.documents);
     let mut selective = fresh();
-    let report = learn_goal(&cands, &corpus.goal, &mut *selective, source, plan);
+    let evidence = Evidence {
+        candidates: &cands,
+        source,
+        semantic,
+    };
+    let report = learn_goal(&evidence, &corpus.goal, &mut *selective, plan);
     let without = |name: &'static str, off: fn(&mut Checks)| {
         let mut checks = plan.checks;
         off(&mut checks);
@@ -140,10 +164,9 @@ pub fn compare(
     for (name, checks) in ablated {
         let mut participant = fresh();
         let report = learn_goal(
-            &cands,
+            &evidence,
             &corpus.goal,
             &mut *participant,
-            source,
             &Plan { checks, ..*plan },
         );
         let chosen: BTreeSet<SectionId> = report.learned.iter().cloned().collect();
@@ -205,15 +228,12 @@ pub fn compare(
     ];
     arms.extend(ablations);
     if let Some(aware) = aware {
-        arms.push(arm(
-            "all-with-provenance",
-            corpus,
-            &cands,
-            aware(),
-            &all,
-            0,
-            None,
-        ));
+        for (name, sections) in [
+            ("all-with-provenance", &all),
+            ("selective-with-provenance", &chosen),
+        ] {
+            arms.push(arm(name, corpus, &cands, aware(), sections, 0, None));
+        }
     }
     arms
 }

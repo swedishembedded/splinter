@@ -11,7 +11,9 @@
 //! Every candidate section gets exactly one [`Decision`] carrying the
 //! reason. In the order they are checked:
 //!
-//! 1. **Relevance** - the share of each open [`Gap`]'s words (weighted by
+//! 1. **Relevance** - by the gaps' words, by meaning ([`Semantic`], a section
+//!    that stands out for a gap among the corpus by an embedder), or either
+//!    ([`Signal`]). By words: the share of each open [`Gap`]'s words (weighted by
 //!    rarity and by how many of its probes use them) a section has,
 //!    weighted by the gap's share of the failures. Below [`Config::min_relevance`] the section is
 //!    [`Verdict::Irrelevant`].
@@ -24,6 +26,7 @@
 //!    fact loses is [`Verdict::Contradicted`] when the winner has higher
 //!    authority and [`Verdict::Superseded`] when it is newer; a tie is
 //!    [`Verdict::Contested`].
+//!    A section the source made nothing of is [`Verdict::Empty`].
 //! 3. **Novelty** - the participant is asked the question each fact of the
 //!    section answers; the share it gets right is what the section would
 //!    teach it that it knows already. Below [`Config::min_novelty`] the
@@ -42,6 +45,7 @@ use serde::{Deserialize, Serialize};
 use super::corpus::{Candidate, SectionId, Vocabulary};
 use super::facts::{states, words, Fact, FactKey};
 use super::gaps::Gap;
+use super::semantic::Semantic;
 use super::source::FactSource;
 
 /// Something that answers questions: the participant being measured.
@@ -62,6 +66,8 @@ pub struct Config {
     /// Whether contradicted and superseded sections are left out. Off only
     /// to measure what the check contributes.
     pub check_conflicts: bool,
+    /// What decides whether a section bears on the gaps.
+    pub signal: Signal,
     /// Whether the participant is asked what it knows already. Off only to
     /// measure what the check contributes.
     pub check_novelty: bool,
@@ -92,10 +98,22 @@ impl Config {
             budget_words,
             min_relevance: MIN_RELEVANCE,
             min_novelty: MIN_NOVELTY,
+            signal: Signal::Fused,
             check_conflicts: true,
             check_novelty: true,
         }
     }
+}
+
+/// What decides whether a section bears on the gaps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Signal {
+    /// The gaps' words.
+    Lexical,
+    /// Closeness in meaning ([`Open::semantic`]); without it nothing is relevant.
+    Semantic,
+    /// Either: a section is relevant if its words or its meaning say so.
+    Fused,
 }
 
 /// What was decided about a section, and the reason.
@@ -122,6 +140,9 @@ pub enum Verdict {
     },
     /// The participant answers what it states already.
     Known,
+    /// Nothing could be made of it: it states no fact or rule a gap could be
+    /// closed with.
+    Empty,
     /// Everything it states is learned or chosen already.
     Duplicate,
     /// Worth learning, but the words ran out.
@@ -167,10 +188,12 @@ impl Selection {
 
 /// What is open: the gaps the probes showed, and the goal's own statement,
 /// which names the domain the gaps are in.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Open<'a> {
     /// The gaps.
     pub gaps: &'a [Gap],
+    /// The sections as an embedder sees them, when relevance by meaning is on.
+    pub semantic: Option<&'a Semantic<'a>>,
     /// The goal's objective as written.
     pub objective: &'a str,
 }
@@ -187,7 +210,7 @@ pub fn select(
     config: &Config,
 ) -> Selection {
     let facts: Vec<Vec<Fact>> = candidates.iter().map(|c| source.facts(c)).collect();
-    let relevance = relevance_of(candidates, vocabulary, open);
+    let relevance = relevance_of(candidates, vocabulary, open, config.signal);
     let conflicts: HashMap<usize, Verdict> = if config.check_conflicts {
         candidates
             .iter()
@@ -223,6 +246,8 @@ pub fn select(
         };
         decisions[i] = if relevance[i].coverage < config.min_relevance {
             decision(Verdict::Irrelevant)
+        } else if !source.has_content(c) {
+            decision(Verdict::Empty)
         } else if let Some(verdict) = conflicts.get(&i) {
             decision(verdict.clone())
         } else {
@@ -293,6 +318,36 @@ pub fn select(
 /// the gap's probes that use them (what the probes have in common is what the gap is about), the share a section has, and the gaps' shares
 /// of the failures added up. Words no section has are not asked about.
 fn relevance_of(
+    candidates: &[Candidate],
+    vocabulary: &Vocabulary,
+    open: &Open<'_>,
+    signal: Signal,
+) -> Vec<Relevance> {
+    let lexical = if signal == Signal::Semantic {
+        vec![Relevance::default(); candidates.len()]
+    } else {
+        lexical_relevance(candidates, vocabulary, open)
+    };
+    let mut meaning = vec![Relevance::default(); candidates.len()];
+    if let (Some(semantic), true) = (open.semantic, signal != Signal::Lexical) {
+        for gap in open.gaps {
+            for (m, stands_out) in meaning.iter_mut().zip(semantic.standout(gap)) {
+                m.coverage = m.coverage.max(stands_out);
+                m.weighted += gap.weight * stands_out;
+            }
+        }
+    }
+    lexical
+        .into_iter()
+        .zip(meaning)
+        .map(|(l, m)| Relevance {
+            coverage: l.coverage.max(m.coverage),
+            weighted: l.weighted.max(m.weighted),
+        })
+        .collect()
+}
+
+fn lexical_relevance(
     candidates: &[Candidate],
     vocabulary: &Vocabulary,
     open: &Open<'_>,
@@ -474,6 +529,7 @@ mod tests {
             &BTreeSet::new(),
             &Open {
                 gaps: &gaps,
+                semantic: None,
                 objective: "Service the alder pump line.",
             },
             &Vocabulary::of(&corpus()),
@@ -549,6 +605,7 @@ mod tests {
         );
         let open = Open {
             gaps: &gaps,
+            semantic: None,
             objective: "",
         };
         let s = select(
@@ -587,6 +644,7 @@ mod tests {
             &learned,
             &Open {
                 gaps: &gaps,
+                semantic: None,
                 objective: "",
             },
             &Vocabulary::of(&twin),

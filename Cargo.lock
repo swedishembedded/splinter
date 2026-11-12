@@ -7080,6 +7080,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
+ "reqwest",
  "serde",
  "serde_json",
  "splinter-sdk",

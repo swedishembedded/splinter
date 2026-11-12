@@ -11,9 +11,12 @@
 //!
 //! * [`corpus`] - documents with provenance, cut into candidate sections.
 //! * [`facts`] - the keyed values a section states.
+//! * [`hard`] - what makes a synthetic corpus hard for lexical selection:
+//!   paraphrase, mirrors, partial staleness, decoys.
 //! * [`gaps`] - a goal, its probes, and the gaps its failed probes show.
 //! * [`source`] - the admitted knowledge objects selection takes its facts
 //!   and conflict rulings from.
+//! * [`semantic`] - relevance by meaning, from an embedder.
 //! * [`select`] - relevance to the gaps, conflicts, novelty to the
 //!   participant, duplicates and a word budget, one decision per section.
 //! * [`synthetic`] - labelled corpora (relevant, irrelevant, outdated,
@@ -26,6 +29,8 @@
 pub mod corpus;
 pub mod facts;
 pub mod gaps;
+pub mod hard;
 pub mod select;
+pub mod semantic;
 pub mod source;
 pub mod synthetic;

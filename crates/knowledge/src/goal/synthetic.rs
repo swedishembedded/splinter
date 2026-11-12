@@ -34,6 +34,7 @@ use splinter_core::rng::SplitMix64;
 use super::corpus::{Document, Provenance, SectionId};
 use super::facts::{Fact, FactKey, Form};
 use super::gaps::{Goal, Probe};
+use super::hard::{decoy_section, lexicon, paraphrase, Hardness};
 
 /// What a section is, as the generator knows it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -67,6 +68,8 @@ pub struct Spec {
     pub known_share: f64,
     /// Dev probes per goal topic.
     pub probes_per_topic: usize,
+    /// Which difficulties the corpus has; none by default.
+    pub hard: Hardness,
 }
 
 impl Spec {
@@ -81,6 +84,7 @@ impl Spec {
             units: 10,
             known_share: 0.3,
             probes_per_topic: 6,
+            hard: Hardness::default(),
         }
     }
 }
@@ -100,6 +104,9 @@ pub struct Corpus {
     pub base_knowledge: Vec<Fact>,
     /// The names of the goal's topics (the equipment lines or client types).
     pub goal_topics: Vec<String>,
+    /// Variants and the words they stand for, as a normalising proposer or an
+    /// embedder would know them; empty unless the corpus is paraphrased.
+    pub lexicon: BTreeMap<String, String>,
 }
 
 const ONSETS: [&str; 14] = [
@@ -389,39 +396,92 @@ pub fn generate(spec: &Spec) -> Corpus {
                     units: &[usize],
                     values: &BTreeMap<FactKey, String>,
                     p: Provenance,
-                    label: &dyn Fn(usize) -> Label| {
+                    label: &dyn Fn(usize) -> Label,
+                    paraphrased: bool| {
             let body: String = units
                 .iter()
                 .map(|&u| section(topic, &topic.units[u], values, prose(w), spec.form))
                 .collect::<Vec<_>>()
                 .join("\n");
+            let body = if paraphrased { paraphrase(&body) } else { body };
             (
                 document(id, p, body),
                 units.iter().map(|&u| label(u)).collect::<Vec<_>>(),
             )
         };
         let all: Vec<usize> = (0..topic.units.len()).collect();
-        for (n, chunk) in all.chunks(3).enumerate() {
+        // Units the current manual no longer covers: the older manual is the
+        // only source for them, and still right.
+        let mut order = all.clone();
+        w.rng.shuffle(&mut order);
+        let retired: BTreeSet<usize> = if spec.hard.partial_stale {
+            order.into_iter().take(topic.units.len() / 2).collect()
+        } else {
+            BTreeSet::new()
+        };
+        let live: Vec<usize> = all
+            .iter()
+            .copied()
+            .filter(|u| !retired.contains(u))
+            .collect();
+        let relevant_label = |u: usize| {
+            if known.contains(&u) {
+                Label::Known
+            } else {
+                Label::Relevant
+            }
+        };
+        // Stale values, except where the old manual is the only source.
+        let old_values: BTreeMap<FactKey, String> = topic
+            .units
+            .iter()
+            .enumerate()
+            .flat_map(|(u, unit)| {
+                let source = if retired.contains(&u) {
+                    &current
+                } else {
+                    &stale
+                };
+                unit.iter().map(move |k| (k.clone(), source[k].clone()))
+            })
+            .collect();
+        for (n, chunk) in live.chunks(3).enumerate() {
             let p = Provenance {
                 date: Some("2026-06-01".into()),
                 version: 5,
                 authority: 3,
             };
+            let paraphrased = spec.hard.paraphrase && n % 2 == 1;
             let (d, l) = make(
                 &mut w,
                 format!("{}-manual-{n}", topic.name),
                 chunk,
                 &current,
                 p,
-                &|u| {
-                    if known.contains(&u) {
-                        Label::Known
-                    } else {
-                        Label::Relevant
-                    }
-                },
+                &relevant_label,
+                paraphrased,
             );
             emit(d, l, &mut labels);
+            if spec.hard.mirrors && n < 2 {
+                // A copy that lost its header, with one value wrong per section.
+                let mut copied = current.clone();
+                for &u in chunk {
+                    let k = &topic.units[u][0];
+                    copied.insert(k.clone(), wrong[k].clone());
+                }
+                let (d, l) = make(
+                    &mut w,
+                    format!("{}-mirror-{n}", topic.name),
+                    chunk,
+                    &copied,
+                    Provenance::default(),
+                    &|_| Label::Misleading,
+                    paraphrased,
+                );
+                emit(d, l, &mut labels);
+            }
+        }
+        for (n, chunk) in all.chunks(3).enumerate() {
             let p = Provenance {
                 date: Some("2024-02-01".into()),
                 version: 2,
@@ -431,9 +491,16 @@ pub fn generate(spec: &Spec) -> Corpus {
                 &mut w,
                 format!("{}-manual-2024-{n}", topic.name),
                 chunk,
-                &stale,
+                &old_values,
                 p,
-                &|_| Label::Outdated,
+                &|u| {
+                    if retired.contains(&u) {
+                        relevant_label(u)
+                    } else {
+                        Label::Outdated
+                    }
+                },
+                false,
             );
             emit(d, l, &mut labels);
         }
@@ -452,8 +519,24 @@ pub fn generate(spec: &Spec) -> Corpus {
                 &wrong,
                 p,
                 &|_| Label::Misleading,
+                false,
             );
             emit(d, l, &mut labels);
+        }
+        if spec.hard.decoys {
+            let attributes: Vec<&str> = topic.units[0]
+                .iter()
+                .map(|k| k.attribute.as_str())
+                .collect();
+            let body: String = (0..3)
+                .map(|n| decoy_section(&topic.name, &attributes, n))
+                .collect::<Vec<_>>()
+                .join("\n");
+            emit(
+                document(format!("{}-news", topic.name), Provenance::default(), body),
+                vec![Label::Irrelevant; 3],
+                &mut labels,
+            );
         }
     }
     for topic in other_topics {
@@ -546,6 +629,11 @@ pub fn generate(spec: &Spec) -> Corpus {
         held_out,
         base_knowledge,
         goal_topics: goal_topics.iter().map(|t| t.name.clone()).collect(),
+        lexicon: if spec.hard.paraphrase {
+            lexicon()
+        } else {
+            BTreeMap::new()
+        },
     }
 }
 

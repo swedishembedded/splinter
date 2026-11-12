@@ -17,22 +17,27 @@
 //! at random, reading everything, and reading only what a hidden label
 //! calls relevant. [`behaviour`] turns the material chosen for a counterpart
 //! role into a seat specification and measures how well it predicts held-out
-//! behaviour.
+//! behaviour. [`intake`] lets live behaviour data in only after the scrub.
 
 pub mod behaviour;
 pub mod compare;
+pub mod intake;
 pub mod participant;
+pub mod report;
 
 use std::cell::Cell;
 
 use serde::Serialize;
 use splinter_knowledge::goal::corpus::{Candidate, SectionId, Vocabulary};
 use splinter_knowledge::goal::gaps::{analyse, pass_rate, Goal, ProbeResult};
-use splinter_knowledge::goal::select::{select, Config, Examinee, Open, Selection};
+use splinter_knowledge::goal::select::{select, Config, Examinee, Open, Selection, Signal};
+use splinter_knowledge::goal::semantic::Semantic;
 use splinter_knowledge::goal::source::FactSource;
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use participant::{InContext, Participant, Query, Reader, ScriptedReader};
+pub use participant::{
+    InContext, LexiconEmbedder, Participant, Query, Reader, Retrieval, ScriptedReader,
+};
 
 /// Which of the selection's checks are on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +64,8 @@ impl Checks {
 pub struct Plan {
     /// What the selection checks; all of it, but for an ablation.
     pub checks: Checks,
+    /// What decides whether a section bears on the gaps.
+    pub signal: Signal,
     /// The most rounds of probe, select, learn.
     pub rounds: usize,
     /// The most words one round may choose.
@@ -138,15 +145,27 @@ pub fn probe(goal: &Goal, participant: &dyn Examinee) -> Vec<ProbeResult> {
         .collect()
 }
 
+/// What selection reads: the sections, where their facts and rulings come
+/// from, and the sections as an embedder sees them when meaning is used.
+#[derive(Clone, Copy)]
+pub struct Evidence<'a> {
+    /// Every section that may be chosen.
+    pub candidates: &'a [Candidate],
+    /// Facts and rulings.
+    pub source: &'a dyn FactSource,
+    /// The sections as vectors, when relevance by meaning is on.
+    pub semantic: Option<&'a Semantic<'a>>,
+}
+
 /// Runs the loop: probe, find the gaps, choose, learn, until the goal is
 /// met, nothing is worth learning, or the plan is spent.
 pub fn learn_goal(
-    candidates: &[Candidate],
+    evidence: &Evidence<'_>,
     goal: &Goal,
     participant: &mut dyn Participant,
-    source: &dyn FactSource,
     plan: &Plan,
 ) -> Report {
+    let (candidates, source) = (evidence.candidates, evidence.source);
     let vocabulary = Vocabulary::of(candidates);
     let mut learned: Vec<SectionId> = Vec::new();
     let mut learned_set: BTreeSet<SectionId> = BTreeSet::new();
@@ -183,6 +202,7 @@ pub fn learn_goal(
         let gaps = analyse(&remembered, &vocabulary);
         let config = Config {
             check_conflicts: plan.checks.conflicts,
+            signal: plan.signal,
             check_novelty: plan.checks.novelty,
             ..Config::with_budget(plan.round_words.min(left))
         };
@@ -191,6 +211,7 @@ pub fn learn_goal(
             &learned_set,
             &Open {
                 gaps: &gaps,
+                semantic: evidence.semantic,
                 objective: if plan.checks.objective {
                     &goal.objective
                 } else {

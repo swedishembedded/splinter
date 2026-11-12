@@ -91,6 +91,8 @@ pub struct Gap {
     /// the gap's probes that use it. A word every probe of the gap shares
     /// says what the gap is about; one only a probe uses says which probe.
     pub terms: BTreeMap<String, f64>,
+    /// The failed probes' questions, as asked.
+    pub questions: Vec<String>,
     /// Its share of all failures, in (0, 1].
     pub weight: f64,
 }
@@ -120,6 +122,7 @@ pub fn analyse(results: &[ProbeResult], vocabulary: &Vocabulary) -> Vec<Gap> {
                 .clone()
                 .unwrap_or_else(|| members[0].probe.id.clone()),
             probes: members.iter().map(|m| m.probe.id.clone()).collect(),
+            questions: members.iter().map(|m| m.probe.question.clone()).collect(),
             terms: terms_of(&members),
             weight: members.len() as f64 / total,
         })
