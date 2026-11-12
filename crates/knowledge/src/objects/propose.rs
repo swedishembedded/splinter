@@ -58,6 +58,12 @@ pub struct DocumentInput {
     /// Every document of the corpus, for checking a reply (not shown).
     #[serde(skip)]
     pub documents: Vec<Document>,
+    /// The pass this input is for; `None` asks for every kind.
+    #[serde(skip)]
+    pub group: Option<Group>,
+    /// Whether the brief carries a worked example.
+    #[serde(skip)]
+    pub examples: bool,
 }
 
 /// A model, or a script standing in for one, asked what a document says.
@@ -90,9 +96,131 @@ impl ObjectProposer for ScriptedProposer {
     }
 }
 
-/// The brief a model proposer is given.
+/// A pass over a document that asks for one family of kinds, with instructions and a worked example that are about those kinds only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Group {
+    /// Limits, conditions with consequences, and exceptions.
+    Conditions,
+    /// Amounts, percentages and formulas.
+    Computations,
+    /// Periods in days, ordered steps, and maximum durations.
+    Periods,
+    /// Facts, definitions and tables.
+    Statements,
+    /// How a subject reveals things when asked.
+    Behaviour,
+}
+
+impl Group {
+    /// Every group, in the order the passes run.
+    pub const ALL: [Group; 5] = [
+        Group::Conditions,
+        Group::Computations,
+        Group::Periods,
+        Group::Statements,
+        Group::Behaviour,
+    ];
+
+    /// The kinds a pass of this group may return; a proposal of another kind is dropped.
+    #[must_use]
+    pub fn kinds(self) -> &'static [&'static str] {
+        match self {
+            Group::Conditions => &["threshold", "rule", "exception"],
+            Group::Computations => &["computation"],
+            Group::Periods => &["deadline", "procedure_step", "threshold"],
+            Group::Statements => &["fact", "definition", "table"],
+            Group::Behaviour => &["trait"],
+        }
+    }
+
+    /// The pass's name in a report.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Group::Conditions => "conditions",
+            Group::Computations => "computations",
+            Group::Periods => "periods",
+            Group::Statements => "statements",
+            Group::Behaviour => "behaviour",
+        }
+    }
+
+    fn instructions(self) -> &'static str {
+        match self {
+            Group::Conditions => {
+                "Extract every sentence that sets a limit, states a condition with its consequence, or makes an exception. A limit on a number (more than, at most, at least, within) \
+                 is a threshold: var, op, value, outcome (what follows), label, vars; limit=true when it is a ceiling a draft must stay within. A condition without a number is a rule: \
+                 when, outcome, vars. 'Unless', 'except if' and 'does not apply if' make an exception: overrides (the id of the rule it qualifies, which you also give), when, outcome, vars. \
+                 Two thresholds in one sentence are two objects with the same quote."
+            }
+            Group::Computations => {
+                "Extract every amount, percentage or formula the text defines. A computation has name, when (the condition under which it applies), expr and vars. \
+                 An expression is [\"const\", \"0.5\"], [\"var\", name] or [op, e1, e2] with op in add sub mul div min max pct; pct(base, percent) is base * percent / 100; \
+                 'for each day/week' multiplies by a count variable; 'but at most X' is min(..., X)."
+            }
+            Group::Periods => {
+                "Extract every period and ordered action. A period in days counted from an event is a deadline: event, from (a date variable you declare in vars), offset (integer), unit \
+                 (calendar_days|business_days), vars. Numbered or ordered actions are procedure_steps: order (1, 2, ...), element (a short phrase), terms; one step per action, several \
+                 steps may share the quote of one sentence. A maximum duration (minutes, hours) is a threshold with limit=true: var, op, value, outcome, vars."
+            }
+            Group::Statements => {
+                "Extract every stated fact, definition and table. 'The X of Y is V' is a fact: key \"X | Y\" with the real words, value V as written, form property. \
+                 'When X, a Y client Z' is a fact: key \"when X | Y client\", value Z, form behaviour. 'In this chapter, T means M' is a definition: term, meaning. \
+                 Values stated for several cases in one sentence are a table: name, columns, rows (every cell copied from the quote)."
+            }
+            Group::Behaviour => {
+                "Extract how a subject behaves when asked: a trait with trait (discloses_when_asked), topic, keywords (words an interviewer's question would contain), \
+                 reveals (what the subject says, in the first person, using the words of the quote) and terms (words copied from the quote). One trait per thing the subject reveals only when asked."
+            }
+        }
+    }
+
+    fn example(self) -> &'static str {
+        match self {
+            Group::Conditions => {
+                "Example text: \"A book may be kept for at most 21 days. After 21 days a fine is due, unless the borrower is a child.\"\n\
+                 Example objects: {\"id\":\"keep\",\"kind\":\"threshold\",\"document\":\"d\",\"quote\":\"After 21 days a fine is due, unless the borrower is a child.\",\"data\":{\"var\":\"days_kept\",\"op\":\">\",\"value\":21,\"outcome\":\"fine_due\",\"label\":\"days kept\",\"vars\":{\"days_kept\":\"int\"}}} \
+                 and {\"id\":\"child\",\"kind\":\"exception\",\"document\":\"d\",\"quote\":\"After 21 days a fine is due, unless the borrower is a child.\",\"data\":{\"overrides\":\"keep\",\"when\":{\"var\":\"borrower_is_child\",\"op\":\"==\",\"value\":true},\"outcome\":\"no_fine\",\"vars\":{\"borrower_is_child\":\"bool\"}}}"
+            }
+            Group::Computations => {
+                "Example text: \"For each full week a book is late a fee of 3 percent of its price is charged, but at most 15 percent of the price.\"\n\
+                 Example object: {\"id\":\"fee\",\"kind\":\"computation\",\"document\":\"d\",\"quote\":\"For each full week a book is late a fee of 3 percent of its price is charged, but at most 15 percent of the price.\",\"data\":{\"name\":\"late_fee\",\"when\":{\"var\":\"weeks_late\",\"op\":\">\",\"value\":0},\"expr\":[\"pct\",[\"var\",\"price\"],[\"min\",[\"mul\",[\"var\",\"weeks_late\"],[\"const\",\"3\"]],[\"const\",\"15\"]]],\"vars\":{\"weeks_late\":\"int\",\"price\":\"number\"}}}"
+            }
+            Group::Periods => {
+                "Example text: \"Step 1. Check the card. Step 2. Scan the book, then stamp it. A claim must be filed within 7 days after the loss.\"\n\
+                 Example objects: {\"id\":\"s1\",\"kind\":\"procedure_step\",\"document\":\"d\",\"quote\":\"Step 1. Check the card.\",\"data\":{\"order\":1,\"element\":\"check the card\",\"terms\":[\"card\"]}}, \
+                 {\"id\":\"s2\",\"kind\":\"procedure_step\",\"document\":\"d\",\"quote\":\"Step 2. Scan the book, then stamp it.\",\"data\":{\"order\":2,\"element\":\"scan the book\",\"terms\":[\"scan\"]}}, \
+                 {\"id\":\"s3\",\"kind\":\"procedure_step\",\"document\":\"d\",\"quote\":\"Step 2. Scan the book, then stamp it.\",\"data\":{\"order\":3,\"element\":\"stamp the book\",\"terms\":[\"stamp\"]}}, \
+                 {\"id\":\"claim\",\"kind\":\"deadline\",\"document\":\"d\",\"quote\":\"A claim must be filed within 7 days after the loss.\",\"data\":{\"event\":\"claim_filing\",\"from\":\"loss_date\",\"offset\":7,\"unit\":\"calendar_days\",\"vars\":{\"loss_date\":\"date\"}}}"
+            }
+            Group::Statements => {
+                "Example text: \"The loan period of Reading card 4 is 28 days. When a book is overdue, a Careful client returns it the same day. In this policy, overdue means kept past the due date.\"\n\
+                 Example objects: {\"id\":\"loan\",\"kind\":\"fact\",\"document\":\"d\",\"quote\":\"The loan period of Reading card 4 is 28 days.\",\"data\":{\"key\":\"loan period | reading card 4\",\"value\":\"28 days\",\"form\":\"property\"}}, \
+                 {\"id\":\"careful\",\"kind\":\"fact\",\"document\":\"d\",\"quote\":\"When a book is overdue, a Careful client returns it the same day.\",\"data\":{\"key\":\"when a book is overdue | careful client\",\"value\":\"returns it the same day\",\"form\":\"behaviour\"}}, \
+                 {\"id\":\"overdue\",\"kind\":\"definition\",\"document\":\"d\",\"quote\":\"In this policy, overdue means kept past the due date.\",\"data\":{\"term\":\"overdue\",\"meaning\":\"kept past the due date\",\"terms\":[\"overdue\"]}}"
+            }
+            Group::Behaviour => {
+                "Example text: \"Ben is shy. He says he lost his card only when he is asked about the card.\"\n\
+                 Example object: {\"id\":\"ben-card\",\"kind\":\"trait\",\"document\":\"d\",\"quote\":\"He says he lost his card only when he is asked about the card.\",\"data\":{\"trait\":\"discloses_when_asked\",\"topic\":\"card\",\"keywords\":[\"card\"],\"reveals\":\"I lost my card.\",\"terms\":[\"card\"]}}"
+            }
+        }
+    }
+}
+
+/// How a document is put to the model.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Strategy {
+    /// One pass per [`Group`] with its own instructions, instead of one pass for every kind.
+    pub per_kind: bool,
+    /// A worked example, from an unrelated domain, in each brief.
+    pub examples: bool,
+    /// Split a document into runs of paragraphs of at most this many words, each put separately; `None` puts it whole.
+    pub chunk_words: Option<usize>,
+}
+
+/// The brief a model proposer is given for a pass of `group` (every kind when `None`).
 #[must_use]
-pub fn brief(vocabulary: &Vocabulary) -> String {
+pub fn brief(vocabulary: &Vocabulary, group: Option<Group>, examples: bool) -> String {
     let outcomes = if vocabulary.outcomes.is_empty() {
         "Name outcomes with short lower-case identifiers such as may_terminate.".to_string()
     } else {
@@ -101,23 +229,53 @@ pub fn brief(vocabulary: &Vocabulary) -> String {
             vocabulary.outcomes.join(", ")
         )
     };
-    format!(
-        "You extract typed knowledge objects from ONE document. Reply with the objects it states; propose nothing it does not state.\n\
+    let common = format!(
+        "You extract typed knowledge objects from ONE document. Reply with the objects it states; propose nothing it does not state, and miss nothing it does.\n\
          Each object: id (short, lower-case, unique), kind, document (the id you are given), quote (copied VERBATIM from the text, as short as it can be while \
          holding every number the object states), data.\n\
-         Kinds and their data:\n\
-         - threshold: var, op (< <= > >= == !=), value (number), outcome, label, vars (name -> int|number|bool|date); limit=true when it is a limit a draft must stay within.\n\
-         - deadline: event, from (a date variable), offset (integer days), unit (calendar_days|business_days), vars.\n\
-         - rule: when (condition), outcome, vars. exception: overrides (id of the rule it overrides), when, outcome, vars.\n\
-         - computation: name, when (condition), expr, vars. A condition is {{var, op, value}}, {{all: [..]}}, {{any: [..]}} or {{not: ..}}; \
-         an expression is [\"const\", \"0.5\"], [\"var\", name] or [op, e1, e2] with op in add sub mul div min max pct (pct: base * percent / 100).\n\
-         - procedure_step: order, element (a short phrase), terms. fact: key (\"attribute | entity\" with the real words, e.g. \"service interval | alder pump 3\"), value (as written), form (property|behaviour).\n\
-         - definition: term, meaning. table: name, columns, rows (cells copied from the quote). trait: trait, topic, keywords, reveals (first person), terms.\n\
          Rules: every number in data must appear in the quote; every name (variable, event, outcome) is a lower-case identifier with underscores, never a sentence; \
-         a variable is declared in vars wherever it is used. {outcomes}\n\
+         a variable is declared in vars wherever it is used (name -> int|number|bool|date). A condition is {{var, op, value}}, {{all: [..]}}, {{any: [..]}} or {{not: ..}} with op in < <= > >= == !=. {outcomes}\n\
          If this document amends or replaces an earlier object (it is listed in earlier_objects), set data.supersedes to that object's id and restate it with the new values. \
-         Where the document states a rule and an exception, give both. A formula (an amount, a percentage per day or year) is a computation, not a threshold."
-    )
+         Return an empty list when the text states none of the kinds asked for; never restate an object of one kind as another."
+    );
+    match group {
+        None => format!(
+            "{common}\n\
+             Kinds and their data:\n\
+             - threshold: var, op, value (number), outcome, label, vars; limit=true when it is a limit a draft must stay within.\n\
+             - deadline: event, from (a date variable), offset (integer days), unit (calendar_days|business_days), vars.\n\
+             - rule: when (condition), outcome, vars. exception: overrides (id of the rule it overrides), when, outcome, vars.\n\
+             - computation: name, when (condition), expr, vars. An expression is [\"const\", \"0.5\"], [\"var\", name] or [op, e1, e2] with op in add sub mul div min max pct (pct: base * percent / 100).\n\
+             - procedure_step: order, element (a short phrase), terms. fact: key (\"attribute | entity\" with the real words, e.g. \"service interval | alder pump 3\"), value (as written), form (property|behaviour).\n\
+             - definition: term, meaning. table: name, columns, rows (cells copied from the quote). trait: trait, topic, keywords, reveals (first person), terms.\n\
+             Where the document states a rule and an exception, give both. A formula (an amount, a percentage per day or year) is a computation, not a threshold."
+        ),
+        Some(group) => {
+            let example = if examples { format!("\n{}", group.example()) } else { String::new() };
+            format!("{common}\nThis pass asks for these kinds only: {}.\n{}{example}", group.kinds().join(", "), group.instructions())
+        }
+    }
+}
+
+/// Runs of paragraphs of `text`, each of at most `max_words` words (a single longer paragraph is a run of its own).
+#[must_use]
+pub fn chunks(text: &str, max_words: usize) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut current = String::new();
+    for paragraph in text.split("\n\n").filter(|p| !p.trim().is_empty()) {
+        let words = |t: &str| t.split_whitespace().count();
+        if !current.is_empty() && words(&current) + words(paragraph) > max_words {
+            out.push(std::mem::take(&mut current));
+        }
+        if !current.is_empty() {
+            current.push_str("\n\n");
+        }
+        current.push_str(paragraph);
+    }
+    if !current.is_empty() {
+        out.push(current);
+    }
+    out
 }
 
 /// The identifier a free-text name becomes: lower case, words joined by underscores.
@@ -208,29 +366,153 @@ pub fn check_reply(
     together.extend(proposals.iter().cloned());
     let pack = admit("check", &input.documents, &together);
     let ours: Vec<&str> = proposals.iter().map(|p| p.id.as_str()).collect();
-    refused.extend(
-        pack.rejected
+    for rejection in pack
+        .rejected
+        .iter()
+        .filter(|r| ours.contains(&r.id.as_str()))
+    {
+        let quote = proposals
             .iter()
-            .filter(|r| ours.contains(&r.id.as_str()))
-            .map(|r| format!("{}: {}", r.id, r.reason)),
-    );
+            .find(|p| p.id == rejection.id)
+            .map_or("", |p| p.quote.as_str());
+        refused.push(format!(
+            "{}: {}{}",
+            rejection.id,
+            rejection.reason,
+            hint(&rejection.reason, quote)
+        ));
+    }
     if refused.is_empty() {
         Ok(proposals)
     } else {
         Err(format!(
-            "these proposals were refused, correct them or leave them out:\n{}",
+            "these proposals were refused; correct them or leave them out, and keep every other object as it was:\n{}",
             refused.join("\n")
         ))
     }
 }
 
-/// Admits what `proposer` says about every document, in order of authority and date so that an amendment follows what it amends.
+/// What to do about a refusal, in the words the model needs: the quote it gave, and what to change.
+fn hint(reason: &str, quote: &str) -> String {
+    if reason.contains("not in the quote") {
+        return format!(" (your quote was {quote:?}: use only numbers that appear in it, or quote the sentence that holds them)");
+    }
+    if reason.contains("not in the document") {
+        return " (copy the quote character for character from the text, including punctuation)"
+            .to_string();
+    }
+    if reason.contains("not identifiers") {
+        return " (use lower-case words joined by underscores)".to_string();
+    }
+    if reason.contains("unknown variable type") {
+        return " (a variable's type is one of int, number, bool, date)".to_string();
+    }
+    if reason.contains("key is not grounded") || reason.contains("fact key") {
+        return " (a fact key is \"attribute | entity\" written with words that are in the quote; if the sentence is a rule or a behaviour, give it as that kind instead)".to_string();
+    }
+    if reason.contains("value is not in the quote") {
+        return " (the value is copied from the quote as written)".to_string();
+    }
+    if reason.contains("undeclared variable") {
+        return " (declare every variable you use in vars, with its type)".to_string();
+    }
+    String::new()
+}
+
+/// Makes every variable one type across the proposals: a model that calls the same variable an `int` in one object and a `number` in another gets
+/// `number` (the wider), so that the ruleset built from them does not fall over on a name used twice.
+pub fn unify_variable_types(proposals: &mut [ProposedObject]) {
+    let mut types: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    for proposal in proposals.iter() {
+        if let Some(vars) = proposal.data.get("vars").and_then(Value::as_object) {
+            for (name, ty) in vars {
+                let Some(ty) = ty.as_str() else { continue };
+                let entry = types.entry(name.clone()).or_insert_with(|| ty.to_string());
+                if *entry != ty
+                    && matches!((entry.as_str(), ty), ("int", "number") | ("number", "int"))
+                {
+                    *entry = "number".to_string();
+                }
+            }
+        }
+    }
+    for proposal in proposals.iter_mut() {
+        if let Some(vars) = proposal.data.get_mut("vars").and_then(Value::as_object_mut) {
+            for (name, ty) in vars.iter_mut() {
+                if let (Some(unified), Some(_)) = (types.get(name), ty.as_str()) {
+                    *ty = Value::String(unified.clone());
+                }
+            }
+        }
+    }
+}
+
+/// How much one kind of object says compared with another that has the same quote: a formula says more than a limit it contains, a period more
+/// than a rule restating it, an ordered step more than the fact or rule that repeats it. Higher dominates lower.
+fn dominates(higher: &str, lower: &str) -> bool {
+    matches!(
+        (higher, lower),
+        ("computation", "threshold" | "rule" | "fact" | "definition")
+            | ("deadline", "threshold" | "rule" | "fact")
+            | ("exception", "fact")
+            | ("threshold" | "rule", "fact")
+            | ("procedure_step", "threshold" | "rule" | "fact")
+    )
+}
+
+/// Drops the objects that only restate a dominating object of the same quote: the same numbers or fewer, from a quote that overlaps it.
+/// Passes that each find a sentence interesting produce a fact, a threshold and a deadline out of one period; the one that says most stays.
+pub fn arbitrate(proposals: &mut Vec<ProposedObject>) {
+    let numbers = |p: &ProposedObject| {
+        let mut set = std::collections::BTreeSet::new();
+        super::claimed_numbers(&p.data, None, &mut |n| {
+            if n != "0" && n != "1" {
+                set.insert(n);
+            }
+        });
+        set
+    };
+    let overlap = |a: &str, b: &str| a.contains(b) || b.contains(a);
+    let keep: Vec<bool> = proposals
+        .iter()
+        .enumerate()
+        .map(|(i, lower)| {
+            !proposals.iter().enumerate().any(|(j, higher)| {
+                j != i
+                    && dominates(&higher.kind, &lower.kind)
+                    && overlap(&higher.quote, &lower.quote)
+                    && numbers(lower).is_subset(&numbers(higher))
+            })
+        })
+        .collect();
+    let mut at = 0;
+    proposals.retain(|_| {
+        at += 1;
+        keep[at - 1]
+    });
+}
+
+/// A pack with the passes that got no usable reply (a model that answered nothing parseable, a deadline): never silently absent.
+#[derive(Debug)]
+pub struct Proposed {
+    /// What was admitted.
+    pub pack: Pack,
+    /// `document/pass: why`, one per pass without a reply.
+    pub declined: Vec<String>,
+}
+
+/// Admits what `proposer` says about every document, in order of date so that an amendment follows what it amends.
+///
+/// # Errors
+/// Never today: a pass without a reply is reported in [`Proposed::declined`].
 pub async fn propose_pack(
     pack_id: &str,
     documents: &[Document],
     proposer: &dyn ObjectProposer,
     vocabulary: &Vocabulary,
-) -> Result<Pack, ProposeError> {
+    strategy: Strategy,
+) -> Result<Proposed, ProposeError> {
+    let mut declined: Vec<String> = Vec::new();
     let mut order: Vec<&Document> = documents.iter().collect();
     order.sort_by(|a, b| {
         (
@@ -244,32 +526,165 @@ pub async fn propose_pack(
                 &b.id,
             ))
     });
+    let groups: Vec<Option<Group>> = if strategy.per_kind {
+        Group::ALL.iter().map(|g| Some(*g)).collect()
+    } else {
+        vec![None]
+    };
     let mut all: Vec<ProposedObject> = Vec::new();
     let mut known: Vec<Value> = Vec::new();
     for document in order {
-        let input = DocumentInput {
-            document: document.id.clone(),
-            provenance: document.provenance.clone(),
-            text: document.text.clone(),
-            earlier_objects: known.clone(),
-            earlier: all.clone(),
-            documents: documents.to_vec(),
-        };
-        let mut proposals = proposer.propose(&input, vocabulary).await?;
-        let local: Vec<String> = proposals.iter().map(|p| p.id.clone()).collect();
-        for proposal in &mut proposals {
-            // Ids are namespaced by document; a reference to an object of the same document follows its renaming.
-            for key in ["overrides", "supersedes"] {
-                if let Some(Value::String(target)) = proposal.data.get_mut(key) {
-                    if local.contains(target) {
-                        *target = format!("{}-{target}", document.id);
+        let pieces = strategy.chunk_words.map_or_else(
+            || vec![document.text.clone()],
+            |n| chunks(&document.text, n),
+        );
+        let mut seen: Vec<ProposedObject> = Vec::new();
+        for (piece_no, piece) in pieces.iter().enumerate() {
+            for group in &groups {
+                let input = DocumentInput {
+                    document: document.id.clone(),
+                    provenance: document.provenance.clone(),
+                    text: piece.clone(),
+                    earlier_objects: known.clone(),
+                    earlier: all.iter().chain(seen.iter()).cloned().collect(),
+                    documents: documents.to_vec(),
+                    group: *group,
+                    examples: strategy.examples,
+                };
+                let mut proposals = match proposer.propose(&input, vocabulary).await {
+                    Ok(proposals) => proposals,
+                    Err(e) => {
+                        declined.push(format!(
+                            "{}/{}: {e}",
+                            document.id,
+                            group.map_or("all", |g| g.name())
+                        ));
+                        continue;
                     }
+                };
+                if let Some(group) = group {
+                    proposals.retain(|p| group.kinds().contains(&p.kind.as_str()));
                 }
+                let tag = format!(
+                    "{}{}",
+                    if pieces.len() > 1 {
+                        piece_no.to_string()
+                    } else {
+                        String::new()
+                    },
+                    group.map_or("", |g| ["c", "k", "p", "s", "b"]
+                        [Group::ALL.iter().position(|x| *x == g).unwrap_or(0)])
+                );
+                let prefix = if tag.is_empty() {
+                    document.id.clone()
+                } else {
+                    format!("{}-{tag}", document.id)
+                };
+                let local: Vec<String> = proposals.iter().map(|p| p.id.clone()).collect();
+                for proposal in &mut proposals {
+                    // Ids are namespaced by document and pass; a reference within the reply follows its renaming.
+                    for key in ["overrides", "supersedes"] {
+                        if let Some(Value::String(target)) = proposal.data.get_mut(key) {
+                            if local.contains(target) {
+                                *target = format!("{prefix}-{target}");
+                            }
+                        }
+                    }
+                    proposal.id = format!("{prefix}-{}", proposal.id);
+                }
+                // The same object twice (two passes may both see it) is one.
+                proposals.retain(|p| {
+                    !seen
+                        .iter()
+                        .any(|q| q.kind == p.kind && q.quote == p.quote && q.data == p.data)
+                });
+                seen.extend(proposals);
             }
-            proposal.id = format!("{}-{}", document.id, proposal.id);
+        }
+        for proposal in &seen {
             known.push(serde_json::json!({"id": proposal.id, "kind": proposal.kind, "quote": proposal.quote.chars().take(160).collect::<String>()}));
         }
-        all.extend(proposals);
+        arbitrate(&mut seen);
+        all.extend(seen);
     }
-    Ok(admit(pack_id, documents, &all))
+    unify_variable_types(&mut all);
+    Ok(Proposed {
+        pack: admit(pack_id, documents, &all),
+        declined,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn object(id: &str, kind: &str, quote: &str, data: Value) -> ProposedObject {
+        ProposedObject {
+            id: id.into(),
+            kind: kind.into(),
+            document: "d".into(),
+            quote: quote.into(),
+            data,
+        }
+    }
+
+    #[test]
+    fn a_variable_called_int_and_number_becomes_number_everywhere() {
+        let mut all = vec![
+            object(
+                "a",
+                "threshold",
+                "q",
+                json!({"vars": {"months": "int", "other": "bool"}}),
+            ),
+            object("b", "threshold", "q", json!({"vars": {"months": "number"}})),
+        ];
+        unify_variable_types(&mut all);
+        assert_eq!(
+            all[0].data["vars"],
+            json!({"months": "number", "other": "bool"})
+        );
+        assert_eq!(all[1].data["vars"], json!({"months": "number"}));
+    }
+
+    #[test]
+    fn an_object_that_only_restates_a_dominating_one_of_the_same_quote_is_dropped() {
+        let fee = "a late fee of 2 percent, but at most 10 percent";
+        let mut all = vec![
+            object(
+                "fee",
+                "computation",
+                fee,
+                json!({"expr": ["pct", ["var", "rent"], ["const", "2"]], "name": "fee", "when": {}}),
+            ),
+            object(
+                "cap",
+                "threshold",
+                "at most 10 percent",
+                json!({"value": 10}),
+            ),
+            object("fact", "fact", fee, json!({"value": "2 percent"})),
+            object("other", "threshold", "after 30 days", json!({"value": 30})),
+        ];
+        arbitrate(&mut all);
+        let kept: Vec<&str> = all.iter().map(|p| p.id.as_str()).collect();
+        // The cap's 10 is in the computation only through its expression's constants: the threshold carries a number the computation lacks here.
+        assert_eq!(
+            kept,
+            ["fee", "cap", "other"],
+            "the fact restates the computation; the unrelated threshold stays"
+        );
+    }
+
+    #[test]
+    fn a_limit_and_the_exception_to_it_are_both_kept() {
+        let quote = "more than 30 days late, unless the tenant is a pensioner";
+        let mut all = vec![
+            object("limit", "threshold", quote, json!({"value": 30})),
+            object("exception", "exception", quote, json!({"when": {}})),
+        ];
+        arbitrate(&mut all);
+        assert_eq!(all.len(), 2);
+    }
 }

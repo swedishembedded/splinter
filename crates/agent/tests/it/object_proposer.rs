@@ -7,7 +7,7 @@
 use serde_json::{json, Value};
 use splinter_agent::object_proposer::SvenObjectProposer;
 use splinter_agent::solve::Model;
-use splinter_knowledge::objects::propose::{propose_pack, Vocabulary};
+use splinter_knowledge::objects::propose::{propose_pack, Strategy, Vocabulary};
 use splinter_knowledge::objects::Document;
 
 use crate::common::Scripted;
@@ -57,9 +57,16 @@ async fn a_reply_with_an_invented_number_is_sent_back_with_the_reason_and_the_co
         json!({}),
     )]);
     let (proposer, model) = proposer(vec![wrong, right]);
-    let pack = propose_pack("t", &documents, &proposer, &Vocabulary::default())
-        .await
-        .unwrap();
+    let pack = propose_pack(
+        "t",
+        &documents,
+        &proposer,
+        &Vocabulary::default(),
+        Strategy::default(),
+    )
+    .await
+    .unwrap()
+    .pack;
     assert_eq!(model.seen.lock().unwrap().len(), 2, "one correction round");
     let correction = format!("{:?}", model.seen.lock().unwrap()[1].messages);
     assert!(
@@ -103,9 +110,10 @@ async fn a_declared_vocabulary_refuses_other_outcomes_until_the_model_uses_it() 
     let vocabulary = Vocabulary {
         outcomes: vec!["may_terminate".into(), "no_right".into()],
     };
-    let pack = propose_pack("t", &documents, &proposer, &vocabulary)
+    let pack = propose_pack("t", &documents, &proposer, &vocabulary, Strategy::default())
         .await
-        .unwrap();
+        .unwrap()
+        .pack;
     assert!(format!("{:?}", model.seen.lock().unwrap()[1].messages).contains("declared vocabulary"));
     assert_eq!(pack.objects[0].data["outcome"], "may_terminate");
 }
@@ -118,9 +126,16 @@ async fn what_is_still_refused_after_the_last_repair_is_dropped_and_the_good_pro
         threshold("bad", QUOTE_14, json!(99), "may_terminate", json!({})),
     ]);
     let (proposer, model) = proposer(vec![mixed.clone(), mixed.clone(), mixed]);
-    let pack = propose_pack("t", &documents, &proposer, &Vocabulary::default())
-        .await
-        .unwrap();
+    let pack = propose_pack(
+        "t",
+        &documents,
+        &proposer,
+        &Vocabulary::default(),
+        Strategy::default(),
+    )
+    .await
+    .unwrap()
+    .pack;
     assert_eq!(
         model.seen.lock().unwrap().len(),
         3,
@@ -151,9 +166,16 @@ async fn an_amendment_names_the_earlier_object_it_replaces_and_documents_are_tak
         json!({"supersedes": "supply-act-delay-late"}),
     )]);
     let (proposer, model) = proposer(vec![first, second]);
-    let pack = propose_pack("t", &documents, &proposer, &Vocabulary::default())
-        .await
-        .unwrap();
+    let pack = propose_pack(
+        "t",
+        &documents,
+        &proposer,
+        &Vocabulary::default(),
+        Strategy::default(),
+    )
+    .await
+    .unwrap()
+    .pack;
     assert!(
         format!("{:?}", model.seen.lock().unwrap()[1].messages).contains("supply-act-delay-late"),
         "the second document is shown the first one's objects"
@@ -169,4 +191,90 @@ async fn an_amendment_names_the_earlier_object_it_replaces_and_documents_are_tak
             ["supply-act-delay-late".to_string()].as_slice()
         )
     );
+}
+
+#[tokio::test]
+async fn one_pass_per_family_of_kinds_puts_a_brief_about_those_kinds_and_drops_the_rest() {
+    let documents = vec![Document::parse("supply-act-delay", DELAY)];
+    let strategy = Strategy {
+        per_kind: true,
+        examples: true,
+        chunk_words: None,
+    };
+    let on_topic = reply(vec![threshold(
+        "late",
+        QUOTE_14,
+        json!(14),
+        "may_terminate",
+        json!({}),
+    )]);
+    let nothing = reply(vec![]);
+    // Five passes: only the first (conditions) answers with a threshold; the second answers with a threshold too, which is not its kind.
+    let off_topic = on_topic.clone();
+    let (proposer, model) = proposer(vec![
+        on_topic,
+        off_topic,
+        nothing.clone(),
+        nothing.clone(),
+        nothing,
+    ]);
+    let pack = propose_pack("t", &documents, &proposer, &Vocabulary::default(), strategy)
+        .await
+        .unwrap()
+        .pack;
+    let seen = model.seen.lock().unwrap();
+    assert_eq!(seen.len(), 5);
+    let system = |i: usize| format!("{:?}", seen[i].messages);
+    assert!(system(0).contains("limit, states a condition") && system(0).contains("Example text"));
+    assert!(system(1).contains("amount, percentage or formula"));
+    assert_eq!(
+        pack.objects.len(),
+        1,
+        "a threshold answered in the formula pass is not that pass's kind"
+    );
+}
+
+#[tokio::test]
+async fn a_document_is_put_in_runs_of_paragraphs_when_asked() {
+    let text = "---\nauthority: 3\n---\n# T\n\nFirst paragraph with several words in it.\n\nSecond paragraph with several more words.\n";
+    let documents = vec![Document::parse("d", text)];
+    let strategy = Strategy {
+        per_kind: false,
+        examples: false,
+        chunk_words: Some(8),
+    };
+    let (proposer, model) = proposer(vec![reply(vec![]), reply(vec![]), reply(vec![])]);
+    let proposed = propose_pack("t", &documents, &proposer, &Vocabulary::default(), strategy)
+        .await
+        .unwrap();
+    assert!(proposed.declined.is_empty());
+    assert_eq!(
+        model.seen.lock().unwrap().len(),
+        3,
+        "a title and two paragraphs, none of them fits with another in eight words"
+    );
+}
+
+#[tokio::test]
+async fn a_pass_that_never_gets_a_usable_reply_is_reported_and_does_not_stop_the_run() {
+    let documents = vec![Document::parse("supply-act-delay", DELAY)];
+    let prose: Vec<String> = (0..4)
+        .map(|n| format!("no objects here, attempt {n}"))
+        .collect();
+    let (proposer, _) = proposer(prose);
+    let proposed = propose_pack(
+        "t",
+        &documents,
+        &proposer,
+        &Vocabulary::default(),
+        Strategy::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(proposed.declined.len(), 1, "{:?}", proposed.declined);
+    assert!(
+        proposed.declined[0].contains("supply-act-delay/all")
+            && proposed.declined[0].contains("no usable reply")
+    );
+    assert!(proposed.pack.objects.is_empty());
 }

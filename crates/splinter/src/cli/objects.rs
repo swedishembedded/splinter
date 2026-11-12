@@ -35,6 +35,15 @@ pub enum ObjectsCommand {
         /// How many times a reply with refused proposals is sent back, per document.
         #[arg(long, default_value_t = 2, value_name = "N")]
         repairs: u32,
+        /// One pass per family of kinds (limits and exceptions, formulas, periods and steps, facts and tables, behaviour), each with its own instructions.
+        #[arg(long)]
+        per_kind: bool,
+        /// Show the model a worked example, from an unrelated domain, in each pass.
+        #[arg(long)]
+        examples: bool,
+        /// Put each document in runs of paragraphs of at most this many words, one run at a time.
+        #[arg(long, value_name = "WORDS")]
+        chunk_words: Option<usize>,
         /// The model asked.
         #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
         policy: ModelRef,

@@ -1,0 +1,307 @@
+{
+ "schema": "material-gold/1",
+ "note": "Everything a careful reader must extract from the corpus, in pack form; written before any model was run on it and not used to tune the brief.",
+ "objects": [
+  {
+   "id": "notice",
+   "kind": "deadline",
+   "document": "tenancy-act",
+   "quote": "The landlord must give notice of a rent increase at least 60 days before it takes effect.",
+   "data": {
+    "event": "rent_increase_notice",
+    "from": "increase_date",
+    "offset": 60,
+    "unit": "calendar_days",
+    "vars": {
+     "increase_date": "date"
+    }
+   }
+  },
+  {
+   "id": "cap",
+   "kind": "threshold",
+   "document": "tenancy-act",
+   "quote": "A rent increase may not exceed 5 percent of the current rent within twelve months.",
+   "data": {
+    "var": "rent_increase_percent",
+    "op": ">",
+    "value": 5,
+    "outcome": "not_allowed",
+    "limit": true,
+    "vars": {
+     "rent_increase_percent": "number"
+    }
+   }
+  },
+  {
+   "id": "warn",
+   "kind": "threshold",
+   "document": "tenancy-act",
+   "quote": "If the rent is paid more than 10 days late, the landlord may send a written warning.",
+   "data": {
+    "var": "days_late",
+    "op": ">",
+    "value": 10,
+    "outcome": "may_warn",
+    "vars": {
+     "days_late": "int"
+    }
+   }
+  },
+  {
+   "id": "term",
+   "kind": "threshold",
+   "document": "tenancy-act",
+   "quote": "If the rent is more than 30 days late, the landlord may terminate the lease, unless the tenant is a pensioner.",
+   "data": {
+    "var": "days_late",
+    "op": ">",
+    "value": 30,
+    "outcome": "may_terminate",
+    "vars": {
+     "days_late": "int"
+    }
+   }
+  },
+  {
+   "id": "pensioner",
+   "kind": "exception",
+   "document": "tenancy-act",
+   "quote": "If the rent is more than 30 days late, the landlord may terminate the lease, unless the tenant is a pensioner.",
+   "data": {
+    "overrides": "term",
+    "when": {
+     "var": "pensioner",
+     "op": "==",
+     "value": true
+    },
+    "outcome": "no_right",
+    "vars": {
+     "pensioner": "bool"
+    }
+   }
+  },
+  {
+   "id": "deposit",
+   "kind": "threshold",
+   "document": "tenancy-act",
+   "quote": "The deposit may not exceed 3 months rent.",
+   "data": {
+    "var": "deposit_months",
+    "op": ">",
+    "value": 3,
+    "outcome": "not_allowed",
+    "limit": true,
+    "vars": {
+     "deposit_months": "number"
+    }
+   }
+  },
+  {
+   "id": "late-fee",
+   "kind": "computation",
+   "document": "tenancy-act",
+   "quote": "For each full week of delay a late fee of 2 percent of the monthly rent is charged, but at most 10 percent of the monthly rent.",
+   "data": {
+    "name": "late_fee",
+    "when": {
+     "var": "weeks_late",
+     "op": ">",
+     "value": 0
+    },
+    "expr": [
+     "pct",
+     [
+      "var",
+      "monthly_rent"
+     ],
+     [
+      "min",
+      [
+       "mul",
+       [
+        "var",
+        "weeks_late"
+       ],
+       [
+        "const",
+        "2"
+       ]
+      ],
+      [
+       "const",
+       "10"
+      ]
+     ]
+    ],
+    "vars": {
+     "weeks_late": "int",
+     "monthly_rent": "number"
+    }
+   }
+  },
+  {
+   "id": "notice-fact",
+   "kind": "fact",
+   "document": "tenancy-act",
+   "quote": "The notice period of rent increases is 60 days.",
+   "data": {
+    "key": "notice period | rent increases",
+    "value": "60 days",
+    "form": "property"
+   }
+  },
+  {
+   "id": "cap-amended",
+   "kind": "threshold",
+   "document": "tenancy-act-amendment",
+   "quote": "A rent increase may not exceed 4 percent of the current rent within twelve months.",
+   "data": {
+    "var": "rent_increase_percent",
+    "op": ">",
+    "value": 4,
+    "outcome": "not_allowed",
+    "limit": true,
+    "vars": {
+     "rent_increase_percent": "number"
+    },
+    "supersedes": "cap"
+   }
+  },
+  {
+   "id": "forum-notice",
+   "kind": "fact",
+   "document": "tenant-forum",
+   "quote": "The notice period of rent increases is 30 days.",
+   "data": {
+    "key": "notice period | rent increases",
+    "value": "30 days",
+    "form": "property"
+   }
+  },
+  {
+   "id": "step-identity",
+   "kind": "procedure_step",
+   "document": "clinic-intake-protocol",
+   "quote": "Step 1. Confirm the identity of the client.",
+   "data": {
+    "order": 1,
+    "element": "confirm the identity of the client"
+   }
+  },
+  {
+   "id": "step-reason",
+   "kind": "procedure_step",
+   "document": "clinic-intake-protocol",
+   "quote": "Step 2. Ask about the reason for the visit, then about medications, then about allergies.",
+   "data": {
+    "order": 2,
+    "element": "ask about the reason for the visit"
+   }
+  },
+  {
+   "id": "step-medications",
+   "kind": "procedure_step",
+   "document": "clinic-intake-protocol",
+   "quote": "Step 2. Ask about the reason for the visit, then about medications, then about allergies.",
+   "data": {
+    "order": 3,
+    "element": "ask about medications"
+   }
+  },
+  {
+   "id": "step-allergies",
+   "kind": "procedure_step",
+   "document": "clinic-intake-protocol",
+   "quote": "Step 2. Ask about the reason for the visit, then about medications, then about allergies.",
+   "data": {
+    "order": 4,
+    "element": "ask about allergies"
+   }
+  },
+  {
+   "id": "step-chest-pain",
+   "kind": "procedure_step",
+   "document": "clinic-intake-protocol",
+   "quote": "Step 3. If the client reports chest pain, call the duty doctor at once.",
+   "data": {
+    "order": 5,
+    "element": "call the duty doctor at once if chest pain"
+   }
+  },
+  {
+   "id": "intake-length",
+   "kind": "threshold",
+   "document": "clinic-intake-protocol",
+   "quote": "An intake takes at most 20 minutes.",
+   "data": {
+    "var": "intake_minutes",
+    "op": ">",
+    "value": 20,
+    "outcome": "too_long",
+    "limit": true,
+    "vars": {
+     "intake_minutes": "int"
+    }
+   }
+  },
+  {
+   "id": "followup",
+   "kind": "deadline",
+   "document": "clinic-intake-protocol",
+   "quote": "A follow-up visit must be booked within 14 days after the intake.",
+   "data": {
+    "event": "followup_booking",
+    "from": "intake_date",
+    "offset": 14,
+    "unit": "calendar_days",
+    "vars": {
+     "intake_date": "date"
+    }
+   }
+  },
+  {
+   "id": "anna-medication",
+   "kind": "trait",
+   "document": "client-sheet-anna",
+   "quote": "She mentions her medication only when she is asked about it.",
+   "data": {
+    "trait": "discloses_when_asked",
+    "topic": "medication",
+    "keywords": [
+     "medication"
+    ],
+    "reveals": "I mention my medication."
+   }
+  },
+  {
+   "id": "anna-appointments",
+   "kind": "trait",
+   "document": "client-sheet-anna",
+   "quote": "She says that she has missed her last two appointments only when she is asked about appointments.",
+   "data": {
+    "trait": "discloses_when_asked",
+    "topic": "appointments",
+    "keywords": [
+     "appointment"
+    ],
+    "reveals": "I have missed my last two appointments."
+   }
+  },
+  {
+   "id": "anna-allergy",
+   "kind": "trait",
+   "document": "client-sheet-anna",
+   "quote": "She does not mention her allergy to penicillin unless she is asked directly about allergies.",
+   "data": {
+    "trait": "discloses_when_asked",
+    "topic": "allergy",
+    "keywords": [
+     "allergy",
+     "allergies"
+    ],
+    "reveals": "I have an allergy to penicillin."
+   }
+  }
+ ]
+}

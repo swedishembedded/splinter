@@ -94,7 +94,7 @@ impl ObjectProposer for SvenObjectProposer {
         let (checked, vocab) = (Arc::new(document.clone()), Arc::new(vocabulary.clone()));
         let mut call = TypedCall::<ObjectReply>::new(
             "propose_objects",
-            brief(vocabulary),
+            brief(vocabulary, document.group, document.examples),
             "extractor",
             self.deadline,
         )
@@ -108,8 +108,14 @@ impl ObjectProposer for SvenObjectProposer {
         let reply = match call.run(&self.model, document).await {
             Ok(reply) => reply,
             // Out of repairs: keep what the last reply held; admission drops what is still wrong.
-            Err(CallError::Invalid { last, .. } | CallError::Postcondition { last, .. }) => serde_json::from_str::<ObjectReply>(&last)
-                .map_err(|e| ProposeError(format!("the reply is not objects: {e}")))?,
+            Err(CallError::Invalid { last, .. } | CallError::Postcondition { last, .. }) => {
+                serde_json::from_str::<ObjectReply>(&last).map_err(|e| {
+                    ProposeError(format!(
+                        "no usable reply after the repairs ({e}); the last began: {}",
+                        last.chars().take(120).collect::<String>()
+                    ))
+                })?
+            }
             Err(e) => return Err(ProposeError(e.to_string())),
         };
         let mut out = Vec::new();

@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use splinter_sdk::knowledge::objects::Pack;
+use splinter_sdk::knowledge::objects::propose::Proposed;
 
 use crate::output::Report;
 
@@ -26,12 +26,15 @@ pub struct ObjectsProposed {
     pub resolutions: usize,
     /// Conflicts no header decides.
     pub conflicts: usize,
+    /// Passes that got no usable reply, each with why.
+    pub declined: Vec<String>,
 }
 
 impl ObjectsProposed {
     /// The report of `pack`, written to `path`.
     #[must_use]
-    pub fn of(pack: &Pack, path: PathBuf) -> Self {
+    pub fn of(proposed: &Proposed, path: PathBuf) -> Self {
+        let pack = &proposed.pack;
         Self {
             pack: path,
             documents: pack.documents.len(),
@@ -43,6 +46,7 @@ impl ObjectsProposed {
                 .collect(),
             resolutions: pack.resolutions.len(),
             conflicts: pack.flags.len(),
+            declined: proposed.declined.clone(),
         }
     }
 }
@@ -58,6 +62,9 @@ impl Report for ObjectsProposed {
             self.conflicts,
             self.pack.display()
         );
+        for why in &self.declined {
+            let _ = writeln!(out, "  declined {why}");
+        }
         for (id, reason) in &self.rejected {
             let _ = writeln!(out, "  refused {id}: {reason}");
         }
@@ -82,8 +89,16 @@ pub fn run(
         outcomes,
         repairs,
         policy,
+        per_kind,
+        examples,
+        chunk_words,
     } = command;
-    let pack = propose(
+    let strategy = splinter_sdk::knowledge::objects::propose::Strategy {
+        per_kind,
+        examples,
+        chunk_words,
+    };
+    let proposed = propose(
         ctx,
         &ObjectsRequest {
             pack_id: &pack_id,
@@ -91,12 +106,13 @@ pub fn run(
             policy: &policy,
             outcomes,
             repairs,
+            strategy,
         },
     )?;
-    let body = serde_json::to_string_pretty(&pack)
+    let body = serde_json::to_string_pretty(&proposed.pack)
         .map_err(|e| splinter_sdk::Error::Refused(e.to_string()))?;
     std::fs::write(&out, body + "\n")
         .map_err(|e| splinter_sdk::Error::Refused(format!("{}: {e}", out.display())))?;
-    crate::output::emit(json, &ObjectsProposed::of(&pack, out));
+    crate::output::emit(json, &ObjectsProposed::of(&proposed, out));
     Ok(())
 }

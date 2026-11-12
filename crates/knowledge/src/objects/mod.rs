@@ -601,7 +601,7 @@ fn normalise(number: &str) -> String {
 }
 
 /// Every number `node` claims, except under the structural keys.
-fn claimed_numbers(node: &Value, key: Option<&str>, sink: &mut dyn FnMut(String)) {
+pub(crate) fn claimed_numbers(node: &Value, key: Option<&str>, sink: &mut dyn FnMut(String)) {
     if key.is_some_and(|k| UNTRACED_KEYS.contains(&k)) {
         return;
     }

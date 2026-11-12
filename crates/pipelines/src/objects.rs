@@ -11,8 +11,8 @@ use std::path::Path;
 
 use splinter_agent::object_proposer::SvenObjectProposer;
 use splinter_core::model_ref::ModelRef;
-use splinter_knowledge::objects::propose::{propose_pack, Vocabulary};
-use splinter_knowledge::objects::{Document, Pack};
+use splinter_knowledge::objects::propose::{propose_pack, Proposed, Strategy, Vocabulary};
+use splinter_knowledge::objects::Document;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -28,6 +28,8 @@ pub struct ObjectsRequest<'a> {
     pub outcomes: Vec<String>,
     /// How many times a reply with refused proposals is sent back, per document.
     pub repairs: u32,
+    /// How a document is put to the model.
+    pub strategy: Strategy,
 }
 
 /// The documents of `directory`, in file name order.
@@ -67,7 +69,7 @@ pub fn read_documents(directory: &Path) -> Result<Vec<Document>, OrchestratorErr
 ///
 /// # Errors
 /// The documents cannot be read, the model cannot be had, or a document gets no usable reply at all.
-pub fn propose(ctx: &Context, request: &ObjectsRequest<'_>) -> Result<Pack, OrchestratorError> {
+pub fn propose(ctx: &Context, request: &ObjectsRequest<'_>) -> Result<Proposed, OrchestratorError> {
     let documents = read_documents(request.source)?;
     let model = ctx.model(request.policy)?;
     let identity = model.identity.clone();
@@ -80,6 +82,7 @@ pub fn propose(ctx: &Context, request: &ObjectsRequest<'_>) -> Result<Pack, Orch
         &documents,
         &proposer,
         &vocabulary,
+        request.strategy,
     ))
     .map_err(|e| OrchestratorError::Model {
         model: identity,
