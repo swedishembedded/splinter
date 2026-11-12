@@ -251,6 +251,16 @@ form, 3 hard corpora (seeds 8000-8002), 150 steps for every arm, base scored in 
 [-1.897,-0.901]. Teacher-forced loss, not generated exact match; held out of selection but not of the material. Finding
 136. Not run: the client-behaviour form, generated exact match, a multi-seed repeat.
 
+**Fifth round: the exam through bench.** The held-out questions of each corpus are exported (`goal-selection --export-eval`) and
+turned into bench task collections by the new `recall` environment (`bench/environments/recall`: a closed-book question or a passage
+to read per task, deterministic whole-word check, `benchgen` admission gates, oracle 1 / nop 0 on the host). Base and every arm's
+adapter (served from a models directory, four slots) run through `bench run` on the training card; `bench report --against` gives
+the paired per-task change. Generated exact match, five corpora per form, 150 steps each: property recall base 0.000, selective
+0.158 [0.100,0.217], oracle 0.092, random 0.008, everything 0.008; client behaviour base 0.000, selective 0.400 [0.211,0.589],
+random 0.133, everything 0.133; reading of unseen passages 1.000 for every arm except everything on property (0.925, one corpus 0.62).
+Findings 137 and 138 (teacher-forced loss ranks the behaviour arms the wrong way round). The null token accuracy is brain finding 439.
+Open: absolute recall is low; one seed per adapter; a reading set that is not saturated; absolute scale with more steps.
+
 Not done: no model-judged relevance; novelty is accuracy,
 not loss (brain log-probabilities of the section's items would sharpen it); facts come from two sentence
 patterns through the compiler's admission (a model proposer is untested here); the participant that trains on the chosen sections
