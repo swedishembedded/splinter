@@ -115,3 +115,5 @@ in the same commit.
 | [127](127-a-tie-among-documents-that-agree-was-flagged-as-a-conflict.md) | A tie among documents that agree was flagged as a conflict by the compiler's resolution |
 | [128](128-a-paraphrase-chosen-by-position-never-fired-with-few-units.md) | A paraphrase chosen by document position never fired with few units |
 | [129](129-an-objective-that-shares-a-word-with-one-kind-of-document-gates-the-others-out.md) | An objective that shares a word with one kind of document gated the others out |
+| [130](130-a-base-exam-measured-under-another-jobs-load-scored-0.854-and-the-same-base-measured-alone-scored-0.938.md) | A base exam measured under another job's load scored 0.854; the same base alone scored 0.938 |
+| [131](131-bench-ingested-rollouts-carry-no-behaviour-log-probabilities-so-policy-gradient-needs-behaviour-start.md) | Bench-ingested rollouts carry no behaviour log-probabilities; policy-gradient training needs --behaviour start |
