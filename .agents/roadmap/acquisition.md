@@ -129,9 +129,70 @@ Interface with the typed knowledge objects: documents and their headers are `obj
 resolutions and `superseded_ids` could give the Superseded verdict directly, and its fact and behaviour
 objects could be the `FactExtractor`, instead of the two sentence patterns.
 
-Not done: selection is lexical (no embedding signal, no model-judged relevance); novelty is accuracy,
-not loss (brain log-probabilities of the section's items would sharpen it); facts are two sentence
-patterns until a model extractor is admitted by code; the participant that trains on the chosen sections
+### Second round (2026-11-12): knowledge objects as the source, a hard world, meaning, weights, the scrubber
+
+- **One implementation.** Facts and the rulings between disagreeing statements are the material compiler's
+  (`goal::source::PackSource` over an admitted `objects::Pack`): my own conflict code is gone. Fixed there: a
+  tie among documents that agree is no conflict. A section no object can be made of is `Empty`. Limit found:
+  admission requires a fact key's words to be in its quote, so two statements that paraphrase each other are
+  not seen to disagree; semantic key normalisation belongs in the compiler.
+- **Hard world** (`goal::hard`, `--hard`): paraphrased current documents, header-less near-copies, partial staleness (the
+  older manual is the only, right source for half the units), decoys. Not generated: multi-hop questions
+  (answer in two documents) and gap expansion from learned material; both are open.
+- **Meaning** (`goal::semantic`, `Signal`, `InContext::retrieving`): a section stands out for a gap by its cosine to the
+  nearest failed probe, read against the corpus (0 at the median section, 1 at the nearest) with its own floor
+  (0.2, tuned on one served-embedder corpus, checked on two others); the reader's memory is searched by BM25 and
+  the embedder fused by reciprocal rank. Scripted runs use a synonym-table embedder (knows exactly the synonyms
+  it is given); real runs use Qwen3-Embedding-0.6B served by brain.
+- **Intervals** (`goal::report`): means over corpora with 95% percentile bootstrap, differences paired by corpus.
+
+Scripted reader, 12 corpora per cell, held-out pass (95% interval); selective / selective with provenance headers /
+everything with provenance headers / oracle; precision and recall of the chosen sections against the labels:
+
+| cell | selective | sel + provenance | all + provenance | oracle | precision / recall of selective |
+|---|---|---|---|---|---|
+| property, hard, lexical | 0.73 [0.67,0.78] | 0.98 [0.97,1.00] | 0.87 [0.83,0.90] | 1.00 | 0.68 / 0.98 |
+| property, hard, semantic | 0.70 [0.63,0.76] | 0.79 [0.73,0.84] | 0.90 [0.88,0.93] | 1.00 | 0.42 / 0.72 |
+| property, hard, fused | 0.74 [0.68,0.79] | 0.94 [0.90,0.98] | 0.89 [0.86,0.92] | 1.00 | 0.55 / 0.93 |
+| behaviour (one client type), hard, lexical | 0.76 [0.66,0.87] | 0.76 [0.66,0.87] | 0.75 [0.65,0.84] | 0.89 | 0.70 / 0.75 |
+| behaviour, hard, semantic | 0.89 [0.83,0.95] | 1.00 [1.00,1.00] | 0.91 [0.83,0.98] | 1.00 | 0.73 / 1.00 |
+| behaviour, hard, fused | 0.79 [0.70,0.88] | 0.99 [0.98,1.00] | 0.84 [0.79,0.90] | 1.00 | 0.73 / 1.00 |
+
+Where each wins: words find the sections of an invented topic name (property recall 0.98 lexical, 0.72 semantic: an
+embedder cannot know that `albalt` and `albalt pump 3` belong together); meaning finds the paraphrased ones (behaviour
+recall 0.75 lexical, 1.00 semantic and fused); fused keeps both recalls and pays precision (decoy and stale sections the
+embedder also finds).
+
+Real Qwen3.8-27B-FP8 reader, Qwen3-Embedding-0.6B (served, 8801/8802), 5 corpora per cell, concurrency 1, evidence in
+`~/project/shared/goal-selection/hard/` (seeds 3000-3004; a first set on seed 2000 with an uncalibrated floor is in
+`hard-v1-seed2000-uncalibrated`): held-out pass (95% interval)
+
+| cell | none | selective | selective + provenance | all | all + provenance | random, same words | oracle |
+|---|---|---|---|---|---|---|---|
+| property, lexical | 0.00 | 0.54 [0.49,0.60] | 0.70 [0.64,0.77] | 0.12 | 0.68 [0.62,0.76] | 0.20 | 0.93 |
+| property, fused | 0.00 | 0.52 [0.47,0.55] | 0.67 [0.61,0.72] | 0.15 | 0.64 [0.53,0.73] | 0.20 | 0.95 |
+| behaviour, lexical | 0.00 | 0.80 [0.62,0.98] | 0.80 [0.62,0.98] | 0.21 | 0.49 [0.42,0.58] | 0.16 | 0.80 |
+| behaviour, fused | 0.00 | 0.78 [0.60,0.96] | 0.80 [0.62,0.98] | 0.20 | 0.56 [0.40,0.71] | 0.18 | 0.80 |
+
+Read plainly: against reading everything as it comes, selection wins by a wide margin; against reading everything
+with provenance, selection with provenance ties (property 0.70 vs 0.68, intervals overlap) at a fifth of the words and
+wins in the behaviour form (0.80 vs 0.49-0.56, paired interval excludes zero). The served embedder raised behaviour
+recall (0.80 to 0.95) without moving held-out accuracy at n = 5. On property the loop is bound by its budget (four
+rounds of 300 words): it spends part on stale sections whose paraphrased current counterpart no key links, which is
+why its recall is 0.71 against 0.98 scripted. Five corpora per cell: intervals are wide and no claim is made beyond them.
+
+**Weights, toy model** (`make test/methods`, `tests/methods/selection.rs`, CPU, 161 s): brain's toy checkpoint trained
+(supervised, 500 steps) on cipher tables chosen by the loop, held-out exact match on prompts in no table: none 0.00,
+selective 1.00 (18 of 25 current sections; the 7 left were already answered, so `Known`), random same words 0.06,
+everything 0.00 (current, outdated, forum and another cipher's tables conflict), oracle-relevant 0.99. One corpus, one
+seed of draws; falsifiable bars asserted. 27B adapter comparison queued, not started: see the Log.
+
+**Live data**: `goal::intake` admits a live document only with consent, the current detectors' scrub marker, and no residue
+when the detectors run again; a marker alone does not vouch for the text. Not yet wired into a CLI command.
+
+Not done: no model-judged relevance; multi-hop; novelty is accuracy,
+not loss (brain log-probabilities of the section's items would sharpen it); facts come from two sentence
+patterns through the compiler's admission (a model proposer is untested here); the participant that trains on the chosen sections
 (waits for a card, and the material compiler's task families); sections that are relevant but share
 no word with the goal or probes are missed; live-user behaviour data goes through the scrubber first.
 
