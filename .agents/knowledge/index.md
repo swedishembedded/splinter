@@ -92,3 +92,7 @@ in the same commit.
 | [104](104-the-harness-edit-tests-author-documents-the-v2-compiler-refuses.md) | The harness-edit tests author documents the v2 compiler refuses |
 | [105](105-a-development-gain-did-not-replicate-on-the-registered-set.md) | A development gain did not replicate on the registered set |
 | [106](106-a-round-stopped-asking-for-tasks-at-its-first-barren-request.md) | A round stopped asking for tasks at its first barren request |
+| [107](107-admission-guarantees-traceability-not-usefulness.md) | Admission guarantees traceability, not usefulness |
+| [108](108-one-variable-typed-two-ways-collapses-the-task-yield.md) | One variable typed two ways collapses the task yield |
+| [109](109-conflicts-grouped-by-key-alone-resolve-unrelated-chapters.md) | Conflicts grouped by key alone resolve unrelated chapters against each other |
+| [110](110-an-amendment-must-reuse-the-variables-of-what-it-replaces.md) | An amendment must reuse the variables of what it replaces |
