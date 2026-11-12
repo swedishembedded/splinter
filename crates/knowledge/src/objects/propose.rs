@@ -236,7 +236,7 @@ pub fn brief(vocabulary: &Vocabulary, group: Option<Group>, examples: bool) -> S
          holding every number the object states), data.\n\
          Rules: every number in data must appear in the quote; every name (variable, event, outcome) is a lower-case identifier with underscores, never a sentence; \
          a variable is declared in vars wherever it is used (name -> int|number|bool|date). A condition is {{var, op, value}}, {{all: [..]}}, {{any: [..]}} or {{not: ..}} with op in < <= > >= == !=. {outcomes}\n\
-         If this document amends or replaces an earlier object (it is listed in earlier_objects), set data.supersedes to that object's id and restate it with the new values. \
+         If this document amends or replaces an earlier object (it is listed in earlier_objects), set data.supersedes to that object's id and restate it with the new values, copying its data and changing only what the new text changes (the same variable names). \
          Return an empty list when the text states none of the kinds asked for; never restate an object of one kind as another."
     );
     match group {
@@ -512,6 +512,108 @@ pub fn arbitrate(proposals: &mut Vec<ProposedObject>) {
     });
 }
 
+/// The words of a title that tell one document from another: a revision or an amendment of a text has the text's title plus one of these words.
+fn title_words(title: &str) -> std::collections::BTreeSet<String> {
+    const FILLER: [&str; 8] = [
+        "amendment",
+        "revision",
+        "edition",
+        "older",
+        "new",
+        "the",
+        "of",
+        "a",
+    ];
+    title
+        .split(|c: char| !c.is_alphanumeric())
+        .map(str::to_lowercase)
+        .filter(|w| !w.is_empty() && !FILLER.contains(&w.as_str()))
+        .collect()
+}
+
+/// The earlier objects a document is shown: those of documents whose title is (nearly) the same words, which is what an amendment or a revision of
+/// them looks like. Showing every earlier object would grow with the corpus; showing none leaves an amendment unable to name what it replaces.
+fn related_objects(known: &[Value], title: &str) -> Vec<Value> {
+    let mine = title_words(title);
+    known
+        .iter()
+        .filter(|k| {
+            let theirs = title_words(k["title"].as_str().unwrap_or_default());
+            let shared = mine.intersection(&theirs).count();
+            // The chapter or protocol number tells siblings apart: a revision of chapter 11 is not shown chapter 12.
+            let numbers = |set: &std::collections::BTreeSet<String>| set.iter().filter(|w| w.chars().any(|c| c.is_ascii_digit())).cloned().collect::<Vec<_>>();
+            numbers(&mine) == numbers(&theirs)
+                && !mine.is_empty() && shared > 0 && (shared as f64) / (mine.len().min(theirs.len()) as f64) >= 0.75
+        })
+        .map(|k| serde_json::json!({"id": k["id"], "kind": k["kind"], "quote": k["quote"], "data": k["data"]}))
+        .collect()
+}
+
+/// Renames in `node` every variable called `old` to `new`: condition and expression references, declarations, a deadline's origin.
+fn rename_variable(node: &mut Value, old: &str, new: &str) {
+    match node {
+        Value::Object(map) => {
+            for key in ["var", "from"] {
+                if let Some(Value::String(s)) = map.get_mut(key) {
+                    if s == old {
+                        *s = new.to_string();
+                    }
+                }
+            }
+            if let Some(Value::Object(vars)) = map.get_mut("vars") {
+                if let Some(ty) = vars.remove(old) {
+                    vars.entry(new.to_string()).or_insert(ty);
+                }
+            }
+            map.values_mut().for_each(|v| rename_variable(v, old, new));
+        }
+        Value::Array(items) => {
+            if items.len() == 2 && items[0] == "var" && items[1] == old {
+                items[1] = Value::String(new.to_string());
+            }
+            items.iter_mut().for_each(|v| rename_variable(v, old, new));
+        }
+        _ => {}
+    }
+}
+
+/// An amendment restates what it replaces, so it speaks of the same variables and the same event: a model that names them afresh in the amending
+/// document leaves the two unable to be compared. The amendment's variables take the names of the replaced object's, in order, when both have as many.
+pub fn align_amendments(proposals: &mut [ProposedObject], earlier: &[ProposedObject]) {
+    for proposal in proposals.iter_mut() {
+        let Some(target) = proposal
+            .data
+            .get("supersedes")
+            .and_then(Value::as_str)
+            .and_then(|id| earlier.iter().find(|e| e.id == id))
+        else {
+            continue;
+        };
+        let names = |p: &ProposedObject| -> Vec<String> {
+            p.data
+                .get("vars")
+                .and_then(Value::as_object)
+                .map(|v| v.keys().cloned().collect())
+                .unwrap_or_default()
+        };
+        let (mine, theirs) = (names(proposal), names(target));
+        if mine.len() == theirs.len() {
+            let free_mine: Vec<&String> = mine.iter().filter(|n| !theirs.contains(n)).collect();
+            let free_theirs: Vec<&String> = theirs.iter().filter(|n| !mine.contains(n)).collect();
+            for (old, new) in free_mine.iter().zip(free_theirs.iter()) {
+                rename_variable(&mut proposal.data, old, new);
+            }
+        }
+        for key in ["event", "name", "outcome"] {
+            if let Some(value) = target.data.get(key).cloned() {
+                if proposal.data.get(key).is_some() {
+                    proposal.data[key] = value;
+                }
+            }
+        }
+    }
+}
+
 /// A pack with the passes that got no usable reply (a model that answered nothing parseable, a deadline): never silently absent.
 #[derive(Debug)]
 pub struct Proposed {
@@ -565,7 +667,7 @@ pub async fn propose_pack(
                     document: document.id.clone(),
                     provenance: document.provenance.clone(),
                     text: piece.clone(),
-                    earlier_objects: known.clone(),
+                    earlier_objects: related_objects(&known, &document.title),
                     earlier: all.iter().chain(seen.iter()).cloned().collect(),
                     documents: documents.to_vec(),
                     group: *group,
@@ -612,6 +714,7 @@ pub async fn propose_pack(
                     }
                     proposal.id = format!("{prefix}-{}", proposal.id);
                 }
+                align_amendments(&mut proposals, &all);
                 // The same object twice (two passes may both see it) is one.
                 proposals.retain(|p| {
                     !seen
@@ -622,7 +725,8 @@ pub async fn propose_pack(
             }
         }
         for proposal in &seen {
-            known.push(serde_json::json!({"id": proposal.id, "kind": proposal.kind, "quote": proposal.quote.chars().take(160).collect::<String>()}));
+            known.push(serde_json::json!({"id": proposal.id, "kind": proposal.kind, "title": document.title,
+                "quote": proposal.quote.chars().take(200).collect::<String>(), "data": proposal.data}));
         }
         arbitrate(&mut seen);
         all.extend(seen);
@@ -729,6 +833,47 @@ mod tests {
         ];
         arbitrate(&mut all);
         assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn an_amendment_takes_the_variable_names_and_the_event_of_what_it_replaces() {
+        let earlier = vec![object(
+            "base",
+            "threshold",
+            "q",
+            json!({"var": "days_late", "op": ">", "value": 14, "outcome": "may_terminate", "vars": {"days_late": "int"}}),
+        )];
+        let mut amended = vec![object(
+            "new",
+            "threshold",
+            "q",
+            json!({"var": "delay_days", "op": ">", "value": 21, "outcome": "may_terminate", "vars": {"delay_days": "int"}, "supersedes": "base"}),
+        )];
+        align_amendments(&mut amended, &earlier);
+        assert_eq!(
+            (
+                amended[0].data["var"].as_str(),
+                amended[0].data["vars"].clone()
+            ),
+            (Some("days_late"), json!({"days_late": "int"}))
+        );
+    }
+
+    #[test]
+    fn a_document_is_shown_only_the_earlier_objects_of_documents_with_nearly_its_title() {
+        let known = vec![
+            json!({"id": "a", "kind": "threshold", "title": "Fictional Supply Act, chapter 11", "quote": "q", "data": {}}),
+            json!({"id": "b", "kind": "threshold", "title": "Fictional Supply Act, chapter 12", "quote": "q", "data": {}}),
+            json!({"id": "c", "kind": "threshold", "title": "Fictional clinic intake protocol 3", "quote": "q", "data": {}}),
+        ];
+        let shown = related_objects(&known, "Fictional Supply Act, chapter 11: amendment");
+        assert_eq!(
+            shown
+                .iter()
+                .map(|k| k["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["a"]
+        );
     }
 
     #[test]

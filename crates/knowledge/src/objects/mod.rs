@@ -660,6 +660,56 @@ fn content(object: &Object) -> String {
     data.to_string()
 }
 
+/// The digits of a document's title: chapter 11 and chapter 12 are different texts.
+fn title_digits(documents: &[Document], id: &str) -> BTreeSet<String> {
+    let title = documents
+        .iter()
+        .find(|d| d.id == id)
+        .map_or("", |d| d.title.as_str());
+    let mut out = BTreeSet::new();
+    let mut run = String::new();
+    for c in title.chars().chain(std::iter::once(' ')) {
+        if c.is_ascii_digit() {
+            run.push(c);
+        } else if !run.is_empty() {
+            out.insert(std::mem::take(&mut run));
+        }
+    }
+    out
+}
+
+/// The sets of objects that can disagree with each other: those of one key, except that objects of documents numbered differently in their titles
+/// never compete; an unnumbered document competes with every number.
+fn compete<'a>(
+    groups: Vec<(Vec<String>, Vec<&'a Object>)>,
+    documents: &[Document],
+) -> Vec<(Vec<String>, Vec<&'a Object>)> {
+    let mut out = Vec::new();
+    for (key, group) in groups {
+        let mut numbered: Vec<(BTreeSet<String>, Vec<&Object>)> = Vec::new();
+        let mut loose: Vec<&Object> = Vec::new();
+        for object in group {
+            let digits = title_digits(documents, &object.document);
+            if digits.is_empty() {
+                loose.push(object);
+            } else if let Some((_, members)) = numbered.iter_mut().find(|(d, _)| *d == digits) {
+                members.push(object);
+            } else {
+                numbered.push((digits, vec![object]));
+            }
+        }
+        if numbered.is_empty() {
+            out.push((key, loose));
+            continue;
+        }
+        for (_, mut members) in numbered {
+            members.extend(loose.iter().copied());
+            out.push((key.clone(), members));
+        }
+    }
+    out
+}
+
 fn basis_of(winner: &Provenance, loser: &Provenance) -> &'static str {
     if winner.authority != loser.authority {
         "authority"
@@ -707,6 +757,7 @@ fn resolve(objects: &[Object], documents: &[Document]) -> (Vec<Resolution>, Vec<
             None => groups.push((key, vec![object])),
         }
     }
+    let groups = compete(groups, documents);
     let mut flags = Vec::new();
     for (key, group) in groups {
         if group

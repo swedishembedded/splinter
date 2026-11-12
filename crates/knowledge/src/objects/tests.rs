@@ -253,3 +253,52 @@ fn a_fact_whose_key_is_a_placeholder_or_not_in_the_quote_is_refused() {
         );
     }
 }
+
+#[test]
+fn chapters_numbered_differently_never_compete_but_an_unnumbered_forum_post_competes_with_each() {
+    let doc = |id: &str, title: &str, authority: u8| Document {
+        id: id.into(),
+        title: title.into(),
+        text: format!(
+            "More than {} days late ends it.",
+            if id == "a" {
+                14
+            } else if id == "b" {
+                21
+            } else {
+                30
+            }
+        ),
+        provenance: Provenance {
+            authority,
+            version: 1,
+            date: Some("2026-01-01".into()),
+        },
+    };
+    let limit = |d: &str, days: u32| ProposedObject {
+        id: format!("t-{d}"),
+        kind: "threshold".into(),
+        document: d.into(),
+        quote: format!("More than {days} days late ends it."),
+        data: json!({"var": "days_late", "op": ">", "value": days, "outcome": "ended", "vars": {"days_late": "int"}}),
+    };
+    let chapters = [
+        doc("a", "Act, chapter 11", 3),
+        doc("b", "Act, chapter 12", 3),
+    ];
+    let pack = admit("t", &chapters, &[limit("a", 14), limit("b", 21)]);
+    assert!(pack.resolutions.is_empty() && pack.flags.is_empty());
+    let all = [
+        chapters[0].clone(),
+        chapters[1].clone(),
+        doc("c", "Forum note", 1),
+    ];
+    let pack = admit("t", &all, &[limit("a", 14), limit("b", 21), limit("c", 30)]);
+    assert_eq!(
+        pack.resolutions
+            .iter()
+            .map(|r| r.superseded[0].as_str())
+            .collect::<Vec<_>>(),
+        ["t-c", "t-c"]
+    );
+}
