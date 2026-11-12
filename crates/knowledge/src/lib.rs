@@ -25,6 +25,10 @@
 //!   evidence.
 //! * [`denoise`] - a passage of a source part, corrupted, as a task to
 //!   restore it: the first task generator feeding the experience store.
+//! * [`objects`] - typed knowledge objects (rules, thresholds, deadlines,
+//!   exceptions, procedure steps, behaviour traits) proposed by a model with the
+//!   quote each rests on, and admitted by code: every number traceable to the
+//!   quote, conflicts flagged, never merged.
 //! * [`codebook`] - what a record file's variables mean, as published.
 //! * [`harmonize`] - a variable mapped onto a shared concept, proposed by a
 //!   model with the codebook words it relied on and admitted by code.
@@ -57,6 +61,7 @@ pub mod denoise;
 pub mod gates;
 pub mod harmonize;
 pub mod material;
+pub mod objects;
 pub mod redact;
 pub mod rehearsal;
 pub mod retrieve;

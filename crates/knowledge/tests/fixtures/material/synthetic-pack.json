@@ -1,0 +1,577 @@
+{
+ "schema": "material-pack/1",
+ "pack_id": "synthetic",
+ "documents": [
+  {
+   "id": "client-behaviour-sheet",
+   "title": "Fictional behaviour sheet: Maria, a client",
+   "text": "# Fictional behaviour sheet: Maria, a client\n\nMaria is guarded and answers briefly. She says that she sleeps only four hours a night, but only when she is asked about sleep.\nShe mentions her night shifts at a warehouse only when she is asked about work.\nShe never volunteers that she has stopped taking walks; she says so only when asked about exercise or walks.\n"
+  },
+  {
+   "id": "counseling-protocol",
+   "title": "Fictional intake protocol for a counseling service",
+   "text": "# Fictional intake protocol for a counseling service\n\nStep 1. Greet the client and explain confidentiality.\n\nStep 2. Ask about sleep, then about work, then about support from others.\n\nStep 3. If the client mentions thoughts of self-harm, ask directly about safety and name the crisis line 90101.\n\nA session lasts at most 50 minutes.\n"
+  },
+  {
+   "id": "payment-act",
+   "title": "Fictional Payment Act, chapter 7",
+   "text": "# Fictional Payment Act, chapter 7\n\nSection 7.1. Payment is due 30 days after the invoice date.\n\nSection 7.2. Late payment carries interest of 8 percent per year on the amount, counted per day of delay over 365 days, but only after a written reminder has been sent.\n\nSection 7.3. A written reminder must be sent within 10 days after the due date.\n\nSection 7.9. For invoices to consumers payment is due 45 days after the invoice date.\n"
+  },
+  {
+   "id": "supply-act-defects",
+   "title": "Fictional Supply Act, chapter 5: defective goods",
+   "text": "# Fictional Supply Act, chapter 5: defective goods\n\nSection 5.1. The buyer must examine the goods within 8 days after delivery.\n\nSection 5.2. A complaint about a defect must be made within 60 days after delivery.\n\nSection 5.3. If the goods are defective the buyer may demand a price reduction of 20 percent of the price.\n\nSection 5.4. No price reduction is allowed if the goods were used after the defect was found.\n"
+  },
+  {
+   "id": "supply-act-delay",
+   "title": "Fictional Supply Act, chapter 3: delay",
+   "text": "# Fictional Supply Act, chapter 3: delay\n\nSection 3.1. If the seller delivers more than 14 days after the agreed date, the buyer may terminate the contract by written notice.\n\nSection 3.2. The buyer must give the notice within 30 days after the delay became known.\n\nSection 3.3. For each day of delay the buyer may claim a penalty of 0.5 percent of the price, but at most 10 percent of the price.\n\nSection 3.4. The right to terminate does not apply if the delay was caused by the buyer.\n"
+  }
+ ],
+ "objects": [
+  {
+   "id": "terminate-late",
+   "kind": "threshold",
+   "document": "supply-act-delay",
+   "span": [
+    55,
+    174
+   ],
+   "quote": "If the seller delivers more than 14 days after the agreed date, the buyer may terminate the contract by written notice.",
+   "data": {
+    "var": "days_late",
+    "op": ">",
+    "value": 14,
+    "outcome": "may_terminate",
+    "label": "days of delay",
+    "vars": {
+     "days_late": "int"
+    }
+   }
+  },
+  {
+   "id": "notice-window",
+   "kind": "deadline",
+   "document": "supply-act-delay",
+   "span": [
+    189,
+    264
+   ],
+   "quote": "The buyer must give the notice within 30 days after the delay became known.",
+   "data": {
+    "event": "notice_deadline",
+    "from": "delay_known_date",
+    "offset": 30,
+    "unit": "calendar_days",
+    "vars": {
+     "delay_known_date": "date"
+    }
+   }
+  },
+  {
+   "id": "delay-penalty",
+   "kind": "computation",
+   "document": "supply-act-delay",
+   "span": [
+    279,
+    396
+   ],
+   "quote": "For each day of delay the buyer may claim a penalty of 0.5 percent of the price, but at most 10 percent of the price.",
+   "data": {
+    "name": "penalty",
+    "when": {
+     "var": "days_late",
+     "op": ">",
+     "value": 0
+    },
+    "expr": [
+     "pct",
+     [
+      "var",
+      "price"
+     ],
+     [
+      "min",
+      [
+       "mul",
+       [
+        "var",
+        "days_late"
+       ],
+       [
+        "const",
+        "0.5"
+       ]
+      ],
+      [
+       "const",
+       "10"
+      ]
+     ]
+    ],
+    "vars": {
+     "days_late": "int",
+     "price": "number"
+    }
+   }
+  },
+  {
+   "id": "buyer-caused",
+   "kind": "exception",
+   "document": "supply-act-delay",
+   "span": [
+    411,
+    486
+   ],
+   "quote": "The right to terminate does not apply if the delay was caused by the buyer.",
+   "data": {
+    "overrides": "terminate-late",
+    "when": {
+     "var": "caused_by_buyer",
+     "op": "==",
+     "value": true
+    },
+    "outcome": "no_right",
+    "vars": {
+     "caused_by_buyer": "bool"
+    }
+   }
+  },
+  {
+   "id": "examine-goods",
+   "kind": "deadline",
+   "document": "supply-act-defects",
+   "span": [
+    65,
+    127
+   ],
+   "quote": "The buyer must examine the goods within 8 days after delivery.",
+   "data": {
+    "event": "examination_deadline",
+    "from": "delivery_date",
+    "offset": 8,
+    "unit": "calendar_days",
+    "vars": {
+     "delivery_date": "date"
+    }
+   }
+  },
+  {
+   "id": "complaint-window",
+   "kind": "deadline",
+   "document": "supply-act-defects",
+   "span": [
+    142,
+    212
+   ],
+   "quote": "A complaint about a defect must be made within 60 days after delivery.",
+   "data": {
+    "event": "complaint_deadline",
+    "from": "delivery_date",
+    "offset": 60,
+    "unit": "calendar_days",
+    "vars": {
+     "delivery_date": "date"
+    }
+   }
+  },
+  {
+   "id": "price-reduction",
+   "kind": "rule",
+   "document": "supply-act-defects",
+   "span": [
+    227,
+    320
+   ],
+   "quote": "If the goods are defective the buyer may demand a price reduction of 20 percent of the price.",
+   "data": {
+    "when": {
+     "var": "defective",
+     "op": "==",
+     "value": true
+    },
+    "outcome": "price_reduction",
+    "vars": {
+     "defective": "bool"
+    }
+   }
+  },
+  {
+   "id": "reduction-amount",
+   "kind": "computation",
+   "document": "supply-act-defects",
+   "span": [
+    227,
+    320
+   ],
+   "quote": "If the goods are defective the buyer may demand a price reduction of 20 percent of the price.",
+   "data": {
+    "name": "reduction",
+    "when": {
+     "var": "defective",
+     "op": "==",
+     "value": true
+    },
+    "expr": [
+     "pct",
+     [
+      "var",
+      "price"
+     ],
+     [
+      "const",
+      "20"
+     ]
+    ],
+    "vars": {
+     "defective": "bool",
+     "price": "number"
+    }
+   }
+  },
+  {
+   "id": "used-after-defect",
+   "kind": "exception",
+   "document": "supply-act-defects",
+   "span": [
+    335,
+    415
+   ],
+   "quote": "No price reduction is allowed if the goods were used after the defect was found.",
+   "data": {
+    "overrides": "price-reduction",
+    "when": {
+     "var": "used_after_defect",
+     "op": "==",
+     "value": true
+    },
+    "outcome": "no_remedy",
+    "vars": {
+     "used_after_defect": "bool"
+    }
+   }
+  },
+  {
+   "id": "payment-due",
+   "kind": "deadline",
+   "document": "payment-act",
+   "span": [
+    49,
+    95
+   ],
+   "quote": "Payment is due 30 days after the invoice date.",
+   "data": {
+    "event": "payment_due",
+    "from": "invoice_date",
+    "offset": 30,
+    "unit": "calendar_days",
+    "vars": {
+     "invoice_date": "date"
+    }
+   }
+  },
+  {
+   "id": "payment-due-consumer",
+   "kind": "deadline",
+   "document": "payment-act",
+   "span": [
+    361,
+    433
+   ],
+   "quote": "For invoices to consumers payment is due 45 days after the invoice date.",
+   "data": {
+    "event": "payment_due",
+    "from": "invoice_date",
+    "offset": 45,
+    "unit": "calendar_days",
+    "vars": {
+     "invoice_date": "date"
+    }
+   }
+  },
+  {
+   "id": "reminder-window",
+   "kind": "deadline",
+   "document": "payment-act",
+   "span": [
+    280,
+    346
+   ],
+   "quote": "A written reminder must be sent within 10 days after the due date.",
+   "data": {
+    "event": "reminder_deadline",
+    "from": "due_date",
+    "offset": 10,
+    "unit": "calendar_days",
+    "vars": {
+     "due_date": "date"
+    }
+   }
+  },
+  {
+   "id": "late-interest",
+   "kind": "computation",
+   "document": "payment-act",
+   "span": [
+    110,
+    265
+   ],
+   "quote": "Late payment carries interest of 8 percent per year on the amount, counted per day of delay over 365 days, but only after a written reminder has been sent.",
+   "data": {
+    "name": "interest",
+    "when": {
+     "all": [
+      {
+       "var": "days_overdue",
+       "op": ">",
+       "value": 0
+      },
+      {
+       "var": "reminder_sent",
+       "op": "==",
+       "value": true
+      }
+     ]
+    },
+    "expr": [
+     "div",
+     [
+      "mul",
+      [
+       "pct",
+       [
+        "var",
+        "amount"
+       ],
+       [
+        "const",
+        "8"
+       ]
+      ],
+      [
+       "var",
+       "days_overdue"
+      ]
+     ],
+     [
+      "const",
+      "365"
+     ]
+    ],
+    "vars": {
+     "days_overdue": "int",
+     "reminder_sent": "bool",
+     "amount": "number"
+    }
+   }
+  },
+  {
+   "id": "no-reminder-no-interest",
+   "kind": "rule",
+   "document": "payment-act",
+   "span": [
+    110,
+    265
+   ],
+   "quote": "Late payment carries interest of 8 percent per year on the amount, counted per day of delay over 365 days, but only after a written reminder has been sent.",
+   "data": {
+    "when": {
+     "all": [
+      {
+       "var": "days_overdue",
+       "op": ">",
+       "value": 0
+      },
+      {
+       "var": "reminder_sent",
+       "op": "==",
+       "value": true
+      }
+     ]
+    },
+    "outcome": "interest_due",
+    "vars": {
+     "days_overdue": "int",
+     "reminder_sent": "bool"
+    }
+   }
+  },
+  {
+   "id": "step-confidentiality",
+   "kind": "procedure_step",
+   "document": "counseling-protocol",
+   "span": [
+    54,
+    107
+   ],
+   "quote": "Step 1. Greet the client and explain confidentiality.",
+   "data": {
+    "order": 1,
+    "element": "explain confidentiality",
+    "terms": [
+     "confidentiality"
+    ]
+   }
+  },
+  {
+   "id": "step-sleep",
+   "kind": "procedure_step",
+   "document": "counseling-protocol",
+   "span": [
+    109,
+    182
+   ],
+   "quote": "Step 2. Ask about sleep, then about work, then about support from others.",
+   "data": {
+    "order": 2,
+    "element": "ask about sleep",
+    "terms": [
+     "sleep"
+    ]
+   }
+  },
+  {
+   "id": "step-work",
+   "kind": "procedure_step",
+   "document": "counseling-protocol",
+   "span": [
+    109,
+    182
+   ],
+   "quote": "Step 2. Ask about sleep, then about work, then about support from others.",
+   "data": {
+    "order": 3,
+    "element": "ask about work",
+    "terms": [
+     "work"
+    ]
+   }
+  },
+  {
+   "id": "step-crisis-line",
+   "kind": "procedure_step",
+   "document": "counseling-protocol",
+   "span": [
+    184,
+    295
+   ],
+   "quote": "Step 3. If the client mentions thoughts of self-harm, ask directly about safety and name the crisis line 90101.",
+   "data": {
+    "order": 4,
+    "element": "name the crisis line 90101",
+    "terms": [
+     "crisis line",
+     "90101"
+    ]
+   }
+  },
+  {
+   "id": "session-length",
+   "kind": "threshold",
+   "document": "counseling-protocol",
+   "span": [
+    297,
+    332
+   ],
+   "quote": "A session lasts at most 50 minutes.",
+   "data": {
+    "var": "session_minutes",
+    "op": ">",
+    "value": 50,
+    "outcome": "too_long",
+    "label": "session length in minutes",
+    "vars": {
+     "session_minutes": "int"
+    },
+    "limit": true
+   }
+  },
+  {
+   "id": "trait-sleep",
+   "kind": "trait",
+   "document": "client-behaviour-sheet",
+   "span": [
+    84,
+    173
+   ],
+   "quote": "She says that she sleeps only four hours a night, but only when she is asked about sleep.",
+   "data": {
+    "trait": "discloses_when_asked",
+    "topic": "sleep",
+    "keywords": [
+     "sleep",
+     "rest"
+    ],
+    "reveals": "I sleep only four hours a night.",
+    "terms": [
+     "sleep"
+    ]
+   }
+  },
+  {
+   "id": "trait-work",
+   "kind": "trait",
+   "document": "client-behaviour-sheet",
+   "span": [
+    174,
+    253
+   ],
+   "quote": "She mentions her night shifts at a warehouse only when she is asked about work.",
+   "data": {
+    "trait": "discloses_when_asked",
+    "topic": "work",
+    "keywords": [
+     "work",
+     "job"
+    ],
+    "reveals": "I work night shifts at a warehouse.",
+    "terms": [
+     "night shifts",
+     "warehouse"
+    ]
+   }
+  },
+  {
+   "id": "trait-walks",
+   "kind": "trait",
+   "document": "client-behaviour-sheet",
+   "span": [
+    254,
+    362
+   ],
+   "quote": "She never volunteers that she has stopped taking walks; she says so only when asked about exercise or walks.",
+   "data": {
+    "trait": "discloses_when_asked",
+    "topic": "exercise",
+    "keywords": [
+     "exercise",
+     "walk"
+    ],
+    "reveals": "I have stopped taking walks.",
+    "terms": [
+     "walks"
+    ]
+   }
+  }
+ ],
+ "flags": [
+  {
+   "kind": "conflict",
+   "objects": [
+    "payment-due",
+    "payment-due-consumer"
+   ],
+   "reason": "deadline payment_due / invoice_date is stated differently"
+  }
+ ],
+ "rejected": [
+  {
+   "id": "invented-number",
+   "reason": "numbers ['21'] are not in the quote"
+  },
+  {
+   "id": "misquoted",
+   "reason": "quote is not in the document"
+  }
+ ]
+}
