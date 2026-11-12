@@ -60,7 +60,9 @@ is the only, and right, source for the rest, and prose that names the goal's
 topics and states nothing. Facts and the rulings between disagreeing statements
 come from admitted knowledge objects (`splinter_knowledge::objects`): a key stays in
 the words of its quote, so statements that paraphrase each other are not seen to
-disagree, and a section no object can be made of is left out. `--signal` chooses
+disagree, and a section no object can be made of is left out. `--hops` asks the goal only through the sites of a register (the unit's facts are in other documents; a still-failing probe
+whose words occur in a learned sentence opens a gap for the other words of that sentence; `--no-expansion` switches that off); `--no-align`
+leaves the keys of paraphrased statements apart. `--signal` chooses
 what decides relevance and how the reader's memory is searched: the gaps' words
 (`lexical`), closeness in meaning (`semantic`), or either (`fused`); `--embedder
 lexicon` is a stand-in that knows only the corpus's synonym table, `--embedder

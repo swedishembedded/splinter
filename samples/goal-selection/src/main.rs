@@ -100,6 +100,9 @@ struct Cli {
     /// question needs the register and then the unit's facts.
     #[arg(long)]
     hops: bool,
+    /// Do not let what was learned open the gaps it depends on.
+    #[arg(long)]
+    no_expansion: bool,
     /// With an embedder, do not align the keys of paraphrased statements.
     #[arg(long)]
     no_align: bool,
@@ -220,7 +223,10 @@ fn main() -> anyhow::Result<()> {
         SignalArg::Fused => Retrieval::Fused,
     };
     let plan = Plan {
-        checks: Checks::ALL,
+        checks: Checks {
+            expansion: !cli.no_expansion,
+            ..Checks::ALL
+        },
         signal,
         rounds: cli.rounds,
         round_words: cli.round_words,

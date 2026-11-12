@@ -190,7 +190,47 @@ seed of draws; falsifiable bars asserted. 27B adapter comparison queued, not sta
 **Live data**: `goal::intake` admits a live document only with consent, the current detectors' scrub marker, and no residue
 when the detectors run again; a marker alone does not vouch for the text. Not yet wired into a CLI command.
 
-Not done: no model-judged relevance; multi-hop; novelty is accuracy,
+### Third round (2026-11-12): aligned keys, early rulings, multi-hop, live data behind a command
+
+- **Semantic conflict detection** (`goal::align`, `objects::resolve_aligned`): an embedder proposes which attribute
+  phrases and entity names are one (cosine >= 0.6, mutual best by a margin of 0.05, no document uses both phrases, no
+  digit in an entity name); the rulings stay the documents' headers and the stated values, never the embedder's. The
+  compiler's `resolve` is reused unchanged (only the keys it groups by are rewritten). Written down as findings 123
+  and 124 in `.agents/knowledge/`.
+- **Budget waste.** Rulings were already decided before novelty and before the budget; the waste was rulings that
+  could not be reached across a paraphrase (finding 123). With keys aligned, real 27B reader, served
+  Qwen3-Embedding-0.6B, property form, fresh seeds 6000-6004 (5 corpora, concurrency 1), held-out pass (95%
+  interval), precision / recall of the chosen sections:
+
+| property, hard, fused | selective | precision / recall | selective + provenance | all + provenance | oracle |
+|---|---|---|---|---|---|
+| keys aligned | 0.97 [0.95,1.00] | 0.99 / 0.99 | 0.97 [0.93,1.00] | 0.65 [0.58,0.72] | 0.98 |
+| keys as written | 0.70 [0.54,0.89] | 0.84 / 0.84 | 0.82 [0.70,0.94] | 0.65 [0.59,0.72] | 0.99 |
+
+  The earlier recall of 0.71 (seeds 3000-3004) is now 0.99 and the budget no longer goes to stale sections.
+- **Alignment is not safe everywhere.** Client-behaviour form, same protocol: aligned selective 0.40 [0.33,0.47]
+  (precision 0.46, recall 0.60), unaligned 0.52 [0.43,0.61] (precision 0.39, recall 0.78), oracle 0.52. Phrase
+  embeddings cannot separate a paraphrase from a neighbouring situation, the structural check (no document uses both)
+  refuses nothing when situations and types never co-occur, and a false merge turns two facts into a ruled conflict
+  (finding 124). A guard that drops unsettled flags across an alignment was tried and was worse (0.28). Open: a
+  structural check for keys that never co-occur, or leaving those keys unaligned and relying on provenance headers.
+- **Multi-hop and gap expansion** (`Form::Link`, `Hardness::hops`, `gaps::dependent_gaps`, `InContext::looking_again`):
+  a register says which unit is installed at a site; a question names the site; the unit's facts are in other
+  documents. A still-failing probe whose rare words occur in a learned section opens a dependent gap with the rare words
+  of those sentences (the unit named), so the next round asks for that unit's facts. Scripted, 8 corpora: expansion on
+  raises recall and held-out by more than 0.2 over expansion off (test
+  `a_learned_link_opens_the_gap_for_the_facts_it_names`). Real 27B reader, served embedder, 5 corpora (seeds
+  6500-6504, 2 topics x 12 units, six rounds of 900 words): expansion off: recall 0.60 [0.51,0.70], precision 0.73,
+  selective + provenance 0.20 [0.05,0.37], 1568 words; expansion on: recall 0.99 [0.97,1.00], precision 0.49,
+  selective + provenance 0.88 (all + provenance 0.88, oracle 1.00), 5229 words (oracle 2049). Expansion opens the
+  gap, at the price of reading everything the dependent gaps match (precision falls); without provenance headers the
+  same chosen material scores 0.16 against 0.88 with them, cause not found (open, not a finding).
+- **Live data** is behind `splinter goal admit --open FILE.. --live FILE.. --consent --scrub --out DIR`: a live file is
+  admitted only with consent and after the current scrub, and a refusal exits with code 2.
+- **27B adapter comparison** is queued and not started (the training card belongs to the RL lane); `queue-27b.sh`
+  is verified up to model loading (`splinter learn` reaches `could not be loaded` with a nonexistent models directory).
+
+Not done: no model-judged relevance; novelty is accuracy,
 not loss (brain log-probabilities of the section's items would sharpen it); facts come from two sentence
 patterns through the compiler's admission (a model proposer is untested here); the participant that trains on the chosen sections
 (waits for a card, and the material compiler's task families); sections that are relevant but share
