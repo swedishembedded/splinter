@@ -244,6 +244,13 @@ when the detectors run again; a marker alone does not vouch for the text. Not ye
 - **Open**: in the multi-hop corpora the dependent gaps still choose 21 to 36 sections of other topics (precision about 0.6, held-out
   unaffected at 0.98); cause not found.
 
+**27B adapter comparison (run 2026-11-12).** Done on a training card (gpu2, port 8803, restarted before every job), property
+form, 3 hard corpora (seeds 8000-8002), 150 steps for every arm, base scored in the same job. Held-out loss of the tuned model
+(lower is better; base 4.24 to 4.35): selective 0.163 [0.115,0.210], oracle-relevant 0.297 [0.248,0.338], everything 0.791
+[0.774,0.802], random same words 1.721 [1.066,2.086]; selective minus everything -0.628 [-0.687,-0.587], minus random -1.558
+[-1.897,-0.901]. Teacher-forced loss, not generated exact match; held out of selection but not of the material. Finding
+136. Not run: the client-behaviour form, generated exact match, a multi-seed repeat.
+
 Not done: no model-judged relevance; novelty is accuracy,
 not loss (brain log-probabilities of the section's items would sharpen it); facts come from two sentence
 patterns through the compiler's admission (a model proposer is untested here); the participant that trains on the chosen sections

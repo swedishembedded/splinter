@@ -1,0 +1,10 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
+
+# 136. Under one compute budget a 27B adapter trained on the loop's material beat everything and random material on held-out loss
+
+Qwen3.8-27B-FP8 on a brain training server (one card), LoRA rank 16, 150 optimizer steps of 4 records for every arm (the budget is compute, so the arm with most records sees each fact less), the server restarted before each job. Three property-form hard corpora (seeds 8000-8002, 2 goal topics x 8 units, material chosen with the same 27B reader and the served embedder). Each job scores the base and the tuned model on the same held-out records (the questions of the goal's other facts) in the same job, so the base replicate is at the same load: the base loss was 4.24, 4.35, 4.24 for the three corpora and identical across the four arms of a corpus.
+
+Held-out loss of the tuned model, mean over the corpora with a 95% bootstrap interval (lower is better): selective 0.163 [0.115, 0.210]; oracle-relevant 0.297 [0.248, 0.338]; everything 0.791 [0.774, 0.802]; random sections of the same words 1.721 [1.066, 2.086]. Selective minus everything -0.628 [-0.687, -0.587], minus random -1.558 [-1.897, -0.901]; minus oracle -0.134 [-0.223, -0.038] although the two arms trained on records of the same sections: the difference is the adapter seed and batch order, so selective is level with the oracle, not better.
+
+What this establishes: selecting the material before training beats training on all of it (conflicting stale and wrong statements teach a mixture) and beats the same number of words at random, at equal compute. What it does not: the metric is teacher-forced loss on the answer tokens, not generated exact match; the held-out questions ask about facts the relevant arms trained on (the held-out set is held out of selection, not of the material); three corpora, one seed each; the corpus is invented, so the base knew none of it. Evidence: `~/project/shared/goal-selection/weights-27b/` (result-*.json, train-*.log), `goal-train` and `goal-selection --export-chat`.

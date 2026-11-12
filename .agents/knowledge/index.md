@@ -121,3 +121,4 @@ in the same commit.
 | [133](133-a-compiler-rule-on-numbered-titles-silently-disabled-every-ruling-of-a-corpus.md) | The compiler's numbered-title rule silently disabled every ruling of a corpus whose titles carried chunk numbers |
 | [134](134-value-coincidence-is-no-evidence-that-two-phrases-are-one.md) | Value coincidence is no evidence that two phrases are one |
 | [135](135-attribute-alignment-is-evidence-only-through-identified-things.md) | Attribute alignment is evidence only through identified things, and a class is left alone |
+| [136](136-under-one-compute-budget-a-27b-adapter-trained-on-the-loops-material-beat-everything-and-random-material.md) | Under one compute budget a 27B adapter trained on the loop's material beat everything and random material on held-out loss |
