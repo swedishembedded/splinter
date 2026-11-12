@@ -25,7 +25,7 @@ number it can move, and that a regression would show. The bench numbers on real 
 
 ## Results (CPU, 2026-11-12)
 
-See the table `make test/methods` prints; the figures of the last full run are recorded in the Log below.
+See the table `make test/methods` prints; the figures of the last full run are in the Log below.
 
 ## Findings that changed the code
 
@@ -64,6 +64,10 @@ See the table `make test/methods` prints; the figures of the last full run are r
   steps are tool calls, a toy chat template that renders them, and a step verifier stage; none is built.
 - Skill library. `skill_planner` and `splinter_knowledge::skills::admit` have no model-level smoke; no learning
   effect of a library is measured.
+- Test-time search is a small gain on this model: against greedy decoding, greedy plus best-of-48 against a check the
+  model can run itself (the cipher undone must give the prompt back, no answer key) goes 0.39 -> 0.46. The prompts
+  greedy gets wrong are the ones whose right answer the model gives almost no mass, so more draws or a higher
+  temperature help little (T 1.0: 0.41). Best-of-16 sampling alone does not beat greedy (0.35).
 - Test-time critique and refinement (`critique.rs`): only best-of-n against a check the model can run is smoked.
 - Distillation is sequence-level (a teacher's answers to unlabelled prompts). Logit-level distillation and the
   privileged-context self-distillation view are brain features with no Splinter-reachable smoke.
@@ -71,6 +75,22 @@ See the table `make test/methods` prints; the figures of the last full run are r
 - The smokes use the plain answerer, or a sven agent with no tools (self-play). Rollouts with tools and sandboxes are
   covered by the bench lanes.
 
+## The unreliable pipelines tests
+
+`splinter-pipelines --test it` (354 tests) failed 4 to 67 tests when run as `cargo test` runs it, one test per core
+(288 here). Measured: those failures are `Disk quota exceeded` (EDQUOT) on the scratch directories the tests create,
+plus timing assertions ("three requests are in flight together") starved by the oversubscription; with the
+scratch directory emptied and 8 tests at a time, all 352 tests that finished passed (two slow ones had not when the
+run was cut at 28 minutes), and each of the four originally reported passes alone in seconds. One defect was real: a
+guarded write that refreshed the expdb session and then failed on the disk rolled back with a stale mark and
+panicked (`split index (is 3) should be <= len (is 0)`), hiding the I/O error; `Session::rollback` now treats
+everything pending after a refresh as written after the mark (regression test in `expdb/tests/it/session.rs`).
+`make test` now runs `--test-threads=$(TEST_THREADS)` (16).
+
 ## Log
 
-- 2026-11-12: lane created. Nine smokes, all green on CPU in `make test/methods`; figures below.
+- 2026-11-12: lane created. Nine smokes, all green on CPU in `make test/methods`.
+- 2026-11-12, final state: SFT 0.00 -> 0.99; rejection sampling 0.39 -> 0.60; DPO 0.39 -> 0.57; GRPO (default two-sided
+  advantage) 0.39 -> 0.50; distillation 0.00 -> 0.99; continued pretraining 0.00 -> 0.52; self-play through the seat
+  0.39 -> 0.59; test-time search vs greedy 0.39 -> 0.46; retrieval closed-book 0.00 -> 1.00. No smoke: process
+  verification, skill library.

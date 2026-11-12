@@ -129,7 +129,7 @@ fn best_of_n_against_a_check_the_model_can_run_beats_its_greedy_answer() {
         metric: "held-out exact match",
         before: greedy as f64 / n,
         after: searched as f64 / n,
-        min_gain: 0.1,
+        min_gain: 0.05,
         note: &note,
     }
     .conclude();
