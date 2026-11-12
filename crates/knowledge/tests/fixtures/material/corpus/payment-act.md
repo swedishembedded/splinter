@@ -1,3 +1,8 @@
+---
+authority: 3
+version: 1
+date: 2026-03-01
+---
 # Fictional Payment Act, chapter 7
 
 Section 7.1. Payment is due 30 days after the invoice date.
@@ -7,3 +12,5 @@ Section 7.2. Late payment carries interest of 8 percent per year on the amount, 
 Section 7.3. A written reminder must be sent within 10 days after the due date.
 
 Section 7.9. For invoices to consumers payment is due 45 days after the invoice date.
+
+Section 7.5. Interest rates by invoice size: invoices under 10000 carry 8 percent per year; invoices of 10000 or more carry 6 percent per year.

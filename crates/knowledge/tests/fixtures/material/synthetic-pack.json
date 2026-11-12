@@ -1,31 +1,146 @@
 {
- "schema": "material-pack/1",
+ "schema": "material-pack/2",
  "pack_id": "synthetic",
  "documents": [
   {
    "id": "client-behaviour-sheet",
    "title": "Fictional behaviour sheet: Maria, a client",
-   "text": "# Fictional behaviour sheet: Maria, a client\n\nMaria is guarded and answers briefly. She says that she sleeps only four hours a night, but only when she is asked about sleep.\nShe mentions her night shifts at a warehouse only when she is asked about work.\nShe never volunteers that she has stopped taking walks; she says so only when asked about exercise or walks.\n"
+   "text": "# Fictional behaviour sheet: Maria, a client\n\nMaria is guarded and answers briefly. She says that she sleeps only four hours a night, but only when she is asked about sleep.\nShe mentions her night shifts at a warehouse only when she is asked about work.\nShe never volunteers that she has stopped taking walks; she says so only when asked about exercise or walks.\n",
+   "provenance": {
+    "authority": 2,
+    "version": 1,
+    "date": "2026-04-01"
+   }
+  },
+  {
+   "id": "counseling-protocol-2027",
+   "title": "Fictional intake protocol for a counseling service, revision",
+   "text": "# Fictional intake protocol for a counseling service, revision\n\nA session lasts at most 45 minutes.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 2,
+    "date": "2027-01-15"
+   }
   },
   {
    "id": "counseling-protocol",
    "title": "Fictional intake protocol for a counseling service",
-   "text": "# Fictional intake protocol for a counseling service\n\nStep 1. Greet the client and explain confidentiality.\n\nStep 2. Ask about sleep, then about work, then about support from others.\n\nStep 3. If the client mentions thoughts of self-harm, ask directly about safety and name the crisis line 90101.\n\nA session lasts at most 50 minutes.\n"
+   "text": "# Fictional intake protocol for a counseling service\n\nStep 1. Greet the client and explain confidentiality.\n\nStep 2. Ask about sleep, then about work, then about support from others.\n\nStep 3. If the client mentions thoughts of self-harm, ask directly about safety and name the crisis line 90101.\n\nA session lasts at most 50 minutes.\n\nSession fees by length: sessions of up to 30 minutes cost 500 kronor, and sessions of up to 45 minutes cost 700 kronor.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 1,
+    "date": "2026-02-01"
+   }
+  },
+  {
+   "id": "forum-fans",
+   "title": "Forum thread about fans",
+   "text": "# Forum thread about fans\n\nThe rated flow of Birch fan 7 is 520 cubic meters per hour.\n",
+   "provenance": {
+    "authority": 1,
+    "version": 1,
+    "date": "2027-01-25"
+   }
+  },
+  {
+   "id": "forum-note",
+   "title": "Forum note",
+   "text": "# Forum note\n\nSomeone told me the price reduction for defective goods is 35 percent of the price.\n",
+   "provenance": {
+    "authority": 1,
+    "version": 1,
+    "date": "2027-02-01"
+   }
+  },
+  {
+   "id": "forum-pumps",
+   "title": "Forum thread about pumps",
+   "text": "# Forum thread about pumps\n\nThe rated flow of Alder pump 3 is 150 liters per minute.\n",
+   "provenance": {
+    "authority": 1,
+    "version": 1,
+    "date": "2027-01-20"
+   }
   },
   {
    "id": "payment-act",
    "title": "Fictional Payment Act, chapter 7",
-   "text": "# Fictional Payment Act, chapter 7\n\nSection 7.1. Payment is due 30 days after the invoice date.\n\nSection 7.2. Late payment carries interest of 8 percent per year on the amount, counted per day of delay over 365 days, but only after a written reminder has been sent.\n\nSection 7.3. A written reminder must be sent within 10 days after the due date.\n\nSection 7.9. For invoices to consumers payment is due 45 days after the invoice date.\n"
+   "text": "# Fictional Payment Act, chapter 7\n\nSection 7.1. Payment is due 30 days after the invoice date.\n\nSection 7.2. Late payment carries interest of 8 percent per year on the amount, counted per day of delay over 365 days, but only after a written reminder has been sent.\n\nSection 7.3. A written reminder must be sent within 10 days after the due date.\n\nSection 7.9. For invoices to consumers payment is due 45 days after the invoice date.\n\nSection 7.5. Interest rates by invoice size: invoices under 10000 carry 8 percent per year; invoices of 10000 or more carry 6 percent per year.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 1,
+    "date": "2026-03-01"
+   }
+  },
+  {
+   "id": "service-manual-2024",
+   "title": "Fictional pump manual, 2024 edition",
+   "text": "# Fictional pump manual, 2024 edition\n\nThe service interval of Alder pump 3 is 250 hours.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 1,
+    "date": "2024-06-01"
+   }
+  },
+  {
+   "id": "service-manual-b-2024",
+   "title": "Fictional fan manual, 2024 edition",
+   "text": "# Fictional fan manual, 2024 edition\n\nThe service interval of Birch fan 7 is 600 hours.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 1,
+    "date": "2024-08-01"
+   }
+  },
+  {
+   "id": "service-manual-b",
+   "title": "Fictional fan manual",
+   "text": "# Fictional fan manual\n\nThe service interval of Birch fan 7 is 900 hours.\n\nThe rated flow of Birch fan 7 is 480 cubic meters per hour.\n\nWhen the invoice is late, a Proud client pays at once.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 1,
+    "date": "2026-02-10"
+   }
+  },
+  {
+   "id": "service-manual",
+   "title": "Fictional pump manual",
+   "text": "# Fictional pump manual\n\nThe service interval of Alder pump 3 is 400 hours.\n\nThe rated flow of Alder pump 3 is 120 liters per minute.\n\nWhen the invoice is late, a Hesitant client asks for a payment plan.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 1,
+    "date": "2026-01-10"
+   }
   },
   {
    "id": "supply-act-defects",
    "title": "Fictional Supply Act, chapter 5: defective goods",
-   "text": "# Fictional Supply Act, chapter 5: defective goods\n\nSection 5.1. The buyer must examine the goods within 8 days after delivery.\n\nSection 5.2. A complaint about a defect must be made within 60 days after delivery.\n\nSection 5.3. If the goods are defective the buyer may demand a price reduction of 20 percent of the price.\n\nSection 5.4. No price reduction is allowed if the goods were used after the defect was found.\n"
+   "text": "# Fictional Supply Act, chapter 5: defective goods\n\nSection 5.1. The buyer must examine the goods within 8 days after delivery.\n\nSection 5.2. A complaint about a defect must be made within 60 days after delivery.\n\nSection 5.3. If the goods are defective the buyer may demand a price reduction of 20 percent of the price.\n\nSection 5.4. No price reduction is allowed if the goods were used after the defect was found.\n\nSection 5.5. In this chapter, defect means that the goods differ from what the contract describes.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 1,
+    "date": "2026-03-01"
+   }
+  },
+  {
+   "id": "supply-act-delay-amendment",
+   "title": "Fictional Supply Act, chapter 3: amendment",
+   "text": "# Fictional Supply Act, chapter 3: amendment\n\nSection 3.1 (amended). If the seller delivers more than 21 days after the agreed date, the buyer may terminate the contract by written notice.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 2,
+    "date": "2027-01-01"
+   }
   },
   {
    "id": "supply-act-delay",
    "title": "Fictional Supply Act, chapter 3: delay",
-   "text": "# Fictional Supply Act, chapter 3: delay\n\nSection 3.1. If the seller delivers more than 14 days after the agreed date, the buyer may terminate the contract by written notice.\n\nSection 3.2. The buyer must give the notice within 30 days after the delay became known.\n\nSection 3.3. For each day of delay the buyer may claim a penalty of 0.5 percent of the price, but at most 10 percent of the price.\n\nSection 3.4. The right to terminate does not apply if the delay was caused by the buyer.\n"
+   "text": "# Fictional Supply Act, chapter 3: delay\n\nSection 3.1. If the seller delivers more than 14 days after the agreed date, the buyer may terminate the contract by written notice.\n\nSection 3.2. The buyer must give the notice within 30 days after the delay became known.\n\nSection 3.3. For each day of delay the buyer may claim a penalty of 0.5 percent of the price, but at most 10 percent of the price.\n\nSection 3.4. The right to terminate does not apply if the delay was caused by the buyer.\n\nSection 3.5. In this chapter, delay means that the goods are delivered after the agreed date.\n",
+   "provenance": {
+    "authority": 3,
+    "version": 1,
+    "date": "2026-03-01"
+   }
   }
  ],
  "objects": [
@@ -552,6 +667,436 @@
      "walks"
     ]
    }
+  },
+  {
+   "id": "terminate-late-amended",
+   "kind": "threshold",
+   "document": "supply-act-delay-amendment",
+   "span": [
+    69,
+    188
+   ],
+   "quote": "If the seller delivers more than 21 days after the agreed date, the buyer may terminate the contract by written notice.",
+   "data": {
+    "var": "days_late",
+    "op": ">",
+    "value": 21,
+    "outcome": "may_terminate",
+    "label": "days of delay",
+    "vars": {
+     "days_late": "int"
+    },
+    "supersedes": "terminate-late"
+   }
+  },
+  {
+   "id": "session-length-revised",
+   "kind": "threshold",
+   "document": "counseling-protocol-2027",
+   "span": [
+    64,
+    99
+   ],
+   "quote": "A session lasts at most 45 minutes.",
+   "data": {
+    "var": "session_minutes",
+    "op": ">",
+    "value": 45,
+    "outcome": "too_long",
+    "label": "session length in minutes",
+    "limit": true,
+    "vars": {
+     "session_minutes": "int"
+    },
+    "supersedes": "session-length"
+   }
+  },
+  {
+   "id": "forum-reduction",
+   "kind": "computation",
+   "document": "forum-note",
+   "span": [
+    14,
+    97
+   ],
+   "quote": "Someone told me the price reduction for defective goods is 35 percent of the price.",
+   "data": {
+    "name": "reduction",
+    "when": {
+     "var": "defective",
+     "op": "==",
+     "value": true
+    },
+    "expr": [
+     "pct",
+     [
+      "var",
+      "price"
+     ],
+     [
+      "const",
+      "35"
+     ]
+    ],
+    "vars": {
+     "defective": "bool",
+     "price": "number"
+    }
+   }
+  },
+  {
+   "id": "delay-definition",
+   "kind": "definition",
+   "document": "supply-act-delay",
+   "span": [
+    501,
+    581
+   ],
+   "quote": "In this chapter, delay means that the goods are delivered after the agreed date.",
+   "data": {
+    "term": "delay",
+    "meaning": "the goods are delivered after the agreed date",
+    "terms": [
+     "delay"
+    ]
+   }
+  },
+  {
+   "id": "interest-by-size",
+   "kind": "table",
+   "document": "payment-act",
+   "span": [
+    480,
+    577
+   ],
+   "quote": "invoices under 10000 carry 8 percent per year; invoices of 10000 or more carry 6 percent per year",
+   "data": {
+    "name": "interest rate by invoice size",
+    "columns": [
+     "invoice size",
+     "percent per year"
+    ],
+    "rows": [
+     [
+      "under 10000",
+      "8"
+     ],
+     [
+      "10000 or more",
+      "6"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "forum-fans-prop-rated-flow-birch-fan-7",
+   "kind": "fact",
+   "document": "forum-fans",
+   "span": [
+    27,
+    86
+   ],
+   "quote": "The rated flow of Birch fan 7 is 520 cubic meters per hour.",
+   "data": {
+    "key": "rated flow | birch fan 7",
+    "value": "520 cubic meters per hour",
+    "form": "property",
+    "terms": [
+     "520 cubic meters per hour"
+    ]
+   }
+  },
+  {
+   "id": "forum-pumps-prop-rated-flow-alder-pump-3",
+   "kind": "fact",
+   "document": "forum-pumps",
+   "span": [
+    28,
+    84
+   ],
+   "quote": "The rated flow of Alder pump 3 is 150 liters per minute.",
+   "data": {
+    "key": "rated flow | alder pump 3",
+    "value": "150 liters per minute",
+    "form": "property",
+    "terms": [
+     "150 liters per minute"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-2024-prop-service-interval-alder-pump-3",
+   "kind": "fact",
+   "document": "service-manual-2024",
+   "span": [
+    39,
+    89
+   ],
+   "quote": "The service interval of Alder pump 3 is 250 hours.",
+   "data": {
+    "key": "service interval | alder pump 3",
+    "value": "250 hours",
+    "form": "property",
+    "terms": [
+     "250 hours"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-b-2024-prop-service-interval-birch-fan-7",
+   "kind": "fact",
+   "document": "service-manual-b-2024",
+   "span": [
+    38,
+    87
+   ],
+   "quote": "The service interval of Birch fan 7 is 600 hours.",
+   "data": {
+    "key": "service interval | birch fan 7",
+    "value": "600 hours",
+    "form": "property",
+    "terms": [
+     "600 hours"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-b-prop-service-interval-birch-fan-7",
+   "kind": "fact",
+   "document": "service-manual-b",
+   "span": [
+    24,
+    73
+   ],
+   "quote": "The service interval of Birch fan 7 is 900 hours.",
+   "data": {
+    "key": "service interval | birch fan 7",
+    "value": "900 hours",
+    "form": "property",
+    "terms": [
+     "900 hours"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-b-prop-rated-flow-birch-fan-7",
+   "kind": "fact",
+   "document": "service-manual-b",
+   "span": [
+    75,
+    134
+   ],
+   "quote": "The rated flow of Birch fan 7 is 480 cubic meters per hour.",
+   "data": {
+    "key": "rated flow | birch fan 7",
+    "value": "480 cubic meters per hour",
+    "form": "property",
+    "terms": [
+     "480 cubic meters per hour"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-b-beha-the-invoice-is-late-proud",
+   "kind": "fact",
+   "document": "service-manual-b",
+   "span": [
+    136,
+    190
+   ],
+   "quote": "When the invoice is late, a Proud client pays at once.",
+   "data": {
+    "key": "when the invoice is late | proud client",
+    "value": "pays at once",
+    "form": "behaviour",
+    "terms": [
+     "pays at once"
+    ]
+   }
+  },
+  {
+   "id": "defect-definition",
+   "kind": "definition",
+   "document": "supply-act-defects",
+   "span": [
+    430,
+    515
+   ],
+   "quote": "In this chapter, defect means that the goods differ from what the contract describes.",
+   "data": {
+    "term": "defect",
+    "meaning": "the goods differ from what the contract describes",
+    "terms": [
+     "defect"
+    ]
+   }
+  },
+  {
+   "id": "session-fees",
+   "kind": "table",
+   "document": "counseling-protocol",
+   "span": [
+    358,
+    452
+   ],
+   "quote": "sessions of up to 30 minutes cost 500 kronor, and sessions of up to 45 minutes cost 700 kronor",
+   "data": {
+    "name": "session fee by length",
+    "columns": [
+     "session length",
+     "fee in kronor"
+    ],
+    "rows": [
+     [
+      "up to 30 minutes",
+      "500"
+     ],
+     [
+      "up to 45 minutes",
+      "700"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "service-manual-prop-service-interval-alder-pump-3",
+   "kind": "fact",
+   "document": "service-manual",
+   "span": [
+    25,
+    75
+   ],
+   "quote": "The service interval of Alder pump 3 is 400 hours.",
+   "data": {
+    "key": "service interval | alder pump 3",
+    "value": "400 hours",
+    "form": "property",
+    "terms": [
+     "400 hours"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-prop-rated-flow-alder-pump-3",
+   "kind": "fact",
+   "document": "service-manual",
+   "span": [
+    77,
+    133
+   ],
+   "quote": "The rated flow of Alder pump 3 is 120 liters per minute.",
+   "data": {
+    "key": "rated flow | alder pump 3",
+    "value": "120 liters per minute",
+    "form": "property",
+    "terms": [
+     "120 liters per minute"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-beha-the-invoice-is-late-hesitant",
+   "kind": "fact",
+   "document": "service-manual",
+   "span": [
+    135,
+    203
+   ],
+   "quote": "When the invoice is late, a Hesitant client asks for a payment plan.",
+   "data": {
+    "key": "when the invoice is late | hesitant client",
+    "value": "asks for a payment plan",
+    "form": "behaviour",
+    "terms": [
+     "asks for a payment plan"
+    ]
+   }
+  }
+ ],
+ "resolutions": [
+  {
+   "kind": "amendment",
+   "winner": "terminate-late-amended",
+   "superseded": [
+    "terminate-late"
+   ],
+   "basis": "amendment",
+   "bases": {
+    "terminate-late": "amendment"
+   },
+   "detail": "supply-act-delay-amendment amends supply-act-delay"
+  },
+  {
+   "kind": "amendment",
+   "winner": "session-length-revised",
+   "superseded": [
+    "session-length"
+   ],
+   "basis": "amendment",
+   "bases": {
+    "session-length": "amendment"
+   },
+   "detail": "counseling-protocol-2027 amends counseling-protocol"
+  },
+  {
+   "kind": "conflict",
+   "winner": "reduction-amount",
+   "superseded": [
+    "forum-reduction"
+   ],
+   "basis": "authority",
+   "bases": {
+    "forum-reduction": "authority"
+   },
+   "detail": "computation reduction"
+  },
+  {
+   "kind": "conflict",
+   "winner": "service-manual-b-prop-rated-flow-birch-fan-7",
+   "superseded": [
+    "forum-fans-prop-rated-flow-birch-fan-7"
+   ],
+   "basis": "authority",
+   "bases": {
+    "forum-fans-prop-rated-flow-birch-fan-7": "authority"
+   },
+   "detail": "fact rated flow | birch fan 7"
+  },
+  {
+   "kind": "conflict",
+   "winner": "service-manual-prop-rated-flow-alder-pump-3",
+   "superseded": [
+    "forum-pumps-prop-rated-flow-alder-pump-3"
+   ],
+   "basis": "authority",
+   "bases": {
+    "forum-pumps-prop-rated-flow-alder-pump-3": "authority"
+   },
+   "detail": "fact rated flow | alder pump 3"
+  },
+  {
+   "kind": "conflict",
+   "winner": "service-manual-prop-service-interval-alder-pump-3",
+   "superseded": [
+    "service-manual-2024-prop-service-interval-alder-pump-3"
+   ],
+   "basis": "date",
+   "bases": {
+    "service-manual-2024-prop-service-interval-alder-pump-3": "date"
+   },
+   "detail": "fact service interval | alder pump 3"
+  },
+  {
+   "kind": "conflict",
+   "winner": "service-manual-b-prop-service-interval-birch-fan-7",
+   "superseded": [
+    "service-manual-b-2024-prop-service-interval-birch-fan-7"
+   ],
+   "basis": "date",
+   "bases": {
+    "service-manual-b-2024-prop-service-interval-birch-fan-7": "date"
+   },
+   "detail": "fact service interval | birch fan 7"
   }
  ],
  "flags": [

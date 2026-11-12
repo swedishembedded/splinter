@@ -24,6 +24,7 @@ mod judge;
 mod knowledge;
 mod mapper;
 mod model_tasks;
+mod object_proposer;
 mod repair;
 mod solve;
 mod task_variants;

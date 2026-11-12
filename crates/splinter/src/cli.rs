@@ -94,6 +94,10 @@ pub enum Command {
     /// Capture and inspect sources.
     #[command(subcommand)]
     Source(SourceCommand),
+    /// Knowledge objects (rules, thresholds, deadlines, exceptions, facts,
+    /// procedure steps) a model proposes from documents, admitted by code.
+    #[command(subcommand)]
+    Objects(ObjectsCommand),
     /// Check an experiment plan: which families each generation trains on,
     /// which earlier ones it is held to, which are the sealed final exam.
     #[command(subcommand)]
@@ -747,6 +751,7 @@ mod improve;
 mod invocations;
 mod jobs;
 mod learn;
+mod objects;
 mod practice;
 pub mod reference;
 mod state;
@@ -768,6 +773,7 @@ pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
 pub use improve::ImproveArgs;
 pub use jobs::{help as jobs_help, JobsArgs, JobsCommand};
 pub use learn::{LearnArgs, TaskHarnessArgs};
+pub use objects::ObjectsCommand;
 pub use practice::{PracticeArgs, ReplayArg};
 pub use reference::CliReferenceArgs;
 pub use state::{RunsCommand, StateCommand};

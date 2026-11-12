@@ -43,6 +43,7 @@ mod learn_output;
 mod learn_request;
 mod learn_session;
 mod lineage_output;
+mod objects_output;
 mod output;
 mod practice_output;
 mod practice_request;

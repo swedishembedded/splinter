@@ -271,6 +271,7 @@ impl Session {
             Command::Corrections(args) => {
                 return crate::corrections_session::corrections_command(ctx, json, *args);
             }
+            Command::Objects(command) => crate::objects_output::run(ctx, json, command)?,
             Command::Ask(args) => {
                 let retrieve = &args.retrieval;
                 if retrieve.sources.is_empty() {

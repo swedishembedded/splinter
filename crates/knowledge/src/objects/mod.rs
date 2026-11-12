@@ -25,12 +25,17 @@
 //! 5. every listed term occurs in the quote, and prose the object carries
 //!    (`reveals`, `element`) has most of its content words in the quote.
 //!
-//! Two admitted objects that state the same thing differently (the same
+//! Where admitted objects state the same thing differently (the same
 //! variable and outcome with another value, the same event with another
-//! offset) are [`Flag`]ged as a conflict; they stay in the pack with their
-//! provenance and no ruleset is compiled from them. They are never merged.
+//! offset) the documents' headers decide, and the decision is recorded as a
+//! [`Resolution`]: higher `authority` wins, then the later `date`, then the
+//! higher `version`. An object whose data names `supersedes` is an amendment
+//! and replaces the object it names, when its document is not earlier or of
+//! lower authority. Objects no header can separate stay [`Flag`]ged as a
+//! conflict. Nothing is merged: a superseded object keeps its provenance and
+//! is left out of every ruleset compiled from the pack.
 //!
-//! The pack is a plain JSON document (`material-pack/1`); the consumer
+//! The pack is a plain JSON document (`material-pack/2`); the consumer
 //! that compiles it into rule sets and tasks re-runs the same admission on
 //! what it reads.
 
@@ -41,17 +46,52 @@ use serde_json::Value;
 
 use crate::tasks::grounding::content_words;
 
+pub mod propose;
+
 /// The pack format's name.
-pub const PACK_SCHEMA: &str = "material-pack/1";
+pub const PACK_SCHEMA: &str = "material-pack/2";
+/// What a document with no header is believed at, against another.
+pub const NEUTRAL_AUTHORITY: u8 = 2;
 /// Numbers that are structure, not a claim about the source.
 const STRUCTURAL_NUMBERS: [&str; 2] = ["0", "1"];
 /// Data keys whose numbers are structure.
-const UNTRACED_KEYS: [&str; 4] = ["order", "vars", "terms", "limit"];
+const UNTRACED_KEYS: [&str; 5] = ["order", "vars", "terms", "limit", "supersedes"];
 /// The share of a prose field's content words the quote must carry.
 const MIN_PROSE_SUPPORT: f64 = 0.6;
 const OPERATORS: [&str; 6] = ["<", "<=", ">", ">=", "==", "!="];
 const ARITHMETIC: [&str; 7] = ["add", "sub", "mul", "div", "min", "max", "pct"];
 const VARIABLE_TYPES: [&str; 4] = ["int", "number", "bool", "date"];
+
+/// What a document says about itself.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Provenance {
+    /// How much it is believed against another document.
+    pub authority: u8,
+    /// Its version, 0 when not stated.
+    pub version: u32,
+    /// ISO date, when stated.
+    pub date: Option<String>,
+}
+
+impl Default for Provenance {
+    fn default() -> Self {
+        Self {
+            authority: NEUTRAL_AUTHORITY,
+            version: 0,
+            date: None,
+        }
+    }
+}
+
+impl Provenance {
+    fn rank(&self) -> (u8, &str, u32) {
+        (
+            self.authority,
+            self.date.as_deref().unwrap_or(""),
+            self.version,
+        )
+    }
+}
 
 /// A source document.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -60,12 +100,55 @@ pub struct Document {
     pub id: String,
     /// Display title.
     pub title: String,
-    /// The text quotes are found in.
+    /// The text quotes are found in (the body, without the header).
     pub text: String,
+    /// What it says about itself.
+    #[serde(default)]
+    pub provenance: Provenance,
+}
+
+impl Document {
+    /// A document file: an optional `---` header (`authority`, `version`, `date`), then the body.
+    #[must_use]
+    pub fn parse(id: &str, raw: &str) -> Self {
+        let mut provenance = Provenance::default();
+        let mut body = raw;
+        if let Some((head, rest)) = raw
+            .strip_prefix("---\n")
+            .and_then(|r| r.split_once("\n---\n"))
+        {
+            for line in head.lines() {
+                let Some((key, value)) = line.split_once(':') else {
+                    continue;
+                };
+                let value = value.trim();
+                match key.trim() {
+                    "authority" => {
+                        provenance.authority = value.parse().unwrap_or(NEUTRAL_AUTHORITY)
+                    }
+                    "version" => provenance.version = value.parse().unwrap_or(0),
+                    "date" => provenance.date = Some(value.to_string()),
+                    _ => {}
+                }
+            }
+            body = rest;
+        }
+        let title = body
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .map_or(id, |l| l.trim_start_matches(['#', ' ']).trim())
+            .to_string();
+        Self {
+            id: id.to_string(),
+            title,
+            text: body.to_string(),
+            provenance,
+        }
+    }
 }
 
 /// What a model proposes.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct ProposedObject {
     /// The proposer's id for the object; unique within a pack.
     pub id: String,
@@ -96,7 +179,24 @@ pub struct Object {
     pub data: Value,
 }
 
-/// Two or more objects that state the same thing differently.
+/// A decision between objects that stated the same thing differently, or an amendment.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Resolution {
+    /// `amendment` or `conflict`.
+    pub kind: String,
+    /// The object that stands.
+    pub winner: String,
+    /// The objects it replaces.
+    pub superseded: Vec<String>,
+    /// What decided it against the strongest competitor: `amendment`, `authority`, `date` or `version`.
+    pub basis: String,
+    /// What decided it against each replaced object.
+    pub bases: BTreeMap<String, String>,
+    /// What was in dispute.
+    pub detail: String,
+}
+
+/// Two or more objects that state the same thing differently, and that no header separates.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Flag {
     /// Always `conflict`.
@@ -116,7 +216,7 @@ pub struct Rejected {
     pub reason: String,
 }
 
-/// Admitted objects with their documents, conflicts and rejections.
+/// Admitted objects with their documents, decisions, conflicts and rejections.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Pack {
     /// [`PACK_SCHEMA`].
@@ -127,7 +227,9 @@ pub struct Pack {
     pub documents: Vec<Document>,
     /// The admitted objects, in proposal order.
     pub objects: Vec<Object>,
-    /// Conflicts among them.
+    /// Which object stands where documents disagree or amend.
+    pub resolutions: Vec<Resolution>,
+    /// Conflicts no header decides.
     pub flags: Vec<Flag>,
     /// The proposals that were refused.
     pub rejected: Vec<Rejected>,
@@ -145,6 +247,8 @@ pub fn required_keys(kind: &str) -> Option<&'static [&'static str]> {
         "procedure_step" => &["order", "element"],
         "fact" => &["key", "value"],
         "trait" => &["trait", "topic", "keywords", "reveals"],
+        "definition" => &["term", "meaning"],
+        "table" => &["name", "columns", "rows"],
         _ => return None,
     })
 }
@@ -158,7 +262,7 @@ pub fn admit(pack_id: &str, documents: &[Document], proposals: &[ProposedObject]
         let outcome = if objects.iter().any(|o| o.id == proposal.id) {
             Err("duplicate id".to_string())
         } else {
-            admit_one(proposal, documents)
+            admit_one(proposal, documents, &objects)
         };
         match outcome {
             Ok(object) => objects.push(object),
@@ -168,18 +272,27 @@ pub fn admit(pack_id: &str, documents: &[Document], proposals: &[ProposedObject]
             }),
         }
     }
-    let flags = conflicts(&objects);
+    let (resolutions, flags) = resolve(&objects, documents);
     Pack {
         schema: PACK_SCHEMA.to_string(),
         pack_id: pack_id.to_string(),
         documents: documents.to_vec(),
         objects,
+        resolutions,
         flags,
         rejected,
     }
 }
 
-fn admit_one(proposal: &ProposedObject, documents: &[Document]) -> Result<Object, String> {
+fn provenance_of<'a>(documents: &'a [Document], id: &str) -> Option<&'a Provenance> {
+    documents.iter().find(|d| d.id == id).map(|d| &d.provenance)
+}
+
+fn admit_one(
+    proposal: &ProposedObject,
+    documents: &[Document],
+    earlier: &[Object],
+) -> Result<Object, String> {
     let keys =
         required_keys(&proposal.kind).ok_or_else(|| format!("unknown kind {:?}", proposal.kind))?;
     let document = documents
@@ -203,6 +316,7 @@ fn admit_one(proposal: &ProposedObject, documents: &[Document]) -> Result<Object
         return Err(format!("missing {missing:?}"));
     }
     check_shape(&proposal.kind, data)?;
+    check_identifiers(data)?;
     let allowed = quote_numbers(&proposal.quote);
     let mut untraced: BTreeSet<String> = BTreeSet::new();
     claimed_numbers(&proposal.data, None, &mut |n| {
@@ -228,8 +342,43 @@ fn admit_one(proposal: &ProposedObject, documents: &[Document]) -> Result<Object
             return Err(format!("terms {absent:?} are not in the quote"));
         }
     }
+    if proposal.kind == "fact" {
+        if !data["value"]
+            .as_str()
+            .is_some_and(|v| quote_lower.contains(&v.to_lowercase()))
+        {
+            return Err("the value is not in the quote".to_string());
+        }
+        let key = data["key"].as_str().unwrap_or_default();
+        let parts: Vec<&str> = key.split('|').map(str::trim).collect();
+        if parts.len() != 2 || parts.iter().any(|p| p.is_empty()) {
+            return Err("a fact key is 'attribute | entity'".to_string());
+        }
+        let in_quote = content_words(&proposal.quote);
+        let grounded = |part: &str| {
+            let words = content_words(part);
+            words.is_empty()
+                || (words.intersection(&in_quote).count() as f64) / (words.len() as f64) >= 0.8
+        };
+        if !parts.iter().all(|p| grounded(p)) {
+            return Err("the key is not grounded in the quote".to_string());
+        }
+    }
+    if proposal.kind == "table" {
+        let absent: Vec<String> = data["rows"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|r| r.as_array().into_iter().flatten())
+            .map(|c| c.as_str().map_or_else(|| c.to_string(), str::to_string))
+            .filter(|c| !quote_lower.contains(&c.to_lowercase()))
+            .collect();
+        if !absent.is_empty() {
+            return Err(format!("cells {absent:?} are not in the quote"));
+        }
+    }
     let quote_words = content_words(&proposal.quote);
-    for key in ["reveals", "element"] {
+    for key in ["reveals", "element", "meaning"] {
         if let Some(prose) = data.get(key).and_then(Value::as_str) {
             let words = content_words(prose);
             if !words.is_empty()
@@ -240,6 +389,26 @@ fn admit_one(proposal: &ProposedObject, documents: &[Document]) -> Result<Object
             }
         }
     }
+    if let Some(target) = data.get("supersedes").and_then(Value::as_str) {
+        let old = earlier.iter().find(|o| o.id == target).ok_or_else(|| {
+            format!("supersedes {target:?}, which is not an admitted object before it")
+        })?;
+        if old.kind != proposal.kind {
+            return Err("an amendment is of the same kind as what it replaces".to_string());
+        }
+        let (new_rank, old_rank) = (
+            provenance_of(documents, &proposal.document),
+            provenance_of(documents, &old.document),
+        );
+        if new_rank
+            .zip(old_rank)
+            .is_none_or(|(n, o)| n.rank() <= o.rank())
+        {
+            return Err(
+                "an amendment must come from a later or more authoritative document".to_string(),
+            );
+        }
+    }
     Ok(Object {
         id: proposal.id.clone(),
         kind: proposal.kind.clone(),
@@ -248,6 +417,35 @@ fn admit_one(proposal: &ProposedObject, documents: &[Document]) -> Result<Object
         quote: proposal.quote.clone(),
         data: proposal.data.clone(),
     })
+}
+
+fn is_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// Names the ruleset is built from are identifiers, not sentences: the vocabulary step's check, after normalisation has had its say.
+fn check_identifiers(data: &serde_json::Map<String, Value>) -> Result<(), String> {
+    let mut names: Vec<String> = data
+        .get("vars")
+        .and_then(Value::as_object)
+        .map(|v| v.keys().cloned().collect())
+        .unwrap_or_default();
+    for key in ["var", "event", "from", "outcome"] {
+        if let Some(name) = data.get(key).and_then(Value::as_str) {
+            names.push(name.to_string());
+        }
+    }
+    let bad: Vec<String> = names.into_iter().filter(|n| !is_identifier(n)).collect();
+    if bad.is_empty() {
+        return Ok(());
+    }
+    let listed: Vec<String> = bad.iter().map(|n| format!("'{n}'")).collect();
+    Err(format!(
+        "names [{}] are not identifiers (lower-case words joined by underscores)",
+        listed.join(", ")
+    ))
 }
 
 fn check_shape(kind: &str, data: &serde_json::Map<String, Value>) -> Result<(), String> {
@@ -293,6 +491,28 @@ fn check_shape(kind: &str, data: &serde_json::Map<String, Value>) -> Result<(), 
             keywords
                 .map(|_| ())
                 .ok_or_else(|| "a trait needs keywords".to_string())
+        }
+        "table" => {
+            let width = data["columns"].as_array().map_or(0, Vec::len);
+            let rows = data["rows"].as_array().filter(|r| !r.is_empty());
+            let ok = width > 0
+                && rows.is_some_and(|rows| {
+                    rows.iter()
+                        .all(|r| r.as_array().is_some_and(|r| r.len() == width))
+                });
+            if ok {
+                Ok(())
+            } else {
+                Err("a table needs columns and rows of the same width".to_string())
+            }
+        }
+        "fact" => {
+            let text = |k: &str| data[k].as_str().is_some_and(|s| !s.is_empty());
+            if text("key") && text("value") {
+                Ok(())
+            } else {
+                Err("a fact needs a key and a value".to_string())
+            }
         }
         _ => Ok(()),
     }
@@ -389,11 +609,12 @@ fn claimed_numbers(node: &Value, key: Option<&str>, sink: &mut dyn FnMut(String)
         Value::Number(n) => sink(normalise(&n.to_string())),
         Value::String(s)
             if matches!(key, Some("value" | "offset"))
-                && s.chars().all(|c| c.is_ascii_digit() || c == '.')
-                && !s.is_empty() =>
+                && !s.is_empty()
+                && s.chars().all(|c| c.is_ascii_digit() || c == '.') =>
         {
             sink(normalise(s));
         }
+        Value::String(s) if key == Some("rows") => quote_numbers(s).into_iter().for_each(sink),
         Value::Object(map) => map
             .iter()
             .for_each(|(k, v)| claimed_numbers(v, Some(k), sink)),
@@ -414,7 +635,7 @@ fn claimed_numbers(node: &Value, key: Option<&str>, sink: &mut dyn FnMut(String)
     }
 }
 
-/// What makes two objects state the same thing; objects of kinds without such a key never conflict.
+/// What makes two objects state the same thing; objects of kinds without such a key never disagree.
 fn conflict_key(object: &Object) -> Option<Vec<String>> {
     let text = |k: &str| object.data[k].as_str().unwrap_or_default().to_string();
     match object.kind.as_str() {
@@ -422,6 +643,8 @@ fn conflict_key(object: &Object) -> Option<Vec<String>> {
         "deadline" => Some(vec!["deadline".into(), text("event"), text("from")]),
         "computation" => Some(vec!["computation".into(), text("name")]),
         "fact" => Some(vec!["fact".into(), text("key")]),
+        "definition" => Some(vec!["definition".into(), text("term")]),
+        "table" => Some(vec!["table".into(), text("name")]),
         _ => None,
     }
 }
@@ -430,215 +653,116 @@ fn conflict_key(object: &Object) -> Option<Vec<String>> {
 fn content(object: &Object) -> String {
     let mut data = object.data.clone();
     if let Some(map) = data.as_object_mut() {
-        for key in ["terms", "label", "vars"] {
+        for key in ["terms", "label", "vars", "supersedes"] {
             map.remove(key);
         }
     }
     data.to_string()
 }
 
-fn conflicts(objects: &[Object]) -> Vec<Flag> {
-    let mut groups: BTreeMap<Vec<String>, Vec<&Object>> = BTreeMap::new();
+fn basis_of(winner: &Provenance, loser: &Provenance) -> &'static str {
+    if winner.authority != loser.authority {
+        "authority"
+    } else if winner.date.as_deref().unwrap_or("") != loser.date.as_deref().unwrap_or("") {
+        "date"
+    } else if winner.version != loser.version {
+        "version"
+    } else {
+        "tie"
+    }
+}
+
+fn resolve(objects: &[Object], documents: &[Document]) -> (Vec<Resolution>, Vec<Flag>) {
+    let provenance = |o: &Object| {
+        provenance_of(documents, &o.document)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let mut resolutions = Vec::new();
+    let mut superseded: BTreeSet<String> = BTreeSet::new();
     for object in objects {
-        if let Some(key) = conflict_key(object) {
-            groups.entry(key).or_default().push(object);
+        if let Some(target) = object.data.get("supersedes").and_then(Value::as_str) {
+            superseded.insert(target.to_string());
+            let old_document = objects
+                .iter()
+                .find(|o| o.id == target)
+                .map_or("", |o| o.document.as_str());
+            resolutions.push(Resolution {
+                kind: "amendment".into(),
+                winner: object.id.clone(),
+                superseded: vec![target.to_string()],
+                basis: "amendment".into(),
+                bases: BTreeMap::from([(target.to_string(), "amendment".to_string())]),
+                detail: format!("{} amends {old_document}", object.document),
+            });
         }
     }
-    let mut flags: Vec<Flag> = groups
-        .into_iter()
-        .filter(|(_, group)| {
-            group
-                .iter()
-                .map(|o| content(o))
-                .collect::<BTreeSet<_>>()
-                .len()
-                > 1
-        })
-        .map(|(key, group)| Flag {
-            kind: "conflict".into(),
-            objects: group.iter().map(|o| o.id.clone()).collect(),
-            reason: format!("{} {} is stated differently", key[0], key[1..].join(" / ")),
-        })
-        .collect();
-    flags.sort_by(|a, b| a.objects.cmp(&b.objects));
-    flags
-}
-
-/// A model, or a script standing in for one, asked what a document says.
-pub trait ObjectProposer {
-    /// The proposals for one document.
-    fn propose(&self, document: &Document) -> Vec<ProposedObject>;
-}
-
-/// Replays a stored list of proposals: the proposer of tests and of the synthetic corpus.
-pub struct ScriptedProposer(pub Vec<ProposedObject>);
-
-impl ObjectProposer for ScriptedProposer {
-    fn propose(&self, document: &Document) -> Vec<ProposedObject> {
-        self.0
-            .iter()
-            .filter(|p| p.document == document.id)
-            .cloned()
-            .collect()
+    let mut groups: Vec<(Vec<String>, Vec<&Object>)> = Vec::new();
+    for object in objects {
+        let (Some(key), false) = (conflict_key(object), superseded.contains(&object.id)) else {
+            continue;
+        };
+        match groups.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, group)) => group.push(object),
+            None => groups.push((key, vec![object])),
+        }
     }
+    let mut flags = Vec::new();
+    for (key, group) in groups {
+        if group
+            .iter()
+            .map(|o| content(o))
+            .collect::<BTreeSet<_>>()
+            .len()
+            < 2
+        {
+            continue;
+        }
+        let mut ordered = group.clone();
+        ordered.sort_by(|a, b| provenance(b).rank().cmp(&provenance(a).rank()));
+        let (top, second) = (ordered[0], ordered[1]);
+        let detail = format!("{} {}", key[0], key[1..].join(" / "));
+        if provenance(top).rank() > provenance(second).rank() && content(top) != content(second) {
+            let losers: Vec<&Object> = ordered[1..]
+                .iter()
+                .copied()
+                .filter(|o| content(o) != content(top))
+                .collect();
+            resolutions.push(Resolution {
+                kind: "conflict".into(),
+                winner: top.id.clone(),
+                superseded: losers.iter().map(|o| o.id.clone()).collect(),
+                basis: basis_of(&provenance(top), &provenance(second)).into(),
+                bases: losers
+                    .iter()
+                    .map(|o| {
+                        (
+                            o.id.clone(),
+                            basis_of(&provenance(top), &provenance(o)).to_string(),
+                        )
+                    })
+                    .collect(),
+                detail,
+            });
+        } else {
+            flags.push(Flag {
+                kind: "conflict".into(),
+                objects: group.iter().map(|o| o.id.clone()).collect(),
+                reason: format!("{detail} is stated differently"),
+            });
+        }
+    }
+    (resolutions, flags)
 }
 
-/// Admits what `proposer` says about every document.
+/// The ids a pack supersedes.
 #[must_use]
-pub fn admit_from(pack_id: &str, documents: &[Document], proposer: &dyn ObjectProposer) -> Pack {
-    let proposals: Vec<ProposedObject> =
-        documents.iter().flat_map(|d| proposer.propose(d)).collect();
-    admit(pack_id, documents, &proposals)
+pub fn superseded_ids(pack: &Pack) -> BTreeSet<String> {
+    pack.resolutions
+        .iter()
+        .flat_map(|r| r.superseded.iter().cloned())
+        .collect()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    const DOCUMENTS: [(&str, &str); 5] = [
-        (
-            "client-behaviour-sheet",
-            include_str!("../tests/fixtures/material/client-behaviour-sheet.md"),
-        ),
-        (
-            "counseling-protocol",
-            include_str!("../tests/fixtures/material/counseling-protocol.md"),
-        ),
-        (
-            "payment-act",
-            include_str!("../tests/fixtures/material/payment-act.md"),
-        ),
-        (
-            "supply-act-defects",
-            include_str!("../tests/fixtures/material/supply-act-defects.md"),
-        ),
-        (
-            "supply-act-delay",
-            include_str!("../tests/fixtures/material/supply-act-delay.md"),
-        ),
-    ];
-    const PROPOSALS: &str = include_str!("../tests/fixtures/material/proposals.json");
-    const STORED_PACK: &str = include_str!("../tests/fixtures/material/synthetic-pack.json");
-
-    fn documents() -> Vec<Document> {
-        DOCUMENTS
-            .iter()
-            .map(|(id, text)| Document {
-                id: (*id).to_string(),
-                title: text
-                    .lines()
-                    .next()
-                    .unwrap_or_default()
-                    .trim_start_matches("# ")
-                    .to_string(),
-                text: (*text).to_string(),
-            })
-            .collect()
-    }
-
-    fn proposals() -> Vec<ProposedObject> {
-        let file: Value = serde_json::from_str(PROPOSALS).unwrap();
-        serde_json::from_value(file["proposals"].clone()).unwrap()
-    }
-
-    fn one(id: &str) -> ProposedObject {
-        proposals().into_iter().find(|p| p.id == id).unwrap()
-    }
-
-    #[test]
-    fn the_synthetic_corpus_is_admitted_exactly_as_the_consumers_admission_reads_it() {
-        let pack = admit("synthetic", &documents(), &proposals());
-        let stored: Value = serde_json::from_str(STORED_PACK).unwrap();
-        // The pack is one format with two implementations of its admission; they must agree object for object.
-        assert_eq!(
-            serde_json::to_value(&pack.objects).unwrap(),
-            stored["objects"]
-        );
-        assert_eq!(serde_json::to_value(&pack.flags).unwrap(), stored["flags"]);
-        assert_eq!(
-            serde_json::to_value(&pack.rejected).unwrap(),
-            stored["rejected"]
-        );
-        assert_eq!(pack.schema, PACK_SCHEMA);
-    }
-
-    #[test]
-    fn a_number_the_quote_does_not_carry_is_refused_however_plausible() {
-        let pack = admit("t", &documents(), &[one("invented-number")]);
-        assert!(
-            pack.objects.is_empty() && pack.rejected[0].reason.contains("not in the quote"),
-            "{:?}",
-            pack.rejected
-        );
-    }
-
-    #[test]
-    fn a_quote_that_is_not_in_the_document_and_unlisted_terms_are_refused() {
-        assert!(admit("t", &documents(), &[one("misquoted")]).rejected[0]
-            .reason
-            .contains("not in the document"));
-        let mut trait_ = one("trait-sleep");
-        trait_.data["terms"] = json!(["penalty"]);
-        assert!(admit("t", &documents(), &[trait_]).rejected[0]
-            .reason
-            .contains("terms"));
-        let mut invented = one("trait-sleep");
-        invented.data["reveals"] = json!("I have a secret second job as a pilot.");
-        assert!(admit("t", &documents(), &[invented]).rejected[0]
-            .reason
-            .contains("not supported"));
-    }
-
-    #[test]
-    fn a_proposal_of_the_wrong_shape_is_refused() {
-        let mut no_outcome = one("terminate-late");
-        no_outcome.data.as_object_mut().unwrap().remove("outcome");
-        assert!(admit("t", &documents(), &[no_outcome]).rejected[0]
-            .reason
-            .contains("missing"));
-        let mut bad_operator = one("terminate-late");
-        bad_operator.data["op"] = json!("~");
-        assert!(admit("t", &documents(), &[bad_operator]).rejected[0]
-            .reason
-            .contains("bad condition"));
-        let mut unknown = one("terminate-late");
-        unknown.kind = "opinion".into();
-        assert!(admit("t", &documents(), &[unknown]).rejected[0]
-            .reason
-            .contains("unknown kind"));
-    }
-
-    #[test]
-    fn spans_are_character_offsets_that_resolve_to_the_quote() {
-        let pack = admit_from("synthetic", &documents(), &ScriptedProposer(proposals()));
-        for object in &pack.objects {
-            let text = &pack
-                .documents
-                .iter()
-                .find(|d| d.id == object.document)
-                .unwrap()
-                .text;
-            let found: String = text
-                .chars()
-                .skip(object.span[0])
-                .take(object.span[1] - object.span[0])
-                .collect();
-            assert_eq!(found, object.quote);
-        }
-    }
-
-    #[test]
-    fn objects_that_state_the_same_thing_differently_are_flagged_and_both_kept() {
-        let pack = admit_from("synthetic", &documents(), &ScriptedProposer(proposals()));
-        assert_eq!(pack.flags.len(), 1);
-        assert_eq!(
-            pack.flags[0].objects,
-            ["payment-due", "payment-due-consumer"]
-        );
-        assert!(
-            pack.objects.iter().any(|o| o.id == "payment-due")
-                && pack.objects.iter().any(|o| o.id == "payment-due-consumer")
-        );
-    }
-}
+mod tests;

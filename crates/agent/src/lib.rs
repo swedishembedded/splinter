@@ -72,6 +72,7 @@ pub mod harness_work;
 pub mod judge;
 pub mod knowledge;
 pub mod mapper;
+pub mod object_proposer;
 pub mod prompts;
 pub mod proposer;
 pub mod repair;

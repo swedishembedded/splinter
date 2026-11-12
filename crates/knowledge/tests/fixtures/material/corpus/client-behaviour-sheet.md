@@ -1,3 +1,8 @@
+---
+authority: 2
+version: 1
+date: 2026-04-01
+---
 # Fictional behaviour sheet: Maria, a client
 
 Maria is guarded and answers briefly. She says that she sleeps only four hours a night, but only when she is asked about sleep.

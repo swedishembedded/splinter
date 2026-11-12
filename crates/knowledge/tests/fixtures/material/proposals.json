@@ -1,6 +1,6 @@
 {
  "schema": "material-proposals/1",
- "note": "What a scripted proposer returns for the synthetic corpus: the model's output, before any admission.",
+ "note": "What a scripted proposer returns for the synthetic corpus: the hand-written proposals and the pattern proposer's facts, before any admission.",
  "proposals": [
   {
    "id": "terminate-late",
@@ -469,6 +469,282 @@
     "vars": {
      "days_overdue": "int"
     }
+   }
+  },
+  {
+   "id": "terminate-late-amended",
+   "kind": "threshold",
+   "document": "supply-act-delay-amendment",
+   "quote": "If the seller delivers more than 21 days after the agreed date, the buyer may terminate the contract by written notice.",
+   "data": {
+    "var": "days_late",
+    "op": ">",
+    "value": 21,
+    "outcome": "may_terminate",
+    "label": "days of delay",
+    "vars": {
+     "days_late": "int"
+    },
+    "supersedes": "terminate-late"
+   }
+  },
+  {
+   "id": "session-length-revised",
+   "kind": "threshold",
+   "document": "counseling-protocol-2027",
+   "quote": "A session lasts at most 45 minutes.",
+   "data": {
+    "var": "session_minutes",
+    "op": ">",
+    "value": 45,
+    "outcome": "too_long",
+    "label": "session length in minutes",
+    "limit": true,
+    "vars": {
+     "session_minutes": "int"
+    },
+    "supersedes": "session-length"
+   }
+  },
+  {
+   "id": "forum-reduction",
+   "kind": "computation",
+   "document": "forum-note",
+   "quote": "Someone told me the price reduction for defective goods is 35 percent of the price.",
+   "data": {
+    "name": "reduction",
+    "when": {
+     "var": "defective",
+     "op": "==",
+     "value": true
+    },
+    "expr": [
+     "pct",
+     [
+      "var",
+      "price"
+     ],
+     [
+      "const",
+      "35"
+     ]
+    ],
+    "vars": {
+     "defective": "bool",
+     "price": "number"
+    }
+   }
+  },
+  {
+   "id": "delay-definition",
+   "kind": "definition",
+   "document": "supply-act-delay",
+   "quote": "In this chapter, delay means that the goods are delivered after the agreed date.",
+   "data": {
+    "term": "delay",
+    "meaning": "the goods are delivered after the agreed date",
+    "terms": [
+     "delay"
+    ]
+   }
+  },
+  {
+   "id": "interest-by-size",
+   "kind": "table",
+   "document": "payment-act",
+   "quote": "invoices under 10000 carry 8 percent per year; invoices of 10000 or more carry 6 percent per year",
+   "data": {
+    "name": "interest rate by invoice size",
+    "columns": [
+     "invoice size",
+     "percent per year"
+    ],
+    "rows": [
+     [
+      "under 10000",
+      "8"
+     ],
+     [
+      "10000 or more",
+      "6"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "forum-fans-prop-rated-flow-birch-fan-7",
+   "kind": "fact",
+   "document": "forum-fans",
+   "quote": "The rated flow of Birch fan 7 is 520 cubic meters per hour.",
+   "data": {
+    "key": "rated flow | birch fan 7",
+    "value": "520 cubic meters per hour",
+    "form": "property",
+    "terms": [
+     "520 cubic meters per hour"
+    ]
+   }
+  },
+  {
+   "id": "forum-pumps-prop-rated-flow-alder-pump-3",
+   "kind": "fact",
+   "document": "forum-pumps",
+   "quote": "The rated flow of Alder pump 3 is 150 liters per minute.",
+   "data": {
+    "key": "rated flow | alder pump 3",
+    "value": "150 liters per minute",
+    "form": "property",
+    "terms": [
+     "150 liters per minute"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-2024-prop-service-interval-alder-pump-3",
+   "kind": "fact",
+   "document": "service-manual-2024",
+   "quote": "The service interval of Alder pump 3 is 250 hours.",
+   "data": {
+    "key": "service interval | alder pump 3",
+    "value": "250 hours",
+    "form": "property",
+    "terms": [
+     "250 hours"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-b-2024-prop-service-interval-birch-fan-7",
+   "kind": "fact",
+   "document": "service-manual-b-2024",
+   "quote": "The service interval of Birch fan 7 is 600 hours.",
+   "data": {
+    "key": "service interval | birch fan 7",
+    "value": "600 hours",
+    "form": "property",
+    "terms": [
+     "600 hours"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-b-prop-service-interval-birch-fan-7",
+   "kind": "fact",
+   "document": "service-manual-b",
+   "quote": "The service interval of Birch fan 7 is 900 hours.",
+   "data": {
+    "key": "service interval | birch fan 7",
+    "value": "900 hours",
+    "form": "property",
+    "terms": [
+     "900 hours"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-b-prop-rated-flow-birch-fan-7",
+   "kind": "fact",
+   "document": "service-manual-b",
+   "quote": "The rated flow of Birch fan 7 is 480 cubic meters per hour.",
+   "data": {
+    "key": "rated flow | birch fan 7",
+    "value": "480 cubic meters per hour",
+    "form": "property",
+    "terms": [
+     "480 cubic meters per hour"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-b-beha-the-invoice-is-late-proud",
+   "kind": "fact",
+   "document": "service-manual-b",
+   "quote": "When the invoice is late, a Proud client pays at once.",
+   "data": {
+    "key": "when the invoice is late | proud client",
+    "value": "pays at once",
+    "form": "behaviour",
+    "terms": [
+     "pays at once"
+    ]
+   }
+  },
+  {
+   "id": "defect-definition",
+   "kind": "definition",
+   "document": "supply-act-defects",
+   "quote": "In this chapter, defect means that the goods differ from what the contract describes.",
+   "data": {
+    "term": "defect",
+    "meaning": "the goods differ from what the contract describes",
+    "terms": [
+     "defect"
+    ]
+   }
+  },
+  {
+   "id": "session-fees",
+   "kind": "table",
+   "document": "counseling-protocol",
+   "quote": "sessions of up to 30 minutes cost 500 kronor, and sessions of up to 45 minutes cost 700 kronor",
+   "data": {
+    "name": "session fee by length",
+    "columns": [
+     "session length",
+     "fee in kronor"
+    ],
+    "rows": [
+     [
+      "up to 30 minutes",
+      "500"
+     ],
+     [
+      "up to 45 minutes",
+      "700"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "service-manual-prop-service-interval-alder-pump-3",
+   "kind": "fact",
+   "document": "service-manual",
+   "quote": "The service interval of Alder pump 3 is 400 hours.",
+   "data": {
+    "key": "service interval | alder pump 3",
+    "value": "400 hours",
+    "form": "property",
+    "terms": [
+     "400 hours"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-prop-rated-flow-alder-pump-3",
+   "kind": "fact",
+   "document": "service-manual",
+   "quote": "The rated flow of Alder pump 3 is 120 liters per minute.",
+   "data": {
+    "key": "rated flow | alder pump 3",
+    "value": "120 liters per minute",
+    "form": "property",
+    "terms": [
+     "120 liters per minute"
+    ]
+   }
+  },
+  {
+   "id": "service-manual-beha-the-invoice-is-late-hesitant",
+   "kind": "fact",
+   "document": "service-manual",
+   "quote": "When the invoice is late, a Hesitant client asks for a payment plan.",
+   "data": {
+    "key": "when the invoice is late | hesitant client",
+    "value": "asks for a payment plan",
+    "form": "behaviour",
+    "terms": [
+     "asks for a payment plan"
+    ]
    }
   }
  ]

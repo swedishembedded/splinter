@@ -109,6 +109,7 @@ pub mod judge;
 pub mod judging;
 pub mod learn;
 pub mod lineage;
+pub mod objects;
 pub mod plan;
 pub mod powered;
 pub mod practice;

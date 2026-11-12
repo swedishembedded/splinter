@@ -76,6 +76,8 @@ Every command takes these.
   - [splinter source add](#splinter-source-add) - Capture a file (a document), a directory (a repository) or cmd:COMMAND
   - [splinter source list](#splinter-source-list) - List the stored sources
   - [splinter source show](#splinter-source-show) - Show one stored source
+- [splinter objects](#splinter-objects) - Knowledge objects (rules, thresholds, deadlines, exceptions, facts, procedure steps) a model proposes from documents, admitted by code
+  - [splinter objects propose](#splinter-objects-propose) - Ask a model for the typed objects each document of a directory states, one document at a time in date order
 - [splinter experiment](#splinter-experiment) - Check an experiment plan
   - [splinter experiment check](#splinter-experiment-check) - Validate a plan against the catalog of families and show its schedule
 - [splinter absorb](#splinter-absorb) - Learn from the sessions you held with an agent
@@ -188,6 +190,7 @@ Subcommands:
 - [`doctor`](#splinter-doctor) - Check that a run can start here
 - [`baseline`](#splinter-baseline) - Print the `baseline-v1` record of what a registered run runs on
 - [`source`](#splinter-source) - Capture and inspect sources
+- [`objects`](#splinter-objects) - Knowledge objects (rules, thresholds, deadlines, exceptions, facts, procedure steps) a model proposes from documents, admitted by code
 - [`experiment`](#splinter-experiment) - Check an experiment plan
 - [`absorb`](#splinter-absorb) - Learn from the sessions you held with an agent
 - [`consolidate`](#splinter-consolidate) - Take the generation the policy is in into the weights
@@ -496,6 +499,38 @@ splinter source show [OPTIONS] <ID>
 Arguments:
 
 - `<ID>` (required): The source's id, or a unique prefix of it.
+
+### splinter objects
+
+Knowledge objects (rules, thresholds, deadlines, exceptions, facts, procedure steps) a model proposes from documents, admitted by code
+
+```text
+splinter objects [OPTIONS] <COMMAND>
+```
+
+Subcommands:
+
+- [`propose`](#splinter-objects-propose) - Ask a model for the typed objects each document of a directory states, one document at a time in date order
+
+#### splinter objects propose
+
+Ask a model for the typed objects each document of a directory states, one document at a time in date order. Admission is code: a quote must be verbatim in its document, every number in an object must be in its quote, names must be identifiers (and outcomes in --outcomes when given), and objects the documents' headers (authority, date, version) cannot separate stay flagged as conflicts. A reply with refused proposals is sent back with the reasons, up to --repairs times. Writes the pack as JSON
+
+```text
+splinter objects propose [OPTIONS] --out <FILE> <DIR>
+```
+
+Arguments:
+
+- `<DIR>` (required): A directory of Markdown documents; a `---` header may give `authority`, `version` and `date`.
+
+Options:
+
+- `--out <FILE>` (required): Where the pack is written.
+- `--pack-id <ID>`: The pack's name. Default: `pack`.
+- `--outcomes <NAME,...>...`: The outcomes a rule may conclude, comma separated; open when absent.
+- `--repairs <N>`: How many times a reply with refused proposals is sent back, per document. Default: `2`.
+- `--policy <REF>`: The model asked. Default: `policy:default`.
 
 ### splinter experiment
 
