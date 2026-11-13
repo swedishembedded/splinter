@@ -309,3 +309,14 @@ replicates' state deleted to free the disk. The one champion measured, r1 genera
 (base 0; 46 wins, 0 losses, one-sided sign test p = 1.4e-14), a first step only. The per-lineage criterion was
 never evaluated, so arm HL is neither a success nor a failure of it; a replication needs a fresh run on a disk with
 headroom. Records: `rsi1-hl/` of the evidence repository.
+
+2026-11-13 **Arm HL outcome (rerun): criterion not met, 1 of 4 lineages.** The registered replication was rerun on a
+cleared disk with the same scripts and binaries (splinter b39782f43, brain 69b1834fa). The per-lineage criterion
+(each replicate better at every generation, sign test within the lineage; two lineages required) was met by one
+lineage of four. r3 improved at all three generations (16/0; 14/5, p = 0.032; 33/12, p = 0.0012). r2 rose twice (38/0;
+62/16, p = 7.6e-8) and fell at generation 3 (27 wins, 36 losses). r0 rose at generation 1 (59/0) and did not rise
+significantly at generations 2 and 3 (35/25, p = 0.12; 37/28, p = 0.16). r1 rose at generation 1 (36/0) and accepted no
+round in generations 2 and 3. Pooled over the four lineages: generation 1 vs base 149/0, generation 2 vs generation 1
+111/46 (p = 1.1e-7), generation 3 vs generation 2 97/76 (p = 0.064). Third-generation steps are fragile: gains are
+offset by losses on other items and some lineages stall. This is an outcome record, not an amendment. Records:
+`rsi1-hl2/` of the evidence repository (commit 0fa5f71e).
