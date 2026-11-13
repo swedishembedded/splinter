@@ -61,6 +61,10 @@
 //!   over sources and carried to datasets and releases.
 //! * [`tool_calls`] - the calls of a trajectory, each with the output it
 //!   returned.
+//! * [`verifiability`] - how a reward is established (objective check,
+//!   proxy, calibrated judge, human evidence), the provenance every reward
+//!   carries, the label a verdict resting on it must bear, and the splits
+//!   Splinter produces (never a sealed exam).
 //!
 //! This crate performs no I/O (the fan-out runs the work it is handed and does none). It knows no store, no model and no agent
 //! runtime: it is the language they share, and the invariants every record
@@ -102,3 +106,4 @@ pub mod teaching;
 pub mod terms;
 pub mod tool_calls;
 pub mod training;
+pub mod verifiability;
