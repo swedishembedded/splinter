@@ -130,3 +130,4 @@ in the same commit.
 | [142](142-a-test-runner-in-the-process-under-test-needs-a-canary-that-must-fail.md) | A test runner in the process under test needs a canary that must fail |
 | [143](143-informative-groups-come-from-frontier-tasks-so-the-pool-is-sized-by-them.md) | Informative groups come from frontier tasks, so a pool is sized by how many it holds |
 | [144](144-in-process-policy-gradient-on-qwen3-4b-shows-token-ratios-near-1e-8-from-the-second-step.md) | In-process policy gradient on Qwen3-4B shows token ratios near 1e-8 from the second step, whatever the learning rate |
+| [145](145-a-retention-gate-of-zero-rolled-back-three-significant-dev-gains-of-one-lost-task.md) | A retention gate of zero rolled back three significant dev gains over one lost retention task |

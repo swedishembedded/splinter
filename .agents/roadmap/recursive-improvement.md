@@ -136,6 +136,14 @@ campaign instead of rounds glued together by scripts (`scripts/campaigns/flywhee
   `TaskFamily`, brain's policy-gradient trainer, a greedy dev exam) and the episode path (`campaign::endpoint`:
   an `EpisodeExecutor` that runs Harbor-format tasks in sandboxes and returns, per episode, the reward and the
   sampled calls' token ids and log-probabilities; an unprovable chain is dropped, never re-tokenized).
+- Real weights (2026-11-13, Qwen3-4B, in process, one GH200, `samples/campaign-lua`, findings 143-145): calibration at k = 8
+  of 240 tasks, batches of 12 informative groups, 12 steps per arm, lr 1e-5, dev 400 programs. Dev pass rate 0.3375
+  (base), 0.385, 0.4475, 0.475, 0.49 over four accepted arms (27/8, 27/2, 11/0 significant at the level each gate spends,
+  15/9 not), 0.65 GPU-hours, one pack file for the campaign. With zero retention losses allowed every arm was rolled
+  back (one of 40 retention tasks lost each time). Informative-group fraction 0.39 falling to 0.09 as frontier tasks
+  are used. Brain's reported KL is 1e2 to 1e7 and a token ratio near 1e-8 appears from step 2 (finding 144): open in
+  brain. Entropy is unmeasured in process. Not run: the lr/rank sweep (gap 19), the equal-compute method matrix (gap 20),
+  the distillation strategy on real weights.
 - Open: an `EpisodeExecutor` over sven's rollout executor (landed in sven: `sven_sdk::rollout`; the adapter that reads
   its `attempt.jsonl` into `Episode` is not written); the training
   records do not yet carry the sampler's behaviour log-probabilities (`WireMessage` has no field for brain's
