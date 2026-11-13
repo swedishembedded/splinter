@@ -188,42 +188,77 @@ impl Trained {
 /// train. The default of [`AcquireRequest::min_tasks_per_round`].
 pub const ROUND_TASKS_WANTED: usize = 12;
 
+/// Verified answers per task a round trains on when a request names none: the
+/// shortest one. The default of [`AcquireRequest::answers_per_task`].
+pub const DEFAULT_ANSWERS_PER_TASK: usize = 1;
+
 /// The most requests one round's tasks take. The default of
 /// [`AcquireRequest::max_proposal_batches`].
 pub const MAX_ROUND_WRITES: usize = 6;
 
-/// The verified answers of `set` a round trains on: one per task, the
-/// shortest. A task the policy solved in three of four attempts otherwise
+/// One verified attempt a round may train on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Answer {
+    /// The task it answers.
+    pub(super) task: Digest,
+    /// The answer's text; two attempts that wrote the same text are one answer.
+    pub(super) text: String,
+    /// The attempt's experience.
+    pub(super) id: splinter_core::experience::ExperienceId,
+}
+
+/// The answers a round trains on: for each task, the `per_task` shortest
+/// distinct ones. A task the policy solved in three of four attempts otherwise
 /// weighs three records against a taught task's one - in a round of four
-/// records, three of them one program - and the policy's passing attempts
-/// can be explanations around the answer, which teach a form the probes do
-/// not ask for.
-fn one_answer_per_task(
+/// records, three of them one program - so the count is capped per task, and
+/// the policy's passing attempts can be explanations around the answer, which
+/// teach a form the probes do not ask for, hence shortest first. One (the
+/// default) keeps only the shortest verified answer; a larger cap keeps the
+/// alternatives the policy found, which one shortest answer throws away.
+pub(super) fn select_answers(answers: Vec<Answer>, per_task: usize) -> Vec<Answer> {
+    let mut by_task: BTreeMap<Digest, Vec<Answer>> = BTreeMap::new();
+    for answer in answers {
+        by_task.entry(answer.task.clone()).or_default().push(answer);
+    }
+    by_task
+        .into_values()
+        .flat_map(|mut candidates| {
+            candidates.sort_by(|a, b| a.text.len().cmp(&b.text.len()).then(a.text.cmp(&b.text)));
+            candidates.dedup_by(|a, b| a.text == b.text);
+            candidates.truncate(per_task.max(1));
+            candidates
+        })
+        .collect()
+}
+
+/// The verified answers of `set` a round trains on, at most `per_task` per task
+/// ([`select_answers`]).
+fn answers_per_task(
     ctx: &splinter_orchestrator::context::Context,
     set: &splinter_store::experiences::SetId,
+    per_task: usize,
 ) -> Result<splinter_store::experiences::SetId, OrchestratorError> {
     let store = ctx.experiences();
     let members = store.get_set(set)?.members;
     let decisions = store.decisions(&members)?;
-    let mut shortest: BTreeMap<Digest, (usize, splinter_core::experience::ExperienceId)> =
-        BTreeMap::new();
+    let mut verified = Vec::new();
     for id in members {
         if decisions.get(&id).map(|d| d.passed) != Some(true) {
             continue;
         }
         let experience = store.get(&id)?;
-        let length = experience
-            .final_output
-            .as_deref()
-            .map_or(usize::MAX, str::len);
-        let task = experience.task.id.clone();
-        if shortest.get(&task).is_none_or(|(kept, _)| length < *kept) {
-            shortest.insert(task, (length, id));
-        }
+        verified.push(Answer {
+            task: experience.task.id.clone(),
+            text: experience.final_output.clone().unwrap_or_default(),
+            id,
+        });
     }
     Ok(store.put_set(&splinter_store::experiences::ExperienceSet {
-        name: format!("the shortest verified answer per task of {set}"),
-        members: shortest.into_values().map(|(_, id)| id).collect(),
+        name: format!("up to {per_task} verified answer(s) per task of {set}"),
+        members: select_answers(verified, per_task)
+            .into_iter()
+            .map(|a| a.id)
+            .collect(),
     })?)
 }
 
@@ -405,7 +440,11 @@ impl Acquisition<'_> {
         let built = match build(
             ctx,
             &BuildRequest {
-                sets: vec![one_answer_per_task(ctx, &kept.frontier_experience_set)?],
+                sets: vec![answers_per_task(
+                    ctx,
+                    &kept.frontier_experience_set,
+                    self.request.answers_per_task,
+                )?],
                 view: ViewName::SftFinal,
                 strip: None,
                 min_strength: Some(DEFAULT_MIN_STRENGTH),
@@ -691,5 +730,50 @@ impl Acquisition<'_> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod answer_tests {
+    use super::*;
+    use splinter_core::experience::ExperienceId;
+
+    fn answer(task: &str, text: &str, n: u8) -> Answer {
+        Answer {
+            task: Digest::of(task.as_bytes()),
+            text: text.into(),
+            id: ExperienceId(Digest::of(&[n])),
+        }
+    }
+
+    #[test]
+    fn one_per_task_keeps_the_shortest_and_more_keep_distinct_alternatives_shortest_first() {
+        let all = vec![
+            answer("t", "a long explanation then 4", 1),
+            answer("t", "4", 2),
+            answer("t", "four", 3),
+            answer("t", "4", 4),
+            answer("u", "x", 5),
+        ];
+        let one = select_answers(all.clone(), 1);
+        let texts: Vec<&str> = one.iter().map(|a| a.text.as_str()).collect();
+        assert_eq!(texts.len(), 2, "one per task: {texts:?}");
+        assert!(texts.contains(&"4") && texts.contains(&"x"));
+
+        let two = select_answers(all.clone(), 2);
+        let t: Vec<&str> = two
+            .iter()
+            .filter(|a| a.task == Digest::of(b"t"))
+            .map(|a| a.text.as_str())
+            .collect();
+        assert_eq!(t, ["4", "four"], "the duplicate '4' is one answer");
+
+        let many = select_answers(all, 10);
+        assert_eq!(many.len(), 4, "distinct answers only");
+    }
+
+    #[test]
+    fn a_cap_of_zero_still_keeps_one() {
+        assert_eq!(select_answers(vec![answer("t", "4", 1)], 0).len(), 1);
     }
 }

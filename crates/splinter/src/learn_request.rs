@@ -52,6 +52,7 @@ pub(crate) fn acquire_request(args: LearnArgs) -> AcquireRequest {
     request.max_proposal_batches = named
         .max_proposal_batches
         .unwrap_or(request.max_proposal_batches);
+    request.answers_per_task = named.answers_per_task.unwrap_or(request.answers_per_task);
     request.structural_graph = named.structural_graph;
     request.reference_teacher = named.reference_teacher;
     request.probes_from = named.probes_from;

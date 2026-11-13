@@ -8,8 +8,9 @@ use std::time::Duration;
 
 use clap::Args;
 use splinter_sdk::acquire::{
-    DEFAULT_MASTERY, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_ROUNDS_PER_SKILL, DEFAULT_MIN_PROBES,
-    DEFAULT_POOLED_RETENTION_DROP, DEFAULT_RETENTION_DROP, MAX_ROUND_WRITES, ROUND_TASKS_WANTED,
+    DEFAULT_ANSWERS_PER_TASK, DEFAULT_MASTERY, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_ROUNDS_PER_SKILL,
+    DEFAULT_MIN_PROBES, DEFAULT_POOLED_RETENTION_DROP, DEFAULT_RETENTION_DROP, MAX_ROUND_WRITES,
+    ROUND_TASKS_WANTED,
 };
 use splinter_sdk::exam_set::{DEFAULT_DEV_TASKS_PER_FAMILY, DEFAULT_TASKS_PER_FAMILY};
 use splinter_sdk::learn::{DEFAULT_REHEARSAL_SHARE, DEFAULT_VOICE_SHARE};
@@ -96,6 +97,11 @@ pub struct AcquireArgs {
         requires = "source", help = format!("The most requests to the generator a round makes \
         for its training tasks, each with a new sampling seed [default: {MAX_ROUND_WRITES}]"))]
     pub max_proposal_batches: Option<usize>,
+    /// Verified answers per task a round trains on.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize),
+        requires = "source", help = format!("Verified answers a round trains on per task, \
+        shortest distinct ones first [default: {DEFAULT_ANSWERS_PER_TASK}]"))]
+    pub answers_per_task: Option<usize>,
     /// Read the skill graph from the sources' structure, one skill per
     /// section, instead of asking a planner model.
     #[arg(long, requires = "source")]

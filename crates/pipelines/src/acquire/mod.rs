@@ -68,7 +68,9 @@ pub use cost::StageCost;
 pub use graph::{plan, Planned, PlannedBy};
 pub use intake::{intake, is_url, Fetched, Intaken};
 pub use probes::{ProbeScore, ProposalBatch, SkillProbes};
-pub use round::{Change, Outcome, Round, MAX_ROUND_WRITES, ROUND_TASKS_WANTED};
+pub use round::{
+    Change, Outcome, Round, DEFAULT_ANSWERS_PER_TASK, MAX_ROUND_WRITES, ROUND_TASKS_WANTED,
+};
 pub use select::{next_skill, Selection, Targets};
 
 use crate::curriculum::frontier::PassAtK;
@@ -176,6 +178,8 @@ pub struct AcquireRequest {
     /// The most requests a round makes for its training tasks; each draws a
     /// new sampling seed and is shown what the earlier ones came to.
     pub max_proposal_batches: usize,
+    /// Verified answers a round trains on per task, shortest distinct first.
+    pub answers_per_task: usize,
     /// Read the skill graph from the sources' structure instead of asking
     /// the planner.
     pub structural_graph: bool,
@@ -231,6 +235,7 @@ impl AcquireRequest {
             self_generate: false,
             min_tasks_per_round: ROUND_TASKS_WANTED,
             max_proposal_batches: MAX_ROUND_WRITES,
+            answers_per_task: DEFAULT_ANSWERS_PER_TASK,
             structural_graph: false,
             reference_teacher: false,
             probes_from: None,
@@ -276,6 +281,9 @@ impl AcquireRequest {
                 "a round makes at least one request for its tasks: max_proposal_batches is 0"
                     .into(),
             ));
+        }
+        if self.answers_per_task == 0 {
+            return Err(OrchestratorError::Refused("answers_per_task is 0".into()));
         }
         if self.max_rounds == 0 || self.max_rounds_per_skill == 0 {
             return Err(OrchestratorError::Refused(

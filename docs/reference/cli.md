@@ -252,6 +252,7 @@ Options:
 - `--self-generate`: Let the incumbent write the next round's training tasks.
 - `--min-tasks-per-round <N>`: Ask the generator again until a round has admitted this many training tasks (0: one request) [default: 12]
 - `--max-proposal-batches <N>`: The most requests to the generator a round makes for its training tasks, each with a new sampling seed [default: 6]
+- `--answers-per-task <N>`: Verified answers a round trains on per task, shortest distinct ones first [default: 1]
 - `--structural-graph`: Read the skill graph from the sources' structure, one skill per section, instead of asking a planner model.
 - `--reference-teacher`: Teach a task the policy never solves with the task's own reference answer (the output the runtime computed, a reference program), graded like any answer, instead of asking the teacher model.
 - `--probes-from <RUN-ID>`: Take the skill graph and probes of this earlier learn --source run (its id is in `splinter runs list`) instead of planning and generating them; refused unless that run used the same sources. The baseline, rounds and assessment are still this run's.
