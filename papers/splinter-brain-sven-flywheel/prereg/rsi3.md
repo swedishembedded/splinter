@@ -53,3 +53,25 @@ exclusion counts, dev and retention trajectories and GPU-hours are reported besi
 ## What is not claimed
 
 Nothing until bench's verdicts evaluate the criterion; the outcome is recorded whatever it is.
+
+## Outcome (2026-11-13): criterion not met, two of four lineages improved at every generation
+
+Bench examined every champion on its pinned build (brain d11e91340, direct-completion protocol, sealed 889-item exam,
+training-overlap exclusion on) and returned signed aggregate verdicts; its signed plan verdict reads `plan_met: false`.
+Items right by generation (base 0 in every lineage), with each step's wins/losses and one-sided sign-test p:
+
+| Lineage | gen 1 vs base | gen 2 vs gen 1 | gen 3 vs gen 2 | succeeds |
+|---|---|---|---|---|
+| r0 | 58 (58/0, 3.5e-18) | 122 (78/14, 3.1e-12) | 123 (29/28, 0.50) | no |
+| r1 | 72 (72/0, 2.1e-22) | 101 (41/12, 4.1e-5) | 91 (18/28, 0.95) | no |
+| r2 | 67 (67/0, 6.8e-21) | 86 (38/19, 0.0082) | 121 (48/13, 3.8e-6) | yes |
+| r3 | 91 (91/0, 4.0e-28) | 118 (42/15, 0.00023) | 142 (47/23, 0.0028) | yes |
+
+Pooled over the four lineages: gen 1 vs base 288/0 (p 2.0e-87), gen 2 vs gen 1 199/60 (p 6.9e-19), gen 3 vs gen 2
+142/92 (p 0.00065). No exam item matched any training program in any comparison (0 excluded) and no integrity flag was
+raised. The criterion (at least three of four lineages succeed) is not met: every lineage improved at generations 1 and
+2; at generation 3 r0 held flat and r1 fell (its own dev gate had accepted it). Deviations: r2's held-out proposal cap
+raised before its first round (see `rsi3-launch.md`); r3's generation 3 failed once on a transient connection close and
+was resumed from its journals with the same build and settings. Learning-signal decay is visible in the learner's
+records: generation 1 trained on 568 mispredicted programs of 600 proposals, generation 2 on 229 of 554. RSI4
+(`rsi4.md`) tests cumulative retraining from the base on frontier-selected programs.
