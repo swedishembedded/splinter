@@ -329,3 +329,16 @@ fn state_reports_the_database_and_maintenance_keeps_what_is_stored() {
         "one source, however often added"
     );
 }
+
+#[test]
+fn train_on_a_dataset_that_does_not_exist_fails_loudly_with_json_and_a_nonzero_exit() {
+    let scratch = Scratch::new("train-fails");
+    let state = scratch.0.join("state");
+    let (code, report) = splinter(&state, &["train", "no-such-dataset"]);
+    assert_ne!(code, 0, "{report}");
+    assert!(
+        report["error"].as_str().is_some_and(|e| !e.is_empty()),
+        "a failed train prints why: {report}"
+    );
+    assert!(report.get("refused").is_some(), "{report}");
+}

@@ -46,6 +46,7 @@ mod learn_session;
 mod lineage_output;
 mod objects_output;
 mod output;
+mod panic_report;
 mod practice_output;
 mod practice_request;
 mod release_output;
@@ -248,10 +249,27 @@ fn main() -> ExitCode {
             return exit.into();
         }
     };
-    let exit = match (cli.command, cli.sentence) {
-        (Some(command), _) => session.command(command),
-        (None, Some(sentence)) => session.sentence(&sentence),
-        (None, None) => session.repl(),
-    };
-    exit.into()
+    // A panic that no layer below contained (a device fault, a trainer's
+    // invariant) must end in a report and a failing exit status, never in a
+    // bare backtrace a script reads as no output at all.
+    let json = cli.global.json;
+    let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        match (cli.command, cli.sentence) {
+            (Some(command), _) => session.command(command),
+            (None, Some(sentence)) => session.sentence(&sentence),
+            (None, None) => session.repl(),
+        }
+    }));
+    match ran {
+        Ok(exit) => exit.into(),
+        Err(panic) => {
+            let message = panic
+                .downcast_ref::<&str>()
+                .map(|m| (*m).to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "a panic with no message".into());
+            panic_report::panic_report(json, &message);
+            session::Exit::Failed.into()
+        }
+    }
 }
