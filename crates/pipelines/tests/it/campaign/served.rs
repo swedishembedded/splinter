@@ -152,3 +152,20 @@ fn a_policy_already_examined_is_not_examined_again() {
         "the exam is greedy"
     );
 }
+
+#[test]
+fn a_policy_answers_any_tasks_greedily_with_the_completion_and_the_verdict() {
+    let host = host("7");
+    let validator = ServedValidator::new(&Family, &host, settings()).unwrap();
+    let answers = validator
+        .answer(&PolicyRef::default(), &["a".to_string(), "b".to_string()])
+        .unwrap();
+    assert_eq!(
+        answers.iter().map(|a| a.task.as_str()).collect::<Vec<_>>(),
+        vec!["a", "b"],
+        "answers come back in the order asked"
+    );
+    assert!(answers.iter().all(|a| a.completion == "7" && a.passed));
+    assert_eq!(*host.greedy.lock().unwrap(), vec![true]);
+    assert_eq!(host.provider.seen.lock().unwrap().len(), 2);
+}

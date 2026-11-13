@@ -223,15 +223,35 @@ impl<'f> ServedValidator<'f> {
         })
     }
 
-    fn pass_each(&self, model: &Model, tasks: &[String]) -> Result<Outcomes, CampaignError> {
+    /// Every task of `tasks` answered once by `policy`, greedily, as many
+    /// requests at once as the settings allow, each with the completion and
+    /// whether the family's verifier passed it.
+    ///
+    /// # Errors
+    /// The policy cannot be served, a request fails, or the verifier does.
+    pub fn answer(
+        &self,
+        policy: &PolicyRef,
+        tasks: &[String],
+    ) -> Result<Vec<Answered>, CampaignError> {
+        let model = self.models.model(policy, true)?;
+        self.answer_with(&model, tasks)
+    }
+
+    fn answer_with(&self, model: &Model, tasks: &[String]) -> Result<Vec<Answered>, CampaignError> {
         let (family, max_tokens) = (self.family, self.settings.max_tokens);
         let answers = self.runtime.block_on(async {
             futures::stream::iter(tasks.iter().map(|task| async move {
                 let conversation = turns(family, task)?;
-                let text = ask(model, &conversation, max_tokens)
+                let completion = ask(model, &conversation, max_tokens)
                     .await
                     .map_err(|e| CampaignError::Validator(e.to_string()))?;
-                Ok::<_, CampaignError>((task.clone(), family.grade(task, &text)?.passed))
+                let passed = family.grade(task, &completion)?.passed;
+                Ok::<_, CampaignError>(Answered {
+                    task: task.clone(),
+                    completion,
+                    passed,
+                })
             }))
             .buffered(self.settings.concurrency.max(1))
             .collect::<Vec<_>>()
@@ -239,6 +259,26 @@ impl<'f> ServedValidator<'f> {
         });
         answers.into_iter().collect()
     }
+
+    fn pass_each(&self, model: &Model, tasks: &[String]) -> Result<Outcomes, CampaignError> {
+        Ok(self
+            .answer_with(model, tasks)?
+            .into_iter()
+            .map(|a| (a.task, a.passed))
+            .collect())
+    }
+}
+
+/// One task answered by a policy: what it wrote and whether the verifier
+/// passed it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Answered {
+    /// The task id.
+    pub task: String,
+    /// The completion, as the policy wrote it.
+    pub completion: String,
+    /// Whether the family's verifier passed it.
+    pub passed: bool,
 }
 
 /// What identifies a policy: its adapter's digest, else its version.
