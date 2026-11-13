@@ -12,13 +12,14 @@
 //! |---|---|---|
 //! | [`PROGRAM_OUTPUT_LUA`], [`PROGRAM_OUTPUT_PYTHON`] | predict what a program prints | the interpreter |
 //! | [`DB_WORKFLOW`] | complete a workflow through tools over a database | the final database state, diffed against the expected state |
-//! | [`REPOSITORY_BUGS`] | not built yet | the project's tests |
+//! | [`REPOSITORY_BUGS`] | fix injected faults in a small library | a hidden test suite, with a canary |
 //! | [`FIRMWARE_EMULATOR`] | not built yet | the emulator |
 //! | [`DOCUMENT_QUESTIONS`] | not built yet | the document's own text |
 
 mod db_tools;
 pub mod db_workflow;
 pub mod program_output;
+pub mod repository_bugs;
 
 use super::plugin::Plugin;
 
@@ -42,5 +43,6 @@ pub fn builtin() -> Vec<Box<dyn Plugin>> {
         Box::new(program_output::ProgramOutput::lua()),
         Box::new(program_output::ProgramOutput::python()),
         Box::new(db_workflow::DbWorkflow::new()),
+        Box::new(repository_bugs::RepositoryBugs::new()),
     ]
 }

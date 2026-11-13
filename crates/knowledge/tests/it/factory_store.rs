@@ -14,6 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use splinter_core::verifiability::{Split, VerifierClass};
 use splinter_knowledge::factory::admission::{admit, Status};
+use splinter_knowledge::factory::artifact::Instance;
 use splinter_knowledge::factory::band::BandMeasurement;
 use splinter_knowledge::factory::compile::compile;
 use splinter_knowledge::factory::host::{Host, Verdict};
@@ -21,6 +22,7 @@ use splinter_knowledge::factory::objective::{Budget, ObjectiveSpec};
 use splinter_knowledge::factory::plugin::{InstanceRequest, Plugin};
 use splinter_knowledge::factory::plugins::builtin;
 use splinter_knowledge::factory::plugins::db_workflow::DbWorkflow;
+use splinter_knowledge::factory::plugins::repository_bugs::RepositoryBugs;
 use splinter_knowledge::factory::store::{EnvironmentStore, StoreError};
 
 use super::factory_admission::{
@@ -392,4 +394,87 @@ fn a_collection_is_one_archive_and_a_task_folder_exists_only_while_it_is_staged(
     // A reload from the archive is byte-identical to what was generated.
     let again = store.instances(&id, Split::Dev).unwrap().remove(0);
     assert_eq!(again.version(), instance.version());
+}
+
+#[test]
+fn the_repository_environment_passes_admission_and_no_attack_on_the_test_runner_wins() {
+    let report = run(&RepositoryBugs::new(), Some(&in_band()));
+    for g in &report.gates {
+        assert!(g.passed, "{}: {}", g.name, g.detail);
+    }
+    assert_eq!(report.status, Status::Admitted, "{:?}", report.reasons);
+    assert!(report.beaten.is_empty(), "{:?}", report.beaten);
+    assert!(
+        report.attacks_run >= 40,
+        "generic and runner attacks both ran: {}",
+        report.attacks_run
+    );
+}
+
+#[test]
+fn fixing_only_some_of_the_faults_earns_a_share_of_the_tests_and_no_reward() {
+    let plugin = RepositoryBugs::new();
+    let request = InstanceRequest {
+        split: Split::Dev,
+        seed: 11, // seed: the share of passing tests asserted below depends on which faults this instance holds
+        difficulty: BTreeMap::from([("bugs".to_string(), 4), ("detail".to_string(), 3)]),
+    };
+    let instance = plugin.generate(&request).unwrap();
+    let session = Host::default().open(&instance).unwrap();
+    assert!(!session.verify().unwrap().solved());
+    // Put one faulty file back by hand: some tests pass, the reward is still zero.
+    let fixed = instance
+        .folder()
+        .under("solution/textkit")
+        .next()
+        .map(|(path, entry)| (path["solution/".len()..].to_string(), entry.bytes.clone()))
+        .unwrap();
+    session.write(&fixed.0, &fixed.1).unwrap();
+    let verdict = session.verify().unwrap();
+    let Verdict::Graded(vector) = verdict else {
+        panic!("graded")
+    };
+    assert_eq!(vector["reward"], 0.0, "{vector:?}");
+    assert!(vector["tests"] > 0.8 && vector["tests"] < 1.0, "{vector:?}");
+    // The full reference solves it.
+    assert!(session.solve().unwrap().succeeded());
+    assert!(session.verify().unwrap().solved());
+}
+
+#[test]
+fn the_canary_is_what_stops_a_library_that_patches_the_test_framework() {
+    let plugin = RepositoryBugs::new();
+    let request = InstanceRequest {
+        split: Split::Train,
+        seed: 3, // seed: the patch must leave this instance unsolved, which depends on its faults
+        difficulty: BTreeMap::from([("bugs".to_string(), 2), ("detail".to_string(), 3)]),
+    };
+    let instance = plugin.generate(&request).unwrap();
+    let patching = "import unittest\n\n\ndef _run(self, result=None):\n    result.startTest(self)\n    result.addSuccess(self)\n    result.stopTest(self)\n    return result\n\n\nunittest.TestCase.run = _run\n";
+
+    let session = Host::default().open(&instance).unwrap();
+    session
+        .write("textkit/__init__.py", patching.as_bytes())
+        .unwrap();
+    assert!(
+        !session.verify().unwrap().solved(),
+        "the canary reports the patch"
+    );
+
+    // The same verifier without its canary is beaten by the same patch.
+    let mut folder = instance.folder().clone();
+    let runner = folder.text("tests/runner.py").unwrap().replace(
+        "canary_failed = 0 if canary.wasSuccessful() else 1",
+        "canary_failed = 1",
+    );
+    folder.put_text("tests/runner.py", &runner).unwrap();
+    let naive = Instance::from_folder(folder).unwrap();
+    let session = Host::default().open(&naive).unwrap();
+    session
+        .write("textkit/__init__.py", patching.as_bytes())
+        .unwrap();
+    assert!(
+        session.verify().unwrap().solved(),
+        "without the canary the patch earns the reward"
+    );
 }

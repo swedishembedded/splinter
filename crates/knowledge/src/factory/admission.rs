@@ -548,6 +548,7 @@ fn attack_all(
         let sample = &samples[index];
         let siblings: Vec<Reference> = references
             .iter()
+            .filter(|_| !plugin.shares_answers())
             .enumerate()
             .filter(|(i, _)| *i != index)
             .map(|(_, r)| r.clone())

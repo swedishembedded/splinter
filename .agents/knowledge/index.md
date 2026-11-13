@@ -127,3 +127,4 @@ in the same commit.
 | [139](139-a-verifier-that-imports-from-its-working-directory-is-beaten-by-a-planted-module.md) | A verifier that imports from its working directory is beaten by a planted module |
 | [140](140-a-reference-must-solve-a-reset-workspace-not-its-own-result.md) | A reference must solve a reset workspace again, not run twice on its own result |
 | [141](141-a-seed-drawn-over-u64-does-not-fit-a-toml-integer.md) | A seed drawn over the whole u64 range does not fit a TOML integer |
+| [142](142-a-test-runner-in-the-process-under-test-needs-a-canary-that-must-fail.md) | A test runner in the process under test needs a canary that must fail |

@@ -181,6 +181,15 @@ pub trait Plugin: Send + Sync {
         Vec::new()
     }
 
+    /// Whether the correct answer is the same for every instance by design
+    /// (a bug-fixing environment over one library: the fix is the library as
+    /// it was). Admission then does not attack with another instance's
+    /// answer, and the environment's report says memorising the library
+    /// solves every instance.
+    fn shares_answers(&self) -> bool {
+        false
+    }
+
     /// The text two instances of this plugin are compared by for novelty:
     /// what varies between instances, without the boilerplate they share.
     fn novelty_text(&self, instance: &Instance) -> String {

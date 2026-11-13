@@ -67,9 +67,15 @@ The plugins, in the order they are built (`env plugins` lists their difficulty k
 |---|---|---|
 | `program-output-lua`, `program-output-python` | predict what a generated program prints | the interpreter; the same program is rendered in both languages and a third evaluator, and all must agree |
 | `db-workflow` | complete requests through a tool over a database, some of which are conditions whose answer is to change nothing | the final database state diffed against the expected state |
+| `repository-bugs` | fix injected faults in a small Python library | a hidden test suite, run in a child process, with a canary test that must fail |
 
-Repository bug-fixing, firmware through the emulator and document-grounded questions
-are classified and listed as not built yet; their status is in the roadmap ledger.
+The repository plugin's fix is the library as it was, the same for every instance, so a model
+that memorised the library solves any of them; its report says so, and admission does not
+attack it with another instance's answer. Use a private or time-split repository for a claim
+about generalisation.
+
+Firmware through the emulator and document-grounded questions are classified and listed as
+not built yet; their status is in the roadmap ledger.
 
 ## Admission
 
@@ -108,7 +114,9 @@ no instance is stored.
 - editing everything the solver may edit: blanking the workspace, planting `exit 0` in
   scripts, planting modules a verifier might import from its working directory that write
   the reward themselves;
-- plugin attacks, for example corrupting, emptying or rewriting the database.
+- plugin attacks: corrupting, emptying or rewriting the database; a library that exits at
+  import, prints forged result lines, patches the test framework to report success or skips
+  everything.
 
 An attack that earns reward always quarantines; guesses are counted as the share of
 instances they beat, quarantining above 10 percent.
