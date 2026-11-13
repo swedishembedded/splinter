@@ -40,7 +40,13 @@ impl CampaignController<'_> {
             .cloned()
             .collect();
         let mut rng = self.rng(generation, 2);
-        for chunk in todo.chunks(self.config.calibration_batch) {
+        let total = todo.len();
+        for (n, chunk) in todo.chunks(self.config.calibration_batch).enumerate() {
+            self.say(&format!(
+                "calibrating {} of {total} tasks at k={}",
+                n * self.config.calibration_batch,
+                self.config.calibration_k
+            ));
             let groups = self.parts.collector.collect(&CollectRequest {
                 tasks: chunk.to_vec(),
                 attempts: self.config.calibration_k,

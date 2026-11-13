@@ -20,7 +20,7 @@ use splinter_sdk::campaign::brain::{
     BrainTrainer, ChatCollector, ChatValidator, ModelSettings, TrainerSettings,
 };
 use splinter_sdk::campaign::{
-    CampaignConfig, CampaignController, LearningStrategy, Parts, WallClock,
+    CampaignConfig, CampaignController, LearningStrategy, Parts, Stopwatch, WallClock,
 };
 use splinter_sdk::model::policy_gradient::PolicyGradientOptions;
 use splinter_sdk::model::precision::BasePrecision;
@@ -206,6 +206,7 @@ fn main() -> Result<()> {
         significance: &BrainSignificance,
         clock: &clock,
         stopwatch: &watch,
+        progress: Some(&|line| eprintln!("[{}s] {line}", watch.seconds() as u64)),
     };
     let mut controller =
         CampaignController::open(&root, config, seed, parts, cli.out.join("adapters"))

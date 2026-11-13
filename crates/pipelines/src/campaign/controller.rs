@@ -78,6 +78,9 @@ pub struct Parts<'p> {
     pub clock: &'p dyn Clock,
     /// GPU-hours.
     pub stopwatch: &'p dyn Stopwatch,
+    /// Where a one-line account of each stage goes while an arm runs, for a
+    /// person watching a multi-hour campaign; `None` stays silent.
+    pub progress: Option<&'p dyn Fn(&str)>,
 }
 
 /// What one arm did.
@@ -253,6 +256,13 @@ impl<'p> CampaignController<'p> {
         Ok(self.store.ledger()?)
     }
 
+    /// Reports one stage to the progress sink.
+    pub(super) fn say(&self, line: &str) {
+        if let Some(progress) = self.parts.progress {
+            progress(line);
+        }
+    }
+
     pub(super) fn save(&mut self) -> Result<(), CampaignError> {
         let at = self.parts.clock.utc_now();
         let digest = self
@@ -368,6 +378,10 @@ impl<'p> CampaignController<'p> {
                 return Err(refused.into());
             }
         };
+        self.say(&format!(
+            "{}: planned (exam detects a lead of {:.3} at level {:.4})",
+            id.name, planned.minimum_detectable_effect, planned.alpha
+        ));
         let running = self.entry(
             &id,
             Outcome {
@@ -393,6 +407,14 @@ impl<'p> CampaignController<'p> {
         let retired = self.loaded.state.rates.counts(&self.pool()).retired;
         measurements.insert("retired_tasks".into(), retired as f64);
 
+        self.say(&format!(
+            "{}: {} groups, {} informative ({} short of the batch), {} rollouts",
+            id.name,
+            collected.groups.len(),
+            collected.informative.len(),
+            collected.shortfall,
+            collected.rollouts
+        ));
         let records = self.records(generation, strategy, &collected)?;
         let trainable = records.counts.policy_gradient + records.counts.distilled > 0;
         let rollouts = collected.rollouts;
@@ -422,6 +444,11 @@ impl<'p> CampaignController<'p> {
             out_dir: self.adapters.join(&id.name),
             seed: self.rng(generation, 1).next_u64(),
         };
+        self.say(&format!(
+            "{}: training on {} records",
+            id.name,
+            train.records.len()
+        ));
         let trained = self.parts.trainer.train(&train)?;
         let mean_reward = mean(
             collected

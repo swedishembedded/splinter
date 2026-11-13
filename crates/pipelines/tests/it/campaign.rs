@@ -272,6 +272,7 @@ impl<'w> Rig<'w> {
             significance: &BrainSignificance,
             clock,
             stopwatch: watch,
+            progress: None,
         }
     }
 }

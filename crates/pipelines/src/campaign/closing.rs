@@ -140,6 +140,17 @@ impl CampaignController<'_> {
             self.parts.significance,
         );
         let advance = decision.action == Action::Advance;
+        self.say(&format!(
+            "{}: dev {:?} vs {:?} (won {}, lost {}, p {:.4}, level {:.4}): {}",
+            pending.arm,
+            decision.candidate_rate,
+            decision.champion_rate,
+            decision.wins,
+            decision.losses,
+            decision.p_value,
+            decision.alpha,
+            if advance { "advance" } else { "roll back" }
+        ));
         let verdict = if advance {
             Verdict::Accepted {
                 significant: decision.significant,
