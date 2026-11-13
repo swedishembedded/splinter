@@ -20,11 +20,15 @@ use splinter_knowledge::factory::artifact::{
     environment_id, EnvMeta, Instance, Parts, SolverTools, SCHEMA_VERSION,
 };
 use splinter_knowledge::factory::band::BandMeasurement;
+use splinter_knowledge::factory::compile::compile;
 use splinter_knowledge::factory::folder::Folder;
 use splinter_knowledge::factory::host::{Host, Verdict};
+use splinter_knowledge::factory::objective::{Budget, ObjectiveSpec};
 use splinter_knowledge::factory::plugin::{InstanceRequest, Knob, Plugin, PluginError};
+use splinter_knowledge::factory::plugins::builtin;
 use splinter_knowledge::factory::plugins::db_workflow::DbWorkflow;
 use splinter_knowledge::factory::plugins::program_output::ProgramOutput;
+use splinter_knowledge::factory::store::{EnvironmentStore, StoreError};
 
 const NO_KNOBS: &[Knob] = &[];
 
@@ -561,4 +565,225 @@ fn the_shops_tool_refuses_what_its_rules_forbid_and_changes_nothing() {
     assert_eq!(refused.exit_code, Some(2), "{refused:?}");
     assert!(refused.stdout.contains("refused"));
     assert_eq!(session.workspace_digest().unwrap(), before);
+}
+
+fn objective() -> ObjectiveSpec {
+    ObjectiveSpec {
+        text: "- Predict the output of short Lua programs\n- Handle orders in an inventory database through its tools\n- Hold an empathetic counselling conversation\n- Configure a UART peripheral in firmware".into(),
+        sources: vec![],
+        constraints: vec![],
+        budget: Budget { environments: 4, instances_per_split: 2 },
+    }
+}
+
+#[test]
+fn an_objective_compiles_to_stored_environments_and_says_what_it_could_not_build_and_why() {
+    let root = tempfile::tempdir().unwrap();
+    let store = EnvironmentStore::new(root.path());
+    // seed: any compile seed must give the same shape of outcome
+    let report = compile(
+        &objective(),
+        &builtin(),
+        &Host::default(),
+        &small_policy(),
+        31,
+        &store,
+    )
+    .unwrap();
+
+    assert_eq!(report.skills.len(), 4);
+    let lua = &report.skills[0];
+    assert_eq!(lua.classification.class, VerifierClass::Objective);
+    assert_eq!(
+        lua.environments.len(),
+        2,
+        "four environments over two buildable skills, a ladder of two each"
+    );
+    assert!(
+        lua.environments
+            .iter()
+            .all(|e| e.status == Status::PendingBand),
+        "{:?}",
+        lua.environments
+    );
+    assert_ne!(
+        lua.environments[0].difficulty, lua.environments[1].difficulty,
+        "a ladder differs by difficulty"
+    );
+
+    let counselling = &report.skills[2];
+    assert_eq!(counselling.label.as_deref(), Some("proxy only"));
+    assert!(counselling.environments.is_empty());
+    assert!(counselling
+        .not_built
+        .as_deref()
+        .unwrap()
+        .contains("no automatic environment"));
+    let firmware = &report.skills[3];
+    assert!(
+        firmware
+            .not_built
+            .as_deref()
+            .unwrap()
+            .contains("not built yet"),
+        "{:?}",
+        firmware.not_built
+    );
+
+    let outcomes: Vec<_> = report.skills.iter().flat_map(|s| &s.environments).collect();
+    assert_eq!(report.pending_band(), 4, "{outcomes:#?}");
+    assert_eq!(
+        report.admitted(),
+        0,
+        "nothing enters a campaign before its base pass rate is measured"
+    );
+    assert_eq!(store.list().unwrap().len(), 4);
+    for environment in &lua.environments {
+        let train = store
+            .instance_dirs(&environment.environment, Split::Train)
+            .unwrap();
+        assert_eq!(train.len(), 2);
+        let instance = store.load_instance(&train[0]).unwrap();
+        assert_eq!(instance.meta().environment, environment.environment);
+        assert_eq!(instance.meta().split, Split::Train);
+    }
+}
+
+#[test]
+fn a_measured_base_pass_rate_admits_a_stored_environment_and_the_decision_survives_a_reload() {
+    let root = tempfile::tempdir().unwrap();
+    let store = EnvironmentStore::new(root.path());
+    let report = compile(
+        &objective(),
+        &builtin(),
+        &Host::default(),
+        &small_policy(),
+        5,
+        &store,
+    )
+    .unwrap(); // seed: any
+    let id = report.skills[0].environments[0].environment.clone();
+    assert_eq!(store.report(&id).unwrap().status, Status::PendingBand);
+
+    let judged = store.record_band(&id, &in_band()).unwrap();
+    assert_eq!(judged.status, Status::Admitted);
+    let reloaded = EnvironmentStore::new(root.path()).report(&id).unwrap();
+    assert!(reloaded.may_enter_campaign());
+    assert_eq!(reloaded.band.unwrap().attempts, 32);
+
+    let too_easy = store
+        .record_band(
+            &id,
+            &BandMeasurement {
+                model: "base".into(),
+                attempts: 32,
+                passes: 32,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        too_easy.status,
+        Status::Rejected,
+        "a newer measurement is judged again"
+    );
+}
+
+#[test]
+fn a_second_compile_with_another_seed_does_not_repeat_what_was_trained_on_and_the_same_seed_is_refused_as_not_novel(
+) {
+    let root = tempfile::tempdir().unwrap();
+    let store = EnvironmentStore::new(root.path());
+    let spec = ObjectiveSpec {
+        text: "Predict the output of Python snippets".into(),
+        budget: Budget {
+            environments: 1,
+            instances_per_split: 2,
+        },
+        ..ObjectiveSpec::default()
+    };
+    let first = compile(
+        &spec,
+        &builtin(),
+        &Host::default(),
+        &small_policy(),
+        100,
+        &store,
+    )
+    .unwrap(); // seed: any
+    assert_eq!(first.pending_band(), 1);
+    let again = compile(
+        &spec,
+        &builtin(),
+        &Host::default(),
+        &small_policy(),
+        100,
+        &store,
+    )
+    .unwrap();
+    assert_eq!(
+        again.skills[0].environments[0].status,
+        Status::Rejected,
+        "{:?}",
+        again.skills[0].environments
+    );
+    assert!(again.skills[0].environments[0]
+        .reasons
+        .iter()
+        .any(|r| r.contains("already trained on")));
+}
+
+#[test]
+fn a_quarantined_environment_keeps_its_report_and_stores_no_instance() {
+    let root = tempfile::tempdir().unwrap();
+    let store = EnvironmentStore::new(root.path());
+    let weak = Scripted {
+        name: "shape-only",
+        verifier: "if grep -Eq '^[0-9]+$' \"$APP/answer.txt\" 2>/dev/null; then r=1; else r=0; fi\nprintf '{\"reward\": %s}' \"$r\" > \"$LOGS/reward.json\"\n",
+        workspace: &[],
+        solve: SOLVE_FROM_SOLUTION,
+        instruction: plain_instruction,
+    };
+    let (report, instances) = admit(
+        &weak,
+        &BTreeMap::new(),
+        &Host::default(),
+        &small_policy(),
+        3,
+        &BTreeSet::new(),
+        None,
+    )
+    .unwrap(); // seed: any
+    assert_eq!(report.status, Status::Quarantined);
+    store.save(&report, &instances).unwrap();
+    let dirs = store
+        .instance_dirs(&report.environment, Split::Train)
+        .unwrap();
+    assert!(dirs.is_empty(), "{dirs:?}");
+    assert!(store
+        .report(&report.environment)
+        .unwrap()
+        .beaten
+        .iter()
+        .any(|b| b.attack == "format-only"));
+}
+
+#[test]
+fn an_environment_id_cannot_name_a_path_outside_the_store() {
+    let store = EnvironmentStore::new(tempfile::tempdir().unwrap().path());
+    for bad in [
+        "../etc",
+        "env-../../x",
+        "env-zz",
+        "",
+        "env-0123456789abcdef/..",
+    ] {
+        assert!(
+            matches!(store.report(bad), Err(StoreError::BadId(_))),
+            "{bad}"
+        );
+    }
+    assert!(matches!(
+        store.report("env-0123456789abcdef"),
+        Err(StoreError::NotFound(_))
+    ));
 }

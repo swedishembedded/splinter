@@ -21,7 +21,7 @@
 //! | `structural` | the folder is a valid artifact: split train or dev, id matches, the solver is shown neither tests nor solution |
 //! | `reference-passes` | the reference solution, run in the workspace, is graded solved |
 //! | `nop-fails` | doing nothing is graded, and not solved (a crash is not a grade) |
-//! | `robust` | grading is repeatable on one state; the reference is repeatable; reset restores the unsolved state; a missing answer is graded, not a crash |
+//! | `robust` | grading is repeatable on one state; a missing answer is graded, not a crash; reset restores the unsolved state and the reference solves it again |
 //! | `reproducible` | the same request gives a byte-identical folder and the same rewards; a plugin's second oracle agrees |
 //! | `novel` | instances differ from each other, dev from train, and from anything already trained on |
 //! | `red-team` | no attack in [`attack`](super::attack) earns reward |
@@ -148,9 +148,61 @@ pub struct AdmissionReport {
     pub status: Status,
     /// Why, in words.
     pub reasons: Vec<String>,
+    /// The instances admission drew, by content version: what a later
+    /// environment's novelty gate compares against.
+    pub instances: Vec<InstanceRecord>,
+}
+
+/// An instance admission drew.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstanceRecord {
+    /// Its split.
+    pub split: Split,
+    /// Its seed.
+    pub seed: u64,
+    /// Its content version ([`Instance::version`]).
+    pub version: String,
 }
 
 impl AdmissionReport {
+    /// This report judged against `measurement` of the base policy (the
+    /// earlier band gate and measurement replaced): the status follows from
+    /// the other gates, whether the red team held, and the band. Used when
+    /// admission ran and again when a measurement arrives later.
+    #[must_use]
+    pub fn with_band(mut self, measurement: Option<&BandMeasurement>) -> Self {
+        self.gates.retain(|g| g.name != "base-band");
+        let quarantined = self.gates.iter().any(|g| g.name == "red-team" && !g.passed);
+        let hygiene_ok = self.gates.iter().all(|g| g.passed);
+        let result = measurement.and_then(BandMeasurement::result);
+        let (gate, band_status) = judge_band(measurement, result.as_ref(), self.band_policy);
+        self.gates.extend(gate);
+        self.reasons = self
+            .gates
+            .iter()
+            .filter(|g| !g.passed)
+            .map(|g| format!("{}: {}", g.name, g.detail))
+            .collect();
+        self.status = if quarantined {
+            Status::Quarantined
+        } else if !hygiene_ok {
+            Status::Rejected
+        } else {
+            match band_status {
+                BandStatus::Unmeasured => {
+                    self.reasons.push(
+                        "base pass rate not measured: not admissible to a campaign yet".into(),
+                    );
+                    Status::PendingBand
+                }
+                BandStatus::Outside => Status::Rejected,
+                BandStatus::Inside => Status::Admitted,
+            }
+        };
+        self.band = result;
+        self
+    }
+
     /// Whether a campaign may train on this environment.
     #[must_use]
     pub fn may_enter_campaign(&self) -> bool {
@@ -438,7 +490,7 @@ pub fn admit(
         },
     };
 
-    let mut gates = vec![
+    let gates = vec![
         structural.finish(),
         reference_passes.finish(),
         nop_fails.finish(),
@@ -447,33 +499,6 @@ pub fn admit(
         novel.finish(),
         red_team,
     ];
-    let band_result = band.and_then(BandMeasurement::result);
-    let (band_gate, band_status) = judge_band(band, band_result.as_ref(), policy.band);
-    let hygiene_ok = gates.iter().all(|g| g.passed);
-    if let Some(gate) = band_gate {
-        gates.push(gate);
-    }
-    let mut reasons: Vec<String> = gates
-        .iter()
-        .filter(|g| !g.passed)
-        .map(|g| format!("{}: {}", g.name, g.detail))
-        .collect();
-    let status = if quarantined {
-        Status::Quarantined
-    } else if !hygiene_ok {
-        Status::Rejected
-    } else {
-        match band_status {
-            BandStatus::Unmeasured => {
-                reasons
-                    .push("base pass rate not measured: not admissible to a campaign yet".into());
-                Status::PendingBand
-            }
-            BandStatus::Outside => Status::Rejected,
-            BandStatus::Inside => Status::Admitted,
-        }
-    };
-
     let report = AdmissionReport {
         schema_version: SCHEMA_VERSION,
         environment,
@@ -489,11 +514,20 @@ pub fn admit(
         attacks_run,
         beaten,
         blind_rate,
-        band: band_result,
+        band: None,
         band_policy: policy.band,
-        status,
-        reasons,
-    };
+        status: Status::Rejected,
+        reasons: Vec::new(),
+        instances: samples
+            .iter()
+            .map(|s| InstanceRecord {
+                split: s.request.split,
+                seed: s.request.seed,
+                version: s.instance.version().to_string(),
+            })
+            .collect(),
+    }
+    .with_band(band);
     Ok((report, samples.into_iter().map(|s| s.instance).collect()))
 }
 
@@ -614,13 +648,6 @@ fn check_robustness(
             "grading the same state twice gave different rewards",
         );
     }
-    if session.solve()?.succeeded() && !session.verify()?.solved() {
-        gate.fail(
-            split,
-            seed,
-            "running the reference a second time on its own result breaks it",
-        );
-    }
     for (name, outcome) in plugin.extra_gates(&sample.instance, session) {
         if let Err(why) = outcome {
             gate.fail(split, seed, format!("{name}: {why}"));
@@ -651,6 +678,14 @@ fn check_robustness(
         session.reset()?;
         if session.verify()?.solved() {
             gate.fail(split, seed, "after reset the workspace still grades solved");
+        }
+        // The reference solves the reset workspace as it solved the first.
+        if !session.solve()?.succeeded() || !session.verify()?.solved() {
+            gate.fail(
+                split,
+                seed,
+                "the reference does not solve the workspace again after a reset",
+            );
         }
     }
     Ok(())

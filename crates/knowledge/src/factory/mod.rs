@@ -21,6 +21,8 @@
 //! * [`host`] - runs a task folder on the host as a container would.
 //! * [`admission`] - the gates an environment passes before a campaign may
 //!   train on it, ending in a measured base pass-rate band.
+//! * [`compile`] and [`store`] - the compiler from an objective to stored,
+//!   admitted environments, and where they live on disk.
 //! * [`attack`] - the adversarial attempts on a verifier; an environment
 //!   whose verifier is beaten is quarantined.
 //! * [`alarm`] - the reward-versus-held-out divergence alarm a campaign
@@ -35,11 +37,13 @@ pub mod alarm;
 pub mod artifact;
 pub mod attack;
 pub mod band;
+pub mod compile;
 pub mod folder;
 pub mod host;
 pub mod objective;
 pub mod plugin;
 pub mod plugins;
+pub mod store;
 
 #[cfg(test)]
 mod testing;
