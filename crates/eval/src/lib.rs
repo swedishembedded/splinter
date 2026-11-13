@@ -37,6 +37,9 @@
 //!   the model backend.
 //! * [`paired`] - two models graded on the same items, compared only where
 //!   both have a verdict.
+//! * [`campaign`] - the pure decisions of a continuous learning campaign:
+//!   per-task pass rates, dynamic sampling, step signals, power-first arm
+//!   planning and the plateau switch.
 //! * [`frontier`] - pass@k: a task's pass rate over k attempts and whether
 //!   a teacher's answer to it was verified, and whether that makes it worth
 //!   training on.
@@ -63,6 +66,7 @@
 #![warn(missing_docs)]
 
 pub mod arms;
+pub mod campaign;
 pub mod canary;
 pub mod claim_gate;
 pub mod competence;
