@@ -1,0 +1,327 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements solutions that run reinforcement learning on
+// a language model served by a continuously batching engine, for its clients.
+// If your team needs expertise in throughput-bound rollout collection for
+// policy-gradient training you can procure our services by sending an email
+// to info@swedishembedded.com.
+
+//! The served path: rollouts and the dev exam are asked of a model a serving
+//! endpoint holds, many requests at once, so the engine's continuous batching
+//! decodes them together. Which endpoint serves which policy is the host's
+//! business ([`PolicyModels`]); nothing here knows how a server is started.
+//!
+//! The request is exactly the family's conversation, sent through sven's
+//! provider with no system prompt of Splinter's own added.
+
+use std::collections::BTreeMap;
+use std::sync::Mutex;
+use std::time::Duration;
+
+use futures::StreamExt;
+use serde_json::{json, Value};
+use splinter_agent::chat::{reply_bare, ChatOptions, Turn};
+use splinter_agent::solve::Model;
+use splinter_eval::campaign::gate::{DevResult, Outcomes};
+
+use super::brain::{trained_from, tune, write_records, ModelSettings, TaskFamily, TrainerSettings};
+use super::types::{
+    CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup,
+    TrainRequest, Trained, Trainer, Validator,
+};
+use splinter_core::chat::WireMessage;
+use splinter_model::policy_gradient::PolicyGradientTune;
+use splinter_model::served_train::train_policy_gradient_served;
+use splinter_model::BrainEndpoints;
+
+/// How long one reply may take, queueing behind the batch included.
+const REPLY_DEADLINE: Duration = Duration::from_secs(600);
+
+/// Whoever serves policies: a model for a policy, sampling at temperature one
+/// (training rollouts) or greedily (the dev exam).
+pub trait PolicyModels: Send + Sync {
+    /// The model that answers as `policy` does.
+    ///
+    /// # Errors
+    /// The policy cannot be served.
+    fn model(&self, policy: &PolicyRef, greedy: bool) -> Result<Model, CampaignError>;
+}
+
+fn turns(family: &dyn TaskFamily, task: &str) -> Result<Vec<Turn>, CampaignError> {
+    family
+        .prompt(task)?
+        .into_iter()
+        .map(|(role, text)| match role.as_str() {
+            "user" => Ok(Turn::user(text)),
+            "assistant" => Ok(Turn::assistant(text)),
+            other => Err(CampaignError::Config(format!(
+                "the served path sends user and assistant turns, not {other:?} (task {task})"
+            ))),
+        })
+        .collect()
+}
+
+fn wire(turns: &[Turn]) -> Vec<WireMessage> {
+    turns
+        .iter()
+        .map(|turn| WireMessage {
+            role: if turn.by_assistant {
+                "assistant"
+            } else {
+                "user"
+            }
+            .to_string(),
+            content: turn.text.clone(),
+            images: Vec::new(),
+            tool_calls: Vec::new(),
+            tool_call_id: None,
+            reasoning_content: None,
+            train: false,
+        })
+        .collect()
+}
+
+async fn ask(model: &Model, turns: &[Turn], max_tokens: u32) -> Result<String, CampaignError> {
+    let mut options = ChatOptions::new(REPLY_DEADLINE);
+    options.max_output_tokens = Some(max_tokens);
+    reply_bare(model, turns, &options)
+        .await
+        .map_err(|e| CampaignError::Collector(e.to_string()))
+}
+
+/// The served collector: a group's attempts are concurrent requests at
+/// temperature one.
+pub struct ServedCollector<'f> {
+    family: &'f dyn TaskFamily,
+    models: &'f dyn PolicyModels,
+    settings: ModelSettings,
+    policy: PolicyRef,
+    runtime: tokio::runtime::Runtime,
+}
+
+impl<'f> ServedCollector<'f> {
+    /// A collector over `family`, asking the models of `models`.
+    ///
+    /// # Errors
+    /// The async runtime could not start.
+    pub fn new(
+        family: &'f dyn TaskFamily,
+        models: &'f dyn PolicyModels,
+        settings: ModelSettings,
+    ) -> Result<Self, CampaignError> {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .map_err(|e| CampaignError::Collector(format!("starting the runtime: {e}")))?;
+        Ok(Self {
+            family,
+            models,
+            settings,
+            policy: PolicyRef::default(),
+            runtime,
+        })
+    }
+}
+
+impl RolloutCollector for ServedCollector<'_> {
+    fn describe(&self) -> Value {
+        json!({"path": "served", "model": self.settings, "family": self.family.describe()})
+    }
+
+    fn tasks(&self) -> Vec<String> {
+        self.family.pool()
+    }
+
+    fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), CampaignError> {
+        // The host serves it when the first request names it.
+        self.policy = policy.clone();
+        Ok(())
+    }
+
+    fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, CampaignError> {
+        let model = self.models.model(&request.policy, false)?;
+        let max_tokens = self.settings.max_tokens;
+        let mut jobs = Vec::new();
+        for (t, task) in request.tasks.iter().enumerate() {
+            let conversation = turns(self.family, task)?;
+            for _ in 0..request.attempts {
+                jobs.push((t, conversation.clone()));
+            }
+        }
+        let model = &model;
+        let replies = self.runtime.block_on(async {
+            futures::stream::iter(jobs.into_iter().map(|(t, conversation)| async move {
+                let text = ask(model, &conversation, max_tokens).await?;
+                Ok::<_, CampaignError>((t, conversation, text))
+            }))
+            .buffered(self.settings.concurrency.max(1))
+            .collect::<Vec<_>>()
+            .await
+        });
+        let mut groups: Vec<RolloutGroup> = request
+            .tasks
+            .iter()
+            .map(|task| RolloutGroup {
+                task: task.clone(),
+                rollouts: Vec::new(),
+            })
+            .collect();
+        for reply in replies {
+            let (t, conversation, completion) = reply?;
+            let graded = self.family.grade(&request.tasks[t], &completion)?;
+            groups[t].rollouts.push(Rollout {
+                reward: graded.reward,
+                passed: graded.passed,
+                prompt: wire(&conversation),
+                completion,
+                feedback: graded.feedback,
+                privileged: graded.privileged,
+                policy_version: request.policy.version,
+                trace: None,
+            });
+        }
+        Ok(groups)
+    }
+}
+
+/// The served dev exam: every dev and retention task answered once, greedily.
+/// A policy that was already examined keeps its result, so a champion is not
+/// asked twice for the exam its candidate was just compared on.
+pub struct ServedValidator<'f> {
+    family: &'f dyn TaskFamily,
+    models: &'f dyn PolicyModels,
+    settings: ModelSettings,
+    runtime: tokio::runtime::Runtime,
+    kept: Mutex<BTreeMap<String, DevResult>>,
+}
+
+impl<'f> ServedValidator<'f> {
+    /// A validator over `family`, asking the models of `models`.
+    ///
+    /// # Errors
+    /// The async runtime could not start.
+    pub fn new(
+        family: &'f dyn TaskFamily,
+        models: &'f dyn PolicyModels,
+        settings: ModelSettings,
+    ) -> Result<Self, CampaignError> {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .map_err(|e| CampaignError::Validator(format!("starting the runtime: {e}")))?;
+        Ok(Self {
+            family,
+            models,
+            settings,
+            runtime,
+            kept: Mutex::new(BTreeMap::new()),
+        })
+    }
+
+    fn pass_each(&self, model: &Model, tasks: &[String]) -> Result<Outcomes, CampaignError> {
+        let (family, max_tokens) = (self.family, self.settings.max_tokens);
+        let answers = self.runtime.block_on(async {
+            futures::stream::iter(tasks.iter().map(|task| async move {
+                let conversation = turns(family, task)?;
+                let text = ask(model, &conversation, max_tokens)
+                    .await
+                    .map_err(|e| CampaignError::Validator(e.to_string()))?;
+                Ok::<_, CampaignError>((task.clone(), family.grade(task, &text)?.passed))
+            }))
+            .buffered(self.settings.concurrency.max(1))
+            .collect::<Vec<_>>()
+            .await
+        });
+        answers.into_iter().collect()
+    }
+}
+
+/// What identifies a policy: its adapter's digest, else its version.
+fn key(policy: &PolicyRef) -> String {
+    policy.digest.as_ref().map_or_else(
+        || format!("version-{}", policy.version),
+        ToString::to_string,
+    )
+}
+
+impl Validator for ServedValidator<'_> {
+    fn describe(&self) -> Value {
+        json!({"path": "served greedy", "model": self.settings, "family": self.family.describe()})
+    }
+
+    fn units(&self) -> usize {
+        self.family.dev().len()
+    }
+
+    fn retention_units(&self) -> usize {
+        self.family.retention().len()
+    }
+
+    fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError> {
+        let held = key(policy);
+        if let Some(result) = self
+            .kept
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&held)
+        {
+            return Ok(result.clone());
+        }
+        let model = self.models.model(policy, true)?;
+        let result = DevResult {
+            dev: self.pass_each(&model, &self.family.dev())?,
+            retention: self.pass_each(&model, &self.family.retention())?,
+        };
+        self.kept
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(held, result.clone());
+        Ok(result)
+    }
+}
+
+/// The call into brain as a training job of the service that also serves the
+/// policy: a clipped policy gradient on the batch's records, continuing the
+/// champion's adapter, with datasets and adapters exchanged through the
+/// endpoints' artifact store.
+pub struct ServedTrainer {
+    settings: TrainerSettings,
+    endpoints: BrainEndpoints,
+}
+
+impl ServedTrainer {
+    /// A trainer with `settings` on the service at `endpoints`.
+    ///
+    /// # Errors
+    /// The endpoints name no artifact store, which a job needs.
+    pub fn new(
+        settings: TrainerSettings,
+        endpoints: BrainEndpoints,
+    ) -> Result<Self, CampaignError> {
+        endpoints
+            .artifact_store()
+            .map_err(|e| CampaignError::Config(e.to_string()))?;
+        Ok(Self {
+            settings,
+            endpoints,
+        })
+    }
+}
+
+impl Trainer for ServedTrainer {
+    fn describe(&self) -> Value {
+        json!({"path": "brain training job", "settings": self.settings})
+    }
+
+    fn train(&mut self, request: &TrainRequest) -> Result<Trained, CampaignError> {
+        let records = write_records(request)?;
+        let attempt = request.out_dir.join("run");
+        let tune: PolicyGradientTune<'_> = tune(&self.settings, request, &records, &attempt);
+        let trained = train_policy_gradient_served(&self.endpoints, &tune)
+            .map_err(|e| CampaignError::Trainer(e.to_string()))?;
+        trained_from(request, &trained)
+    }
+}

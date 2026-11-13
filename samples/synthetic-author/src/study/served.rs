@@ -119,6 +119,8 @@ impl Loader for ServedLoader {
             device: self.device.as_deref(),
             max_batch: Some(self.slots),
             kv_offload_gb: self.kv_offload_gb,
+            kv_cache: None,
+            artifact_store: None,
             log: Some(&log),
         };
         let server =

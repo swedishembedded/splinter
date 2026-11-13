@@ -49,6 +49,9 @@ pub enum Offer<'a> {
     /// `--adapter-manifest FILE`: whichever adapter the manifest names, as a
     /// release step publishes it.
     Manifest(&'a Path),
+    /// `--serve-adapters DIR`: every adapter in the directory, offered as it
+    /// appears and withdrawn as it goes; the server starts with none.
+    Directory(&'a Path),
     /// Nothing: the base is the model (a consolidated checkpoint).
     Nothing,
 }
@@ -79,6 +82,13 @@ pub struct Launch<'a> {
     /// when the KV pool fills (`--kv-offload-gb`); brain's default when
     /// `None`.
     pub kv_offload_gb: Option<f64>,
+    /// The KV-cache storage tier (`--kv-cache`: `f32`, `bf16`, `int8` or
+    /// `fp8`); brain's own choice when `None`.
+    pub kv_cache: Option<&'a str>,
+    /// The artifact store (`--training --artifact-store DIR`): the server
+    /// also runs training jobs, datasets reach it and trained adapters leave
+    /// it through this directory.
+    pub artifact_store: Option<&'a Path>,
     /// A file every line the server writes is appended to, for an operator
     /// to read after the fact; only the last lines are kept otherwise.
     pub log: Option<&'a Path>,
@@ -139,14 +149,9 @@ impl Started {
     }
 }
 
-/// Starts the server `launch` describes and waits for it to report what it
-/// serves and that it is ready.
-pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failure> {
-    let port = free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
-    let address = format!("127.0.0.1:{port}");
-    let keys = launch.work.join("keys.json");
-    let ready = launch.work.join("ready");
-    let mut command = Command::new(launch.binary);
+/// The command line of `brain serve` for `launch`, listening on `address`,
+/// writing its key to `keys` and touching `ready` when it serves.
+fn configure(command: &mut Command, launch: &Launch<'_>, address: &str, keys: &Path, ready: &Path) {
     if let Some(device) = launch.device {
         command.args(["--device", device]);
     }
@@ -154,10 +159,13 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     if let Some(gib) = splinter_model::device::vram_budget_gib() {
         command.args(["--vram-budget", &gib.to_string()]);
     }
-    command.arg("serve").args(["--openai", &address]);
+    command.arg("serve").args(["--openai", address]);
     // Always named, so the width a caller asks at is the one the server was
     // told rather than a default it might not share.
     command.args(["--max-batch", &launch.slots().to_string()]);
+    if let Some(tier) = launch.kv_cache {
+        command.args(["--kv-cache", tier]);
+    }
     if let Some(gb) = launch.kv_offload_gb {
         command.args(["--kv-offload-gb", &gb.to_string()]);
     }
@@ -168,7 +176,13 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
         Offer::Manifest(manifest) => {
             command.arg("--adapter-manifest").arg(manifest);
         }
+        Offer::Directory(dir) => {
+            command.arg("--serve-adapters").arg(dir);
+        }
         Offer::Nothing => {}
+    }
+    if let Some(store) = launch.artifact_store {
+        command.arg("--training").arg("--artifact-store").arg(store);
     }
     // The trainer's LoRA corrects every linear, the MLP ones included, and
     // brain's bank serves the attention linears only unless told otherwise.
@@ -184,14 +198,40 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
         .arg("--runtime-dir")
         .arg(launch.work)
         .arg("--api-keys-out")
-        .arg(&keys)
+        .arg(keys)
         .arg("--ready-file")
-        .arg(&ready);
+        .arg(ready);
     // brain scans the store it is given at startup; one that does not
     // exist is left to brain's own default.
     if launch.models.is_dir() {
         command.arg("--models-dir").arg(launch.models);
     }
+}
+
+/// Starts the server `launch` describes and waits for it to report what it
+/// serves and that it is ready.
+pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failure> {
+    let port = free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
+    let address = format!("127.0.0.1:{port}");
+    let keys = launch.work.join("keys.json");
+    let ready = launch.work.join("ready");
+    // A marker or key left by an earlier server in this directory describes
+    // a process that is gone: a start that finds them would call the new
+    // server ready before it has loaded anything.
+    for stale in [&ready, &keys] {
+        match std::fs::remove_file(stale) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(Failure::Unmeasured(format!(
+                    "cannot remove {}: {e}",
+                    stale.display()
+                )))
+            }
+        }
+    }
+    let mut command = Command::new(launch.binary);
+    configure(&mut command, launch, &address, &keys, &ready);
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -217,7 +257,7 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     let mut kept: Vec<String> = Vec::new();
     let mut startup_line: Option<String> = None;
     // Only an adapter is announced: a plain base prints no such line.
-    let announced = !matches!(launch.offer, Offer::Nothing);
+    let announced = !matches!(launch.offer, Offer::Nothing | Offer::Directory(_));
     while (announced && startup_line.is_none()) || !ready.exists() {
         if cancel.is_cancelled() {
             return Err(Failure::Cancelled);
@@ -398,5 +438,92 @@ mod tests {
             None
         );
         assert_eq!(parse_adapter_line("APIKEY openai sk-brain-1"), None);
+    }
+
+    fn arguments(offer: Offer<'_>, store: Option<&Path>) -> Vec<String> {
+        let launch = Launch {
+            binary: Path::new("brain"),
+            work: Path::new("/w"),
+            models: Path::new("/no-such-store"),
+            base: Path::new("/m/base"),
+            offer,
+            expected_digest: "",
+            startup: Duration::from_secs(1),
+            device: None,
+            max_batch: Some(8),
+            kv_offload_gb: None,
+            kv_cache: Some("f32"),
+            artifact_store: store,
+            log: None,
+        };
+        let mut command = Command::new("brain");
+        configure(
+            &mut command,
+            &launch,
+            "127.0.0.1:1",
+            Path::new("/w/keys"),
+            Path::new("/w/ready"),
+        );
+        command
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_server_that_follows_a_directory_trains_and_keeps_its_kv_in_f32_when_asked() {
+        let args = arguments(Offer::Directory(Path::new("/a")), Some(Path::new("/s")));
+        let has = |pair: [&str; 2]| args.windows(2).any(|w| w == pair);
+        assert!(has(["--serve-adapters", "/a"]), "{args:?}");
+        assert!(has(["--artifact-store", "/s"]) && args.contains(&"--training".to_string()));
+        assert!(has(["--kv-cache", "f32"]));
+        assert!(
+            has(["--adapter-targets", "all"]),
+            "the trainer corrects every linear"
+        );
+        let plain = arguments(Offer::Nothing, None);
+        assert!(!plain.contains(&"--training".to_string()));
+        assert!(!plain.contains(&"--adapter-targets".to_string()));
+    }
+
+    /// A directory that still holds the ready marker and the key of a server
+    /// that has gone must not make a new server look ready before it is.
+    #[test]
+    fn a_stale_ready_marker_does_not_make_a_new_server_ready() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let work = dir.path().join("work");
+        std::fs::create_dir(&work).unwrap();
+        std::fs::write(work.join("ready"), "").unwrap();
+        std::fs::write(work.join("keys.json"), r#"{"openai":"stale"}"#).unwrap();
+        // A server that takes a moment, then publishes its key and marker.
+        let fake = dir.path().join("brain");
+        std::fs::write(
+            &fake,
+            "#!/bin/sh\nwhile [ \"$1\" != --api-keys-out ]; do shift; done\nkeys=$2\nshift 2\nwhile [ \"$1\" != --ready-file ]; do shift; done\nsleep 1\necho '{\"openai\":\"fresh\"}' > \"$keys\"\ntouch \"$2\"\nsleep 30\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let started = start(
+            &Launch {
+                binary: &fake,
+                work: &work,
+                models: Path::new("/no-such-store"),
+                base: Path::new("/m/base"),
+                offer: Offer::Nothing,
+                expected_digest: "",
+                startup: Duration::from_secs(20),
+                device: None,
+                max_batch: None,
+                kv_offload_gb: None,
+                kv_cache: None,
+                artifact_store: None,
+                log: None,
+            },
+            &CancelToken::new(),
+        )
+        .map_err(|_| "start failed")
+        .unwrap();
+        assert_eq!(started.key, "fresh", "the key of the server that started");
     }
 }

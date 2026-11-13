@@ -377,50 +377,77 @@ impl Trainer for BrainTrainer {
     }
 
     fn train(&mut self, request: &TrainRequest) -> Result<Trained, CampaignError> {
-        let fail = |why: String| CampaignError::Trainer(why);
-        std::fs::create_dir_all(&request.out_dir)
-            .map_err(|e| fail(format!("creating {}: {e}", request.out_dir.display())))?;
-        let mut projection = Projection::new("campaign", Objective::PolicyGradient, None, None);
-        projection.records.clone_from(&request.records);
-        let records_path = request.out_dir.join("records.jsonl");
-        write_dataset(&records_path, &projection, &BrainDatasetCheck)
-            .map_err(|e| fail(format!("writing the training records: {e}")))?;
+        let records = write_records(request)?;
         let attempt = request.out_dir.join("run");
-        let s = &self.settings;
-        let trained = train_policy_gradient(&PolicyGradientTune {
-            model_dir: &s.base,
-            train: &records_path,
-            attempt_dir: &attempt,
-            steps: s.steps,
-            rank: s.rank,
-            alpha: s.alpha,
-            weight_decay: 0.0,
-            grad_accum: s.records_per_step,
-            continue_from: request.continue_from.as_deref(),
-            cancel: None,
-            base: s.base_precision,
-            learning_rate: Some(s.learning_rate),
-            seed: request.seed,
-            max_block: s.max_block,
-            thinking: false,
-            options: s.options,
-        })
-        .map_err(|e| fail(e.to_string()))?;
-        let stats = &trained.statistics;
-        Ok(Trained {
-            digest: Digest::parse(&trained.adapter_digest)
-                .map_err(|e| fail(format!("the adapter's digest: {e}")))?,
-            bytes: directory_bytes(&request.out_dir),
-            adapter: trained.adapter,
-            dir: request.out_dir.clone(),
-            report: TrainReport {
-                steps: u32::try_from(stats.steps.len()).unwrap_or(u32::MAX),
-                kl: stats.mean_kl.map(f64::from),
-                clip_fraction: stats.mean_clip_fraction.map(f64::from),
-                skipped_nonfinite: stats.steps_skipped_nonfinite,
-                skipped_guard: stats.steps_skipped_guard,
-                entropy: stats.mean_entropy.map(f64::from),
-            },
-        })
+        let tune = tune(&self.settings, request, &records, &attempt);
+        let trained =
+            train_policy_gradient(&tune).map_err(|e| CampaignError::Trainer(e.to_string()))?;
+        trained_from(request, &trained)
     }
+}
+
+/// Writes the request's records as the policy-gradient dataset the trainer
+/// reads, in the arm's own directory.
+pub(super) fn write_records(request: &TrainRequest) -> Result<PathBuf, CampaignError> {
+    let fail = |why: String| CampaignError::Trainer(why);
+    std::fs::create_dir_all(&request.out_dir)
+        .map_err(|e| fail(format!("creating {}: {e}", request.out_dir.display())))?;
+    let mut projection = Projection::new("campaign", Objective::PolicyGradient, None, None);
+    projection.records.clone_from(&request.records);
+    let records_path = request.out_dir.join("records.jsonl");
+    write_dataset(&records_path, &projection, &BrainDatasetCheck)
+        .map_err(|e| fail(format!("writing the training records: {e}")))?;
+    Ok(records_path)
+}
+
+/// The policy-gradient run `settings` ask for on `records`, continuing the
+/// champion's adapter, with its files under `attempt`.
+pub(super) fn tune<'a>(
+    s: &'a TrainerSettings,
+    request: &'a TrainRequest,
+    records: &'a Path,
+    attempt: &'a Path,
+) -> PolicyGradientTune<'a> {
+    PolicyGradientTune {
+        model_dir: &s.base,
+        train: records,
+        attempt_dir: attempt,
+        steps: s.steps,
+        rank: s.rank,
+        alpha: s.alpha,
+        weight_decay: 0.0,
+        grad_accum: s.records_per_step,
+        continue_from: request.continue_from.as_deref(),
+        cancel: None,
+        base: s.base_precision,
+        learning_rate: Some(s.learning_rate),
+        seed: request.seed,
+        max_block: s.max_block,
+        thinking: false,
+        options: s.options,
+    }
+}
+
+/// What the controller keeps of a finished run.
+pub(super) fn trained_from(
+    request: &TrainRequest,
+    trained: &splinter_model::policy_gradient::TrainedPolicyGradient,
+) -> Result<Trained, CampaignError> {
+    let fail = |why: String| CampaignError::Trainer(why);
+    let stats = &trained.statistics;
+    Ok(Trained {
+        digest: Digest::parse(&trained.adapter_digest)
+            .map_err(|e| fail(format!("the adapter's digest: {e}")))?,
+        bytes: directory_bytes(&request.out_dir),
+        adapter: trained.adapter.clone(),
+        dir: request.out_dir.clone(),
+        report: TrainReport {
+            steps: u32::try_from(stats.steps.len()).unwrap_or(u32::MAX),
+            kl: stats.mean_kl.map(f64::from),
+            clip_fraction: stats.mean_clip_fraction.map(f64::from),
+            skipped_nonfinite: stats.steps_skipped_nonfinite,
+            skipped_guard: stats.steps_skipped_guard,
+            entropy: stats.mean_entropy.map(f64::from),
+        },
+    })
 }

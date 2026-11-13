@@ -61,6 +61,7 @@ pub mod factory;
 pub mod gc;
 mod records;
 mod replay;
+pub mod served;
 mod stages;
 mod state;
 mod types;

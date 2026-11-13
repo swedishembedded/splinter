@@ -207,6 +207,8 @@ fn serve_and_ask(
             device: None,
             max_batch: None,
             kv_offload_gb: None,
+            kv_cache: None,
+            artifact_store: None,
             log: None,
         },
         cancel,
