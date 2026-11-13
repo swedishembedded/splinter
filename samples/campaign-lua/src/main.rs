@@ -25,7 +25,6 @@ use splinter_sdk::campaign::{
 use splinter_sdk::model::policy_gradient::PolicyGradientOptions;
 use splinter_sdk::model::precision::BasePrecision;
 use splinter_sdk::model::stats::BrainSignificance;
-use splinter_sdk::store::workspace::Workspace;
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::vocabulary::clock::SystemClock;
 
@@ -196,7 +195,7 @@ fn main() -> Result<()> {
         min_free_inodes: 20_000,
     }];
 
-    let workspace = Workspace::at(&StateRoot::new(cli.out.join("state")));
+    let root = StateRoot::new(cli.out.join("state"));
     let clock = SystemClock;
     let watch = WallClock::start();
     let parts = Parts {
@@ -209,7 +208,7 @@ fn main() -> Result<()> {
         stopwatch: &watch,
     };
     let mut controller =
-        CampaignController::open(&workspace, config, seed, parts, cli.out.join("adapters"))
+        CampaignController::open(&root, config, seed, parts, cli.out.join("adapters"))
             .map_err(|e| anyhow::anyhow!("{e}"))?;
     let report = controller
         .run(cli.arms)

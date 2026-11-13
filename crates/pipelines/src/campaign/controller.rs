@@ -26,7 +26,7 @@ use splinter_eval::campaign::sampling::AllFailStrategy;
 use splinter_eval::campaign::signals::{sampled_entropy, Finding, StepSignals};
 use splinter_eval::significance::Significance;
 use splinter_store::campaign::{CampaignStore, Cost, LedgerEntry, Loaded, Verdict};
-use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 
 use super::config::{CampaignConfig, LearningStrategy};
 use super::gc::Checkpoint;
@@ -114,7 +114,7 @@ pub struct CampaignReport {
 
 /// A running campaign.
 pub struct CampaignController<'p> {
-    pub(super) store: CampaignStore<'p>,
+    pub(super) store: CampaignStore,
     pub(super) config: CampaignConfig,
     pub(super) parts: Parts<'p>,
     pub(super) adapters: PathBuf,
@@ -158,7 +158,7 @@ pub(super) struct Collected {
 }
 
 impl<'p> CampaignController<'p> {
-    /// Opens campaign `config.name` in `workspace`, creating it at `seed`
+    /// Opens campaign `config.name` under the state `root`, creating it at `seed`
     /// when it does not exist and resuming it when it does. Adapters live
     /// under `adapters`.
     ///
@@ -167,7 +167,7 @@ impl<'p> CampaignController<'p> {
     /// given; a campaign begun under another configuration or layout; a store
     /// failure; a policy the collector cannot serve.
     pub fn open(
-        workspace: &'p Workspace,
+        root: &StateRoot,
         config: CampaignConfig,
         seed: u64,
         parts: Parts<'p>,
@@ -184,7 +184,7 @@ impl<'p> CampaignController<'p> {
                 config.all_fail
             )));
         }
-        let store = CampaignStore::new(workspace, &config.name)?;
+        let store = CampaignStore::new(root, &config.name)?;
         let digest = digest_of(&json!({
             "config": config,
             "collector": parts.collector.describe(),

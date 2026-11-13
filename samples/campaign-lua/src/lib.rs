@@ -115,8 +115,11 @@ fn generate(level: usize, rng: &mut SplitMix64) -> String {
     }
 }
 
-fn run_lua(lua: &Path, source: &str, scratch: &Path, name: &str) -> Result<String, CampaignError> {
-    let file = scratch.join(format!("{name}.lua"));
+/// Runs one program. Every program goes through the same scratch file: a file
+/// per program would put hundreds of files on a disk with a quota on their
+/// number.
+fn run_lua(lua: &Path, source: &str, scratch: &Path) -> Result<String, CampaignError> {
+    let file = scratch.join("program.lua");
     std::fs::write(&file, source)
         .map_err(|e| CampaignError::Config(format!("writing {}: {e}", file.display())))?;
     let out = Command::new(lua)
@@ -169,7 +172,7 @@ impl LuaPredict {
                     continue;
                 }
                 let id = format!("{prefix}-l{level}-{:04}", ids.len());
-                let expected = run_lua(lua, &source, scratch, &id)?;
+                let expected = run_lua(lua, &source, scratch)?;
                 programs.insert(
                     id.clone(),
                     Program {

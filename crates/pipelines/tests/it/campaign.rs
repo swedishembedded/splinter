@@ -35,7 +35,6 @@ use splinter_pipelines::campaign::{
     Trained, Trainer, Validator,
 };
 use splinter_store::campaign::Verdict;
-use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
 /// The skill of the policy at a version.
@@ -241,12 +240,9 @@ fn config(name: &str) -> CampaignConfig {
     c
 }
 
-fn workspace() -> (Workspace, tempfile::TempDir) {
+fn workspace() -> (StateRoot, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
-    (
-        Workspace::at(&StateRoot::new(dir.path().join("state"))),
-        dir,
-    )
+    (StateRoot::new(dir.path().join("state")), dir)
 }
 
 struct Rig<'w> {
@@ -283,7 +279,7 @@ impl<'w> Rig<'w> {
 const SEED: u64 = 424_242; // seed: the scripted world is a pure function of it
 
 fn open<'a>(
-    ws: &'a Workspace,
+    ws: &'a StateRoot,
     config: CampaignConfig,
     rig: &'a mut Rig<'_>,
     adapters: &std::path::Path,
@@ -380,6 +376,10 @@ fn the_ledger_records_hypothesis_digest_cost_and_the_numbers_behind_the_verdict(
     controller.run(1).unwrap();
     let ledger = controller.ledger().unwrap();
     assert_eq!(ledger.len(), 2, "running, then the verdict");
+    let state_files = std::fs::read_dir(dir.path().join("state/campaigns"))
+        .unwrap()
+        .count();
+    assert_eq!(state_files, 1, "the whole campaign is one pack");
     assert_eq!(ledger[0].verdict, Verdict::Running);
     let done = &ledger[1];
     assert!(done.hypothesis.contains("a policy that is better each arm"));

@@ -15,7 +15,6 @@
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::digest_of;
 use splinter_store::campaign::{CampaignError, CampaignStore, Cost, LedgerEntry, Verdict};
-use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,10 +23,9 @@ struct State {
     adapter: String,
 }
 
-fn workspace() -> (Workspace, tempfile::TempDir) {
+fn workspace() -> (StateRoot, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
-    let ws = Workspace::at(&StateRoot::new(dir.path()));
-    (ws, dir)
+    (StateRoot::new(dir.path()), dir)
 }
 
 fn entry(campaign: &str, arm: &str, verdict: Verdict) -> LedgerEntry {
@@ -182,4 +180,104 @@ fn the_ledger_keeps_every_event_in_order_and_unmeasured_stays_absent() {
     assert!(matches!(latest[1].verdict, Verdict::Refused { .. }));
     let text = serde_json::to_string(&ledger[0]).unwrap();
     assert!(!text.contains("gpu_hours"), "{text}");
+}
+
+fn files_under(dir: &std::path::Path) -> usize {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| {
+            let path = e.unwrap().path();
+            if path.is_dir() {
+                files_under(&path)
+            } else {
+                1
+            }
+        })
+        .sum()
+}
+
+#[test]
+fn a_campaign_is_one_file_however_many_states_and_entries_it_holds() {
+    let (ws, dir) = workspace();
+    let store = CampaignStore::new(&ws, "lua").unwrap();
+    let mut previous = None;
+    for step in 0..25 {
+        let state = State {
+            step,
+            adapter: format!("a{step}"),
+        };
+        previous = Some(store.save(previous.as_ref(), &state, "t").unwrap());
+        store
+            .record(&entry("lua", &format!("arm-{step}"), Verdict::Running))
+            .unwrap();
+    }
+    assert_eq!(
+        files_under(dir.path()),
+        1,
+        "one pack, no file per state or entry"
+    );
+    assert_eq!(store.ledger().unwrap().len(), 25);
+    assert_eq!(store.load::<State>().unwrap().unwrap().version, 25);
+}
+
+#[test]
+fn a_torn_last_line_is_cut_off_and_the_previous_state_is_still_the_head() {
+    let (ws, dir) = workspace();
+    let store = CampaignStore::new(&ws, "lua").unwrap();
+    let first = State {
+        step: 1,
+        adapter: "a1".into(),
+    };
+    let digest = store.save(None, &first, "t").unwrap();
+    let pack = dir.path().join("campaigns/lua.pack");
+    let mut text = std::fs::read(&pack).unwrap();
+    text.extend_from_slice(br#"{"record":"state","at":"t","state":{"step":2,"ada"#);
+    std::fs::write(&pack, text).unwrap();
+    assert_eq!(store.load::<State>().unwrap().unwrap().state, first);
+    let second = State {
+        step: 2,
+        adapter: "a2".into(),
+    };
+    store.save(Some(&digest), &second, "t2").unwrap();
+    assert_eq!(store.load::<State>().unwrap().unwrap().state, second);
+}
+
+#[test]
+fn compaction_keeps_the_ledger_and_the_newest_states() {
+    let (ws, dir) = workspace();
+    let store = CampaignStore::new(&ws, "lua").unwrap();
+    let mut previous = None;
+    for step in 0..10 {
+        let state = State {
+            step,
+            adapter: "x".repeat(200),
+        };
+        previous = Some(store.save(previous.as_ref(), &state, "t").unwrap());
+        store
+            .record(&entry("lua", &format!("arm-{step}"), Verdict::Running))
+            .unwrap();
+    }
+    let before = std::fs::metadata(dir.path().join("campaigns/lua.pack"))
+        .unwrap()
+        .len();
+    store.compact(2).unwrap();
+    let after = std::fs::metadata(dir.path().join("campaigns/lua.pack"))
+        .unwrap()
+        .len();
+    assert!(after < before);
+    assert_eq!(store.ledger().unwrap().len(), 10);
+    let loaded = store.load::<State>().unwrap().unwrap();
+    assert_eq!(loaded.state.step, 9);
+    assert_eq!(loaded.version, 10, "the version survives compaction");
+    store
+        .save(
+            Some(&loaded.digest),
+            &State {
+                step: 10,
+                adapter: "y".into(),
+            },
+            "t",
+        )
+        .unwrap();
+    assert_eq!(files_under(dir.path()), 1);
 }
