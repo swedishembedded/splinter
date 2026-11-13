@@ -9,8 +9,8 @@ real model, and does the dev gate decide correctly what that signal did?
 The sample runs `splinter_sdk::campaign::CampaignController` end to end on a
 base checkpoint, in process, against a verifiable task family: Lua output
 prediction. A generated program is shown, the policy writes what it prints, and
-the Lua interpreter that ran the program is the verifier. Programs come in four
-levels (arithmetic, strings, loops, tables); the training pool, the dev set the
+the Lua interpreter that ran the program is the verifier. Programs come in six
+levels (sums, products, strings, loops, table sorts, long arithmetic); the training pool, the dev set the
 gate is decided on and the retention set (levels 1 and 2) are drawn from one
 recorded seed under different salts and share no program.
 

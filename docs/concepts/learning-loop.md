@@ -93,3 +93,46 @@ its server does, and naming a sampling for it is refused.
 The same pipeline, planned from a directory of someone's writing: see [Learn how a person
 thinks](../guides/personas.md). Learning a repository from its own tests is the same loop with
 an agent working in copies of the tree: see [Learn a repository](../guides/repositories.md).
+
+## A continuous campaign, and where its rollouts come from
+
+A learning run that keeps going (many arms, each one a cycle of calibrate, collect, train, gate, account) is a
+*campaign*, run by the campaign controller (`splinter_sdk::campaign`; the sample `samples/campaign-lua` drives it on a
+real model). Its state is one append-only file per campaign, so a crash resumes where it stopped and a second
+controller on the same campaign is refused rather than allowed to corrupt it.
+
+Every arm:
+
+1. checks that the disks have the bytes and the *files* the arm needs (a file quota, not the disk's size, ended
+   registered runs);
+2. refuses itself when the exam that will judge it cannot detect the effect it targets, at the level that gate may spend
+   (alpha is spent by gate number, so ten gates in a row do not release a null candidate 40 percent of the time);
+3. calibrates every unmeasured task at 8 to 16 attempts with the current policy and drops, for good, tasks the policy
+   already solves at 0.9 or more;
+4. collects groups of attempts on tasks near the frontier, keeping only groups whose attempts earned different
+   rewards, over-provisioned and refilled; groups that all failed go to a strategy (skip, a teacher, per-token
+   distillation, decomposition);
+5. trains on the batch, beside a bounded replay of earlier arms' verified data, through brain;
+6. gates the candidate on dev tasks the campaign never trains on, and rolls it back unless it beat the champion
+   without losing retention;
+7. appends the arm to the experiment ledger (hypothesis, configuration digest, GPU-hours, cost, verdict) and moves to
+   the next strategy of its ladder when discovery per GPU-hour has fallen.
+
+**Where rollouts come from.** The controller collects its training episodes through one of two paths and no other:
+
+- sven's training executor (`sven rollout`, `sven_sdk::rollout`): sven runs Harbor-format task folders (instruction,
+  workspace, tests that write a reward) as sandboxed episodes, and writes one `attempt.jsonl` per attempt holding the
+  verifier's result and reward, the ATIF trajectory and the policy trace (the prompt and generated token ids and their
+  log-probabilities as the serving endpoint returned them). An attempt with no reward (the provider failed, the
+  verifier wrote none) enters no group, and one whose trace is not provable is never trained on, never re-tokenized.
+- the in-process path, a loaded model sampled at temperature 1 against a verifier the policy cannot reach.
+
+The controller never drives `bench run` on bench collections to get training data. A benchmark is the sealed
+measurement authority: it holds the exams, and the proposer must not be able to see or influence them. Bench is asked
+for one thing only, a verdict on a finished candidate; the campaign's own gate is a dev-validation gate on tasks of
+its own, and it does not move a release alias.
+
+The bench-mediated flow (a benchmark run exported and admitted with `experiences ingest-bench`, see
+[Benchmark trials as training data](../guides/bench-trials.md)) is **legacy** for new work: it remains for the
+recorded arms and for evidence from benchmarks that cannot be re-run, and it trains on the stored actions with a
+proxy for the behaviour policy (`--behaviour start`) because a benchmark export carries no sampler log-probabilities.

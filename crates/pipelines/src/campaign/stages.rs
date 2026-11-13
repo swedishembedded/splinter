@@ -74,12 +74,15 @@ impl CampaignController<'_> {
             .map_err(|e| CampaignError::Config(e.to_string()))?;
         let mut rng = self.rng(generation, 3);
         let mut groups: Vec<RolloutGroup> = Vec::new();
-        let pool = self.pool();
+        let mut pool = self.pool();
         while let Some(wanted) = builder.next_request() {
             let tasks = draw_prompts(&pool, &self.loaded.state.rates, wanted, &mut rng);
             if tasks.is_empty() {
                 break;
             }
+            // A task is attempted once per batch: a refill that drew the same
+            // prompts again would only repeat the groups that had no spread.
+            pool.retain(|task| !tasks.contains(task));
             let got = self.parts.collector.collect(&CollectRequest {
                 tasks,
                 attempts: self.config.attempts_per_group,

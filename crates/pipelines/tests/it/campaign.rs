@@ -64,6 +64,7 @@ struct Log {
     trained: Cell<usize>,
     last_records: RefCell<Vec<splinter_data::Record>>,
     validated: Cell<usize>,
+    requests: RefCell<Vec<(usize, Vec<String>)>>,
 }
 
 struct World {
@@ -110,6 +111,11 @@ impl RolloutCollector for Collector<'_> {
         Ok(())
     }
     fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, CampaignError> {
+        self.0
+            .log
+            .requests
+            .borrow_mut()
+            .push((request.attempts, request.tasks.clone()));
         self.0
             .log
             .collected_versions
@@ -658,4 +664,28 @@ fn the_repair_strategy_adds_wrong_attempt_feedback_fix_records_to_the_batch() {
         );
         assert_eq!(messages[2].content, "wrong");
     }
+}
+
+#[test]
+fn a_task_is_attempted_once_per_batch_however_often_the_batch_is_refilled() {
+    let (ws, dir) = workspace();
+    let world = World::new(20, 0.15);
+    let adapters = dir.path().join("adapters");
+    let mut rig = Rig::new(&world, &adapters, 120);
+    let mut c = config("c15");
+    c.attempts_per_group = 6; // calibration asks for 8, so the two are told apart
+    c.batch.target_groups = 12;
+    c.batch.max_request = 20;
+    let mut controller = open(&ws, c, &mut rig, &adapters).unwrap();
+    controller.run(1).unwrap();
+    let batch_requests: Vec<String> = world
+        .log
+        .requests
+        .borrow()
+        .iter()
+        .filter(|(attempts, _)| *attempts == 6)
+        .flat_map(|(_, tasks)| tasks.clone())
+        .collect();
+    let unique: std::collections::BTreeSet<&String> = batch_requests.iter().collect();
+    assert_eq!(batch_requests.len(), unique.len(), "{batch_requests:?}");
 }

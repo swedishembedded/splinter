@@ -10,7 +10,7 @@
 //! Lua output prediction as a verifiable task family: a program is shown, the
 //! policy writes what it prints, and the Lua interpreter that actually ran the
 //! program is the verifier. Programs come in four levels of difficulty
-//! (arithmetic, strings, loops, tables) from a seeded generator, so a pool
+//! (sums, products, strings, loops, tables, long arithmetic) from a seeded generator, so a pool
 //! can be made as large and as hard as a campaign needs, and the dev and
 //! retention sets are drawn from other seeds than the training pool.
 
@@ -28,7 +28,7 @@ const SYSTEM: &str =
     "You are a Lua interpreter. Reply with exactly what the program prints and nothing else.";
 
 /// Levels of difficulty.
-pub const LEVELS: usize = 4;
+pub const LEVELS: usize = 6;
 
 /// One generated program and what the interpreter printed for it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,49 +69,50 @@ fn word(rng: &mut SplitMix64) -> String {
         .collect()
 }
 
-/// A program of `level`, Lua 5.1 compatible.
+/// A program of `level`, Lua 5.1 compatible. The levels climb from sums the
+/// base answers without reasoning to programs it cannot do without it, so a
+/// pool spans the pass rates a policy-gradient run learns from: 1 a sum of two
+/// small numbers, 2 a product plus a digit, 3 a short string transformation,
+/// 4 a small accumulating loop with a start and a step, 5 a three-item table sort, 6 a longer
+/// arithmetic expression.
 fn generate(level: usize, rng: &mut SplitMix64) -> String {
     let n = |rng: &mut SplitMix64, low: u64, high: u64| rng.between(low, high);
     match level {
-        1 => format!(
-            "print({} * {} + {} - {})",
-            n(rng, 2, 19),
-            n(rng, 2, 19),
-            n(rng, 1, 99),
-            n(rng, 1, 49)
+        1 => format!("print({} + {})", n(rng, 1, 30), n(rng, 1, 30)),
+        2 => format!(
+            "print({} * {} + {})",
+            n(rng, 2, 9),
+            n(rng, 2, 9),
+            n(rng, 1, 9)
         ),
-        2 => {
+        3 => {
             let w = word(rng);
             match rng.below(3) {
-                0 => format!(
-                    "print(string.rep(\"{}\", {}) .. string.upper(\"{}\"))",
-                    &w[..2],
-                    n(rng, 2, 4),
-                    word(rng)
-                ),
-                1 => format!(
-                    "print(#\"{w}\" * {} .. string.sub(\"{w}\", 2, {}))",
-                    n(rng, 2, 9),
-                    w.len()
-                ),
-                _ => format!("print(string.reverse(\"{w}\") .. {})", n(rng, 10, 99)),
+                0 => format!("print(string.upper(\"{w}\"))"),
+                1 => format!("print(string.rep(\"{}\", {}))", &w[..2], n(rng, 2, 4)),
+                _ => format!("print(#\"{w}\" + {})", n(rng, 1, 9)),
             }
         }
-        3 => format!(
-            "local s = 0\nfor i = 1, {} do\n  if i % {} == 0 then s = s + i * {} else s = s - 1 end\nend\nprint(s)",
-            n(rng, 8, 30),
-            n(rng, 2, 5),
-            n(rng, 2, 4)
+        4 => format!(
+            "local s = {}\nfor i = 1, {} do\n  s = s + i * {}\nend\nprint(s)",
+            n(rng, 0, 9),
+            n(rng, 3, 9),
+            n(rng, 1, 5)
         ),
-        _ => {
-            let items: Vec<String> = (0..5).map(|_| n(rng, 1, 40).to_string()).collect();
+        5 => {
+            let items: Vec<String> = (0..3).map(|_| n(rng, 1, 9).to_string()).collect();
             format!(
-                "local t = {{{}}}\ntable.sort(t)\ntable.remove(t, {})\ntable.insert(t, 2, {})\nprint(table.concat(t, \",\"))",
-                items.join(", "),
-                n(rng, 1, 4),
-                n(rng, 1, 40)
+                "local t = {{{}}}\ntable.sort(t)\nprint(table.concat(t, \",\"))",
+                items.join(", ")
             )
         }
+        _ => format!(
+            "print({} * {} + {} - {})",
+            n(rng, 12, 29),
+            n(rng, 3, 19),
+            n(rng, 10, 99),
+            n(rng, 5, 49)
+        ),
     }
 }
 

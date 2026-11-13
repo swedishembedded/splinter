@@ -130,6 +130,10 @@ inconclusive and more tasks are collected rather than the threshold changed.
 
 ## Benchmark trials (2026-10-28)
 
+- Legacy for new work (2026-11-13): training episodes for a new campaign come from sven's rollout executor
+  (Harbor-format task folders, one `attempt.jsonl` per attempt) or the in-process path through the campaign
+  controller, never from `bench run` on bench collections; bench is asked for verdicts on candidates only. What
+  follows is the bench-mediated flow, kept for recorded arms.
 - Done: `experiences ingest-bench` admits the trial artifacts a benchmark exports (digests
   verified, the benchmark's grade as an executable verdict, ATIF as the record), one
   experience set per split; the eval split is refused by every dataset build and by the

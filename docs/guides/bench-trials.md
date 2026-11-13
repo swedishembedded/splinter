@@ -3,6 +3,13 @@
 
 # Benchmark trials as training data
 
+> **Legacy for new work.** A new learning campaign collects its training episodes through sven's training
+> executor (Harbor-format task folders, one `attempt.jsonl` per attempt with the reward, the trajectory and the
+> policy trace) or in process, never by driving `bench run` on a benchmark's collections: a benchmark is the sealed
+> measurement authority and is asked only for verdicts on finished candidates. See [A continuous campaign, and where
+> its rollouts come from](../concepts/learning-loop.md#a-continuous-campaign-and-where-its-rollouts-come-from). What
+> follows stays for the recorded arms and for exports that cannot be regenerated.
+
 A benchmark that runs an agent on tasks it grades itself can feed Splinter's
 experience, dataset, train and select pipeline. The benchmark exports each run as a
 directory of immutable trial artifacts; Splinter admits them as experiences, keeps the

@@ -10,6 +10,11 @@
 //! The endpoint path: rollouts from an agent executor that runs tasks in
 //! sandboxes against a served policy.
 //!
+//! This and the in-process path are the only ways a campaign collects training
+//! episodes: it never drives a benchmark's runner on the benchmark's own
+//! collections, because the benchmark is the sealed measurement authority and
+//! is asked only for verdicts on finished candidates.
+//!
 //! The executor is a trait because the thing that implements it lives in
 //! another project: an agent runtime that loads Harbor-format task folders
 //! (instruction, environment, tests that write a reward), runs the policy
@@ -19,7 +24,10 @@
 //! endpoint returned them. [`EpisodeCollector`] turns those episodes into
 //! rollout groups; an episode whose chain of calls the executor cannot prove is
 //! returned marked unprovable and is dropped from training, never repaired by
-//! re-tokenizing.
+//! re-tokenizing. Sven's rollout executor maps onto it directly: an attempt
+//! that ended `verified` is an [`Episode`] with its reward, one that ended
+//! `unverified` or in an infrastructure error has no reward, and a trace
+//! summary that is not `trainable` is `provable: false`.
 
 use serde_json::{json, Value};
 use splinter_core::chat::WireMessage;

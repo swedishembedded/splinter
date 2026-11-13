@@ -75,7 +75,7 @@ struct Cli {
     #[arg(long, default_value_t = 16)]
     steps: u32,
     /// Learning rate.
-    #[arg(long, default_value_t = 5e-5)]
+    #[arg(long, default_value_t = 1e-5)]
     lr: f32,
     /// Adapter rank.
     #[arg(long, default_value_t = 16)]
@@ -109,6 +109,10 @@ struct Cli {
     /// What to do with a group that all failed (`skip`, `cliff-distill`).
     #[arg(long, default_value = "skip")]
     all_fail: String,
+    /// Print this many raw completions of the base model and exit: what the
+    /// policy writes and how it is graded, before any campaign.
+    #[arg(long)]
+    probe: Option<usize>,
     /// Fraction of the batch's records replayed from earlier arms.
     #[arg(long, default_value_t = 0.25)]
     replay: f64,
@@ -149,6 +153,32 @@ fn main() -> Result<()> {
     model.concurrency = cli.concurrency;
     let mut collector =
         ChatCollector::new(&family, model.clone()).map_err(|e| anyhow::anyhow!("{e}"))?;
+    if let Some(count) = cli.probe {
+        use splinter_sdk::campaign::brain::TaskFamily as _;
+        use splinter_sdk::campaign::{CollectRequest, PolicyRef, RolloutCollector};
+        let tasks: Vec<String> = family.pool().into_iter().take(count).collect();
+        let groups = collector
+            .collect(&CollectRequest {
+                tasks,
+                attempts: 2,
+                policy: PolicyRef::default(),
+                seed,
+            })
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        for group in groups {
+            let program = family.program(&group.task);
+            for rollout in group.rollouts {
+                println!(
+                    "{}\texpected {:?}\tpassed {}\tcompletion {:?}",
+                    group.task,
+                    program.map(|p| p.expected.as_str()),
+                    rollout.passed,
+                    rollout.completion
+                );
+            }
+        }
+        return Ok(());
+    }
     let mut validator = ChatValidator::new(&family, model).map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut trainer = BrainTrainer::new(TrainerSettings {
         base: cli.model.clone(),

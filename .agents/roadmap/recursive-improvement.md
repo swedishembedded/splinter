@@ -120,11 +120,16 @@ campaign instead of rounds glued together by scripts (`scripts/campaigns/flywhee
   configuration digest, GPU-hours, cost, verdict), power-first arm planning that refuses an arm whose exam cannot
   detect its target effect, alpha spent by gate number as the default (`eval::campaign::plan`), the plateau
   ladder, and a disk preflight that counts files as well as bytes (`pipelines::preflight`).
+- Rule: a campaign collects training episodes through sven's rollout executor (`sven rollout`, Harbor-format task
+  folders, `attempt.jsonl` with reward, ATIF and policy trace) or in process, never by driving `bench run` on bench
+  collections (the sealed measurement authority); bench is asked for verdicts on finished candidates only. The
+  bench-mediated flow (`bench export` then `experiences ingest-bench`) is legacy for new work.
 - Collectors: the in-process path (`campaign::brain`: a loaded model sampled at temperature 1 against a
   `TaskFamily`, brain's policy-gradient trainer, a greedy dev exam) and the episode path (`campaign::endpoint`:
   an `EpisodeExecutor` that runs Harbor-format tasks in sandboxes and returns, per episode, the reward and the
   sampled calls' token ids and log-probabilities; an unprovable chain is dropped, never re-tokenized).
-- Open: the sven training executor that implements `EpisodeExecutor` (lane L3 is building it); the training
+- Open: an `EpisodeExecutor` over sven's rollout executor (landed in sven: `sven_sdk::rollout`; the adapter that reads
+  its `attempt.jsonl` into `Episode` is not written); the training
   records do not yet carry the sampler's behaviour log-probabilities (`WireMessage` has no field for brain's
   `behavior_logprobs`, so every campaign step trains on the start-of-run proxy, exact for on-policy rollouts only);
   a hot refit of the champion's adapter through a serving endpoint (the in-process collector reloads the model on
