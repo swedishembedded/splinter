@@ -88,6 +88,10 @@ pub struct Recipe {
     /// Fraction of the batch's records replayed from earlier arms.
     #[arg(long, default_value_t = 0.25)]
     pub replay: f64,
+    /// Files the disks must have free before an arm (a quota on their number
+    /// is as binding as one on bytes).
+    #[arg(long, default_value_t = 20_000)]
+    pub min_free_inodes: u64,
     /// Half-width of the clip band of the importance ratio.
     #[arg(long)]
     pub clip_eps: Option<f32>,
@@ -184,7 +188,7 @@ impl Recipe {
         config.preflight = vec![splinter_sdk::preflight::Requirement {
             path: out.to_path_buf(),
             min_free_bytes: 5 << 30,
-            min_free_inodes: 20_000,
+            min_free_inodes: self.min_free_inodes,
         }];
         Ok(config)
     }

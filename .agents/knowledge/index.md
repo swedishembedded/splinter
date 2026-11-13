@@ -131,3 +131,5 @@ in the same commit.
 | [143](143-informative-groups-come-from-frontier-tasks-so-the-pool-is-sized-by-them.md) | Informative groups come from frontier tasks, so a pool is sized by how many it holds |
 | [144](144-in-process-policy-gradient-on-qwen3-4b-shows-token-ratios-near-1e-8-from-the-second-step.md) | In-process policy gradient on Qwen3-4B shows token ratios near 1e-8 from the second step, whatever the learning rate |
 | [145](145-a-retention-gate-of-zero-rolled-back-three-significant-dev-gains-of-one-lost-task.md) | A retention gate of zero rolled back three significant dev gains over one lost retention task |
+| [146](146-an-in-process-model-cancels-the-request-before-it-so-concurrent-rollouts-fail-and-a-lineage-runs-through-one-brain-serve.md) | An in-process model cancels the request before it, so concurrent rollouts fail and a lineage runs through one brain serve |
+| [147](147-a-learning-rate-of-6e-6-for-24-steps-moves-qwen3-4b-seventy-five-thousandths-on-a-400-task-dev-exam-with-a-kl-of-0-0035.md) | A learning rate of 6e-6 for 24 steps moves Qwen3-4B 0.075 on a 400-task dev exam with a KL of 0.0035 |
