@@ -25,7 +25,9 @@ use splinter_agent::chat::{reply_bare, ChatOptions, Turn};
 use splinter_agent::solve::Model;
 use splinter_eval::campaign::gate::{DevResult, Outcomes};
 
-use super::brain::{trained_from, tune, write_records, ModelSettings, TaskFamily, TrainerSettings};
+use super::brain::{
+    attempt_dir, trained_from, tune, write_records, ModelSettings, TaskFamily, TrainerSettings,
+};
 use super::types::{
     CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup,
     TrainRequest, Trained, Trainer, Validator,
@@ -318,7 +320,7 @@ impl Trainer for ServedTrainer {
 
     fn train(&mut self, request: &TrainRequest) -> Result<Trained, CampaignError> {
         let records = write_records(request)?;
-        let attempt = request.out_dir.join("run");
+        let attempt = attempt_dir(request)?;
         let tune: PolicyGradientTune<'_> = tune(&self.settings, request, &records, &attempt);
         let trained = train_policy_gradient_served(&self.endpoints, &tune)
             .map_err(|e| CampaignError::Trainer(e.to_string()))?;

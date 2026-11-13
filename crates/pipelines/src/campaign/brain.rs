@@ -378,12 +378,33 @@ impl Trainer for BrainTrainer {
 
     fn train(&mut self, request: &TrainRequest) -> Result<Trained, CampaignError> {
         let records = write_records(request)?;
-        let attempt = request.out_dir.join("run");
+        let attempt = attempt_dir(request)?;
         let tune = tune(&self.settings, request, &records, &attempt);
         let trained =
             train_policy_gradient(&tune).map_err(|e| CampaignError::Trainer(e.to_string()))?;
         trained_from(request, &trained)
     }
+}
+
+/// The directory a training call writes its candidate into, named after the
+/// arm (`<out_dir>/<arm>`). Its name is the tag of the adapter's card id
+/// (`<base>:splinter:candidate:<arm>`): a server offers every adapter of a
+/// directory under its card id and refuses a second file with an id it already
+/// serves, so each arm's candidate must carry its own tag. A fixed name made
+/// every candidate after the first unservable beside it.
+pub(super) fn attempt_dir(request: &TrainRequest) -> Result<PathBuf, CampaignError> {
+    let arm = request
+        .out_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty() && !n.contains([':', '/']))
+        .ok_or_else(|| {
+            CampaignError::Trainer(format!(
+                "{}: an arm's directory needs a name to tag its adapter with",
+                request.out_dir.display()
+            ))
+        })?;
+    Ok(request.out_dir.join(arm))
 }
 
 /// Writes the request's records as the policy-gradient dataset the trainer
@@ -450,4 +471,33 @@ pub(super) fn trained_from(
             entropy: stats.mean_entropy.map(f64::from),
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(out_dir: &str) -> TrainRequest {
+        TrainRequest {
+            records: Vec::new(),
+            continue_from: None,
+            out_dir: PathBuf::from(out_dir),
+            seed: u64::from(std::process::id()),
+        }
+    }
+
+    /// Two arms' candidates must not share a card id: the served directory
+    /// refuses a second adapter with an id it already serves, so the arm names
+    /// the attempt directory, whose name is the card id's tag.
+    #[test]
+    fn each_arm_trains_into_a_directory_named_after_it() {
+        let first = attempt_dir(&request("/run/adapters/arm-0001-policy-gradient")).unwrap();
+        let second = attempt_dir(&request("/run/adapters/arm-0002-policy-gradient")).unwrap();
+        assert_eq!(
+            first,
+            PathBuf::from("/run/adapters/arm-0001-policy-gradient/arm-0001-policy-gradient")
+        );
+        assert_ne!(first.file_name(), second.file_name());
+        assert!(attempt_dir(&request("/")).is_err());
+    }
 }
