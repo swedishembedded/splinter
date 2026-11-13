@@ -75,3 +75,18 @@ trajectories, informative-group fractions, KL and clip statistics and GPU-hours.
 
 Nothing is claimed until the criterion is evaluated. A lineage that falls or stalls is reported with its numbers;
 the outcome is recorded whatever it is.
+
+## Clarification before any run (2026-11-13, no generation has run)
+
+Who does what, so that training never sees the examination:
+
+- **Bench is the only examiner.** It holds the exam, serves each candidate itself on its own brain build, runs the
+  registered protocol, keeps every item-level grade, computes each step's sign test and the per-lineage criterion,
+  and returns signed aggregate verdicts only (items right, wins and losses, p, step holds, criterion met). It also
+  audits the training tasks each generation used for overlap with the exam and returns only a count.
+- **The learning side (splinter, sven, brain as the learner's engine) never reads the exam** or any file derived from
+  it, for any purpose: no deduplication against it, no measurement of it, no access to its grades. Dev and retention
+  sets come only from the learner's own generators and proposals.
+- The learner hands bench, per lineage and generation, a candidate (base and adapter digests, serving settings,
+  commits) and the list of training tasks; nothing flows from bench to the learner except the aggregate verdicts. The
+  base is generation 0 and is measured by bench on the same build as every champion.
