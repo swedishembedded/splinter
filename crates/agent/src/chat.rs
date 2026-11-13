@@ -16,6 +16,7 @@
 //! next. No tools are offered and nothing is kept: the caller records the
 //! reply where it belongs.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
@@ -153,8 +154,9 @@ async fn collect(
     request: CompletionRequest,
     options: &ChatOptions,
 ) -> Result<String, ChatError> {
-    let mut stream = model
-        .provider
+    // A bare reply is asked through the same bounded retry as every other
+    // model call: one dropped connection must not fail a measurement.
+    let mut stream = crate::retry::Retrying::wrap(Arc::clone(&model.provider))
         .complete(request)
         .await
         .map_err(|e| ChatError::Model(e.to_string()))?;
@@ -174,4 +176,49 @@ async fn collect(
         }
     }
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use sven_sdk::model::{ModelProvider, ResponseStream};
+
+    use super::*;
+
+    /// Drops its first request, then says "ok".
+    struct DropsOnce(AtomicU32);
+
+    #[async_trait::async_trait]
+    impl ModelProvider for DropsOnce {
+        fn name(&self) -> &str {
+            "scripted"
+        }
+
+        fn model_name(&self) -> &str {
+            "scripted"
+        }
+
+        async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
+            if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
+                anyhow::bail!("error sending request: connection closed before message completed");
+            }
+            Ok(Box::pin(futures::stream::iter([
+                Ok(ResponseEvent::TextDelta("ok".into())),
+                Ok(ResponseEvent::Done),
+            ])))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_bare_reply_survives_one_dropped_connection() {
+        let provider = Arc::new(DropsOnce(AtomicU32::new(0)));
+        let model = Model::new(provider.clone(), "scripted");
+        let options = ChatOptions::new(Duration::from_secs(30));
+        let said = reply_bare(&model, &[Turn::user("hi")], &options)
+            .await
+            .unwrap();
+        assert_eq!(said, "ok");
+        assert_eq!(provider.0.load(Ordering::SeqCst), 2);
+    }
 }
