@@ -21,6 +21,7 @@ mod claim_supersession;
 mod claim_task;
 mod denoise_task;
 mod factory_admission;
+mod factory_store;
 mod generation_calls;
 mod history_tasks;
 mod redact;
