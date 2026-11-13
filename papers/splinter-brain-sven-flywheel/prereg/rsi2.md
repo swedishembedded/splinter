@@ -90,3 +90,23 @@ Who does what, so that training never sees the examination:
 - The learner hands bench, per lineage and generation, a candidate (base and adapter digests, serving settings,
   commits) and the list of training tasks; nothing flows from bench to the learner except the aggregate verdicts. The
   base is generation 0 and is measured by bench on the same build as every champion.
+
+## Outcome (2026-11-13): criterion not met, no lineage passed generation 1
+
+Bench examined each lineage's generation-1 champion against the base on the sealed 889-item exam on its pinned build
+(brain d11e91340, direct-completion protocol, base 0 of 889) and returned signed aggregate verdicts: r0 4 items right
+(4 wins, 0 losses, one-sided p 0.0625), r1 2 (2/0, p 0.25), r2 3 (3/0, p 0.125), r3 3 (3/0, p 0.125). No step holds at
+p < 0.05, so no lineage can succeed and the criterion (at least three of four) is not met. Generation 2 did not run:
+in every lineage the new server refused the generation-1 adapter because every trained candidate carried the same card
+id (`...:candidate:run`); the defect is fixed in splinter 1e5883c98, after the launch build, and since the criterion was
+already decided by generation 1, generations 2 and 3 were not run on the fixed build.
+
+Bench's overlap audit flagged three of the four lineages (`training_material_overlaps_collection`): the policy's own
+proposals from the Lua manual reproduced 1, 1 and 2 exam programs exactly (of 936-980 training tasks). The learner never
+read the exam; independent proposals from the same manual pages coincide with some exam items. The aggregate verdicts
+above count those items as bench scored them.
+
+What it shows: the on-policy recipe raised the learner's own dev exam (pilot: 0.4875 to 0.5625) but moved the sealed exam
+of items the base never answers by 2-4 items. RSI1's arm H, which trained on the interpreter's outputs for the model's
+own mispredicted programs, moved the same exam by 16-59 items at generation 1. Records: bench's verdicts and the
+learner's ledgers in the evidence dataset (`rsi2/`).
