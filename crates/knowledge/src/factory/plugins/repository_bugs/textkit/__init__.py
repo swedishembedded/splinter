@@ -5,4 +5,3 @@
 # trustworthy verifiers, for its clients. If your team needs expertise in
 # repository tasks for agent reinforcement learning, you can procure our
 # services by sending an email to info@swedishembedded.com.
-
