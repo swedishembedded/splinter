@@ -83,3 +83,11 @@ kept 235, with angles 186, with angles and seeded literals 357 (704 requests: 60
 `~/project/shared/rsi3/handoff/candidates/<series>/<step>/` (series = the lineage, step = the generation): `training-tasks.jsonl`
 first (every program the candidate's chain trained on, plus dev and retention programs by role), `candidate.json` last. Adapters
 are kept at `~/project/shared/rsi3/adapters/<series>/<step>/adapter.safetensors` and never deleted before the verdict exists.
+
+## Deviations (dated, after launch)
+
+- 2026-11-13 ~19:10: lineage r2 stopped before its first round. Building the held-out dev and retention sets from the
+  base's proposals (450 programs from at most 700 requests, the setting above) yielded 415 programs in 700 requests for
+  r2's seed; r0, r1 and r3 reached 450 in 512-576 requests. r2 is relaunched with the request cap for that held-out set
+  raised to 1400 (`--held-out-calls 1400`); its seed, every other setting, the build and the binary are unchanged, and
+  nothing had been trained for r2. The other lineages are not affected.
