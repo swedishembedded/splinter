@@ -14,7 +14,7 @@ and the prior work it draws on are in `.agents/research/flywheel-harnesses.md`.
 | Harness | Workspace the host lays out | Inputs | Leaves |
 |---|---|---|---|
 | [invent](invent/harness.yaml) | `data/` (the raw material), `brief.md` (audience and skills), `tasks/` (earlier tasks, may be empty) | `count` (angles, so new tasks, per run) | new task directories in `tasks/`, an updated `tasks/index.md` |
-| [solve](solve/harness.yaml) | a copy of a task's `environment/`, its `instruction.md` as `task.md` | none | the finished workspace; the conversation (`--conversations`) is the trajectory |
+| [solve](solve/harness.yaml) | a copy of a task's `environment/`, its `instruction.md` as `task.md` | none | the finished workspace; the conversation (`--conversations`, a JSON-lines file) is the trajectory |
 | [validate](validate/harness.yaml) | `task.md`, `workspace/` (the finished work), `tests.md` (hidden tests and what they printed), `trajectory.md` | `focus`: `outcome`, `process` or `teaching` | output `decision`: `{decision: keep or discard, evidence, rejection_reasons}` |
 
 ## A task directory
@@ -70,7 +70,7 @@ tasks therefore serve as training material and as an exam.
 ```sh
 sven harness run harnesses/flywheel/invent --input-file inputs.json --workspace WS \
     --scratchpad SCRATCH --model openai/<name> --model-endpoint http://127.0.0.1:<port>/v1 \
-    --api-key-file keys.json --approvals auto --json --trajectory traj.json --conversations CONV
+    --api-key-file keys.json --approvals auto --json --trajectory traj.json --conversations CONV.jsonl
 ```
 
 The tools the tasks need (e.g. `lua`) must be on the PATH of the `sven` process.

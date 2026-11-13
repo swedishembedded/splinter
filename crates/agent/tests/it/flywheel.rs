@@ -65,7 +65,7 @@ printf '#!/bin/sh\nexit 0\n' > "$slug/solution/solve.sh"
 cat "$here/outcomes" >> log.jsonl
 git add -A "$slug" log.jsonl && git commit -q -m "$slug"
 mkdir -p stray && echo "not committed" > stray/instruction.md
-mkdir -p "$conversations"
+touch "$conversations"
 echo '{}' > "$trajectory"
 echo '{"status":"completed","conclusion":"success"}'
 "#;

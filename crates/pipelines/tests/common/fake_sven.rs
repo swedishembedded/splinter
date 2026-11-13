@@ -43,7 +43,7 @@ echo "echo 1" > no-tests/environment/calc.sh
 printf '#!/bin/sh\ntrue\n' > no-tests/solution/solve.sh
 for outcome in admitted admitted rejected duplicate failed; do echo "{\"outcome\": \"$outcome\"}" >> log.jsonl; done
 git add -A . && git commit -q -m tasks
-mkdir -p "$conversations"
+touch "$conversations"
 echo '{}' > "$trajectory"
 echo '{"status":"completed","conclusion":"success"}'
 "#;

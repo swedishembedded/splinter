@@ -140,7 +140,9 @@ pub struct SvenLaunch {
 pub struct HarnessRunRecord {
     /// The run's ATIF trajectory.
     pub trajectory: PathBuf,
-    /// The directory of the ATIF trajectory of each conversation.
+    /// The JSON-lines file of the run's conversations, one line each
+    /// (`{index, name, trajectory}`, the trajectory an ATIF document);
+    /// `sven_sdk::read_conversations` reads it.
     pub conversations: PathBuf,
     /// The status sven reported (`completed`, `failed`, ...).
     pub status: Option<String>,
@@ -211,8 +213,10 @@ impl Runner {
     async fn run(&self, call: &Call<'_>) -> Result<Finished, FlywheelError> {
         let path = self.path()?;
         let kept = self.launch.runs.join(call.label);
-        let (trajectory, conversations) =
-            (kept.join("trajectory.json"), kept.join("conversations"));
+        let (trajectory, conversations) = (
+            kept.join("trajectory.json"),
+            kept.join("conversations.jsonl"),
+        );
         let scratchpad = kept.join("scratchpad");
         let inputs = kept.join("inputs.json");
         std::fs::create_dir_all(&kept).map_err(io(format!("making {}", kept.display())))?;
