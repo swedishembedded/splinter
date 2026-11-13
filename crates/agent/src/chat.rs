@@ -101,14 +101,40 @@ pub async fn reply(
 ) -> Result<String, ChatError> {
     let system = model.system.as_deref().unwrap_or(SYSTEM_PROMPT);
     let messages = std::iter::once(Message::system(system))
-        .chain(turns.iter().map(|turn| {
-            if turn.by_assistant {
-                Message::assistant(&turn.text)
-            } else {
-                Message::user(&turn.text)
-            }
-        }))
+        .chain(turns.iter().map(message))
         .collect();
+    let text = ask(model, messages, options).await?;
+    if text.is_empty() {
+        return Err(ChatError::Empty);
+    }
+    Ok(text)
+}
+
+/// The model's reply to exactly `turns`, with no system prompt added: what a
+/// measurement that states its whole request sends. A model that says
+/// nothing has said the empty text, which is an answer a verifier grades, not
+/// an error.
+pub async fn reply_bare(
+    model: &Model,
+    turns: &[Turn],
+    options: &ChatOptions,
+) -> Result<String, ChatError> {
+    ask(model, turns.iter().map(message).collect(), options).await
+}
+
+fn message(turn: &Turn) -> Message {
+    if turn.by_assistant {
+        Message::assistant(&turn.text)
+    } else {
+        Message::user(&turn.text)
+    }
+}
+
+async fn ask(
+    model: &Model,
+    messages: Vec<Message>,
+    options: &ChatOptions,
+) -> Result<String, ChatError> {
     let request = CompletionRequest {
         messages,
         stream: true,
@@ -119,11 +145,7 @@ pub async fn reply(
     let text = collected
         .await
         .map_err(|_| ChatError::TimedOut(options.deadline))??;
-    let text = text.trim();
-    if text.is_empty() {
-        return Err(ChatError::Empty);
-    }
-    Ok(text.to_string())
+    Ok(text.trim().to_string())
 }
 
 async fn collect(

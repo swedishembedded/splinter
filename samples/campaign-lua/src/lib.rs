@@ -14,6 +14,12 @@
 //! can be made as large and as hard as a campaign needs, and the dev and
 //! retention sets are drawn from other seeds than the training pool.
 
+pub mod family;
+pub mod handoff;
+pub mod neutral;
+pub mod proposer;
+pub mod recipe;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -203,6 +209,11 @@ impl LuaPredict {
     #[must_use]
     pub fn program(&self, task: &str) -> Option<&Program> {
         self.programs.get(task)
+    }
+
+    /// The source of every program of the family.
+    pub fn sources(&self) -> impl Iterator<Item = &str> {
+        self.programs.values().map(|p| p.source.as_str())
     }
 
     fn get(&self, task: &str) -> Result<&Program, CampaignError> {

@@ -14,7 +14,7 @@ use crate::common;
 use std::time::Duration;
 
 use common::Scripted;
-use splinter_agent::chat::{reply, ChatError, ChatOptions, Turn};
+use splinter_agent::chat::{reply, reply_bare, ChatError, ChatOptions, Turn};
 use splinter_agent::solve::{Model, SYSTEM_PROMPT};
 use sven_sdk::model::{MessageContent, Role};
 
@@ -71,4 +71,26 @@ fn a_model_answers_under_its_own_system_prompt_and_silence_is_an_error() {
     assert!(matches!(outcome, Err(ChatError::Empty)), "{outcome:?}");
     let seen = scripted.seen.lock().unwrap();
     assert_eq!(text_of(&seen[0].messages[0]), "You are Ada.");
+}
+
+#[test]
+fn a_bare_reply_sends_exactly_the_turns_and_silence_is_an_empty_answer() {
+    let scripted = Scripted::new(vec!["  ".into()]);
+    let model = Model::new(scripted.clone(), "scripted/chat-3").with_system("You are Ada.");
+    let said = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(reply_bare(
+            &model,
+            &[Turn::user("What prints?")],
+            &options(),
+        ))
+        .unwrap();
+    assert_eq!(
+        said, "",
+        "nothing said is the empty answer a verifier grades"
+    );
+    let seen = scripted.seen.lock().unwrap();
+    let roles: Vec<Role> = seen[0].messages.iter().map(|m| m.role.clone()).collect();
+    assert_eq!(roles, [Role::User], "no system prompt is added");
+    assert_eq!(text_of(&seen[0].messages[0]), "What prints?");
 }

@@ -17,11 +17,16 @@ path = "src/lib.rs"
 name = "campaign-lua"
 path = "src/main.rs"
 
+[[bin]]
+name = "rsi2"
+path = "src/rsi2.rs"
+
 [dependencies]
 splinter-sdk = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

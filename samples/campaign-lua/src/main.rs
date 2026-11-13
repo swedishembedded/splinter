@@ -16,18 +16,13 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use splinter_sdk::campaign::brain::{
-    BrainTrainer, ChatCollector, ChatValidator, ModelSettings, TrainerSettings,
-};
-use splinter_sdk::campaign::{
-    CampaignConfig, CampaignController, LearningStrategy, Parts, Stopwatch, WallClock,
-};
-use splinter_sdk::model::policy_gradient::PolicyGradientOptions;
-use splinter_sdk::model::precision::BasePrecision;
+use splinter_sdk::campaign::brain::{BrainTrainer, ChatCollector, ChatValidator};
+use splinter_sdk::campaign::{CampaignController, Parts, Stopwatch, WallClock};
 use splinter_sdk::model::stats::BrainSignificance;
 use splinter_sdk::store::StateRoot;
 use splinter_sdk::vocabulary::clock::SystemClock;
 
+use campaign_lua::recipe::Recipe;
 use campaign_lua::{default_interpreter, LuaPredict, Sizes};
 
 #[derive(Parser)]
@@ -38,6 +33,8 @@ use campaign_lua::{default_interpreter, LuaPredict, Sizes};
 struct Cli {
     #[command(flatten)]
     device: splinter_sdk::device::DeviceFlags,
+    #[command(flatten)]
+    recipe: Recipe,
     /// The base checkpoint directory.
     #[arg(long)]
     model: PathBuf,
@@ -62,90 +59,14 @@ struct Cli {
     /// Retention programs (levels 1 and 2).
     #[arg(long, default_value_t = 40)]
     retention_tasks: usize,
-    /// Attempts per task of the calibration, 8 to 16.
-    #[arg(long, default_value_t = 8)]
-    calibration_k: usize,
-    /// Attempts per task of a training group.
-    #[arg(long, default_value_t = 8)]
-    attempts: usize,
-    /// Informative groups per batch.
-    #[arg(long, default_value_t = 24)]
-    batch_groups: usize,
-    /// Optimiser steps per arm.
-    #[arg(long, default_value_t = 16)]
-    steps: u32,
-    /// Learning rate.
-    #[arg(long, default_value_t = 1e-5)]
-    lr: f32,
-    /// Adapter rank.
-    #[arg(long, default_value_t = 16)]
-    rank: u32,
-    /// Records averaged into one optimiser step.
-    #[arg(long, default_value_t = 8)]
-    records_per_step: u32,
-    /// The lead (share of dev programs won) an arm is meant to produce.
-    #[arg(long, default_value_t = 0.1)]
-    target_effect: f64,
-    /// Expected share of dev programs a candidate and its champion differ on.
-    #[arg(long, default_value_t = 0.2)]
-    discordance: f64,
-    /// Requests in flight at once.
-    #[arg(long, default_value_t = 16)]
-    concurrency: usize,
-    /// Tokens a completion may take.
-    #[arg(long, default_value_t = 24)]
-    max_tokens: u32,
-    /// Cards held, for the GPU-hours recorded.
-    #[arg(long, default_value_t = 1)]
-    gpus: u32,
     /// The seed of the program generator and of every draw; drawn and printed
     /// when absent.
     #[arg(long)]
     seed: Option<u64>,
-    /// Strategies in order (`policy-gradient`, `positive-only`, `repair`,
-    /// `distill`); a plateau moves to the next.
-    #[arg(long, value_delimiter = ',', default_value = "policy-gradient")]
-    ladder: Vec<String>,
-    /// What to do with a group that all failed (`skip`, `cliff-distill`).
-    #[arg(long, default_value = "skip")]
-    all_fail: String,
     /// Print this many raw completions of the base model and exit: what the
     /// policy writes and how it is graded, before any campaign.
     #[arg(long)]
     probe: Option<usize>,
-    /// Largest mean KL to the reference a step may show before the campaign
-    /// halts.
-    #[arg(long, default_value_t = 0.5)]
-    max_kl: f64,
-    /// Fewest informative groups, as a share of those collected, before a
-    /// step is reported starved.
-    #[arg(long, default_value_t = 0.25)]
-    min_informative: f64,
-    /// Retention passes a candidate may lose against the champion; zero rolls
-    /// back any arm that forgets a retention task.
-    #[arg(long, default_value_t = 0)]
-    max_retention_loss: usize,
-    /// Retention loss, as a share of the retention set, a candidate may show
-    /// (a non-inferiority margin); also the loss the retention set must be
-    /// large enough to detect.
-    #[arg(long, default_value_t = 0.0)]
-    retention_margin: f64,
-    /// Precision of the frozen base during training: `bf16` or `fp32`.
-    #[arg(long, default_value = "bf16")]
-    base_precision: String,
-    /// Fraction of the batch's records replayed from earlier arms.
-    #[arg(long, default_value_t = 0.25)]
-    replay: f64,
-}
-
-fn strategy(name: &str) -> Result<LearningStrategy> {
-    Ok(match name {
-        "policy-gradient" => LearningStrategy::PolicyGradient,
-        "positive-only" => LearningStrategy::PositiveOnly,
-        "repair" => LearningStrategy::Repair,
-        "distill" => LearningStrategy::Distill,
-        other => anyhow::bail!("{other:?} is not a strategy"),
-    })
 }
 
 fn main() -> Result<()> {
@@ -168,9 +89,7 @@ fn main() -> Result<()> {
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    let mut model = ModelSettings::new(&cli.model);
-    model.max_tokens = cli.max_tokens;
-    model.concurrency = cli.concurrency;
+    let model = cli.recipe.model_settings(&cli.model);
     let mut collector =
         ChatCollector::new(&family, model.clone()).map_err(|e| anyhow::anyhow!("{e}"))?;
     if let Some(count) = cli.probe {
@@ -200,59 +119,12 @@ fn main() -> Result<()> {
         return Ok(());
     }
     let mut validator = ChatValidator::new(&family, model).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let mut trainer = BrainTrainer::new(TrainerSettings {
-        base: cli.model.clone(),
-        steps: cli.steps,
-        rank: cli.rank,
-        alpha: (cli.rank * 2) as f32,
-        learning_rate: cli.lr,
-        records_per_step: cli.records_per_step,
-        max_block: Some(1024),
-        options: PolicyGradientOptions {
-            kl_beta: Some(0.0),
-            reference: Some(splinter_sdk::model::policy_gradient::Reference::StartOfRun),
-            behaviour: Some(splinter_sdk::model::policy_gradient::Behaviour::StartOfRun),
-            temperature: Some(1.0),
-            ..PolicyGradientOptions::default()
-        },
-        base_precision: match cli.base_precision.as_str() {
-            "bf16" => BasePrecision::Bf16,
-            "fp32" => BasePrecision::Fp32,
-            other => anyhow::bail!("{other:?} is not a base precision: bf16 or fp32"),
-        },
-    });
-
-    let mut config = CampaignConfig::new(
+    let mut trainer = BrainTrainer::new(cli.recipe.trainer_settings(&cli.model)?);
+    let config = cli.recipe.campaign_config(
         &cli.name,
         "dynamic sampling on the pass-rate frontier puts an informative signal through the policy and raises dev accuracy on Lua output prediction",
-    );
-    config.calibration_k = cli.calibration_k;
-    config.attempts_per_group = cli.attempts;
-    config.batch.target_groups = cli.batch_groups;
-    config.batch.max_request = cli.batch_groups * 4;
-    config.target_effect = cli.target_effect;
-    config.expected_discordance = cli.discordance;
-    config.gpus = cli.gpus;
-    config.replay.per_batch_record = cli.replay;
-    config.bounds.max_kl = Some(cli.max_kl);
-    config.gate.max_retention_loss = cli.max_retention_loss;
-    config.gate.max_retention_loss_rate = cli.retention_margin;
-    config.retention_loss_to_detect = cli.retention_margin;
-    config.bounds.min_informative_fraction = Some(cli.min_informative);
-    config.ladder = cli
-        .ladder
-        .iter()
-        .map(|s| strategy(s))
-        .collect::<Result<_>>()?;
-    config.all_fail = cli
-        .all_fail
-        .parse()
-        .map_err(|e: String| anyhow::anyhow!(e))?;
-    config.preflight = vec![splinter_sdk::preflight::Requirement {
-        path: cli.out.clone(),
-        min_free_bytes: 5 << 30,
-        min_free_inodes: 20_000,
-    }];
+        &cli.out,
+    )?;
 
     let root = StateRoot::new(cli.out.join("state"));
     let clock = SystemClock;
