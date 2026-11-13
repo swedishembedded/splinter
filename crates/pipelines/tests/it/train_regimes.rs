@@ -277,6 +277,9 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
         tuning: Tuning {
             policy_gradient: PolicyGradientOptions {
                 clip_eps: Some(0.1),
+                clip_eps_high: Some(0.2),
+                max_step_kl: Some(0.5),
+                max_step_grad_norm: Some(8.0),
                 kl_beta: Some(0.0),
                 reference: Some(Reference::StartOfRun),
                 behaviour: Some(Behaviour::StartOfRun),
@@ -301,6 +304,15 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     assert_eq!(
         (resolved.reference, resolved.loss_agg),
         (Reference::StartOfRun, LossAggregation::TokenSum)
+    );
+    assert_eq!(
+        (
+            resolved.clip_eps_high,
+            resolved.max_step_kl,
+            resolved.max_step_grad_norm
+        ),
+        (Some(0.2), Some(0.5), Some(8.0)),
+        "clip-higher and the step guard reach the plan as named"
     );
     // The self-distillation guards reach the plan as named.
     assert_eq!(

@@ -500,6 +500,8 @@ impl<'p> CampaignController<'p> {
                 .flat_map(|&i| &collected.groups[i].rollouts)
                 .map(|r| r.reward),
         );
+        // The sampler's own log-probabilities when the rollouts carry them,
+        // else the trainer's estimate over the same on-policy tokens.
         let entropy = sampled_entropy(
             collected
                 .informative
@@ -508,7 +510,8 @@ impl<'p> CampaignController<'p> {
                 .filter_map(|r| r.trace.as_ref())
                 .flat_map(|t| &t.sequences)
                 .flat_map(|s| s.generation_log_probs.iter().map(|&lp| f64::from(lp))),
-        );
+        )
+        .or(trained.report.entropy);
         let signals = StepSignals {
             step: generation,
             policy_version: self.loaded.state.policy.version,
@@ -546,6 +549,10 @@ impl<'p> CampaignController<'p> {
             });
         }
         measurements.extend(signal_measurements(&signals));
+        measurements.insert(
+            "steps_skipped_guard".into(),
+            trained.report.skipped_guard as f64,
+        );
         self.loaded.state.pending = Some(PendingCandidate {
             arm: id.name.clone(),
             adapter: trained.adapter,

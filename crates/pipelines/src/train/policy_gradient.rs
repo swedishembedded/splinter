@@ -107,6 +107,9 @@ pub(super) fn resolved(regime: Regime, named: PolicyGradientOptions) -> PolicyGr
     let resolved = named.resolved();
     PolicyGradientOptions {
         clip_eps: Some(resolved.clip_eps),
+        clip_eps_high: resolved.clip_eps_high,
+        max_step_kl: resolved.max_step_kl,
+        max_step_grad_norm: resolved.max_step_grad_norm,
         kl_beta: Some(resolved.kl_beta),
         reference: Some(resolved.reference),
         behaviour: Some(resolved.behaviour),

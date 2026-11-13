@@ -205,6 +205,13 @@ pub struct TrainReport {
     pub clip_fraction: Option<f64>,
     /// Steps skipped because a loss or gradient was not finite.
     pub skipped_nonfinite: usize,
+    /// Steps skipped because the step's KL or gradient norm was over its
+    /// bound.
+    #[serde(default)]
+    pub skipped_guard: usize,
+    /// Mean entropy estimate of the sampled tokens over the steps.
+    #[serde(default)]
+    pub entropy: Option<f64>,
 }
 
 /// A trained candidate.

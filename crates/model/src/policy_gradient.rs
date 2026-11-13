@@ -115,6 +115,16 @@ pub struct PolicyGradientOptions {
     /// Half-width of the clip band `[1 - eps, 1 + eps]` of the importance
     /// ratio, in (0, 1).
     pub clip_eps: Option<f32>,
+    /// The upper edge `1 + eps_high` of the clip band when it is wider than
+    /// the lower one (clip-higher): a rare token that turns out well keeps
+    /// gaining mass instead of being clipped early. Unset: symmetric.
+    pub clip_eps_high: Option<f32>,
+    /// Skip, and record, the optimiser step of a step whose mean KL to the
+    /// reference exceeds this; unset: no bound.
+    pub max_step_kl: Option<f32>,
+    /// Skip, and record, the optimiser step of a step whose global gradient
+    /// norm exceeds this; unset: no bound.
+    pub max_step_grad_norm: Option<f32>,
     /// Coefficient of the KL term to the reference policy; 0 puts none in the
     /// loss.
     pub kl_beta: Option<f32>,
@@ -143,6 +153,12 @@ pub struct PolicyGradientOptions {
 pub struct ResolvedPolicyGradient {
     /// See [`PolicyGradientOptions::clip_eps`].
     pub clip_eps: f32,
+    /// See [`PolicyGradientOptions::clip_eps_high`]; `None` is symmetric.
+    pub clip_eps_high: Option<f32>,
+    /// See [`PolicyGradientOptions::max_step_kl`]; `None` is no bound.
+    pub max_step_kl: Option<f32>,
+    /// See [`PolicyGradientOptions::max_step_grad_norm`]; `None` is no bound.
+    pub max_step_grad_norm: Option<f32>,
     /// See [`PolicyGradientOptions::kl_beta`].
     pub kl_beta: f32,
     /// See [`PolicyGradientOptions::reference`].
@@ -168,6 +184,9 @@ impl PolicyGradientOptions {
     pub fn named(&self) -> Vec<&'static str> {
         [
             (self.clip_eps.is_some(), "--clip-eps"),
+            (self.clip_eps_high.is_some(), "--clip-eps-high"),
+            (self.max_step_kl.is_some(), "--max-step-kl"),
+            (self.max_step_grad_norm.is_some(), "--max-step-grad-norm"),
             (self.kl_beta.is_some(), "--kl-beta"),
             (self.reference.is_some(), "--reference"),
             (self.behaviour.is_some(), "--behaviour"),
@@ -191,6 +210,9 @@ impl PolicyGradientOptions {
         let defaults = Self::defaults();
         ResolvedPolicyGradient {
             clip_eps: self.clip_eps.unwrap_or(defaults.clip_eps),
+            clip_eps_high: self.clip_eps_high.or(defaults.clip_eps_high),
+            max_step_kl: self.max_step_kl.or(defaults.max_step_kl),
+            max_step_grad_norm: self.max_step_grad_norm.or(defaults.max_step_grad_norm),
             kl_beta: self.kl_beta.unwrap_or(defaults.kl_beta),
             reference: self.reference.unwrap_or(defaults.reference),
             behaviour: self.behaviour.unwrap_or(defaults.behaviour),
@@ -210,6 +232,9 @@ impl PolicyGradientOptions {
         let config = brain::PolicyGradientConfig::default();
         ResolvedPolicyGradient {
             clip_eps: config.clip_eps,
+            clip_eps_high: config.clip_eps_high,
+            max_step_kl: config.max_step_kl,
+            max_step_grad_norm: config.max_step_grad_norm,
             kl_beta: config.kl_beta,
             reference: match config.reference {
                 brain::ReferencePolicy::Base => Reference::Base,
@@ -237,6 +262,9 @@ impl PolicyGradientOptions {
         let resolved = self.resolved();
         brain::PolicyGradientConfig {
             clip_eps: resolved.clip_eps,
+            clip_eps_high: resolved.clip_eps_high,
+            max_step_kl: resolved.max_step_kl,
+            max_step_grad_norm: resolved.max_step_grad_norm,
             kl_beta: resolved.kl_beta,
             reference: match resolved.reference {
                 Reference::Base => brain::ReferencePolicy::Base,
@@ -342,9 +370,15 @@ fn summarised(stats: &brain::PolicyGradientStats) -> PolicyGradientSummary {
             token_advantage_mean: s.token_advantage_mean,
             token_advantage_max: s.token_advantage_max,
             token_advantage_clip_fraction: s.token_advantage_clip_fraction,
+            entropy_estimate: s.entropy_estimate,
+            grad_norm: s.grad_norm,
+            skipped: s.skipped.clone(),
         })
         .collect();
-    PolicyGradientSummary::from_steps(steps, stats.steps_skipped_nonfinite)
+    PolicyGradientSummary {
+        steps_skipped_guard: stats.steps_skipped_guard,
+        ..PolicyGradientSummary::from_steps(steps, stats.steps_skipped_nonfinite)
+    }
 }
 
 /// Fine-tunes a LoRA on the rollout records of `request.train` by a clipped
@@ -472,6 +506,9 @@ mod tests {
 
         let named = PolicyGradientOptions {
             clip_eps: Some(0.3),
+            clip_eps_high: Some(0.28),
+            max_step_kl: Some(0.5),
+            max_step_grad_norm: Some(10.0),
             kl_beta: Some(0.0),
             reference: Some(Reference::StartOfRun),
             behaviour: Some(Behaviour::StartOfRun),
@@ -481,11 +518,20 @@ mod tests {
             advantage_bound: Some(4.0),
             sequence_advantage_cap: Some(30.0),
         };
-        assert_eq!(named.named().len(), 9);
+        assert_eq!(named.named().len(), 12);
         let config = named.config();
         assert_eq!(
             (config.clip_eps, config.kl_beta, config.temperature),
             (0.3, 0.0, 0.6)
+        );
+        assert_eq!(
+            (
+                config.clip_eps_high,
+                config.max_step_kl,
+                config.max_step_grad_norm
+            ),
+            (Some(0.28), Some(0.5), Some(10.0)),
+            "the clip-higher edge and the step guard reach brain as named"
         );
         assert_eq!(config.reference, brain::ReferencePolicy::StartOfRun);
         assert_eq!(config.loss_agg, brain::LossAgg::TokenSum);
@@ -523,9 +569,11 @@ mod tests {
                 },
             ],
             steps_skipped_nonfinite: 1,
+            steps_skipped_guard: 1,
             ..Default::default()
         };
         let summary = summarised(&stats);
+        assert_eq!(summary.steps_skipped_guard, 1);
         assert_eq!(summary.steps.len(), 2);
         assert_eq!((summary.first_kl, summary.last_kl), (Some(0.0), Some(0.1)));
         assert_eq!(summary.mean_clip_fraction, Some(0.25));

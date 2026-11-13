@@ -73,6 +73,7 @@ struct World {
     log: Rc<Log>,
     privileged: bool,
     kl: Option<f64>,
+    entropy: Option<f64>,
     fail_validation_once: Cell<bool>,
     flat_dev_for_even: bool,
 }
@@ -89,6 +90,7 @@ impl World {
             log: Rc::new(Log::default()),
             privileged: false,
             kl: Some(0.01),
+            entropy: None,
             fail_validation_once: Cell::new(false),
             flat_dev_for_even: false,
         }
@@ -183,6 +185,8 @@ impl Trainer for Learner<'_> {
                 kl: self.world.kl,
                 clip_fraction: Some(0.1),
                 skipped_nonfinite: 0,
+                skipped_guard: 1,
+                entropy: self.world.entropy,
             },
         })
     }
@@ -421,6 +425,20 @@ fn the_ledger_records_hypothesis_digest_cost_and_the_numbers_behind_the_verdict(
         !done.measurements.contains_key("entropy"),
         "no trace, so entropy is unmeasured and absent, not zero"
     );
+}
+
+#[test]
+fn the_trainers_entropy_and_guard_skips_are_in_the_ledger_when_the_rollouts_carry_no_trace() {
+    let (ws, dir) = workspace();
+    let mut world = World::new(20, 0.15);
+    world.entropy = Some(0.7);
+    let adapters = dir.path().join("adapters");
+    let mut rig = Rig::new(&world, &adapters, 120);
+    let mut controller = open(&ws, config("c4b"), &mut rig, &adapters).unwrap();
+    controller.run(1).unwrap();
+    let done = &controller.ledger().unwrap()[1];
+    assert_eq!(done.measurements.get("entropy"), Some(&0.7));
+    assert_eq!(done.measurements.get("steps_skipped_guard"), Some(&1.0));
 }
 
 #[test]

@@ -418,6 +418,8 @@ impl Trainer for BrainTrainer {
                 kl: stats.mean_kl.map(f64::from),
                 clip_fraction: stats.mean_clip_fraction.map(f64::from),
                 skipped_nonfinite: stats.steps_skipped_nonfinite,
+                skipped_guard: stats.steps_skipped_guard,
+                entropy: stats.mean_entropy.map(f64::from),
             },
         })
     }

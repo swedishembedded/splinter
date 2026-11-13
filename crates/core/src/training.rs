@@ -182,6 +182,17 @@ pub struct PolicyGradientStep {
     /// See `token_advantage_mean`.
     #[serde(default)]
     pub token_advantage_clip_fraction: f32,
+    /// The mean of `-log p(y)` over the policy tokens of the step: an
+    /// estimator of the policy's entropy while the rollouts are on-policy.
+    #[serde(default)]
+    pub entropy_estimate: f32,
+    /// The global gradient norm of the step before the optimiser's clip.
+    #[serde(default)]
+    pub grad_norm: f32,
+    /// Why the step's optimiser update was not taken (a guard bound was
+    /// exceeded), when it was not.
+    #[serde(default)]
+    pub skipped: Option<String>,
 }
 
 /// A policy-gradient run's statistics: the series of every step and the
@@ -193,6 +204,10 @@ pub struct PolicyGradientSummary {
     pub steps: Vec<PolicyGradientStep>,
     /// Steps not taken because a loss or gradient was not finite.
     pub steps_skipped_nonfinite: usize,
+    /// Steps not taken because the step's KL or gradient norm was over its
+    /// bound.
+    #[serde(default)]
+    pub steps_skipped_guard: usize,
     /// KL to the reference at the first step measuring one.
     pub first_kl: Option<f32>,
     /// KL to the reference at the last step measuring one.
@@ -205,6 +220,9 @@ pub struct PolicyGradientSummary {
     pub mean_ratio: Option<f32>,
     /// Mean advantage-weighted loss over all steps.
     pub mean_loss: Option<f32>,
+    /// Mean of the steps' entropy estimate.
+    #[serde(default)]
+    pub mean_entropy: Option<f32>,
 }
 
 impl PolicyGradientSummary {
@@ -224,8 +242,10 @@ impl PolicyGradientSummary {
             mean_clip_fraction: mean(steps.iter().map(|s| s.clip_fraction)),
             mean_ratio: mean(steps.iter().map(|s| s.ratio_mean)),
             mean_loss: mean(steps.iter().map(|s| s.loss)),
+            mean_entropy: mean(steps.iter().map(|s| s.entropy_estimate)),
             steps,
             steps_skipped_nonfinite,
+            steps_skipped_guard: 0,
         }
     }
 

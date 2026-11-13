@@ -222,6 +222,7 @@ impl PolicyGradientArgs {
             teacher: self.teacher_policy,
             advantage_bound: self.advantage_bound,
             sequence_advantage_cap: self.sequence_advantage_cap,
+            ..PolicyGradientOptions::default()
         }
     }
 }

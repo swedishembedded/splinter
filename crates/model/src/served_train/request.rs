@@ -211,6 +211,15 @@ fn options(params: &mut Map<String, Value>, options: &PolicyGradientOptions) {
     if let Some(v) = options.clip_eps {
         set(params, "clip_eps", v);
     }
+    if let Some(v) = options.clip_eps_high {
+        set(params, "clip_eps_high", v);
+    }
+    if let Some(v) = options.max_step_kl {
+        set(params, "max_step_kl", v);
+    }
+    if let Some(v) = options.max_step_grad_norm {
+        set(params, "max_step_grad_norm", v);
+    }
     if let Some(v) = options.kl_beta {
         set(params, "kl_beta", v);
     }
@@ -264,6 +273,9 @@ mod tests {
             &mut params,
             &PolicyGradientOptions {
                 clip_eps: Some(0.3),
+                clip_eps_high: Some(0.28),
+                max_step_kl: Some(0.5),
+                max_step_grad_norm: Some(10.0),
                 kl_beta: Some(0.0),
                 reference: Some(Reference::StartOfRun),
                 behaviour: Some(Behaviour::StartOfRun),
@@ -278,7 +290,13 @@ mod tests {
         assert_eq!(params["loss_agg"], "token-sum");
         assert_eq!(params["behaviour"], "start_of_run_proxy");
         assert_eq!(params["teacher"], "base");
-        assert_eq!(params.len(), 9);
+        assert_eq!(params.len(), 12);
+        assert_eq!(
+            params["clip_eps_high"]
+                .as_f64()
+                .map(|v| (v * 100.0).round()),
+            Some(28.0)
+        );
     }
 
     #[test]
