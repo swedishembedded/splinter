@@ -37,13 +37,16 @@
 //! append-only annotations beside them, and named sets of experience ids;
 //! [`decision`] is the rule that turns an experience's verdicts into one
 //! decision. The sources, tasks, experiences and annotations themselves are
-//! `splinter-core`'s vocabulary. [`error`] is the error every store reports.
+//! `splinter-core`'s vocabulary. [`campaign`] is a continuous campaign's
+//! resumable state and its experiment ledger. [`error`] is the error every
+//! store reports.
 
 #![warn(missing_docs)]
 
 pub mod address;
 pub mod artifacts;
 pub mod bundle;
+pub mod campaign;
 pub mod claims;
 pub mod decision;
 pub mod documents;
