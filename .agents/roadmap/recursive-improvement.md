@@ -160,6 +160,18 @@ campaign instead of rounds glued together by scripts (`scripts/campaigns/flywhee
   served teacher (finding 442's scored trace is the source). Splinter has nothing more to wire until brain accepts
   either; no real-weight run of the distillation strategy has been made.
 
+### RSI2 training lane (2026-11-13)
+
+- Done: the lineage driver `rsi2` (`samples/campaign-lua`): policy-proposed `predict-lua` tasks over the manual (parallel waves
+  through the served policy) beside the seeded generator, neutral protocol, one `brain serve` per lineage for proposals,
+  rollouts, dev exam and the training job, adapter hot-load, a candidate hand-off per generation; the served collector,
+  validator (kept results) and trainer in `campaign::served`; findings 146 and 147; launch record `prereg/rsi2-launch.md`.
+- Blocked at launch: the project disk's inode quota was at 99-100% from other work (423 files free), and a lineage needs a few
+  thousand; `~/project/shared/rsi2/run-lineage.sh SERIES CARD SEED` starts a lineage (generations under the card's flock) once
+  there is room. No generation has run; no candidate has been handed over.
+- Open: the factory program-output plugin as source (b) (the generator is used); the serve/train numerics gate on the pilot's
+  own rollouts (brain's finding 446 is cited); outcome entry after the examiner's verdicts.
+
 ### brain
 
 Rule for everything below: training is architecture-generic. SFT, policy gradient, self-distillation, full
