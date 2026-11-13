@@ -182,5 +182,10 @@ inconclusive and more tasks are collected rather than the threshold changed.
   `sft-step` are refused before any attempt; a generation under a rollout objective replays nothing and records
   `none`. Spec tests: `crates/pipelines/tests/practice_objectives.rs`, `generations.rs`,
   `crates/data/tests/policy_gradient_attempts.rs`, the grammar in `crates/splinter/src/practice_request.rs`.
-- Open: not run on the 27B. Group sizes, the share of all-fail tasks, the distilled records' token advantages
-  and the objective's effect on the exam are unmeasured on real weights.
+- Measured on the 27B for `policy-gradient` (corrected 2026-11-13; this item said "not run on the 27B"): served
+  Qwen3.8-27B-FP8 runs on compiled-material and accounting rollouts had per-step KL 0.001-0.004 with isolated
+  spikes (KL 0.50 at lr 1.2e-5, a blow-up at 3e-5; brain finding 440) and only 10.7 to 14.7 percent of groups
+  carried any advantage (`recursive-improvement.md`), which is what the campaign controller's dynamic sampling and
+  informative-fraction gate answer. Still unmeasured on real weights: the `self-distill` objective (the
+  distilled records' token advantages, the share of all-fail tasks it distils) and any objective's effect on the
+  exam.

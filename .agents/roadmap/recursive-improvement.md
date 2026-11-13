@@ -67,8 +67,13 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
 
 - [ ] Promote arm R's driver (`rsi1/rl/star.py`, a script today) into `splinter learn` as an automatic strategy:
   frontier selection by measured pass@k, wide sampling, thinking-on traces, ReST-EM retraining, plateau detection.
-- [ ] Dataset views beyond `sft-final`: `sft-repair` (wrong attempt + feedback -> fix), `sft-diagnose`,
-  `sft-execute` (predict intermediate state), `sft-verify`, `policy-trajectory`; keep more than the shortest answer.
+- [ ] Dataset views beyond `sft-final`: `sft-diagnose`, `sft-execute` (predict intermediate state), `sft-verify`,
+  `policy-trajectory`. Done (2026-11-13): `sft-repair` (wrong attempt + the verifier's feedback -> the fix a later
+  attempt found) as a record kind of the campaign controller (`campaign::records`), `learn --answers-per-task N`
+  keeps the N shortest distinct verified answers of a task instead of only the shortest (default 1, unchanged),
+  positive-only against two-sided advantages are an explicit option (`AdvantageMode`, `--advantage positive`), and
+  fresh prompts before revisits are the controller's draw order. An experience-corpus `sft-repair` view for
+  `dataset build` is still open.
 - [ ] Procedure data from the environment: interpreter-derived execution traces (each sub-call's value) as
   reasoning targets; counterexample generation for stuck skills.
 - [ ] Measurement: power-sized dev and confirmation suites (24-64 items per skill), pass@1 / pass@16 / pass@64,
@@ -90,9 +95,49 @@ interpreter's output, since 81c611b70; b39782f43 records and counts it).
 - [ ] Ablation: arm H without interpreter relabelling of mispredicted programs, to test whether the corrected answers
   to the model's own mistakes are what drives arms H and HP.
 - [ ] Stricter round acceptance (no promotion on one dev probe) and the 0.25 retention default restored.
-- [ ] A plateau controller that switches strategy (task distribution, external evidence, repair training,
-  exploration breadth, objective) when the discovery rate per GPU-hour falls.
+- [x] A plateau controller that switches strategy (task distribution, external evidence, repair training,
+  exploration breadth, objective) when the discovery rate per GPU-hour falls: `eval::campaign::plateau` reads
+  discoveries per GPU-hour over a window against the best window, and the controller moves to the next strategy of
+  its ladder (2026-11-13). Which ladder is best is not measured.
 - [ ] Re-grade the paper's Lua claims (SL20-SL23, the 8B run) under a neutral protocol before keeping them.
+
+### Campaign controller (2026-11-13)
+
+`splinter_pipelines::campaign` (exposed as `splinter_sdk::campaign`) runs learning as one continuous, resumable
+campaign instead of rounds glued together by scripts (`scripts/campaigns/flywheel/loop.py` and the `rsi1`
+`seq*.py` drivers still work and are kept for their recorded arms; new campaigns use the controller).
+
+- Done: typed state in one append-only pack per campaign (`store::campaign`: state, head and ledger lines under a
+  lock, compare-and-swap on the head so a second controller loses instead of corrupting, torn tails cut,
+  compaction); a crash resumes at the arm start, or at the gate when training had finished; a changed
+  configuration is refused. Per-task pass-rate state with an offline calibration at k = 8-16 and permanent
+  retirement at 0.9 (`eval::campaign::pass_rate`). Dynamic sampling: only groups with a reward spread enter a
+  batch, over-provisioned and refilled, all-fail groups routed to skip, teacher, cliff-distill or decompose
+  (`eval::campaign::sampling`). Per-step signals as gate inputs: informative-group fraction, KL, clip fraction,
+  entropy (absent when unmeasured; the in-process path records no sampled tokens, so its entropy is absent and brain
+  does not report one per step, gap 24). Bounded replay of earlier arms' verified data, the dev-validation gate with
+  rollback (`eval::campaign::gate`), checkpoint collection keeping digests, the experiment ledger (hypothesis,
+  configuration digest, GPU-hours, cost, verdict), power-first arm planning that refuses an arm whose exam cannot
+  detect its target effect, alpha spent by gate number as the default (`eval::campaign::plan`), the plateau
+  ladder, and a disk preflight that counts files as well as bytes (`pipelines::preflight`).
+- Collectors: the in-process path (`campaign::brain`: a loaded model sampled at temperature 1 against a
+  `TaskFamily`, brain's policy-gradient trainer, a greedy dev exam) and the episode path (`campaign::endpoint`:
+  an `EpisodeExecutor` that runs Harbor-format tasks in sandboxes and returns, per episode, the reward and the
+  sampled calls' token ids and log-probabilities; an unprovable chain is dropped, never re-tokenized).
+- Open: the sven training executor that implements `EpisodeExecutor` (lane L3 is building it); the training
+  records do not yet carry the sampler's behaviour log-probabilities (`WireMessage` has no field for brain's
+  `behavior_logprobs`, so every campaign step trains on the start-of-run proxy, exact for on-policy rollouts only);
+  a hot refit of the champion's adapter through a serving endpoint (the in-process collector reloads the model on
+  each accepted arm); batched in-process sampling (the in-process engine serves one generation at a time, so
+  rollouts are not batched; a served endpoint is the batched path); the campaign is not a `splinter` command yet
+  (the sample `samples/campaign-lua` is the driver).
+- Distillation (gap 21): `LearningStrategy::Distill` and `--all-fail cliff-distill` train the policy's own tokens
+  on brain's per-token reverse-KL signal (`A_t = log q_teacher - log p_behaviour`, clipped, capped) with the frozen
+  model shown what the verifier knows. Missing in brain for a separate, larger teacher (a 27B teacher for a 4B or 8B
+  student): `PolicyGradientConfig::teacher` names only the base or the start-of-run adapter of the same model, so
+  the teacher cannot be another checkpoint, and a record cannot carry per-token teacher log-probabilities scored by a
+  served teacher (finding 442's scored trace is the source). Splinter has nothing more to wire until brain accepts
+  either; no real-weight run of the distillation strategy has been made.
 
 ### brain
 

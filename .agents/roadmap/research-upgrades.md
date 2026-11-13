@@ -18,6 +18,10 @@ missing: test strength, canaries, coverage, power.
 ## Left to do
 
 - [ ] RS-P1 (S, U4) Power-first planning and small-n statistics.
+  - Done (campaign, 2026-11-13): the campaign controller spends alpha by gate number by default and plans every arm
+    power-first (`eval::campaign::plan`, `pipelines::campaign`): an arm whose exam cannot detect its target lead at
+    the level that gate may spend is refused before it rolls out anything. The release gate's own default is still
+    opt-in.
   - Done: exact sign-test power, minimum detectable lead and the fixed alpha spending schedule
     in `splinter-eval::power`; `exam-set power` prints the sign-test power and the smallest lead
     seen; the gate takes `alpha_spending` (opt-in) and `target_effect` and reports a miss on an
@@ -77,6 +81,10 @@ missing: test strength, canaries, coverage, power.
   - Acceptance: three-seed ablation on the sealed exam; adopt the filtered arm only if it is not
     worse (paired sign test p above 0.2) with fewer tokens. `make test`.
 - [ ] RS-P6 (S-M, U9) Learnability by disagreement, k, and cross-round skipping.
+  - Done (campaign, 2026-11-13): per-task pass-rate state with an offline calibration at k = 8, measured once per
+    task and kept up to date by every later group; a task at 0.9 or more is retired for good and a never-solved
+    task is drawn at a tenth of the weight (`eval::campaign::pass_rate`, `sampling`). Not done: the 0.8 skip with a
+    20 percent re-test, disagreement classes, per-stage pre-registered bands.
   - First measurement k=8, then k=2 for tasks already on the frontier; persist the previous
     round's class and skip Always and Never tasks with probability 0.8 while re-testing 20%;
     student-versus-teacher disagreement becomes a recorded class; RL bands are pre-registered
