@@ -27,3 +27,23 @@ suspects), whether the proxy or the training forward is wrong, and whether `--be
 log-probabilities removes it. Brain owns the cause (the numerics gate of the design review: a step-0 ratio of 1 is not
 enough, a step-1 ratio after a tiny update must also be near 1). Until it is fixed, a policy-gradient arm on this
 setting is a measurement of the guard, not of learning: the controller records the halt with the signals.
+
+## Isolated (2026-11-13, same records, brain finetune at 701ac8bc4-era build)
+
+The ratios are not an accounting defect; the optimiser really moves a few tail tokens by tens of nats. Reproduced with
+`brain finetune --policy-gradient --behaviour start_of_run_proxy --kl-beta 0 --lora 16` on the arm-4 records of the
+real-weight campaign (120 records, answers of 2-8 tokens):
+
+- Same blow-up on CUDA, WGPU and the CPU backend (step-4 loss 6.4e7, 6.4e7, 6.9e7): not a kernel.
+- At lr 1e-12 nothing moves (mean KL 7.6e-5, clip 0): the start-of-run scoring agrees with the training forward.
+- Scoring every record before the first update (grad-accum 12) gives the same KL as lazy scoring (1.6e8 vs 1.55e8).
+- Brain's served Qwen3-4B and Hugging Face transformers give the same greedy token ids on three of these prompts
+  (`string.rep("mi", 3)` -> `miimิ` in both), so the odd sampled answers (`mimimị`, `mimimิ`) are the model's own.
+- KL against lr on the 12 odd-token records, 6 steps: 1e-7 -> 0.009, 3e-7 -> 0.043, 1e-6 -> 0.68, 1e-5 -> 1.6e8; the 92
+  plain-ASCII records reach 4.8e3 at 1e-5. The jump between 1e-6 and 1e-5 is the dynamics of Adam's first, sign-like
+  steps (warmup is steps/20, so one step for a 12-step arm) over a rank-16 adapter on every projection, on records of
+  a few tokens.
+
+**Consequence:** at lr 1e-5 the reported KL is real but concentrated on rare tokens; dev still rose (0.3375 -> 0.49), so
+the bulk of the policy moved usefully. A campaign that wants a KL guard to mean something trains at lr <= 1e-6 on
+this setting, or with a warmup of several steps, and logs the per-token KL distribution rather than its mean.
