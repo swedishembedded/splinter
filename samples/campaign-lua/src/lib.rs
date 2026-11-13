@@ -17,9 +17,13 @@
 pub mod family;
 pub mod handoff;
 pub mod host;
+pub mod journal;
+pub mod lineage;
 pub mod neutral;
 pub mod proposer;
 pub mod recipe;
+pub mod sections;
+pub mod sft;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

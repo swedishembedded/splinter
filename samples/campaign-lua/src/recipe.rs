@@ -8,8 +8,7 @@
 // can procure our services by sending an email to info@swedishembedded.com.
 
 //! The recipe of a campaign: every setting that shapes what an arm trains on
-//! and how, as command-line flags with one definition for both drivers of the
-//! sample (`campaign-lua` and `rsi2`), and the controller and trainer
+//! and how, as command-line flags with one definition, and the controller and trainer
 //! configuration they make.
 
 use anyhow::Result;

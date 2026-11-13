@@ -18,8 +18,8 @@ name = "campaign-lua"
 path = "src/main.rs"
 
 [[bin]]
-name = "rsi2"
-path = "src/rsi2.rs"
+name = "lineage"
+path = "src/lineage_cli.rs"
 
 [dependencies]
 splinter-sdk = { workspace = true }

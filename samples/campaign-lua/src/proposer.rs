@@ -8,9 +8,9 @@
 // our services by sending an email to info@swedishembedded.com.
 
 //! The policy proposes its own tasks: Splinter's `predict-lua` task kind is
-//! asked of the current policy over the Lua 5.1 manual (the generation the
-//! `acquire` pipeline runs with `--self-generate`), the interpreter runs every
-//! proposed program and its output is the reference, and a program that
+//! asked of the current policy over the Lua 5.1 manual, one section per
+//! request (see [`crate::sections`] for which sections), the interpreter runs
+//! every proposed program and its output is the reference, and a program that
 //! repeats a task the learner already has is dropped.
 
 use std::collections::BTreeMap;
@@ -24,11 +24,13 @@ use splinter_sdk::knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS}
 use splinter_sdk::sources::{self, SourceTarget};
 use splinter_sdk::tasks::{self, Generation};
 use splinter_sdk::vocabulary::experience::{PrivilegedKind, Task};
+use splinter_sdk::vocabulary::rng::SplitMix64;
 use splinter_sdk::vocabulary::source::SourceId;
 use splinter_sdk::Context;
 
-use crate::family::{proposal_id, Part, Proposal, Rsi2Family};
+use crate::family::{proposal_id, Part, Proposal, ProposalFamily};
 use crate::neutral;
+use crate::sections::{manual_sections, plan_requests, weak_functions, Accuracy, ManualSection};
 
 /// The task kind asked of the policy.
 const KIND: &str = "predict-lua";
@@ -36,6 +38,47 @@ const KIND: &str = "predict-lua";
 /// What the generator is told it is for.
 const GOAL: &str = "Write Lua 5.1 programs that exercise the standard library functions the \
                     manual describes, each printing a result a reader has to work out.";
+
+/// Angles a request asks its programs to take, so asking again about a
+/// section yields different programs instead of the one the model writes for
+/// it every time (the first lever against saturation: the second request for a
+/// section otherwise repeats the first in about half its programs).
+const ANGLES: [&str; 12] = [
+    "Use empty, single-character and long arguments.",
+    "Use negative numbers, zero and fractional numbers as arguments.",
+    "Print several lines, one result per line, from a loop.",
+    "Combine the function with a second standard library function in one expression.",
+    "Use return values beyond the first: multiple returns, captures, positions.",
+    "Build a table first, then apply the library to it.",
+    "Use patterns, escapes or format specifiers with unusual flags.",
+    "Make a conditional depend on the function's result and print which branch ran.",
+    "Use values near limits: large integers, tiny floats, long strings.",
+    "Call it through pcall and print what comes back.",
+    "Define a short function that uses it and call that function twice.",
+    "Make the output hinge on a subtle rule of the function that a reader may get wrong.",
+];
+
+/// Words a request may be asked to put in its programs.
+const WORDS: [&str; 40] = [
+    "apple", "river", "stone", "lantern", "garden", "window", "copper", "falcon", "marble",
+    "violet", "harbor", "meadow", "thunder", "ribbon", "candle", "engine", "island", "jungle",
+    "kettle", "ladder", "magnet", "needle", "orchid", "pepper", "quartz", "rocket", "saddle",
+    "tunnel", "umbrella", "velvet", "walnut", "yellow", "zebra", "anchor", "bridge", "cactus",
+    "dragon", "ember", "forest", "glacier",
+];
+
+/// One program the policy proposed and the interpreter ran.
+#[derive(Clone, Debug)]
+pub struct Kept {
+    /// The program.
+    pub program: String,
+    /// What the interpreter printed.
+    pub expected: String,
+    /// The instruction the policy wrote for it.
+    pub instruction: String,
+    /// The manual section it was proposed from (`part#position`).
+    pub section: String,
+}
 
 /// What one round of proposing came to.
 #[derive(Clone, Debug, Default, Serialize)]
@@ -51,15 +94,62 @@ pub struct Proposed {
     pub unusable: usize,
     /// Refusals of the task generator, by reason.
     pub refused: BTreeMap<String, usize>,
+    /// Programs kept, by manual section.
+    pub kept_by_section: BTreeMap<String, usize>,
     /// The programs kept, with the interpreter's output.
     #[serde(skip)]
-    pub kept: Vec<(String, String, String)>,
+    pub kept: Vec<Kept>,
+}
+
+/// What a round of proposing is steered by.
+#[derive(Clone, Copy, Debug)]
+pub struct Steering<'a> {
+    /// The current policy's dev accuracy per library function.
+    pub accuracy: &'a Accuracy,
+    /// Proposals made so far, by manual section.
+    pub asked: &'a BTreeMap<String, usize>,
+    /// The seed the literals each request is asked to use are drawn from.
+    pub seed: u64,
+}
+
+/// How much one round of proposing may spend.
+#[derive(Clone, Copy, Debug)]
+pub struct Budget {
+    /// Programs wanted.
+    pub want: usize,
+    /// The most requests made.
+    pub max_calls: usize,
+    /// Requests asked at once.
+    pub parallel: usize,
 }
 
 /// The policy as a proposer of tasks, over the manual.
 pub struct Proposer {
     manuals: Vec<PathBuf>,
     base: PathBuf,
+}
+
+/// The brief of one request: the standing goal, the functions of the section
+/// the policy answers worst on when it has any, and the angle of this visit
+/// to the section.
+fn goal_for(section: &ManualSection, accuracy: &Accuracy, visit: usize, seed: u64) -> String {
+    let weak = weak_functions(section, accuracy);
+    let angle = ANGLES[visit % ANGLES.len()];
+    // The second lever: literals a request must use, drawn from the request's
+    // own seed, so two requests about one section cannot write one program.
+    let mut rng = SplitMix64::new(seed);
+    let word = WORDS[rng.below(WORDS.len())];
+    let number = rng.between(2, 999);
+    let material = format!("Put the word \"{word}\" and the number {number} in the programs.");
+    if weak.is_empty() {
+        format!("{GOAL} {angle} {material}")
+    } else {
+        let named: Vec<&str> = weak.iter().take(3).map(String::as_str).collect();
+        format!(
+            "{GOAL} Make most of the programs use {}. {angle} {material}",
+            named.join(", ")
+        )
+    }
 }
 
 impl Proposer {
@@ -74,10 +164,11 @@ impl Proposer {
     }
 
     /// The tasks the policy (the base with `adapter`, or the base alone)
-    /// proposes until `want` new ones are kept or `max_calls` requests are
-    /// spent, asking `parallel` at a time; two waves in a row that keep nothing end it early. `family`
-    /// holds what the learner already has: nothing that repeats it is kept,
-    /// and the policy is shown it as tasks not to write again.
+    /// proposes until `budget.want` new ones are kept or `budget.max_calls`
+    /// requests are spent, asking `budget.parallel` at a time; two waves in a
+    /// row that keep nothing end it early. `family` holds what the learner
+    /// already has: nothing that repeats it is kept, and the policy is shown
+    /// the tasks already written from a section as ones not to write again.
     ///
     /// # Errors
     /// The model cannot be run or the task store cannot be read.
@@ -85,10 +176,9 @@ impl Proposer {
         &self,
         ctx: &Context,
         adapter: Option<&Path>,
-        family: &Rsi2Family,
-        want: usize,
-        max_calls: usize,
-        parallel: usize,
+        family: &ProposalFamily,
+        steering: Steering<'_>,
+        budget: Budget,
     ) -> Result<Proposed> {
         let sources = self
             .manuals
@@ -100,36 +190,81 @@ impl Proposer {
                     .with_context(|| format!("capturing {}", page.display()))
             })
             .collect::<Result<Vec<SourceId>>>()?;
+        let sections = manual_sections(ctx, &sources)?;
+        anyhow::ensure!(!sections.is_empty(), "the manual pages hold no section");
+        let plan = plan_requests(
+            &sections,
+            steering.asked,
+            steering.accuracy,
+            budget.max_calls,
+        );
         let policy = splinter_sdk::release::arm_on(ctx.config(), &self.base, adapter);
         let mut seen = Seen::new(DEFAULT_SHINGLE_WORDS, DEFAULT_MAX_OVERLAP);
-        let mut shown: Vec<String> = Vec::new();
+        // The instructions held, with the section each came from.
+        let mut shown: Vec<(Option<String>, String)> = Vec::new();
         for held in family.proposals() {
             seen.admit(&held.request);
-            shown.push(held.request);
+            shown.push((held.section, held.request));
         }
         let mut out = Proposed::default();
         let mut barren = 0;
-        while out.kept.len() < want && out.calls < max_calls && barren < 2 {
+        let mut next = 0;
+        let kinds = [KIND.to_string()];
+        while out.kept.len() < budget.want && next < plan.len() && barren < 2 {
             // One wave: independent requests, asked together so the server
             // decodes them in one batch. Each is shown the tasks written so
-            // far, and what they repeat among themselves is dropped below.
-            let wave = parallel.min(max_calls - out.calls).max(1);
-            let kinds = [KIND.to_string()];
+            // far, those of its own section last (the generator shows the
+            // most recent), and what they repeat among themselves is dropped
+            // below.
+            let first = next;
+            let wave: Vec<usize> =
+                plan[next..(next + budget.parallel.max(1)).min(plan.len())].to_vec();
+            next += wave.len();
+            let requests: Vec<(usize, String, Vec<String>)> = wave
+                .iter()
+                .enumerate()
+                .map(|(n, &at)| {
+                    let key = sections[at].key();
+                    let earlier = plan[..first + n].iter().filter(|&&p| p == at).count();
+                    let visit = steering.asked.get(&key).copied().unwrap_or(0) + earlier;
+                    // seed: per-request literals, derived from the lineage's seed.
+                    let request_seed = steering.seed
+                        ^ ((first + n) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                        ^ at as u64;
+                    let mut written: Vec<String> = shown
+                        .iter()
+                        .filter(|(s, _)| s.as_deref() != Some(key.as_str()))
+                        .map(|(_, text)| text.clone())
+                        .collect();
+                    written.extend(
+                        shown
+                            .iter()
+                            .filter(|(s, _)| s.as_deref() == Some(key.as_str()))
+                            .map(|(_, text)| text.clone()),
+                    );
+                    (
+                        at,
+                        goal_for(&sections[at], steering.accuracy, visit, request_seed),
+                        written,
+                    )
+                })
+                .collect();
             let generations: Vec<_> = std::thread::scope(|scope| {
-                let handles: Vec<_> = (0..wave)
-                    .map(|_| {
-                        let (kinds, sources, policy, shown) = (&kinds, &sources, &policy, &shown);
+                let handles: Vec<_> = requests
+                    .iter()
+                    .map(|(at, goal, written)| {
+                        let (kinds, policy, sections) = (&kinds, &policy, &sections);
                         scope.spawn(move || {
                             tasks::generate(
                                 ctx,
                                 &Generation {
-                                    sources,
-                                    sections: &[],
+                                    sources: &[],
+                                    sections: std::slice::from_ref(&sections[*at].at),
                                     kinds,
                                     generator: policy,
-                                    goal: Some(GOAL),
+                                    goal: Some(goal),
                                     author: None,
-                                    written: shown,
+                                    written,
                                     denoise_seed: None,
                                     deadline: None,
                                     cancel: CancelToken::new(),
@@ -149,8 +284,9 @@ impl Proposer {
                     .collect::<Result<Vec<_>>>()
             })?;
             let before = out.kept.len();
-            for generated in generations {
+            for (generated, &at) in generations.into_iter().zip(&wave) {
                 out.calls += 1;
+                let key = sections[at].key();
                 for (reason, n) in &generated.rejected {
                     *out.refused.entry(reason.clone()).or_default() += n;
                 }
@@ -163,15 +299,21 @@ impl Proposer {
                         continue;
                     };
                     if family.holds(&program)
-                        || out.kept.iter().any(|(p, _, _)| p.trim() == program.trim())
+                        || out.kept.iter().any(|k| k.program.trim() == program.trim())
                         || seen.repeats(&task.instruction).is_some()
                     {
                         out.repeats += 1;
                         continue;
                     }
                     seen.admit(&task.instruction);
-                    shown.push(task.instruction.clone());
-                    out.kept.push((program, expected, task.instruction));
+                    shown.push((Some(key.clone()), task.instruction.clone()));
+                    *out.kept_by_section.entry(key.clone()).or_default() += 1;
+                    out.kept.push(Kept {
+                        program,
+                        expected,
+                        instruction: task.instruction,
+                        section: key.clone(),
+                    });
                 }
             }
             eprintln!(
@@ -188,7 +330,7 @@ impl Proposer {
                 0
             };
         }
-        out.kept.truncate(want);
+        out.kept.truncate(budget.want);
         Ok(out)
     }
 }
@@ -214,27 +356,40 @@ fn program_and_output(task: &Task) -> Option<(String, String)> {
 /// A longer printed output is not a short answer a reply can be graded on.
 const MAX_OUTPUT_BYTES: usize = 400;
 
+/// Which generation and round proposed a batch, and how it is used.
+#[derive(Clone, Copy, Debug)]
+pub struct Origin {
+    /// The generation whose policy proposed them.
+    pub generation: u32,
+    /// The round of that generation.
+    pub round: u32,
+}
+
 /// The proposals as family entries: the first `dev` of them are held out for
-/// the dev gate, the rest are trained on.
+/// the dev gate, the next `keep` for retention, the rest are trained on.
 #[must_use]
-pub fn as_proposals(
-    kept: Vec<(String, String, String)>,
-    generation: u32,
-    dev: usize,
-) -> Vec<Proposal> {
+pub fn as_proposals(kept: Vec<Kept>, origin: Origin, dev: usize, keep: usize) -> Vec<Proposal> {
     kept.into_iter()
         .enumerate()
-        .map(|(n, (program, expected, instruction))| Proposal {
-            id: proposal_id(&program),
-            generation,
-            part: if n < dev { Part::Dev } else { Part::Train },
-            request: if instruction.contains(&program) {
-                instruction
+        .map(|(n, k)| Proposal {
+            id: proposal_id(&k.program),
+            generation: origin.generation,
+            round: origin.round,
+            section: Some(k.section),
+            part: if n < dev {
+                Part::Dev
+            } else if n < dev + keep {
+                Part::Keep
             } else {
-                neutral::request(&program)
+                Part::Train
             },
-            program,
-            expected,
+            request: if k.instruction.contains(&k.program) {
+                k.instruction
+            } else {
+                neutral::request(&k.program)
+            },
+            program: k.program,
+            expected: k.expected,
         })
         .collect()
 }
@@ -275,32 +430,68 @@ mod tests {
     }
 
     #[test]
-    fn the_first_proposals_are_held_out_for_dev_and_the_rest_are_trained_on() {
-        let kept = vec![
-            (
-                "print(1)".to_string(),
-                "1".to_string(),
-                "q ```lua\nprint(1)\n```".to_string(),
-            ),
-            (
-                "print(2)".to_string(),
-                "2".to_string(),
-                "no program shown".to_string(),
-            ),
-            (
-                "print(3)".to_string(),
-                "3".to_string(),
-                "q ```lua\nprint(3)\n```".to_string(),
-            ),
-        ];
-        let proposals = as_proposals(kept, 1, 2);
+    fn the_first_proposals_are_held_out_for_dev_and_retention_and_the_rest_are_trained_on() {
+        let kept = |program: &str, instruction: &str| Kept {
+            program: program.into(),
+            expected: "x".into(),
+            instruction: instruction.into(),
+            section: "page#0".into(),
+        };
+        let proposals = as_proposals(
+            vec![
+                kept("print(1)", "q ```lua\nprint(1)\n```"),
+                kept("print(2)", "no program shown"),
+                kept("print(3)", "q ```lua\nprint(3)\n```"),
+                kept("print(4)", "q ```lua\nprint(4)\n```"),
+            ],
+            Origin {
+                generation: 1,
+                round: 1,
+            },
+            1,
+            2,
+        );
         assert_eq!(
             proposals.iter().map(|p| p.part).collect::<Vec<_>>(),
-            vec![Part::Dev, Part::Dev, Part::Train]
+            vec![Part::Dev, Part::Keep, Part::Keep, Part::Train]
         );
         assert!(
             proposals[1].request.contains("print(2)"),
             "a request that does not show its program is rebuilt to"
         );
+        assert_eq!(proposals[0].section.as_deref(), Some("page#0"));
+    }
+
+    #[test]
+    fn each_visit_to_a_section_takes_another_angle_and_a_weak_family_is_named() {
+        use crate::sections::{family_accuracy, ManualSection};
+        use splinter_sdk::knowledge::concepts::SectionRef;
+        use splinter_sdk::vocabulary::digest::Digest;
+        let section = ManualSection {
+            at: SectionRef {
+                source: splinter_sdk::vocabulary::source::SourceId(Digest::of(b"page")),
+                part: "page.html".into(),
+                section: 0,
+            },
+            functions: ["string.rep".to_string()].into(),
+        };
+        let none = Accuracy::new();
+        let goals: Vec<String> = (0..ANGLES.len() + 1)
+            .map(|visit| goal_for(&section, &none, visit, 7))
+            .collect();
+        let distinct: std::collections::BTreeSet<&String> = goals.iter().collect();
+        assert_eq!(
+            distinct.len(),
+            ANGLES.len(),
+            "the angles come round after all of them"
+        );
+        assert_eq!(goals[0], goals[ANGLES.len()]);
+        let weak = family_accuracy((0..4).map(|_| ("print(string.rep('a', 2))", false)));
+        let seeded: std::collections::BTreeSet<String> = (0..8)
+            .map(|seed| goal_for(&section, &none, 0, seed))
+            .collect();
+        assert!(seeded.len() > 4, "requests draw their own literals");
+        assert!(goal_for(&section, &weak, 0, 7).contains("string.rep"));
+        assert!(!goal_for(&section, &none, 0, 7).contains("string.rep"));
     }
 }

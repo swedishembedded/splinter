@@ -44,3 +44,33 @@ Running the same command again continues the campaign from its saved state; a
 changed setting is refused. The seed is drawn and printed when `--seed` is not
 given; pass it back to reproduce the programs and the draws. The campaign needs
 `lua` on the path (or `--lua`).
+
+## The `lineage` driver: self-taught rounds
+
+`lineage` runs one lineage of generations against the same family without the
+campaign controller. Everything goes through a `brain serve` the driver starts
+(serving, the policy's proposals, training jobs):
+
+1. The current policy proposes Lua 5.1 programs from the manual, one section
+   per request. Sections are chosen so that the library functions the policy
+   answers worst on its dev set are asked about most, and a program that
+   repeats an earlier proposal is dropped.
+2. The policy predicts what each proposal prints (greedy); the interpreter
+   runs it and its output is the label.
+3. The mispredicted programs are the new information. A supervised training
+   job continues the champion's adapter on them, with `--correct-share` of the
+   draws on programs the policy already predicted right and `--replay-share` on
+   earlier accepted rounds' records.
+4. The candidate and the champion answer the dev and retention sets (the
+   base's own held-out proposals and the generator's programs; sized by
+   power-first planning before anything runs), and the dev gate decides. Only
+   an advance changes the champion; the last advance of a generation is its
+   champion, handed to an examiner when `--handoff` is given.
+
+The lineage's journals (`rounds.jsonl`, `dev-results.jsonl`,
+`predictions.jsonl`, `proposals.jsonl`) hold everything it knows; running the
+command again continues from them.
+
+```bash
+cargo run --release -p splinter-campaign-lua --bin lineage -- --help
+```

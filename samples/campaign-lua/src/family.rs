@@ -7,15 +7,15 @@
 // self-generated verifiable task pools for policy-gradient training you can
 // procure our services by sending an email to info@swedishembedded.com.
 
-//! The task family of RSI2: the seeded generator's programs (source b) beside
-//! the programs the current policy proposed from the Lua 5.1 manual (source
-//! a), all put and graded under the neutral protocol.
+//! The task family of a lineage: the seeded generator's programs beside the
+//! programs the current policy proposed from the Lua 5.1 manual, all put and
+//! graded under the neutral protocol.
 //!
-//! The proposals are kept in one append-only file, so a campaign that is
-//! continued has the pool it had, and each proposal records which generation's
-//! policy wrote it. The pool grows between arms; the dev and retention sets
-//! are fixed when the campaign opens, so every arm is judged on the same
-//! tasks.
+//! The proposals are kept in one append-only file, so a lineage that is
+//! continued has the pool it had, and each proposal records which round's
+//! policy wrote it and from which manual section. The pool grows between
+//! rounds; the dev and retention sets are fixed once they are drawn, so every
+//! round is judged on the same tasks.
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -38,6 +38,9 @@ pub enum Part {
     Train,
     /// Never trained on: the dev gate is decided on it.
     Dev,
+    /// Never trained on: what the policy already answered, kept as a
+    /// retention probe beside the generator's.
+    Keep,
 }
 
 /// One program the policy proposed, labelled by the interpreter.
@@ -47,6 +50,13 @@ pub struct Proposal {
     pub id: String,
     /// The generation whose policy proposed it (1 is the base).
     pub generation: u32,
+    /// The round of that generation (from 1; 0 for a proposal made before
+    /// any round).
+    #[serde(default)]
+    pub round: u32,
+    /// The manual section it was proposed from, as `part#position`.
+    #[serde(default)]
+    pub section: Option<String>,
     /// Where it is used.
     pub part: Part,
     /// What the policy is asked: the question and the fenced program.
@@ -84,13 +94,13 @@ pub struct TaskRecord {
 }
 
 /// The family: see the module documentation.
-pub struct Rsi2Family {
+pub struct ProposalFamily {
     generator: LuaPredict,
     proposals: Mutex<BTreeMap<String, Proposal>>,
     file: PathBuf,
 }
 
-impl Rsi2Family {
+impl ProposalFamily {
     /// The family over `generator` and the proposals kept in `file` (created
     /// when absent).
     ///
@@ -125,10 +135,19 @@ impl Rsi2Family {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// Whether any proposal was made by the policy of `generation`.
+    /// Whether any proposal was made by the policy of `generation` in
+    /// `round`.
     #[must_use]
-    pub fn has_generation(&self, generation: u32) -> bool {
-        self.lock().values().any(|p| p.generation == generation)
+    pub fn has_round(&self, generation: u32, round: u32) -> bool {
+        self.lock()
+            .values()
+            .any(|p| p.generation == generation && p.round == round)
+    }
+
+    /// The proposal of task `id`, if it is one.
+    #[must_use]
+    pub fn proposal(&self, id: &str) -> Option<Proposal> {
+        self.lock().get(id).cloned()
     }
 
     /// Every proposal, by id.
@@ -183,10 +202,18 @@ impl Rsi2Family {
         Ok(count)
     }
 
-    /// Every task of the family with its role, for the examiner's overlap
-    /// audit.
+    /// The program of task `id`, proposed or generated.
     #[must_use]
-    pub fn records(&self) -> Vec<TaskRecord> {
+    pub fn program_of(&self, id: &str) -> Option<String> {
+        self.known(id).ok().map(|(program, _)| program)
+    }
+
+    /// Every task of the family with its role, for the examiner's overlap
+    /// audit: the dev and retention tasks, and of the proposals meant for
+    /// training only those in `trained` (the ones a candidate was actually
+    /// trained on).
+    #[must_use]
+    pub fn records(&self, trained: &std::collections::BTreeSet<String>) -> Vec<TaskRecord> {
         let record = |id: &str, role, origin: String, program: &str, reference: &str| TaskRecord {
             id: id.to_string(),
             role,
@@ -214,9 +241,13 @@ impl Rsi2Family {
             }
         }
         for p in self.lock().values() {
+            if p.part == Part::Train && !trained.contains(&p.id) {
+                continue;
+            }
             let role = match p.part {
                 Part::Train => "train",
                 Part::Dev => "dev",
+                Part::Keep => "retention",
             };
             records.push(record(
                 &p.id,
@@ -241,11 +272,11 @@ impl Rsi2Family {
     }
 }
 
-impl TaskFamily for Rsi2Family {
+impl TaskFamily for ProposalFamily {
     fn describe(&self) -> Value {
         // The proposals are not part of it: the pool grows between arms and a
         // campaign that is continued is the same campaign.
-        json!({"family": "rsi2", "protocol": "neutral", "generator": self.generator.describe()})
+        json!({"family": "proposed-lua", "protocol": "neutral", "generator": self.generator.describe()})
     }
 
     fn pool(&self) -> Vec<String> {
@@ -257,7 +288,7 @@ impl TaskFamily for Rsi2Family {
     }
 
     fn retention(&self) -> Vec<String> {
-        self.generator.retention()
+        self.ids(Part::Keep, self.generator.retention())
     }
 
     fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError> {
@@ -284,7 +315,7 @@ impl TaskFamily for Rsi2Family {
     }
 }
 
-impl Rsi2Family {
+impl ProposalFamily {
     /// The program and what it prints, of a proposed or a generated task.
     fn known(&self, task: &str) -> Result<(String, String), CampaignError> {
         if let Some(p) = self.lock().get(task) {
@@ -302,7 +333,7 @@ mod tests {
     use super::*;
     use crate::{default_interpreter, Sizes};
 
-    fn family(dir: &Path) -> Rsi2Family {
+    fn family(dir: &Path) -> ProposalFamily {
         let sizes = Sizes {
             pool: 6,
             dev: 6,
@@ -310,13 +341,15 @@ mod tests {
         };
         // seed: the sets only have to be disjoint, whatever the draw.
         let generator = LuaPredict::generate(&default_interpreter(), dir, sizes, 7).unwrap();
-        Rsi2Family::open(generator, &dir.join("proposals.jsonl")).unwrap()
+        ProposalFamily::open(generator, &dir.join("proposals.jsonl")).unwrap()
     }
 
     fn proposal(program: &str, generation: u32, part: Part) -> Proposal {
         Proposal {
             id: proposal_id(program),
             generation,
+            round: 1,
+            section: None,
             part,
             request: format!("What does this print?\n\n```lua\n{program}\n```"),
             program: program.into(),
@@ -365,9 +398,43 @@ mod tests {
         let described = first.describe();
         drop(first);
         let again = family(dir.path());
-        assert!(again.has_generation(1) && !again.has_generation(2));
+        assert!(again.has_round(1, 1) && !again.has_round(1, 2) && !again.has_round(2, 1));
         assert_eq!(again.pool().len(), 7);
         assert_eq!(again.describe(), described);
+    }
+
+    #[test]
+    fn retention_proposals_join_the_retention_set_and_an_untrained_proposal_is_not_audited_as_trained(
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let family = family(dir.path());
+        let before = family.retention().len();
+        family
+            .add(vec![
+                proposal("print(5)", 1, Part::Keep),
+                proposal("print(6)", 2, Part::Train),
+            ])
+            .unwrap();
+        assert_eq!(family.retention().len(), before + 1);
+        let none = std::collections::BTreeSet::new();
+        assert_eq!(
+            family
+                .records(&none)
+                .iter()
+                .filter(|r| r.origin.starts_with("policy"))
+                .count(),
+            1,
+            "only the retention proposal: the training one was not trained on"
+        );
+        let trained = std::collections::BTreeSet::from([proposal_id("print(6)")]);
+        assert_eq!(
+            family
+                .records(&trained)
+                .iter()
+                .filter(|r| r.origin.starts_with("policy"))
+                .count(),
+            2
+        );
     }
 
     #[test]
@@ -377,7 +444,7 @@ mod tests {
         family
             .add(vec![proposal("print(1+2)", 1, Part::Dev)])
             .unwrap();
-        let records = family.records();
+        let records = family.records(&std::collections::BTreeSet::new());
         assert_eq!(records.len(), 6 + 6 + 4 + 1);
         let proposed = records
             .iter()
