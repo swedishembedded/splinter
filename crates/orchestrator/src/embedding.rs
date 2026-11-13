@@ -14,19 +14,21 @@ use std::sync::{Arc, Mutex};
 
 use splinter_knowledge::retrieve::{EmbedError, Embedder};
 use splinter_model::embed::{Embeddings, DEFAULT_MODEL};
+use splinter_model::BrainEndpoints;
 
 use crate::error::OrchestratorError;
 
 /// An embedder shared by everything that runs on a runtime.
 pub type SharedEmbedder = Arc<dyn Embedder + Send + Sync>;
 
-/// A loaded embedding model, as an [`Embedder`].
+/// A served embedding model, as an [`Embedder`].
 pub struct ModelEmbedder(Mutex<Embeddings>);
 
 impl ModelEmbedder {
-    /// The default embedding model ([`DEFAULT_MODEL`]), loaded.
-    pub fn load_default() -> Result<Self, OrchestratorError> {
-        Embeddings::load(DEFAULT_MODEL)
+    /// The default embedding model ([`DEFAULT_MODEL`]), as the brain server
+    /// `endpoints` reach serves it.
+    pub fn request_default(endpoints: &BrainEndpoints) -> Result<Self, OrchestratorError> {
+        Embeddings::request(endpoints, DEFAULT_MODEL)
             .map(|loaded| Self(Mutex::new(loaded)))
             .map_err(|e| OrchestratorError::Refused(format!("the embedding model: {e}")))
     }

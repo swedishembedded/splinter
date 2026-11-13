@@ -16,6 +16,8 @@ use crate::curate::Document;
 use crate::split::{self, Assignment, Split};
 use crate::tasks::{self, PERSONA};
 
+mod anchor_exam;
+pub use anchor_exam::*;
 mod reconstruction;
 pub use reconstruction::*;
 
@@ -179,7 +181,10 @@ pub struct Exam {
 
 /// Ask one model, with or without its adapter, every question not yet
 /// answered in `out`.
-pub fn exam_command(e: &Exam) -> anyhow::Result<()> {
+pub fn exam_command(
+    endpoints: &splinter_sdk::model::BrainEndpoints,
+    e: &Exam,
+) -> anyhow::Result<()> {
     ensure_unchanged(&e.tasks)?;
     let questions = tasks::read_tasks(&e.tasks)?;
     let model = splinter_sdk::model::exam::Model {
@@ -190,9 +195,10 @@ pub fn exam_command(e: &Exam) -> anyhow::Result<()> {
         label: "adams",
         decoding: Decoding::Greedy,
     };
-    let asked = splinter_sdk::model::exam::run(&questions, &e.out, e.limit, &model, &|q, a| {
-        tasks::is_correct(q, a).into()
-    })?;
+    let asked =
+        splinter_sdk::model::exam::run(endpoints, &questions, &e.out, e.limit, &model, &|q, a| {
+            tasks::is_correct(q, a).into()
+        })?;
     println!("asked {asked} questions; results in {}", e.out.display());
     Ok(())
 }
@@ -559,7 +565,11 @@ pub struct TransferExam {
 }
 
 /// Ask one model every benchmark question, in both modes, graded by the rules.
-pub fn transfer_exam_command(e: &TransferExam, documents: &[Document]) -> anyhow::Result<()> {
+pub fn transfer_exam_command(
+    endpoints: &splinter_sdk::model::BrainEndpoints,
+    e: &TransferExam,
+    documents: &[Document],
+) -> anyhow::Result<()> {
     ensure_unchanged(&e.benchmark)?;
     let questions = crate::datasets::read_benchmark(&e.benchmark)?;
     let system = if e.examples.is_empty() {
@@ -581,13 +591,23 @@ pub fn transfer_exam_command(e: &TransferExam, documents: &[Document]) -> anyhow
     };
     let asked = if e.samples > 1 {
         let sampled = splinter_sdk::model::exam::samples(&questions, e.samples);
-        splinter_sdk::model::exam::run(&sampled, &e.out, e.limit, &model, &|s, answer| {
-            s.question().verdict(answer, documents)
-        })?
+        splinter_sdk::model::exam::run(
+            endpoints,
+            &sampled,
+            &e.out,
+            e.limit,
+            &model,
+            &|s, answer| s.question().verdict(answer, documents),
+        )?
     } else {
-        splinter_sdk::model::exam::run(&questions, &e.out, e.limit, &model, &|task, answer| {
-            task.verdict(answer, documents)
-        })?
+        splinter_sdk::model::exam::run(
+            endpoints,
+            &questions,
+            &e.out,
+            e.limit,
+            &model,
+            &|task, answer| task.verdict(answer, documents),
+        )?
     };
     println!("asked {asked} questions; results in {}", e.out.display());
     Ok(())
@@ -612,33 +632,6 @@ pub fn constant_baseline_command(
             task.verdict(answer, documents)
         })?;
     println!("graded {asked} questions; results in {}", out.display());
-    Ok(())
-}
-
-/// Ask one model, with or without its adapter, the frozen general questions
-/// under no persona: what a retention check compares before and after.
-pub fn anchor_exam_command(
-    anchor: &Path,
-    out: &Path,
-    base: &Path,
-    adapter: Option<&Path>,
-    limit: Option<usize>,
-    max_tokens: u32,
-    decoding: Decoding,
-) -> anyhow::Result<()> {
-    let questions = crate::anchor::read(anchor)?;
-    let model = splinter_sdk::model::exam::Model {
-        base,
-        adapter,
-        system: crate::anchor::SYSTEM,
-        max_tokens,
-        label: "adams",
-        decoding,
-    };
-    let asked = splinter_sdk::model::exam::run(&questions, out, limit, &model, &|q, a| {
-        crate::anchor::is_correct(q, a).into()
-    })?;
-    println!("asked {asked} questions; results in {}", out.display());
     Ok(())
 }
 

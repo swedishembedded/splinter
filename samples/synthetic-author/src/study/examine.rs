@@ -20,13 +20,11 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use splinter_sdk::agent::sven::model::ModelProvider;
-use splinter_sdk::model::answer::{Answerer, Decoding};
 
 use super::arm_key::{ArmKey, SHARED_SLOT};
 use super::layout::Study;
 use super::train::finished;
 use crate::binding::{file_digest, items_digest, Base, ModelIdentity};
-use crate::exam_cmd::CONTEXT_TOKENS;
 use crate::lab::{exam_items_of, run_arm, ExamRun};
 use crate::sampled::{self, run_arm_sampled, Requested};
 
@@ -53,39 +51,6 @@ pub trait Loader {
     /// # Errors
     /// The model cannot be loaded.
     fn load(&self, adapter: Option<&Path>) -> anyhow::Result<Box<dyn Examinee>>;
-}
-
-/// Loads the base checkpoint with brain.
-pub struct BrainLoader<'a> {
-    /// The checkpoint directory of the base model.
-    pub base: &'a Path,
-}
-
-struct Loaded(Answerer);
-
-impl Examinee for Loaded {
-    fn greedy(&self) -> Arc<dyn ModelProvider> {
-        self.0.provider()
-    }
-
-    fn sampled(&self, temperature: f32, seed: u64) -> anyhow::Result<Arc<dyn ModelProvider>> {
-        Ok(self.0.provider_with(Decoding::Sampled {
-            temperature,
-            seed: Some(seed),
-        }))
-    }
-}
-
-impl Loader for BrainLoader<'_> {
-    fn load(&self, adapter: Option<&Path>) -> anyhow::Result<Box<dyn Examinee>> {
-        Ok(Box::new(Loaded(Answerer::load_with(
-            self.base,
-            adapter,
-            Some(CONTEXT_TOKENS),
-            "study",
-            Decoding::Greedy,
-        )?)))
-    }
 }
 
 /// What a call of the stage asked.

@@ -30,7 +30,7 @@ use splinter_model::policy_gradient::{
     train_policy_gradient, PolicyGradientOptions, PolicyGradientTune,
 };
 use splinter_model::precision::BasePrecision;
-use splinter_model::BrainDatasetCheck;
+use splinter_model::{BrainDatasetCheck, BrainEndpoints, LocalWeights};
 
 use super::types::{
     CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup, TrainReport,
@@ -126,23 +126,25 @@ fn prompt_messages(turns: &[(String, String)]) -> Vec<WireMessage> {
 }
 
 fn answerer(
+    endpoints: &BrainEndpoints,
     settings: &ModelSettings,
     policy: &PolicyRef,
     decoding: Decoding,
 ) -> Result<Answerer, CampaignError> {
-    Answerer::load_with(
-        &settings.base,
-        policy.adapter.as_deref(),
-        settings.context_tokens,
-        "campaign",
-        decoding,
-    )
-    .map_err(|e| CampaignError::Collector(format!("loading {}: {e}", settings.base.display())))
+    let weights = LocalWeights {
+        base: settings.base.clone(),
+        adapter: policy.adapter.clone(),
+        context_tokens: settings.context_tokens,
+    };
+    Answerer::request(endpoints, &weights, decoding).map_err(|e| {
+        CampaignError::Collector(format!("requesting {}: {e}", settings.base.display()))
+    })
 }
 
-/// The in-process collector: the policy sampled at temperature 1, one draw per
+/// The collector of a served policy: the policy sampled at temperature 1, one draw per
 /// attempt under a seed derived from the request's.
 pub struct ChatCollector<'f> {
+    endpoints: BrainEndpoints,
     family: &'f dyn TaskFamily,
     settings: ModelSettings,
     policy: PolicyRef,
@@ -155,12 +157,17 @@ impl<'f> ChatCollector<'f> {
     ///
     /// # Errors
     /// The async runtime could not start.
-    pub fn new(family: &'f dyn TaskFamily, settings: ModelSettings) -> Result<Self, CampaignError> {
+    pub fn new(
+        endpoints: BrainEndpoints,
+        family: &'f dyn TaskFamily,
+        settings: ModelSettings,
+    ) -> Result<Self, CampaignError> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|e| CampaignError::Collector(format!("starting the runtime: {e}")))?;
         Ok(Self {
+            endpoints,
             family,
             settings,
             policy: PolicyRef::default(),
@@ -172,7 +179,7 @@ impl<'f> ChatCollector<'f> {
 
 impl RolloutCollector for ChatCollector<'_> {
     fn describe(&self) -> Value {
-        json!({"path": "in-process", "model": self.settings, "family": self.family.describe()})
+        json!({"path": "served", "model": self.settings, "family": self.family.describe()})
     }
 
     fn tasks(&self) -> Vec<String> {
@@ -180,9 +187,12 @@ impl RolloutCollector for ChatCollector<'_> {
     }
 
     fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), CampaignError> {
-        // Dropped first: two copies of a large model do not share a card.
-        self.model = None;
-        self.model = Some(answerer(&self.settings, policy, Decoding::Greedy)?);
+        self.model = Some(answerer(
+            &self.endpoints,
+            &self.settings,
+            policy,
+            Decoding::Greedy,
+        )?);
         self.policy = policy.clone();
         Ok(())
     }
@@ -255,6 +265,7 @@ impl RolloutCollector for ChatCollector<'_> {
 /// greedily, so a task has one answer for given weights and the champion and
 /// the candidate differ only by the weights.
 pub struct ChatValidator<'f> {
+    endpoints: BrainEndpoints,
     family: &'f dyn TaskFamily,
     settings: ModelSettings,
     runtime: tokio::runtime::Runtime,
@@ -265,12 +276,17 @@ impl<'f> ChatValidator<'f> {
     ///
     /// # Errors
     /// The async runtime could not start.
-    pub fn new(family: &'f dyn TaskFamily, settings: ModelSettings) -> Result<Self, CampaignError> {
+    pub fn new(
+        endpoints: BrainEndpoints,
+        family: &'f dyn TaskFamily,
+        settings: ModelSettings,
+    ) -> Result<Self, CampaignError> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|e| CampaignError::Validator(format!("starting the runtime: {e}")))?;
         Ok(Self {
+            endpoints,
             family,
             settings,
             runtime,
@@ -300,7 +316,7 @@ impl<'f> ChatValidator<'f> {
 
 impl Validator for ChatValidator<'_> {
     fn describe(&self) -> Value {
-        json!({"path": "in-process greedy", "model": self.settings, "family": self.family.describe()})
+        json!({"path": "served greedy", "model": self.settings, "family": self.family.describe()})
     }
 
     fn units(&self) -> usize {
@@ -312,7 +328,7 @@ impl Validator for ChatValidator<'_> {
     }
 
     fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError> {
-        let model = answerer(&self.settings, policy, Decoding::Greedy)
+        let model = answerer(&self.endpoints, &self.settings, policy, Decoding::Greedy)
             .map_err(|e| CampaignError::Validator(e.to_string()))?;
         Ok(DevResult {
             dev: self.pass_each(&model, &self.family.dev())?,

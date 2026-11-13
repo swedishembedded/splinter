@@ -3,7 +3,7 @@
 
 //! Which model a stage runs on, and the one name every record gives it.
 //!
-//! Local-first: the model Splinter trains is served in-process from local
+//! Local-first: the model Splinter trains is served by a brain server from local
 //! weights; a model reached over an API is an explicit alternative, used
 //! for comparison and development. Every stage - an agent attempt, an
 //! exploration, an evaluation, a one-shot question - selects its model the
@@ -12,21 +12,14 @@
 
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
-use splinter_core::rng::Seed;
 use sven_sdk::model::ModelProvider;
 
 use crate::error::PolicyError;
-use crate::local::{LocalQwen, LocalWeights, Sampling};
-use crate::residency::Residency;
+use crate::local::{LocalWeights, Sampling};
 
 mod served;
 use served::Served;
-
-/// How long dropping a [`LoadedModel`] waits for a local generation still
-/// running to stop before the process may exit.
-pub const QUIESCE_GRACE: Duration = Duration::from_secs(60);
 
 /// A model reached over an API, named `provider/model` the way sven's
 /// configuration names it.
@@ -107,7 +100,7 @@ impl RemoteModel {
             .as_object()
             .cloned()
             .unwrap_or_default();
-        // A model served on this machine answers like the in-process one:
+        // A model served on this machine answers as an agent needs it to:
         // without a reasoning block that would spend the caller's output
         // budget before any answer or tool call is written. When it may
         // reason, the request says so, so the answer does not depend on the
@@ -154,7 +147,7 @@ const LOCAL_SERVER_PROVIDER: &str = "brain";
 /// The model one stage runs on.
 #[derive(Clone, Debug)]
 pub enum ModelSelection {
-    /// Served in-process from local weights, with an optional adapter.
+    /// Served by a brain server from local weights, with an optional adapter.
     Local(LocalWeights),
     /// Reached over an API.
     Remote(RemoteModel),
@@ -187,42 +180,29 @@ impl ModelSelection {
         }
     }
 
-    /// This selection loaded: a provider for it, known by its
-    /// [`Self::identity`]. Local weights go on `residency`'s copy of their
-    /// base, loaded there if no other model holds it - the expensive step,
-    /// so load once per command, not per request.
-    pub fn load(&self, residency: &Residency) -> Result<LoadedModel, PolicyError> {
+    /// A model reached over an API, loaded: a provider for it, known by its
+    /// [`Self::identity`]. A local selection is refused: it is requested from
+    /// a brain server ([`Self::load_served`]), never loaded here.
+    pub fn load_remote(&self) -> Result<LoadedModel, PolicyError> {
         let identity = self.identity();
-        match self {
-            Self::Remote(remote) => {
-                let unreachable = |e: anyhow::Error| PolicyError::Remote {
-                    spec: remote.spec.clone(),
-                    reason: format!("{e:#}"),
-                };
-                let mut config = sven_sdk::config::load(None).map_err(unreachable)?;
-                remote.apply_to(&mut config)?;
-                let driver = probed_provider(&config).map_err(unreachable)?;
-                Ok(LoadedModel {
-                    provider: Arc::from(driver),
-                    identity,
-                    local: None,
-                    served: None,
-                })
-            }
-            Self::Local(weights) => {
-                let local = Arc::new(LocalQwen::load(
-                    residency,
-                    weights,
-                    &local_model_name(&weights.base),
-                )?);
-                Ok(LoadedModel {
-                    provider: local.clone(),
-                    identity,
-                    local: Some(local),
-                    served: None,
-                })
-            }
-        }
+        let Self::Remote(remote) = self else {
+            return Err(PolicyError::Endpoint {
+                url: String::new(),
+                reason: format!("{identity} is a local model: request it from a brain server"),
+            });
+        };
+        let unreachable = |e: anyhow::Error| PolicyError::Remote {
+            spec: remote.spec.clone(),
+            reason: format!("{e:#}"),
+        };
+        let mut config = sven_sdk::config::load(None).map_err(unreachable)?;
+        remote.apply_to(&mut config)?;
+        let driver = probed_provider(&config).map_err(unreachable)?;
+        Ok(LoadedModel {
+            provider: Arc::from(driver),
+            identity,
+            served: None,
+        })
     }
 }
 
@@ -316,7 +296,6 @@ pub fn served_model_sampled(
     Ok(LoadedModel {
         provider: Arc::from(driver),
         identity: format!("{spec}@{base_url}"),
-        local: None,
         served: None,
     })
 }
@@ -324,8 +303,8 @@ pub fn served_model_sampled(
 /// The configuration [`served_model`] builds its driver from. Every
 /// request asks the server not to open with a reasoning block
 /// (`chat_template_kwargs.enable_thinking: false`) unless `sampling` lets
-/// the model reason, as an in-process generation does ([`crate::local`]), so
-/// a served answer and an in-process one are produced from the same prompt.
+/// the model reason, as the local sampling defaults say ([`crate::local`]), so
+/// every served answer is produced from the same prompt.
 ///
 /// A typed call is not sent as a constrained `response_format`: the server
 /// refuses a request field it cannot honor, and treats an explicit null as
@@ -383,13 +362,10 @@ fn served_config_capped(
 }
 
 /// A model loaded for the length of a command: the provider every engine
-/// on it shares, and its identity. Dropping it stops a local generation
-/// still running and waits up to [`QUIESCE_GRACE`] for the device to go
-/// quiet, so a process never exits under a live device call.
+/// on it shares, and its identity.
 pub struct LoadedModel {
     provider: Arc<dyn ModelProvider>,
     identity: String,
-    local: Option<Arc<LocalQwen>>,
     served: Option<Served>,
 }
 
@@ -406,39 +382,14 @@ impl LoadedModel {
         &self.identity
     }
 
-    /// Stops a local generation still running and waits up to
-    /// [`QUIESCE_GRACE`] for it to end, as dropping the model does, while
-    /// keeping the model: before its base is released for other work.
-    /// Returns whether every generation has stopped.
-    pub fn quiesce(&self) -> bool {
-        self.local
-            .as_ref()
-            .is_none_or(|local| local.stop_generation(QUIESCE_GRACE))
-    }
-
-    /// Every seed this model drew for a sampled request that named none since
-    /// the last call, in request order ([`LocalQwen::take_drawn_seeds`]);
-    /// empty for a model reached over an API, whose server samples.
-    #[must_use]
-    pub fn take_drawn_seeds(&self) -> Vec<Seed> {
-        self.local
-            .as_ref()
-            .map_or_else(Vec::new, |local| local.take_drawn_seeds())
-    }
-
     /// A provider for the same weights sampling as `sampling` says; `None`
     /// for a model reached over an API under its own name, whose sampling is
-    /// its server's. An in-process provider shares the weights: this model
-    /// must outlive its use, as it must outlive [`Self::provider`]'s. A
-    /// served one sends every request to the endpoint the sampling's seed
+    /// its server's. A served one sends every request to the endpoint the sampling's seed
     /// pins it to, so the requests of one attempt share one server's cache.
     pub fn resampled(
         &self,
         sampling: Sampling,
     ) -> Result<Option<Arc<dyn ModelProvider>>, PolicyError> {
-        if let Some(local) = &self.local {
-            return Ok(Some(Arc::new(local.resampled(sampling))));
-        }
         match &self.served {
             Some(served) => {
                 let pin = sampling.seed.map(|seed| seed.to_le_bytes().to_vec());
@@ -454,14 +405,6 @@ impl std::fmt::Debug for LoadedModel {
         f.debug_struct("LoadedModel")
             .field("identity", &self.identity)
             .finish_non_exhaustive()
-    }
-}
-
-impl Drop for LoadedModel {
-    fn drop(&mut self) {
-        // Best effort by contract: a generation that outlives the grace is
-        // cancelling and stops on its own.
-        let _ = self.quiesce();
     }
 }
 

@@ -306,9 +306,6 @@ fn full(
         },
     )?;
     let work = planned.plan.dir.clone();
-    // A full fine-tune loads its own copy of the base: the device holds no
-    // other while it trains.
-    ctx.release_bases();
     let trained = trainer.train_full(ctx, &planned.plan, &job.cancel);
     let checkpoint = match trained {
         Ok(checkpoint) => checkpoint,
@@ -365,7 +362,6 @@ fn merge(
         .join("consolidate")
         .join(splinter_store::new_id_with_prefix("merge"));
     std::fs::create_dir_all(&work).map_err(io(&work))?;
-    ctx.release_bases();
     let checkpoint = match trainer.merge(ctx, &job.from.base, adapter, &work.join("checkpoint")) {
         Ok(checkpoint) => checkpoint,
         Err(e) => {

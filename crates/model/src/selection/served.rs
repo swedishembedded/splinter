@@ -90,7 +90,6 @@ impl ModelSelection {
         Ok(LoadedModel {
             provider,
             identity: self.identity(),
-            local: None,
             served: Some(served),
         })
     }

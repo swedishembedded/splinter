@@ -13,6 +13,5 @@ mod fan_out;
 mod generations;
 mod pipeline;
 mod releases;
-mod sampled_seeds;
 mod seeds;
 mod workspace_environments;

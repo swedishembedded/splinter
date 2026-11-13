@@ -190,6 +190,46 @@ fn an_adapter_is_offered_through_the_manifest_the_endpoint_follows_and_waited_fo
 }
 
 #[test]
+fn an_adapter_is_offered_by_writing_it_to_the_directory_the_endpoint_serves_and_none_is_withdrawn()
+{
+    let dir = tempfile::tempdir().unwrap();
+    let served = dir.path().join("adapters");
+    std::fs::create_dir(&served).unwrap();
+    let (one_dir, two_dir) = (dir.path().join("one"), dir.path().join("two"));
+    std::fs::create_dir_all(&one_dir).unwrap();
+    std::fs::create_dir_all(&two_dir).unwrap();
+    let (first, second) = (
+        adapter_file(&one_dir, b"candidate-1"),
+        adapter_file(&two_dir, b"candidate-2"),
+    );
+    let server = ScriptedEndpoint::start(vec![Card::base("Qwen/Qwen3-0.6B")])
+        .serving_adapters(served.clone());
+    let brain = endpoints(&[server.url()]).with_adapter_directory(served.clone());
+
+    let one = ModelSelection::Local(weights("/models/Qwen/Qwen3-0.6B", Some(&first)))
+        .load_served(&brain)
+        .unwrap();
+    let two = ModelSelection::Local(weights("/models/Qwen/Qwen3-0.6B", Some(&second)))
+        .load_served(&brain)
+        .unwrap();
+
+    assert_eq!(
+        ask(&one, "hi"),
+        "an answer",
+        "the first adapter still answers"
+    );
+    assert_eq!(ask(&two, "hi"), "an answer");
+    let models: Vec<_> = server.seen().into_iter().map(|s| s.model).collect();
+    assert_ne!(models[0], models[1], "each adapter is a model of its own");
+    assert!(!brain.offers_adapters(), "a directory withdraws nothing");
+    let hidden = std::fs::read_dir(&served)
+        .unwrap()
+        .flatten()
+        .any(|e| e.file_name().to_string_lossy().starts_with('.'));
+    assert!(!hidden, "nothing is left half written");
+}
+
+#[test]
 fn sampling_rides_every_request_and_a_seed_pins_the_attempt_to_one_endpoint() {
     let first = ScriptedEndpoint::start(vec![Card::base("Qwen/Qwen3-0.6B")]);
     let second = ScriptedEndpoint::start(vec![Card::base("Qwen/Qwen3-0.6B")]);
@@ -314,4 +354,44 @@ fn the_width_asked_of_endpoints_is_the_configured_one_else_a_stated_default_per_
         2 * splinter_model::endpoint::DEFAULT_ATTEMPTS_PER_ENDPOINT
     );
     assert_eq!(one.with_attempt_concurrency(48).attempt_concurrency(), 48);
+}
+
+#[test]
+fn embeddings_are_requested_from_the_served_model_in_text_order_with_the_query_instructed() {
+    use splinter_model::embed::{Embeddings, MAX_TOKENS};
+    let server = ScriptedEndpoint::start(vec![Card::base("Qwen/Qwen3-Embedding-0.6B")]);
+    let brain = endpoints(&[server.url()]);
+    let embeddings = Embeddings::request(&brain, "Qwen/Qwen3-Embedding-0.6B").unwrap();
+
+    let passages = embeddings.passages(&["a", "bcd", "ef"]).unwrap();
+    let query = embeddings.query("xy").unwrap();
+
+    assert_eq!(
+        passages,
+        vec![vec![1.0, 1.0], vec![3.0, 1.0], vec![2.0, 1.0]]
+    );
+    assert_eq!(query, vec![2.0, 1.0]);
+    let asked = server.embeddings_asked();
+    assert_eq!(asked[0]["model"], "Qwen/Qwen3-Embedding-0.6B");
+    assert_eq!(asked[0]["max_tokens"], MAX_TOKENS);
+    assert!(
+        asked[0].get("instruction").is_none(),
+        "a passage is not instructed"
+    );
+    assert!(asked[1]["instruction"]
+        .as_str()
+        .is_some_and(|i| !i.is_empty()));
+}
+
+#[test]
+fn an_embedding_model_the_endpoint_does_not_serve_is_refused_by_name() {
+    let server = ScriptedEndpoint::start(vec![Card::base("Qwen/Qwen3-0.6B")]);
+    let brain = endpoints(&[server.url()]);
+
+    let refused = splinter_model::embed::Embeddings::request(&brain, "Qwen/Qwen3-Embedding-0.6B")
+        .err()
+        .expect("refused")
+        .to_string();
+
+    assert!(refused.contains("Qwen3-Embedding-0.6B"), "{refused}");
 }

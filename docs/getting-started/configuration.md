@@ -4,7 +4,8 @@
 # Configuration
 
 A run needs no flags. Splinter finds what this machine holds: brain's model
-store (the one `brain pull` fills), the `brain` on `PATH`, the GPUs, and the
+store (the one `brain pull` fills), the `brain` on `PATH` it serves models
+from, the GPUs, and the
 strongest chat model in the store that fits a card, which then helps the
 policy learn (see [Roles](#roles)). Every choice is a flag, valid on every
 command; nothing is read from environment variables. The flags are listed
@@ -40,7 +41,8 @@ before anything is submitted.
 |---|---|
 | `--models-dir DIR` | Brain's model store (default: the store `brain pull` fills, `~/.local/share/brain/models`). |
 | `--policy-base CHECKPOINT` | The policy's base checkpoint, a path or a name in the store (default `Qwen/Qwen3-0.6B`). |
-| `--brain-bin PATH` | The `brain` binary a release is served on (default: the first `brain` on `PATH`). |
+| `--brain-bin PATH` | The `brain` binary Splinter starts a server from, and a release is served on (default: the first `brain` on `PATH`). |
+| `--brain-endpoint URL`, `--brain-key-file FILE` | A running brain server to request every local model from, instead of starting one (see [Serving models from brain](#serving-models-from-brain)). |
 | `--assistant-model REF` | The stronger model that plans, writes tasks, teaches, judges and reads sentences when the command names none (default: discovered, see [Roles](#roles)). |
 | `--judge-model REF` | The model that judges what only a judge can decide (default: the assistant). |
 | `--front-door-model REF` | The model that reads sentences (default: the assistant). |
@@ -82,13 +84,21 @@ A remote reference is refused unless `--allow-remote` is given; that is the
 only way Splinter uses the network. Its key is the one sven holds for the
 provider: store it once with `sven auth set openrouter` (or the provider's id).
 
-## Serving models from a brain endpoint
+## Serving models from brain
 
-By default a local model (`local:...`, `policy:...`) is loaded in the process and decodes one attempt at a
-time. Given a `brain serve --openai` endpoint, Splinter loads nothing: every local reference is requested
-from the endpoint by the id it serves it under, and the attempts of `practice`, `learn`, `generation run`,
-`solve` and the release gate run against it at once, which brain's continuous batching decodes together.
-This also serves policies the in-process model cannot load, such as Qwen3.8.
+Splinter reaches brain only through its API. A local model (`local:...`, `policy:...`) is never loaded in
+the process: it is requested from a `brain serve --openai` by the id that server serves it under, and the
+attempts of `practice`, `learn`, `generation run`, `solve` and the release gate run against it at once,
+which brain's continuous batching decodes together.
+
+Without flags, Splinter starts such a server for the length of the command: the `brain` on `PATH` (or
+`--brain-bin`), over the model store, with the adapters Splinter trains served from a directory under the
+state root and the training workload on. `--device` and `--backend` are brain's own flags, handed to that
+server; `--attempt-concurrency N` is its `--max-batch` and the number of attempts asked of it at once (16
+when not given). With no `brain` binary and no endpoint, a command that needs a local model is refused
+with what to name.
+
+Given a running server, Splinter starts nothing:
 
 ```text
 brain --device gpu3 --backend cuda serve --openai 127.0.0.1:8805 --api-key-file KEY \
@@ -105,12 +115,12 @@ when not given).
 
 A base is requested as `<org>/<model>`, the last two components of its checkpoint path, which is how
 brain's model store names it. An adapter is found on the endpoint by the digest of its file. A reference
-the endpoint does not list is refused by name, with what it does list; it is never run in the process
-instead. `--brain-adapter-manifest FILE` names the release manifest the endpoint follows (`brain serve
---adapter-manifest FILE`): an adapter the endpoint does not list, a release candidate in the gate for
-example, is offered by publishing it there and waited for. A manifest offers one adapter at a time, so
-the gate's two arms are asked one after the other. With endpoints, the gate starts no `brain` of its own:
-its serve check is that each endpoint lists the candidate under the digest the release records.
+the endpoint does not list is refused by name, with what it does list. `--brain-adapter-manifest FILE` names
+the release manifest the endpoint follows (`brain serve --adapter-manifest FILE`): an adapter the endpoint
+does not list, a release candidate in the gate for example, is offered by publishing it there and waited
+for. A manifest offers one adapter at a time, so the gate's two arms are asked one after the other. With
+endpoints, the gate starts no `brain` of its own: its serve check is that each endpoint lists the candidate
+under the digest the release records.
 
 ### Training on a brain endpoint
 

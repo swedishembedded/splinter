@@ -16,7 +16,8 @@
 //! flight together. A request takes [`ScriptedEndpoint::with_delay`] to
 //! answer, so requests asked together overlap and the peak shows it. An
 //! endpoint may follow a release manifest, listing the adapter the manifest
-//! names, as `brain serve --adapter-manifest` does.
+//! names, as `brain serve --adapter-manifest` does, or serve the adapters in
+//! a directory, as `--serve-adapters` does.
 
 // Test support: a listener that cannot be bound is the failure report.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -82,6 +83,8 @@ type Reply = dyn Fn(&Seen) -> String + Send + Sync;
 struct Shared {
     models: Mutex<Vec<Card>>,
     manifest: Mutex<Option<(PathBuf, String)>>,
+    adapters_dir: Mutex<Option<PathBuf>>,
+    embeddings: Mutex<Vec<serde_json::Value>>,
     delay: Mutex<Duration>,
     reply: Mutex<Arc<Reply>>,
     jobs: crate::scripted_jobs::Jobs,
@@ -107,6 +110,8 @@ impl ScriptedEndpoint {
         let shared = Arc::new(Shared {
             models: Mutex::new(models),
             manifest: Mutex::new(None),
+            adapters_dir: Mutex::new(None),
+            embeddings: Mutex::new(Vec::new()),
             delay: Mutex::new(Duration::ZERO),
             reply: Mutex::new(Arc::new(|_: &Seen| "an answer".to_string())),
             jobs: crate::scripted_jobs::Jobs::default(),
@@ -153,6 +158,16 @@ impl ScriptedEndpoint {
         self
     }
 
+    /// Serves the adapters written to `directory`, as `brain serve
+    /// --serve-adapters` does: each visible `<hex>.safetensors` is listed as
+    /// its own model, `adapter-<hex prefix>`, with the SHA-256 of its bytes
+    /// as its digest. Hidden files are ignored.
+    #[must_use]
+    pub fn serving_adapters(self, directory: PathBuf) -> Self {
+        *self.shared.adapters_dir.lock().unwrap() = Some(directory);
+        self
+    }
+
     /// Serves training jobs as `script` says (`POST /v1/jobs` and the rest of
     /// brain's job routes), over the artifact store the script names.
     #[must_use]
@@ -179,6 +194,15 @@ impl ScriptedEndpoint {
         self.shared.peak.load(Ordering::SeqCst)
     }
 
+    /// The body of every embeddings request so far, in arrival order. Each
+    /// text is answered with the vector `[its length in chars, 1]`, and the
+    /// items come back in reverse order with their `index`, as a server that
+    /// batches may return them.
+    #[must_use]
+    pub fn embeddings_asked(&self) -> Vec<serde_json::Value> {
+        self.shared.embeddings.lock().unwrap().clone()
+    }
+
     /// Every chat request answered or refused so far, in arrival order.
     #[must_use]
     pub fn seen(&self) -> Vec<Seen> {
@@ -203,6 +227,31 @@ fn listed(shared: &Shared) -> Vec<Card> {
                 .and_then(|m| m["digest"].as_str().map(str::to_string))
             {
                 cards.push(Card::adapter(id, &digest));
+            }
+        }
+    }
+    if let Some(directory) = shared.adapters_dir.lock().unwrap().as_ref() {
+        let mut names: Vec<_> = std::fs::read_dir(directory)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.extension().is_some_and(|e| e == "safetensors")
+                    && !path
+                        .file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+            })
+            .collect();
+        names.sort();
+        for path in names {
+            if let Ok(file) = std::fs::File::open(&path) {
+                if let Ok(digest) = splinter_core::digest::Digest::sha256_of_reader(file) {
+                    cards.push(Card::adapter(
+                        &format!("adapter-{}", &digest.hex()[..12]),
+                        digest.as_str(),
+                    ));
+                }
             }
         }
     }
@@ -267,6 +316,22 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
             .collect();
         let list = serde_json::json!({ "object": "list", "data": data }).to_string();
         let _ = respond(&mut stream, "200 OK", "application/json", &list);
+    } else if request_line.starts_with("POST /v1/embeddings") {
+        let request: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+        shared.embeddings.lock().unwrap().push(request.clone());
+        let mut data: Vec<serde_json::Value> = request["input"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .map(|(index, text)| {
+                let chars = text.as_str().map_or(0, |t| t.chars().count());
+                serde_json::json!({"object": "embedding", "index": index, "embedding": [chars as f64, 1.0]})
+            })
+            .collect();
+        data.reverse();
+        let reply = serde_json::json!({"object": "list", "data": data}).to_string();
+        let _ = respond(&mut stream, "200 OK", "application/json", &reply);
     } else if request_line.starts_with("POST /v1/chat/completions") {
         chat(&mut stream, shared, &body, bearer);
     } else {

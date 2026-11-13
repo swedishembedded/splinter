@@ -42,20 +42,18 @@ use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    splinter_sdk::device::DeviceFlags::take(&mut args)
-        .map_err(anyhow::Error::msg)?
-        .apply()?;
+    let flags = splinter_sdk::device::DeviceFlags::take(&mut args).map_err(anyhow::Error::msg)?;
     match args.first().map(String::as_str) {
         Some("corpus") => corpus_command(&args[1..]),
         Some("materials") => materials_command(&args[1..]),
         Some("tasks") => tasks_command(&args[1..]),
-        Some("exam") => exam_command(&args[1..]),
+        Some("exam") => exam_command(&flags, &args[1..]),
         Some("train") => train_command(&args[1..]),
         Some("report") => report_command(&args[1..]),
-        Some("scenarios") => scenarios_command(&args[1..]),
-        Some("apply") => apply_command(&args[1..]),
-        Some("judge") => judge_command(&args[1..]),
-        Some("retrieval") => retrieval_command(&args[1..]),
+        Some("scenarios") => scenarios_command(&flags, &args[1..]),
+        Some("apply") => apply_command(&flags, &args[1..]),
+        Some("judge") => judge_command(&flags, &args[1..]),
+        Some("retrieval") => retrieval_command(&flags, &args[1..]),
         Some("apply-report") => apply_report_command(&args[1..]),
         _ => anyhow::bail!("usage: splinter-jefferson <corpus|tasks> --resources DIR --out DIR"),
     }
@@ -202,7 +200,7 @@ fn tasks_command(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn exam_command(args: &[String]) -> anyhow::Result<()> {
+fn exam_command(flags: &splinter_sdk::device::DeviceFlags, args: &[String]) -> anyhow::Result<()> {
     let need = |name: &str| flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"));
     let run = exam::Run {
         exam: PathBuf::from(need("--exam")?),
@@ -222,7 +220,8 @@ fn exam_command(args: &[String]) -> anyhow::Result<()> {
             run.exam.display()
         );
     }
-    let asked = exam::run(&run)?;
+    let brain = flags.brain()?;
+    let asked = exam::run(brain.endpoints(), &run)?;
     println!("asked {asked} questions; results in {}", run.out.display());
     Ok(())
 }
@@ -330,7 +329,10 @@ fn report_command(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn scenarios_command(args: &[String]) -> anyhow::Result<()> {
+fn scenarios_command(
+    flags: &splinter_sdk::device::DeviceFlags,
+    args: &[String],
+) -> anyhow::Result<()> {
     let need = |name: &str| flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"));
     let out = PathBuf::from(need("--out")?);
     let frozen = frozen_seed(&out, args)?;
@@ -345,7 +347,8 @@ fn scenarios_command(args: &[String]) -> anyhow::Result<()> {
         per_letter: number(args, "--per-letter", 2)?,
     };
     frozen.record()?;
-    let made = writer::generate(&options, &out)?;
+    let brain = flags.brain()?;
+    let made = writer::generate(brain.endpoints(), &options, &out)?;
     let mut sft = String::new();
     for scenario in writer::read_scenarios(&out.join("scenarios.jsonl"))?
         .iter()
@@ -362,7 +365,7 @@ fn scenarios_command(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn apply_command(args: &[String]) -> anyhow::Result<()> {
+fn apply_command(flags: &splinter_sdk::device::DeviceFlags, args: &[String]) -> anyhow::Result<()> {
     let need = |name: &str| flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"));
     let run = application::Run {
         resources: PathBuf::from(need("--resources")?),
@@ -375,15 +378,17 @@ fn apply_command(args: &[String]) -> anyhow::Result<()> {
     };
     println!(
         "answered {} scenarios; results in {}",
-        application::run(&run)?,
+        application::run(flags.brain()?.endpoints(), &run)?,
         run.out.display()
     );
     Ok(())
 }
 
-fn judge_command(args: &[String]) -> anyhow::Result<()> {
+fn judge_command(flags: &splinter_sdk::device::DeviceFlags, args: &[String]) -> anyhow::Result<()> {
     let need = |name: &str| flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"));
+    let brain = flags.brain()?;
     let controls = application::judge_all(
+        brain.endpoints(),
         std::path::Path::new(&need("--judge")?),
         std::path::Path::new(&need("--scenarios")?),
         std::path::Path::new(&need("--answers")?),
@@ -481,14 +486,23 @@ fn materials_command(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn retrieval_command(args: &[String]) -> anyhow::Result<()> {
+fn retrieval_command(
+    flags: &splinter_sdk::device::DeviceFlags,
+    args: &[String],
+) -> anyhow::Result<()> {
     let need = |name: &str| flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"));
     let resources = PathBuf::from(need("--resources")?);
     let scenarios = writer::read_scenarios(std::path::Path::new(&need("--scenarios")?))?;
     let letters = corpus::load_letters(&resources)?;
     let passages = retrieval::letter_passages(&letters);
+    let brain = flag(args, "--embedder")
+        .map(|_| flags.brain())
+        .transpose()?;
     let loaded = flag(args, "--embedder")
-        .map(|model| splinter_sdk::model::embed::Embeddings::load(&model))
+        .zip(brain.as_ref())
+        .map(|(model, brain)| {
+            splinter_sdk::model::embed::Embeddings::request(brain.endpoints(), &model)
+        })
         .transpose()?;
     let embedder = loaded.as_ref().map(retrieval::Qwen);
     let results = retrieval::measure(

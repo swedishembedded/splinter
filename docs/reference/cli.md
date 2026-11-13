@@ -11,9 +11,12 @@ lists every command, argument and option.
 
 Every command takes these.
 
-- `--device <DEVICE>`: Which compute may be scheduled: `gpu`, `gpu1`, `gpu0,gpu1`, `cpu0-7`, `vulkan`, ... in brain's grammar. Without it, every device the machine has.
+- `--device <DEVICE>`: Which compute the brain server may schedule: `gpu`, `gpu1`, `gpu0,gpu1`, `cpu0-7`, `vulkan`, ... in brain's grammar. Without it, every device the machine has.
 - `--backend <BACKEND>`: How the hardware is driven: wgpu, vulkan, cuda or cpu. Without it brain picks, which on a CUDA host is not CUDA.
-- `--vram-budget <VRAM_BUDGET>`: The VRAM, in GiB, this process was granted: every card it budgets from is capped at it, so a run on a share of a card sizes its model, KV pool and context to the share. Without it the whole card is budgeted.
+- `--vram-budget <VRAM_BUDGET>`: The VRAM, in GiB, this process was granted: every card the server budgets from is capped at it. Without it the whole card is budgeted.
+- `--brain-endpoint <BRAIN_ENDPOINT>...`: A running `brain serve --openai` to request every local model from (its base URL, ending in `/v1`); repeat for more. Without one, a server is started from `--brain-bin`.
+- `--brain-key-file <BRAIN_KEY_FILE>`: The file holding the endpoints' API key.
+- `--brain-bin <BRAIN_BIN>`: The `brain` binary a server is started from (default: the first on `PATH`)
 - `--state <DIR>`: The state root (default: ~/.splinter)
 - `--job-owner <NAME>`: The controller name recorded with each job this process submits and the claim it takes on one (default: this machine's host name)
 - `--job-attempt-root <DIR>`: Where a submitted job's attempt directories are written (default: `jobs` under the state root)
@@ -24,7 +27,6 @@ Every command takes these.
 - `--slurm-arg <ARG>...`: An argument every `slurm` submission passes to `sbatch` before the script (for example `--partition=debug`); repeat for more.
 - `--models-dir <DIR>`: brain's model store, where `local:<org>/<model>` names a checkpoint (default: the store `brain pull` fills)
 - `--policy-base <CHECKPOINT>`: The checkpoint the policy trains and `policy:default` serves: a path, or a name in the model store (default: Qwen/Qwen3-0.6B)
-- `--brain-bin <PATH>`: The `brain` executable a release is checked to serve on (default: the first `brain` on PATH)
 - `--assistant-model <REF>`: The model that plans a learning run, writes its tasks, teaches what the policy cannot answer and judges, when the command names none for a role (default: the strongest chat model in the model store that fits a card, else the policy)
 - `--judge-model <REF>`: The model that judges answers in place of the assistant, so the judge is another model than the one that wrote what it grades.
 - `--front-door-model <REF>`: The model that reads a sentence (`splinter "learn ..."`) in place of the assistant.
@@ -41,11 +43,9 @@ Every command takes these.
 - `--allow-remote`: Permit models reached over the network (remote:...); without it every model runs locally.
 - `--policy-context-tokens <TOKENS>`: Limit the policy model's context to this many tokens (default: the largest its checkpoint supports); for a policy too large for the card at that size. Another model is limited by its reference, `local:<checkpoint>@<tokens>`.
 - `--remote-concurrency <N>`: How many requests to a model reached over an API may be in flight at once [default: 4]
-- `--brain-endpoint <URL>...`: A brain endpoint (an OpenAI-compatible base URL, `http://HOST:PORT/v1`) every local model reference is requested from instead of being loaded in this process: `local:<checkpoint>[+adapter]` and `policy:<alias>` are asked of it by the id it serves them under, and a reference it does not list is refused. Repeat for more endpoints; an attempt is pinned to one by a stable hash of its id, so its conversation stays cached on that server. Needs `--brain-key-file`.
-- `--brain-key-file <FILE>`: The file holding the API key of the brain endpoints (the one word of the file `brain serve --api-key-file` was given)
 - `--brain-adapter-manifest <FILE>`: The release manifest the brain endpoints follow (`brain serve --adapter-manifest FILE`): an adapter they do not list, such as a release candidate, is offered by publishing it there and waited for. A manifest offers one adapter at a time.
 - `--brain-artifact-store <DIR>`: The artifact store the brain endpoints train through (`brain serve --training --artifact-store DIR`): a directory both they and this machine reach, in which datasets are published, named by their BLAKE3 digest, and trained adapters are found. With endpoints, a supervised or policy-gradient training run is a job of the service and needs it.
-- `--attempt-concurrency <N>`: How many attempts are asked of the brain endpoints at once, in all (set to their --max-batch) [default: 16 per endpoint]
+- `--attempt-concurrency <N>`: How many attempts are asked of the brain server at once, in all (set to its --max-batch) [default: 16 per endpoint]
 - `--solve-deadline <SECONDS>`: How many seconds one task's solve may take on the wall clock [default: 300]
 - `--test-output-cap <BYTES>`: Bytes kept of each output stream of a test run [default: 1048576]
 - `--allow-unconfined-workspace`: Let a project's commands (the solver's shell, the test runs) see the whole filesystem where the kernel cannot confine them to their tree. Without it such a run is refused; the environment record says when it was allowed.

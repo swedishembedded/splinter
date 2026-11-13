@@ -55,6 +55,6 @@ pub mod releases;
 pub mod roles;
 pub mod runs;
 
-pub use config::Config;
+pub use config::{set_brain_defaults, BrainDefaults, Config};
 pub use context::{Context, Runtime};
 pub use error::OrchestratorError;

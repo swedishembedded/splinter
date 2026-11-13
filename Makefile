@@ -101,9 +101,9 @@ test/families:
 	python3 scripts/tasks/families.py mutate
 	python3 scripts/tasks/test_runaway.py
 
-## test/methods - one falsifiable smoke per learning method (SFT, rejection sampling, DPO, GRPO, distillation, continued pretraining, test-time search, retrieval, self-play) on a toy model on the CPU, printed as a table of held-out scores before and after (no GPU, minutes)
+## test/methods - one falsifiable smoke per learning method (SFT, rejection sampling, DPO, GRPO, distillation, continued pretraining, test-time search, retrieval, self-play) on a toy model served by a built brain (BRAIN_BIN) on the CPU, printed as a table of held-out scores before and after (no GPU, minutes; exit 3 means no brain binary)
 test/methods:
-	bash scripts/methods/table.sh "$(CARGO)" "$(PROFILE)"
+	bash scripts/methods/table.sh "$(CARGO)" "$(PROFILE)" "$(BRAIN_BIN)"
 
 ## test/e2e - lists the end-to-end targets, which need built brain and sven binaries; runs nothing
 test/e2e:

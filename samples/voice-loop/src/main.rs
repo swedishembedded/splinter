@@ -378,9 +378,9 @@ fn main() -> Result<()> {
     match cli.command {
         Command::SpeechRl(args) => voice_loop::rl::run(&args),
         Command::Takes(args) => voice_loop::takes::run(&args),
-        Command::Agent(args) => voice_loop::agent::run(&args),
-        Command::TeachEval(args) => voice_loop::teach_eval::run(&args),
-        Command::TeachRead(args) => voice_loop::teach_eval::read(&args),
+        Command::Agent(args) => voice_loop::agent::run(&cli.device, &args),
+        Command::TeachEval(args) => voice_loop::teach_eval::run(&cli.device, &args),
+        Command::TeachRead(args) => voice_loop::teach_eval::read(&cli.device, &args),
         Command::Judge(args) => voice_loop::judge::run(&args),
         Command::Teach(args) => voice_loop::teach::teach(&args),
         Command::Speak {
@@ -583,13 +583,16 @@ fn main() -> Result<()> {
             base,
             adapter,
             report,
-        } => turn(
-            &models,
-            voice.speaker(&voice_loop::voice::manifest_beside(&out))?,
-            (&input, &out),
-            &Persona::load(&persona, &base, adapter.as_deref())?,
-            report.as_deref(),
-        ),
+        } => {
+            let brain = cli.device.brain()?;
+            turn(
+                &models,
+                voice.speaker(&voice_loop::voice::manifest_beside(&out))?,
+                (&input, &out),
+                &Persona::load(brain.endpoints(), &persona, &base, adapter.as_deref())?,
+                report.as_deref(),
+            )
+        }
         Command::Turns {
             models,
             voice,
@@ -610,7 +613,8 @@ fn main() -> Result<()> {
                 out_dir: &out_dir,
             };
             let persona = {
-                let loaded = Persona::load(&persona, &base, adapter.as_deref())?;
+                let brain = cli.device.brain()?;
+                let loaded = Persona::load(brain.endpoints(), &persona, &base, adapter.as_deref())?;
                 match system {
                     Some(system) => loaded.under(system),
                     None => loaded,

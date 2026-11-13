@@ -72,7 +72,6 @@ mod release_workspace;
 mod rerank;
 mod reserve;
 mod reserve_learn;
-mod residency;
 mod router;
 mod runtime;
 mod sample_anchor;

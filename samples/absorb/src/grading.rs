@@ -171,8 +171,6 @@ impl Judge {
         reference: &ModelRef,
         set: &TaskSetId,
     ) -> anyhow::Result<Calibrated> {
-        // The policy's base is not the judge's: give the device back first.
-        ctx.release_bases();
         let measured = measure_judge(ctx, set, reference, Judging::Reference)?;
         let calibration = JudgeCalibration {
             judge: measured.judge.clone(),

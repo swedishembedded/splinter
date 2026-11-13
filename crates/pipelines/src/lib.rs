@@ -72,7 +72,7 @@ pub mod ask;
 pub mod author;
 pub mod bench;
 mod block;
-pub mod brain_server;
+pub use splinter_model::server as brain_server;
 pub mod budget;
 pub mod campaign;
 pub mod canaries;

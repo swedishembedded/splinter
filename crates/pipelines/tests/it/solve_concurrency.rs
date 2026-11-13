@@ -148,10 +148,11 @@ fn a_remote_model_is_asked_up_to_the_configured_width_at_once() {
 }
 
 #[test]
-fn a_model_on_the_local_device_is_asked_one_request_at_a_time() {
+fn a_local_model_is_asked_as_wide_as_the_brain_server_decodes_together() {
     let local: ModelRef = "local:/models/base".parse().unwrap();
-    let (most, ..) = solve_with("local-narrow", local, 3);
-    assert_eq!(most, 1);
+    let (most, ..) = solve_with("local-wide", local, 3);
+    // Every attempt of the solve (12) fits the server's slots, so all are in flight together.
+    assert_eq!(most, 12, "requests overlap instead of queueing one at a time");
 }
 
 #[test]
@@ -170,7 +171,10 @@ fn a_model_is_handed_to_a_stage_with_the_width_it_is_asked_at() {
         ctx.add_model(reference.clone(), Model::new(slow.clone(), "slow/model"));
     }
     assert_eq!(ctx.model(&remote).unwrap().slots(), 5);
-    assert_eq!(ctx.model(&local).unwrap().slots(), 1);
+    assert_eq!(
+        ctx.model(&local).unwrap().slots(),
+        splinter_model::server::DEFAULT_SERVE_SLOTS as usize
+    );
     // A model whose owner says how many requests it decodes together keeps
     // that width, whatever its reference.
     let served: ModelRef = "local:/models/served".parse().unwrap();

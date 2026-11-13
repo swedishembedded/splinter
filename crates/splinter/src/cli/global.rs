@@ -61,10 +61,6 @@ pub struct Global {
     /// or a name in the model store (default: Qwen/Qwen3-0.6B).
     #[arg(long, global = true, value_name = "CHECKPOINT")]
     pub policy_base: Option<String>,
-    /// The `brain` executable a release is checked to serve on (default: the
-    /// first `brain` on PATH).
-    #[arg(long, global = true, value_name = "PATH")]
-    pub brain_bin: Option<PathBuf>,
     /// The model that plans a learning run, writes its tasks, teaches what the
     /// policy cannot answer and judges, when the command names none for a
     /// role (default: the strongest chat model in the model store that fits a
@@ -135,19 +131,6 @@ pub struct Global {
         help = format!("How many requests to a model reached over an API may be in flight at \
                         once [default: {DEFAULT_REMOTE_CONCURRENCY}]"))]
     pub remote_concurrency: Option<u32>,
-    /// A brain endpoint (an OpenAI-compatible base URL, `http://HOST:PORT/v1`)
-    /// every local model reference is requested from instead of being loaded
-    /// in this process: `local:<checkpoint>[+adapter]` and `policy:<alias>`
-    /// are asked of it by the id it serves them under, and a reference it
-    /// does not list is refused. Repeat for more endpoints; an attempt is
-    /// pinned to one by a stable hash of its id, so its conversation stays
-    /// cached on that server. Needs `--brain-key-file`.
-    #[arg(long, global = true, value_name = "URL")]
-    pub brain_endpoint: Vec<String>,
-    /// The file holding the API key of the brain endpoints (the one word of
-    /// the file `brain serve --api-key-file` was given).
-    #[arg(long, global = true, value_name = "FILE")]
-    pub brain_key_file: Option<PathBuf>,
     /// The release manifest the brain endpoints follow
     /// (`brain serve --adapter-manifest FILE`): an adapter they do not list,
     /// such as a release candidate, is offered by publishing it there and
@@ -162,11 +145,12 @@ pub struct Global {
     /// the service and needs it.
     #[arg(long, global = true, value_name = "DIR")]
     pub brain_artifact_store: Option<PathBuf>,
-    /// How many attempts are asked of the brain endpoints at once, in all
-    /// (set to their `--max-batch`).
+    /// How many attempts are asked of the brain server at once, in all (set
+    /// to its `--max-batch`); the width of the server this process starts
+    /// when no endpoint is named.
     #[arg(long, global = true, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
-        help = format!("How many attempts are asked of the brain endpoints at once, in all \
-                        (set to their --max-batch) [default: {} per endpoint]",
+        help = format!("How many attempts are asked of the brain server at once, in all \
+                        (set to its --max-batch) [default: {} per endpoint]",
                         splinter_sdk::model::endpoint::DEFAULT_ATTEMPTS_PER_ENDPOINT))]
     pub attempt_concurrency: Option<u32>,
     /// The wall-clock bound of one task's solve, a guard for a stuck episode.

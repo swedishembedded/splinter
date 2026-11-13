@@ -33,6 +33,7 @@ use splinter_sdk::model::speech::{
     BrainRecognizer, BrainSynthesizer, Recognizer, Synthesizer, DEFAULT_RECOGNIZER,
     DEFAULT_SYNTHESIZER,
 };
+use splinter_sdk::model::BrainEndpoints;
 use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
 
 use crate::batch::{emit, Persona};
@@ -334,7 +335,8 @@ fn run_scenario(
     })
 }
 
-pub fn run(args: &TeachEvalArgs) -> Result<()> {
+pub fn run(flags: &splinter_sdk::device::DeviceFlags, args: &TeachEvalArgs) -> Result<()> {
+    let brain = flags.brain()?;
     let text = std::fs::read_to_string(&args.scenarios)
         .with_context(|| format!("reading {}", args.scenarios.display()))?;
     let scenarios: Vec<Scenario> = text
@@ -343,10 +345,11 @@ pub fn run(args: &TeachEvalArgs) -> Result<()> {
         .map(serde_json::from_str)
         .collect::<Result<_, _>>()
         .with_context(|| format!("{} is not a file of scenarios", args.scenarios.display()))?;
-    let persona = Persona::load("assistant", &args.base, None)?.under(SYSTEM.to_string());
+    let persona =
+        Persona::load(brain.endpoints(), "assistant", &args.base, None)?.under(SYSTEM.to_string());
     let reader = args
         .model_reader
-        .then(|| reading_persona(&args.base))
+        .then(|| reading_persona(brain.endpoints(), &args.base))
         .transpose()?;
     let (synthesizer, recognizer) = if args.voices.is_empty() {
         (None, None)
@@ -421,8 +424,8 @@ pub fn model_reader(persona: &Persona) -> Reader<'_> {
 }
 
 /// A persona that reads what users say, on the model at `base`.
-pub fn reading_persona(base: &Path) -> Result<Persona> {
-    Ok(Persona::load("reader", base, None)?.under(READER_PROMPT.to_string()))
+pub fn reading_persona(endpoints: &BrainEndpoints, base: &Path) -> Result<Persona> {
+    Ok(Persona::load(endpoints, "reader", base, None)?.under(READER_PROMPT.to_string()))
 }
 
 #[derive(Args)]
@@ -454,10 +457,11 @@ struct Reading {
 
 /// What the plain readers and the model reader each make of every utterance.
 /// The model is asked of every one, so the two can be compared on all of them.
-pub fn read(args: &TeachReadArgs) -> Result<()> {
+pub fn read(flags: &splinter_sdk::device::DeviceFlags, args: &TeachReadArgs) -> Result<()> {
+    let brain = flags.brain()?;
     let text = std::fs::read_to_string(&args.utterances)
         .with_context(|| format!("reading {}", args.utterances.display()))?;
-    let persona = reading_persona(&args.base)?;
+    let persona = reading_persona(brain.endpoints(), &args.base)?;
     let reader = model_reader(&persona);
     let readings = text
         .lines()

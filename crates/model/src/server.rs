@@ -18,7 +18,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
-use splinter_agent::CancelToken;
+use sven_sdk::CancelToken;
 
 /// The model name plain `brain serve` answers to when the Qwen3 it serves
 /// carries no adapter, as the adapter's startup line names it when it does.
@@ -156,7 +156,7 @@ fn configure(command: &mut Command, launch: &Launch<'_>, address: &str, keys: &P
         command.args(["--device", device]);
     }
     // A grant this process was given bounds the server it starts too.
-    if let Some(gib) = splinter_model::device::vram_budget_gib() {
+    if let Some(gib) = crate::device::vram_budget_gib() {
         command.args(["--vram-budget", &gib.to_string()]);
     }
     command.arg("serve").args(["--openai", address]);
@@ -253,42 +253,18 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     let lines = forward_lines(&mut child, log);
     let mut running = Running(child);
 
-    let deadline = Instant::now() + launch.startup;
     let mut kept: Vec<String> = Vec::new();
-    let mut startup_line: Option<String> = None;
     // Only an adapter is announced: a plain base prints no such line.
     let announced = !matches!(launch.offer, Offer::Nothing | Offer::Directory(_));
-    while (announced && startup_line.is_none()) || !ready.exists() {
-        if cancel.is_cancelled() {
-            return Err(Failure::Cancelled);
-        }
-        if let Ok(Some(status)) = running.0.try_wait() {
-            return Err(Failure::Unmeasured(format!(
-                "brain serve exited ({status}) before it served: {}",
-                recent_output(&lines, &mut kept)
-            )));
-        }
-        let left = deadline.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            return Err(Failure::Unmeasured(format!(
-                "brain serve did not report its adapter and readiness within {}s: {}",
-                launch.startup.as_secs(),
-                recent_output(&lines, &mut kept)
-            )));
-        }
-        match lines.recv_timeout(left.min(Duration::from_millis(100))) {
-            Ok(line) => {
-                if startup_line.is_none() && is_adapter_line(&line) {
-                    startup_line = Some(line.clone());
-                }
-                remember(&mut kept, line);
-            }
-            Err(RecvTimeoutError::Timeout) => {}
-            // Both streams closed: the exit is reported by `try_wait` above
-            // once the process is reaped.
-            Err(RecvTimeoutError::Disconnected) => std::thread::sleep(Duration::from_millis(20)),
-        }
-    }
+    let startup_line = wait_ready(
+        &mut running,
+        &lines,
+        &mut kept,
+        &ready,
+        launch.startup,
+        cancel,
+        announced,
+    )?;
     let (startup_line, model, served_digest) = match startup_line {
         Some(line) => {
             let Some((model, digest)) = parse_adapter_line(&line) else {
@@ -319,6 +295,197 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
         key,
         slots: launch.slots(),
     })
+}
+
+/// What it takes to start a server that serves a whole model store, as the
+/// service every `local:` model of a run is requested from.
+pub struct ServiceLaunch<'a> {
+    /// The `brain` binary.
+    pub binary: &'a Path,
+    /// A scratch directory for the keys, the ready marker and the runtime
+    /// directory.
+    pub work: &'a Path,
+    /// Brain's model store: every base in it is served under the id the
+    /// store gives it.
+    pub models: &'a Path,
+    /// The directory adapters are offered in (`--serve-adapters`): one
+    /// written there is served as a model of its own, with no restart.
+    pub adapters: &'a Path,
+    /// The directory datasets and trained adapters move through
+    /// (`--artifact-store`), which also turns the training workload on.
+    pub artifacts: &'a Path,
+    /// The compute it may schedule, in brain's `--device` grammar; brain's
+    /// own choice when `None`.
+    pub device: Option<&'a str>,
+    /// How the hardware is driven (`--backend`); brain's choice when `None`.
+    pub backend: Option<&'a str>,
+    /// Sequences it decodes together (`--max-batch`);
+    /// [`DEFAULT_SERVE_SLOTS`] when `None`.
+    pub max_batch: Option<u32>,
+    /// How long the server may take to bind.
+    pub startup: Duration,
+    /// A file every line the server writes is appended to; only the last
+    /// lines are kept otherwise.
+    pub log: Option<&'a Path>,
+}
+
+/// A running service: the server, and how to reach it.
+pub struct Service {
+    /// The process, stopped when the service is dropped.
+    pub running: Running,
+    /// What it writes, line by line.
+    pub lines: Receiver<String>,
+    /// The last lines it wrote.
+    pub kept: Vec<String>,
+    /// Where it listens, `host:port`.
+    pub address: String,
+    /// The OpenAI surface's key.
+    pub key: String,
+    /// The sequences it was started to decode together.
+    pub slots: u32,
+}
+
+impl Service {
+    /// The OpenAI base URL clients request the service at.
+    #[must_use]
+    pub fn url(&self) -> String {
+        format!("http://{}/v1", self.address)
+    }
+
+    /// What the server last wrote, as one line of text.
+    pub fn recent_output(&mut self) -> String {
+        recent_output(&self.lines, &mut self.kept)
+    }
+}
+
+/// Starts the service `launch` describes and waits until it is ready.
+pub fn start_service(launch: &ServiceLaunch<'_>, cancel: &CancelToken) -> Result<Service, Failure> {
+    let port = free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
+    let address = format!("127.0.0.1:{port}");
+    let keys = launch.work.join("keys.json");
+    let ready = launch.work.join("ready");
+    let slots = launch.max_batch.unwrap_or(DEFAULT_SERVE_SLOTS).max(1);
+    let mut command = Command::new(launch.binary);
+    if let Some(device) = launch.device {
+        command.args(["--device", device]);
+    }
+    if let Some(backend) = launch.backend {
+        command.args(["--backend", backend]);
+    }
+    if let Some(gib) = crate::device::vram_budget_gib() {
+        command.args(["--vram-budget", &gib.to_string()]);
+    }
+    command
+        .arg("serve")
+        .args(["--openai", &address])
+        .args(["--max-batch", &slots.to_string()])
+        .arg("--models-dir")
+        .arg(launch.models)
+        .arg("--serve-adapters")
+        .arg(launch.adapters)
+        .arg("--adapter-targets")
+        .arg("all")
+        .arg("--training")
+        .arg("--artifact-store")
+        .arg(launch.artifacts)
+        .arg("--runtime-dir")
+        .arg(launch.work)
+        .arg("--api-keys-out")
+        .arg(&keys)
+        .arg("--ready-file")
+        .arg(&ready);
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            Failure::Unmeasured(format!("{} could not start: {e}", launch.binary.display()))
+        })?;
+    let log = match launch.log {
+        Some(path) => Some(
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .map_err(|e| Failure::Unmeasured(format!("{}: {e}", path.display())))?,
+        ),
+        None => None,
+    };
+    let lines = forward_lines(&mut child, log);
+    let mut running = Running(child);
+    let mut kept: Vec<String> = Vec::new();
+    wait_ready(
+        &mut running,
+        &lines,
+        &mut kept,
+        &ready,
+        launch.startup,
+        cancel,
+        false,
+    )?;
+    let key = read_key(&keys).map_err(|why| {
+        Failure::Unmeasured(format!(
+            "{why}; it wrote: {}",
+            recent_output(&lines, &mut kept)
+        ))
+    })?;
+    Ok(Service {
+        running,
+        lines,
+        kept,
+        address,
+        key,
+        slots,
+    })
+}
+
+/// Waits until the server has created `ready` and, when `announced`, has
+/// named the adapter it serves; returns that line. A server that exits, a
+/// cancel and the deadline end the wait.
+fn wait_ready(
+    running: &mut Running,
+    lines: &Receiver<String>,
+    kept: &mut Vec<String>,
+    ready: &Path,
+    startup: Duration,
+    cancel: &CancelToken,
+    announced: bool,
+) -> Result<Option<String>, Failure> {
+    let deadline = Instant::now() + startup;
+    let mut startup_line: Option<String> = None;
+    while (announced && startup_line.is_none()) || !ready.exists() {
+        if cancel.is_cancelled() {
+            return Err(Failure::Cancelled);
+        }
+        if let Ok(Some(status)) = running.0.try_wait() {
+            return Err(Failure::Unmeasured(format!(
+                "brain serve exited ({status}) before it served: {}",
+                recent_output(lines, kept)
+            )));
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(Failure::Unmeasured(format!(
+                "brain serve did not report its adapter and readiness within {}s: {}",
+                startup.as_secs(),
+                recent_output(lines, kept)
+            )));
+        }
+        match lines.recv_timeout(left.min(Duration::from_millis(100))) {
+            Ok(line) => {
+                if startup_line.is_none() && is_adapter_line(&line) {
+                    startup_line = Some(line.clone());
+                }
+                remember(kept, line);
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            // Both streams closed: the exit is reported by `try_wait` above
+            // once the process is reaped.
+            Err(RecvTimeoutError::Disconnected) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    }
+    Ok(startup_line)
 }
 
 /// Keeps `line` among the last [`KEPT_LINES`] of `kept`.

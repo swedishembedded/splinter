@@ -12,18 +12,12 @@
 //! context per sentence, so a model loaded for one sentence is there for the
 //! next, and an alias that moved in between is resolved afresh.
 //!
-//! A model is loaded once per runtime and adapter and shared by every stage
-//! that names it; dropping the runtime stops a local generation still
-//! running before the process exits. A caller that already holds a model - a
-//! test's scripted one - hands it in with [`Context::with_model`] instead.
-//!
-//! Local models go on the runtime's [`Residency`]: one resident copy of each
-//! base, shared by every model on it - the policy and the release gate's two
-//! arms differ only by adapter, and never hold two bases. Work that needs the
-//! device for itself - a fine-tune, which loads its own copy, and the gate's
-//! serve check, a separate process - first releases every resident base
-//! ([`Runtime::release_bases`]); the next generation of a model reloads its
-//! base.
+//! A model is resolved once per runtime and adapter and shared by every stage
+//! that names it. A local model is requested from a brain server, never run
+//! in this process: the one the command line names, or one the runtime
+//! starts on first use and stops when it is dropped ([`Runtime::brain`]). A
+//! caller that already holds a model - a test's scripted one - hands it in
+//! with [`Context::with_model`] instead.
 //!
 //! `policy:<alias>` is resolved once per context, on first use: the release
 //! the alias points at then is the one every stage of the command uses,
@@ -44,7 +38,9 @@ use serde::Serialize;
 use splinter_agent::solve::Model;
 use splinter_core::clock::{Clock, SystemClock};
 use splinter_data::DatasetStore;
-use splinter_model::{LoadedModel, ModelSelection, Residency, Sampling};
+use splinter_model::{
+    BrainConnection, BrainEndpoints, LoadedModel, ManagedBrain, ModelSelection, Sampling,
+};
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::claims::ClaimStore;
 use splinter_store::experiences::ExperienceStore;
@@ -60,7 +56,6 @@ use crate::error::OrchestratorError;
 use crate::releases::ReleaseStore;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
-use splinter_core::rng::Seed;
 
 /// How long a local model may stay silent between two stream chunks: as
 /// long as its run lasts. sven's idle limit guards a remote wire going
@@ -75,7 +70,7 @@ pub type Progress = Box<dyn Fn(&str, &serde_json::Value) + Send + Sync>;
 /// A loaded model: what a command runs on, and what keeps it alive.
 struct Held {
     model: Model,
-    /// The loaded model; dropping it quiesces a local device.
+    /// The model as its server is asked for it.
     loaded: LoadedModel,
 }
 
@@ -117,7 +112,8 @@ pub struct Runtime {
     handed_in: Mutex<HashMap<ModelRef, Model>>,
     embedder: Mutex<Option<SharedEmbedder>>,
     models: Mutex<HashMap<ModelKey, Held>>,
-    residency: Residency,
+    /// The brain server local models are requested from, once there is one.
+    brain: Mutex<Option<BrainConnection>>,
     environments: Environments,
 }
 
@@ -147,17 +143,9 @@ impl Runtime {
             handed_in: Mutex::new(HashMap::new()),
             embedder: Mutex::new(None),
             models: Mutex::new(HashMap::new()),
-            residency: Residency::default(),
+            brain: Mutex::new(None),
             environments,
         })
-    }
-
-    /// The same runtime keeping its local models' bases on `residency`
-    /// instead of loading them with brain: a spec's scripted bases.
-    #[must_use]
-    pub fn with_residency(mut self, residency: Residency) -> Self {
-        self.residency = residency;
-        self
     }
 
     /// The same runtime stamping records with `clock`.
@@ -188,7 +176,7 @@ impl Runtime {
     }
 
     /// The embedder this runtime embeds with: the one handed in, else the
-    /// default embedding model, loaded on first use and kept.
+    /// default embedding model, requested on first use and kept.
     pub fn embedder(&self) -> Result<SharedEmbedder, OrchestratorError> {
         let mut held = self
             .embedder
@@ -197,29 +185,52 @@ impl Runtime {
         if let Some(embedder) = held.as_ref() {
             return Ok(Arc::clone(embedder));
         }
-        let loaded: SharedEmbedder = Arc::new(ModelEmbedder::load_default()?);
+        let loaded: SharedEmbedder = Arc::new(ModelEmbedder::request_default(&self.brain()?)?);
         *held = Some(Arc::clone(&loaded));
         Ok(loaded)
     }
 
-    /// How many bases are resident on the device for this runtime's
-    /// models right now.
-    #[must_use]
-    pub fn resident_bases(&self) -> usize {
-        self.residency.resident()
-    }
-
-    /// Frees every resident base for work that needs the device for
-    /// itself: each loaded model's running generation is stopped first
-    /// (and waited for, as dropping the model does), and the models stay,
-    /// their next generation loading the base again.
-    pub fn release_bases(&self) {
-        for held in self.lock_models().values() {
-            // Best effort, as on drop: a generation outliving the grace
-            // is cancelling, and the release waits for it to end.
-            let _ = held.loaded.quiesce();
+    /// The brain server local models are requested from: the endpoints the
+    /// configuration names, else a server this runtime starts on first use
+    /// (`brain serve` over the model store, with adapters served from the
+    /// state directory and the training workload on) and stops when it is
+    /// dropped.
+    ///
+    /// # Errors
+    /// No endpoint is configured and no `brain` binary is known, or the
+    /// server does not start.
+    pub fn brain(&self) -> Result<BrainEndpoints, OrchestratorError> {
+        if let Some(endpoints) = &self.config.brain {
+            return Ok(endpoints.clone());
         }
-        self.residency.release_all();
+        let mut held = self
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(connection) = held.as_ref() {
+            return Ok(connection.endpoints().clone());
+        }
+        let binary = self.config.brain_binary.clone().ok_or_else(|| {
+            OrchestratorError::Refused(
+                "a local model is requested from a brain server: name one with \
+                 --brain-endpoint, or make the `brain` binary known (--brain-bin, or on PATH) \
+                 so one can be started"
+                    .into(),
+            )
+        })?;
+        let settings = splinter_model::ServiceSettings {
+            binary,
+            models: self.config.model_store.clone(),
+            state: self.config.state_root.brain_service(),
+            device: self.config.brain_device.clone(),
+            backend: self.config.brain_backend.clone(),
+            max_batch: self.config.brain_max_batch,
+        };
+        let managed = ManagedBrain::start(&settings, &splinter_agent::CancelToken::default())
+            .map_err(|e| OrchestratorError::Refused(format!("the brain server: {e}")))?;
+        let endpoints = managed.endpoints().clone();
+        *held = Some(BrainConnection::Owned(managed));
+        Ok(endpoints)
     }
 
     /// The configuration.
@@ -341,12 +352,13 @@ impl Runtime {
             return Ok(held.model.clone());
         }
         let local = selection.local().is_some();
-        // With brain endpoints a local model is requested from the endpoint
-        // that serves it, never loaded here: a reference it does not serve
-        // is refused by name.
-        let loaded = match (&self.config.brain, local) {
-            (Some(brain), true) => selection.load_served(brain),
-            _ => selection.load(&self.residency),
+        // A local model is requested from the endpoint that serves it, never
+        // loaded here: a reference it does not serve is refused by name.
+        let loaded = if local {
+            let brain = self.brain()?;
+            selection.load_served(&brain)
+        } else {
+            selection.load_remote()
         }
         .map_err(|e| OrchestratorError::Model {
             model: reference.to_string(),
@@ -425,24 +437,10 @@ impl Runtime {
         }))
     }
 
-    /// Every seed the loaded local models drew for sampled requests since the
-    /// last call, in request order within each model ([`LoadedModel::take_drawn_seeds`]).
-    /// Models are taken in the order of their references, so the list is a
-    /// function of the requests made.
-    fn take_drawn_seeds(&self) -> Vec<Seed> {
-        let models = self.lock_models();
-        let mut keys: Vec<&ModelKey> = models.keys().collect();
-        keys.sort_by_cached_key(|(reference, adapter)| (reference.to_string(), adapter.clone()));
-        keys.into_iter()
-            .flat_map(|key| models[key].loaded.take_drawn_seeds())
-            .collect()
-    }
-
     /// Drops every model loaded for `reference`, whatever adapter it was on:
     /// the models stay gone until next used, and a base goes with its last
     /// model. A model handed in stays.
     fn drop_loaded(&self, reference: &ModelRef) {
-        // Dropped outside the lock: dropping quiesces a running generation.
         let dropped: Vec<Held> = {
             let mut models = self.lock_models();
             let keys: Vec<ModelKey> = models
@@ -551,15 +549,6 @@ impl Context {
     #[must_use]
     pub fn with_model(self, reference: ModelRef, model: Model) -> Self {
         self.add_model(reference, model);
-        self
-    }
-
-    /// The same context keeping its local models' bases on `residency`
-    /// instead of loading them with brain: a spec's scripted bases. Only a
-    /// context that owns its runtime alone can change it.
-    #[must_use]
-    pub fn with_residency(mut self, residency: Residency) -> Self {
-        self.sole_runtime().residency = residency;
         self
     }
 
@@ -774,14 +763,6 @@ impl Context {
             .map(|model| self.with_release_prompt(reference, model))
             .transpose()
             .map(|model| model.map(|model| self.with_width(reference, model)))
-    }
-
-    /// Every seed the local models loaded in this process drew for sampled
-    /// requests since the last call, oldest first: what a recorded run takes
-    /// into its record, so that the sampled decoding can be replayed. A model
-    /// handed in, and one reached over an API, draw none.
-    pub fn take_drawn_seeds(&self) -> Vec<Seed> {
-        self.runtime.take_drawn_seeds()
     }
 
     /// Reports a finished stage to the progress receiver, if any.

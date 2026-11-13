@@ -120,9 +120,6 @@ pub fn check(
     let Some(binary) = request.binary else {
         return Ok(Check::unmeasured(NO_BINARY));
     };
-    // `brain serve` is another process loading its own copy of the base:
-    // this one holds none while it runs.
-    ctx.release_bases();
     let work = scratch(ctx)?;
     let result = serve_and_ask(
         ctx,

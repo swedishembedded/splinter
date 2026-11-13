@@ -89,8 +89,9 @@ pub struct RunStage {
 /// counted and covered by the digest.
 pub const SAMPLED_FIRST: usize = 16;
 
-/// The seeds a local model drew for the sampled requests of a run, as the run
-/// record shows them: bounded, however many requests the run made. The
+/// The seeds a local model drew in this process for the sampled requests of a
+/// run, as the run record shows them (runs recorded before models were
+/// requested from a brain server carry them; no new run does): bounded, however many requests the run made. The
 /// complete list, in request order, is kept in the run's events
 /// ([`read_sampled_seeds`]); `digest` is over all of it, so a replay can
 /// check it was given the whole list.
@@ -187,9 +188,6 @@ pub struct RunLog {
     workspace: Workspace,
     run: Run,
     events: u64,
-    /// Every sampling seed recorded so far, in order: the run record shows
-    /// a bounded view of them.
-    sampled: Vec<u64>,
 }
 
 /// The body of a run's start event. The build is named only when something is
@@ -267,7 +265,6 @@ impl RunLog {
                 last_heartbeat_unix: None,
             },
             events: 1,
-            sampled: Vec::new(),
         };
         log.append(&event(
             &id,
@@ -345,34 +342,6 @@ impl RunLog {
         self.run.seeds.insert(name.to_string(), seed.value());
         self.run.updated_at = now;
         Ok(())
-    }
-
-    /// Records the seeds a local model drew for the sampled requests made
-    /// since the last call, in request order, as one event: a request is not
-    /// an event of its own, so a run of thousands costs one write per call.
-    pub fn sampled(&mut self, seeds: &[Seed], clock: &dyn Clock) -> Result<(), StoreError> {
-        if seeds.is_empty() {
-            return Ok(());
-        }
-        let now = clock.utc_now();
-        self.append(&event(
-            &self.run.id,
-            self.events,
-            "sampled",
-            &now,
-            json!({ "seeds": seeds }),
-        ))?;
-        self.events += 1;
-        self.sampled.extend(seeds.iter().map(|seed| seed.value()));
-        self.run.sampled = SampledSeeds::of(&self.sampled);
-        self.run.updated_at = now;
-        Ok(())
-    }
-
-    /// The bounded view of the sampling seeds recorded so far.
-    #[must_use]
-    pub fn sampled_so_far(&self) -> &SampledSeeds {
-        &self.run.sampled
     }
 
     /// Records how the run ended - `status`, what it produced, and why it

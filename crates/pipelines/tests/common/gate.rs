@@ -561,9 +561,8 @@ pub fn serve_release(ctx: &Context, id: &ReleaseId) {
 
 /// A trainer double for both regimes: its adapter file is JSON naming the
 /// topics its candidate knows, and it hands the context a scripted model
-/// knowing them under the candidate's arm. Keeps every plan it was given,
-/// which of its methods trained it, and how many bases were resident when
-/// it started.
+/// knowing them under the candidate's arm. Keeps every plan it was given and
+/// which of its methods trained it.
 pub struct FakeTrainer {
     knows: Vec<String>,
     /// For a candidate that works in a workspace: whether it restores the
@@ -575,8 +574,6 @@ pub struct FakeTrainer {
     /// The regime of each method called, in order: `train` is SFT,
     /// `train_preference` DPO.
     pub called: Mutex<Vec<Regime>>,
-    /// The context's resident bases as each training started.
-    pub resident_at_start: Mutex<Vec<usize>>,
     /// The curve its next supervised candidate reports; `None` reports a
     /// run that monitored nothing and carries its last step.
     pub curve: Mutex<Option<TrainingCurve>>,
@@ -597,7 +594,6 @@ impl FakeTrainer {
             mends: None,
             plans: Mutex::new(Vec::new()),
             called: Mutex::new(Vec::new()),
-            resident_at_start: Mutex::new(Vec::new()),
             curve: Mutex::new(None),
             evaluations: Mutex::new(Vec::new()),
             by_group: false,
@@ -672,10 +668,6 @@ struct FakeAdapter {
 impl FakeTrainer {
     /// Writes the adapter and training record for `plan` and serves it.
     fn fake(&self, ctx: &Context, plan: &TrainPlan) -> FakeAdapter {
-        self.resident_at_start
-            .lock()
-            .unwrap()
-            .push(ctx.resident_bases());
         self.plans.lock().unwrap().push(plan.clone());
         let adapter = plan.dir.join("adapter.safetensors");
         let mut card = serde_json::json!({ "candidate": plan.candidate, "knows": self.knows });

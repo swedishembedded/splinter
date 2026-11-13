@@ -19,7 +19,7 @@ use splinter_sdk::{Config, Splinter};
 
 use super::amend::{amend_base_hold, BaseHold};
 use super::corpus::{self, Staff};
-use super::examine::{self, BrainLoader};
+use super::examine;
 use super::layout::Study;
 use super::served::ServedLoader;
 use super::train;
@@ -479,26 +479,19 @@ fn exam_stage(args: &ExamStageArgs) -> anyhow::Result<()> {
     let study = Study::open(&args.study)?;
     let authors = chosen_authors(&study, &args.only)?;
     let base = open_base(&args.base)?;
-    let served;
-    let in_process;
-    let loader: &dyn examine::Loader = match &args.brain {
-        Some(brain) => {
-            let device = splinter_sdk::model::device::selected().source().to_string();
-            served = ServedLoader {
-                brain: brain.clone(),
-                base: base.path().to_path_buf(),
-                work: study.root().join("serve"),
-                device: (device != "all").then_some(device),
-                slots: args.slots,
-                kv_offload_gb: args.kv_offload_gb,
-            };
-            &served
-        }
-        None => {
-            in_process = BrainLoader { base: base.path() };
-            &in_process
-        }
+    let Some(brain) = &args.brain else {
+        anyhow::bail!("the examination is served: name the `brain` binary with --brain");
     };
+    let device = splinter_sdk::model::device::selected().source().to_string();
+    let served = ServedLoader {
+        brain: brain.clone(),
+        base: base.path().to_path_buf(),
+        work: study.root().join("serve"),
+        device: (device != "all").then_some(device),
+        slots: args.slots,
+        kv_offload_gb: args.kv_offload_gb,
+    };
+    let loader: &dyn examine::Loader = &served;
     for_each_author(&authors, |seed| {
         let examined = examine::run_arms(&study, seed, &base, loader, args.sampled, &args.arms)?;
         for (slot, arm, items) in &examined.arms {

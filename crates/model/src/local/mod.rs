@@ -1,51 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
-//
-// Swedish Embedded AB implements coding agents that run their model
-// in-process - no separately versioned serving process to drift from the
-// build. If your team needs expertise in local inference integration or
-// provider abstractions, you can procure our services by sending an email
-// to info@swedishembedded.com.
-
-//! The local model provider: brain's chat pipeline, linked in-process.
+//! What a local model reference names, and how it is asked to sample.
 //!
-//! sven's [`ModelProvider`] seam is what remote providers (OpenAI,
-//! Anthropic, OpenRouter) hang off; this module hangs a LOCAL model off the
-//! same seam, so the loop agent runs the same engine the wire providers do
-//! (same tool loop, same event stream, same usage accounting) with no HTTP
-//! hop and no dependency on a separately running, separately versioned
-//! `brain serve`: Splinter is built against the brain SDK it links, and
-//! loads weights and adapters directly from disk at startup.
-//!
-//! The generation is [`brain::ChatPipeline`]'s: the chat template, tool
-//! schemas, KV-cached decode, chunked prefill, the reasoning and tool-call
-//! scanner and cooperative cancellation are brain's, the same functions its
-//! served chat endpoint runs. The base is the [`crate::residency`]'s: one
-//! resident copy per checkpoint, shared by every model on it, with the
-//! model's LoRA adapter attached before each of its generations. This
-//! module maps sven's request onto a [`brain::ChatRequest`] and the reply
-//! back onto sven's event stream.
+//! A local model is requested from a brain server by the id its model store
+//! gives the checkpoint ([`crate::endpoint`]); nothing here loads weights.
+//! This module holds the description of the weights ([`LocalWeights`]), the
+//! sampling every request carries ([`Sampling`], [`AGENT_SAMPLING`],
+//! [`GREEDY_SAMPLING`]) and the reading of a checkpoint directory's layout.
 
-mod events;
 mod reasoning;
 mod request;
-mod seeds;
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-
-use brain::CancelToken;
-use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent};
 
 use crate::error::PolicyError;
-use crate::residency::{Residency, Resident};
-use events::events_from;
 pub use reasoning::{closed_think_pairs, opens_think_block, CLOSED_THINK, REASONING_REPLY_TOKENS};
-use request::chat_request;
 pub use request::Sampling;
-use seeds::DrawnSeeds;
-use splinter_core::rng::Seed;
 
 /// Sampling defaults for agent work, applied per request. Low temperature:
 /// an agent is executing a procedure, not writing prose; the small models
@@ -75,38 +45,6 @@ pub const GREEDY_SAMPLING: Sampling = Sampling {
     temperature: 0.0,
     ..AGENT_SAMPLING
 };
-
-/// A chat model on a resident base, with its optional LoRA adapter,
-/// ready to complete. One sequence decodes at a time on a base - it carries
-/// its KV cache and attached adapter across a generation - so requests on
-/// every model sharing it serialize behind its lock; that is the shape of a
-/// single-user local agent, not a serving fleet.
-pub struct LocalQwen {
-    resident: Arc<Resident>,
-    /// The adapter attached before each generation; `None` for the base.
-    adapter: Option<PathBuf>,
-    model_name: String,
-    /// The in-flight generation's cancel token, if one is running.
-    /// [`Self::stop_generation`] arms it when the work using the model ends
-    /// before the turn does, so a decode stops within one prefill chunk or
-    /// one token instead of running to its cap.
-    in_flight: Arc<Mutex<Option<CancelToken>>>,
-    /// Generations currently running. [`Self::stop_generation`] waits on
-    /// this reaching zero so the process never exits under a live device
-    /// call - exit racing a Vulkan submit is a segfault, not a controlled
-    /// outcome.
-    live: Arc<AtomicUsize>,
-    /// How each reply is sampled.
-    sampling: Sampling,
-    /// The least a reply may run before its cap, whatever the sampling says:
-    /// a reasoning model spends its first tokens inside the think block its
-    /// template opened.
-    reply_floor: u32,
-    /// The seeds drawn for sampled requests that named none, shared by every
-    /// handle on this model.
-    drawn_seeds: DrawnSeeds,
-}
-
 /// Where the weights come from and which adapter rides on top.
 #[derive(Clone, Debug)]
 pub struct LocalWeights {
@@ -122,95 +60,6 @@ pub struct LocalWeights {
     /// a card.
     pub context_tokens: Option<u32>,
 }
-
-impl LocalQwen {
-    /// The model `weights` names, on `residency`'s copy of its base: loaded
-    /// if no other model holds it - the expensive step, done once per
-    /// base, not per request - with the adapter attached, so an adapter
-    /// that does not fit the base is refused here.
-    pub fn load(
-        residency: &Residency,
-        weights: &LocalWeights,
-        model_name: &str,
-    ) -> Result<Self, PolicyError> {
-        let base = resolve_base(&weights.base)?;
-        let context_tokens = match weights.context_tokens {
-            Some(tokens) => tokens,
-            None => maximum_context_tokens(&base)?,
-        };
-        let resident = residency.acquire(&base, context_tokens, weights.adapter.as_deref())?;
-        Ok(Self {
-            resident,
-            adapter: weights.adapter.clone(),
-            model_name: model_name.to_string(),
-            in_flight: Arc::new(Mutex::new(None)),
-            live: Arc::new(AtomicUsize::new(0)),
-            sampling: AGENT_SAMPLING,
-            reply_floor: reasoning::reply_floor(&base),
-            drawn_seeds: DrawnSeeds::default(),
-        })
-    }
-
-    /// Another handle on this model, sampling as it does: the base, the
-    /// adapter and the in-flight generation are shared.
-    #[must_use]
-    pub fn shared(&self) -> Self {
-        self.resampled(self.sampling)
-    }
-
-    /// The same model sampling as `sampling` says: the base, the adapter
-    /// and the in-flight generation are shared, so a request on either
-    /// waits for (and supersedes) one running on the other, as two
-    /// requests on one model do.
-    #[must_use]
-    pub fn resampled(&self, sampling: Sampling) -> Self {
-        Self {
-            resident: Arc::clone(&self.resident),
-            adapter: self.adapter.clone(),
-            model_name: self.model_name.clone(),
-            in_flight: Arc::clone(&self.in_flight),
-            live: Arc::clone(&self.live),
-            sampling,
-            reply_floor: self.reply_floor,
-            drawn_seeds: self.drawn_seeds.clone(),
-        }
-    }
-
-    /// The seeds this model drew since the last call, oldest first, one per
-    /// sampled request that named no seed. sven's response events carry no
-    /// seed, so this is where a drawn one is reported: the run that owns the
-    /// model records them, and passing one back as [`Sampling::seed`]
-    /// replays that request's decoding. Greedy requests draw nothing.
-    #[must_use]
-    pub fn take_drawn_seeds(&self) -> Vec<Seed> {
-        self.drawn_seeds.take()
-    }
-
-    /// Cancels the in-flight generation, if any, and waits up to `grace` for
-    /// it to actually stop, so the process exits AFTER the device is quiet:
-    /// exiting under a live prefill or decode crashes the process instead of
-    /// ending it. [`crate::LoadedModel`] calls it when it is dropped.
-    /// Returns whether every generation has stopped; on `false` the exit is
-    /// best-effort (the generation is cancelling and will stop, just not
-    /// inside the grace window).
-    #[must_use]
-    pub fn stop_generation(&self, grace: std::time::Duration) -> bool {
-        if let Some(cancel) = self
-            .in_flight
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_ref()
-        {
-            cancel.cancel();
-        }
-        let deadline = std::time::Instant::now() + grace;
-        while self.live.load(Ordering::SeqCst) > 0 && std::time::Instant::now() < deadline {
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        self.live.load(Ordering::SeqCst) == 0
-    }
-}
-
 /// A directory pointing at a checkpoint resolves to the checkpoint inside
 /// it; a file passes through. A sharded Hugging Face checkpoint has no single
 /// file to resolve to, so its directory is the checkpoint. Mirrors brain's
@@ -305,142 +154,6 @@ pub fn load_source(checkpoint: &Path) -> PathBuf {
         _ => checkpoint.to_path_buf(),
     }
 }
-
-/// The most tokens a reply may run when the request names no cap: the
-/// sampling's, raised to `floor` when the model may reason, because a
-/// reasoning model spends its first tokens inside the block it opened. A model
-/// asked not to reason answers at once and needs no more than any other.
-fn reply_cap(sampling: &Sampling, floor: u32) -> u32 {
-    if sampling.thinking {
-        sampling.max_new_tokens.max(floor)
-    } else {
-        sampling.max_new_tokens
-    }
-}
-
-#[async_trait::async_trait]
-impl ModelProvider for LocalQwen {
-    fn name(&self) -> &str {
-        "brain"
-    }
-
-    fn model_name(&self) -> &str {
-        &self.model_name
-    }
-
-    async fn complete(
-        &self,
-        req: CompletionRequest,
-    ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
-        let sampling = self.drawn_seeds.resolve(Sampling {
-            max_new_tokens: reply_cap(&self.sampling, self.reply_floor),
-            ..self.sampling
-        });
-        let request = chat_request(&req, &sampling);
-        let resident = Arc::clone(&self.resident);
-        let adapter = self.adapter.clone();
-        let (tx, rx) = tokio::sync::mpsc::channel(16);
-        let cancel = CancelToken::armed();
-        // Register this generation so a raced attempt end can stop it
-        // through `stop_generation`, and account it in `live` for that
-        // method's bounded wait. A generation still registered is
-        // superseded: this request would queue behind it on the lock.
-        {
-            let mut slot = self.in_flight.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(previous) = slot.as_ref() {
-                previous.cancel();
-            }
-            *slot = Some(cancel.clone());
-        }
-        self.live.fetch_add(1, Ordering::SeqCst);
-        let live = Arc::clone(&self.live);
-        // Generation runs on an OS thread the async runtime does not own and
-        // never joins. A `spawn_blocking` task would make the runtime's
-        // shutdown wait for a decode to run to its cap - an abandoned turn
-        // (timeout, interrupt) would hang the process inside
-        // `Runtime::drop`. Here an abandoned stream is what arms the cancel:
-        // its receiver is gone, the next send fails, and the decode stops at
-        // the next token. `LoadedModel` additionally calls `stop_generation`
-        // when it is dropped, so the device is quiet - not merely abandoned -
-        // when the process ends.
-        let spawned = std::thread::Builder::new()
-            .name("loop-generate".to_string())
-            .spawn(move || {
-                // A device error surfaces as a panic (brain's backend reports
-                // wgpu errors that way); catch it here so it reaches the
-                // consumer as a failed stream instead of a dead thread.
-                // The resident's lock is held for the whole generation, its
-                // adapter switched to this model's first; the thread's own
-                // handle keeps the base loaded until the generation ends.
-                let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    resident.generate(adapter.as_deref(), |engine| {
-                        engine.generate_stream(&request, &cancel, &mut |delta| {
-                            let Some(event) = events::delta_event(delta) else {
-                                return;
-                            };
-                            // A failed send means the consumer is gone - the
-                            // turn was abandoned above this stream - so stop.
-                            if tx.blocking_send(Ok(event)).is_err() {
-                                cancel.cancel();
-                            }
-                        })
-                    })
-                }));
-                let tail = match run {
-                    Ok(Ok(response)) => events_from(response),
-                    Ok(Err(e)) => vec![Err(anyhow::anyhow!("generation failed: {e}"))],
-                    Err(panic) => vec![Err(anyhow::anyhow!(
-                        "device panic during generation: {}",
-                        panic_message(&panic)
-                    ))],
-                };
-                for event in tail {
-                    if tx.blocking_send(event).is_err() {
-                        break;
-                    }
-                }
-                // Drop the live count - `stop_generation`'s wait condition.
-                // The slot itself keeps the (now-finished) token: cancelling
-                // a finished generation is a no-op, and the next request
-                // replaces the slot wholesale.
-                live.fetch_sub(1, Ordering::SeqCst);
-            });
-        if let Err(e) = spawned {
-            self.live.fetch_sub(1, Ordering::SeqCst);
-            anyhow::bail!("spawning the generation thread: {e}");
-        }
-        Ok(Box::pin(Events(rx)))
-    }
-}
-
-/// The generation thread's events as sven's `ResponseStream`: the receiving
-/// half of the channel the decode streams through. Dropping it is the
-/// abandon signal - the sender sees a failed send and fires the cancel token.
-struct Events(tokio::sync::mpsc::Receiver<anyhow::Result<ResponseEvent>>);
-
-impl futures::Stream for Events {
-    type Item = anyhow::Result<ResponseEvent>;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        self.0.poll_recv(cx)
-    }
-}
-
-/// A panic payload as text, however it was constructed.
-pub(crate) fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
-    if let Some(oom) = panic.downcast_ref::<gpu_core::DeviceOutOfMemory>() {
-        return oom.to_string();
-    }
-    panic
-        .downcast_ref::<String>()
-        .cloned()
-        .or_else(|| panic.downcast_ref::<&str>().map(|s| (*s).to_string()))
-        .unwrap_or_else(|| "no message".into())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -528,21 +241,5 @@ mod tests {
         let brain_file = brain_format.join("model.brain.safetensors");
         assert_eq!(load_source(&brain_file), brain_file);
         std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    /// A model that may reason gets room to; one asked not to is held to the
-    /// ordinary cap, and thinking is off unless a run asks for it.
-    #[test]
-    fn only_a_model_that_may_think_gets_the_reasoning_floor() {
-        let on = Sampling {
-            thinking: true,
-            ..AGENT_SAMPLING
-        };
-        assert_eq!(reply_cap(&on, 4096), 4096);
-        assert_eq!(
-            reply_cap(&AGENT_SAMPLING, 4096),
-            AGENT_SAMPLING.max_new_tokens
-        );
-        assert_eq!(reply_cap(&on, 0), AGENT_SAMPLING.max_new_tokens);
     }
 }

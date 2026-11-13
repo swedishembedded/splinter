@@ -7,12 +7,13 @@
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
-use splinter_sdk::model::answer::Answerer;
+use splinter_sdk::model::answer::{Answerer, Decoding};
 use splinter_sdk::model::error::PolicyError;
 use splinter_sdk::model::speech::{
     corpus_word_error_rate, take_turn, BrainRecognizer, BrainSynthesizer, Clip, ListenerOptions,
     Recognizer, Sentences, Synthesizer,
 };
+use splinter_sdk::model::{BrainEndpoints, LocalWeights};
 use splinter_sdk::vocabulary::prompt::persona_prompt;
 use splinter_sdk::vocabulary::speech::SpeakerProfile;
 
@@ -52,6 +53,7 @@ pub struct Persona {
 impl Persona {
     /// Load the model (with its adapter, if any) the persona answers with.
     pub fn load(
+        endpoints: &BrainEndpoints,
         name: &str,
         base: &std::path::Path,
         adapter: Option<&std::path::Path>,
@@ -59,7 +61,15 @@ impl Persona {
         Ok(Self {
             name: name.to_string(),
             system: persona_prompt(name),
-            answerer: Answerer::load(base, adapter, None, name)?,
+            answerer: Answerer::request(
+                endpoints,
+                &LocalWeights {
+                    base: base.to_path_buf(),
+                    adapter: adapter.map(std::path::Path::to_path_buf),
+                    context_tokens: None,
+                },
+                Decoding::Greedy,
+            )?,
             runtime: tokio::runtime::Runtime::new()?,
             base: base.to_path_buf(),
             adapter: adapter.map(std::path::Path::to_path_buf),

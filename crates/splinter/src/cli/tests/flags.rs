@@ -248,11 +248,11 @@ fn brain_endpoints_are_global_flags_and_repeat() {
     ])
     .unwrap();
     assert_eq!(
-        cli.global.brain_endpoint,
+        cli.global.device.brain_endpoint,
         ["http://127.0.0.1:8805/v1", "http://127.0.0.1:8806/v1"]
     );
     assert_eq!(
-        cli.global.brain_key_file.as_deref(),
+        cli.global.device.brain_key_file.as_deref(),
         Some(std::path::Path::new("/keys/brain"))
     );
     assert_eq!(cli.global.attempt_concurrency, Some(48));
@@ -261,6 +261,8 @@ fn brain_endpoints_are_global_flags_and_repeat() {
         Some(std::path::Path::new("/shared/artifacts"))
     );
     let none = parse(&["status"]).unwrap();
-    assert!(none.global.brain_endpoint.is_empty() && none.global.attempt_concurrency.is_none());
+    assert!(
+        none.global.device.brain_endpoint.is_empty() && none.global.attempt_concurrency.is_none()
+    );
     assert!(parse(&["--attempt-concurrency", "0", "status"]).is_err());
 }

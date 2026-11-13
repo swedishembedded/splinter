@@ -25,7 +25,7 @@ use crate::corpus::words;
 use crate::scenarios::Scenario;
 use crate::tasks::PERSONA;
 use splinter_sdk::measure::verifiers::answer::{fabricated, final_answer};
-use splinter_sdk::model::answer::Answerer;
+use splinter_sdk::model::answer::{Answerer, Decoding};
 
 /// One answered scenario.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -133,7 +133,7 @@ pub fn read_answers(path: &Path) -> anyhow::Result<Vec<Answered>> {
 ///
 /// # Errors
 /// The model cannot be loaded or a generation fails.
-pub fn run(run: &Run) -> anyhow::Result<usize> {
+pub fn run(endpoints: &splinter_sdk::model::BrainEndpoints, run: &Run) -> anyhow::Result<usize> {
     let all = crate::writer::read_scenarios(&run.scenarios)?;
     let mut chosen: Vec<(&Scenario, &str)> = all
         .iter()
@@ -152,7 +152,15 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
         return Ok(0);
     }
     let index = corpus_index(&run.resources)?;
-    let answerer = Answerer::load(&run.base, run.adapter.as_deref(), Some(4096), "jefferson")?;
+    let answerer = Answerer::request(
+        endpoints,
+        &splinter_sdk::model::LocalWeights {
+            base: run.base.clone(),
+            adapter: run.adapter.clone(),
+            context_tokens: Some(4096),
+        },
+        Decoding::Greedy,
+    )?;
     let runtime = tokio::runtime::Runtime::new()?;
     let log = splinter_sdk::store::jsonl::Log::open(&run.out)?;
     for (n, (scenario, split)) in chosen.iter().enumerate() {
@@ -234,6 +242,7 @@ pub struct Controls {
 /// The judge cannot be loaded, a file cannot be read or written, or a
 /// generation fails.
 pub fn judge_all(
+    endpoints: &splinter_sdk::model::BrainEndpoints,
     judge_base: &Path,
     scenarios: &Path,
     answers: &Path,
@@ -243,7 +252,15 @@ pub fn judge_all(
     let by_id: std::collections::HashMap<&str, &Scenario> =
         all.iter().map(|s| (s.id.as_str(), s)).collect();
     let mut rows = read_answers(answers)?;
-    let judge = Answerer::load(judge_base, None, Some(4096), "jefferson")?;
+    let judge = Answerer::request(
+        endpoints,
+        &splinter_sdk::model::LocalWeights {
+            base: judge_base.to_path_buf(),
+            adapter: None,
+            context_tokens: Some(4096),
+        },
+        Decoding::Greedy,
+    )?;
     let runtime = tokio::runtime::Runtime::new()?;
     let ask = |question: &str, passage: &str, answer: &str| -> anyhow::Result<Option<bool>> {
         let reply = runtime.block_on(judge.ask(

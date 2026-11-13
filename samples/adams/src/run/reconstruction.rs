@@ -78,14 +78,19 @@ pub struct Replies {
 }
 
 /// Have one model write the reply to every briefing, in full.
-pub fn replies_command(r: &Replies) -> anyhow::Result<()> {
+pub fn replies_command(
+    endpoints: &splinter_sdk::model::BrainEndpoints,
+    r: &Replies,
+) -> anyhow::Result<()> {
     ensure_unchanged(&r.briefings)?;
     let briefings = crate::reconstruct::read_briefings(&r.briefings)?;
-    let answerer = splinter_sdk::model::answer::Answerer::load_with(
-        &r.base,
-        r.adapter.as_deref(),
-        Some(8192),
-        "adams",
+    let answerer = splinter_sdk::model::answer::Answerer::request(
+        endpoints,
+        &splinter_sdk::model::LocalWeights {
+            base: r.base.clone(),
+            adapter: r.adapter.clone(),
+            context_tokens: Some(8192),
+        },
         r.decoding,
     )?;
     let runtime = tokio::runtime::Runtime::new()?;

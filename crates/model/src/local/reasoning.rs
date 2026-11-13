@@ -85,17 +85,6 @@ pub fn closed_think_pairs(dataset: &str) -> Result<String, serde_json::Error> {
     Ok(out)
 }
 
-/// The reply budget floor for the model at `base`: the reasoning budget when
-/// its template opens a think block, else none.
-#[must_use]
-pub fn reply_floor(base: &Path) -> u32 {
-    if opens_think_block(base) {
-        REASONING_REPLY_TOKENS
-    } else {
-        0
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,11 +124,6 @@ mod tests {
             assert_eq!(
                 opens_think_block(&dir.join("model.safetensors")),
                 opens,
-                "{name}"
-            );
-            assert_eq!(
-                reply_floor(&dir),
-                if opens { REASONING_REPLY_TOKENS } else { 0 },
                 "{name}"
             );
             std::fs::remove_dir_all(&dir).unwrap();

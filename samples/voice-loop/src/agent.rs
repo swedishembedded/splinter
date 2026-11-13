@@ -84,7 +84,8 @@ pub struct AgentArgs {
 }
 
 /// Take every recording as a turn of one conversation with the agent.
-pub fn run(args: &AgentArgs) -> Result<()> {
+pub fn run(flags: &splinter_sdk::device::DeviceFlags, args: &AgentArgs) -> Result<()> {
+    let brain = flags.brain()?;
     std::fs::create_dir_all(&args.out_dir)?;
     let speaker = crate::voice::speaker(&crate::voice::manifest_in(&args.out_dir), args.seed)?;
     BrainSynthesizer::load(&args.tts)?
@@ -92,7 +93,12 @@ pub fn run(args: &AgentArgs) -> Result<()> {
         .save(args.out_dir.join("disclosure.wav"))
         .context("writing the spoken disclosure")?;
 
-    let persona = Persona::load(&args.persona, &args.base, args.adapter.as_deref())?;
+    let persona = Persona::load(
+        brain.endpoints(),
+        &args.persona,
+        &args.base,
+        args.adapter.as_deref(),
+    )?;
     let voice = persona.voice_agent(args.workspace.as_deref())?;
     let desk = match &args.lessons {
         Some(file) => LessonDesk::open(file, speaker.portrayal().clone())
@@ -108,7 +114,7 @@ pub fn run(args: &AgentArgs) -> Result<()> {
     };
     let reading = args
         .model_reader
-        .then(|| reading_persona(&args.base))
+        .then(|| reading_persona(brain.endpoints(), &args.base))
         .transpose()?;
     let mut teachable = Teachable::new(&voice, ledger);
     if let Some(reading) = &reading {

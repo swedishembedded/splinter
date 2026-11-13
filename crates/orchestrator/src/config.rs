@@ -87,10 +87,22 @@ pub struct Config {
     /// once. A model run on this machine's device is asked one at a time.
     pub remote_concurrency: usize,
     /// The brain endpoints every local model reference (`local:...`,
-    /// `policy:...`) is requested from; `None` runs them in this process.
+    /// `policy:...`) is requested from; `None` starts a server of this
+    /// process's own ([`crate::context::Runtime::brain`]).
     /// With endpoints, attempts are asked as many at once as they say
     /// ([`splinter_model::BrainEndpoints::attempt_concurrency`]).
     pub brain: Option<splinter_model::BrainEndpoints>,
+    /// The compute a brain server this process starts may schedule
+    /// (`brain --device`); brain's own choice when `None`. Without
+    /// [`Config::brain`], local models are requested from that server.
+    pub brain_device: Option<String>,
+    /// How a brain server this process starts drives the hardware
+    /// (`brain --backend`); brain's choice when `None`.
+    pub brain_backend: Option<String>,
+    /// How many requests a brain server this process starts decodes together
+    /// (`--max-batch`), which is also how many attempts are asked of it at
+    /// once; [`splinter_model::server::DEFAULT_SERVE_SLOTS`] when `None`.
+    pub brain_max_batch: Option<u32>,
     /// How long one task's solve may take on the wall clock. A bound for a
     /// stuck episode, not a measure of the solver: under a loaded server it
     /// must leave room for the queue, or a task is failed for the load.
@@ -396,7 +408,10 @@ impl Config {
                 .filter_map(|name| var(name).map(|value| (name.to_string(), value)))
                 .collect(),
             working_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            brain_binary: var("PATH").and_then(|path| find_executable(&path, "brain")),
+            brain_binary: BRAIN_DEFAULTS
+                .get()
+                .and_then(|d| d.binary.clone())
+                .or_else(|| var("PATH").and_then(|path| find_executable(&path, "brain"))),
             front_door_model: None,
             assistant_model: None,
             judge_model: None,
@@ -410,7 +425,10 @@ impl Config {
             served_thinking_budget: None,
             min_calibration_controls: DEFAULT_MIN_CALIBRATION_CONTROLS,
             remote_concurrency: DEFAULT_REMOTE_CONCURRENCY,
-            brain: None,
+            brain: BRAIN_DEFAULTS.get().and_then(|d| d.endpoints.clone()),
+            brain_device: BRAIN_DEFAULTS.get().and_then(|d| d.device.clone()),
+            brain_backend: BRAIN_DEFAULTS.get().and_then(|d| d.backend.clone()),
+            brain_max_batch: BRAIN_DEFAULTS.get().and_then(|d| d.max_batch),
             solve_deadline: DEFAULT_SOLVE_DEADLINE,
             coding_prompt: CodingPrompt::default(),
             workspace: WorkspaceSettings {
@@ -423,6 +441,36 @@ impl Config {
             build: BuildInfo::default(),
         }
     }
+}
+
+/// What a program's command line says about brain before any [`Config`] is
+/// built: the compute and endpoints it was given. A program that builds its
+/// [`Config`] in several places (a sample's commands each do) states them once
+/// and every [`Config::from_env`] after carries them.
+#[derive(Clone, Debug, Default)]
+pub struct BrainDefaults {
+    /// [`Config::brain_device`].
+    pub device: Option<String>,
+    /// [`Config::brain_backend`].
+    pub backend: Option<String>,
+    /// [`Config::brain_max_batch`].
+    pub max_batch: Option<u32>,
+    /// [`Config::brain`].
+    pub endpoints: Option<splinter_model::BrainEndpoints>,
+    /// [`Config::brain_binary`], when the command line names one.
+    pub binary: Option<PathBuf>,
+}
+
+static BRAIN_DEFAULTS: std::sync::OnceLock<BrainDefaults> = std::sync::OnceLock::new();
+
+/// States the process's brain settings; the first statement stands.
+///
+/// # Errors
+/// The settings were already stated.
+pub fn set_brain_defaults(defaults: BrainDefaults) -> Result<(), &'static str> {
+    BRAIN_DEFAULTS
+        .set(defaults)
+        .map_err(|_| "the process's brain settings were already stated")
 }
 
 /// The first file named `name` in the directories of the `PATH`-style list

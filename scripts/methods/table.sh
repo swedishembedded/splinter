@@ -10,12 +10,18 @@
 # method: the held-out score before and after, and whether the gain cleared the smoke's bar. Exits non-zero if any smoke fails
 # or the run itself fails.
 #
-# usage: scripts/methods/table.sh <cargo> <profile flag>
+# The smokes ask a `brain serve` for every generation, so they need a built brain: its binary's directory is put
+# first on PATH, where the smokes find it.
+#
+# usage: scripts/methods/table.sh <cargo> <profile flag> <brain binary>
 
 set -uo pipefail
 
 cargo=${1:-cargo}
 profile=${2:---release}
+brain=${3:?usage: table.sh <cargo> <profile flag> <brain binary>}
+[ -x "$brain" ] || { echo "table.sh: no brain binary at $brain (BRAIN_BIN)" >&2; exit 3; }
+PATH="$(dirname "$brain"):$PATH"
 log=$(mktemp "${TMPDIR:-$HOME/tmp}/methods.XXXXXX")
 trap 'rm -f "$log"' EXIT
 

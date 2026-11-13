@@ -103,9 +103,6 @@ fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
     if let Some(base) = &global.policy_base {
         config.policy_base = splinter_sdk::model_ref::checkpoint_path(config, base);
     }
-    if let Some(binary) = &global.brain_bin {
-        config.brain_binary = Some(binary.clone());
-    }
     config.assistant_model.clone_from(&global.assistant_model);
     config.judge_model.clone_from(&global.judge_model);
     config.front_door_model.clone_from(&global.front_door_model);
@@ -124,41 +121,32 @@ fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
     config.workspace.cargo_home.clone_from(&global.cargo_home);
 }
 
-/// The brain endpoints the command line names, if it names any. Every flag
-/// that configures them is refused without the endpoints it configures, and
-/// the endpoints without the key they are asked with.
-fn brain_endpoints(
-    global: &cli::Global,
-) -> Result<Option<splinter_sdk::model::BrainEndpoints>, String> {
-    let stray = [
-        (global.brain_key_file.is_some(), "--brain-key-file"),
-        (
-            global.brain_adapter_manifest.is_some(),
-            "--brain-adapter-manifest",
-        ),
-        (
-            global.attempt_concurrency.is_some(),
-            "--attempt-concurrency",
-        ),
-        (
-            global.brain_artifact_store.is_some(),
-            "--brain-artifact-store",
-        ),
-    ];
-    if global.brain_endpoint.is_empty() {
+/// Puts the command line's brain settings into `config`: the server it is
+/// given (`--brain-endpoint`, with what configures it) or the one it starts.
+/// A flag that configures endpoints is refused without the endpoints it
+/// configures.
+fn apply_brain_flags(config: &mut Config, global: &cli::Global) -> Result<(), String> {
+    global.device.apply_to(config).map_err(|e| e.to_string())?;
+    config.brain_max_batch = global.attempt_concurrency;
+    let Some(brain) = config.brain.take() else {
+        let stray = [
+            (
+                global.brain_adapter_manifest.is_some(),
+                "--brain-adapter-manifest",
+            ),
+            (
+                global.brain_artifact_store.is_some(),
+                "--brain-artifact-store",
+            ),
+        ];
         return match stray.iter().find(|(given, _)| *given) {
             Some((_, flag)) => Err(format!(
                 "{flag} configures --brain-endpoint, which is not given"
             )),
-            None => Ok(None),
+            None => Ok(()),
         };
-    }
-    let Some(key_file) = &global.brain_key_file else {
-        return Err("--brain-endpoint needs --brain-key-file".into());
     };
-    let key = splinter_sdk::model::BrainEndpoints::read_key(key_file).map_err(|e| e.to_string())?;
-    let mut brain = splinter_sdk::model::BrainEndpoints::new(global.brain_endpoint.clone(), key)
-        .map_err(|e| e.to_string())?;
+    let mut brain = brain;
     if let Some(manifest) = &global.brain_adapter_manifest {
         brain = brain.with_adapter_manifest(manifest.clone());
     }
@@ -170,7 +158,8 @@ fn brain_endpoints(
             .map_err(|e| e.to_string())?;
         brain = brain.with_artifact_store(store);
     }
-    Ok(Some(brain))
+    config.brain = Some(brain);
+    Ok(())
 }
 
 fn main() -> ExitCode {
@@ -191,25 +180,15 @@ fn main() -> ExitCode {
     if let Some(Command::CliReference(args)) = &cli.command {
         return cli::reference::run(args).into();
     }
-    if let Err(e) = cli.global.device.apply() {
-        output::error(
-            cli.global.json,
-            &splinter_sdk::Error::Refused(e.to_string()),
-        );
-        return session::Exit::Failed.into();
-    }
     let mut config = Config::from_env();
     apply_machine_flags(&mut config, &cli.global);
     config.policy_context_tokens = cli.global.policy_context_tokens;
     if let Some(width) = cli.global.remote_concurrency {
         config.remote_concurrency = width as usize;
     }
-    match brain_endpoints(&cli.global) {
-        Ok(brain) => config.brain = brain,
-        Err(e) => {
-            output::error(cli.global.json, &splinter_sdk::Error::Refused(e));
-            return session::Exit::Refused.into();
-        }
+    if let Err(e) = apply_brain_flags(&mut config, &cli.global) {
+        output::error(cli.global.json, &splinter_sdk::Error::Refused(e));
+        return session::Exit::Refused.into();
     }
     config.served_temperature = cli.global.temperature;
     config.served_top_p = cli.global.top_p;

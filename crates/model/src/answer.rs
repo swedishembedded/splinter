@@ -6,13 +6,12 @@
 // what a fine-tune changed, you can procure our services by sending an email
 // to info@swedishembedded.com.
 
-//! One local model answering one question at a time, greedily.
+//! One served model answering one question at a time, greedily.
 //!
 //! An evaluation asks the same model twice: with no adapter, then with the one
 //! training produced. Greedy decoding means a question has one answer for a
 //! given set of weights, so a difference between the two is the weights'.
 
-use std::path::Path;
 use std::time::Instant;
 
 use futures::StreamExt;
@@ -21,8 +20,11 @@ use sven_sdk::model::{
 };
 
 use crate::error::PolicyError;
-use crate::local::{LocalQwen, LocalWeights, Sampling, GREEDY_SAMPLING};
-use crate::residency::Residency;
+use std::sync::Arc;
+
+use crate::endpoint::BrainEndpoints;
+use crate::local::{LocalWeights, Sampling, GREEDY_SAMPLING};
+use crate::selection::{LoadedModel, ModelSelection};
 
 /// What a model said to one question.
 #[derive(Clone, Debug, Default)]
@@ -132,66 +134,48 @@ impl std::str::FromStr for Decoding {
 
 /// A loaded model, with its adapter if it has one.
 pub struct Answerer {
-    model: LocalQwen,
-    _residency: Residency,
+    model: LoadedModel,
+    provider: Arc<dyn ModelProvider>,
 }
 
 impl Answerer {
-    /// Loads the base at `base`, attaching `adapter` when given. `label` names
-    /// the model in the provider seam's records.
+    /// The model `weights` names, requested from the brain `endpoints` that
+    /// serve it, decoding as `decoding` says. `label` names the model in the
+    /// provider seam's records.
     ///
     /// # Errors
-    /// The checkpoint cannot be opened or the adapter does not fit it.
-    pub fn load(
-        base: &Path,
-        adapter: Option<&Path>,
-        context_tokens: Option<u32>,
-        label: &str,
-    ) -> Result<Self, PolicyError> {
-        Self::load_with(base, adapter, context_tokens, label, Decoding::Greedy)
-    }
-
-    /// [`Self::load`], decoding as `decoding` says.
-    ///
-    /// # Errors
-    /// The checkpoint cannot be opened or the adapter does not fit it.
-    pub fn load_with(
-        base: &Path,
-        adapter: Option<&Path>,
-        context_tokens: Option<u32>,
-        label: &str,
+    /// No endpoint serves the checkpoint (or the adapter, which is offered
+    /// when the endpoints follow a manifest), or an endpoint is unreachable.
+    pub fn request(
+        endpoints: &BrainEndpoints,
+        weights: &LocalWeights,
         decoding: Decoding,
     ) -> Result<Self, PolicyError> {
-        let residency = Residency::default();
-        let weights = LocalWeights {
-            base: base.to_path_buf(),
-            adapter: adapter.map(Path::to_path_buf),
-            context_tokens,
-        };
-        let model = LocalQwen::load(&residency, &weights, label)?.resampled(decoding.sampling());
-        Ok(Self {
-            model,
-            _residency: residency,
-        })
+        let model = ModelSelection::Local(weights.clone()).load_served(endpoints)?;
+        let provider = model
+            .resampled(decoding.sampling())?
+            .unwrap_or_else(|| model.provider());
+        Ok(Self { model, provider })
     }
 
-    /// The loaded model as a sven model provider, for an agent to run on. It
-    /// shares this answerer's base and adapter, so the answerer must outlive
-    /// it.
+    /// The model as a sven model provider, for an agent to run on. It sends
+    /// its requests to the same endpoints, so the answerer must outlive
+    /// nothing: the provider holds what it needs.
     #[must_use]
-    pub fn provider(&self) -> std::sync::Arc<dyn sven_sdk::model::ModelProvider> {
-        std::sync::Arc::new(self.model.shared())
+    pub fn provider(&self) -> Arc<dyn ModelProvider> {
+        Arc::clone(&self.provider)
     }
 
     /// [`Self::provider`], decoding as `decoding` says instead of as the
-    /// answerer was loaded: the weights are shared, so asking the same
-    /// question under several seeds loads nothing again.
-    #[must_use]
-    pub fn provider_with(
-        &self,
-        decoding: Decoding,
-    ) -> std::sync::Arc<dyn sven_sdk::model::ModelProvider> {
-        std::sync::Arc::new(self.model.resampled(decoding.sampling()))
+    /// answerer was requested.
+    ///
+    /// # Errors
+    /// The endpoint the decoding's seed pins it to cannot be reached.
+    pub fn provider_with(&self, decoding: Decoding) -> Result<Arc<dyn ModelProvider>, PolicyError> {
+        Ok(self
+            .model
+            .resampled(decoding.sampling())?
+            .unwrap_or_else(|| self.model.provider()))
     }
 
     /// The model's reply to `user` under the system message `system`, within
@@ -218,8 +202,8 @@ impl Answerer {
         user: &str,
         max_tokens: u32,
     ) -> anyhow::Result<Reply> {
-        let model = self.model.resampled(decoding.sampling());
-        Self::complete(&model, system, user, max_tokens, |_| {}).await
+        let model = self.provider_with(decoding).map_err(anyhow::Error::from)?;
+        Self::complete(&*model, system, user, max_tokens, |_| {}).await
     }
 
     /// The model's reply to a conversation of `turns` (role, text) pairs, roles `system`, `user` or `assistant`, decoding
@@ -247,8 +231,8 @@ impl Answerer {
                 reasoning: None,
             });
         }
-        let model = self.model.resampled(decoding.sampling());
-        Self::complete_messages(&model, messages, max_tokens, |_| {}).await
+        let model = self.provider_with(decoding).map_err(anyhow::Error::from)?;
+        Self::complete_messages(&*model, messages, max_tokens, |_| {}).await
     }
 
     /// [`Self::ask`], handing `on_text` each piece of the reply as it is
@@ -263,7 +247,7 @@ impl Answerer {
         max_tokens: u32,
         on_text: &mut dyn FnMut(&str),
     ) -> anyhow::Result<Reply> {
-        Self::complete(&self.model, system, user, max_tokens, |piece| {
+        Self::complete(&*self.provider, system, user, max_tokens, |piece| {
             on_text(piece)
         })
         .await
@@ -272,7 +256,7 @@ impl Answerer {
     /// Generic in the callback so that a caller handing a `Send` one gets a
     /// `Send` future (a search drives it from sven's `Send` proposer).
     async fn complete(
-        model: &LocalQwen,
+        model: &dyn ModelProvider,
         system: &str,
         user: &str,
         max_tokens: u32,
@@ -288,7 +272,7 @@ impl Answerer {
     }
 
     async fn complete_messages(
-        model: &LocalQwen,
+        model: &dyn ModelProvider,
         messages: Vec<Message>,
         max_tokens: u32,
         mut on_text: impl FnMut(&str),

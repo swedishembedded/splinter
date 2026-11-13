@@ -143,7 +143,6 @@ pub fn score(
     let failure = arms
         .iter()
         .try_for_each(|arm| {
-            ctx.release_bases();
             scores.push(score_arm(ctx, exam, skip, arm, scratch)?);
             Ok(())
         })

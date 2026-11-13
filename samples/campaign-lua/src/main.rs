@@ -72,6 +72,7 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     cli.device.apply().map_err(|e| anyhow::anyhow!("{e}"))?;
+    let brain = cli.device.brain().map_err(|e| anyhow::anyhow!("{e}"))?;
     let seed = splinter_sdk::seed::resolve("seed", cli.seed);
     std::fs::create_dir_all(&cli.out).with_context(|| format!("creating {}", cli.out.display()))?;
     let scratch = cli.out.join("lua-programs");
@@ -90,8 +91,8 @@ fn main() -> Result<()> {
     .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let model = cli.recipe.model_settings(&cli.model);
-    let mut collector =
-        ChatCollector::new(&family, model.clone()).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let mut collector = ChatCollector::new(brain.endpoints().clone(), &family, model.clone())
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     if let Some(count) = cli.probe {
         use splinter_sdk::campaign::brain::TaskFamily as _;
         use splinter_sdk::campaign::{CollectRequest, PolicyRef, RolloutCollector};
@@ -118,7 +119,8 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
-    let mut validator = ChatValidator::new(&family, model).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let mut validator = ChatValidator::new(brain.endpoints().clone(), &family, model)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut trainer = BrainTrainer::new(cli.recipe.trainer_settings(&cli.model)?);
     let config = cli.recipe.campaign_config(
         &cli.name,

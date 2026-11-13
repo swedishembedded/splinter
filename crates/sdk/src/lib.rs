@@ -70,7 +70,9 @@ pub use splinter_orchestrator::{
     answers, concurrency, config, context, generation, ids, model_ref, pipeline, releases, roles,
     runs,
 };
-pub use splinter_orchestrator::{Config, Context, OrchestratorError as Error, Runtime};
+pub use splinter_orchestrator::{
+    set_brain_defaults, BrainDefaults, Config, Context, OrchestratorError as Error, Runtime,
+};
 
 // The commands.
 pub use splinter_pipelines::{

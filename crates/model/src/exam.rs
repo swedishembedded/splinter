@@ -24,8 +24,10 @@ use splinter_core::concurrency::fan_out;
 use splinter_eval::verifiers::answer::final_answer;
 
 use crate::answer::{Answerer, Decoding, Reply};
+use crate::endpoint::BrainEndpoints;
+use crate::local::LocalWeights;
 
-/// Context a model is loaded with: room for a prompt, and for a reasoning
+/// Context a model is asked with: room for a prompt, and for a reasoning
 /// model to think before it answers.
 const CONTEXT_TOKENS: u32 = 8192;
 
@@ -177,9 +179,8 @@ pub fn pending<'a, Q: Question>(
 /// Ask every pending question and append its graded answer to `out`, one line
 /// at a time, flushed, so a stop loses at most the questions in flight.
 ///
-/// This asks one question at a time: for a model that answers one request at
-/// a time, as a model loaded in this process does. A model that decodes
-/// several together is asked through [`run_batched`].
+/// This asks one question at a time, for a caller whose `ask` is not
+/// concurrent; [`run_batched`] keeps a server's decode slots full.
 ///
 /// # Errors
 /// `out` cannot be written or `ask` fails.
@@ -307,17 +308,16 @@ pub struct Model<'a> {
     pub decoding: Decoding,
 }
 
-/// The exam against a local model. The model is loaded only when something is
-/// pending, so a finished exam costs nothing to resume.
-///
-/// Questions are asked one at a time because a model loaded in this process
-/// is one engine behind a lock: a second request on it cancels the one
-/// decoding, so it has no slots to fill. An exam against a batching server
-/// is [`run_batched`].
+/// The exam against a model a brain server serves: every pending question is
+/// a request, as many in flight as the endpoints are asked at once
+/// ([`BrainEndpoints::attempt_concurrency`]), so the server's continuous
+/// batching decodes them together. The model is requested only when something
+/// is pending, so a finished exam costs nothing to resume.
 ///
 /// # Errors
-/// The model cannot be loaded, a generation fails or `out` cannot be written.
+/// No endpoint serves the model, a generation fails or `out` cannot be written.
 pub fn run<Q: Question>(
+    endpoints: &BrainEndpoints,
     questions: &[Q],
     out: &Path,
     limit: Option<usize>,
@@ -327,17 +327,21 @@ pub fn run<Q: Question>(
     if pending(questions, out, limit)?.is_empty() {
         return Ok(0);
     }
-    let answerer = Answerer::load_with(
-        model.base,
-        model.adapter,
-        Some(CONTEXT_TOKENS),
-        model.label,
-        model.decoding,
-    )?;
+    let weights = LocalWeights {
+        base: model.base.to_path_buf(),
+        adapter: model.adapter.map(Path::to_path_buf),
+        context_tokens: Some(CONTEXT_TOKENS),
+    };
+    let answerer = Answerer::request(endpoints, &weights, model.decoding)?;
     let runtime = tokio::runtime::Runtime::new()?;
-    let mut ask =
-        |q: &Q| runtime.block_on(answerer.ask(model.system, q.prompt(), model.max_tokens));
-    run_with(questions, out, limit, &mut ask, grade)
+    runtime.block_on(run_batched(
+        questions,
+        out,
+        limit,
+        endpoints.attempt_concurrency(),
+        |q| answerer.ask(model.system, q.prompt(), model.max_tokens),
+        grade,
+    ))
 }
 
 #[cfg(test)]

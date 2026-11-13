@@ -70,9 +70,8 @@ use document::{Date, Identity, Period};
 
 fn main() -> anyhow::Result<()> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    splinter_sdk::device::DeviceFlags::take(&mut args)
-        .map_err(anyhow::Error::msg)?
-        .apply()?;
+    let flags = splinter_sdk::device::DeviceFlags::take(&mut args).map_err(anyhow::Error::msg)?;
+    flags.apply()?;
     match args.first().map(String::as_str) {
         Some("identify") => identify_command(&args[1..]),
         Some("corpus") => corpus_command(&args[1..]),
@@ -80,20 +79,20 @@ fn main() -> anyhow::Result<()> {
         Some("materials") => materials_command(&args[1..]),
         Some("tasks") => tasks_command(&args[1..]),
         Some("train") => train_command(&args[1..]),
-        Some("exam") => exam_command(&args[1..]),
+        Some("exam") => exam_command(&flags, &args[1..]),
         Some("report") => report_command(&args[1..]),
         Some("principles") => principles_command(&args[1..]),
         Some("transfer") => transfer_command(&args[1..]),
         Some("build-data") => build_data_command(&args[1..]),
         Some("train-dpo") => train_dpo_command(&args[1..]),
-        Some("transfer-exam") => transfer_exam_command(&args[1..]),
+        Some("transfer-exam") => transfer_exam_command(&flags, &args[1..]),
         Some("constant-baseline") => constant_baseline_command(&args[1..]),
         Some("build-onpolicy") => build_onpolicy_command(&args[1..]),
         Some("pin") => run::pin_command(std::path::Path::new(&need(&args[1..], "--file")?)),
         Some("grpo") => grpo_command(&args[1..]),
-        Some("anchor-exam") => anchor_exam_command(&args[1..]),
+        Some("anchor-exam") => anchor_exam_command(&flags, &args[1..]),
         Some("briefings") => briefings_command(&args[1..]),
-        Some("reconstruct-replies") => reconstruct_replies_command(&args[1..]),
+        Some("reconstruct-replies") => reconstruct_replies_command(&flags, &args[1..]),
         Some("judge") => judge_command(&args[1..]),
         Some("reconstruct-report") => reconstruct_report_command(&args[1..]),
         _ => anyhow::bail!(
@@ -399,16 +398,20 @@ fn train_seed(args: &[String]) -> anyhow::Result<u64> {
     drawn_seed(args, "train-seed")
 }
 
-fn exam_command(args: &[String]) -> anyhow::Result<()> {
-    run::exam_command(&run::Exam {
-        tasks: need(args, "--tasks")?.into(),
-        out: need(args, "--out")?.into(),
-        base: need(args, "--base")?.into(),
-        adapter: flag(args, "--adapter").map(Into::into),
-        max_tokens: number(args, "--max-tokens", 400)?,
-        limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
-        system: system_flag(args),
-    })
+fn exam_command(flags: &splinter_sdk::device::DeviceFlags, args: &[String]) -> anyhow::Result<()> {
+    let brain = flags.brain()?;
+    run::exam_command(
+        brain.endpoints(),
+        &run::Exam {
+            tasks: need(args, "--tasks")?.into(),
+            out: need(args, "--out")?.into(),
+            base: need(args, "--base")?.into(),
+            adapter: flag(args, "--adapter").map(Into::into),
+            max_tokens: number(args, "--max-tokens", 400)?,
+            limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+            system: system_flag(args),
+        },
+    )
 }
 
 /// The system message an exam asks under, when not the sample's own persona:
@@ -542,10 +545,15 @@ fn constant_baseline_command(args: &[String]) -> anyhow::Result<()> {
     )
 }
 
-fn transfer_exam_command(args: &[String]) -> anyhow::Result<()> {
+fn transfer_exam_command(
+    flags: &splinter_sdk::device::DeviceFlags,
+    args: &[String],
+) -> anyhow::Result<()> {
+    let brain = flags.brain()?;
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
     let documents = read_documents(&resources)?;
     run::transfer_exam_command(
+        brain.endpoints(),
         &run::TransferExam {
             benchmark: flag(args, "--benchmark").map_or_else(
                 || resources.join("datasets").join("benchmark.jsonl"),
@@ -608,19 +616,26 @@ fn briefings_command(args: &[String]) -> anyhow::Result<()> {
     )
 }
 
-fn reconstruct_replies_command(args: &[String]) -> anyhow::Result<()> {
+fn reconstruct_replies_command(
+    flags: &splinter_sdk::device::DeviceFlags,
+    args: &[String],
+) -> anyhow::Result<()> {
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
-    run::replies_command(&run::Replies {
-        briefings: resources.join("reconstruction").join("briefings.jsonl"),
-        out: need(args, "--out")?.into(),
-        arm: need(args, "--arm")?,
-        base: need(args, "--base")?.into(),
-        adapter: flag(args, "--adapter").map(Into::into),
-        max_tokens: number(args, "--max-tokens", 768)?,
-        limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
-        framing: framing_flag(args)?,
-        decoding: decoding_flag(args)?,
-    })
+    let brain = flags.brain()?;
+    run::replies_command(
+        brain.endpoints(),
+        &run::Replies {
+            briefings: resources.join("reconstruction").join("briefings.jsonl"),
+            out: need(args, "--out")?.into(),
+            arm: need(args, "--arm")?,
+            base: need(args, "--base")?.into(),
+            adapter: flag(args, "--adapter").map(Into::into),
+            max_tokens: number(args, "--max-tokens", 768)?,
+            limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+            framing: framing_flag(args)?,
+            decoding: decoding_flag(args)?,
+        },
+    )
 }
 
 /// How the model decodes: `--decoding greedy|thinking|sample[:T]|sample-thinking[:T]`,
@@ -687,15 +702,22 @@ fn reconstruct_report_command(args: &[String]) -> anyhow::Result<()> {
     )
 }
 
-fn anchor_exam_command(args: &[String]) -> anyhow::Result<()> {
+fn anchor_exam_command(
+    flags: &splinter_sdk::device::DeviceFlags,
+    args: &[String],
+) -> anyhow::Result<()> {
+    let brain = flags.brain()?;
     run::anchor_exam_command(
-        std::path::Path::new(&need(args, "--anchor")?),
-        std::path::Path::new(&need(args, "--out")?),
-        std::path::Path::new(&need(args, "--base")?),
-        flag(args, "--adapter").as_deref().map(std::path::Path::new),
-        flag(args, "--limit").map(|v| v.parse()).transpose()?,
-        number(args, "--max-tokens", 400)?,
-        decoding_flag(args)?,
+        brain.endpoints(),
+        &run::AnchorExam {
+            anchor: need(args, "--anchor")?.into(),
+            out: need(args, "--out")?.into(),
+            base: need(args, "--base")?.into(),
+            adapter: flag(args, "--adapter").map(Into::into),
+            limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
+            max_tokens: number(args, "--max-tokens", 400)?,
+            decoding: decoding_flag(args)?,
+        },
     )
 }
 

@@ -134,6 +134,14 @@ impl StateRoot {
         self.0.join("serving")
     }
 
+    /// Where the brain server a run starts keeps its adapters and the
+    /// artifact store training moves data through: both are state the
+    /// campaign's models and datasets live in, so they outlive the server.
+    #[must_use]
+    pub fn brain_service(&self) -> PathBuf {
+        self.0.join("brain-service")
+    }
+
     /// The experience database's directory.
     #[must_use]
     pub fn expdb(&self) -> PathBuf {

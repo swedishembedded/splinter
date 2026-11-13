@@ -639,9 +639,6 @@ pub fn train(
 ) -> Result<Candidate, OrchestratorError> {
     let Planned { plan, replay } = plan_training(ctx, request)?;
     let (candidate, dir, regime) = (plan.candidate.clone(), plan.dir.clone(), plan.regime);
-    // A fine-tune loads its own copy of the base: the device holds no
-    // other while it trains.
-    ctx.release_bases();
     let trained = match regime {
         Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),
         Regime::Dpo => Outcome::from(trainer.train_preference(ctx, &plan, cancel)?),

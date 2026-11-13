@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use crate::corpus::{families, is_exam_family, load_letters};
 use splinter_sdk::knowledge::advice::advice_cues;
-use splinter_sdk::model::answer::Answerer;
+use splinter_sdk::model::answer::{Answerer, Decoding};
 
 use crate::scenarios::{admit, advice_passages, classifier_prompt, writer_prompt, Scenario};
 use crate::tasks::PERSONA;
@@ -108,8 +108,20 @@ pub struct Generated {
 ///
 /// # Errors
 /// The corpus or the writer model cannot be read, or a generation fails.
-pub fn generate(options: &Options, out: &Path) -> anyhow::Result<Generated> {
-    let writer = Answerer::load(&options.writer, None, Some(4096), "jefferson")?;
+pub fn generate(
+    endpoints: &splinter_sdk::model::BrainEndpoints,
+    options: &Options,
+    out: &Path,
+) -> anyhow::Result<Generated> {
+    let writer = Answerer::request(
+        endpoints,
+        &splinter_sdk::model::LocalWeights {
+            base: options.writer.clone(),
+            adapter: None,
+            context_tokens: Some(4096),
+        },
+        Decoding::Greedy,
+    )?;
     let runtime = tokio::runtime::Runtime::new()?;
     // Each scenario is written as it is kept: a long run that stops early
     // leaves everything it had made.

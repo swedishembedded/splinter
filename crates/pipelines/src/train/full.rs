@@ -167,9 +167,6 @@ pub fn train_full_candidate(
         plan.replay_share = Some(DEFAULT_REPLAY_SHARE);
     }
     plan.train_precision = request.train_precision.clone();
-    // A full fine-tune loads its own copy of the base: the device holds no
-    // other while it trains.
-    ctx.release_bases();
     let checkpoint = trainer
         .train_full(ctx, &plan, cancel)
         .map_err(|e| abandon(&plan, e))?;

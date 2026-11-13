@@ -376,7 +376,7 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::Train(args) => synthetic_author::training::run(&args),
-        Command::Exam(args) => synthetic_author::exam_cmd::exam(&args),
+        Command::Exam(args) => synthetic_author::exam_cmd::exam(&cli.device, &args),
         Command::Show {
             seed,
             cache,

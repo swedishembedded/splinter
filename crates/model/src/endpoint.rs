@@ -75,7 +75,7 @@ pub struct ServedCard {
 pub struct BrainEndpoints {
     urls: Vec<String>,
     key: String,
-    adapter_manifest: Option<PathBuf>,
+    adapter_offer: Option<AdapterOffer>,
     attempt_concurrency: Option<usize>,
     artifact_store: Option<ArtifactStore>,
     refused_wait: Duration,
@@ -86,7 +86,7 @@ impl std::fmt::Debug for BrainEndpoints {
         // The key never reaches a log or an error.
         f.debug_struct("BrainEndpoints")
             .field("urls", &self.urls)
-            .field("adapter_manifest", &self.adapter_manifest)
+            .field("adapter_offer", &self.adapter_offer)
             .field("attempt_concurrency", &self.attempt_concurrency)
             .field("artifact_store", &self.artifact_store)
             .finish_non_exhaustive()
@@ -117,7 +117,7 @@ impl BrainEndpoints {
         Ok(Self {
             urls,
             key: key.into(),
-            adapter_manifest: None,
+            adapter_offer: None,
             attempt_concurrency: None,
             artifact_store: None,
             refused_wait: crate::served_train::REFUSED_WAIT,
@@ -144,7 +144,17 @@ impl BrainEndpoints {
     /// it to the release manifest at `manifest`, which they follow.
     #[must_use]
     pub fn with_adapter_manifest(mut self, manifest: PathBuf) -> Self {
-        self.adapter_manifest = Some(manifest);
+        self.adapter_offer = Some(AdapterOffer::Manifest(manifest));
+        self
+    }
+
+    /// These endpoints, offering an adapter they do not list by writing it
+    /// into `directory`, which they serve (`brain serve --serve-adapters`):
+    /// every adapter written there is a model of its own, so offering one
+    /// withdraws none.
+    #[must_use]
+    pub fn with_adapter_directory(mut self, directory: PathBuf) -> Self {
+        self.adapter_offer = Some(AdapterOffer::Directory(directory));
         self
     }
 
@@ -194,10 +204,10 @@ impl BrainEndpoints {
 
     /// Whether an adapter the endpoints do not list is offered by publishing
     /// it to the release manifest they follow, which withdraws the adapter
-    /// offered before it.
+    /// offered before it: only one is served at a time.
     #[must_use]
     pub fn offers_adapters(&self) -> bool {
-        self.adapter_manifest.is_some()
+        matches!(self.adapter_offer, Some(AdapterOffer::Manifest(_)))
     }
 
     /// The endpoints' base URLs, without a trailing slash.
@@ -265,14 +275,14 @@ impl BrainEndpoints {
         for index in 0..self.urls.len() {
             let cards = self.list(index)?;
             let mut found = wanted.find(&cards);
-            if let (None, Wanted::Adapter { file, digest }, Some(manifest)) =
-                (&found, &wanted, &self.adapter_manifest)
+            if let (None, Wanted::Adapter { file, digest }, Some(offer)) =
+                (&found, &wanted, &self.adapter_offer)
             {
                 if !offered {
-                    publish(manifest, file, digest)?;
+                    offer.publish(file, digest)?;
                     offered = true;
                 }
-                found = self.await_listing(index, &wanted, manifest)?;
+                found = self.await_listing(index, &wanted, offer)?;
             }
             match found {
                 Some(id) => ids.push(id),
@@ -290,7 +300,7 @@ impl BrainEndpoints {
         &self,
         index: usize,
         wanted: &Wanted,
-        manifest: &Path,
+        offer: &AdapterOffer,
     ) -> Result<Option<String>, PolicyError> {
         let deadline = Instant::now() + OFFER_WAIT;
         loop {
@@ -301,10 +311,10 @@ impl BrainEndpoints {
                 return Err(refused(
                     &self.urls[index],
                     &format!(
-                        "did not list {wanted} within {}s of publishing {}: it does not follow \
-                         that manifest (start it with --adapter-manifest) or refused the adapter",
+                        "did not list {wanted} within {}s of {}: it does not serve from there \
+                         or refused the adapter",
                         OFFER_WAIT.as_secs(),
-                        manifest.display()
+                        offer.describe()
                     ),
                 ));
             }
@@ -315,8 +325,8 @@ impl BrainEndpoints {
     fn not_served(&self, index: usize, wanted: &Wanted, cards: &[ServedCard]) -> PolicyError {
         let how = match wanted {
             Wanted::Base(_) => "start it with --checkpoint naming that model".to_string(),
-            Wanted::Adapter { .. } if self.adapter_manifest.is_some() => {
-                "its manifest was published but it lists no such adapter".to_string()
+            Wanted::Adapter { .. } if self.adapter_offer.is_some() => {
+                "the adapter was offered but it lists no such adapter".to_string()
             }
             Wanted::Adapter { .. } => "serve it with brain serve --adapter FILE, or name the \
                 manifest the endpoint follows with --brain-adapter-manifest FILE so it is offered"
@@ -388,19 +398,54 @@ impl std::fmt::Display for Wanted {
     }
 }
 
-/// Publishes `file` (whose SHA-256 is `digest`) as the release the endpoints
-/// following `manifest` serve.
-fn publish(manifest: &Path, file: &Path, digest: &Digest) -> Result<(), PolicyError> {
-    let absolute = std::path::absolute(file).map_err(|source| PolicyError::Io {
-        path: file.to_path_buf(),
-        source,
-    })?;
-    crate::manifest::write_adapter_manifest(manifest, &absolute, digest).map_err(|source| {
-        PolicyError::Io {
-            path: manifest.to_path_buf(),
-            source,
+/// How an adapter an endpoint does not list is put in front of it.
+#[derive(Clone, Debug)]
+enum AdapterOffer {
+    /// Publish a release manifest the endpoint follows (`--adapter-manifest`);
+    /// one adapter is served at a time.
+    Manifest(PathBuf),
+    /// Write the adapter into a directory the endpoint serves
+    /// (`--serve-adapters`); each is a model of its own.
+    Directory(PathBuf),
+}
+
+impl AdapterOffer {
+    /// Offers `file` (whose SHA-256 is `digest`).
+    fn publish(&self, file: &Path, digest: &Digest) -> Result<(), PolicyError> {
+        let io = |path: &Path| {
+            let path = path.to_path_buf();
+            move |source| PolicyError::Io { path, source }
+        };
+        match self {
+            Self::Manifest(manifest) => {
+                let absolute = std::path::absolute(file).map_err(io(file))?;
+                crate::manifest::write_adapter_manifest(manifest, &absolute, digest).map_err(
+                    |source| PolicyError::Io {
+                        path: manifest.clone(),
+                        source,
+                    },
+                )
+            }
+            Self::Directory(directory) => {
+                let served = directory.join(format!("{}.safetensors", digest.hex()));
+                if served.exists() {
+                    return Ok(());
+                }
+                // Written aside under a hidden name and renamed into place:
+                // the server ignores hidden files and never reads half of one.
+                let aside = directory.join(format!(".{}.partial", digest.hex()));
+                std::fs::copy(file, &aside).map_err(io(file))?;
+                std::fs::rename(&aside, &served).map_err(io(&served))
+            }
         }
-    })
+    }
+
+    fn describe(&self) -> String {
+        match self {
+            Self::Manifest(manifest) => format!("publishing {}", manifest.display()),
+            Self::Directory(directory) => format!("writing it to {}", directory.display()),
+        }
+    }
 }
 
 /// `url`'s JSON body, asked with `key`; the reason on failure. On a thread of
@@ -408,6 +453,26 @@ fn publish(manifest: &Path, file: &Path, digest: &Digest) -> Result<(), PolicyEr
 /// runtime. Environment proxies are not consulted: an endpoint is a direct
 /// address.
 fn get_json(url: &str, key: &str) -> Result<Value, String> {
+    request_json(url, key, None, LIST_TIMEOUT)
+}
+
+/// `body` posted to `url` as JSON, asked with `key`, and the JSON reply; the
+/// reason on failure. Run as [`get_json`] runs.
+pub(crate) fn post_json(
+    url: &str,
+    key: &str,
+    body: &Value,
+    timeout: Duration,
+) -> Result<Value, String> {
+    request_json(url, key, Some(body), timeout)
+}
+
+fn request_json(
+    url: &str,
+    key: &str,
+    body: Option<&Value>,
+    timeout: Duration,
+) -> Result<Value, String> {
     std::thread::scope(|scope| {
         scope
             .spawn(|| {
@@ -421,20 +486,29 @@ fn get_json(url: &str, key: &str) -> Result<Value, String> {
                 runtime.block_on(async {
                     let client = reqwest::Client::builder()
                         .no_proxy()
-                        .timeout(LIST_TIMEOUT)
+                        .timeout(timeout)
                         .build()
                         .map_err(|e| e.to_string())?;
-                    let response = client
-                        .get(url)
+                    let request = match body {
+                        Some(body) => client.post(url).json(body),
+                        None => client.get(url),
+                    };
+                    let response = request
                         .bearer_auth(key)
                         .send()
                         .await
                         .map_err(|e| e.to_string())?;
                     let status = response.status();
-                    if !status.is_success() {
-                        return Err(format!("answered HTTP {}", status.as_u16()));
-                    }
                     let text = response.text().await.map_err(|e| e.to_string())?;
+                    if !status.is_success() {
+                        let detail = serde_json::from_str::<Value>(&text)
+                            .ok()
+                            .and_then(|v| v["error"]["message"].as_str().map(str::to_string));
+                        return Err(match detail {
+                            Some(detail) => format!("answered HTTP {}: {detail}", status.as_u16()),
+                            None => format!("answered HTTP {}", status.as_u16()),
+                        });
+                    }
                     serde_json::from_str(&text).map_err(|e| format!("not JSON: {e}"))
                 })
             })

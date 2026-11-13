@@ -50,7 +50,7 @@ pub fn vram_budget_gib() -> Option<f64> {
 /// returns with the cause in it.
 pub(crate) fn contain_device_panic<T>(f: impl FnOnce() -> T) -> Result<T, String> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
-        .map_err(|panic| format!("device panic: {}", crate::local::panic_message(&*panic)))
+        .map_err(|panic| format!("device panic: {}", panic_message(&*panic)))
 }
 
 /// One GPU's memory right now, as the driver reports it.
@@ -178,6 +178,18 @@ fn same_selection(chosen: &'static Devices, text: &str) -> Result<&'static Devic
             reason: format!("the process already schedules on {}", chosen.source()),
         })
     }
+}
+
+/// A panic payload as text, however it was constructed.
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    if let Some(oom) = panic.downcast_ref::<gpu_core::DeviceOutOfMemory>() {
+        return oom.to_string();
+    }
+    panic
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| panic.downcast_ref::<&str>().map(|s| (*s).to_string()))
+        .unwrap_or_else(|| "no message".into())
 }
 
 #[cfg(test)]

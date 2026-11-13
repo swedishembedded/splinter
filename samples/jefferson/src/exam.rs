@@ -95,7 +95,7 @@ pub struct Run {
 ///
 /// # Errors
 /// The model cannot be loaded or a generation fails.
-pub fn run(run: &Run) -> anyhow::Result<usize> {
+pub fn run(endpoints: &splinter_sdk::model::BrainEndpoints, run: &Run) -> anyhow::Result<usize> {
     let tasks = read_tasks(&run.exam)?;
     let model = Model {
         base: &run.base,
@@ -105,9 +105,14 @@ pub fn run(run: &Run) -> anyhow::Result<usize> {
         label: "jefferson",
         decoding: Decoding::Greedy,
     };
-    splinter_sdk::model::exam::run(&tasks, &run.out, run.limit, &model, &|task, answer| {
-        is_correct(task, answer).into()
-    })
+    splinter_sdk::model::exam::run(
+        endpoints,
+        &tasks,
+        &run.out,
+        run.limit,
+        &model,
+        &|task, answer| is_correct(task, answer).into(),
+    )
 }
 
 #[cfg(test)]

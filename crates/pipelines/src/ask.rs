@@ -137,11 +137,6 @@ pub fn ask_retrieving(
         rerank: request.rerank,
     };
     let retrieved = retrieval.find(question)?;
-    // A reader that was loaded to judge passages gives the device back
-    // before the model that answers needs it.
-    if retrieval.rerank.is_some() {
-        ctx.release_bases();
-    }
     let instruction = retrieved.prompt(question);
     let shown = retrieved.passages;
     let shown = shown

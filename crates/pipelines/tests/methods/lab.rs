@@ -11,7 +11,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::path::{Path, PathBuf};
-use std::sync::Once;
 
 use atif::{StepOrigin, TraceStep, Trajectory};
 use serde_json::json;
@@ -28,6 +27,7 @@ use splinter_model::policy_gradient::{
 use splinter_model::train::{
     fine_tune, train_preference, BasePrecision, FineTune, PreferenceTune, DEFAULT_DPO_BETA,
 };
+use splinter_model::{LocalWeights, ManagedBrain, ServiceSettings};
 
 use crate::world::{cipher, is_correct, letters_right};
 
@@ -40,37 +40,57 @@ pub const SAMPLING_TEMPERATURE: f32 = 0.6;
 /// The end-of-turn marker the toy template appends to an assistant turn.
 const END_OF_TURN: &str = "<|im_end|>";
 
-static DEVICE: Once = Once::new();
-
-/// The scratch directory, the toy base in it, and the runtime that drives the async sampler.
+/// The scratch directory, the toy base in a model store, the brain server on the CPU backend that serves it, and
+/// the runtime that drives the async sampler.
 pub struct Lab {
     pub dir: tempfile::TempDir,
     pub base: PathBuf,
+    brain: ManagedBrain,
     runtime: tokio::runtime::Runtime,
 }
 
 impl Lab {
-    /// A fresh toy base on the CPU backend.
+    /// A fresh toy base in a model store, served by a `brain serve` (the first `brain` on `PATH`) on the CPU backend.
     pub fn new() -> Self {
-        DEVICE.call_once(|| {
-            splinter_model::device::select_backend("cpu").expect("the CPU backend");
-            splinter_model::device::select("cpu").expect("the CPU device");
-        });
         let dir = tempfile::tempdir().unwrap();
-        let base = dir.path().join("base");
+        let models = dir.path().join("models");
+        let base = models.join("toy").join("chat");
         toy_chat_checkpoint(&base, 5).unwrap();
+        let binary = splinter_orchestrator::Config::from_env()
+            .brain_binary
+            .expect("the method smokes need a `brain` binary on PATH");
+        let brain = ManagedBrain::start(
+            &ServiceSettings {
+                binary,
+                models,
+                state: dir.path().join("brain-service"),
+                device: Some("cpu".into()),
+                backend: Some("cpu".into()),
+                max_batch: Some(4),
+            },
+            &sven_sdk::CancelToken::default(),
+        )
+        .unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
-        Self { dir, base, runtime }
+        Self {
+            dir,
+            base,
+            brain,
+            runtime,
+        }
     }
 
     /// A policy: the base with `adapter` attached, decoding as `decoding` says.
     pub fn policy(&self, adapter: Option<&Path>, decoding: Decoding) -> Policy<'_> {
-        let answerer =
-            Answerer::load_with(&self.base, adapter, Some(CONTEXT_TOKENS), "toy", decoding)
-                .unwrap();
+        let weights = LocalWeights {
+            base: self.base.clone(),
+            adapter: adapter.map(Path::to_path_buf),
+            context_tokens: Some(CONTEXT_TOKENS),
+        };
+        let answerer = Answerer::request(self.brain.endpoints(), &weights, decoding).unwrap();
         Policy {
             lab: self,
             answerer,
@@ -368,10 +388,12 @@ impl Policy<'_> {
         temperature: f32,
         seed: u64,
     ) -> std::sync::Arc<dyn sven_sdk::model::ModelProvider> {
-        self.answerer.provider_with(Decoding::Sampled {
-            temperature,
-            seed: Some(seed),
-        })
+        self.answerer
+            .provider_with(Decoding::Sampled {
+                temperature,
+                seed: Some(seed),
+            })
+            .unwrap()
     }
 
     /// [`Policy::sample`] for a caller already running on the lab's runtime.

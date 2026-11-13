@@ -137,7 +137,7 @@ fn parse_arm(name: &str) -> anyhow::Result<Arm> {
 /// # Errors
 /// The seed contradicts the corpus, the outcomes were made under another
 /// manifest, or the model fails.
-pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
+pub fn exam(brain: &splinter_sdk::device::DeviceFlags, args: &ExamArgs) -> anyhow::Result<()> {
     let arm = parse_arm(&args.arm)?;
     let asked = asked_decoding(args)?;
     let adapter = match (arm, &args.adapter) {
@@ -170,11 +170,14 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
         adopt: args.adopt,
         slots: 1,
     };
-    let answerer = Answerer::load_with(
-        &args.base,
-        adapter,
-        Some(CONTEXT_TOKENS),
-        arm.name(),
+    let connection = brain.brain()?;
+    let answerer = Answerer::request(
+        connection.endpoints(),
+        &splinter_sdk::model::LocalWeights {
+            base: args.base.clone(),
+            adapter: adapter.map(std::path::Path::to_path_buf),
+            context_tokens: Some(CONTEXT_TOKENS),
+        },
         Decoding::Greedy,
     )?;
     match asked {
@@ -194,7 +197,7 @@ pub fn exam(args: &ExamArgs) -> anyhow::Result<()> {
                 Ok(answerer.provider_with(Decoding::Sampled {
                     temperature,
                     seed: Some(seed),
-                }))
+                })?)
             };
             let outcomes =
                 sampled::run_arm_sampled(&cache, &persona, arm, &provider_for, &all, &run, &how)?;
