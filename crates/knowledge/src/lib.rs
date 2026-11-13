@@ -20,6 +20,9 @@
 //!   to a model.
 //! * [`retrieve`] - the passages of the sources that bear on a query:
 //!   lexical and semantic ranking, fused.
+//! * [`factory`] - a learning objective compiled into validated, versioned
+//!   training environments: verifiability classes, task-folder artifacts,
+//!   generator plugins, admission gates and a verifier red team.
 //! * [`gates`] - the text rules a generated task is held to: instruction
 //!   normalisation for duplicate detection, and numbers traceable to the
 //!   evidence.
@@ -60,6 +63,7 @@ pub mod claims;
 pub mod codebook;
 pub mod concepts;
 pub mod denoise;
+pub mod factory;
 pub mod gates;
 pub mod goal;
 pub mod harmonize;

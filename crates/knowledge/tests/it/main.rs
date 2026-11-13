@@ -20,6 +20,7 @@ mod claim_gates;
 mod claim_supersession;
 mod claim_task;
 mod denoise_task;
+mod factory_admission;
 mod generation_calls;
 mod history_tasks;
 mod redact;
