@@ -150,11 +150,13 @@ impl SolveOptions {
         options
     }
 
-    /// `model`, limited to this call's output budget a reply where a request
-    /// names no limit of its own; `model` itself when there is no budget. See
+    /// `model`, asked again when a request fails transiently
+    /// ([`crate::retry`]), and limited to this call's output budget a reply
+    /// where a request names no limit of its own when there is a budget. See
     /// [`crate::budget`].
     #[must_use]
     pub fn provider(&self, model: Arc<dyn ModelProvider>) -> Arc<dyn ModelProvider> {
+        let model = crate::retry::Retrying::wrap(model);
         match self.max_output_tokens {
             Some(tokens) => crate::budget::OutputCap::wrap(model, tokens),
             None => model,
@@ -419,7 +421,7 @@ pub async fn solve_prompted(
     }
     let engine = engine(
         environment,
-        model,
+        crate::retry::Retrying::wrap(model),
         options.engine_config(),
         options.system_prompt(),
     )?;

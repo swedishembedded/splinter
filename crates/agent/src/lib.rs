@@ -77,6 +77,7 @@ pub mod prompts;
 pub mod proposer;
 pub mod repair;
 pub mod replay;
+pub mod retry;
 pub mod run_code;
 pub mod skill_planner;
 pub mod solve;
