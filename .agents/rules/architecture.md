@@ -35,8 +35,9 @@ one it starts and owns (`splinter_model::ManagedBrain`). Nothing in Splinter
 loads weights, decodes or trains in its own process, and nothing re-implements
 what brain computes. What brain's API does not offer yet is a gap to fix in
 brain, recorded in `.agents/roadmap/api-only-brain.md`, never an in-process
-fallback. The brain crates `splinter-model` still links are listed there with
-the API that replaces each.
+fallback. The brain crates `splinter-model` still links are the
+`[[brain.exception]]` rows of `architecture.toml`, each with the API that
+replaces it; the architecture gate refuses any other brain dependency.
 
 **The rule that decides a boundary:** each project proves its own capabilities
 with its own standalone samples, and Splinter proves they compose. If moving

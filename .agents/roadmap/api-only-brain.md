@@ -57,8 +57,20 @@ Each item is brain API to add first (in brain, with a regression test), then the
 | A toy chat checkpoint writer in the brain CLI | `fixture::toy_chat_checkpoint` | the method smokes and `dataset_split` tests build checkpoints with `brain::toy` |
 | Delete `campaign::brain::{ChatCollector, ChatValidator, BrainTrainer}` | | `campaign-lua`'s `main` still uses them; `rsi2` already uses `campaign::served` |
 | Pass endpoints explicitly instead of `BrainDefaults` | `orchestrator::config::set_brain_defaults` | samples that build a `Config` in several places state the flags once |
-| `scripts/gates/` refusing a brain crate outside the allowed client | | needs the manifests clean first |
+| ~~`scripts/gates/` refusing a brain crate outside the allowed client~~ | | landed: `[[brain.exception]]` in `architecture.toml` names each (package, brain crate) pair still linked, with a why; any other brain dependency fails `check/gates/architecture`, and an exception whose dependency is gone fails as stale, so the list only shrinks |
 
 Brain landed: `/v1/embeddings` takes `instruction` and `max_tokens` (the client sends both; a brain without them drops the instruction silently, so Splinter needs a brain with ab4379f00).
 
 Verified: `make check`, and `make test` with `--skip timeline_` (the in-process timeline specs create a wgpu adapter and fail when the cards are busy: they passed alone, and leave with the timeline retirement). `sandbox::process_runner::nothing_outlives_a_supervisor_that_is_killed_mid_run` fails on the shared node with the sandbox crate untouched. Not verified: a real `brain serve` started by `ManagedBrain` (the scripted contract and a stand-in binary only; no brain binary was available and the cards were busy).
+
+## Plan for the served-only training family (brain now offers every API it needs)
+
+Brain origin/main has `brain/train` objectives `dpo`, `full_train`, `merge`, `timeline_train`, the `check_dataset` action, teacher-forced `score` through `/v1/run`, `GET /v1/devices`, `POST /v1/audio/speech` and `brain qwen3 toy`. The order that keeps every commit green:
+
+1. `served_train::job::run` takes the action; add `check_dataset` (typed report), `score`, and the request builders and delivery for `dpo`, `full_train` (a checkpoint leaves as a manifest of per-file digests) and `merge`; scripted-job doubles for each.
+2. Replace `train_checks`, `capabilities::overlong_records` and `pictures::validate_dataset_on` with the `check_dataset` report (row length is its `tokens.max`; overlong lines are `over_max_block_lines`; refused records are `invalid`); `BrainDatasetCheck` becomes `splinter_data::Unchecked` at write time, since job admission names a refused line.
+3. Pipelines always train through `Runtime::brain()`: delete `fine_tune`, `train_preference`, `train_policy_gradient`, `full_fine_tune`, `merge`, `score_chat` and `refuse_unserved`; `powered::voice` scores through `/v1/run`.
+4. Per-record token counts (`TokenCounter`, `RecordMeter`, used by `block.rs`, `datasets.rs`, `voice`, repo-replay) need a per-line count from `check_dataset` (brain gap: an option returning each example's tokens); until then they keep the `brain` dependency.
+5. Hardware inventory (`device`, `roles::discovered_assistant`, `doctor`) onto `/v1/devices`; speech recognition and synthesis onto `/v1/audio/*` (speech ingress, the TTS policy trainer and the listener have no route and need one or retirement); the timeline model onto `timeline_train` and its forecast action; toy checkpoints onto `brain qwen3 toy`.
+6. Paired statistics stay in splinter as pure arithmetic: the sign test and bootstrap are reimplemented here; `brain-survival` (no dependencies) is the one brain crate that may stay as a reviewed exception.
+7. Delete `campaign::brain::{ChatCollector, ChatValidator, BrainTrainer}` and `campaign-lua`'s `main` (the generic `lineage` driver supersedes it), then `BrainDefaults`; drop the exceptions one by one.
