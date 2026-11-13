@@ -104,7 +104,7 @@ One line each; the linked file holds the detail and the gate enforces it.
 - **One implementation.** Never copy code out of sven or brain; depend on it,
   and fix a missing sven SDK surface in sven (`.agents/rules/architecture.md`).
 - **Layering.** Dependencies point down the tiers in `architecture.toml`; only
-  the adapters reach sven, only `splinter-model` reaches brain
+  the adapters reach sven, only `splinter-model` reaches brain, through its API
   (`make check/gates/architecture`).
 - **Evidence over claims.** A run is judged by measurements the policy cannot
   influence; an unmeasured number is absent, never `0` (`.agents/rules/quality.md`).

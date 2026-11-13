@@ -21,17 +21,22 @@ is the gate's own specification. What each crate owns is stated in its
 Neither sven nor brain depends on Splinter.
 
 **sven** is consumed through its public SDK, `sven-sdk`, by `splinter-agent`
-(which runs agents and typed calls) and `splinter-model` (which implements
-sven's model provider for the in-process model). The vocabulary holds sven's
+(which runs agents and typed calls) and `splinter-model` (which hands sven
+a provider for a model brain serves). The vocabulary holds sven's
 trajectory format, `atif`, which `sven-sdk` re-exports. Needing any other sven
 crate is a gap in sven's SDK: fix it there and record it in
 `.agents/roadmap/splinter.md`, never reach further in.
 
-**brain** is reached by `splinter-model` alone. It may use any crate of brain's
-repository: it instantiates the SDK's higher-level primitives first (the
-`brain` crate: devices, residency, models) and reaches into another brain crate
-only when the state it needs sits there. Nothing in Splinter re-implements what
-brain computes.
+**brain** is reached through its API: `splinter-model` is the only crate that
+speaks to it, and a local model is always requested from a `brain serve` (HTTP
+OpenAI-compatible endpoints, `/v1/jobs` training jobs, adapters served from a
+directory or a manifest), either one the run is given (`--brain-endpoint`) or
+one it starts and owns (`splinter_model::ManagedBrain`). Nothing in Splinter
+loads weights, decodes or trains in its own process, and nothing re-implements
+what brain computes. What brain's API does not offer yet is a gap to fix in
+brain, recorded in `.agents/roadmap/api-only-brain.md`, never an in-process
+fallback. The brain crates `splinter-model` still links are listed there with
+the API that replaces each.
 
 **The rule that decides a boundary:** each project proves its own capabilities
 with its own standalone samples, and Splinter proves they compose. If moving
@@ -129,7 +134,7 @@ Two questions before adding anything:
   model is attempted at them (`pipelines` release), the numbers the report
   keeps and the rule that decides them (`eval` gate), the exam or anchor that
   supplies the tasks, the serve check's comparison of a served run with the
-  in-process one, the CLI's report of the gate, the docs.
+  candidate's answers, the CLI's report of the gate, the docs.
 - **A field of an experience:** the vocabulary (`core`), its canonical form and
   golden test (`crates/store/tests/it/identity.rs`), ingestion, every projection
   that reads it, and a note on compatibility with what is already stored: an
