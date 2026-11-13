@@ -17,11 +17,12 @@
      from `from` over normal dependencies, at any depth. `to` is a workspace
      crate or an external one (named by a direct dependency of any crate on
      the way).
-  3. Only the crates in `[brain].allowed` depend on brain. They may use any
-     crate of the brain repository: they instantiate its SDK's primitives
-     first and reach the state of the whole system through them. A brain
-     crate is `brain`, a `brain-*` crate, or any crate sourced from brain's
-     repository.
+  3. Splinter reaches brain through its API, never by linking it. No crate
+     depends on a brain crate (`brain`, a `brain-*` crate, or any crate sourced
+     from brain's repository) unless a `[[brain.exception]]` names the pair
+     (`package`, `crate`) with a `why`. An exception is a reviewed, TEMPORARY
+     debt: it lists what the API does not replace yet, and a stale one (the
+     dependency it names is gone) fails the gate, so the list only shrinks.
   4. Only the crates in `[sven].allowed` depend (normally) on sven, and only
      on its public SDK, `sven-sdk`: an internal `sven-*` crate is refused.
      A dev-dependency may drive sven directly, so a test can script an agent.
@@ -151,13 +152,25 @@ def _is_brain_crate(dep):
 
 def _brain(arch, packages):
     failures = []
-    allowed = set(arch.get("brain", {}).get("allowed", []))
+    exceptions = arch.get("brain", {}).get("exception", [])
+    allowed = {(e["package"], e["crate"]) for e in exceptions}
+    for e in exceptions:
+        if not e.get("why"):
+            failures.append(f"brain exception {e['package']} -> {e['crate']}: needs a why")
+    present = set()
     for pkg in packages:
-        if pkg["name"] in allowed:
-            continue
         for dep in pkg["deps"]:
-            if _is_brain_crate(dep):
-                failures.append(f"{pkg['name']} -> {dep['name']}: only {', '.join(sorted(allowed))} may depend on brain")
+            if not _is_brain_crate(dep):
+                continue
+            pair = (pkg["name"], dep["name"])
+            present.add(pair)
+            if pair not in allowed:
+                failures.append(
+                    f"{pkg['name']} -> {dep['name']}: splinter reaches brain through its API only; "
+                    "use the served endpoints (a missing API is added to brain, not linked)"
+                )
+    for package, crate in sorted(allowed - present):
+        failures.append(f"brain exception {package} -> {crate} is stale: the dependency is gone, delete the entry")
     return failures
 
 

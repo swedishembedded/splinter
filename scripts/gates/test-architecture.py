@@ -38,7 +38,7 @@ def workspace():
             "model": "adapters",
             "demo": "sample",
         },
-        "brain": {"allowed": ["model"]},
+        "brain": {"exception": [{"package": "model", "crate": "brain", "why": "x"}]},
         "limits": {"max_file_lines": 100},
     }
     packages = [
@@ -138,21 +138,26 @@ class Gate(unittest.TestCase):
             a["forbidden"] = [{"from": "eval", "to": "libc", "why": "x"}]
         self.assertEqual(self.failures(mutate), "")
 
-    def test_only_an_allowed_crate_depends_on_brain(self):
+    def test_a_crate_without_an_exception_may_not_depend_on_brain(self):
         out = self.failures(lambda a, p, f: p[2]["deps"].append({"name": "brain", "kind": None}))
         self.assertIn("eval -> brain", out)
-
-    def test_the_allowed_crate_may_use_any_crate_of_brain(self):
-        def mutate(a, p, f):
-            p[3]["deps"].append({"name": "brain-core", "kind": None})
-            p[3]["deps"].append({"name": "gpu-core", "kind": None, "source": "git+https://github.com/swedishembedded/brain?rev=abc#abc"})
-        self.assertEqual(self.failures(mutate), "")
-
-    def test_a_crate_that_is_not_allowed_may_use_no_crate_of_brain(self):
-        out = self.failures(lambda a, p, f: p[2]["deps"].append({"name": "gpu-core", "kind": None, "source": "git+https://github.com/swedishembedded/brain?rev=abc#abc"}))
-        self.assertIn("eval -> gpu-core", out)
-        out = self.failures(lambda a, p, f: p[2]["deps"].append({"name": "brain-core", "kind": None}))
+        out = self.failures(lambda a, p, f: p[2]["deps"].append({"name": "brain-core", "kind": "dev"}))
         self.assertIn("eval -> brain-core", out)
+
+    def test_an_exception_covers_only_the_crate_it_names(self):
+        def mutate(a, p, f):
+            p[3]["deps"].append({"name": "gpu-core", "kind": None, "source": "git+https://github.com/swedishembedded/brain?rev=abc#abc"})
+        self.assertIn("model -> gpu-core", self.failures(mutate))
+
+    def test_a_stale_exception_fails_so_the_list_only_shrinks(self):
+        def mutate(a, p, f):
+            p[3]["deps"] = [d for d in p[3]["deps"] if d["name"] != "brain"]
+        self.assertIn("brain exception model -> brain is stale", self.failures(mutate))
+
+    def test_an_exception_needs_a_why(self):
+        def mutate(a, p, f):
+            a["brain"]["exception"][0]["why"] = ""
+        self.assertIn("needs a why", self.failures(mutate))
 
     def test_only_an_allowed_crate_depends_on_sven(self):
         def mutate(a, p, f):

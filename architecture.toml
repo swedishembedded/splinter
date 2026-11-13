@@ -20,9 +20,11 @@
 #     no longer exists) is itself a failure: delete it when the underlying
 #     issue is fixed.
 #   - A declared internal dependency must be named by the crate's sources.
-#   - Only the crates in [brain].allowed depend on brain. They may use any
-#     crate of its repository: they instantiate the SDK's higher-level
-#     primitives first and reach the state of the whole system through them.
+#   - Splinter reaches brain through its API (HTTP endpoints, training jobs,
+#     adapter serving), never by linking it. A crate depends on a brain crate
+#     only where a [[brain.exception]] names the pair with its why; each is
+#     temporary debt for what the API does not replace yet, and a stale one
+#     fails the gate.
 
 [tiers]
 # Ordered low -> high.
@@ -69,8 +71,30 @@ splinter-synthetic-author = "sample"
 splinter-voice-loop = "sample"
 splinter-agent-loop = "sample"
 
-[brain]
-allowed = ["splinter-model"]
+[[brain.exception]]
+package = "splinter-model"
+crate = "brain"
+why = "in-process training, scoring, speech and timeline code that the served API now offers; being moved onto it (.agents/roadmap/api-only-brain.md)"
+
+[[brain.exception]]
+package = "splinter-model"
+crate = "brain-gpu-core"
+why = "the device inventory and panic payloads of the in-process trainers; GET /v1/devices replaces it"
+
+[[brain.exception]]
+package = "splinter-model"
+crate = "brain-data"
+why = "the dataset parsers behind BrainDatasetCheck; the check_dataset job replaces them"
+
+[[brain.exception]]
+package = "splinter-model"
+crate = "brain-catalog"
+why = "dev: toy checkpoints for the in-process specs; `brain qwen3 toy` replaces them"
+
+[[brain.exception]]
+package = "splinter-model"
+crate = "brain-testutil"
+why = "dev: adapter fixtures for the manifest spec"
 
 [sven]
 # Only the agent runs sven and only the model adapter serves it a provider.
