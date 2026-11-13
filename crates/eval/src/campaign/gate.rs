@@ -49,6 +49,10 @@ pub struct DevGate {
     /// Retention passes the candidate may lose against the champion; zero
     /// means any net loss rolls the arm back.
     pub max_retention_loss: usize,
+    /// A non-inferiority margin: retention passes lost, as a share of the
+    /// retention set, that are still allowed. The larger of this and
+    /// `max_retention_loss` applies.
+    pub max_retention_loss_rate: f64,
 }
 
 impl Default for DevGate {
@@ -56,6 +60,7 @@ impl Default for DevGate {
         Self {
             total_alpha: DEFAULT_TOTAL_ALPHA,
             max_retention_loss: 0,
+            max_retention_loss_rate: 0.0,
         }
     }
 }
@@ -124,6 +129,9 @@ pub fn decide(
         .iter()
         .filter(|(task, &c)| !c && champion.retention.get(*task) == Some(&true))
         .count();
+    let allowed = gate
+        .max_retention_loss
+        .max((gate.max_retention_loss_rate * champion.retention.len() as f64).floor() as usize);
     let alpha = spent_alpha(gate.total_alpha, generation);
     let sign = test.sign_test(&pairs);
     let (action, reason) = if pairs.is_empty() {
@@ -131,12 +139,12 @@ pub fn decide(
             Action::Rollback,
             "no dev task was graded for both the champion and the candidate".to_string(),
         )
-    } else if retention_losses > gate.max_retention_loss {
+    } else if retention_losses > allowed {
         (
             Action::Rollback,
             format!(
                 "the candidate lost {retention_losses} retention passes, more than the {} allowed",
-                gate.max_retention_loss
+                allowed
             ),
         )
     } else if wins > losses {
@@ -259,10 +267,35 @@ mod tests {
         assert_eq!(strict.retention_losses, 1);
         let lenient = DevGate {
             max_retention_loss: 1,
+            max_retention_loss_rate: 0.0,
             ..DevGate::default()
         };
         assert_eq!(
             decide(&lenient, 1, &champion, &candidate, &Strict).action,
+            Action::Advance
+        );
+    }
+
+    #[test]
+    fn a_non_inferiority_margin_as_a_share_of_the_retention_set_is_allowed() {
+        let names: Vec<String> = (0..50).map(|i| format!("r{i}")).collect();
+        let retention = |lost: usize| -> Vec<(&str, bool)> {
+            names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| (n.as_str(), i >= lost))
+                .collect()
+        };
+        let champion = result(&[("a", false)], &retention(0));
+        let candidate = result(&[("a", true)], &retention(3));
+        let strict = decide(&DevGate::default(), 1, &champion, &candidate, &Strict);
+        assert_eq!(strict.action, Action::Rollback);
+        let margin = DevGate {
+            max_retention_loss_rate: 0.06,
+            ..DevGate::default()
+        };
+        assert_eq!(
+            decide(&margin, 1, &champion, &candidate, &Strict).action,
             Action::Advance
         );
     }

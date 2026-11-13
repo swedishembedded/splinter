@@ -240,6 +240,10 @@ pub trait Validator {
     fn describe(&self) -> Value;
     /// Independent units the dev set has: families, not tasks.
     fn units(&self) -> usize;
+    /// Tasks of the retention set; zero when the campaign keeps none.
+    fn retention_units(&self) -> usize {
+        0
+    }
     /// Attempts `policy` at the dev tasks (never trained on) and, when the
     /// campaign keeps one, its retention tasks, and returns pass or fail per
     /// task.

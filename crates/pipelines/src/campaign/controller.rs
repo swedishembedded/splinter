@@ -351,6 +351,26 @@ impl<'p> CampaignController<'p> {
     }
 
     fn plan(&self, generation: u32) -> Result<PlannedArm, ArmRefused> {
+        let kept = self.parts.validator.retention_units();
+        if kept > 0 && self.config.retention_loss_to_detect > 0.0 {
+            let alpha = splinter_eval::campaign::plan::spent_alpha(
+                self.config.gate.total_alpha,
+                generation,
+            );
+            let needed = splinter_eval::campaign::plan::retention_units_needed(
+                self.config.retention_loss_to_detect,
+                alpha,
+                2000,
+                self.parts.significance,
+            );
+            if needed.is_none_or(|n| kept < n) {
+                return Err(ArmRefused::Invalid(format!(
+                    "the retention set has {kept} tasks, too few to detect a loss of {} of them at level {alpha:.4} (needs {})",
+                    self.config.retention_loss_to_detect,
+                    needed.map_or("more than 2000".to_string(), |n| n.to_string())
+                )));
+            }
+        }
         let prior = self.config.expected_discordance;
         let discordance = match self.loaded.state.last_discordance {
             Some(seen) if seen >= self.config.target_effect.max(DISCORDANCE_FLOOR) => seen,

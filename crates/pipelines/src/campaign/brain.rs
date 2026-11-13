@@ -307,6 +307,10 @@ impl Validator for ChatValidator<'_> {
         self.family.dev().len()
     }
 
+    fn retention_units(&self) -> usize {
+        self.family.retention().len()
+    }
+
     fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError> {
         let model = answerer(&self.settings, policy, Decoding::Greedy)
             .map_err(|e| CampaignError::Validator(e.to_string()))?;

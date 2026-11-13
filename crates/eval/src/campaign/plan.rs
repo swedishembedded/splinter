@@ -66,6 +66,33 @@ impl ArmGoal {
     }
 }
 
+/// The fewest retention units whose probe detects, with `DEFAULT_POWER` at level
+/// `alpha`, that a candidate lost `loss_rate` of them (every discordant unit a
+/// loss): a retention set smaller than this cannot tell the loss it exists to
+/// catch from noise. `None` when no set up to `ceiling` units does.
+#[must_use]
+pub fn retention_units_needed(
+    loss_rate: f64,
+    alpha: f64,
+    ceiling: usize,
+    test: &dyn Significance,
+) -> Option<usize> {
+    if !(loss_rate > 0.0 && loss_rate <= 1.0) {
+        return None;
+    }
+    (4..=ceiling).find(|&units| {
+        power(
+            &SignPlan {
+                units,
+                discordance: loss_rate,
+                effect: loss_rate,
+                alpha,
+            },
+            test,
+        ) >= DEFAULT_POWER
+    })
+}
+
 /// An arm that may run.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PlannedArm {
@@ -247,6 +274,18 @@ mod tests {
             assert!(matches!(tenth, Err(ArmRefused::Underpowered { .. })));
         }
         assert!(spent_alpha(0.05, 10) < spent_alpha(0.05, 1));
+    }
+
+    #[test]
+    fn a_retention_probe_is_sized_by_the_loss_it_must_detect() {
+        let big = retention_units_needed(0.1, 0.05, 400, &Exact).unwrap();
+        let small = retention_units_needed(0.2, 0.05, 400, &Exact).unwrap();
+        assert!(big > small, "{big} {small}");
+        assert!(
+            big > 40,
+            "forty programs cannot see a ten percent loss: {big}"
+        );
+        assert_eq!(retention_units_needed(0.0, 0.05, 400, &Exact), None);
     }
 
     #[test]

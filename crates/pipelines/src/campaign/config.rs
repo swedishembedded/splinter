@@ -139,6 +139,10 @@ pub struct CampaignConfig {
     pub distilled_per_group: usize,
     /// Disks the campaign writes to and what each must have free before an arm.
     pub preflight: Vec<Requirement>,
+    /// The share of the retention set a candidate may lose that the probe
+    /// must be able to detect; the retention set is refused when too small for
+    /// it. Zero skips the check.
+    pub retention_loss_to_detect: f64,
     /// Checkpoints kept beyond the champion and a pending candidate.
     pub keep_recent_checkpoints: usize,
     /// When an environment's training reward climbing while its dev measure
@@ -181,6 +185,7 @@ impl CampaignConfig {
             repairs_per_group: 2,
             distilled_per_group: 2,
             preflight: Vec::new(),
+            retention_loss_to_detect: 0.0,
             keep_recent_checkpoints: 1,
             divergence: DivergencePolicy::default(),
             max_idle_arms: 4,

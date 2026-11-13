@@ -125,6 +125,11 @@ struct Cli {
     /// back any arm that forgets a retention task.
     #[arg(long, default_value_t = 0)]
     max_retention_loss: usize,
+    /// Retention loss, as a share of the retention set, a candidate may show
+    /// (a non-inferiority margin); also the loss the retention set must be
+    /// large enough to detect.
+    #[arg(long, default_value_t = 0.0)]
+    retention_margin: f64,
     /// Precision of the frozen base during training: `bf16` or `fp32`.
     #[arg(long, default_value = "bf16")]
     base_precision: String,
@@ -231,6 +236,8 @@ fn main() -> Result<()> {
     config.replay.per_batch_record = cli.replay;
     config.bounds.max_kl = Some(cli.max_kl);
     config.gate.max_retention_loss = cli.max_retention_loss;
+    config.gate.max_retention_loss_rate = cli.retention_margin;
+    config.retention_loss_to_detect = cli.retention_margin;
     config.bounds.min_informative_fraction = Some(cli.min_informative);
     config.ladder = cli
         .ladder
