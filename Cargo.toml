@@ -11,6 +11,7 @@ members = [
     "samples/absorb-story",
     "samples/adams",
     "samples/agent/loop",
+    "samples/campaign-lua",
     "samples/goal-selection",
     "samples/health",
     "samples/jefferson",

@@ -7019,6 +7019,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-campaign-lua"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde_json",
+ "splinter-sdk",
+ "tempfile",
+]
+
+[[package]]
 name = "splinter-core"
 version = "0.2.0"
 dependencies = [
