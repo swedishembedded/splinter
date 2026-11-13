@@ -152,7 +152,10 @@ fn a_local_model_is_asked_as_wide_as_the_brain_server_decodes_together() {
     let local: ModelRef = "local:/models/base".parse().unwrap();
     let (most, ..) = solve_with("local-wide", local, 3);
     // Every attempt of the solve (12) fits the server's slots, so all are in flight together.
-    assert_eq!(most, 12, "requests overlap instead of queueing one at a time");
+    assert_eq!(
+        most, 12,
+        "requests overlap instead of queueing one at a time"
+    );
 }
 
 #[test]
