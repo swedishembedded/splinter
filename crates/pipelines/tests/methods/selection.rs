@@ -182,6 +182,7 @@ fn corpus() -> Corpus {
         base_knowledge: Vec::new(),
         goal_topics: vec!["cipher".into()],
         lexicon: Default::default(),
+        reading: Vec::new(),
     }
 }
 
