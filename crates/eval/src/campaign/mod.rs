@@ -20,6 +20,9 @@
 //! * [`sampling`] - dynamic sampling: only groups whose attempts earned
 //!   different rewards enter a batch, over-provisioned and refilled; groups
 //!   that all failed are routed to a strategy.
+//! * [`gate`] - the dev-validation gate: advance on a net dev gain, roll
+//!   back on none or on a retention loss, with the level each gate may
+//!   spend.
 //! * [`signals`] - the per-step numbers a gate reads: informative-group
 //!   fraction, KL, clip fraction and entropy.
 //! * [`plan`] - power-first planning: an arm whose exam cannot detect the
@@ -27,6 +30,7 @@
 //!   gates spend alpha by default.
 //! * [`plateau`] - discovery per GPU-hour, and the switch when it falls.
 
+pub mod gate;
 pub mod pass_rate;
 pub mod plan;
 pub mod plateau;

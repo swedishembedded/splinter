@@ -167,7 +167,7 @@ pub enum AdvantageKind {
 impl AdvantageKind {
     /// The advantage of each reward of a group, in order; `None` when the
     /// group says nothing: a single attempt, or all rewards the same.
-    pub(crate) fn advantages(self, rewards: &[f64]) -> Option<Vec<f64>> {
+    pub fn advantages(self, rewards: &[f64]) -> Option<Vec<f64>> {
         if rewards.len() < 2 {
             return None;
         }
@@ -193,7 +193,7 @@ impl AdvantageKind {
 
     /// Whether an attempt with `advantage` is left out of the dataset: under
     /// [`Self::Positive`], one that did no better than its group.
-    pub(crate) fn drops(self, advantage: f64) -> bool {
+    pub fn drops(self, advantage: f64) -> bool {
         self == Self::Positive && advantage <= 0.0
     }
 }

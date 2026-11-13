@@ -62,6 +62,10 @@ pub struct Group {
     pub task: String,
     /// Its graded attempts; ungraded ones are not in a group.
     pub attempts: Vec<Attempt>,
+    /// Whatever the caller needs to find this group's rollouts again once
+    /// the batch is built: an index, opaque here.
+    #[serde(default)]
+    pub tag: u64,
 }
 
 /// What a group can teach.
@@ -364,6 +368,7 @@ mod tests {
         Group {
             task: task.into(),
             attempts: rewards.iter().map(|&r| attempt(r, r >= 1.0)).collect(),
+            tag: 0,
         }
     }
 
