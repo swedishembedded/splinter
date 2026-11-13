@@ -18,6 +18,31 @@ use super::records::{passing_records, BatchRecords};
 use super::types::{CampaignError, CollectRequest, RolloutGroup};
 
 impl CampaignController<'_> {
+    /// The mean reward of the batch's informative groups by environment.
+    pub(super) fn env_rewards(
+        &self,
+        collected: &Collected,
+    ) -> std::collections::BTreeMap<String, f64> {
+        let Some(labels) = self.parts.environments else {
+            return std::collections::BTreeMap::new();
+        };
+        let mut sums: std::collections::BTreeMap<String, (f64, usize)> = Default::default();
+        for &i in &collected.informative {
+            let group = &collected.groups[i];
+            let Some(env) = labels.environment_of(&group.task) else {
+                continue;
+            };
+            let entry = sums.entry(env).or_default();
+            for rollout in &group.rollouts {
+                entry.0 += rollout.reward;
+                entry.1 += 1;
+            }
+        }
+        sums.into_iter()
+            .map(|(env, (sum, n))| (env, sum / n as f64))
+            .collect()
+    }
+
     pub(super) fn passing(&self, collected: &Collected) -> Vec<splinter_data::Record> {
         let groups: Vec<&RolloutGroup> = collected
             .informative

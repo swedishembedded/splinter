@@ -127,6 +127,15 @@ Every arm:
   verifier wrote none) enters no group, and one whose trace is not provable is never trained on, never re-tokenized.
 - the in-process path, a loaded model sampled at temperature 1 against a verifier the policy cannot reach.
 
+**Where its tasks come from.** A campaign's tasks may be environments from the environment factory ([Environments
+from an objective](../guides/environment-factory.md)). Only an `Admitted` environment whose recorded base pass rate
+lies inside the learnable band it was admitted at may enter (`campaign::factory::select` refuses the rest with the
+reason); its task folders are staged per attempt and removed. Every ledger entry then records, per environment, how its
+rewards are established and the label the weakest class forces on the verdict (`proxy only` is never lost on the way to
+a "better" model), and at every gate each environment's training reward and dev pass rate go to the divergence alarm:
+a reward that climbs while the dev measure does not stops the arm, the candidate is not adopted, and that environment
+is quarantined for the rest of the campaign.
+
 The controller never drives `bench run` on bench collections to get training data. A benchmark is the sealed
 measurement authority: it holds the exams, and the proposer must not be able to see or influence them. Bench is asked
 for one thing only, a verdict on a finished candidate; the campaign's own gate is a dev-validation gate on tasks of

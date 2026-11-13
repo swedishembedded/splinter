@@ -29,6 +29,7 @@ use splinter_store::campaign::{CampaignStore, Cost, LedgerEntry, Loaded, Verdict
 use splinter_store::StateRoot;
 
 use super::config::{CampaignConfig, LearningStrategy};
+use super::environments::EnvironmentLabels;
 use super::gc::Checkpoint;
 use super::records::RecordCounts;
 use super::replay::ReplayBuffer;
@@ -78,6 +79,10 @@ pub struct Parts<'p> {
     pub clock: &'p dyn Clock,
     /// GPU-hours.
     pub stopwatch: &'p dyn Stopwatch,
+    /// Which environment each task belongs to, when the tasks come from the
+    /// environment factory: enables reward provenance in the ledger and the
+    /// divergence alarm.
+    pub environments: Option<&'p dyn EnvironmentLabels>,
     /// Where a one-line account of each stage goes while an arm runs, for a
     /// person watching a multi-hour campaign; `None` stays silent.
     pub progress: Option<&'p dyn Fn(&str)>,
@@ -283,6 +288,14 @@ impl<'p> CampaignController<'p> {
         pool.extend(self.loaded.state.extra_tasks.iter().cloned());
         pool.sort();
         pool.dedup();
+        // A quarantined environment is never drawn from again.
+        if let Some(labels) = self.parts.environments {
+            pool.retain(|task| {
+                labels
+                    .environment_of(task)
+                    .is_none_or(|env| !self.loaded.state.quarantined.contains(&env))
+            });
+        }
         pool
     }
 
@@ -294,6 +307,11 @@ impl<'p> CampaignController<'p> {
     }
 
     pub(super) fn entry(&self, id: &ArmId, outcome: Outcome) -> LedgerEntry {
+        let sources = self
+            .parts
+            .environments
+            .map(EnvironmentLabels::sources)
+            .unwrap_or_default();
         LedgerEntry {
             campaign: self.config.name.clone(),
             arm: id.name.clone(),
@@ -305,6 +323,11 @@ impl<'p> CampaignController<'p> {
             cost: outcome.cost,
             discoveries: outcome.discoveries,
             verdict: outcome.verdict,
+            reward_sources: sources.clone(),
+            verdict_label: splinter_core::verifiability::verdict_label(
+                sources.iter().map(|source| source.class),
+            )
+            .map(str::to_string),
             measurements: outcome.measurements,
         }
     }
@@ -517,6 +540,7 @@ impl<'p> CampaignController<'p> {
             started_at,
             replay: self.passing(&collected),
             measurements,
+            env_rewards: self.env_rewards(&collected),
         });
         self.save()?;
         let mut report = self.gate_pending()?;

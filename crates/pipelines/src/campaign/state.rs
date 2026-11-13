@@ -20,6 +20,7 @@ use splinter_eval::campaign::gate::DevResult;
 use splinter_eval::campaign::pass_rate::PassRates;
 use splinter_eval::campaign::plateau::ArmCost;
 use splinter_eval::campaign::signals::StepSignals;
+use splinter_knowledge::factory::alarm::Observation;
 
 use super::gc::{Checkpoint, Dropped};
 use super::replay::ReplayBuffer;
@@ -61,6 +62,10 @@ pub struct PendingCandidate {
     pub replay: Vec<Record>,
     /// The step's own measurements, for the ledger.
     pub measurements: BTreeMap<String, f64>,
+    /// The mean training reward of the batch by environment, for the
+    /// divergence alarm; empty for tasks that come from no environment.
+    #[serde(default)]
+    pub env_rewards: BTreeMap<String, f64>,
 }
 
 /// A campaign as of its last save.
@@ -107,6 +112,13 @@ pub struct CampaignState {
     pub gpu_hours: f64,
     /// Arms in a row that did not advance the champion.
     pub idle_arms: u32,
+    /// What the divergence alarm has seen of each environment, one
+    /// observation per gate.
+    #[serde(default)]
+    pub observations: BTreeMap<String, Vec<Observation>>,
+    /// Environments the alarm quarantined: no later arm draws from them.
+    #[serde(default)]
+    pub quarantined: Vec<String>,
 }
 
 impl CampaignState {
@@ -139,6 +151,8 @@ impl CampaignState {
             signals: Vec::new(),
             gpu_hours: 0.0,
             idle_arms: 0,
+            observations: BTreeMap::new(),
+            quarantined: Vec::new(),
         }
     }
 }

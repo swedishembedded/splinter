@@ -543,6 +543,18 @@ pub enum Verdict {
     },
 }
 
+/// Where the rewards of an arm came from: one per environment the arm drew
+/// tasks from, so a verdict can say how far its numbers deserve trust.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RewardSource {
+    /// The environment.
+    pub environment: String,
+    /// How its rewards are established.
+    pub class: splinter_core::verifiability::VerifierClass,
+    /// The verifier that produced them, with its version.
+    pub verifier: String,
+}
+
 /// One account of one arm of a campaign.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LedgerEntry {
@@ -570,6 +582,16 @@ pub struct LedgerEntry {
     pub discoveries: Option<f64>,
     /// How it ended.
     pub verdict: Verdict,
+    /// The environments whose rewards the arm trained and was judged on, with
+    /// how each reward is established; empty for tasks that come from no
+    /// environment factory.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reward_sources: Vec<RewardSource>,
+    /// What a verdict on these rewards must say beside its number (`proxy
+    /// only`, `judge-graded`, `human evidence`); absent when every reward is
+    /// an objective check.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict_label: Option<String>,
     /// The numbers behind the verdict (dev pass rates, informative fraction,
     /// KL), by name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

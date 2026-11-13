@@ -13,13 +13,16 @@
 use std::collections::BTreeMap;
 
 use splinter_core::digest::Digest;
-use splinter_eval::campaign::gate::{decide, Action};
+use splinter_core::verifiability::VerifierClass;
+use splinter_eval::campaign::gate::{decide, Action, DevResult};
 use splinter_eval::campaign::plateau::{assess, ArmCost, Trend};
+use splinter_knowledge::factory::alarm::{DivergenceAlarm, Observation, Signal};
 use splinter_store::campaign::{Cost, Verdict};
 
 use super::controller::{ArmId, ArmReport, CampaignController, Outcome, Spent};
 use super::gc::{self, Checkpoint, Keep};
 use super::records::RecordCounts;
+use super::state::PendingCandidate;
 use super::types::{CampaignError, PolicyRef};
 
 impl CampaignController<'_> {
@@ -111,6 +114,65 @@ impl CampaignController<'_> {
             && state.idle_arms >= self.config.max_idle_arms
     }
 
+    /// Feeds each environment's training reward and dev pass rate of this arm
+    /// to the divergence alarm; an environment whose reward climbs while its
+    /// dev measure does not is quarantined. Returns one reason per
+    /// quarantined environment.
+    fn check_divergence(
+        &mut self,
+        generation: u32,
+        pending: &PendingCandidate,
+        dev: &DevResult,
+    ) -> Result<Vec<String>, CampaignError> {
+        let Some(labels) = self.parts.environments else {
+            return Ok(Vec::new());
+        };
+        let sources = labels.sources();
+        let mut reasons = Vec::new();
+        for (env, reward) in &pending.env_rewards {
+            let passes: Vec<bool> = dev
+                .dev
+                .iter()
+                .filter(|(task, _)| labels.environment_of(task).as_deref() == Some(env.as_str()))
+                .map(|(_, passed)| *passed)
+                .collect();
+            let heldout = (!passes.is_empty())
+                .then(|| passes.iter().filter(|p| **p).count() as f64 / passes.len() as f64);
+            let history = self
+                .loaded
+                .state
+                .observations
+                .entry(env.clone())
+                .or_default();
+            history.push(Observation {
+                step: u64::from(generation),
+                reward: *reward,
+                heldout,
+            });
+            let class = sources
+                .iter()
+                .find(|source| &source.environment == env)
+                .map_or(VerifierClass::Objective, |source| source.class);
+            let mut alarm = DivergenceAlarm::new(self.config.divergence, class);
+            let mut last = Signal::Steady;
+            for observation in history.iter() {
+                last = alarm.observe(*observation);
+            }
+            if let Signal::Diverging(alert) = last {
+                let reason = format!(
+                    "{env}: training reward rose {:.3} over the window while the dev measure moved {:.3}{}",
+                    alert.reward_rise,
+                    alert.heldout_rise,
+                    alert.label.map_or(String::new(), |l| format!(" ({l})"))
+                );
+                labels.quarantine(env, &reason)?;
+                self.loaded.state.quarantined.push(env.clone());
+                reasons.push(reason);
+            }
+        }
+        Ok(reasons)
+    }
+
     /// Runs the dev gate on the pending candidate, adopts or rolls it back,
     /// and accounts the arm.
     pub(super) fn gate_pending(&mut self) -> Result<ArmReport, CampaignError> {
@@ -139,7 +201,8 @@ impl CampaignController<'_> {
             &candidate,
             self.parts.significance,
         );
-        let advance = decision.action == Action::Advance;
+        let diverged = self.check_divergence(generation, &pending, &candidate)?;
+        let advance = decision.action == Action::Advance && diverged.is_empty();
         self.say(&format!(
             "{}: dev {:?} vs {:?} (won {}, lost {}, p {:.4}, level {:.4}): {}",
             pending.arm,
@@ -154,6 +217,13 @@ impl CampaignController<'_> {
         let verdict = if advance {
             Verdict::Accepted {
                 significant: decision.significant,
+            }
+        } else if !diverged.is_empty() {
+            Verdict::Halted {
+                reason: format!(
+                    "the reward stopped meaning anything: {}",
+                    diverged.join("; ")
+                ),
             }
         } else {
             Verdict::RolledBack {

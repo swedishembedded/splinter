@@ -74,6 +74,7 @@ struct World {
     privileged: bool,
     kl: Option<f64>,
     fail_validation_once: Cell<bool>,
+    flat_dev_for_even: bool,
 }
 
 impl World {
@@ -89,6 +90,7 @@ impl World {
             privileged: false,
             kl: Some(0.01),
             fail_validation_once: Cell::new(false),
+            flat_dev_for_even: false,
         }
     }
 }
@@ -203,7 +205,14 @@ impl Validator for Exam<'_> {
         let s = skill(policy.version, self.0.gain);
         Ok(DevResult {
             dev: (0..self.1)
-                .map(|i| (format!("d{i:03}"), s > f64::from(i as u32) / self.1 as f64))
+                .map(|i| {
+                    let passed = s > f64::from(i as u32) / self.1 as f64;
+                    // The even environment's dev measure never moves.
+                    (
+                        format!("d{i:03}"),
+                        passed && !(self.0.flat_dev_for_even && i % 2 == 0),
+                    )
+                })
                 .collect(),
             retention: Default::default(),
         })
@@ -278,6 +287,7 @@ impl<'w> Rig<'w> {
             significance: &BrainSignificance,
             clock,
             stopwatch: watch,
+            environments: None,
             progress: None,
         }
     }
@@ -689,3 +699,5 @@ fn a_task_is_attempted_once_per_batch_however_often_the_batch_is_refilled() {
     let unique: std::collections::BTreeSet<&String> = batch_requests.iter().collect();
     assert_eq!(batch_requests.len(), unique.len(), "{batch_requests:?}");
 }
+
+mod environments;

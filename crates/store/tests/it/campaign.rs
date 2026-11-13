@@ -40,6 +40,8 @@ fn entry(campaign: &str, arm: &str, verdict: Verdict) -> LedgerEntry {
         cost: Cost::default(),
         discoveries: None,
         verdict,
+        reward_sources: Vec::new(),
+        verdict_label: None,
         measurements: Default::default(),
     }
 }

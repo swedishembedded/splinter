@@ -15,6 +15,7 @@ use splinter_eval::campaign::pass_rate::{CALIBRATION_K, RETIRE_AT};
 use splinter_eval::campaign::plateau::PlateauRule;
 use splinter_eval::campaign::sampling::{AllFailStrategy, BatchPolicy};
 use splinter_eval::campaign::signals::SignalBounds;
+use splinter_knowledge::factory::alarm::DivergencePolicy;
 
 use super::CampaignError;
 use crate::preflight::Requirement;
@@ -140,6 +141,10 @@ pub struct CampaignConfig {
     pub preflight: Vec<Requirement>,
     /// Checkpoints kept beyond the champion and a pending candidate.
     pub keep_recent_checkpoints: usize,
+    /// When an environment's training reward climbing while its dev measure
+    /// does not is called a divergence (only for tasks that come from an
+    /// environment factory).
+    pub divergence: DivergencePolicy,
     /// Arms in a row that may fail to advance the champion once the strategy
     /// ladder is spent; the campaign then stops instead of burning GPU-hours.
     pub max_idle_arms: u32,
@@ -177,6 +182,7 @@ impl CampaignConfig {
             distilled_per_group: 2,
             preflight: Vec::new(),
             keep_recent_checkpoints: 1,
+            divergence: DivergencePolicy::default(),
             max_idle_arms: 4,
         }
     }

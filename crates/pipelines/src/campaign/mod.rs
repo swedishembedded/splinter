@@ -56,6 +56,8 @@ mod closing;
 mod config;
 mod controller;
 pub mod endpoint;
+mod environments;
+pub mod factory;
 pub mod gc;
 mod records;
 mod replay;
@@ -65,6 +67,7 @@ mod types;
 
 pub use config::{AdvantageMode, CampaignConfig, LearningStrategy, ReplayConfig};
 pub use controller::{ArmReport, CampaignController, CampaignReport, Parts, Stopwatch, WallClock};
+pub use environments::EnvironmentLabels;
 pub use records::{BatchRecords, RecordCounts};
 pub use replay::ReplayBuffer;
 pub use state::{CampaignState, PendingCandidate};

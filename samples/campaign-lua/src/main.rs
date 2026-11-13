@@ -113,6 +113,17 @@ struct Cli {
     /// policy writes and how it is graded, before any campaign.
     #[arg(long)]
     probe: Option<usize>,
+    /// Largest mean KL to the reference a step may show before the campaign
+    /// halts.
+    #[arg(long, default_value_t = 0.5)]
+    max_kl: f64,
+    /// Fewest informative groups, as a share of those collected, before a
+    /// step is reported starved.
+    #[arg(long, default_value_t = 0.25)]
+    min_informative: f64,
+    /// Precision of the frozen base during training: `bf16` or `fp32`.
+    #[arg(long, default_value = "bf16")]
+    base_precision: String,
     /// Fraction of the batch's records replayed from earlier arms.
     #[arg(long, default_value_t = 0.25)]
     replay: f64,
@@ -195,7 +206,11 @@ fn main() -> Result<()> {
             temperature: Some(1.0),
             ..PolicyGradientOptions::default()
         },
-        base_precision: BasePrecision::Bf16,
+        base_precision: match cli.base_precision.as_str() {
+            "bf16" => BasePrecision::Bf16,
+            "fp32" => BasePrecision::Fp32,
+            other => anyhow::bail!("{other:?} is not a base precision: bf16 or fp32"),
+        },
     });
 
     let mut config = CampaignConfig::new(
@@ -210,6 +225,8 @@ fn main() -> Result<()> {
     config.expected_discordance = cli.discordance;
     config.gpus = cli.gpus;
     config.replay.per_batch_record = cli.replay;
+    config.bounds.max_kl = Some(cli.max_kl);
+    config.bounds.min_informative_fraction = Some(cli.min_informative);
     config.ladder = cli
         .ladder
         .iter()
@@ -236,6 +253,7 @@ fn main() -> Result<()> {
         significance: &BrainSignificance,
         clock: &clock,
         stopwatch: &watch,
+        environments: None,
         progress: Some(&|line| eprintln!("[{}s] {line}", watch.seconds() as u64)),
     };
     let mut controller =

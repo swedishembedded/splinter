@@ -124,6 +124,14 @@ campaign instead of rounds glued together by scripts (`scripts/campaigns/flywhee
   folders, `attempt.jsonl` with reward, ATIF and policy trace) or in process, never by driving `bench run` on bench
   collections (the sealed measurement authority); bench is asked for verdicts on finished candidates only. The
   bench-mediated flow (`bench export` then `experiences ingest-bench`) is legacy for new work.
+- Environments (2026-11-13): `campaign::factory` takes a campaign's tasks from the environment factory store: only
+  `Admitted` environments whose recorded base band is inside the learnable range enter (`select` refuses the rest with
+  reasons), instances are staged per attempt and removed, every ledger entry carries each environment's verifier
+  class and the label the weakest class forces on the verdict, and each gate feeds every environment's training
+  reward and dev rate to `DivergenceAlarm` (Diverging: the arm stops, the candidate is not adopted, the environment is
+  quarantined in the store and out of the pool). In process the factory path runs the answer-file environments
+  (program output); environments whose solver needs a shell or a database go through the sven rollout executor,
+  which has no adapter yet.
 - Collectors: the in-process path (`campaign::brain`: a loaded model sampled at temperature 1 against a
   `TaskFamily`, brain's policy-gradient trainer, a greedy dev exam) and the episode path (`campaign::endpoint`:
   an `EpisodeExecutor` that runs Harbor-format tasks in sandboxes and returns, per episode, the reward and the
