@@ -20,9 +20,10 @@ use splinter_sdk::knowledge::factory::host::Host;
 use splinter_sdk::knowledge::factory::objective::{
     classify_all, Budget, Classification, ObjectiveSpec,
 };
-use splinter_sdk::knowledge::factory::plugins::builtin;
+use splinter_sdk::knowledge::factory::plugins::{builtin, builtin_with, Locations};
 use splinter_sdk::knowledge::factory::store::EnvironmentStore;
 use splinter_sdk::sandbox::host::DEFAULT_SEARCH_PATH;
+use splinter_sdk::vocabulary::verifiability::Split;
 use splinter_sdk::Error;
 
 use crate::cli::{EnvCommand, ObjectiveArgs};
@@ -168,6 +169,22 @@ impl Report for Compiled {
     }
 }
 
+/// The task folders `env export` wrote.
+#[derive(Debug, Serialize)]
+pub struct Exported {
+    /// One directory per instance.
+    pub directories: Vec<PathBuf>,
+}
+
+impl Report for Exported {
+    fn human(&self) -> String {
+        self.directories
+            .iter()
+            .map(|d| format!("{}\n", d.display()))
+            .collect()
+    }
+}
+
 /// The environments in a store.
 #[derive(Debug, Serialize)]
 pub struct Listed {
@@ -287,6 +304,9 @@ pub fn run(ctx: &splinter_sdk::Context, json: bool, command: EnvCommand) -> Resu
             environments,
             instances,
             seed,
+            repositories,
+            emulator,
+            documents,
         } => {
             if environments == 0 || instances == 0 {
                 return Err(refused("--environments and --instances must be at least 1"));
@@ -304,9 +324,17 @@ pub fn run(ctx: &splinter_sdk::Context, json: bool, command: EnvCommand) -> Resu
                 instances_per_split: instances,
                 ..AdmissionPolicy::default()
             };
-            let host = Host::with_path(DEFAULT_SEARCH_PATH);
-            let report =
-                compile(&spec, &builtin(), &host, &policy, seed, &store).map_err(refused)?;
+            let mut host = Host::with_path(DEFAULT_SEARCH_PATH);
+            if let Some(emulator) = &emulator {
+                host = host.with_variable("VEMU", &emulator.display().to_string());
+            }
+            let locations = Locations {
+                repositories,
+                emulator,
+                documents,
+            };
+            let plugins = builtin_with(&locations, &host);
+            let report = compile(&spec, &plugins, &host, &policy, seed, &store).map_err(refused)?;
             emit(
                 json,
                 &Compiled {
@@ -322,6 +350,34 @@ pub fn run(ctx: &splinter_sdk::Context, json: bool, command: EnvCommand) -> Resu
         EnvCommand::Show { environment, store } => {
             let report = store_at(ctx, store).report(&environment).map_err(refused)?;
             emit(json, &Shown { report });
+        }
+        EnvCommand::Export {
+            environment,
+            split,
+            out,
+            store,
+        } => {
+            let split: Split = split.parse().map_err(refused)?;
+            let store = store_at(ctx, store);
+            let instances = store.instances(&environment, split).map_err(refused)?;
+            if instances.is_empty() {
+                return Err(refused(format!(
+                    "{environment} has no stored {split} instances (a rejected or quarantined environment keeps none)"
+                )));
+            }
+            let mut written = Vec::new();
+            for instance in &instances {
+                let meta = instance.meta();
+                let dir = out.join(format!("{}-{}-{}", environment, meta.split, meta.seed));
+                instance.folder().write_to(&dir).map_err(refused)?;
+                written.push(dir);
+            }
+            emit(
+                json,
+                &Exported {
+                    directories: written,
+                },
+            );
         }
         EnvCommand::Band {
             environment,

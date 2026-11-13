@@ -22,7 +22,7 @@ use splinter_core::verifiability::VerifierClass;
 
 use super::plugins::{
     DB_WORKFLOW, DOCUMENT_QUESTIONS, FIRMWARE_EMULATOR, PROGRAM_OUTPUT_LUA, PROGRAM_OUTPUT_PYTHON,
-    REPOSITORY_BUGS,
+    REPOSITORY_MUTANTS,
 };
 
 /// How much the factory may build.
@@ -231,7 +231,7 @@ pub fn classify(skill: &str, spec: &ObjectiveSpec) -> Classification {
     ) {
         return decide(
             VerifierClass::Objective,
-            Some(REPOSITORY_BUGS),
+            Some(REPOSITORY_MUTANTS),
             format!("repository skill (\"{word}\"): the project's own tests are the oracle"),
         );
     }
@@ -374,7 +374,7 @@ mod tests {
                 "Handle customer orders in the inventory database",
                 DB_WORKFLOW,
             ),
-            ("Fix a failing test in a repository", REPOSITORY_BUGS),
+            ("Fix a failing test in a repository", REPOSITORY_MUTANTS),
             ("Configure a UART peripheral in firmware", FIRMWARE_EMULATOR),
             ("Answer questions about the manual", DOCUMENT_QUESTIONS),
         ] {

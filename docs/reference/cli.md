@@ -82,6 +82,7 @@ Every command takes these.
   - [splinter env compile](#splinter-env-compile) - Compile an objective into environments
   - [splinter env list](#splinter-env-list) - List the environments in a store with their status
   - [splinter env show](#splinter-env-show) - Show one environment's admission report
+  - [splinter env export](#splinter-env-export) - Write an environment's stored instances of one split as Harbor task folders, one directory each under --out, for a run that needs them on disk (`make env/measure`)
   - [splinter env band](#splinter-env-band) - Record a base policy's measured pass rate on an environment's dev instances and judge it
 - [splinter objects](#splinter-objects) - Knowledge objects (rules, thresholds, deadlines, exceptions, facts, procedure steps) a model proposes from documents, admitted by code
   - [splinter objects propose](#splinter-objects-propose) - Ask a model for the typed objects each document of a directory states, one document at a time in date order
@@ -527,6 +528,7 @@ Subcommands:
 - [`compile`](#splinter-env-compile) - Compile an objective into environments
 - [`list`](#splinter-env-list) - List the environments in a store with their status
 - [`show`](#splinter-env-show) - Show one environment's admission report
+- [`export`](#splinter-env-export) - Write an environment's stored instances of one split as Harbor task folders, one directory each under --out, for a run that needs them on disk (`make env/measure`)
 - [`band`](#splinter-env-band) - Record a base policy's measured pass rate on an environment's dev instances and judge it
 
 #### splinter env classify
@@ -570,6 +572,9 @@ Options:
 - `--environments <N>`: How many environments to build at most, across all skills. Default: `4`.
 - `--instances <N>`: How many train and how many dev instances each environment is drawn for and tested on. Default: `4`.
 - `--seed <N>`: The seed the samples are drawn from; drawn and printed when absent.
+- `--repositories <DIR>`: The directory of repositories with their test suites (the `tasks/` directory: a `catalog.toml` and one directory each); enables the repository plugin on real projects.
+- `--emulator <FILE>`: The emulator binary (`vemu`), run as a command and never modified; enables the firmware plugin.
+- `--documents <DIR>`: A directory of Markdown or text documents to compile questions from (at least three: train and dev never share one); enables the document plugin. Name the same directory with --source so a document skill is built.
 
 #### splinter env list
 
@@ -597,6 +602,24 @@ Arguments:
 
 Options:
 
+- `--store <DIR>`: The store; default `environments` under the state root.
+
+#### splinter env export
+
+Write an environment's stored instances of one split as Harbor task folders, one directory each under --out, for a run that needs them on disk (`make env/measure`). The folders are a working copy: remove them when the run is done, the store keeps the instances
+
+```text
+splinter env export [OPTIONS] --out <DIR> <ENV-ID>
+```
+
+Arguments:
+
+- `<ENV-ID>` (required): The environment's id.
+
+Options:
+
+- `--split <train|dev>`: The split to write. Default: `dev`.
+- `--out <DIR>` (required): The directory to write into (it must not hold files yet)
 - `--store <DIR>`: The store; default `environments` under the state root.
 
 #### splinter env band

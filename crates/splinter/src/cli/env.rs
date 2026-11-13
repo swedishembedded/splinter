@@ -67,6 +67,21 @@ pub enum EnvCommand {
         /// The seed the samples are drawn from; drawn and printed when absent.
         #[arg(long, value_name = "N")]
         seed: Option<u64>,
+        /// The directory of repositories with their test suites (the
+        /// `tasks/` directory: a `catalog.toml` and one directory each);
+        /// enables the repository plugin on real projects.
+        #[arg(long, value_name = "DIR")]
+        repositories: Option<PathBuf>,
+        /// The emulator binary (`vemu`), run as a command and never
+        /// modified; enables the firmware plugin.
+        #[arg(long, value_name = "FILE")]
+        emulator: Option<PathBuf>,
+        /// A directory of Markdown or text documents to compile questions
+        /// from (at least three: train and dev never share one); enables the
+        /// document plugin. Name the same directory with --source so a
+        /// document skill is built.
+        #[arg(long, value_name = "DIR")]
+        documents: Option<PathBuf>,
     },
     /// List the environments in a store with their status.
     List {
@@ -80,6 +95,24 @@ pub enum EnvCommand {
         /// The environment's id.
         #[arg(value_name = "ENV-ID")]
         environment: String,
+        /// The store; default `environments` under the state root.
+        #[arg(long, value_name = "DIR")]
+        store: Option<PathBuf>,
+    },
+    /// Write an environment's stored instances of one split as Harbor task
+    /// folders, one directory each under --out, for a run that needs them on
+    /// disk (`make env/measure`). The folders are a working copy: remove them
+    /// when the run is done, the store keeps the instances.
+    Export {
+        /// The environment's id.
+        #[arg(value_name = "ENV-ID")]
+        environment: String,
+        /// The split to write.
+        #[arg(long, default_value = "dev", value_name = "train|dev")]
+        split: String,
+        /// The directory to write into (it must not hold files yet).
+        #[arg(long, required = true, value_name = "DIR")]
+        out: PathBuf,
         /// The store; default `environments` under the state root.
         #[arg(long, value_name = "DIR")]
         store: Option<PathBuf>,

@@ -44,6 +44,7 @@ const REWARD_FILE: &str = "reward.json";
 #[derive(Clone, Debug)]
 pub struct Host {
     path: String,
+    variables: BTreeMap<String, String>,
     timeout: Duration,
     limits: ResourceLimits,
 }
@@ -61,15 +62,24 @@ impl Host {
     pub fn with_path(path: &str) -> Self {
         Self {
             path: path.to_string(),
+            variables: BTreeMap::new(),
             timeout: Duration::from_secs(60),
             limits: ResourceLimits {
                 cpu_seconds: 60,
-                address_space_bytes: 8 << 30,
+                address_space_bytes: 64 << 30, // an emulator maps its guest memory and a JIT arena up front
                 file_size_bytes: 64 << 20,
                 max_processes: None,
                 tree_memory_bytes: None,
             },
         }
+    }
+
+    /// This host with the variable `name` set to `value` for every script,
+    /// for a tool a script finds by variable (the emulator's binary).
+    #[must_use]
+    pub fn with_variable(mut self, name: &str, value: &str) -> Self {
+        self.variables.insert(name.to_string(), value.to_string());
+        self
     }
 
     /// This host with a different time limit per script.
@@ -93,6 +103,7 @@ impl Host {
             ("LC_ALL".to_string(), "C".to_string()),
             ("PYTHONDONTWRITEBYTECODE".to_string(), "1".to_string()),
         ]);
+        vars.extend(self.variables.clone());
         vars.extend(env);
         let mut spec = ProcessSpec::new(argv, cwd, vars, self.timeout, OUTPUT_CAP);
         spec.resources = Some(self.limits);

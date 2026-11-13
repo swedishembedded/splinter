@@ -13,6 +13,7 @@ model can learn from.
 splinter env classify --text "Predict the output of short Lua programs" --constraint lua
 splinter env plugins
 splinter env compile --file objective.txt --store envs --environments 4 --instances 4
+splinter env compile --file objective.txt --repositories tasks --emulator /path/to/vemu --documents docs-dir --source docs-dir
 splinter env list --store envs
 splinter env show --store envs ENV-ID
 splinter env band --store envs ENV-ID --model base --attempts 32 --passes 12
@@ -67,15 +68,29 @@ The plugins, in the order they are built (`env plugins` lists their difficulty k
 |---|---|---|
 | `program-output-lua`, `program-output-python` | predict what a generated program prints | the interpreter; the same program is rendered in both languages and a third evaluator, and all must agree |
 | `db-workflow` | complete requests through a tool over a database, some of which are conditions whose answer is to change nothing | the final database state diffed against the expected state |
-| `repository-bugs` | fix injected faults in a small Python library | a hidden test suite, run in a child process, with a canary test that must fail |
+| `repository-mutants` | fix faults mutated into real projects that have their own test suites (needs `--repositories`) | the project's whole suite, with the failing tests hidden, run in a child process with a canary |
+| `repository-bugs` | the same on one small embedded library (the fallback when no repositories are given) | a hidden suite with a canary |
+| `firmware-emulator` | fix faults in a bare-metal Cortex-M33 library (needs `--emulator`, `clang` and `lld`) | the emulator's console output against a reference model, on hidden inputs |
+| `document-questions` | answer questions compiled from documents, without the documents (needs `--documents`) | a number computed from, or a value stated by, the document |
 
-The repository plugin's fix is the library as it was, the same for every instance, so a model
-that memorised the library solves any of them; its report says so, and admission does not
-attack it with another instance's answer. Use a private or time-split repository for a claim
-about generalisation.
+Repository tasks are split by repository (train and dev never share one) and firmware tasks by module;
+document questions by document. The repositories are the original projects under `tasks/`, which no
+model has seen; a claim about generalisation to other code still needs a private or newer repository. The
+fix of a repository or firmware instance is the project as it was, so a model that memorised it solves
+its instances: admission does not attack those plugins with another instance's answer, and the report
+says so.
 
-Firmware through the emulator and document-grounded questions are classified and listed as
-not built yet; their status is in the roadmap ledger.
+The repository verifier copies the workspace, lays the hidden tests over the copy, and runs the whole suite
+in a child process that reads a nonce before importing anything; only the line carrying the nonce counts, the
+number of tests that ran must equal the pinned count, a canary test must fail (a project that patches the test
+framework to report success reports success for the canary too), and the reward is written by a parent that
+imports nothing of the workspace. The firmware verifier builds a private copy with its own flags and linker script
+against input seeds the solver never sees, so output printed from a table cannot pass. The emulator is run as a
+command and never modified.
+
+A derived document question carries the document's figures as premises and asks for a quantity computed from them;
+a recall question asks for a stated fact, so only a policy that learned the document answers it and its base pass rate
+is expected near zero (its band is measured on a policy that was trained on the document).
 
 ## Admission
 
@@ -99,6 +114,21 @@ Every sampled train and dev instance is held to the gates; the report records ea
 An environment whose gates pass is `PendingBand` until `env band` records a
 measurement; only an `Admitted` environment may enter a campaign. A measurement
 outside the band rejects it and says whether to raise or lower a difficulty knob.
+
+## Measuring the band
+
+`env band` records a measurement; `make env/measure` makes one. Serve the model first (under the lock of
+the card it runs on, held only while measuring), then:
+
+```sh
+make env/measure SPLINTER_BIN=splinter STORE=envs ENDPOINT=http://127.0.0.1:8798/v1 MODEL=Qwen/Qwen3-4B WORK=work/measure ENVS="env-0123456789abcdef"
+```
+
+Each environment's dev instances are exported as task folders (`splinter env export`), attempted eight
+times each (`ATTEMPTS`), and removed afterwards. An environment whose solver has files only (program output,
+document questions) is attempted closed-book through the endpoint, the task's own verifier grading the reply.
+One whose solver has a shell (database workflows, repositories, firmware) is attempted by
+`sven rollout run` (`SVEN_BIN`). The pass rate is recorded with `env band` and judged against the band.
 
 ## The verifier red team
 

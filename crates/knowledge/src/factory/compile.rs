@@ -25,6 +25,7 @@ use super::admission::{admit, AdmissionPolicy, AdmitError, Status};
 use super::host::Host;
 use super::objective::{classify_all, Classification, ObjectiveSpec};
 use super::plugin::{Knob, Plugin};
+use super::plugins::{REPOSITORY_BUGS, REPOSITORY_MUTANTS};
 use super::store::{EnvironmentStore, StoreError};
 
 /// The most rungs a skill's difficulty ladder has.
@@ -39,6 +40,17 @@ pub enum CompileError {
     /// The store refused.
     #[error(transparent)]
     Store(#[from] StoreError),
+}
+
+/// The plugin named `id`, or the one that stands in for it when it is not
+/// available (the repository plugin falls back to the embedded library).
+fn find_plugin<'a>(plugins: &'a [Box<dyn Plugin>], id: &str) -> Option<&'a dyn Plugin> {
+    let stand_in = (id == REPOSITORY_MUTANTS).then_some(REPOSITORY_BUGS);
+    plugins
+        .iter()
+        .find(|p| p.id() == id)
+        .or_else(|| plugins.iter().find(|p| Some(p.id()) == stand_in))
+        .map(Box::as_ref)
 }
 
 /// The difficulty ladder of a plugin: `rungs` settings of every knob from
@@ -148,7 +160,7 @@ pub fn compile(
         .filter(|c| {
             c.plugin
                 .as_deref()
-                .is_some_and(|id| plugins.iter().any(|p| p.id() == id))
+                .is_some_and(|id| find_plugin(plugins, id).is_some())
         })
         .count();
     let rungs = (objective.budget.environments / buildable.max(1)).clamp(1, MAX_RUNGS);
@@ -160,7 +172,7 @@ pub fn compile(
         let plugin = classification
             .plugin
             .as_deref()
-            .and_then(|id| plugins.iter().find(|p| p.id() == id));
+            .and_then(|id| find_plugin(plugins, id));
         let Some(plugin) = plugin else {
             let reason = match &classification.plugin {
                 Some(id) => format!("the {id} plugin is not built yet"),
@@ -184,7 +196,7 @@ pub fn compile(
             }
             let known = store.known_versions()?;
             let (report, instances) = admit(
-                plugin.as_ref(),
+                plugin,
                 &difficulty,
                 host,
                 policy,

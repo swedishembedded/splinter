@@ -166,6 +166,18 @@ fn text_answers(reference: &Reference) -> Vec<(&String, &str)> {
         .collect()
 }
 
+/// The longest answer, in bytes, that a guess can stand for: a source file
+/// is not guessed, so guesses and scrambles are not tried on one.
+pub const MAX_GUESSABLE_ANSWER: usize = 1000;
+
+/// The reference's text answers short enough to be guessed.
+fn guessable_answers(reference: &Reference) -> Vec<(&String, &str)> {
+    text_answers(reference)
+        .into_iter()
+        .filter(|(_, text)| text.len() <= MAX_GUESSABLE_ANSWER)
+        .collect()
+}
+
 /// `text` with every digit and letter moved to another of its class and
 /// everything else kept: the same shape, a different content.
 #[must_use]
@@ -221,13 +233,13 @@ pub fn generic_attacks(
     }];
 
     let answer_paths: Vec<&String> = reference.changed.keys().collect();
-    let text_paths: Vec<&String> = text_answers(reference)
+    let text_paths: Vec<&String> = guessable_answers(reference)
         .into_iter()
         .map(|(p, _)| p)
         .collect();
 
     // The same shape with another content, for every text answer at once.
-    let scrambled: Vec<Edit> = text_answers(reference)
+    let scrambled: Vec<Edit> = guessable_answers(reference)
         .into_iter()
         .filter(|(_, text)| scramble(text) != *text)
         .map(|(path, text)| Edit::Write {
