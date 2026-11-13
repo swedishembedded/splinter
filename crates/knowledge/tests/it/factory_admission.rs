@@ -640,10 +640,14 @@ fn an_objective_compiles_to_stored_environments_and_says_what_it_could_not_build
     assert_eq!(store.list().unwrap().len(), 4);
     for environment in &lua.environments {
         let train = store
-            .instance_dirs(&environment.environment, Split::Train)
+            .instances(&environment.environment, Split::Train)
             .unwrap();
         assert_eq!(train.len(), 2);
-        let instance = store.load_instance(&train[0]).unwrap();
+        let dev = store
+            .instances(&environment.environment, Split::Dev)
+            .unwrap();
+        assert_eq!(dev.len(), 2);
+        let instance = train[0].clone();
         assert_eq!(instance.meta().environment, environment.environment);
         assert_eq!(instance.meta().split, Split::Train);
     }
@@ -755,10 +759,10 @@ fn a_quarantined_environment_keeps_its_report_and_stores_no_instance() {
     .unwrap(); // seed: any
     assert_eq!(report.status, Status::Quarantined);
     store.save(&report, &instances).unwrap();
-    let dirs = store
-        .instance_dirs(&report.environment, Split::Train)
-        .unwrap();
-    assert!(dirs.is_empty(), "{dirs:?}");
+    assert!(store
+        .instances(&report.environment, Split::Train)
+        .unwrap()
+        .is_empty());
     assert!(store
         .report(&report.environment)
         .unwrap()
@@ -786,4 +790,59 @@ fn an_environment_id_cannot_name_a_path_outside_the_store() {
         store.report("env-0123456789abcdef"),
         Err(StoreError::NotFound(_))
     ));
+}
+
+#[test]
+fn a_collection_is_one_archive_and_a_task_folder_exists_only_while_it_is_staged() {
+    let root = tempfile::tempdir().unwrap();
+    let store = EnvironmentStore::new(root.path().join("store"));
+    let single = ObjectiveSpec {
+        text: "Handle orders in an inventory database through its tools".into(),
+        budget: Budget {
+            environments: 1,
+            instances_per_split: 2,
+        },
+        ..ObjectiveSpec::default()
+    };
+    let report = compile(
+        &single,
+        &builtin(),
+        &Host::default(),
+        &small_policy(),
+        9,
+        &store,
+    )
+    .unwrap(); // seed: any
+    let id = report.skills[0].environments[0].environment.clone();
+
+    // The environment is two files however many instances it holds.
+    let files: Vec<_> = std::fs::read_dir(root.path().join("store").join(&id))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    assert_eq!(files.len(), 2, "{files:?}");
+    assert!(
+        files.contains(&"instances.json".to_string())
+            && files.contains(&"admission.json".to_string())
+    );
+
+    // Staged, it is a runnable Harbor folder; dropped, it is gone.
+    let instance = store.instances(&id, Split::Dev).unwrap().remove(0);
+    let staging = root.path().join("staging");
+    let path = {
+        let staged = EnvironmentStore::stage(&staging, &instance).unwrap();
+        assert!(staged.path().join("task.toml").is_file());
+        assert!(staged.path().join("tests/test.sh").is_file());
+        staged.path().to_path_buf()
+    };
+    assert!(!path.exists());
+    assert_eq!(
+        std::fs::read_dir(&staging).unwrap().count(),
+        0,
+        "nothing is left behind"
+    );
+
+    // A reload from the archive is byte-identical to what was generated.
+    let again = store.instances(&id, Split::Dev).unwrap().remove(0);
+    assert_eq!(again.version(), instance.version());
 }

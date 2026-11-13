@@ -12,22 +12,29 @@
 //! <root>/
 //!   <environment-id>/
 //!     admission.json        the AdmissionReport: gates, attacks, band, status
-//!     train-<seed>/         one task folder per instance (Harbor layout)
-//!     dev-<seed>/
+//!     instances.json        every stored instance of the environment: one
+//!                           archive, files shared between instances (the
+//!                           tool, the verifier) kept once by content address
 //!   compilations/<id>.json  what each objective was compiled to
 //! ```
 //!
-//! Instances are written only for an environment that may still enter a
+//! A generated collection is one archive, never a directory per task: a
+//! campaign draws thousands of instances and a file per instance file would
+//! exhaust the inode quota of a shared disk. A task folder exists only while
+//! something runs it: [`EnvironmentStore::stage`] writes one into a scratch
+//! directory and removes it when the guard is dropped.
+//!
+//! Instances are archived only for an environment that may still enter a
 //! campaign (admitted, or waiting for its band): a rejected or quarantined
 //! environment keeps its report, with the attack that beat it, and nothing a
-//! campaign could pick up by mistake. An instance directory is never written
-//! over another: the same environment, split and seed always has the same
-//! content, so a differing file is a bug to report, not to overwrite.
+//! campaign could pick up by mistake. The same environment, split and seed
+//! always has the same content, so a differing archived instance is a bug to
+//! report, not to overwrite.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_core::verifiability::Split;
 
@@ -37,6 +44,7 @@ use super::band::BandMeasurement;
 use super::folder::{Folder, FolderError};
 
 const REPORT_FILE: &str = "admission.json";
+const ARCHIVE_FILE: &str = "instances.json";
 const COMPILATIONS_DIR: &str = "compilations";
 
 /// Why the store could not read or write.
@@ -70,9 +78,12 @@ pub enum StoreError {
     /// A task folder that is not an artifact.
     #[error(transparent)]
     Artifact(#[from] ArtifactError),
-    /// An instance already stored differs from the one to store.
-    #[error("{0} is already stored with different content")]
+    /// An instance already archived differs from the one to store.
+    #[error("{0} is already archived with different content")]
     Differs(String),
+    /// An archive that does not hold together.
+    #[error("the archive is corrupt: {0}")]
+    Corrupt(String),
 }
 
 fn io(path: &Path) -> impl FnOnce(std::io::Error) -> StoreError + '_ {
@@ -85,6 +96,111 @@ fn io(path: &Path) -> impl FnOnce(std::io::Error) -> StoreError + '_ {
 fn valid_id(id: &str) -> bool {
     id.strip_prefix("env-")
         .is_some_and(|hex| hex.len() == 16 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// One archived instance: its files by content address.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct Archived {
+    split: Split,
+    seed: u64,
+    version: String,
+    /// `(path, executable, blob)` for every file of the folder.
+    files: Vec<(String, bool, String)>,
+}
+
+/// An environment's instances in one file.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct Archive {
+    /// File contents as hex, by content address.
+    blobs: BTreeMap<String, String>,
+    instances: Vec<Archived>,
+}
+
+fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
+}
+
+fn unhex(text: &str) -> Option<Vec<u8>> {
+    if !text.len().is_multiple_of(2) || !text.is_ascii() {
+        return None;
+    }
+    (0..text.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).ok())
+        .collect()
+}
+
+impl Archive {
+    fn add(&mut self, instance: &Instance) -> Result<(), String> {
+        let meta = instance.meta();
+        let version = instance.version().to_string();
+        if let Some(existing) = self
+            .instances
+            .iter()
+            .find(|a| a.split == meta.split && a.seed == meta.seed)
+        {
+            return if existing.version == version {
+                Ok(())
+            } else {
+                Err(format!("{}-{}", meta.split, meta.seed))
+            };
+        }
+        let mut files = Vec::new();
+        for (path, entry) in instance.folder().entries() {
+            let address = Digest::of(&entry.bytes).to_string();
+            self.blobs
+                .entry(address.clone())
+                .or_insert_with(|| hex(&entry.bytes));
+            files.push((path.to_string(), entry.executable, address));
+        }
+        self.instances.push(Archived {
+            split: meta.split,
+            seed: meta.seed,
+            version,
+            files,
+        });
+        Ok(())
+    }
+
+    fn instance(&self, archived: &Archived) -> Result<Instance, StoreError> {
+        let mut folder = Folder::new();
+        for (path, executable, address) in &archived.files {
+            let bytes = self
+                .blobs
+                .get(address)
+                .and_then(|h| unhex(h))
+                .ok_or_else(|| StoreError::Corrupt(format!("blob {address} of {path}")))?;
+            folder.put(path, bytes, *executable)?;
+        }
+        let instance = Instance::from_folder(folder)?;
+        if instance.version().to_string() != archived.version {
+            return Err(StoreError::Corrupt(format!(
+                "{}-{} does not match its recorded version",
+                archived.split, archived.seed
+            )));
+        }
+        Ok(instance)
+    }
+}
+
+/// A task folder staged for a run; removed when dropped.
+pub struct Staged {
+    _scratch: tempfile::TempDir,
+    dir: PathBuf,
+}
+
+impl Staged {
+    /// The task folder.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.dir
+    }
 }
 
 /// A directory of environments.
@@ -124,18 +240,11 @@ impl EnvironmentStore {
         let dir = self.dir(&report.environment)?;
         std::fs::create_dir_all(&dir).map_err(io(&dir))?;
         if matches!(report.status, Status::Admitted | Status::PendingBand) {
+            let mut archive = self.archive(&report.environment)?;
             for instance in instances {
-                let meta = instance.meta();
-                let target = dir.join(format!("{}-{}", meta.split, meta.seed));
-                if target.exists() {
-                    let existing = Folder::read_from(&target)?;
-                    if existing.digest() != instance.version() {
-                        return Err(StoreError::Differs(target.display().to_string()));
-                    }
-                } else {
-                    instance.folder().write_to(&target)?;
-                }
+                archive.add(instance).map_err(StoreError::Differs)?;
             }
+            Self::write_json(&dir.join(ARCHIVE_FILE), &archive)?;
         }
         Self::write_json(&dir.join(REPORT_FILE), report)
     }
@@ -191,23 +300,46 @@ impl EnvironmentStore {
             .collect())
     }
 
-    /// The stored instances of `id` in `split`, as task folders on disk.
-    pub fn instance_dirs(&self, id: &str, split: Split) -> Result<Vec<PathBuf>, StoreError> {
-        let dir = self.dir(id)?;
-        let prefix = format!("{split}-");
-        let mut found: Vec<PathBuf> = std::fs::read_dir(&dir)
-            .map_err(io(&dir))?
-            .filter_map(Result::ok)
-            .filter(|e| e.file_name().to_string_lossy().starts_with(&prefix))
-            .map(|e| e.path())
-            .collect();
-        found.sort();
-        Ok(found)
+    fn archive(&self, id: &str) -> Result<Archive, StoreError> {
+        let path = self.dir(id)?.join(ARCHIVE_FILE);
+        match std::fs::read_to_string(&path) {
+            Ok(text) => serde_json::from_str(&text).map_err(|source| StoreError::Json {
+                path: path.display().to_string(),
+                source,
+            }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Archive::default()),
+            Err(e) => Err(io(&path)(e)),
+        }
     }
 
-    /// Reads a stored instance back.
-    pub fn load_instance(&self, dir: &Path) -> Result<Instance, StoreError> {
-        Ok(Instance::from_folder(Folder::read_from(dir)?)?)
+    /// The archived instances of `id` in `split`, by seed.
+    pub fn instances(&self, id: &str, split: Split) -> Result<Vec<Instance>, StoreError> {
+        let archive = self.archive(id)?;
+        let mut chosen: Vec<&Archived> = archive
+            .instances
+            .iter()
+            .filter(|a| a.split == split)
+            .collect();
+        chosen.sort_by_key(|a| a.seed);
+        chosen.into_iter().map(|a| archive.instance(a)).collect()
+    }
+
+    /// Writes `instance`'s task folder into a new scratch directory under
+    /// `parent` and returns the guard that removes it. This is the only way
+    /// a task folder comes to exist on disk; a run holds the guard for as
+    /// long as it needs the folder.
+    pub fn stage(parent: &Path, instance: &Instance) -> Result<Staged, StoreError> {
+        std::fs::create_dir_all(parent).map_err(io(parent))?;
+        let scratch = tempfile::Builder::new()
+            .prefix("task-")
+            .tempdir_in(parent)
+            .map_err(io(parent))?;
+        let dir = scratch.path().join("task");
+        instance.folder().write_to(&dir)?;
+        Ok(Staged {
+            _scratch: scratch,
+            dir,
+        })
     }
 
     /// Writes a document under `compilations/`.
