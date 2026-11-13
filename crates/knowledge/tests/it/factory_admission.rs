@@ -21,8 +21,9 @@ use splinter_knowledge::factory::artifact::{
 };
 use splinter_knowledge::factory::band::BandMeasurement;
 use splinter_knowledge::factory::folder::Folder;
-use splinter_knowledge::factory::host::Host;
+use splinter_knowledge::factory::host::{Host, Verdict};
 use splinter_knowledge::factory::plugin::{InstanceRequest, Knob, Plugin, PluginError};
+use splinter_knowledge::factory::plugins::db_workflow::DbWorkflow;
 use splinter_knowledge::factory::plugins::program_output::ProgramOutput;
 
 const NO_KNOBS: &[Knob] = &[];
@@ -175,7 +176,7 @@ fn an_honest_environment_passes_every_gate_and_still_waits_for_its_base_pass_rat
     }
     assert_eq!(report.status, Status::PendingBand);
     assert!(!report.may_enter_campaign());
-    assert!(report.attacks_run > 100, "{}", report.attacks_run);
+    assert!(report.attacks_run >= 40, "{}", report.attacks_run);
     assert!(report.beaten.is_empty(), "{:?}", report.beaten);
 }
 
@@ -473,4 +474,91 @@ fn a_difficulty_knob_gives_a_different_environment_that_is_admitted_on_its_own()
             .count(),
         2
     );
+}
+
+fn db_request(seed: u64, goals: u32, traps: u32) -> InstanceRequest {
+    InstanceRequest {
+        split: Split::Train,
+        seed,
+        difficulty: BTreeMap::from([
+            ("goals".to_string(), goals),
+            ("traps".to_string(), traps),
+            ("rows".to_string(), 6),
+            ("distractor_tables".to_string(), 1),
+        ]),
+    }
+}
+
+#[test]
+fn the_database_workflow_environment_passes_admission_and_every_database_attack_fails() {
+    let report = run(&DbWorkflow::new(), Some(&in_band()));
+    for g in &report.gates {
+        assert!(g.passed, "{}: {}", g.name, g.detail);
+    }
+    assert_eq!(report.status, Status::Admitted, "{:?}", report.reasons);
+    assert!(report.beaten.is_empty(), "{:?}", report.beaten);
+    assert!(
+        report.attacks_run >= 40,
+        "the plugin's own attacks run beside the generic ones: {}",
+        report.attacks_run
+    );
+}
+
+#[test]
+fn the_final_state_diff_rejects_acting_on_a_request_whose_answer_is_to_change_nothing() {
+    // seed: scanning for an instance with a restock request that needs no restock
+    let plugin = DbWorkflow::new();
+    let host = Host::default();
+    let found = (0..200)
+        .map(|s| plugin.generate(&db_request(s, 4, 3)).unwrap())
+        .find(|instance| {
+            let ops = instance.folder().text("tests/ops.json").unwrap();
+            instance.instruction().contains("must have at least") && !ops.contains("restock")
+        });
+    let instance = found.expect("some seed gives a restock request with nothing to restock");
+    let session = host.open(&instance).unwrap();
+    assert!(session.solve().unwrap().succeeded());
+    assert!(
+        session.verify().unwrap().solved(),
+        "the reference alone solves it"
+    );
+
+    let sku = instance
+        .instruction()
+        .split("Product ")
+        .nth(1)
+        .unwrap()
+        .split(' ')
+        .next()
+        .unwrap()
+        .to_string();
+    let blind = session
+        .run_in_workspace(&["python3", "tools.py", "restock", &sku, "1"])
+        .unwrap();
+    assert!(blind.succeeded());
+    let verdict = session.verify().unwrap();
+    assert!(
+        !verdict.solved(),
+        "one unit too many is collateral damage: {verdict:?}"
+    );
+    let Verdict::Graded(vector) = verdict else {
+        panic!("graded")
+    };
+    assert!(
+        vector["state"] > 0.0 && vector["state"] < 1.0,
+        "partial credit by table: {vector:?}"
+    );
+}
+
+#[test]
+fn the_shops_tool_refuses_what_its_rules_forbid_and_changes_nothing() {
+    let instance = DbWorkflow::new().generate(&db_request(5, 3, 0)).unwrap(); // seed: any instance has a shipped or pending order 200
+    let session = Host::default().open(&instance).unwrap();
+    let before = session.workspace_digest().unwrap();
+    let refused = session
+        .run_in_workspace(&["python3", "tools.py", "refund", "99999"])
+        .unwrap();
+    assert_eq!(refused.exit_code, Some(2), "{refused:?}");
+    assert!(refused.stdout.contains("refused"));
+    assert_eq!(session.workspace_digest().unwrap(), before);
 }

@@ -68,6 +68,9 @@ pub enum Edit {
         /// The path, relative to the workspace.
         path: String,
     },
+    /// Run a shell command in the workspace, as a solver with a shell
+    /// would; whether it succeeds does not matter.
+    Shell(String),
 }
 
 /// What an attack relies on, and so how a success is read.
@@ -131,6 +134,9 @@ fn run_attack(session: &Session, attack: &Attack) -> Result<AttackOutcome, HostE
             Edit::Write { path, bytes } => session.write(path, bytes)?,
             Edit::Remove { path } => {
                 session.remove(path);
+            }
+            Edit::Shell(command) => {
+                session.run_in_workspace(&["sh", "-c", command])?;
             }
         }
     }
