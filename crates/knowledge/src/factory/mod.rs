@@ -23,13 +23,15 @@
 //!   train on it, ending in a measured base pass-rate band.
 //! * [`attack`] - the adversarial attempts on a verifier; an environment
 //!   whose verifier is beaten is quarantined.
-
+//! * [`alarm`] - the reward-versus-held-out divergence alarm a campaign
+//!   controller feeds one observation per evaluation.
 //!
 //! Nothing here produces a sealed exam: those belong to the measurement
 //! authority, and [`Split`](splinter_core::verifiability::Split) has no
 //! variant for one.
 
 pub mod admission;
+pub mod alarm;
 pub mod artifact;
 pub mod attack;
 pub mod band;
