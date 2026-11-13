@@ -21,6 +21,7 @@ mod bench_ingest;
 mod bench_policy_gradient;
 mod bench_request_records;
 mod budget;
+mod campaign;
 mod canary_sets;
 mod clusters;
 mod compare_sets;
