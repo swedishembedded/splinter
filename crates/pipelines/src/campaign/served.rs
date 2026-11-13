@@ -238,7 +238,18 @@ impl<'f> ServedValidator<'f> {
         self.answer_with(&model, tasks)
     }
 
-    fn answer_with(&self, model: &Model, tasks: &[String]) -> Result<Vec<Answered>, CampaignError> {
+    /// Every task of `tasks` answered once by `model`, as many requests at
+    /// once as the settings allow; a task listed several times is answered
+    /// that many times, independently. How the model decodes (greedily or
+    /// sampled, at what temperature) is the model's own.
+    ///
+    /// # Errors
+    /// A request fails, or the verifier does.
+    pub fn answer_with(
+        &self,
+        model: &Model,
+        tasks: &[String],
+    ) -> Result<Vec<Answered>, CampaignError> {
         let (family, max_tokens) = (self.family, self.settings.max_tokens);
         let answers = self.runtime.block_on(async {
             futures::stream::iter(tasks.iter().map(|task| async move {

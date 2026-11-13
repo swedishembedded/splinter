@@ -23,9 +23,10 @@ use splinter_sdk::campaign::PolicyRef;
 use splinter_sdk::measure::campaign::gate::DevGate;
 
 use campaign_lua::family::ProposalFamily;
+use campaign_lua::frontier::FrontierArgs;
 use campaign_lua::handoff::{self, Build, Candidate};
 use campaign_lua::host::{HostSettings, ServerHost};
-use campaign_lua::lineage::{champion_of, trained_up_to, Files, Lineage, Plan};
+use campaign_lua::lineage::{champion_of, trained_up_to, Files, Lineage, Plan, TrainFrom};
 use campaign_lua::proposer::{Budget, Proposer};
 use campaign_lua::sft::Recipe;
 use campaign_lua::{LuaPredict, Sizes};
@@ -134,6 +135,24 @@ struct Cli {
     /// Retention loss, as a share of the retention set, a candidate may show.
     #[arg(long)]
     retention_margin: f64,
+    /// What each generation's candidate is trained from: the previous
+    /// champion's adapter, continued, or a fresh adapter on the base trained
+    /// on every accepted generation's records so far.
+    #[arg(long, value_enum, default_value_t = TrainFrom::Previous)]
+    train_from: TrainFrom,
+    /// With `--train-from base-cumulative`: passes over the union a
+    /// candidate's training makes; the steps are the larger of `--steps` and
+    /// this many passes' worth, rounded up.
+    #[arg(long)]
+    cumulative_epochs: Option<f32>,
+    #[command(flatten)]
+    frontier: FrontierArgs,
+    /// Where the Splinter state of the proposing handle lives (task records,
+    /// a file each): disposable, since the proposals themselves are kept in
+    /// the lineage's directory; a memory-backed directory spares the disk's
+    /// file quota. Default: under `--out`.
+    #[arg(long)]
+    proposer_state: Option<PathBuf>,
     /// Files the disks must have free before a round.
     #[arg(long, default_value_t = 20_000)]
     min_free_inodes: u64,
@@ -250,6 +269,7 @@ fn main() -> Result<()> {
         generator_seed,
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let frontier = cli.frontier.settings()?;
     let files = Files::at(&cli.out);
     let family =
         ProposalFamily::open(generator, &files.proposals()).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -262,7 +282,10 @@ fn main() -> Result<()> {
         models: cli.models_dir.clone(),
         base: cli.model.clone(),
         work: cli.out.join("server-work"),
-        state: cli.out.join("proposer-state"),
+        state: cli
+            .proposer_state
+            .clone()
+            .unwrap_or_else(|| cli.out.join("proposer-state")),
         store: cli.out.join("artifacts"),
         adapters: cli.out.join("served-adapters"),
         log: cli.out.join("brain-serve.log"),
@@ -270,6 +293,7 @@ fn main() -> Result<()> {
         kv_cache: cli.kv_cache.clone(),
         slots: cli.slots,
         lua_dir,
+        predict_temperature: frontier.map_or(1.0, |f| f.temperature),
     });
     let proposer = Proposer::new(&cli.model, &cli.manuals);
     let mut model = ModelSettings::new(&cli.model);
@@ -285,7 +309,11 @@ fn main() -> Result<()> {
         target_effect: cli.target_effect,
         discordance: cli.discordance,
         retention_margin: cli.retention_margin,
+        train_from: cli.train_from,
+        frontier,
+        epochs: cli.cumulative_epochs,
     };
+    plan.validate(&cli.recipe)?;
     let base_digest = handoff::base_digest(&cli.model)?;
     let mut lineage = Lineage {
         files,

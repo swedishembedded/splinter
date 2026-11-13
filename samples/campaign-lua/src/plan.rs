@@ -1,0 +1,212 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements solutions that let a model teach itself from
+// an interpreter's answers to its own proposals, gated on held-out evidence,
+// for its clients. If your team needs expertise in self-taught model
+// lineages judged by an independent examiner you can procure our services by
+// sending an email to info@swedishembedded.com.
+
+//! What a lineage is asked to do, and how a candidate is trained from the
+//! records: the plan and its refusals.
+
+use std::collections::BTreeSet;
+
+use anyhow::Result;
+use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
+
+use crate::frontier::Frontier;
+use crate::sft::Recipe;
+
+/// What a round's candidate is trained from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrainFrom {
+    /// The champion's adapter, continued on the round's records (with the
+    /// recipe's replay of earlier rounds).
+    #[default]
+    Previous,
+    /// A fresh adapter on the base, trained on the union of every accepted
+    /// round's records and this round's.
+    BaseCumulative,
+}
+
+/// What the lineage is asked to do, apart from how it trains.
+#[derive(Clone, Debug)]
+pub struct Plan {
+    /// Generations in the lineage.
+    pub generations: u32,
+    /// Rounds of each generation.
+    pub rounds: u32,
+    /// Programs the policy is asked to propose each round.
+    pub proposals_per_round: usize,
+    /// The most proposal requests a round makes, and how many at once.
+    pub budget: (usize, usize),
+    /// The lead (share of dev programs won) a round is meant to produce.
+    pub target_effect: f64,
+    /// Expected share of dev programs a candidate and its champion differ on.
+    pub discordance: f64,
+    /// The retention loss, as a share of the retention set, a candidate may
+    /// show; also the loss the retention set must be able to detect.
+    pub retention_margin: f64,
+    /// What a candidate is trained from.
+    pub train_from: TrainFrom,
+    /// Frontier selection; none keeps every program the champion mispredicts
+    /// once, greedily.
+    pub frontier: Option<Frontier>,
+    /// With [`TrainFrom::BaseCumulative`]: the passes over the union a
+    /// candidate's training makes. The steps are then
+    /// `max(recipe steps, epochs x records / records per step)`, rounded up,
+    /// so the training grows with the data.
+    pub epochs: Option<f32>,
+}
+
+impl Plan {
+    /// Refuses combinations whose meaning would change silently.
+    ///
+    /// # Errors
+    /// Replay is asked beside a union that already contains it, programs the
+    /// champion predicts right are asked beside a frontier that excludes them,
+    /// or epochs are given for a continuation.
+    pub fn validate(&self, recipe: &Recipe) -> Result<()> {
+        anyhow::ensure!(
+            self.train_from != TrainFrom::BaseCumulative || recipe.replay_share == 0.0,
+            "--replay-share must be 0 with --train-from base-cumulative: the union contains every earlier record already"
+        );
+        anyhow::ensure!(
+            self.frontier.is_none() || recipe.correct_share == 0.0,
+            "--correct-share must be 0 with --frontier-samples: programs the champion always predicts right are not trained on"
+        );
+        anyhow::ensure!(
+            self.epochs.is_none() || self.train_from == TrainFrom::BaseCumulative,
+            "--cumulative-epochs applies to --train-from base-cumulative only"
+        );
+        anyhow::ensure!(
+            self.epochs.is_none_or(|e| e.is_finite() && e > 0.0),
+            "--cumulative-epochs is a positive number of passes"
+        );
+        Ok(())
+    }
+
+    /// The optimiser steps to train `records` records for.
+    #[must_use]
+    pub fn steps_for(&self, recipe: &Recipe, records: usize) -> u32 {
+        match self.epochs {
+            Some(epochs) => {
+                let wanted = (f64::from(epochs) * records as f64
+                    / f64::from(recipe.records_per_step))
+                .ceil() as u32;
+                wanted.max(recipe.steps)
+            }
+            None => recipe.steps,
+        }
+    }
+}
+
+/// The programs a candidate's training set is made of: the round's `wrong`
+/// programs, and when `cumulative` every accepted program before them (once).
+pub(crate) fn training_ids(cumulative: bool, accepted: &[String], wrong: &[String]) -> Vec<String> {
+    if !cumulative {
+        return wrong.to_vec();
+    }
+    let new: BTreeSet<&String> = wrong.iter().collect();
+    accepted
+        .iter()
+        .filter(|id| !new.contains(id))
+        .chain(wrong)
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn recipe(steps: u32, replay: f32, correct: f32) -> Recipe {
+        Recipe {
+            steps,
+            lr: 3e-5,
+            rank: 16,
+            records_per_step: 8,
+            replay_share: replay,
+            correct_share: correct,
+            weight_decay: 0.0,
+            max_block: 1024,
+            base_precision: "bf16".into(),
+            held_out_records: 8,
+        }
+    }
+
+    fn plan(train_from: TrainFrom, frontier: bool, epochs: Option<f32>) -> Plan {
+        Plan {
+            generations: 3,
+            rounds: 1,
+            proposals_per_round: 600,
+            budget: (800, 64),
+            target_effect: 0.08,
+            discordance: 0.2,
+            retention_margin: 0.05,
+            train_from,
+            frontier: frontier.then_some(Frontier {
+                samples: 4,
+                temperature: 1.0,
+                target: 300,
+                request_cap: 1500,
+            }),
+            epochs,
+        }
+    }
+
+    #[test]
+    fn options_whose_meaning_would_change_silently_are_refused() {
+        let cumulative = plan(TrainFrom::BaseCumulative, true, Some(2.0));
+        assert!(cumulative.validate(&recipe(40, 0.0, 0.0)).is_ok());
+        assert!(
+            cumulative.validate(&recipe(40, 0.25, 0.0)).is_err(),
+            "replay beside a union that holds it"
+        );
+        assert!(
+            cumulative.validate(&recipe(40, 0.0, 0.25)).is_err(),
+            "right predictions beside a frontier that excludes them"
+        );
+        assert!(
+            plan(TrainFrom::Previous, false, Some(2.0))
+                .validate(&recipe(40, 0.25, 0.25))
+                .is_err(),
+            "epochs for a continuation"
+        );
+        assert!(plan(TrainFrom::Previous, false, None)
+            .validate(&recipe(40, 0.25, 0.25))
+            .is_ok());
+        assert!(plan(TrainFrom::BaseCumulative, false, Some(0.0))
+            .validate(&recipe(40, 0.0, 0.0))
+            .is_err());
+    }
+
+    #[test]
+    fn the_steps_grow_with_the_union_but_never_fall_below_the_recipe() {
+        let p = plan(TrainFrom::BaseCumulative, true, Some(2.0));
+        let r = recipe(40, 0.0, 0.0);
+        assert_eq!(
+            p.steps_for(&r, 100),
+            40,
+            "2 x 100 / 8 = 25 is under the floor"
+        );
+        assert_eq!(p.steps_for(&r, 300), 75, "2 x 300 / 8");
+        assert_eq!(p.steps_for(&r, 901), 226, "rounded up");
+        assert_eq!(
+            plan(TrainFrom::Previous, false, None).steps_for(&r, 900),
+            40
+        );
+    }
+
+    #[test]
+    fn a_cumulative_candidate_trains_on_every_accepted_record_and_the_new_ones_once() {
+        let accepted = vec!["a".to_string(), "b".to_string()];
+        let wrong = vec!["b".to_string(), "c".to_string()];
+        assert_eq!(training_ids(true, &accepted, &wrong), ["a", "b", "c"]);
+        assert_eq!(training_ids(false, &accepted, &wrong), ["b", "c"]);
+        assert_eq!(training_ids(true, &[], &wrong), ["b", "c"]);
+    }
+}

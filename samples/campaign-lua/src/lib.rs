@@ -15,11 +15,14 @@
 //! retention sets are drawn from other seeds than the training pool.
 
 pub mod family;
+pub mod frontier;
+pub mod frontier_round;
 pub mod handoff;
 pub mod host;
 pub mod journal;
 pub mod lineage;
 pub mod neutral;
+pub mod plan;
 pub mod proposer;
 pub mod recipe;
 pub mod sections;

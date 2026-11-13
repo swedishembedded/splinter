@@ -58,6 +58,8 @@ pub struct HostSettings {
     pub slots: u32,
     /// The directory of the interpreter the task kinds run code in.
     pub lua_dir: PathBuf,
+    /// The sampling temperature of [`ServerHost::predicting`].
+    pub predict_temperature: f32,
 }
 
 /// The running server and the handles that ask it; the server is stopped
@@ -65,6 +67,7 @@ pub struct HostSettings {
 struct Running {
     sampled: Splinter,
     greedy: Splinter,
+    predicting: Splinter,
     endpoints: BrainEndpoints,
     _server: Mutex<Started>,
 }
@@ -148,6 +151,7 @@ impl ServerHost {
         Ok(Running {
             sampled: self.handle(&server, &endpoints, 1.0)?,
             greedy: self.handle(&server, &endpoints, 0.0)?,
+            predicting: self.handle(&server, &endpoints, s.predict_temperature)?,
             endpoints,
             _server: Mutex::new(server),
         })
@@ -230,17 +234,17 @@ impl ServerHost {
     }
 }
 
-impl splinter_sdk::campaign::served::PolicyModels for ServerHost {
-    fn model(&self, policy: &PolicyRef, greedy: bool) -> Result<Model, CampaignError> {
+impl ServerHost {
+    /// The model that answers as `policy` does, decoding through `handle`.
+    fn model_on(
+        &self,
+        policy: &PolicyRef,
+        handle: impl FnOnce(&Running) -> &Splinter,
+    ) -> Result<Model, CampaignError> {
         let fail = |e: anyhow::Error| CampaignError::Collector(format!("{e:#}"));
         let running = self.running().map_err(fail)?;
         self.adopt(&running, policy).map_err(fail)?;
-        let handle = if greedy {
-            &running.greedy
-        } else {
-            &running.sampled
-        };
-        let ctx = handle.context();
+        let ctx = handle(&running).context();
         let reference = splinter_sdk::release::arm_on(
             ctx.config(),
             &self.settings.base,
@@ -248,5 +252,26 @@ impl splinter_sdk::campaign::served::PolicyModels for ServerHost {
         );
         ctx.model(&reference)
             .map_err(|e| CampaignError::Collector(format!("{e}")))
+    }
+
+    /// The model that answers as `policy` does, sampling at the host's
+    /// prediction temperature (frontier selection).
+    ///
+    /// # Errors
+    /// The policy cannot be served.
+    pub fn predicting(&self, policy: &PolicyRef) -> Result<Model, CampaignError> {
+        self.model_on(policy, |running| &running.predicting)
+    }
+}
+
+impl splinter_sdk::campaign::served::PolicyModels for ServerHost {
+    fn model(&self, policy: &PolicyRef, greedy: bool) -> Result<Model, CampaignError> {
+        self.model_on(policy, |running| {
+            if greedy {
+                &running.greedy
+            } else {
+                &running.sampled
+            }
+        })
     }
 }

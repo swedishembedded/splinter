@@ -67,9 +67,32 @@ campaign controller. Everything goes through a `brain serve` the driver starts
    an advance changes the champion; the last advance of a generation is its
    champion, handed to an examiner when `--handoff` is given.
 
+Two options change steps 2 and 3, both off by default:
+
+- `--train-from base-cumulative` trains each candidate as a fresh adapter on the
+  base, on the union of every accepted generation's training records and the
+  new ones, instead of continuing the champion's adapter (`--replay-share` must
+  be 0: the union already holds the earlier records). `--cumulative-epochs E`
+  lets the steps grow with the union: `max(--steps, ceil(E x records /
+  --records-per-step))`.
+- `--frontier-samples K --frontier-temperature T --frontier-target N
+  --frontier-request-cap C` select the frontier: the champion predicts each
+  proposal K times, sampled at temperature T (instead of once, greedily), and
+  only programs it did not predict right every time are trained on (the
+  interpreter's output is the target; `--correct-share` must be 0). Proposing
+  goes on in waves of `--proposals-per-round` programs until N frontier
+  programs are found, within C proposal requests per round; the round fails
+  with the numbers found when C is reached, and running it again with a larger
+  C continues from the journalled waves and predictions.
+
+`--proposer-state DIR` moves the proposing handle's task records (one file per
+record, disposable) off the project disk, for instance to a memory-backed
+directory.
+
 The lineage's journals (`rounds.jsonl`, `dev-results.jsonl`,
-`predictions.jsonl`, `proposals.jsonl`) hold everything it knows; running the
-command again continues from them.
+`predictions.jsonl`, `proposals.jsonl`, and with a frontier `waves.jsonl` and
+`frontier.jsonl`) hold everything it knows; running the command again
+continues from them.
 
 ```bash
 cargo run --release -p splinter-campaign-lua --bin lineage -- --help

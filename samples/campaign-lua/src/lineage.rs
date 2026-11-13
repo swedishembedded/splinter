@@ -22,6 +22,14 @@
 //! sets and the dev gate decides; only an advance changes the champion. The
 //! last accepted candidate of a generation is its champion.
 //!
+//! Two options change what a round trains on (both off by default). With
+//! [`TrainFrom::BaseCumulative`] the candidate is a fresh adapter trained from
+//! the base on the union of every accepted round's records and the new ones,
+//! not a continuation of the champion's adapter. With a [`Frontier`] the
+//! champion predicts each proposal several times, sampled, and only the
+//! programs it does not always predict right are trained on; proposing goes
+//! on until enough of them are found, within a hard cap of requests.
+//!
 //! Everything the lineage knows is in append-only journals and the proposals
 //! file, so a lineage that is started again continues from them.
 
@@ -43,32 +51,15 @@ use splinter_sdk::model::stats::BrainSignificance;
 use splinter_sdk::model::train::FineTune;
 use splinter_sdk::vocabulary::digest::Digest;
 
-use crate::family::{Part, ProposalFamily};
+use crate::family::{proposal_id, Part, ProposalFamily};
+use crate::frontier_round::FrontierOutcome;
 use crate::host::ServerHost;
 use crate::journal::Journal;
-use crate::proposer::{as_proposals, Budget, Origin, Proposer, Steering};
+use crate::plan::training_ids;
+pub use crate::plan::{Plan, TrainFrom};
+use crate::proposer::{as_proposals, Budget, Origin, Proposed, Proposer, Steering};
 use crate::sections::{family_accuracy, Accuracy};
 use crate::sft::{write_chat, Example, Recipe};
-
-/// What the lineage is asked to do, apart from how it trains.
-#[derive(Clone, Debug)]
-pub struct Plan {
-    /// Generations in the lineage.
-    pub generations: u32,
-    /// Rounds of each generation.
-    pub rounds: u32,
-    /// Programs the policy is asked to propose each round.
-    pub proposals_per_round: usize,
-    /// The most proposal requests a round makes, and how many at once.
-    pub budget: (usize, usize),
-    /// The lead (share of dev programs won) a round is meant to produce.
-    pub target_effect: f64,
-    /// Expected share of dev programs a candidate and its champion differ on.
-    pub discordance: f64,
-    /// The retention loss, as a share of the retention set, a candidate may
-    /// show; also the loss the retention set must be able to detect.
-    pub retention_margin: f64,
-}
 
 /// What a round trained: the adapter and what brain reported of the run.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -113,6 +104,15 @@ pub struct RoundRecord {
     pub trained_on: Vec<String>,
     /// Wall-clock seconds the round took.
     pub seconds: f64,
+    /// What the candidate was trained from.
+    #[serde(default)]
+    pub train_from: TrainFrom,
+    /// Records the candidate trained on in all (the union, when it is one).
+    #[serde(default)]
+    pub trained_records: usize,
+    /// How the frontier was found, when it was.
+    #[serde(default)]
+    pub frontier: Option<FrontierOutcome>,
 }
 
 /// One policy's dev and retention answers, kept so a lineage that is started
@@ -167,6 +167,14 @@ impl Files {
         Journal::at(&self.root.join("predictions.jsonl"))
     }
 
+    pub(crate) fn waves(&self) -> Journal {
+        Journal::at(&self.root.join("waves.jsonl"))
+    }
+
+    pub(crate) fn frontier(&self) -> Journal {
+        Journal::at(&self.root.join("frontier.jsonl"))
+    }
+
     fn datasets(&self) -> PathBuf {
         self.root.join("datasets")
     }
@@ -177,14 +185,14 @@ impl Files {
 }
 
 /// The key a policy is known by in the journals.
-fn policy_key(policy: &PolicyRef) -> String {
+pub(crate) fn policy_key(policy: &PolicyRef) -> String {
     policy
         .digest
         .as_ref()
         .map_or_else(|| "base".to_string(), ToString::to_string)
 }
 
-fn fail<E: std::fmt::Display>(e: E) -> anyhow::Error {
+pub(crate) fn fail<E: std::fmt::Display>(e: E) -> anyhow::Error {
     anyhow::anyhow!("{e}")
 }
 
@@ -304,7 +312,7 @@ impl Lineage<'_> {
     }
 
     /// The champion's dev accuracy per library function.
-    fn accuracy(&self, dev: &DevResult) -> Accuracy {
+    pub(crate) fn accuracy(&self, dev: &DevResult) -> Accuracy {
         let programs: Vec<(String, bool)> = dev
             .dev
             .iter()
@@ -313,7 +321,7 @@ impl Lineage<'_> {
         family_accuracy(programs.iter().map(|(p, passed)| (p.as_str(), *passed)))
     }
 
-    fn asked_by_section(&self) -> BTreeMap<String, usize> {
+    pub(crate) fn asked_by_section(&self) -> BTreeMap<String, usize> {
         let mut asked = BTreeMap::new();
         for proposal in self.family.proposals() {
             if let Some(section) = proposal.section {
@@ -371,7 +379,8 @@ impl Lineage<'_> {
     /// Runs round `round` of `generation` unless the journal holds it.
     ///
     /// # Errors
-    /// Serving, proposing, training or journaling fails.
+    /// Serving, proposing, training or journaling fails; with a frontier, the
+    /// request cap is reached before the frontier has its target size.
     pub fn run_round(&mut self, generation: u32, round: u32) -> Result<RoundRecord> {
         let rounds = self.rounds()?;
         if let Some(done) = rounds
@@ -385,52 +394,12 @@ impl Lineage<'_> {
         let started_from = champion.digest.as_ref().map(ToString::to_string);
         let champion_dev = self.dev_of(&champion)?;
 
-        if !self.family.has_round(generation, round) {
-            let ctx = self.host.context(&champion)?;
-            let made = self.proposer.propose(
-                &ctx,
-                champion.adapter.as_deref(),
-                self.family,
-                Steering {
-                    accuracy: &self.accuracy(&champion_dev),
-                    asked: &self.asked_by_section(),
-                    seed: self.seed ^ (u64::from(generation) << 32 | u64::from(round)),
-                },
-                Budget {
-                    want: self.plan.proposals_per_round,
-                    max_calls: self.plan.budget.0,
-                    parallel: self.plan.budget.1,
-                },
-            )?;
-            eprintln!(
-                "generation {generation} round {round}: the policy proposed {}",
-                serde_json::to_string(&made)?
-            );
-            self.family
-                .add(as_proposals(made.kept, Origin { generation, round }, 0, 0))
-                .map_err(fail)?;
-        }
-        let proposed: Vec<String> = self
-            .family
-            .proposals()
-            .into_iter()
-            .filter(|p| p.generation == generation && p.round == round && p.part == Part::Train)
-            .map(|p| p.id)
-            .collect();
-        let answers = self.predict(&champion, generation, round, &proposed)?;
-        let (wrong, right): (Vec<&Answered>, Vec<&Answered>) =
-            answers.iter().partition(|a| !a.passed);
-        eprintln!(
-            "generation {generation} round {round}: the policy predicted {} of {} proposals right",
-            right.len(),
-            answers.len()
-        );
         let mut record = RoundRecord {
             generation,
             round,
             started_from,
-            proposed: proposed.len(),
-            mispredicted: wrong.len(),
+            proposed: 0,
+            mispredicted: 0,
             replayed: 0,
             trained: None,
             decision: None,
@@ -438,12 +407,20 @@ impl Lineage<'_> {
             note: String::new(),
             trained_on: Vec::new(),
             seconds: 0.0,
+            train_from: self.plan.train_from,
+            trained_records: 0,
+            frontier: None,
         };
+        let (wrong, right) = match self.plan.frontier {
+            Some(settings) => {
+                self.select_frontier(&champion, &champion_dev, &mut record, settings)?
+            }
+            None => self.select_mispredicted(&champion, &champion_dev, &mut record)?,
+        };
+        record.mispredicted = wrong.len();
         if wrong.is_empty() {
             record.note = "the policy predicted every proposal right: nothing to learn".into();
         } else {
-            let wrong: Vec<String> = wrong.iter().map(|a| a.task.clone()).collect();
-            let right: Vec<String> = right.iter().map(|a| a.task.clone()).collect();
             self.train_and_gate(&champion, &champion_dev, &wrong, &right, &mut record)?;
         }
         record.seconds = started.elapsed().as_secs_f64();
@@ -451,9 +428,100 @@ impl Lineage<'_> {
         Ok(record)
     }
 
+    /// The champion proposes the round's programs once and predicts each once,
+    /// greedily; the ones it got wrong and the ones it got right.
+    fn select_mispredicted(
+        &mut self,
+        champion: &PolicyRef,
+        champion_dev: &DevResult,
+        record: &mut RoundRecord,
+    ) -> Result<(Vec<String>, Vec<String>)> {
+        let (generation, round) = (record.generation, record.round);
+        if !self.family.has_round(generation, round) {
+            self.propose_wave(
+                champion,
+                champion_dev,
+                (generation, round, 0),
+                Budget {
+                    want: self.plan.proposals_per_round,
+                    max_calls: self.plan.budget.0,
+                    parallel: self.plan.budget.1,
+                },
+            )?;
+        }
+        let proposed = self.round_proposals(generation, round);
+        let answers = self.predict(champion, generation, round, &proposed)?;
+        let (wrong, right): (Vec<&Answered>, Vec<&Answered>) =
+            answers.iter().partition(|a| !a.passed);
+        eprintln!(
+            "generation {generation} round {round}: the policy predicted {} of {} proposals right",
+            right.len(),
+            answers.len()
+        );
+        record.proposed = proposed.len();
+        Ok((
+            wrong.iter().map(|a| a.task.clone()).collect(),
+            right.iter().map(|a| a.task.clone()).collect(),
+        ))
+    }
+
+    /// Ids of the training programs the round's proposing added so far.
+    pub(crate) fn round_proposals(&self, generation: u32, round: u32) -> Vec<String> {
+        self.family
+            .proposals()
+            .into_iter()
+            .filter(|p| p.generation == generation && p.round == round && p.part == Part::Train)
+            .map(|p| p.id)
+            .collect()
+    }
+
+    /// One wave of proposing by the champion, added to the family; the ids of
+    /// the programs it added and what it asked.
+    pub(crate) fn propose_wave(
+        &mut self,
+        champion: &PolicyRef,
+        champion_dev: &DevResult,
+        (generation, round, wave): (u32, u32, usize),
+        budget: Budget,
+    ) -> Result<(Proposed, Vec<String>)> {
+        let ctx = self.host.context(champion)?;
+        let made = self.proposer.propose(
+            &ctx,
+            champion.adapter.as_deref(),
+            self.family,
+            Steering {
+                accuracy: &self.accuracy(champion_dev),
+                asked: &self.asked_by_section(),
+                seed: self.seed
+                    ^ (u64::from(generation) << 32 | u64::from(round))
+                    ^ (wave as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
+            },
+            budget,
+        )?;
+        eprintln!(
+            "generation {generation} round {round} wave {wave}: the policy proposed {}",
+            serde_json::to_string(&made)?
+        );
+        let fresh: Vec<String> = made
+            .kept
+            .iter()
+            .map(|k| proposal_id(&k.program))
+            .filter(|id| self.family.proposal(id).is_none())
+            .collect();
+        self.family
+            .add(as_proposals(
+                made.kept.clone(),
+                Origin { generation, round },
+                0,
+                0,
+            ))
+            .map_err(fail)?;
+        Ok((made, fresh))
+    }
+
     /// Asks `policy` every proposal in `ids` once (greedy), remembering the
     /// answers.
-    fn predict(
+    pub(crate) fn predict(
         &mut self,
         policy: &PolicyRef,
         generation: u32,
@@ -526,7 +594,19 @@ impl Lineage<'_> {
         let accepted: Vec<String> = trained_up_to(&self.rounds()?, u32::MAX)
             .into_iter()
             .collect();
-        let (train, correct, replay) = (examples(wrong)?, examples(right)?, examples(&accepted)?);
+        let cumulative = self.plan.train_from == TrainFrom::BaseCumulative;
+        // Cumulative: the union of every accepted round's records and the new
+        // ones is the training set, so nothing is replayed beside it.
+        // Continued: the new records are, and earlier ones are replayed.
+        let new_ids = training_ids(cumulative, &accepted, wrong);
+        let replay_ids = if cumulative { Vec::new() } else { accepted };
+        let (train, correct, replay) = (
+            examples(&new_ids)?,
+            examples(right)?,
+            examples(&replay_ids)?,
+        );
+        record.trained_records = train.len();
+        let steps = self.plan.steps_for(self.recipe, train.len());
         let (train_file, correct_file, replay_file) = (
             dir.join(format!("{tag}-mispredicted.jsonl")),
             dir.join(format!("{tag}-correct.jsonl")),
@@ -570,14 +650,18 @@ impl Lineage<'_> {
             eval_every: 0,
             patience: 0,
             attempt_dir: &attempt,
-            steps: self.recipe.steps,
+            steps,
             rank: self.recipe.rank,
             alpha: (self.recipe.rank * 2) as f32,
             replay: &replayed,
             replay_share: (!replayed.is_empty()).then_some(self.recipe.replay_share),
             weighted_replay: &weighted,
             grad_accum: self.recipe.records_per_step,
-            continue_from: champion.adapter.as_deref(),
+            continue_from: if cumulative {
+                None
+            } else {
+                champion.adapter.as_deref()
+            },
             cancel: None,
             base: self.recipe.precision()?,
             learning_rate: Some(self.recipe.lr),
@@ -631,6 +715,14 @@ impl Lineage<'_> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_round_journalled_before_these_options_still_reads() {
+        let old = r#"{"generation":1,"round":1,"started_from":null,"proposed":2,"mispredicted":1,"replayed":0,"trained":null,"decision":null,"advanced":false,"note":"","trained_on":[],"seconds":1.0}"#;
+        let record: RoundRecord = serde_json::from_str(old).unwrap();
+        assert_eq!(record.train_from, TrainFrom::Previous);
+        assert!(record.frontier.is_none());
+    }
+
     fn round(generation: u32, round: u32, advanced: bool, tag: &str) -> RoundRecord {
         RoundRecord {
             generation,
@@ -654,6 +746,9 @@ mod tests {
             note: String::new(),
             trained_on: vec![format!("prop-{tag}")],
             seconds: 0.0,
+            train_from: TrainFrom::Previous,
+            trained_records: 0,
+            frontier: None,
         }
     }
 
