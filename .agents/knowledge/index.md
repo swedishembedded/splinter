@@ -128,3 +128,5 @@ in the same commit.
 | [140](140-a-reference-must-solve-a-reset-workspace-not-its-own-result.md) | A reference must solve a reset workspace again, not run twice on its own result |
 | [141](141-a-seed-drawn-over-u64-does-not-fit-a-toml-integer.md) | A seed drawn over the whole u64 range does not fit a TOML integer |
 | [142](142-a-test-runner-in-the-process-under-test-needs-a-canary-that-must-fail.md) | A test runner in the process under test needs a canary that must fail |
+| [143](143-informative-groups-come-from-frontier-tasks-so-the-pool-is-sized-by-them.md) | Informative groups come from frontier tasks, so a pool is sized by how many it holds |
+| [144](144-in-process-policy-gradient-on-qwen3-4b-shows-token-ratios-near-1e-8-from-the-second-step.md) | In-process policy gradient on Qwen3-4B shows token ratios near 1e-8 from the second step, whatever the learning rate |

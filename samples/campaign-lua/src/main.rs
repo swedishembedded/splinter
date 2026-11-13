@@ -121,6 +121,10 @@ struct Cli {
     /// step is reported starved.
     #[arg(long, default_value_t = 0.25)]
     min_informative: f64,
+    /// Retention passes a candidate may lose against the champion; zero rolls
+    /// back any arm that forgets a retention task.
+    #[arg(long, default_value_t = 0)]
+    max_retention_loss: usize,
     /// Precision of the frozen base during training: `bf16` or `fp32`.
     #[arg(long, default_value = "bf16")]
     base_precision: String,
@@ -226,6 +230,7 @@ fn main() -> Result<()> {
     config.gpus = cli.gpus;
     config.replay.per_batch_record = cli.replay;
     config.bounds.max_kl = Some(cli.max_kl);
+    config.gate.max_retention_loss = cli.max_retention_loss;
     config.bounds.min_informative_fraction = Some(cli.min_informative);
     config.ladder = cli
         .ladder
@@ -259,11 +264,13 @@ fn main() -> Result<()> {
     let mut controller =
         CampaignController::open(&root, config, seed, parts, cli.out.join("adapters"))
             .map_err(|e| anyhow::anyhow!("{e}"))?;
-    let report = controller
-        .run(cli.arms)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-    println!("{}", serde_json::to_string_pretty(&report)?);
+    // The ledger is printed whether or not the run ended in an error: the
+    // arms it finished are the evidence, and a refused or failed arm is one of
+    // its entries.
+    let outcome = controller.run(cli.arms);
     let ledger = controller.ledger().map_err(|e| anyhow::anyhow!("{e}"))?;
     println!("{}", serde_json::to_string_pretty(&ledger)?);
+    let report = outcome.map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
     Ok(())
 }
