@@ -31,6 +31,7 @@ mod continual_output;
 mod conversation_dataset;
 mod corrections_session;
 mod curriculum_output;
+mod decision_fixtures_dataset;
 mod doctor_output;
 mod env_output;
 mod exam_output;

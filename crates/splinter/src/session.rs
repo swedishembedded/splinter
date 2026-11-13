@@ -556,11 +556,9 @@ impl Session {
                     })?,
                 );
             }
-            Command::Dataset(DatasetCommand::Conversations {
-                input,
-                system_prompt,
-                advantage,
-            }) => conversation_dataset::run(ctx, json, &input, &system_prompt, advantage)?,
+            Command::Dataset(
+                command @ (DatasetCommand::Conversations(_) | DatasetCommand::DecisionFixtures(_)),
+            ) => conversation_dataset::dispatch(ctx, json, command)?,
             Command::Goal(command) => {
                 if !crate::goal_session::run(json, command)? {
                     return Ok(Exit::Refused);

@@ -173,3 +173,42 @@ pub struct BuildArgs {
     #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub describe_with: Option<ModelRef>,
 }
+
+/// `dataset conversations`.
+#[derive(Debug, clap::Args)]
+pub struct ConversationsArgs {
+    /// The input: one JSON object per line (`case`, `policy`, `trial`,
+    /// `reward`, `record`).
+    #[arg(value_name = "GRADED.JSONL")]
+    pub input: std::path::PathBuf,
+    /// The role prompt the learner played under, which opens every record.
+    #[arg(long, required = true, value_name = "TEXT")]
+    pub system_prompt: String,
+    /// How an attempt's advantage is read from the rewards of its case.
+    #[arg(long, value_parser = advantage, value_name = "KIND")]
+    pub advantage: Option<AdvantageKind>,
+}
+
+/// `dataset decision-fixtures`.
+#[derive(Debug, clap::Args)]
+pub struct DecisionFixturesArgs {
+    /// The benchmark output directory (it holds `runs/<task>/<variant>/`).
+    #[arg(value_name = "RUNS-DIR")]
+    pub runs: std::path::PathBuf,
+    /// The JSON-lines file to write.
+    #[arg(long, required = true, value_name = "FILE")]
+    pub out: std::path::PathBuf,
+    /// Seed of the split; the same seed gives the same split. Drawn and
+    /// printed when not given.
+    #[arg(long, value_name = "N")]
+    pub split_seed: Option<u64>,
+    /// The share of each family's seeds held for validation.
+    #[arg(long, default_value_t = 0.2, value_name = "F")]
+    pub validation_fraction: f64,
+    /// The share of each family's seeds held for test.
+    #[arg(long, default_value_t = 0.2, value_name = "F")]
+    pub test_fraction: f64,
+    /// A whole task family that is test only (repeatable).
+    #[arg(long = "holdout-suite", value_name = "FAMILY")]
+    pub holdout_suites: Vec<String>,
+}

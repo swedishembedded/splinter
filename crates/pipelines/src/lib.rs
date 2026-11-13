@@ -87,6 +87,7 @@ pub mod curriculum;
 pub mod dataset_ref;
 mod dataset_views;
 pub mod datasets;
+pub mod decision_fixtures;
 pub mod describe;
 pub mod dialogue;
 pub mod doctor;

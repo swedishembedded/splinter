@@ -137,6 +137,7 @@ Every command takes these.
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
   - [splinter dataset conversations](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
+  - [splinter dataset decision-fixtures](#splinter-dataset-decision-fixtures) - Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits
   - [splinter dataset export](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 - [splinter goal](#splinter-goal) - Goal-directed learning
   - [splinter goal admit](#splinter-goal-admit) - Admit documents into a selection of learning material
@@ -1520,6 +1521,7 @@ Subcommands:
 
 - [`build`](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
 - [`conversations`](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
+- [`decision-fixtures`](#splinter-dataset-decision-fixtures) - Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits
 - [`export`](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 
 #### splinter dataset build
@@ -1579,6 +1581,26 @@ Options:
 
 - `--system-prompt <TEXT>` (required): The role prompt the learner played under, which opens every record.
 - `--advantage <KIND>`: How an attempt's advantage is read from the rewards of its case.
+
+#### splinter dataset decision-fixtures
+
+Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits. The output is a JSON-lines file, not a stored dataset
+
+```text
+splinter dataset decision-fixtures [OPTIONS] --out <FILE> <RUNS-DIR>
+```
+
+Arguments:
+
+- `<RUNS-DIR>` (required): The benchmark output directory (it holds `runs/<task>/<variant>/`)
+
+Options:
+
+- `--out <FILE>` (required): The JSON-lines file to write.
+- `--split-seed <N>`: Seed of the split; the same seed gives the same split. Drawn and printed when not given.
+- `--validation-fraction <F>`: The share of each family's seeds held for validation. Default: `0.2`.
+- `--test-fraction <F>`: The share of each family's seeds held for test. Default: `0.2`.
+- `--holdout-suite <FAMILY>...`: A whole task family that is test only (repeatable)
 
 #### splinter dataset export
 

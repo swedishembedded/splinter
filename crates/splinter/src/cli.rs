@@ -584,18 +584,12 @@ pub enum DatasetCommand {
     /// case, the model that played the learner, the reward the case's grade
     /// earned and the conversation record. Only conversations the admission
     /// rules accept are used; the learner's turns are the actions.
-    Conversations {
-        /// The input: one JSON object per line (`case`, `policy`, `trial`,
-        /// `reward`, `record`).
-        #[arg(value_name = "GRADED.JSONL")]
-        input: PathBuf,
-        /// The role prompt the learner played under, which opens every record.
-        #[arg(long, required = true, value_name = "TEXT")]
-        system_prompt: String,
-        /// How an attempt's advantage is read from the rewards of its case.
-        #[arg(long, value_parser = advantage, value_name = "KIND")]
-        advantage: Option<AdvantageKind>,
-    },
+    Conversations(ConversationsArgs),
+    /// Write labelled decision fixtures (one example per labelled choice
+    /// question) from the run records of an ablation benchmark output
+    /// directory, split by task family and seed so that no task is in two
+    /// splits. The output is a JSON-lines file, not a stored dataset.
+    DecisionFixtures(DecisionFixturesArgs),
     /// Copy a dataset and its manifest into a directory.
     Export {
         /// The dataset, by id or unique prefix.
@@ -773,7 +767,7 @@ pub use bench::BenchSplit;
 pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;
-pub use dataset::BuildArgs;
+pub use dataset::{BuildArgs, ConversationsArgs, DecisionFixturesArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;
