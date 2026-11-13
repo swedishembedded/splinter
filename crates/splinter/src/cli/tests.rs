@@ -762,6 +762,7 @@ fn a_rehearsal_is_built_by_its_own_verb_and_mixed_in_by_train() {
 }
 
 mod absorb;
+mod env;
 mod flags;
 mod harness;
 mod jobs;

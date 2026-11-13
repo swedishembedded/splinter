@@ -76,6 +76,13 @@ Every command takes these.
   - [splinter source add](#splinter-source-add) - Capture a file (a document), a directory (a repository) or cmd:COMMAND
   - [splinter source list](#splinter-source-list) - List the stored sources
   - [splinter source show](#splinter-source-show) - Show one stored source
+- [splinter env](#splinter-env) - Compile a learning objective into validated, versioned training environments
+  - [splinter env classify](#splinter-env-classify) - Say how each skill of an objective could be verified (an objective check, a proxy, a calibrated judge or human evidence), with the reasons and the plugin that would build it
+  - [splinter env plugins](#splinter-env-plugins) - List the environment plugins, their difficulty knobs and what each verifies by
+  - [splinter env compile](#splinter-env-compile) - Compile an objective into environments
+  - [splinter env list](#splinter-env-list) - List the environments in a store with their status
+  - [splinter env show](#splinter-env-show) - Show one environment's admission report
+  - [splinter env band](#splinter-env-band) - Record a base policy's measured pass rate on an environment's dev instances and judge it
 - [splinter objects](#splinter-objects) - Knowledge objects (rules, thresholds, deadlines, exceptions, facts, procedure steps) a model proposes from documents, admitted by code
   - [splinter objects propose](#splinter-objects-propose) - Ask a model for the typed objects each document of a directory states, one document at a time in date order
 - [splinter experiment](#splinter-experiment) - Check an experiment plan
@@ -192,6 +199,7 @@ Subcommands:
 - [`doctor`](#splinter-doctor) - Check that a run can start here
 - [`baseline`](#splinter-baseline) - Print the `baseline-v1` record of what a registered run runs on
 - [`source`](#splinter-source) - Capture and inspect sources
+- [`env`](#splinter-env) - Compile a learning objective into validated, versioned training environments
 - [`objects`](#splinter-objects) - Knowledge objects (rules, thresholds, deadlines, exceptions, facts, procedure steps) a model proposes from documents, admitted by code
 - [`experiment`](#splinter-experiment) - Check an experiment plan
 - [`absorb`](#splinter-absorb) - Learn from the sessions you held with an agent
@@ -503,6 +511,112 @@ splinter source show [OPTIONS] <ID>
 Arguments:
 
 - `<ID>` (required): The source's id, or a unique prefix of it.
+
+### splinter env
+
+Compile a learning objective into validated, versioned training environments: classify how each skill can be verified, generate and admit environments, red-team their verifiers
+
+```text
+splinter env [OPTIONS] <COMMAND>
+```
+
+Subcommands:
+
+- [`classify`](#splinter-env-classify) - Say how each skill of an objective could be verified (an objective check, a proxy, a calibrated judge or human evidence), with the reasons and the plugin that would build it
+- [`plugins`](#splinter-env-plugins) - List the environment plugins, their difficulty knobs and what each verifies by
+- [`compile`](#splinter-env-compile) - Compile an objective into environments
+- [`list`](#splinter-env-list) - List the environments in a store with their status
+- [`show`](#splinter-env-show) - Show one environment's admission report
+- [`band`](#splinter-env-band) - Record a base policy's measured pass rate on an environment's dev instances and judge it
+
+#### splinter env classify
+
+Say how each skill of an objective could be verified (an objective check, a proxy, a calibrated judge or human evidence), with the reasons and the plugin that would build it. Builds nothing
+
+```text
+splinter env classify [OPTIONS] <--text <TEXT>|--file <FILE>>
+```
+
+Options:
+
+- `--text <TEXT>`: The objective in plain language; each line is one skill.
+- `--file <FILE>`: A file holding the objective; each line is one skill.
+- `--source <PATH>...`: A source the objective rests on (a document, a repository); repeat for more. A skill about a document is only built when a source is given.
+- `--constraint <TEXT>...`: What must hold of any environment built (a language, that real ratings or a calibration set exist); repeat for more.
+
+#### splinter env plugins
+
+List the environment plugins, their difficulty knobs and what each verifies by
+
+```text
+splinter env plugins [OPTIONS]
+```
+
+#### splinter env compile
+
+Compile an objective into environments: a difficulty ladder per skill that has a plugin, each sampled, held to the admission gates and the verifier red team, and stored with its report. A beaten verifier is quarantined; an environment whose gates pass waits for its base pass rate (`env band`) before it may enter a campaign
+
+```text
+splinter env compile [OPTIONS] <--text <TEXT>|--file <FILE>>
+```
+
+Options:
+
+- `--text <TEXT>`: The objective in plain language; each line is one skill.
+- `--file <FILE>`: A file holding the objective; each line is one skill.
+- `--source <PATH>...`: A source the objective rests on (a document, a repository); repeat for more. A skill about a document is only built when a source is given.
+- `--constraint <TEXT>...`: What must hold of any environment built (a language, that real ratings or a calibration set exist); repeat for more.
+- `--store <DIR>`: The store to write; default `environments` under the state root.
+- `--environments <N>`: How many environments to build at most, across all skills. Default: `4`.
+- `--instances <N>`: How many train and how many dev instances each environment is drawn for and tested on. Default: `4`.
+- `--seed <N>`: The seed the samples are drawn from; drawn and printed when absent.
+
+#### splinter env list
+
+List the environments in a store with their status
+
+```text
+splinter env list [OPTIONS]
+```
+
+Options:
+
+- `--store <DIR>`: The store; default `environments` under the state root.
+
+#### splinter env show
+
+Show one environment's admission report: every gate, the attacks that beat the verifier, the base pass rate
+
+```text
+splinter env show [OPTIONS] <ENV-ID>
+```
+
+Arguments:
+
+- `<ENV-ID>` (required): The environment's id.
+
+Options:
+
+- `--store <DIR>`: The store; default `environments` under the state root.
+
+#### splinter env band
+
+Record a base policy's measured pass rate on an environment's dev instances and judge it: inside the band the environment is admitted to campaigns, outside it is rejected with the direction to turn the difficulty knobs
+
+```text
+splinter env band [OPTIONS] --model <NAME> --attempts <N> --passes <N> <ENV-ID>
+```
+
+Arguments:
+
+- `<ENV-ID>` (required): The environment's id.
+
+Options:
+
+- `--model <NAME>` (required): Who was measured (a model and its serving settings)
+- `--attempts <N>` (required): How many attempts were made.
+- `--passes <N>` (required): How many of them were graded solved.
+- `--store <DIR>`: The store; default `environments` under the state root.
 
 ### splinter objects
 

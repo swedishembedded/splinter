@@ -32,6 +32,7 @@ mod conversation_dataset;
 mod corrections_session;
 mod curriculum_output;
 mod doctor_output;
+mod env_output;
 mod exam_output;
 mod exam_session;
 mod experiment_output;

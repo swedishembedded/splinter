@@ -124,3 +124,6 @@ in the same commit.
 | [136](136-under-one-compute-budget-a-27b-adapter-trained-on-the-loops-material-beat-everything-and-random-material.md) | Under one compute budget a 27B adapter trained on the loop's material beat everything and random material on held-out loss |
 | [137](137-selecting-material-before-training-raised-generated-exact-match-and-did-not-damage-reading.md) | Selecting the material before training raised generated exact match on held-out questions and did not damage reading |
 | [138](138-teacher-forced-loss-ranked-the-arms-wrongly-for-client-behaviour.md) | Teacher-forced held-out loss ranked the arms wrongly for client behaviour |
+| [139](139-a-verifier-that-imports-from-its-working-directory-is-beaten-by-a-planted-module.md) | A verifier that imports from its working directory is beaten by a planted module |
+| [140](140-a-reference-must-solve-a-reset-workspace-not-its-own-result.md) | A reference must solve a reset workspace again, not run twice on its own result |
+| [141](141-a-seed-drawn-over-u64-does-not-fit-a-toml-integer.md) | A seed drawn over the whole u64 range does not fit a TOML integer |

@@ -216,6 +216,12 @@ impl EnvironmentStore {
         Self { root: root.into() }
     }
 
+    /// The directory the store lives in.
+    #[must_use]
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     fn dir(&self, id: &str) -> Result<PathBuf, StoreError> {
         if valid_id(id) {
             Ok(self.root.join(id))

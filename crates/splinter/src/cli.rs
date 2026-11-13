@@ -94,6 +94,11 @@ pub enum Command {
     /// Capture and inspect sources.
     #[command(subcommand)]
     Source(SourceCommand),
+    /// Compile a learning objective into validated, versioned training
+    /// environments: classify how each skill can be verified, generate and
+    /// admit environments, red-team their verifiers.
+    #[command(subcommand)]
+    Env(EnvCommand),
     /// Knowledge objects (rules, thresholds, deadlines, exceptions, facts,
     /// procedure steps) a model proposes from documents, admitted by code.
     #[command(subcommand)]
@@ -744,6 +749,7 @@ mod consolidate;
 mod control;
 mod corrections;
 mod dataset;
+mod env;
 mod exam;
 mod gate;
 mod generation;
@@ -768,6 +774,7 @@ pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;
 pub use dataset::BuildArgs;
+pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
