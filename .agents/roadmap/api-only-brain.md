@@ -39,3 +39,26 @@ Everything that touches brain lives in `splinter-model`, which links `brain` (fe
 - 2026-11-13: inventory and plan written.
 - 2026-11-13: generation is API-only (commit "generation"). Removed: `LocalQwen` (whose `complete` cancelled the previous generation when a second request arrived: the concurrency defect the RSI2 lane hit, gone with it), `Residency`, `Answerer`'s in-process loader, the in-process exam path, in-process embeddings, `release_bases`, the drawn-seed recorder (the store still reads old records), the in-process `BrainLoader` of the synthetic-author study. Added: `ManagedBrain` (a `brain serve` over the model store with `--serve-adapters`, `--training` and an artifact store, started on first use and stopped on drop), `AdapterOffer::Directory`, `Embeddings` over `/v1/embeddings`, `DeviceFlags` carrying `--brain-endpoint/--brain-key-file/--brain-bin` for every sample. The method smokes (`make test/methods`) now generate through a `brain` on `PATH` serving the toy checkpoint on the CPU backend.
 - Still in-process after this commit: training (`train`, `policy_gradient`, `consolidate`, `timeline`), dataset parsers and the tokenizer (`capabilities`, `measure`, `tokens`), speech, the timeline model, `device` inventory, statistics.
+
+## Open (what remains before `splinter-model` drops its brain crates)
+
+Each item is brain API to add first (in brain, with a regression test), then the Splinter call site moves and the in-process code goes.
+
+| Gap | Replaces | Note |
+|---|---|---|
+| `brain/train` objective `dpo` | `train::train_preference` | `served_train` refuses DPO by name today |
+| Full-parameter job and adapter merge | `consolidate::{full_fine_tune, merge}` | refused by name with endpoints today |
+| Dataset dry-run (validate a chat or preference file and report rows and token lengths without a job) | `capabilities`, `train::validate_*`, `measure::RecordMeter`, `tokens::TokenCounter`, `pictures` | job admission already refuses a bad record by line, but the pipelines check before publishing |
+| Teacher-forced held-out scoring of a base or adapter on a dataset | `train::score_chat`, `timeline/scoring` | the `sft` job report carries base and tuned scores only |
+| Device inventory (`GET /v1/devices`: card, total and free bytes) | `device::gpu_cards`, `Devices`, `device::select*` (used by `roles::discovered_assistant`, `doctor`) | |
+| Timeline (survival) model as a served class | `timeline/` | its survival arithmetic (`brain::timeline::survival`) is pure statistics |
+| Speech synthesis route; transcription exists (`/v1/audio/transcriptions`) | `speech/` | |
+| Statistics: paired sign test, bootstrap interval | `stats.rs` | pure arithmetic: a reviewed exception, or a brain route |
+| A toy chat checkpoint writer in the brain CLI | `fixture::toy_chat_checkpoint` | the method smokes and `dataset_split` tests build checkpoints with `brain::toy` |
+| Delete `campaign::brain::{ChatCollector, ChatValidator, BrainTrainer}` | | `campaign-lua`'s `main` still uses them; `rsi2` already uses `campaign::served` |
+| Pass endpoints explicitly instead of `BrainDefaults` | `orchestrator::config::set_brain_defaults` | samples that build a `Config` in several places state the flags once |
+| `scripts/gates/` refusing a brain crate outside the allowed client | | needs the manifests clean first |
+
+Brain landed: `/v1/embeddings` takes `instruction` and `max_tokens` (the client sends both; a brain without them drops the instruction silently, so Splinter needs a brain with ab4379f00).
+
+Verified: `make check`, and `make test` with `--skip timeline_` (the in-process timeline specs create a wgpu adapter and fail when the cards are busy: they passed alone, and leave with the timeline retirement). `sandbox::process_runner::nothing_outlives_a_supervisor_that_is_killed_mid_run` fails on the shared node with the sandbox crate untouched. Not verified: a real `brain serve` started by `ManagedBrain` (the scripted contract and a stand-in binary only; no brain binary was available and the cards were busy).
