@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use clap::Parser;
 use serde_json::json;
-use splinter_sdk::campaign::brain::{BrainTrainer, ChatCollector, ChatValidator};
+use splinter_sdk::campaign::served::{ServedCollector, ServedTrainer, ServedValidator};
 use splinter_sdk::campaign::{CampaignController, Parts, PolicyRef, Stopwatch, WallClock};
 use splinter_sdk::model::stats::BrainSignificance;
 use splinter_sdk::store::StateRoot;
@@ -27,6 +27,7 @@ use splinter_sdk::vocabulary::clock::SystemClock;
 
 use campaign_lua::family::Rsi2Family;
 use campaign_lua::handoff::{self, Build, Candidate};
+use campaign_lua::host::{HostSettings, ServerHost};
 use campaign_lua::proposer::{as_proposals, Proposer};
 use campaign_lua::recipe::Recipe;
 use campaign_lua::{LuaPredict, Sizes};
@@ -38,8 +39,6 @@ use campaign_lua::{LuaPredict, Sizes};
 )]
 struct Cli {
     #[command(flatten)]
-    device: splinter_sdk::device::DeviceFlags,
-    #[command(flatten)]
     recipe: Recipe,
     /// The base checkpoint directory.
     #[arg(long)]
@@ -49,7 +48,19 @@ struct Cli {
     base_name: String,
     /// Brain's model store.
     #[arg(long)]
-    models_dir: Option<PathBuf>,
+    models_dir: PathBuf,
+    /// The `brain` binary that serves the lineage's current policy.
+    #[arg(long)]
+    brain: PathBuf,
+    /// The card the server runs on, in brain's `--device` grammar.
+    #[arg(long)]
+    server_device: String,
+    /// The server's KV-cache tier.
+    #[arg(long, default_value = "f32")]
+    kv_cache: String,
+    /// Sequences the server decodes together.
+    #[arg(long, default_value_t = 32)]
+    slots: u32,
     /// The lineage's directory: campaign state, adapters, proposals.
     #[arg(long)]
     out: PathBuf,
@@ -100,6 +111,9 @@ struct Cli {
     /// The most requests a round of proposing makes.
     #[arg(long, default_value_t = 40)]
     proposal_calls: usize,
+    /// Requests of a round of proposing asked at once.
+    #[arg(long, default_value_t = 8)]
+    proposal_parallel: usize,
     /// Splinter's commit, as the launch record states it.
     #[arg(long)]
     splinter_commit: String,
@@ -169,7 +183,6 @@ impl Lineage<'_> {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    cli.device.apply().map_err(fail)?;
     let seed = splinter_sdk::seed::resolve("seed", cli.seed);
     let generator_seed = cli.generator_seed.unwrap_or(seed);
     eprintln!(
@@ -197,20 +210,36 @@ fn main() -> Result<()> {
         .lua
         .parent()
         .map_or_else(|| Path::new(".").to_path_buf(), Path::to_path_buf);
-    let proposer = Proposer::open(
-        &cli.out.join("proposer-state"),
-        cli.models_dir.as_deref(),
-        &cli.model,
-        &lua_dir,
-        &cli.manuals,
-    )?;
+    let host = ServerHost::new(HostSettings {
+        brain: cli.brain.clone(),
+        models: cli.models_dir.clone(),
+        base: cli.model.clone(),
+        work: cli.out.join("server-work"),
+        state: cli.out.join("proposer-state"),
+        store: cli.out.join("artifacts"),
+        adapters: cli.out.join("served-adapters"),
+        log: cli.out.join("brain-serve.log"),
+        device: cli.server_device.clone(),
+        kv_cache: cli.kv_cache.clone(),
+        slots: cli.slots,
+        lua_dir,
+    });
+    let proposer = Proposer::new(&cli.model, &cli.manuals);
 
     // Generation 1's policy is the base: it proposes the dev tasks (held out)
     // and the first training tasks before the campaign opens, since the dev
     // set is fixed when it does.
     if !family.has_generation(1) {
         let want = cli.proposed_dev + cli.proposals_per_generation;
-        let made = proposer.propose(None, &family, want, cli.proposal_calls)?;
+        let ctx = host.context(&PolicyRef::default())?;
+        let made = proposer.propose(
+            &ctx,
+            None,
+            &family,
+            want,
+            cli.proposal_calls,
+            cli.proposal_parallel,
+        )?;
         eprintln!("the base proposed: {}", serde_json::to_string(&made)?);
         anyhow::ensure!(
             made.kept.len() >= cli.proposed_dev,
@@ -237,9 +266,11 @@ fn main() -> Result<()> {
     };
 
     let model = cli.recipe.model_settings(&cli.model);
-    let mut collector = ChatCollector::new(&family, model.clone()).map_err(fail)?;
-    let mut validator = ChatValidator::new(&family, model).map_err(fail)?;
-    let mut trainer = BrainTrainer::new(cli.recipe.trainer_settings(&cli.model)?);
+    let mut collector = ServedCollector::new(&family, &host, model.clone()).map_err(fail)?;
+    let mut validator = ServedValidator::new(&family, &host, model).map_err(fail)?;
+    let mut trainer =
+        ServedTrainer::new(cli.recipe.trainer_settings(&cli.model)?, host.endpoints()?)
+            .map_err(fail)?;
     let config = cli.recipe.campaign_config(
         &cli.lineage,
         "on-policy policy gradient on the policy's own proposed programs and the generator's raises Lua output prediction under the neutral protocol",
@@ -270,11 +301,14 @@ fn main() -> Result<()> {
         }
         let champion = controller.state().policy.clone();
         if !family.has_generation(generation) {
+            let ctx = host.context(&champion)?;
             let made = proposer.propose(
+                &ctx,
                 champion.adapter.as_deref(),
                 &family,
                 cli.proposals_per_generation,
                 cli.proposal_calls,
+                cli.proposal_parallel,
             )?;
             eprintln!(
                 "the policy of generation {generation} proposed: {}",
@@ -304,5 +338,6 @@ fn main() -> Result<()> {
             Some(format!("{:?}", arm.verdict)),
         )?;
     }
+    host.stop();
     Ok(())
 }

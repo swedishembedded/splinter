@@ -16,6 +16,7 @@
 
 pub mod family;
 pub mod handoff;
+pub mod host;
 pub mod neutral;
 pub mod proposer;
 pub mod recipe;

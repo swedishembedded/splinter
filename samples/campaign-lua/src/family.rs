@@ -261,8 +261,11 @@ impl TaskFamily for Rsi2Family {
     }
 
     fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError> {
-        let text = match self.lock().get(task) {
-            Some(p) => p.request.clone(),
+        // The lock is released before a generated task is looked up: `known`
+        // takes it again.
+        let proposed = self.lock().get(task).map(|p| p.request.clone());
+        let text = match proposed {
+            Some(request) => request,
             None => neutral::request(&self.known(task)?.0),
         };
         Ok(vec![("user".into(), text)])
@@ -344,6 +347,12 @@ mod tests {
         assert!(family.grade(&id, "so\n```\n3\n```").unwrap().passed);
         assert!(!family.grade(&id, "3").unwrap().passed);
         assert!(family.holds("print(1+2)  "));
+        let generated = &family.generator.pool()[0];
+        let turns = family.prompt(generated).unwrap();
+        assert!(
+            turns[0].1.contains("```lua"),
+            "a generated task is put to the policy too"
+        );
     }
 
     #[test]

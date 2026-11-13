@@ -22,11 +22,10 @@ use splinter_sdk::agent::CancelToken;
 use splinter_sdk::knowledge::tasks::dedup::Seen;
 use splinter_sdk::knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
 use splinter_sdk::sources::{self, SourceTarget};
-use splinter_sdk::store::StateRoot;
 use splinter_sdk::tasks::{self, Generation};
 use splinter_sdk::vocabulary::experience::{PrivilegedKind, Task};
 use splinter_sdk::vocabulary::source::SourceId;
-use splinter_sdk::{Config, Context, Splinter};
+use splinter_sdk::Context;
 
 use crate::family::{proposal_id, Part, Proposal, Rsi2Family};
 use crate::neutral;
@@ -59,63 +58,24 @@ pub struct Proposed {
 
 /// The policy as a proposer of tasks, over the manual.
 pub struct Proposer {
-    splinter: Splinter,
-    sources: Vec<SourceId>,
+    manuals: Vec<PathBuf>,
     base: PathBuf,
 }
 
 impl Proposer {
-    /// A proposer for the base checkpoint at `base`, whose state lives under
-    /// `state`, running programs with the interpreter in `lua_dir`, over the
-    /// manual pages in `manuals`.
-    ///
-    /// # Errors
-    /// The runtime cannot start or a page cannot be captured.
-    pub fn open(
-        state: &Path,
-        models: Option<&Path>,
-        base: &Path,
-        lua_dir: &Path,
-        manuals: &[PathBuf],
-    ) -> Result<Self> {
-        let mut config = Config::from_env();
-        config.state_root = StateRoot::new(state);
-        config.thinking = false;
-        config.allow_remote = false;
-        config.policy_base = std::path::absolute(base)?;
-        config.workspace.runtime_dirs = vec![std::path::absolute(lua_dir)?];
-        if let Some(models) = models {
-            config.model_store = models.to_path_buf();
-        }
-        let splinter = Splinter::builder(config)
-            .build()
-            .context("starting the Splinter runtime")?;
-        let ctx = splinter.context();
-        let sources = manuals
-            .iter()
-            .map(|page| {
-                let target = SourceTarget::Path { path: page.clone() };
-                sources::add(&ctx, &target)
-                    .map(|added| added.source.id)
-                    .with_context(|| format!("capturing {}", page.display()))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(Self {
-            splinter,
-            sources,
-            base: std::path::absolute(base)?,
-        })
-    }
-
-    /// The Splinter context the proposer runs in.
+    /// A proposer for the base checkpoint at `base`, over the manual pages in
+    /// `manuals`.
     #[must_use]
-    pub fn context(&self) -> Context {
-        self.splinter.context()
+    pub fn new(base: &Path, manuals: &[PathBuf]) -> Self {
+        Self {
+            manuals: manuals.to_vec(),
+            base: base.to_path_buf(),
+        }
     }
 
     /// The tasks the policy (the base with `adapter`, or the base alone)
     /// proposes until `want` new ones are kept or `max_calls` requests are
-    /// spent; two requests in a row that keep nothing end it early. `family`
+    /// spent, asking `parallel` at a time; two waves in a row that keep nothing end it early. `family`
     /// holds what the learner already has: nothing that repeats it is kept,
     /// and the policy is shown it as tasks not to write again.
     ///
@@ -123,12 +83,23 @@ impl Proposer {
     /// The model cannot be run or the task store cannot be read.
     pub fn propose(
         &self,
+        ctx: &Context,
         adapter: Option<&Path>,
         family: &Rsi2Family,
         want: usize,
         max_calls: usize,
+        parallel: usize,
     ) -> Result<Proposed> {
-        let ctx = self.context();
+        let sources = self
+            .manuals
+            .iter()
+            .map(|page| {
+                let target = SourceTarget::Path { path: page.clone() };
+                sources::add(ctx, &target)
+                    .map(|added| added.source.id)
+                    .with_context(|| format!("capturing {}", page.display()))
+            })
+            .collect::<Result<Vec<SourceId>>>()?;
         let policy = splinter_sdk::release::arm_on(ctx.config(), &self.base, adapter);
         let mut seen = Seen::new(DEFAULT_SHINGLE_WORDS, DEFAULT_MAX_OVERLAP);
         let mut shown: Vec<String> = Vec::new();
@@ -139,57 +110,85 @@ impl Proposer {
         let mut out = Proposed::default();
         let mut barren = 0;
         while out.kept.len() < want && out.calls < max_calls && barren < 2 {
+            // One wave: independent requests, asked together so the server
+            // decodes them in one batch. Each is shown the tasks written so
+            // far, and what they repeat among themselves is dropped below.
+            let wave = parallel.min(max_calls - out.calls).max(1);
             let kinds = [KIND.to_string()];
-            let generated = tasks::generate(
-                &ctx,
-                &Generation {
-                    sources: &self.sources,
-                    sections: &[],
-                    kinds: &kinds,
-                    generator: &policy,
-                    goal: Some(GOAL),
-                    author: None,
-                    written: &shown,
-                    denoise_seed: None,
-                    deadline: None,
-                    cancel: CancelToken::new(),
-                    harness: None,
-                },
-            )
-            .map_err(|e| anyhow::anyhow!("asking the policy for tasks: {e}"))?;
-            out.calls += 1;
-            for (reason, n) in &generated.rejected {
-                *out.refused.entry(reason.clone()).or_default() += n;
-            }
+            let generations: Vec<_> = std::thread::scope(|scope| {
+                let handles: Vec<_> = (0..wave)
+                    .map(|_| {
+                        let (kinds, sources, policy, shown) = (&kinds, &sources, &policy, &shown);
+                        scope.spawn(move || {
+                            tasks::generate(
+                                ctx,
+                                &Generation {
+                                    sources,
+                                    sections: &[],
+                                    kinds,
+                                    generator: policy,
+                                    goal: Some(GOAL),
+                                    author: None,
+                                    written: shown,
+                                    denoise_seed: None,
+                                    deadline: None,
+                                    cancel: CancelToken::new(),
+                                    harness: None,
+                                },
+                            )
+                        })
+                    })
+                    .collect();
+                handles
+                    .into_iter()
+                    .map(|h| {
+                        h.join()
+                            .map_err(|_| anyhow::anyhow!("a proposal request panicked"))?
+                            .map_err(|e| anyhow::anyhow!("asking the policy for tasks: {e}"))
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })?;
             let before = out.kept.len();
-            let members = ctx.tasks().get_set(&generated.task_set)?.members;
-            for entry in members {
-                let task = ctx.tasks().get(&entry.task)?;
-                out.admitted += 1;
-                let Some((program, expected)) = program_and_output(&task) else {
-                    out.unusable += 1;
-                    continue;
-                };
-                if family.holds(&program)
-                    || out.kept.iter().any(|(p, _, _)| p.trim() == program.trim())
-                    || seen.repeats(&task.instruction).is_some()
-                {
-                    out.repeats += 1;
-                    continue;
+            for generated in generations {
+                out.calls += 1;
+                for (reason, n) in &generated.rejected {
+                    *out.refused.entry(reason.clone()).or_default() += n;
                 }
-                seen.admit(&task.instruction);
-                shown.push(task.instruction.clone());
-                out.kept.push((program, expected, task.instruction));
-                if out.kept.len() >= want {
-                    break;
+                let members = ctx.tasks().get_set(&generated.task_set)?.members;
+                for entry in members {
+                    let task = ctx.tasks().get(&entry.task)?;
+                    out.admitted += 1;
+                    let Some((program, expected)) = program_and_output(&task) else {
+                        out.unusable += 1;
+                        continue;
+                    };
+                    if family.holds(&program)
+                        || out.kept.iter().any(|(p, _, _)| p.trim() == program.trim())
+                        || seen.repeats(&task.instruction).is_some()
+                    {
+                        out.repeats += 1;
+                        continue;
+                    }
+                    seen.admit(&task.instruction);
+                    shown.push(task.instruction.clone());
+                    out.kept.push((program, expected, task.instruction));
                 }
             }
+            eprintln!(
+                "proposal requests {}: {} admitted, {} kept, {} repeats, refused {:?}",
+                out.calls,
+                out.admitted,
+                out.kept.len(),
+                out.repeats,
+                out.refused
+            );
             barren = if out.kept.len() == before {
                 barren + 1
             } else {
                 0
             };
         }
+        out.kept.truncate(want);
         Ok(out)
     }
 }
