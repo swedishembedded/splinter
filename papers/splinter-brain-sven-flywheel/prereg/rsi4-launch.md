@@ -84,3 +84,5 @@ the step's candidate trained on, `candidate.json` last); adapters kept at `~/pro
   from the same Qwen/Qwen3-4B files. `390b4f12` matches a declared base by the checkpoint's content under every brain naming rule, and
   stops its model server when the examiner ends (the stopped watcher had left one running). Exam, protocol, brain build, KV tier,
   candidates and criterion are unchanged.
+- 2026-11-15 ~00:55, before any verdict existed: the examiner serves on gpu3 instead of gpu1 (gpu1's lineage holds its card for a whole
+  generation, so the examiner waited; gpu3 became free). The card does not enter any measurement.
