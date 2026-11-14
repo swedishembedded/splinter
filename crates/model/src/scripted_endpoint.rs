@@ -76,6 +76,10 @@ pub struct Seen {
     pub top_k: Option<u64>,
     /// The bearer token it presented.
     pub bearer: String,
+    /// Whether it asked for brain's policy trace (`policy_trace: true`).
+    pub policy_trace: bool,
+    /// Whether it asked for the sampler's log-probabilities (`logprobs`).
+    pub sampler_logprobs: bool,
 }
 
 type Reply = dyn Fn(&Seen) -> String + Send + Sync;
@@ -356,6 +360,8 @@ fn chat(stream: &mut TcpStream, shared: &Shared, body: &[u8], bearer: String) {
         temperature: request["temperature"].as_f64(),
         top_k: request["top_k"].as_u64(),
         bearer,
+        policy_trace: request["policy_trace"] == serde_json::json!(true),
+        sampler_logprobs: request["logprobs"] == serde_json::json!(true),
     };
     shared.seen.lock().unwrap().push(seen.clone());
     let now = shared.in_flight.fetch_add(1, Ordering::SeqCst) + 1;

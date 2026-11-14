@@ -15,7 +15,10 @@ use std::sync::Arc;
 
 use sven_sdk::model::ModelProvider;
 
-use super::{probed_provider, served_config_capped, LoadedModel, ModelSelection, ServedSampling};
+use super::{
+    probed_provider, served_config_capped, LoadedModel, ModelSelection, ServedSampling,
+    LOCAL_SERVER_PROVIDER,
+};
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 use crate::local::{Sampling, AGENT_SAMPLING, REASONING_REPLY_TOKENS};
@@ -40,7 +43,11 @@ impl Served {
         let index = self
             .endpoints
             .pin(&pin.unwrap_or_else(|| self.ids[0].as_bytes().to_vec()));
-        let spec = format!("openai/{}", self.ids[index]);
+        // Asked through sven's brain driver, not a generic OpenAI one: a
+        // traced request then gets brain's policy trace (the policy's own
+        // log-probabilities over the whole vocabulary) rather than the
+        // sampler's truncated figure, which is 0 under greedy decoding.
+        let spec = format!("{LOCAL_SERVER_PROVIDER}/{}", self.ids[index]);
         let cap = if sampling.thinking {
             sampling.max_new_tokens.max(REASONING_REPLY_TOKENS)
         } else {

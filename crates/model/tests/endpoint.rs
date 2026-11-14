@@ -96,6 +96,31 @@ fn a_base_is_requested_by_its_org_and_model_name_and_answers_through_the_endpoin
 }
 
 #[test]
+fn a_traced_request_asks_the_endpoint_for_the_policys_own_trace_not_the_samplers_figure() {
+    let server = ScriptedEndpoint::start(vec![Card::base("Qwen/Qwen3-4B")]);
+    let brain = endpoints(&[server.url()]);
+    let loaded = ModelSelection::Local(weights("/models/Qwen/Qwen3-4B", None))
+        .load_served(&brain)
+        .unwrap();
+    let request = CompletionRequest {
+        messages: vec![Message::user("hello")],
+        stream: true,
+        want_logprobs: true,
+        ..CompletionRequest::default()
+    };
+    block_on(async {
+        let mut stream = loaded.provider().complete(request).await.unwrap();
+        while stream.next().await.is_some() {}
+    });
+    let seen = &server.seen()[0];
+    assert!(
+        seen.policy_trace && !seen.sampler_logprobs,
+        "a brain endpoint scores the policy's log-probabilities over the whole vocabulary; \
+         the sampler's are truncated and 0 under greedy decoding"
+    );
+}
+
+#[test]
 fn a_model_the_endpoint_does_not_list_is_refused_by_name_with_what_it_serves() {
     let server = ScriptedEndpoint::start(vec![Card::base("Qwen/Qwen3-0.6B")]);
     let brain = endpoints(&[server.url()]);
