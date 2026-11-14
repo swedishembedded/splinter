@@ -22,7 +22,11 @@
 //!   that all failed are routed to a strategy.
 //! * [`gate`] - the dev-validation gate: advance on a net dev gain, roll
 //!   back on none or on a retention loss, with the level each gate may
-//!   spend.
+//!   spend; or, opted into, advance only on an e-process's evidence.
+//! * [`evidence`] - the evidence gate: a noninferiority e-process per round
+//!   and a false evolution budget across rounds.
+//! * [`dev_pool`] - the dev items a round of the evidence gate draws, and
+//!   how exposed each is by earlier rounds.
 //! * [`signals`] - the per-step numbers a gate reads: informative-group
 //!   fraction, KL, clip fraction and entropy.
 //! * [`plan`] - power-first planning: an arm whose exam cannot detect the
@@ -30,6 +34,8 @@
 //!   gates spend alpha by default.
 //! * [`plateau`] - discovery per GPU-hour, and the switch when it falls.
 
+pub mod dev_pool;
+pub mod evidence;
 pub mod gate;
 pub mod pass_rate;
 pub mod plan;
