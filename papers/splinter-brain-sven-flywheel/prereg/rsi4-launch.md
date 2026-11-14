@@ -75,3 +75,12 @@ model is served at f32, so the comparison stays matched.)
 
 As RSI3, under `~/project/shared/rsi4/handoff/candidates/<series>/<step>/` (`training-tasks.jsonl` first, listing every program
 the step's candidate trained on, `candidate.json` last); adapters kept at `~/project/shared/rsi4/adapters/<series>/<step>/`.
+
+## Deviations (dated, after launch)
+
+- 2026-11-15 ~00:30, before any verdict existed: the examiner's bench build moved from `d8a75b30` to `390b4f12`. With `d8a75b30` every
+  verdict would have been Invalid: the learner's brain (796871647) declares the base by an earlier naming rule (`sha256:d3e8e289...`,
+  the weight files alone) than the examiner's brain (d11e91340, `sha256:47c0bbc1...`, config, weights and index); both were recomputed
+  from the same Qwen/Qwen3-4B files. `390b4f12` matches a declared base by the checkpoint's content under every brain naming rule, and
+  stops its model server when the examiner ends (the stopped watcher had left one running). Exam, protocol, brain build, KV tier,
+  candidates and criterion are unchanged.
