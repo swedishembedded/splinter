@@ -168,3 +168,66 @@ fn a_scratch_directory_is_kept_between_commands_and_is_the_only_extra_place_they
     ));
     assert_ne!(sibling.exit_code, Some(0), "{sibling:?}");
 }
+
+/// Spec: a confinement that names TCP ports lets its process connect to
+/// those ports over IPv4 and nothing else of the network: another port is
+/// refused by the kernel, UDP and IPv6 sockets cannot be made.
+#[test]
+fn a_confinement_with_tcp_ports_reaches_only_those_ports() {
+    use std::collections::BTreeMap;
+    use std::time::Duration;
+
+    use splinter_sandbox::landlock::{abi_version, Confinement};
+    use splinter_sandbox::process::{run, ProcessSpec};
+
+    if abi_version().unwrap_or(0) < 4 {
+        panic!("this kernel's Landlock cannot hold TCP to ports (ABI {:?}); the confinement would be refused", abi_version());
+    }
+    let allowed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let other = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let (a, o) = (
+        allowed.local_addr().unwrap().port(),
+        other.local_addr().unwrap().port(),
+    );
+    let work = tempfile::tempdir().unwrap();
+    let script = format!(
+        "try() {{ ( exec 3<>\"$1\" ) 2>&1 && echo ok; }}\n\
+         echo \"allowed=$(try /dev/tcp/127.0.0.1/{a} | tail -n1)\"\n\
+         echo \"other=$(try /dev/tcp/127.0.0.1/{o} | tail -n1)\"\n\
+         echo \"udp=$(try /dev/udp/127.0.0.1/{a} | tail -n1)\"\n\
+         echo \"ipv6=$(try /dev/tcp/::1/{a} | tail -n1)\"\n"
+    );
+    let mut spec = ProcessSpec::new(
+        vec!["/bin/bash".into(), "-c".into(), script],
+        work.path(),
+        BTreeMap::from([("PATH".to_string(), "/usr/bin:/bin".to_string())]),
+        Duration::from_secs(30),
+        1 << 16,
+    );
+    spec.confinement = Some(Confinement {
+        read_only: vec![
+            "/usr".into(),
+            "/bin".into(),
+            "/lib".into(),
+            "/lib64".into(),
+            "/etc".into(),
+        ],
+        read_write: vec![work.path().to_path_buf(), "/dev".into()],
+        allow_network: false,
+        tcp_connect_ports: vec![a],
+        private_proc: false,
+    });
+    let out = run(&spec).unwrap();
+    let text = String::from_utf8_lossy(&out.stdout.bytes).into_owned();
+    assert!(text.contains("allowed=ok"), "{text}");
+    assert!(
+        text.contains("other=")
+            && !text.contains("other=ok")
+            && text.to_lowercase().contains("permission denied"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("udp=ok") && !text.contains("ipv6=ok"),
+        "{text}"
+    );
+}

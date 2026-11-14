@@ -36,6 +36,12 @@ const SECCOMP_SET_MODE_FILTER: libc::c_long = 1;
 const OFFSET_NR: u32 = 0;
 const OFFSET_ARCH: u32 = 4;
 const OFFSET_ARG0: u32 = 16;
+const OFFSET_ARG1: u32 = 24;
+const BPF_ALU_AND_K: u16 = 0x54;
+const SOCK_STREAM: u32 = 1;
+/// The bits of `socket(2)`'s type that name the type (the rest are
+/// `SOCK_NONBLOCK`/`SOCK_CLOEXEC`).
+const SOCK_TYPE_MASK: u32 = 0xf;
 
 const AF_INET: u32 = 2;
 const AF_INET6: u32 = 10;
@@ -119,6 +125,46 @@ impl Filter {
             /* 11 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
         ];
         Ok(Self { program })
+    }
+
+    /// The filter refusing `socket(2)` of the IPv6 and packet families and every
+    /// IPv4 socket that is not a stream: what is left of the network is IPv4
+    /// TCP, which Landlock then holds to its allowed ports.
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    pub fn deny_inet_sockets_but_tcp4() -> io::Result<Self> {
+        const ALLOW: u8 = 12;
+        const DENY: u8 = 13;
+        const KILL: u8 = 14;
+        const fn to(target: u8, at: u8) -> u8 {
+            target - at - 1
+        }
+        let program = vec![
+            /* 0 */ stmt(BPF_LD_W_ABS, OFFSET_ARCH),
+            /* 1 */ jump(BPF_JEQ_K, AUDIT_ARCH, 0, to(KILL, 1)),
+            /* 2 */ stmt(BPF_LD_W_ABS, OFFSET_NR),
+            /* 3 */ jump(BPF_JGE_K, X32_FLAG, to(KILL, 3), 0),
+            /* 4 */ jump(BPF_JEQ_K, SYS_SOCKET, 0, to(ALLOW, 4)),
+            /* 5 */ stmt(BPF_LD_W_ABS, OFFSET_ARG0),
+            /* 6 */ jump(BPF_JEQ_K, AF_INET6, to(DENY, 6), 0),
+            /* 7 */ jump(BPF_JEQ_K, AF_PACKET, to(DENY, 7), 0),
+            /* 8 */ jump(BPF_JEQ_K, AF_INET, 0, to(ALLOW, 8)),
+            /* 9 */ stmt(BPF_LD_W_ABS, OFFSET_ARG1),
+            /* 10 */ stmt(BPF_ALU_AND_K, SOCK_TYPE_MASK),
+            /* 11 */ jump(BPF_JEQ_K, SOCK_STREAM, to(ALLOW, 11), to(DENY, 11)),
+            /* 12 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
+            /* 13 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
+            /* 14 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
+        ];
+        Ok(Self { program })
+    }
+
+    /// Where the filter was not written for the architecture.
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    pub fn deny_inet_sockets_but_tcp4() -> io::Result<Self> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no socket filter exists for this architecture",
+        ))
     }
 
     /// Where the filter was not written for the architecture.

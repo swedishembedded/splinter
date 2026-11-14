@@ -244,6 +244,7 @@ impl ProcessSandbox {
             read_only,
             read_write,
             allow_network: self.allow_network,
+            tcp_connect_ports: Vec::new(),
             private_proc: !self.host_proc,
         }
     }

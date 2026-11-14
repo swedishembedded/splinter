@@ -16,6 +16,10 @@
 //! also closes UDP, that Landlock does not cover). Only local (unix-domain)
 //! sockets remain. A kernel that can do neither refuses the confinement
 //! instead of running the child with the network open.
+//! [`Confinement::tcp_connect_ports`] opens exactly one hole in that: TCP
+//! `connect` to those ports (Landlock ABI 4 port rules), on IPv4 stream sockets
+//! only (the seccomp filter then refuses IPv6, packet and every non-stream
+//! internet socket, so UDP stays closed); TCP `bind` stays denied.
 //!
 //! The ruleset is built in the parent ([`Confinement::prepare`]: it opens
 //! paths and allocates), and the child only enforces it ([`Prepared::enforce`]:
@@ -34,6 +38,7 @@ const SYS_ADD_RULE: libc::c_long = 445;
 const SYS_RESTRICT_SELF: libc::c_long = 446;
 const CREATE_RULESET_VERSION: libc::c_ulong = 1;
 const RULE_PATH_BENEATH: libc::c_int = 1;
+const RULE_NET_PORT: libc::c_int = 2;
 
 const EXECUTE: u64 = 1 << 0;
 const WRITE_FILE: u64 = 1 << 1;
@@ -59,6 +64,12 @@ struct RulesetAttr {
 
 /// The size of the part of [`RulesetAttr`] ABI 1 to 3 kernels know.
 const RULESET_ATTR_FS_ONLY: usize = std::mem::size_of::<u64>();
+
+#[repr(C)]
+struct NetPortAttr {
+    allowed_access: u64,
+    port: u64,
+}
 
 #[repr(C, packed)]
 struct PathBeneathAttr {
@@ -92,6 +103,10 @@ pub struct Confinement {
     /// Whether the child may use the network. Off by default: a confinement
     /// is network-less unless it says otherwise.
     pub allow_network: bool,
+    /// TCP ports a network-less child may still `connect` to (over IPv4), and
+    /// nothing else of the network: the one server a confined agent talks to.
+    /// Ignored when [`Confinement::allow_network`] is set.
+    pub tcp_connect_ports: Vec<u16>,
     /// Whether the child gets a private user and pid namespace with its own
     /// `/proc` ([`crate::namespace`]), so no other process of the host is
     /// visible to it. Where the namespace cannot be made the child is not
@@ -126,8 +141,19 @@ impl Confinement {
                 format!("denying the network needs Landlock ABI {NET_ABI}; the kernel has {abi}"),
             ));
         }
+        let ports = if deny_network {
+            self.tcp_connect_ports.as_slice()
+        } else {
+            &[]
+        };
         let socket_filter = deny_network
-            .then(crate::seccomp::Filter::deny_inet_sockets)
+            .then(|| {
+                if ports.is_empty() {
+                    crate::seccomp::Filter::deny_inet_sockets()
+                } else {
+                    crate::seccomp::Filter::deny_inet_sockets_but_tcp4()
+                }
+            })
             .transpose()?;
         let attr = RulesetAttr {
             handled_access_fs: handled,
@@ -163,12 +189,38 @@ impl Confinement {
         for path in &self.read_write {
             add_rule(&ruleset, path, handled)?;
         }
+        for port in ports {
+            add_port_rule(&ruleset, *port)?;
+        }
         Ok(Prepared {
             ruleset,
             socket_filter,
             private_proc: self.private_proc,
         })
     }
+}
+
+/// Allows TCP `connect` to `port`.
+fn add_port_rule(ruleset: &OwnedFd, port: u16) -> io::Result<()> {
+    let rule = NetPortAttr {
+        allowed_access: NET_CONNECT_TCP,
+        port: u64::from(port),
+    };
+    // SAFETY: `rule` is a valid `landlock_net_port_attr` and the ruleset
+    // descriptor is open.
+    let rc = unsafe {
+        libc::syscall(
+            SYS_ADD_RULE,
+            ruleset.as_raw_fd(),
+            RULE_NET_PORT,
+            &rule as *const NetPortAttr,
+            0 as libc::c_uint,
+        )
+    };
+    if rc < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 /// Allows `access` beneath `path`; a path that is not there allows nothing.
