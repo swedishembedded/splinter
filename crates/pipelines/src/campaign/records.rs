@@ -48,6 +48,17 @@ pub struct RecordCounts {
     pub no_privileged_context: usize,
 }
 
+impl RecordCounts {
+    /// Records carrying this arm's own training signal: advantages, repairs,
+    /// distillation targets and a teacher's verified answers. Replay is left
+    /// out: an arm with nothing but earlier arms' data has learned nothing new
+    /// and makes no candidate.
+    #[must_use]
+    pub fn fresh_signal(&self) -> usize {
+        self.policy_gradient + self.repair + self.distilled + self.taught
+    }
+}
+
 /// A batch's records and the counts by kind.
 #[derive(Clone, Debug, Default)]
 pub struct BatchRecords {

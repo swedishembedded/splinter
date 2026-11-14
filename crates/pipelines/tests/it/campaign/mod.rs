@@ -30,9 +30,9 @@ use splinter_eval::campaign::plateau::PlateauRule;
 use splinter_eval::campaign::sampling::AllFailStrategy;
 use splinter_model::stats::BrainSignificance;
 use splinter_pipelines::campaign::{
-    CampaignConfig, CampaignController, CampaignError, CollectRequest, LearningStrategy, Parts,
-    PolicyRef, Rollout, RolloutCollector, RolloutGroup, Stopwatch, TrainReport, TrainRequest,
-    Trained, Trainer, Validator,
+    AllFailHandler, CampaignConfig, CampaignController, CampaignError, CollectRequest,
+    LearningStrategy, Parts, PolicyRef, Rollout, RolloutCollector, RolloutGroup, Stopwatch,
+    TrainReport, TrainRequest, Trained, Trainer, Validator,
 };
 use splinter_store::campaign::Verdict;
 use splinter_store::StateRoot;
@@ -587,6 +587,77 @@ fn groups_that_all_failed_are_distilled_when_the_strategy_says_so() {
     );
     let records = world.log.last_records.borrow();
     assert!(records.iter().any(|r| matches!(&r.body, RecordBody::Chat { teacher_context, .. } if !teacher_context.is_empty())));
+}
+
+/// A teacher that answers every all-failed task with one verified record.
+struct Teacher {
+    asked: usize,
+}
+
+impl AllFailHandler for Teacher {
+    fn teach(
+        &mut self,
+        groups: &[&RolloutGroup],
+    ) -> Result<Vec<splinter_data::Record>, CampaignError> {
+        self.asked += groups.len();
+        Ok(groups
+            .iter()
+            .map(|g| {
+                let turn = |role: &str, content: &str, train: bool| WireMessage {
+                    role: role.into(),
+                    content: content.into(),
+                    images: Vec::new(),
+                    tool_calls: Vec::new(),
+                    tool_call_id: None,
+                    reasoning_content: None,
+                    train,
+                };
+                splinter_data::Record {
+                    body: RecordBody::chat(vec![
+                        turn("user", &g.task, false),
+                        turn("assistant", "the verified answer", true),
+                    ]),
+                    metadata: splinter_data::RecordMetadata {
+                        experiences: Vec::new(),
+                        task: None,
+                        sources: Vec::new(),
+                        group: None,
+                        split: None,
+                        view: "campaign-taught".into(),
+                        objective: splinter_data::Objective::Sft,
+                    },
+                }
+            })
+            .collect())
+    }
+    fn decompose(&mut self, _groups: &[&RolloutGroup]) -> Result<Vec<String>, CampaignError> {
+        Ok(Vec::new())
+    }
+}
+
+#[test]
+fn groups_that_all_failed_are_trained_on_the_teachers_verified_answers() {
+    let (ws, dir) = workspace();
+    // Skill 0.3 never solves difficulty 0.9 or 0.95: every group fails, so
+    // the teacher's verified answers are the arm's only training signal.
+    let world = World::with_tasks(["t18", "t19"].map(String::from).to_vec(), 0.15);
+    let adapters = dir.path().join("adapters");
+    let mut rig = Rig::new(&world, &adapters, 120);
+    let mut teacher = Teacher { asked: 0 };
+    let mut c = config("c-teacher");
+    c.all_fail = AllFailStrategy::Teacher;
+    c.batch.max_rounds = 2;
+    let clock = FixedClock::new("2026-11-13T09:00:00.000Z");
+    let watch = Seconds::still();
+    let mut parts = rig.parts(&clock, &watch);
+    parts.handler = Some(&mut teacher);
+    let mut controller = CampaignController::open(&ws, c, SEED, parts, adapters.clone()).unwrap();
+    let report = controller.run(1).unwrap();
+    let arm = &report.arms[0];
+    assert!(arm.records.taught > 0, "{:?}", arm.records);
+    assert_eq!(world.log.trained.get(), 1, "{:?}", arm.verdict);
+    let records = world.log.last_records.borrow();
+    assert!(records.iter().any(|r| r.metadata.view == "campaign-taught"));
 }
 
 #[test]

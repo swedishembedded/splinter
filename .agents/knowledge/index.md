@@ -135,3 +135,4 @@ in the same commit.
 | [147](147-a-learning-rate-of-6e-6-for-24-steps-moves-qwen3-4b-seventy-five-thousandths-on-a-400-task-dev-exam-with-a-kl-of-0-0035.md) | A learning rate of 6e-6 for 24 steps moves Qwen3-4B 0.075 on a 400-task dev exam with a KL of 0.0035 |
 | [148](148-asking-a-model-for-programs-about-one-manual-section-repeats-until-each-request-carries-its-own-literals.md) | Asking a model for programs about one manual section repeats until each request carries its own literals |
 | [149](149-a-model-request-that-fails-on-a-dropped-connection-is-asked-again-a-bounded-number-of-times-and-no-other-failure-is.md) | A model request that fails on a dropped connection is asked again a bounded number of times, and no other failure is |
+| [150](150-a-generation-whose-only-signal-is-a-teachers-verified-answers-was-rolled-back-untrained.md) | A generation whose only signal is a teacher's verified answers was rolled back untrained |

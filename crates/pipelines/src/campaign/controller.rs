@@ -459,7 +459,7 @@ impl<'p> CampaignController<'p> {
             collected.rollouts
         ));
         let records = self.records(generation, strategy, &collected)?;
-        let trainable = records.counts.policy_gradient + records.counts.distilled > 0;
+        let trainable = records.counts.fresh_signal() > 0;
         let rollouts = collected.rollouts;
         let spent = |this: &Self| (this.parts.stopwatch.seconds() - began).max(0.0);
         if !trainable {
