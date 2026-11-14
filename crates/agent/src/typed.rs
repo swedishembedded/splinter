@@ -142,10 +142,9 @@ impl<T> TypedCall<T> {
 impl<T: DeserializeOwned + JsonSchema + Send + 'static> TypedCall<T> {
     /// The call set up on `model`, to be run once or many times.
     pub fn start(self, model: &Model) -> Result<TypedSession<T>, CallError> {
-        let mut bounds = SolveOptions::new(self.deadline);
+        let mut bounds = model.transport(SolveOptions::new(self.deadline));
         bounds.max_output_tokens = self.max_output_tokens;
         bounds.cancel = self.cancel;
-        bounds.stream_idle = model.stream_idle;
         let mut method = Method::<T>::new(self.method)
             .task(self.task)
             .role(self.role);
@@ -155,11 +154,14 @@ impl<T: DeserializeOwned + JsonSchema + Send + 'static> TypedCall<T> {
         if let Some(check) = self.postcondition {
             method = method.postcondition(check);
         }
-        let engine = Engine::builder()
+        let mut builder = Engine::builder()
             .config(bounds.engine_config())
             .model_provider(bounds.provider(model.provider.clone()))
-            .toolset(Toolset::none())
-            .build()?;
+            .toolset(Toolset::none());
+        if let Some(log) = &bounds.audit_log {
+            builder = builder.audit_log(log);
+        }
+        let engine = builder.build()?;
         Ok(TypedSession {
             engine,
             method,

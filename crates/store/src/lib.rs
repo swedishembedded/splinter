@@ -142,6 +142,13 @@ impl StateRoot {
         self.0.join("brain-service")
     }
 
+    /// The file the agent runtime's sessions append their audit trail to,
+    /// kept with this state rather than in the user's shared state directory.
+    #[must_use]
+    pub fn agent_audit_log(&self) -> PathBuf {
+        self.0.join("audit").join("agent.jsonl")
+    }
+
     /// The experience database's directory.
     #[must_use]
     pub fn expdb(&self) -> PathBuf {

@@ -14,6 +14,7 @@ mod decision_fixtures;
 mod acquire;
 mod acquire_rounds;
 mod advice_learn;
+mod agent_audit;
 mod ask_retrieving;
 mod author;
 mod batched_probing;

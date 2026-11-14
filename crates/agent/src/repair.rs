@@ -544,16 +544,9 @@ impl<'b> Meter<'b> {
             None => None,
         };
         Ok(SolveOptions {
-            deadline,
             max_output_tokens,
             cancel: self.budget.cancel.clone(),
-            stream_idle: None,
-            first_response: None,
-            system: None,
-            sampling: None,
-            max_tool_rounds: None,
-            compaction: true,
-            transient_retries: None,
+            ..SolveOptions::new(deadline)
         })
     }
 }

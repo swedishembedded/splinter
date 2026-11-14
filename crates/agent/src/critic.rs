@@ -138,10 +138,7 @@ impl Critic {
             prompt,
             vec![],
         )?;
-        let options = SolveOptions {
-            stream_idle: self.model.stream_idle,
-            ..options
-        };
+        let options = self.model.transport(options);
         let solution = runtime.block_on(solve(
             &question,
             &ResolvedEnvironment::ClosedBook,

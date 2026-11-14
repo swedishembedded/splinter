@@ -163,7 +163,17 @@ impl Runtime {
 
     /// Answers `reference` with `model` from now on, instead of loading it.
     pub fn add_model(&self, reference: ModelRef, model: Model) {
+        let model = self.audited(model);
         self.lock_handed_in().insert(reference, model);
+    }
+
+    /// `model`, its sessions keeping their audit trail with this state,
+    /// unless its owner already named a file.
+    fn audited(&self, model: Model) -> Model {
+        if model.audit_log().is_some() {
+            return model;
+        }
+        model.with_audit_log(self.config.state_root.agent_audit_log())
     }
 
     /// Embeds with `embedder` from now on, instead of loading the default
@@ -380,7 +390,7 @@ impl Runtime {
                 .unwrap_or_else(|| loaded.provider()),
             None => loaded.provider(),
         };
-        let mut model = Model::new(provider, loaded.identity());
+        let mut model = self.audited(Model::new(provider, loaded.identity()));
         if let ModelSelection::Remote(remote) = &selection {
             model = model.with_sampling_record(remote.sampling_record());
         }

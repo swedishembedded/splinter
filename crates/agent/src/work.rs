@@ -226,6 +226,9 @@ pub(crate) fn engine(
         .toolset(Toolset::coding())
         .project_root(workspace)
         .approvals(ApprovalPolicy::Auto);
+    if let Some(log) = &options.solve.audit_log {
+        builder = builder.audit_log(log);
+    }
     for tool in replacing {
         builder = builder.tool(Arc::clone(tool));
     }

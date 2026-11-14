@@ -34,6 +34,7 @@
 pub use crate::run_code::RUN_CODE;
 pub use splinter_core::prompt::SYSTEM_PROMPT;
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -103,6 +104,11 @@ pub struct SolveOptions {
     /// episodes itself, within a deadline shorter than sven's pauses, sets
     /// `Some(0)` so the error reaches it at once.
     pub transient_retries: Option<u32>,
+    /// Where the run's sessions keep sven's audit trail: the solving model's
+    /// own [`Model::audit_log`], a file in the host's run state. `None` keeps
+    /// sven's default, one file per working directory in the user's state
+    /// directory, shared by every session ever run from there.
+    pub audit_log: Option<PathBuf>,
 }
 
 impl SolveOptions {
@@ -120,6 +126,7 @@ impl SolveOptions {
             max_tool_rounds: None,
             compaction: true,
             transient_retries: None,
+            audit_log: None,
         }
     }
 
@@ -281,6 +288,9 @@ pub struct Model {
     /// (the slots of the batching server it launched); `None` leaves the
     /// width to the reference the model is asked for by. See [`Self::slots`].
     declared_slots: Option<usize>,
+    /// Where sessions asking this model keep sven's audit trail, set by the
+    /// host to a file in its run state ([`Self::with_audit_log`]).
+    audit_log: Option<PathBuf>,
 }
 
 impl Model {
@@ -294,7 +304,22 @@ impl Model {
             system: None,
             sampling: None,
             declared_slots: None,
+            audit_log: None,
         }
+    }
+
+    /// This model, its sessions keeping sven's audit trail in `path`.
+    #[must_use]
+    pub fn with_audit_log(mut self, path: impl Into<PathBuf>) -> Self {
+        self.audit_log = Some(path.into());
+        self
+    }
+
+    /// Where sessions asking this model keep sven's audit trail, when the
+    /// host said.
+    #[must_use]
+    pub fn audit_log(&self) -> Option<&Path> {
+        self.audit_log.as_deref()
     }
 
     /// This model, declared to decode `slots` requests together (zero is
@@ -330,10 +355,24 @@ impl Model {
     /// The bounds of a solve by this model: `options`, under this model's
     /// stream idle limit and system prompt.
     #[must_use]
-    pub fn solving(&self, mut options: SolveOptions) -> SolveOptions {
-        options.stream_idle = self.stream_idle;
+    pub fn solving(&self, options: SolveOptions) -> SolveOptions {
+        let mut options = self.transport(options);
         options.system.clone_from(&self.system);
         options.sampling.clone_from(&self.sampling);
+        options
+    }
+
+    /// `options` under how this model is reached and recorded, without its
+    /// system prompt or sampling record: its stream idle limit and where its
+    /// sessions keep their audit trail (when the model names no file, the
+    /// one `options` already names stays). For a caller that asks this model
+    /// under a prompt of its own (a judge, a critic, a reranker).
+    #[must_use]
+    pub fn transport(&self, mut options: SolveOptions) -> SolveOptions {
+        options.stream_idle = self.stream_idle;
+        if self.audit_log.is_some() {
+            options.audit_log.clone_from(&self.audit_log);
+        }
         options
     }
 
@@ -424,6 +463,7 @@ pub async fn solve_prompted(
         crate::retry::Retrying::wrap(model),
         options.engine_config(),
         options.system_prompt(),
+        options.audit_log.as_deref(),
     )?;
     let mut agent = engine.agent(SOLVER_MODE);
     let outcome = match agent.send_with(prompt, options.run_options()).await {
@@ -465,11 +505,15 @@ pub(crate) fn engine(
     model: Arc<dyn ModelProvider>,
     config: Config,
     system: &str,
+    audit_log: Option<&Path>,
 ) -> Result<Engine, CallError> {
-    let builder = Engine::builder()
+    let mut builder = Engine::builder()
         .config(config)
         .model_provider(UnderSystemPrompt::wrap(model, system))
         .toolset(Toolset::none());
+    if let Some(log) = audit_log {
+        builder = builder.audit_log(log);
+    }
     match environment {
         ResolvedEnvironment::ClosedBook => builder.build(),
         ResolvedEnvironment::Runtime(runtime) => builder

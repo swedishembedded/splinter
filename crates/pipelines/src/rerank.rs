@@ -76,9 +76,8 @@ impl Reranker for ModelReranker<'_> {
             vec![],
         )
         .map_err(|e| failed(&e))?;
-        let mut options = SolveOptions::new(DEADLINE);
+        let mut options = self.model.transport(SolveOptions::new(DEADLINE));
         options.max_output_tokens = Some(MAX_JUDGMENT_TOKENS);
-        options.stream_idle = self.model.stream_idle;
         let solution = self
             .ctx
             .block_on(solve(

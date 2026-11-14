@@ -94,6 +94,7 @@ pub async fn converse_prompted(
         model,
         options.engine_config(),
         options.system_prompt(),
+        options.audit_log.as_deref(),
     )?;
     let mut agent = engine.agent(SOLVER_MODE);
     let mut exchanges: Vec<Exchange> = Vec::new();

@@ -220,6 +220,8 @@ fn demonstrate(
         let started = Instant::now();
         let mut options = SolveOptions::new(remaining(request.deadline, task_wall));
         options.cancel = Some(request.cancel.clone());
+        // The demonstrations are this run's sessions: audited with its state.
+        options.audit_log = Some(ctx.root().agent_audit_log());
         let solved = match &environment {
             ResolvedEnvironment::Workspace(env) => {
                 let demonstration = match Demonstration::from_patch(&reference.content) {

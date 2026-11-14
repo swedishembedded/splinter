@@ -220,8 +220,7 @@ impl Verifier for JudgeVerifier {
             prompt.as_str(),
             vec![],
         )?;
-        let mut options = SolveOptions::new(self.deadline);
-        options.stream_idle = self.model.stream_idle;
+        let options = self.model.transport(SolveOptions::new(self.deadline));
         let solution = self
             .runtime
             .block_on(solve(
