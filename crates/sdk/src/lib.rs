@@ -60,6 +60,7 @@
 pub mod device;
 pub mod jobs;
 pub mod seed;
+pub mod served_host;
 mod splinter;
 
 pub use crate::jobs::{JobSubmission, JobView, Jobs};

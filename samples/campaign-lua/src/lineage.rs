@@ -50,11 +50,11 @@ use splinter_sdk::measure::campaign::plan::{
 use splinter_sdk::model::served_train::fine_tune_served;
 use splinter_sdk::model::stats::BrainSignificance;
 use splinter_sdk::model::train::FineTune;
+use splinter_sdk::served_host::ServedHost;
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::family::{proposal_id, Part, ProposalFamily};
 use crate::frontier_round::FrontierOutcome;
-use crate::host::ServerHost;
 use crate::journal::Journal;
 use crate::plan::training_ids;
 pub use crate::plan::{Plan, TrainFrom};
@@ -204,7 +204,7 @@ pub struct Lineage<'a> {
     /// The proposals and the dev and retention sets.
     pub family: &'a ProposalFamily,
     /// The server of the policies.
-    pub host: &'a ServerHost,
+    pub host: &'a ServedHost,
     /// The dev exam and the policy's answers to proposals.
     pub validator: &'a mut ServedValidator<'a>,
     /// The policy as a proposer.

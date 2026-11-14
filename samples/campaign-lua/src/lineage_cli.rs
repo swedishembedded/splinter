@@ -25,11 +25,11 @@ use splinter_sdk::measure::campaign::gate::DevGate;
 use campaign_lua::family::ProposalFamily;
 use campaign_lua::frontier::FrontierArgs;
 use campaign_lua::handoff::{self, Build, Candidate};
-use campaign_lua::host::{HostSettings, ServerHost};
 use campaign_lua::lineage::{champion_of, trained_up_to, Files, Lineage, Plan, TrainFrom};
 use campaign_lua::proposer::{Budget, Proposer};
 use campaign_lua::sft::Recipe;
 use campaign_lua::{LuaPredict, Sizes};
+use splinter_sdk::served_host::{HostSettings, ServedHost};
 
 #[derive(Parser)]
 #[command(
@@ -277,7 +277,7 @@ fn main() -> Result<()> {
         .lua
         .parent()
         .map_or_else(|| Path::new(".").to_path_buf(), Path::to_path_buf);
-    let host = ServerHost::new(HostSettings {
+    let host = ServedHost::new(HostSettings {
         brain: cli.brain.clone(),
         models: cli.models_dir.clone(),
         base: cli.model.clone(),
@@ -290,9 +290,9 @@ fn main() -> Result<()> {
         adapters: cli.out.join("served-adapters"),
         log: cli.out.join("brain-serve.log"),
         device: cli.server_device.clone(),
-        kv_cache: cli.kv_cache.clone(),
+        kv_cache: Some(cli.kv_cache.clone()),
         slots: cli.slots,
-        lua_dir,
+        runtime_dirs: vec![lua_dir],
         predict_temperature: frontier.map_or(1.0, |f| f.temperature),
     });
     let proposer = Proposer::new(&cli.model, &cli.manuals);

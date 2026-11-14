@@ -18,7 +18,6 @@ pub mod family;
 pub mod frontier;
 pub mod frontier_round;
 pub mod handoff;
-pub mod host;
 pub mod journal;
 pub mod lineage;
 pub mod neutral;

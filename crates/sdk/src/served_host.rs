@@ -2,32 +2,35 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
 // Swedish Embedded AB implements solutions that put an informative on-policy
-// reinforcement-learning signal through a language model against verifiers it
-// cannot influence, for its clients. If your team needs expertise in running
-// a lineage of policies behind one continuously batching server you can
+// learning signal through a language model against verifiers it cannot
+// influence, for its clients. If your team needs expertise in running a
+// lineage of policies behind one continuously batching server you can
 // procure our services by sending an email to info@swedishembedded.com.
 
-//! One `brain serve` for the whole lineage: the base, every adapter of the
-//! lineage offered from a directory it follows, and training jobs on the same
-//! cards. Rollouts, the dev exam, the policy's proposals and the training of
-//! each arm all go through its API, many requests at once. A new adapter is
-//! hot-loaded by placing it in the directory and waiting until the server
-//! lists it under its digest.
+//! One `brain serve` for a whole experiment: the base, every adapter of it
+//! offered from a directory the server follows, and training jobs on the same
+//! cards. Exams, rollouts and training all go through its API, many requests
+//! at once. A new adapter is hot-loaded by placing it in the directory and
+//! waiting until the server lists it under its digest.
+//!
+//! The server is started on first use and stopped when the host is dropped
+//! or [`ServedHost::stop`]ped; a host started again is a new server session.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context as _, Result};
-use splinter_sdk::agent::solve::Model;
-use splinter_sdk::agent::CancelToken;
-use splinter_sdk::brain_server::{self, Failure, Launch, Offer, Started};
-use splinter_sdk::campaign::{CampaignError, PolicyRef};
-use splinter_sdk::model::served_train::ArtifactStore;
-use splinter_sdk::model::BrainEndpoints;
-use splinter_sdk::store::StateRoot;
-use splinter_sdk::vocabulary::digest::Digest;
-use splinter_sdk::{Config, Context, Splinter};
+use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
+use splinter_core::digest::Digest;
+use splinter_model::served_train::ArtifactStore;
+use splinter_model::BrainEndpoints;
+use splinter_pipelines::brain_server::{self, Failure, Launch, Offer, Started};
+use splinter_pipelines::campaign::served::PolicyModels;
+use splinter_pipelines::campaign::{CampaignError, PolicyRef};
+use splinter_store::StateRoot;
+
+use crate::{Config, Context, Splinter};
 
 /// How the server is started and sampled.
 #[derive(Clone, Debug)]
@@ -40,7 +43,7 @@ pub struct HostSettings {
     pub base: PathBuf,
     /// A scratch directory for the server's keys and ready marker.
     pub work: PathBuf,
-    /// Splinter's state for the handle the models are asked through.
+    /// Splinter's state for the handles the models are asked through.
     pub state: PathBuf,
     /// The artifact store training jobs exchange datasets and adapters
     /// through.
@@ -52,13 +55,14 @@ pub struct HostSettings {
     /// The card, in brain's `--device` grammar.
     pub device: String,
     /// The KV-cache tier (`f32`, `bf16`, `int8`, `fp8`): sampling and training
-    /// agree best with `f32`.
-    pub kv_cache: String,
+    /// agree best with `f32`; `None` is brain's own default tier.
+    pub kv_cache: Option<String>,
     /// Sequences the server decodes together, and requests kept in flight.
     pub slots: u32,
-    /// The directory of the interpreter the task kinds run code in.
-    pub lua_dir: PathBuf,
-    /// The sampling temperature of [`ServerHost::predicting`].
+    /// Directories put on the path of the commands the task kinds run (an
+    /// interpreter a verifier needs, say); may be empty.
+    pub runtime_dirs: Vec<PathBuf>,
+    /// The sampling temperature of [`ServedHost::predicting`].
     pub predict_temperature: f32,
 }
 
@@ -76,13 +80,17 @@ struct Running {
 /// to follow its directory.
 const ADOPT_WAIT: Duration = Duration::from_secs(180);
 
-/// The server of the lineage; see the module documentation.
-pub struct ServerHost {
+fn failed(what: &str) -> impl Fn(String) -> CampaignError + '_ {
+    move |why| CampaignError::Config(format!("{what}: {why}"))
+}
+
+/// The server of an experiment; see the module documentation.
+pub struct ServedHost {
     settings: HostSettings,
     running: Mutex<Option<Arc<Running>>>,
 }
 
-impl ServerHost {
+impl ServedHost {
     /// A host that has started nothing yet.
     #[must_use]
     pub fn new(settings: HostSettings) -> Self {
@@ -94,16 +102,23 @@ impl ServerHost {
 
     fn handle(
         &self,
-        server: &Started,
         endpoints: &BrainEndpoints,
         temperature: f32,
-    ) -> Result<Splinter> {
+    ) -> Result<Splinter, CampaignError> {
         let s = &self.settings;
+        let absolute = |p: &PathBuf| {
+            std::path::absolute(p)
+                .map_err(|e| failed("resolving a path")(format!("{}: {e}", p.display())))
+        };
         let mut config = Config::from_env();
         config.state_root = StateRoot::new(&s.state);
-        config.policy_base = std::path::absolute(&s.base)?;
+        config.policy_base = absolute(&s.base)?;
         config.model_store = s.models.clone();
-        config.workspace.runtime_dirs = vec![std::path::absolute(&s.lua_dir)?];
+        config.workspace.runtime_dirs = s
+            .runtime_dirs
+            .iter()
+            .map(absolute)
+            .collect::<Result<_, _>>()?;
         config.thinking = false;
         config.allow_remote = false;
         config.brain = Some(endpoints.clone());
@@ -112,16 +127,17 @@ impl ServerHost {
         config.served_temperature = Some(temperature);
         config.served_top_p = Some(1.0);
         config.served_top_k = Some(0);
-        let _ = server;
         Splinter::builder(config)
             .build()
-            .context("starting a Splinter handle on the server")
+            .map_err(|e| failed("starting a Splinter handle on the server")(e.to_string()))
     }
 
-    fn launch(&self) -> Result<Running> {
+    fn launch(&self) -> Result<Running, CampaignError> {
         let s = &self.settings;
         for dir in [&s.work, &s.store, &s.adapters] {
-            std::fs::create_dir_all(dir)?;
+            std::fs::create_dir_all(dir).map_err(|e| {
+                failed("creating a server directory")(format!("{}: {e}", dir.display()))
+            })?;
         }
         let launch = Launch {
             binary: &s.brain,
@@ -134,30 +150,33 @@ impl ServerHost {
             device: Some(&s.device),
             max_batch: Some(s.slots),
             kv_offload_gb: None,
-            kv_cache: Some(&s.kv_cache),
+            kv_cache: s.kv_cache.as_deref(),
             artifact_store: Some(&s.store),
             log: Some(&s.log),
         };
         let server = brain_server::start(&launch, &CancelToken::new()).map_err(|f| match f {
-            Failure::Cancelled => anyhow::anyhow!("starting brain serve was cancelled"),
-            Failure::Unmeasured(why) => anyhow::anyhow!("brain serve did not start: {why}"),
+            Failure::Cancelled => failed("brain serve")("starting it was cancelled".into()),
+            Failure::Unmeasured(why) => failed("brain serve did not start")(why),
         })?;
+        let store = ArtifactStore::open(&s.store)
+            .map_err(|e| failed("the artifact store")(e.to_string()))?;
         let endpoints = BrainEndpoints::new(
             vec![format!("http://{}/v1", server.address)],
             server.key.clone(),
-        )?
+        )
+        .map_err(|e| failed("the server's endpoints")(e.to_string()))?
         .with_attempt_concurrency(s.slots as usize)
-        .with_artifact_store(ArtifactStore::open(&s.store)?);
+        .with_artifact_store(store);
         Ok(Running {
-            sampled: self.handle(&server, &endpoints, 1.0)?,
-            greedy: self.handle(&server, &endpoints, 0.0)?,
-            predicting: self.handle(&server, &endpoints, s.predict_temperature)?,
+            sampled: self.handle(&endpoints, 1.0)?,
+            greedy: self.handle(&endpoints, 0.0)?,
+            predicting: self.handle(&endpoints, s.predict_temperature)?,
             endpoints,
             _server: Mutex::new(server),
         })
     }
 
-    fn running(&self) -> Result<Arc<Running>> {
+    fn running(&self) -> Result<Arc<Running>, CampaignError> {
         let mut running = self
             .running
             .lock()
@@ -175,18 +194,22 @@ impl ServerHost {
     ///
     /// # Errors
     /// The server does not start.
-    pub fn endpoints(&self) -> Result<BrainEndpoints> {
+    pub fn endpoints(&self) -> Result<BrainEndpoints, CampaignError> {
         Ok(self.running()?.endpoints.clone())
     }
 
     /// Makes `policy` servable: its adapter, when it has one, is offered to
     /// the server's directory and waited for until the server lists it under
     /// the digest of the file.
-    fn adopt(&self, running: &Running, policy: &PolicyRef) -> Result<()> {
+    fn adopt(&self, running: &Running, policy: &PolicyRef) -> Result<(), CampaignError> {
         let Some(adapter) = &policy.adapter else {
             return Ok(());
         };
-        let digest = Digest::sha256_of_reader(std::fs::File::open(adapter)?)?.to_string();
+        let offer = failed("offering an adapter");
+        let digest = std::fs::File::open(adapter)
+            .and_then(Digest::sha256_of_reader)
+            .map_err(|e| offer(format!("{}: {e}", adapter.display())))?
+            .to_string();
         let target = self.settings.adapters.join(format!(
             "{}.safetensors",
             digest.trim_start_matches("sha256:")
@@ -194,23 +217,27 @@ impl ServerHost {
         if !target.exists() {
             let partial = target.with_extension("partial");
             std::fs::copy(adapter, &partial)
-                .with_context(|| format!("offering {}", adapter.display()))?;
-            std::fs::rename(&partial, &target)?;
+                .and_then(|_| std::fs::rename(&partial, &target))
+                .map_err(|e| offer(format!("{}: {e}", adapter.display())))?;
         }
         let deadline = Instant::now() + ADOPT_WAIT;
         loop {
-            let listed = running.endpoints.list(0)?;
+            let listed = running
+                .endpoints
+                .list(0)
+                .map_err(|e| offer(e.to_string()))?;
             if listed
                 .iter()
                 .any(|card| card.adapter_digest.as_deref() == Some(digest.as_str()))
             {
                 return Ok(());
             }
-            anyhow::ensure!(
-                Instant::now() < deadline,
-                "the server did not list the adapter {digest} within {}s",
-                ADOPT_WAIT.as_secs()
-            );
+            if Instant::now() >= deadline {
+                return Err(offer(format!(
+                    "the server did not list the adapter {digest} within {}s",
+                    ADOPT_WAIT.as_secs()
+                )));
+            }
             std::thread::sleep(Duration::from_millis(250));
         }
     }
@@ -219,33 +246,30 @@ impl ServerHost {
     ///
     /// # Errors
     /// The server does not start or does not list the policy's adapter.
-    pub fn context(&self, policy: &PolicyRef) -> Result<Context> {
+    pub fn context(&self, policy: &PolicyRef) -> Result<Context, CampaignError> {
         let running = self.running()?;
         self.adopt(&running, policy)?;
         Ok(running.sampled.context())
     }
 
-    /// Stops the server.
+    /// Stops the server; the next use starts a new server session.
     pub fn stop(&self) {
         *self
             .running
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
-}
 
-impl ServerHost {
     /// The model that answers as `policy` does, decoding through `handle`.
     fn model_on(
         &self,
         policy: &PolicyRef,
         handle: impl FnOnce(&Running) -> &Splinter,
     ) -> Result<Model, CampaignError> {
-        let fail = |e: anyhow::Error| CampaignError::Collector(format!("{e:#}"));
-        let running = self.running().map_err(fail)?;
-        self.adopt(&running, policy).map_err(fail)?;
+        let running = self.running()?;
+        self.adopt(&running, policy)?;
         let ctx = handle(&running).context();
-        let reference = splinter_sdk::release::arm_on(
+        let reference = splinter_pipelines::release::arm_on(
             ctx.config(),
             &self.settings.base,
             policy.adapter.as_deref(),
@@ -255,7 +279,7 @@ impl ServerHost {
     }
 
     /// The model that answers as `policy` does, sampling at the host's
-    /// prediction temperature (frontier selection).
+    /// prediction temperature.
     ///
     /// # Errors
     /// The policy cannot be served.
@@ -264,7 +288,7 @@ impl ServerHost {
     }
 }
 
-impl splinter_sdk::campaign::served::PolicyModels for ServerHost {
+impl PolicyModels for ServedHost {
     fn model(&self, policy: &PolicyRef, greedy: bool) -> Result<Model, CampaignError> {
         self.model_on(policy, |running| {
             if greedy {
