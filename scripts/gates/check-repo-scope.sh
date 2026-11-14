@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-# Splinter names only the projects it depends on: sven and brain.
+# Splinter names only the projects it depends on: sven and brain, and Claude
+# Code, the agent runtime its adapter can start (allowed here, its launch
+# rules held by check-claude-code.sh).
 #
 # A tracked file that names any other project (an orchestrator, a host
 # application) couples Splinter's text to that project's plans, which

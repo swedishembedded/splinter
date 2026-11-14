@@ -264,3 +264,16 @@ Open:
   count, since that needs a scripted agent that floods events.
 - The brain `rl` crate warns about three unused imports; the warning is in
   brain, not in this repository.
+
+## Agent runtimes behind one contract
+
+- In place: the agent-runner contract (`crates/agent/src/runner`: prepare, run, cancel, collect) with sven's worker and
+  Claude Code behind it, one episode record shape for both (knowledge 153); Claude Code only under its launch rules
+  (pinned binary by digest, loopback brain endpoint, the server's key as the only credential, an allowlisted
+  environment with a fresh home and configuration, bare mode, Landlock files and one TCP port), held by
+  `make check/gates/claude-code`.
+- Open: no stage runs an episode through the contract yet (the repository-task stages still call
+  `work::solve_in_workspace`); move them onto it, with the runtime chosen by configuration, and run the pinned Claude
+  Code build against brain through it (experiment A ran through bench's launcher).
+- Open (pre-existing on the GH200 node, not from this work): `process_runner::nothing_outlives_a_supervisor_that_is_killed_mid_run`
+  fails ("never started"), also with the sandbox sources at HEAD.

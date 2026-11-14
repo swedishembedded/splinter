@@ -138,3 +138,4 @@ in the same commit.
 | [150](150-a-generation-whose-only-signal-is-a-teachers-verified-answers-was-rolled-back-untrained.md) | A generation whose only signal is a teacher's verified answers was rolled back untrained |
 | [151](151-the-served-path-asked-brain-as-a-generic-openai-server-so-a-traced-reply-carried-the-samplers-zeros-not-the-policys-log-probabilities.md) | The served path asked brain as a generic OpenAI server, so a traced reply carried the sampler's zeros, not the policy's log-probabilities |
 | [152](152-a-reply-the-output-limit-cut-was-graded-as-a-wrong-answer-and-one-failed-call-failed-a-whole-exam.md) | A reply the output limit cut was graded as a wrong answer, and one failed call failed a whole exam |
+| [153](153-a-confinement-whose-network-was-all-or-nothing-could-not-hold-an-agent-to-its-one-model-server.md) | A confinement whose network was all or nothing could not hold an agent to its one model server |

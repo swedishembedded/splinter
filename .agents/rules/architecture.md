@@ -75,6 +75,7 @@ foundation        splinter-core (the vocabulary) and splinter-expdb (the databas
 | A new training projection, or a change to the dataset format | `splinter-data` |
 | A new source parser, chunker, or task-construction rule | `splinter-knowledge` |
 | Anything that runs a sven agent or a typed sven call | `splinter-agent` |
+| Another agent runtime behind the agent-runner contract (prepare, run, cancel, collect); its episodes have the one record shape, and no stage branches on the runtime | `splinter-agent` (`runner`) |
 | Anything that touches brain: inference, training, residency, what a trainer can read | `splinter-model` |
 | A setting, a model role, a service a process shares, run recording | `splinter-orchestrator` |
 | A stage, a pipeline, the order stages run in | `splinter-pipelines` |
