@@ -14,7 +14,9 @@ use std::sync::{Arc, Mutex};
 use serde_json::{json, Value};
 use splinter_agent::solve::Model;
 use splinter_pipelines::campaign::brain::{Graded, ModelSettings, TaskFamily};
-use splinter_pipelines::campaign::served::{PolicyModels, ServedCollector, ServedValidator};
+use splinter_pipelines::campaign::served::{
+    CallFailure, PolicyModels, ServedCollector, ServedValidator,
+};
 use splinter_pipelines::campaign::{
     CampaignError, CollectRequest, PolicyRef, RolloutCollector, Validator,
 };
@@ -165,7 +167,80 @@ fn a_policy_answers_any_tasks_greedily_with_the_completion_and_the_verdict() {
         vec!["a", "b"],
         "answers come back in the order asked"
     );
-    assert!(answers.iter().all(|a| a.completion == "7" && a.passed));
+    assert!(answers.iter().all(|a| a.reply.text == "7" && a.passed));
     assert_eq!(*host.greedy.lock().unwrap(), vec![true]);
     assert_eq!(host.provider.seen.lock().unwrap().len(), 2);
+}
+
+/// Says "7" to task a, fails the request for task b and is cut by the output
+/// limit on task c.
+struct Mixed {
+    seen: Mutex<Vec<CompletionRequest>>,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Mixed {
+    fn name(&self) -> &str {
+        "mixed"
+    }
+    fn model_name(&self) -> &str {
+        "mixed"
+    }
+    async fn complete(&self, request: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let asked = request.messages[0]
+            .as_text()
+            .unwrap_or_default()
+            .to_string();
+        self.seen.lock().unwrap().push(request);
+        let mut events = vec![Ok(ResponseEvent::TextDelta("7".into()))];
+        match asked.as_str() {
+            "what is b?" => anyhow::bail!("HTTP 500: the engine failed"),
+            "what is c?" => events.push(Ok(ResponseEvent::MaxTokens)),
+            _ => {}
+        }
+        events.push(Ok(ResponseEvent::Done));
+        Ok(Box::pin(futures::stream::iter(events)))
+    }
+}
+
+struct MixedHost(Arc<Mixed>);
+
+impl PolicyModels for MixedHost {
+    fn model(&self, _: &PolicyRef, _: bool) -> Result<Model, CampaignError> {
+        Ok(Model::new(self.0.clone(), "mixed"))
+    }
+}
+
+#[test]
+fn a_failed_call_is_its_own_outcome_a_cut_reply_says_so_and_a_traced_exam_asks_for_the_trace() {
+    let provider = Arc::new(Mixed {
+        seen: Mutex::new(Vec::new()),
+    });
+    let host = MixedHost(provider.clone());
+    let validator = ServedValidator::new(&Family, &host, settings())
+        .unwrap()
+        .traced();
+    let model = host.model(&PolicyRef::default(), true).unwrap();
+    let tasks = ["a", "b", "c"].map(String::from);
+    let attempts = validator.attempt_with(&model, &tasks).unwrap();
+    let a = attempts[0].outcome.as_ref().unwrap();
+    assert!(a.passed && !a.reply.truncated);
+    assert!(
+        matches!(&attempts[1].outcome, Err(CallFailure::Server(why)) if why.contains("500")),
+        "{:?}",
+        attempts[1].outcome
+    );
+    let c = attempts[2].outcome.as_ref().unwrap();
+    assert!(c.reply.truncated, "the output limit cut task c");
+    assert!(
+        provider
+            .seen
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|r| r.want_logprobs),
+        "a traced exam asks every reply's trace"
+    );
+    let refused = validator.answer_with(&model, &tasks).unwrap_err();
+    assert!(refused.to_string().contains("task b"), "{refused}");
 }

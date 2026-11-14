@@ -63,6 +63,11 @@ pub struct ChatOptions {
     pub max_output_tokens: Option<u32>,
     /// Stops the reply between two chunks of the stream.
     pub cancel: Option<CancelToken>,
+    /// Ask the server for the policy trace of a bare reply: the prompt ids
+    /// the model read, the generated ids and the policy's own
+    /// log-probabilities of them (a brain server scores them over the whole
+    /// vocabulary). A server that returns none leaves the trace empty.
+    pub trace: bool,
 }
 
 impl ChatOptions {
@@ -73,6 +78,7 @@ impl ChatOptions {
             deadline,
             max_output_tokens: None,
             cancel: None,
+            trace: false,
         }
     }
 }
@@ -94,6 +100,42 @@ pub enum ChatError {
     Cancelled,
 }
 
+/// A bare reply and what the server said about it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Reply {
+    /// The text the model wrote, trimmed.
+    pub text: String,
+    /// The output-token limit ended the generation: the text is cut, so a
+    /// verifier's verdict on it is not the model's answer.
+    pub truncated: bool,
+    /// The ids of the prompt as the model read it (asked with
+    /// [`ChatOptions::trace`]); empty when the server returned none.
+    pub prompt_token_ids: Vec<i64>,
+    /// The generated ids, the stop token included when the server reports it.
+    pub token_ids: Vec<i64>,
+    /// The log-probability of each generated id, parallel to `token_ids`
+    /// when the server reported both.
+    pub logprobs: Vec<f64>,
+    /// The served identity of the decode: who answered.
+    pub served: Served,
+}
+
+/// Who served a reply, as the server reported it; a field the server did not
+/// report is `None`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Served {
+    /// The content digest of the adapter that answered; `None` for the base.
+    pub adapter_digest: Option<String>,
+    /// `sha256:<hex>` of the base checkpoint.
+    pub base_digest: Option<String>,
+    /// `sha256:<hex>` of the chat template's rendering of a fixed probe.
+    pub chat_template_digest: Option<String>,
+    /// The engine build.
+    pub engine: Option<String>,
+    /// The sampling seed the decode used.
+    pub seed: Option<u64>,
+}
+
 /// The model's reply to `turns`; see the module documentation.
 pub async fn reply(
     model: &Model,
@@ -104,7 +146,7 @@ pub async fn reply(
     let messages = std::iter::once(Message::system(system))
         .chain(turns.iter().map(message))
         .collect();
-    let text = ask(model, messages, options).await?;
+    let text = ask(model, messages, options).await?.text;
     if text.is_empty() {
         return Err(ChatError::Empty);
     }
@@ -114,12 +156,12 @@ pub async fn reply(
 /// The model's reply to exactly `turns`, with no system prompt added: what a
 /// measurement that states its whole request sends. A model that says
 /// nothing has said the empty text, which is an answer a verifier grades, not
-/// an error.
+/// an error; a reply the output limit cut says so ([`Reply::truncated`]).
 pub async fn reply_bare(
     model: &Model,
     turns: &[Turn],
     options: &ChatOptions,
-) -> Result<String, ChatError> {
+) -> Result<Reply, ChatError> {
     ask(model, turns.iter().map(message).collect(), options).await
 }
 
@@ -135,32 +177,34 @@ async fn ask(
     model: &Model,
     messages: Vec<Message>,
     options: &ChatOptions,
-) -> Result<String, ChatError> {
+) -> Result<Reply, ChatError> {
     let request = CompletionRequest {
         messages,
         stream: true,
         max_output_tokens_override: options.max_output_tokens,
+        want_logprobs: options.trace,
         ..CompletionRequest::default()
     };
     let collected = tokio::time::timeout(options.deadline, collect(model, request, options));
-    let text = collected
+    let mut reply = collected
         .await
         .map_err(|_| ChatError::TimedOut(options.deadline))??;
-    Ok(text.trim().to_string())
+    reply.text = reply.text.trim().to_string();
+    Ok(reply)
 }
 
 async fn collect(
     model: &Model,
     request: CompletionRequest,
     options: &ChatOptions,
-) -> Result<String, ChatError> {
+) -> Result<Reply, ChatError> {
     // A bare reply is asked through the same bounded retry as every other
     // model call: one dropped connection must not fail a measurement.
     let mut stream = crate::retry::Retrying::wrap(Arc::clone(&model.provider))
         .complete(request)
         .await
         .map_err(|e| ChatError::Model(e.to_string()))?;
-    let mut text = String::new();
+    let mut reply = Reply::default();
     while let Some(event) = stream.next().await {
         if options
             .cancel
@@ -170,12 +214,27 @@ async fn collect(
             return Err(ChatError::Cancelled);
         }
         match event.map_err(|e| ChatError::Model(e.to_string()))? {
-            ResponseEvent::TextDelta(delta) => text.push_str(&delta),
+            ResponseEvent::TextDelta(delta) => reply.text.push_str(&delta),
+            ResponseEvent::MaxTokens => reply.truncated = true,
+            ResponseEvent::PromptTokens { ids } => reply.prompt_token_ids = ids,
+            ResponseEvent::Tokens { ids, logprobs } => {
+                reply.token_ids.extend(ids);
+                reply.logprobs.extend(logprobs);
+            }
+            ResponseEvent::Identity(identity) => {
+                reply.served = Served {
+                    adapter_digest: identity.adapter.map(|a| a.digest),
+                    base_digest: identity.base_digest,
+                    chat_template_digest: identity.chat_template_digest,
+                    engine: identity.engine,
+                    seed: identity.seed,
+                };
+            }
             ResponseEvent::Done => break,
             _ => {}
         }
     }
-    Ok(text)
+    Ok(reply)
 }
 
 #[cfg(test)]
@@ -210,6 +269,52 @@ mod tests {
         }
     }
 
+    /// Answers with a cut reply and its trace, recording whether a trace was
+    /// asked for.
+    struct CutWithTrace(std::sync::Mutex<Vec<bool>>);
+
+    #[async_trait::async_trait]
+    impl ModelProvider for CutWithTrace {
+        fn name(&self) -> &str {
+            "scripted"
+        }
+
+        fn model_name(&self) -> &str {
+            "scripted"
+        }
+
+        async fn complete(&self, request: CompletionRequest) -> anyhow::Result<ResponseStream> {
+            self.0.lock().unwrap().push(request.want_logprobs);
+            Ok(Box::pin(futures::stream::iter([
+                Ok(ResponseEvent::PromptTokens { ids: vec![1, 2, 3] }),
+                Ok(ResponseEvent::TextDelta(" {\"a\": ".into())),
+                Ok(ResponseEvent::Tokens {
+                    ids: vec![7, 8],
+                    logprobs: vec![-0.5, -0.25],
+                }),
+                Ok(ResponseEvent::MaxTokens),
+                Ok(ResponseEvent::Done),
+            ])))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_bare_reply_says_when_the_output_limit_cut_it_and_carries_the_trace_asked_for() {
+        let provider = Arc::new(CutWithTrace(std::sync::Mutex::new(Vec::new())));
+        let model = Model::new(provider.clone(), "scripted");
+        let mut options = ChatOptions::new(Duration::from_secs(30));
+        options.trace = true;
+        let said = reply_bare(&model, &[Turn::user("hi")], &options)
+            .await
+            .unwrap();
+        assert_eq!(said.text, "{\"a\":");
+        assert!(said.truncated, "a cut reply is not graded as the answer");
+        assert_eq!(said.prompt_token_ids, [1, 2, 3]);
+        assert_eq!(said.token_ids, [7, 8]);
+        assert_eq!(said.logprobs, [-0.5, -0.25]);
+        assert_eq!(*provider.0.lock().unwrap(), [true]);
+    }
+
     #[tokio::test]
     async fn a_bare_reply_survives_one_dropped_connection() {
         let provider = Arc::new(DropsOnce(AtomicU32::new(0)));
@@ -218,7 +323,7 @@ mod tests {
         let said = reply_bare(&model, &[Turn::user("hi")], &options)
             .await
             .unwrap();
-        assert_eq!(said, "ok");
+        assert_eq!(said.text, "ok");
         assert_eq!(provider.0.load(Ordering::SeqCst), 2);
     }
 }

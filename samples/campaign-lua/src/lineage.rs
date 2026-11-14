@@ -39,6 +39,7 @@ use std::time::Instant;
 
 use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
+use splinter_sdk::agent::chat::Reply;
 use splinter_sdk::campaign::brain::TaskFamily;
 use splinter_sdk::campaign::served::{Answered, ServedValidator};
 use splinter_sdk::campaign::{PolicyRef, Validator};
@@ -542,7 +543,10 @@ impl Lineage<'_> {
                     let p = known[id.as_str()];
                     Answered {
                         task: p.task.clone(),
-                        completion: p.completion.clone(),
+                        reply: Reply {
+                            text: p.completion.clone(),
+                            ..Reply::default()
+                        },
                         passed: p.passed,
                     }
                 })
@@ -556,7 +560,7 @@ impl Lineage<'_> {
                 round,
                 policy: key.clone(),
                 task: a.task.clone(),
-                completion: a.completion.clone(),
+                completion: a.reply.text.clone(),
                 passed: a.passed,
             })?;
         }

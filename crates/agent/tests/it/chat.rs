@@ -86,9 +86,10 @@ fn a_bare_reply_sends_exactly_the_turns_and_silence_is_an_empty_answer() {
         ))
         .unwrap();
     assert_eq!(
-        said, "",
+        said.text, "",
         "nothing said is the empty answer a verifier grades"
     );
+    assert!(!said.truncated);
     let seen = scripted.seen.lock().unwrap();
     let roles: Vec<Role> = seen[0].messages.iter().map(|m| m.role.clone()).collect();
     assert_eq!(roles, [Role::User], "no system prompt is added");

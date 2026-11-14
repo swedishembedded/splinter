@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use serde_json::{json, Value};
-use splinter_agent::chat::{reply_bare, ChatOptions, Turn};
+use splinter_agent::chat::{reply_bare, ChatError, ChatOptions, Reply, Turn};
 use splinter_agent::solve::Model;
 use splinter_eval::campaign::gate::{DevResult, Outcomes};
 
@@ -84,12 +84,16 @@ fn wire(turns: &[Turn]) -> Vec<WireMessage> {
         .collect()
 }
 
-async fn ask(model: &Model, turns: &[Turn], max_tokens: u32) -> Result<String, CampaignError> {
+async fn ask(
+    model: &Model,
+    turns: &[Turn],
+    max_tokens: u32,
+    trace: bool,
+) -> Result<Reply, ChatError> {
     let mut options = ChatOptions::new(REPLY_DEADLINE);
     options.max_output_tokens = Some(max_tokens);
-    reply_bare(model, turns, &options)
-        .await
-        .map_err(|e| CampaignError::Collector(e.to_string()))
+    options.trace = trace;
+    reply_bare(model, turns, &options).await
 }
 
 /// The served collector: a group's attempts are concurrent requests at
@@ -155,8 +159,10 @@ impl RolloutCollector for ServedCollector<'_> {
         let model = &model;
         let replies = self.runtime.block_on(async {
             futures::stream::iter(jobs.into_iter().map(|(t, conversation)| async move {
-                let text = ask(model, &conversation, max_tokens).await?;
-                Ok::<_, CampaignError>((t, conversation, text))
+                let reply = ask(model, &conversation, max_tokens, false)
+                    .await
+                    .map_err(|e| CampaignError::Collector(e.to_string()))?;
+                Ok::<_, CampaignError>((t, conversation, reply.text))
             }))
             .buffered(self.settings.concurrency.max(1))
             .collect::<Vec<_>>()
@@ -197,6 +203,7 @@ pub struct ServedValidator<'f> {
     settings: ModelSettings,
     runtime: tokio::runtime::Runtime,
     kept: Mutex<BTreeMap<String, DevResult>>,
+    trace: bool,
 }
 
 impl<'f> ServedValidator<'f> {
@@ -220,7 +227,17 @@ impl<'f> ServedValidator<'f> {
             settings,
             runtime,
             kept: Mutex::new(BTreeMap::new()),
+            trace: false,
         })
+    }
+
+    /// The same validator, asking every reply's policy trace (the prompt ids
+    /// the model read, the generated ids and their log-probabilities), so an
+    /// answer records exactly what was put to the model and who served it.
+    #[must_use]
+    pub fn traced(mut self) -> Self {
+        self.trace = true;
+        self
     }
 
     /// Every task of `tasks` answered once by `policy`, greedily, as many
@@ -244,31 +261,59 @@ impl<'f> ServedValidator<'f> {
     /// sampled, at what temperature) is the model's own.
     ///
     /// # Errors
-    /// A request fails, or the verifier does.
+    /// A request fails (the first failure is named), or the verifier does.
     pub fn answer_with(
         &self,
         model: &Model,
         tasks: &[String],
     ) -> Result<Vec<Answered>, CampaignError> {
-        let (family, max_tokens) = (self.family, self.settings.max_tokens);
-        let answers = self.runtime.block_on(async {
+        self.attempt_with(model, tasks)?
+            .into_iter()
+            .map(|attempt| {
+                attempt.outcome.map_err(|failure| {
+                    CampaignError::Validator(format!("task {}: {failure}", attempt.task))
+                })
+            })
+            .collect()
+    }
+
+    /// Every task of `tasks` put to `model` as [`Self::answer_with`] does,
+    /// with each call's outcome kept apart: a request that produced no reply
+    /// is its own [`CallFailure`], never a wrong answer, and does not stop the
+    /// other tasks.
+    ///
+    /// # Errors
+    /// A task is not in the family, or the verifier failed.
+    pub fn attempt_with(
+        &self,
+        model: &Model,
+        tasks: &[String],
+    ) -> Result<Vec<Attempt>, CampaignError> {
+        let (family, max_tokens, trace) = (self.family, self.settings.max_tokens, self.trace);
+        let attempts = self.runtime.block_on(async {
             futures::stream::iter(tasks.iter().map(|task| async move {
                 let conversation = turns(family, task)?;
-                let completion = ask(model, &conversation, max_tokens)
-                    .await
-                    .map_err(|e| CampaignError::Validator(e.to_string()))?;
-                let passed = family.grade(task, &completion)?.passed;
-                Ok::<_, CampaignError>(Answered {
+                let outcome = match ask(model, &conversation, max_tokens, trace).await {
+                    Ok(reply) => {
+                        let passed = family.grade(task, &reply.text)?.passed;
+                        Ok(Answered {
+                            task: task.clone(),
+                            reply,
+                            passed,
+                        })
+                    }
+                    Err(e) => Err(CallFailure::of(&e)),
+                };
+                Ok::<_, CampaignError>(Attempt {
                     task: task.clone(),
-                    completion,
-                    passed,
+                    outcome,
                 })
             }))
             .buffered(self.settings.concurrency.max(1))
             .collect::<Vec<_>>()
             .await
         });
-        answers.into_iter().collect()
+        attempts.into_iter().collect()
     }
 
     fn pass_each(&self, model: &Model, tasks: &[String]) -> Result<Outcomes, CampaignError> {
@@ -282,14 +327,49 @@ impl<'f> ServedValidator<'f> {
 
 /// One task answered by a policy: what it wrote and whether the verifier
 /// passed it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Answered {
     /// The task id.
     pub task: String,
-    /// The completion, as the policy wrote it.
-    pub completion: String,
+    /// The reply: the completion as the policy wrote it, whether the output
+    /// limit cut it, and the trace and served identity the server reported.
+    pub reply: Reply,
     /// Whether the family's verifier passed it.
     pub passed: bool,
+}
+
+/// One task put to a policy: its answer, or why the call produced none.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Attempt {
+    /// The task id.
+    pub task: String,
+    /// The answer, or the failed call.
+    pub outcome: Result<Answered, CallFailure>,
+}
+
+/// Why a call to the model produced no reply to grade: an infrastructure
+/// outcome, never a wrong answer.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum CallFailure {
+    /// The reply was not whole within the deadline.
+    #[error("timed out: {0}")]
+    TimedOut(String),
+    /// The server could not be reached, refused the request or failed it.
+    #[error("the server failed: {0}")]
+    Server(String),
+    /// The call was cancelled.
+    #[error("cancelled")]
+    Cancelled,
+}
+
+impl CallFailure {
+    fn of(error: &ChatError) -> Self {
+        match error {
+            ChatError::TimedOut(_) => Self::TimedOut(error.to_string()),
+            ChatError::Cancelled => Self::Cancelled,
+            ChatError::Model(_) | ChatError::Empty => Self::Server(error.to_string()),
+        }
+    }
 }
 
 /// What identifies a policy: its adapter's digest, else its version.
