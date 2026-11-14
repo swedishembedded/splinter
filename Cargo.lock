@@ -7316,6 +7316,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-served-items"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "splinter-sdk",
+ "tempfile",
+]
+
+[[package]]
 name = "splinter-store"
 version = "0.2.0"
 dependencies = [

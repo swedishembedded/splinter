@@ -19,6 +19,7 @@ members = [
     "samples/lifecourse",
     "samples/persona-chat",
     "samples/repo-replay",
+    "samples/served-items",
     "samples/synthetic-author",
     "samples/tool-syntax",
     "samples/voice-loop",
