@@ -15,6 +15,7 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
+use splinter_sdk::measure::campaign::evidence::EvidenceGate;
 
 use crate::frontier::Frontier;
 use crate::sft::Recipe;
@@ -30,6 +31,32 @@ pub enum TrainFrom {
     /// A fresh adapter on the base, trained on the union of every accepted
     /// round's records and this round's.
     BaseCumulative,
+}
+
+/// How a round's candidate is accepted.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Acceptance {
+    /// On a net gain over the whole dev set, within the retention margin;
+    /// significance is reported, not required. The registered lineages run
+    /// this.
+    #[default]
+    Greedy,
+    /// On a noninferiority e-process over dev items drawn per round from the
+    /// dev set as a pool, its false evolution rate controlled across every
+    /// planned round; on rejection the champion stays.
+    Evidence(EvidencePlan),
+}
+
+/// The evidence gate of a lineage.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EvidencePlan {
+    /// The test and its budget.
+    pub gate: EvidenceGate,
+    /// Dev items a round draws, fewer than the pool holds.
+    pub draw: usize,
+    /// Dev items graded at a time; the round stops at the first batch whose
+    /// evidence crosses.
+    pub batch: usize,
 }
 
 /// What the lineage is asked to do, apart from how it trains.
@@ -60,9 +87,18 @@ pub struct Plan {
     /// `max(recipe steps, epochs x records / records per step)`, rounded up,
     /// so the training grows with the data.
     pub epochs: Option<f32>,
+    /// How a candidate is accepted.
+    pub acceptance: Acceptance,
 }
 
 impl Plan {
+    /// The rounds the evidence gate's budget is planned over: every round
+    /// of every generation.
+    #[must_use]
+    pub fn horizon(&self) -> u32 {
+        self.generations * self.rounds
+    }
+
     /// Refuses combinations whose meaning would change silently.
     ///
     /// # Errors
@@ -86,6 +122,16 @@ impl Plan {
             self.epochs.is_none_or(|e| e.is_finite() && e > 0.0),
             "--cumulative-epochs is a positive number of passes"
         );
+        if let Acceptance::Evidence(evidence) = self.acceptance {
+            evidence
+                .gate
+                .validate()
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            anyhow::ensure!(
+                evidence.draw > 0 && evidence.batch > 0,
+                "--dev-draw and --dev-batch are positive numbers of dev items"
+            );
+        }
         Ok(())
     }
 
@@ -155,6 +201,7 @@ mod tests {
                 request_cap: 1500,
             }),
             epochs,
+            acceptance: Acceptance::Greedy,
         }
     }
 
@@ -182,6 +229,34 @@ mod tests {
         assert!(plan(TrainFrom::BaseCumulative, false, Some(0.0))
             .validate(&recipe(40, 0.0, 0.0))
             .is_err());
+    }
+
+    #[test]
+    fn an_evidence_gate_outside_its_ranges_or_with_an_empty_draw_is_refused() {
+        let r = recipe(40, 0.25, 0.25);
+        let mut p = plan(TrainFrom::Previous, false, None);
+        let gate = EvidenceGate::new(0.02, 0.3, 0.01).unwrap();
+        p.acceptance = Acceptance::Evidence(EvidencePlan {
+            gate,
+            draw: 100,
+            batch: 32,
+        });
+        assert!(p.validate(&r).is_ok());
+        assert_eq!(p.horizon(), 3);
+        let mut bad = gate;
+        bad.q = 1.5;
+        p.acceptance = Acceptance::Evidence(EvidencePlan {
+            gate: bad,
+            draw: 100,
+            batch: 32,
+        });
+        assert!(p.validate(&r).unwrap_err().to_string().contains("q is"));
+        p.acceptance = Acceptance::Evidence(EvidencePlan {
+            gate,
+            draw: 0,
+            batch: 32,
+        });
+        assert!(p.validate(&r).is_err());
     }
 
     #[test]

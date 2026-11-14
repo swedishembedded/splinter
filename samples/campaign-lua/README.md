@@ -63,7 +63,8 @@ campaign controller. Everything goes through a `brain serve` the driver starts
    earlier accepted rounds' records.
 4. The candidate and the champion answer the dev and retention sets (the
    base's own held-out proposals and the generator's programs; sized by
-   power-first planning before anything runs), and the dev gate decides. Only
+   power-first planning before anything runs), and the dev gate decides
+   (`--gate`, below). Only
    an advance changes the champion; the last advance of a generation is its
    champion, handed to an examiner when `--handoff` is given.
 
@@ -84,6 +85,22 @@ Two options change steps 2 and 3, both off by default:
   programs are found, within C proposal requests per round; the round fails
   with the numbers found when C is reached, and running it again with a larger
   C continues from the journalled waves and predictions.
+
+`--gate evidence` replaces the dev gate of step 4 with the evidence gate,
+which holds the false evolution rate (the share of accepted rounds that are
+worse by `--gate-eps` or more) to `--gate-q` over every planned round
+(`--generations` x `--rounds`). The dev set becomes a pool: each round draws
+`--dev-draw` of its programs without replacement (fewer than it holds),
+grades the champion and the candidate on them `--dev-batch` at a time (default
+`--slots`), and advances only when the noninferiority e-process, with the
+overlap correction `--gate-beta` for programs earlier rounds used, crosses the
+round's level; otherwise the champion stays and the next round tries again.
+Only drawn programs are graded, and the proposer is steered by the champion's
+results on those alone. The rounds journal records the e-value, the level, the
+budget left, the exposure and the programs spent, and a lineage refuses to
+continue under another gate or other gate settings. The four settings have no
+defaults (they are fixed before a lineage runs); the default `--gate greedy`
+is the gate every registered lineage ran with.
 
 `--proposer-state DIR` moves the proposing handle's task records (one file per
 record, disposable) off the project disk, for instance to a memory-backed

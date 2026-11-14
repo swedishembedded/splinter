@@ -30,6 +30,9 @@
 //! programs it does not always predict right are trained on; proposing goes
 //! on until enough of them are found, within a hard cap of requests.
 //!
+//! The plan's [`Acceptance`] picks the gate: greedy (the default), or the
+//! evidence gate of `crate::evidence_round`, which controls false acceptances.
+//!
 //! Everything the lineage knows is in append-only journals and the proposals
 //! file, so a lineage that is started again continues from them.
 
@@ -57,7 +60,7 @@ use crate::family::{proposal_id, Part, ProposalFamily};
 use crate::frontier_round::FrontierOutcome;
 use crate::journal::Journal;
 use crate::plan::training_ids;
-pub use crate::plan::{Plan, TrainFrom};
+pub use crate::plan::{Acceptance, Plan, TrainFrom};
 use crate::proposer::{as_proposals, Budget, Origin, Proposed, Proposer, Steering};
 use crate::sections::{family_accuracy, Accuracy};
 use crate::sft::{write_chat, Example, Recipe};
@@ -116,12 +119,11 @@ pub struct RoundRecord {
     pub frontier: Option<FrontierOutcome>,
 }
 
-/// One policy's dev and retention answers, kept so a lineage that is started
-/// again does not ask for them twice.
+/// One policy's dev and retention answers as graded, so a restart asks once.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct DevRecord {
-    policy: String,
-    result: DevResult,
+pub(crate) struct DevRecord {
+    pub(crate) policy: String,
+    pub(crate) result: DevResult,
 }
 
 /// One proposal predicted by a policy.
@@ -160,7 +162,7 @@ impl Files {
         Journal::at(&self.root.join("rounds.jsonl"))
     }
 
-    fn dev(&self) -> Journal {
+    pub(crate) fn dev(&self) -> Journal {
         Journal::at(&self.root.join("dev-results.jsonl"))
     }
 
@@ -393,7 +395,7 @@ impl Lineage<'_> {
         let started = Instant::now();
         let champion = champion_of(&rounds);
         let started_from = champion.digest.as_ref().map(ToString::to_string);
-        let champion_dev = self.dev_of(&champion)?;
+        let champion_dev = self.steering_dev(&champion)?;
 
         let mut record = RoundRecord {
             generation,
@@ -692,15 +694,22 @@ impl Lineage<'_> {
             adapter: Some(trained.adapter),
             digest: Some(Digest::parse(&trained.adapter_digest).map_err(fail)?),
         };
-        let candidate_dev = self.dev_of(&candidate)?;
-        let gate_number = (generation - 1) * self.plan.rounds + round;
-        let decision = decide(
-            &self.gate,
-            gate_number,
-            champion_dev,
-            &candidate_dev,
-            &BrainSignificance,
-        );
+        let decision = match self.plan.acceptance {
+            Acceptance::Greedy => {
+                let candidate_dev = self.dev_of(&candidate)?;
+                let gate_number = (generation - 1) * self.plan.rounds + round;
+                decide(
+                    &self.gate,
+                    gate_number,
+                    champion_dev,
+                    &candidate_dev,
+                    &BrainSignificance,
+                )
+            }
+            Acceptance::Evidence(plan) => {
+                self.gate_evidence(plan, champion, &candidate, (generation, round))?
+            }
+        };
         eprintln!(
             "generation {generation} round {round}: gate {:?}: {} (dev {:?} to {:?}, p {:.4})",
             decision.action,

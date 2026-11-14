@@ -14,6 +14,7 @@
 //! can be made as large and as hard as a campaign needs, and the dev and
 //! retention sets are drawn from other seeds than the training pool.
 
+pub mod evidence_round;
 pub mod family;
 pub mod frontier;
 pub mod frontier_round;

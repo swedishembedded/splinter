@@ -15,21 +15,97 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use serde_json::json;
 use splinter_sdk::campaign::brain::ModelSettings;
 use splinter_sdk::campaign::served::ServedValidator;
 use splinter_sdk::campaign::PolicyRef;
+use splinter_sdk::measure::campaign::evidence::EvidenceGate;
 use splinter_sdk::measure::campaign::gate::DevGate;
 
 use campaign_lua::family::ProposalFamily;
 use campaign_lua::frontier::FrontierArgs;
 use campaign_lua::handoff::{self, Build, Candidate};
-use campaign_lua::lineage::{champion_of, trained_up_to, Files, Lineage, Plan, TrainFrom};
+use campaign_lua::lineage::{
+    champion_of, trained_up_to, Acceptance, Files, Lineage, Plan, TrainFrom,
+};
+use campaign_lua::plan::EvidencePlan;
 use campaign_lua::proposer::{Budget, Proposer};
 use campaign_lua::sft::Recipe;
 use campaign_lua::{LuaPredict, Sizes};
 use splinter_sdk::served_host::{HostSettings, ServedHost};
+
+/// The gate a round's candidate must pass.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum GateKind {
+    /// Advance on a net gain over the whole dev set (the registered runs).
+    Greedy,
+    /// Advance on a noninferiority e-process over dev items drawn per round,
+    /// with the false evolution rate held to `--gate-q` across all rounds.
+    Evidence,
+}
+
+/// The evidence gate's settings; each is required with `--gate evidence` and
+/// refused without it.
+#[derive(clap::Args)]
+struct EvidenceArgs {
+    /// The gate a round's candidate must pass.
+    #[arg(long, value_enum, default_value_t = GateKind::Greedy)]
+    gate: GateKind,
+    /// The tolerated loss, on the paired difference scale [-1, 1]: a
+    /// candidate worse by this much is a false evolution.
+    #[arg(long)]
+    gate_eps: Option<f64>,
+    /// The false evolution rate budget over every planned round.
+    #[arg(long)]
+    gate_q: Option<f64>,
+    /// The overlap correction: the optimism allowed on a dev item an earlier
+    /// round used.
+    #[arg(long)]
+    gate_beta: Option<f64>,
+    /// Dev items a round draws from the dev set, fewer than it holds.
+    #[arg(long)]
+    dev_draw: Option<usize>,
+    /// Dev items graded at a time; a round stops at the first batch whose
+    /// evidence crosses. Default: `--slots`.
+    #[arg(long)]
+    dev_batch: Option<usize>,
+}
+
+impl EvidenceArgs {
+    fn acceptance(&self, slots: u32) -> Result<Acceptance> {
+        let given = [
+            self.gate_eps.is_some(),
+            self.gate_q.is_some(),
+            self.gate_beta.is_some(),
+            self.dev_draw.is_some(),
+            self.dev_batch.is_some(),
+        ];
+        match self.gate {
+            GateKind::Greedy => {
+                anyhow::ensure!(
+                    !given.contains(&true),
+                    "--gate-eps, --gate-q, --gate-beta, --dev-draw and --dev-batch need --gate evidence"
+                );
+                Ok(Acceptance::Greedy)
+            }
+            GateKind::Evidence => {
+                let (Some(eps), Some(q), Some(beta), Some(draw)) =
+                    (self.gate_eps, self.gate_q, self.gate_beta, self.dev_draw)
+                else {
+                    anyhow::bail!(
+                        "--gate evidence needs --gate-eps, --gate-q, --gate-beta and --dev-draw, fixed before the lineage runs"
+                    );
+                };
+                Ok(Acceptance::Evidence(EvidencePlan {
+                    gate: EvidenceGate::new(eps, q, beta).map_err(|e| anyhow::anyhow!("{e}"))?,
+                    draw,
+                    batch: self.dev_batch.unwrap_or(slots as usize),
+                }))
+            }
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(
@@ -147,6 +223,8 @@ struct Cli {
     cumulative_epochs: Option<f32>,
     #[command(flatten)]
     frontier: FrontierArgs,
+    #[command(flatten)]
+    evidence: EvidenceArgs,
     /// Where the Splinter state of the proposing handle lives (task records,
     /// a file each): disposable, since the proposals themselves are kept in
     /// the lineage's directory; a memory-backed directory spares the disk's
@@ -312,6 +390,7 @@ fn main() -> Result<()> {
         train_from: cli.train_from,
         frontier,
         epochs: cli.cumulative_epochs,
+        acceptance: cli.evidence.acceptance(cli.slots)?,
     };
     plan.validate(&cli.recipe)?;
     let base_digest = handoff::base_digest(&cli.model)?;
@@ -330,14 +409,20 @@ fn main() -> Result<()> {
         },
         seed,
     };
-    let (planned, retention_needed) = lineage.check_power(
+    let (dev_units, retention_units) = (
         cli.dev_generator + cli.dev_proposals,
         cli.keep_generator + cli.keep_proposals,
-    )?;
-    eprintln!(
-        "{}",
-        json!({"plan": planned, "retention_units_needed": retention_needed})
     );
+    let planned = match plan.acceptance {
+        Acceptance::Greedy => {
+            let (planned, needed) = lineage.check_power(dev_units, retention_units)?;
+            json!({"plan": planned, "retention_units_needed": needed})
+        }
+        Acceptance::Evidence(evidence) => {
+            json!({"evidence": lineage.check_evidence(&evidence, dev_units, retention_units)?})
+        }
+    };
+    eprintln!("{planned}");
     lineage.open_held_out(
         cli.dev_proposals,
         cli.keep_proposals,
@@ -347,8 +432,11 @@ fn main() -> Result<()> {
             parallel: cli.proposal_parallel,
         },
     )?;
-    // The base's own answers: the first champion's dev result.
-    lineage.dev_of(&PolicyRef::default())?;
+    // The base's own answers: the first champion's dev result. The evidence
+    // gate grades only what its rounds draw.
+    if plan.acceptance == Acceptance::Greedy {
+        lineage.dev_of(&PolicyRef::default())?;
+    }
     let done = lineage.rounds()?;
     let first = (1..=cli.generations)
         .find(|g| {
@@ -369,4 +457,51 @@ fn main() -> Result<()> {
     }
     host.stop();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(gate: GateKind) -> EvidenceArgs {
+        EvidenceArgs {
+            gate,
+            gate_eps: None,
+            gate_q: None,
+            gate_beta: None,
+            dev_draw: None,
+            dev_batch: None,
+        }
+    }
+
+    #[test]
+    fn the_greedy_gate_is_the_default_and_refuses_evidence_settings() {
+        assert_eq!(
+            args(GateKind::Greedy).acceptance(32).unwrap(),
+            Acceptance::Greedy
+        );
+        let mut stray = args(GateKind::Greedy);
+        stray.gate_q = Some(0.3);
+        assert!(stray.acceptance(32).is_err(), "a setting no gate reads");
+    }
+
+    #[test]
+    fn the_evidence_gate_needs_every_setting_and_batches_by_the_slots() {
+        let mut evidence = args(GateKind::Evidence);
+        assert!(evidence.acceptance(32).is_err());
+        evidence.gate_eps = Some(0.02);
+        evidence.gate_q = Some(0.3);
+        evidence.gate_beta = Some(0.01);
+        evidence.dev_draw = Some(150);
+        let Acceptance::Evidence(plan) = evidence.acceptance(32).unwrap() else {
+            panic!("an evidence plan")
+        };
+        assert_eq!((plan.draw, plan.batch), (150, 32));
+        assert!((plan.gate.q - 0.3).abs() < 1e-12);
+        evidence.gate_beta = Some(0.9);
+        assert!(
+            evidence.acceptance(32).is_err(),
+            "beta above 1 - (1 - eps) / 2"
+        );
+    }
 }
