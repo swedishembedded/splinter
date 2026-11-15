@@ -72,3 +72,6 @@ does not establish: transfer to other tasks or models, or behaviour beyond three
 - 2026-11-15 ~06:50 (r3 generation 3, examined after the outcome above was written): 218 vs 187 (67/36, p 0.0015), the step holds, 0
   excluded, no flag. The signed plan verdict now reads 4 series succeeded, 0 failed; pooled gen 3 vs gen 2 over four lineages 354/153
   (p 1.1e-19). All four lineages improved at every generation.
+- 2026-11-15 (correction to the outcome text above): "the generation-3 steps are the largest absolute gains of two lineages" is wrong.
+  The gains per generation are r0 +80/+46/+54, r1 +119/+50/+44, r2 +106/+51/+72, r3 +109/+66/+31: generation 1 is every lineage's
+  largest step; the generation-3 step exceeds the generation-2 step in two lineages (r0, r2). The table and the criterion are unchanged.
