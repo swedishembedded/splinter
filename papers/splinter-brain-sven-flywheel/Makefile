@@ -36,6 +36,7 @@ $(PDF): $(SOURCES) $(GENERATED)/.stamp
 verify:
 	python3 scripts/test_verify_structure.py
 	python3 scripts/test_build_data.py
+	python3 reproduce/test_examiner.py
 	python3 scripts/verify_structure.py
 	python3 scripts/build_data.py --check $(if $(EVIDENCE),--evidence $(EVIDENCE))
 
