@@ -1,0 +1,2 @@
+# path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
+papers/splinter-brain-sven-flywheel/reproduce/rerun.sh	-:GENERATOR_SEED	frozen: the generator seed prereg/rsi4-launch.md registered for S4, which a rerun of S4 must use
