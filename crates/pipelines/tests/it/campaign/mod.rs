@@ -64,6 +64,7 @@ struct Log {
     trained: Cell<usize>,
     last_records: RefCell<Vec<splinter_data::Record>>,
     validated: Cell<usize>,
+    graded: Cell<usize>,
     requests: RefCell<Vec<(usize, Vec<String>)>>,
 }
 
@@ -199,23 +200,26 @@ impl Validator for Exam<'_> {
     fn units(&self) -> usize {
         self.1
     }
-    fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError> {
+    fn dev_tasks(&self) -> Vec<String> {
+        (0..self.1).map(|i| format!("d{i:03}")).collect()
+    }
+    fn validate_on(&mut self, p: &PolicyRef, dev: &[String]) -> Result<DevResult, CampaignError> {
         if self.0.fail_validation_once.replace(false) {
             return Err(CampaignError::Validator("the card fell over".into()));
         }
         self.0.log.validated.set(self.0.log.validated.get() + 1);
+        self.0.log.graded.set(self.0.log.graded.get() + dev.len());
         // A candidate's version is its parent's plus one, but a gain of zero
         // or less makes its skill no better than the champion's.
-        let s = skill(policy.version, self.0.gain);
+        let s = skill(p.version, self.0.gain);
         Ok(DevResult {
-            dev: (0..self.1)
-                .map(|i| {
-                    let passed = s > f64::from(i as u32) / self.1 as f64;
+            dev: dev
+                .iter()
+                .map(|task| {
+                    let i: u32 = task[1..].parse().unwrap();
                     // The even environment's dev measure never moves.
-                    (
-                        format!("d{i:03}"),
-                        passed && !(self.0.flat_dev_for_even && i % 2 == 0),
-                    )
+                    let flat = self.0.flat_dev_for_even && i.is_multiple_of(2);
+                    (task.clone(), s > f64::from(i) / self.1 as f64 && !flat)
                 })
                 .collect(),
             retention: Default::default(),
@@ -790,4 +794,5 @@ fn a_task_is_attempted_once_per_batch_however_often_the_batch_is_refilled() {
 }
 
 mod environments;
+mod evidence;
 mod served;

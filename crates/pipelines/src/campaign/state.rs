@@ -10,12 +10,13 @@
 //! every step that cost something, and the only thing a restarted controller
 //! reads.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_data::Record;
+use splinter_eval::campaign::evidence::Budget;
 use splinter_eval::campaign::gate::DevResult;
 use splinter_eval::campaign::pass_rate::PassRates;
 use splinter_eval::campaign::plateau::ArmCost;
@@ -66,6 +67,16 @@ pub struct PendingCandidate {
     /// divergence alarm; empty for tasks that come from no environment.
     #[serde(default)]
     pub env_rewards: BTreeMap<String, f64>,
+}
+
+/// What the evidence gate has spent: its budget, and the dev tasks earlier
+/// arms graded (the exposure of the next arm's draws).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EvidenceSpent {
+    /// The false evolution budget after the last arm.
+    pub budget: Budget,
+    /// Dev tasks graded by earlier arms.
+    pub used: BTreeSet<String>,
 }
 
 /// A campaign as of its last save.
@@ -119,6 +130,9 @@ pub struct CampaignState {
     /// Environments the alarm quarantined: no later arm draws from them.
     #[serde(default)]
     pub quarantined: Vec<String>,
+    /// What the evidence gate has spent; `None` under the greedy gate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<EvidenceSpent>,
 }
 
 impl CampaignState {
@@ -153,6 +167,7 @@ impl CampaignState {
             idle_arms: 0,
             observations: BTreeMap::new(),
             quarantined: Vec::new(),
+            evidence: None,
         }
     }
 }

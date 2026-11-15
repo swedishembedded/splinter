@@ -13,17 +13,24 @@
 use std::collections::BTreeMap;
 
 use splinter_core::digest::Digest;
+use splinter_core::rng::SplitMix64;
 use splinter_core::verifiability::VerifierClass;
-use splinter_eval::campaign::gate::{decide, Action, DevResult};
+use splinter_eval::campaign::dev_pool::DevPool;
+use splinter_eval::campaign::evidence::{Budget, EvidenceGate};
+use splinter_eval::campaign::gate::{decide, decide_evidence, Action, Decision, DevResult};
 use splinter_eval::campaign::plateau::{assess, ArmCost, Trend};
 use splinter_knowledge::factory::alarm::{DivergenceAlarm, Observation, Signal};
 use splinter_store::campaign::{Cost, Verdict};
 
+use super::config::Acceptance;
 use super::controller::{ArmId, ArmReport, CampaignController, Outcome, Spent};
 use super::gc::{self, Checkpoint, Keep};
 use super::records::RecordCounts;
-use super::state::PendingCandidate;
+use super::state::{EvidenceSpent, PendingCandidate};
 use super::types::{CampaignError, PolicyRef};
+
+/// Mixed into the campaign seed so an arm's dev draw is a stream of its own.
+const DEV_DRAW_SALT: u64 = 0xD0E5_5EED_DEF0_0D02;
 
 impl CampaignController<'_> {
     /// Ends an arm that has no candidate to gate: counted, accounted, saved.
@@ -182,25 +189,19 @@ impl CampaignController<'_> {
         let generation = self.loaded.state.arms + 1;
         let strategy = self.strategy();
         let began = self.parts.stopwatch.seconds();
-        if self.loaded.state.champion_dev.is_none() {
-            let champion = self.parts.validator.validate(&self.loaded.state.policy)?;
-            self.loaded.state.champion_dev = Some(champion);
-            self.save()?;
-        }
         let candidate_policy = PolicyRef {
             version: self.loaded.state.policy.version + 1,
             adapter: Some(pending.adapter.clone()),
             digest: Some(pending.digest.clone()),
         };
-        let candidate = self.parts.validator.validate(&candidate_policy)?;
-        let champion = self.loaded.state.champion_dev.clone().unwrap_or_default();
-        let decision = decide(
-            &self.config.gate,
-            generation,
-            &champion,
-            &candidate,
-            self.parts.significance,
-        );
+        let (decision, candidate) = match self.config.acceptance {
+            Acceptance::Greedy => self.gate_greedy(generation, &candidate_policy)?,
+            Acceptance::Evidence {
+                gate,
+                draw,
+                horizon,
+            } => self.gate_evidence(&gate, (draw, horizon), generation, &candidate_policy)?,
+        };
         let diverged = self.check_divergence(generation, &pending, &candidate)?;
         let advance = decision.action == Action::Advance && diverged.is_empty();
         self.say(&format!(
@@ -253,11 +254,37 @@ impl CampaignController<'_> {
         if let Some(rate) = decision.champion_rate {
             measurements.insert("dev_rate_champion".into(), rate);
         }
+        if let Some(evidence) = &decision.evidence {
+            measurements.extend([
+                ("evidence_e_value".to_string(), evidence.e_value),
+                ("evidence_threshold".to_string(), evidence.threshold),
+                (
+                    "evidence_budget_left".to_string(),
+                    evidence.allocation.budget_after,
+                ),
+                ("evidence_charge".to_string(), evidence.allocation.charge),
+                ("dev_drawn".to_string(), evidence.drawn as f64),
+                ("dev_spent".to_string(), evidence.spent.len() as f64),
+                ("dev_observed".to_string(), evidence.observed as f64),
+                ("dev_reused".to_string(), evidence.reused as f64),
+            ]);
+            if let Some(zeta) = evidence.zeta_mean {
+                measurements.insert("evidence_zeta_mean".into(), zeta);
+            }
+        }
         {
             let state = &mut self.loaded.state;
             if decision.compared > 0 {
                 state.last_discordance =
                     Some((decision.wins + decision.losses) as f64 / decision.compared as f64);
+            }
+            if let Some(evidence) = &decision.evidence {
+                let spent = state.evidence.get_or_insert_with(|| EvidenceSpent {
+                    budget: Budget::start(&evidence.gate),
+                    used: Default::default(),
+                });
+                spent.budget.settle(&evidence.allocation, advance);
+                spent.used.extend(evidence.spent.iter().cloned());
             }
             if advance {
                 state.policy = candidate_policy;
@@ -304,5 +331,81 @@ impl CampaignController<'_> {
             gpu_hours,
             stop: self.exhausted(),
         })
+    }
+
+    /// The greedy dev gate: the champion graded once on every dev task, the
+    /// candidate on every dev task.
+    fn gate_greedy(
+        &mut self,
+        generation: u32,
+        candidate_policy: &PolicyRef,
+    ) -> Result<(Decision, DevResult), CampaignError> {
+        if self.loaded.state.champion_dev.is_none() {
+            let champion = self.parts.validator.validate(&self.loaded.state.policy)?;
+            self.loaded.state.champion_dev = Some(champion);
+            self.save()?;
+        }
+        let candidate = self.parts.validator.validate(candidate_policy)?;
+        let champion = self.loaded.state.champion_dev.clone().unwrap_or_default();
+        let decision = decide(
+            &self.config.gate,
+            generation,
+            &champion,
+            &candidate,
+            self.parts.significance,
+        );
+        Ok((decision, candidate))
+    }
+
+    /// The evidence gate: the arm's level from the budget the state holds,
+    /// `draw` dev tasks drawn from the dev set (a seed derived from the
+    /// campaign's and the arm's, so an arm resumed after a crash draws the
+    /// same), the champion and the candidate graded on those alone, and the
+    /// e-process decides. Nothing is graded at level zero. The whole draw is
+    /// graded at once; the decision is the one a batched grading stopped at
+    /// the crossing would reach.
+    fn gate_evidence(
+        &mut self,
+        gate: &EvidenceGate,
+        (draw, horizon): (usize, u32),
+        generation: u32,
+        candidate_policy: &PolicyRef,
+    ) -> Result<(Decision, DevResult), CampaignError> {
+        // A resumed campaign runs under the configuration it began with (its
+        // digest is checked at open), so the budget it saved is this gate's.
+        let (budget, used) = self.loaded.state.evidence.clone().map_or_else(
+            || (Budget::start(gate), Default::default()),
+            |s| (s.budget, s.used),
+        );
+        let allocation = budget.allocate(gate, horizon);
+        let pool = DevPool::new(self.parts.validator.dev_tasks(), &used);
+        let mut rng = SplitMix64::new(
+            self.loaded.state.seed ^ DEV_DRAW_SALT ^ u64::from(generation).rotate_left(32),
+        );
+        let drawn = pool
+            .draw(draw, &mut rng)
+            .map_err(|e| CampaignError::Config(e.to_string()))?;
+        let (champion, candidate, graded) = if allocation.alpha > 0.0 {
+            let ids: Vec<String> = drawn.iter().map(|d| d.task.clone()).collect();
+            let champion = self
+                .parts
+                .validator
+                .validate_on(&self.loaded.state.policy, &ids)?;
+            let candidate = self.parts.validator.validate_on(candidate_policy, &ids)?;
+            (champion, candidate, drawn.len())
+        } else {
+            (DevResult::default(), DevResult::default(), 0)
+        };
+        let decision = decide_evidence(
+            &self.config.gate,
+            gate,
+            &allocation,
+            (&drawn, graded),
+            &champion,
+            &candidate,
+            self.parts.significance,
+        )
+        .map_err(|e| CampaignError::Config(e.to_string()))?;
+        Ok((decision, candidate))
     }
 }

@@ -10,6 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::{digest_of, Digest};
+use splinter_eval::campaign::evidence::EvidenceGate;
 use splinter_eval::campaign::gate::DevGate;
 use splinter_eval::campaign::pass_rate::{CALIBRATION_K, RETIRE_AT};
 use splinter_eval::campaign::plateau::PlateauRule;
@@ -76,6 +77,38 @@ impl LearningStrategy {
     }
 }
 
+/// How an arm's candidate is accepted.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum Acceptance {
+    /// The dev gate: a net gain over every dev task within the retention
+    /// margin; significance is reported, not required.
+    #[default]
+    Greedy,
+    /// The evidence gate: each arm draws `draw` dev tasks (fewer than the dev
+    /// set holds) and the candidate advances only when a noninferiority
+    /// e-process over them crosses the arm's level, the false evolution rate
+    /// held to `gate.q` over `horizon` arms.
+    Evidence {
+        /// The test and its budget.
+        gate: EvidenceGate,
+        /// Dev tasks an arm draws.
+        draw: usize,
+        /// Arms the budget is planned over; later arms test at level zero.
+        horizon: u32,
+    },
+}
+
+impl Acceptance {
+    /// Whether this is the greedy gate, which a configuration does not
+    /// write, so the digest of every configuration before the choice existed
+    /// is unchanged.
+    #[must_use]
+    pub fn is_greedy(&self) -> bool {
+        *self == Self::Greedy
+    }
+}
+
 /// The bounded replay of earlier arms' verified data.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ReplayConfig {
@@ -121,8 +154,11 @@ pub struct CampaignConfig {
     pub bounds: SignalBounds,
     /// The replay of earlier arms.
     pub replay: ReplayConfig,
-    /// The dev gate.
+    /// The dev gate: its retention rule applies under either acceptance.
     pub gate: DevGate,
+    /// How a candidate is accepted.
+    #[serde(default, skip_serializing_if = "Acceptance::is_greedy")]
+    pub acceptance: Acceptance,
     /// The lead, in the share of dev units won, an arm is meant to produce.
     pub target_effect: f64,
     /// The share of dev units on which a candidate and its champion are
@@ -178,6 +214,7 @@ impl CampaignConfig {
             bounds: SignalBounds::default(),
             replay: ReplayConfig::default(),
             gate: DevGate::default(),
+            acceptance: Acceptance::Greedy,
             target_effect: 0.15,
             expected_discordance: 0.3,
             plateau: PlateauRule::default(),
@@ -228,6 +265,20 @@ impl CampaignConfig {
         if !(self.replay.per_batch_record >= 0.0 && self.replay.per_batch_record.is_finite()) {
             return refuse("replay.per_batch_record is not a finite number of at least 0".into());
         }
+        if let Acceptance::Evidence {
+            gate,
+            draw,
+            horizon,
+        } = self.acceptance
+        {
+            gate.validate()
+                .map_err(|e| CampaignError::Config(e.to_string()))?;
+            if draw == 0 || horizon == 0 {
+                return refuse(
+                    "the evidence gate draws at least one dev task over at least one arm".into(),
+                );
+            }
+        }
         Ok(())
     }
 }
@@ -264,6 +315,30 @@ mod tests {
             let refused = bad.validate().unwrap_err().to_string();
             assert!(refused.contains(mention), "{refused}");
         }
+    }
+
+    #[test]
+    fn the_greedy_gate_is_not_written_so_earlier_digests_hold_and_an_evidence_gate_is() {
+        let greedy = CampaignConfig::new("c", "h");
+        let json = serde_json::to_value(&greedy).unwrap();
+        assert!(json.get("acceptance").is_none(), "{json}");
+        let mut evidence = greedy.clone();
+        evidence.acceptance = Acceptance::Evidence {
+            gate: EvidenceGate::new(0.02, 0.3, 0.01).unwrap(),
+            draw: 60,
+            horizon: 8,
+        };
+        evidence.validate().unwrap();
+        assert_ne!(greedy.digest(), evidence.digest());
+        let read: CampaignConfig =
+            serde_json::from_value(serde_json::to_value(&evidence).unwrap()).unwrap();
+        assert_eq!(read, evidence);
+        evidence.acceptance = Acceptance::Evidence {
+            gate: EvidenceGate::new(0.02, 0.3, 0.01).unwrap(),
+            draw: 0,
+            horizon: 8,
+        };
+        assert!(evidence.validate().is_err());
     }
 
     #[test]

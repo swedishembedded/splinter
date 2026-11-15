@@ -327,11 +327,19 @@ impl Validator for ChatValidator<'_> {
         self.family.retention().len()
     }
 
-    fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError> {
+    fn dev_tasks(&self) -> Vec<String> {
+        self.family.dev()
+    }
+
+    fn validate_on(
+        &mut self,
+        policy: &PolicyRef,
+        dev: &[String],
+    ) -> Result<DevResult, CampaignError> {
         let model = answerer(&self.endpoints, &self.settings, policy, Decoding::Greedy)
             .map_err(|e| CampaignError::Validator(e.to_string()))?;
         Ok(DevResult {
-            dev: self.pass_each(&model, &self.family.dev())?,
+            dev: self.pass_each(&model, dev)?,
             retention: self.pass_each(&model, &self.family.retention())?,
         })
     }

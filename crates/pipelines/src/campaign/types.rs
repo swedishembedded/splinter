@@ -251,13 +251,29 @@ pub trait Validator {
     fn retention_units(&self) -> usize {
         0
     }
-    /// Attempts `policy` at the dev tasks (never trained on) and, when the
-    /// campaign keeps one, its retention tasks, and returns pass or fail per
-    /// task.
+    /// The dev task ids, in the validator's order: the pool the evidence
+    /// gate draws a round's items from.
+    fn dev_tasks(&self) -> Vec<String>;
+    /// Attempts `policy` at the dev tasks `dev` (ids of [`Self::dev_tasks`],
+    /// never trained on) and, when the campaign keeps one, at every retention
+    /// task, and returns pass or fail per task. No other dev task is
+    /// attempted, so the evidence gate's unspent items stay unseen.
     ///
     /// # Errors
     /// The policy could not be attempted or graded.
-    fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError>;
+    fn validate_on(
+        &mut self,
+        policy: &PolicyRef,
+        dev: &[String],
+    ) -> Result<DevResult, CampaignError>;
+    /// [`Self::validate_on`] every dev task: what the greedy gate compares.
+    ///
+    /// # Errors
+    /// The policy could not be attempted or graded.
+    fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError> {
+        let dev = self.dev_tasks();
+        self.validate_on(policy, &dev)
+    }
 }
 
 /// What the strategies that need more than the batch's own rollouts call.

@@ -66,12 +66,12 @@ mod stages;
 mod state;
 mod types;
 
-pub use config::{AdvantageMode, CampaignConfig, LearningStrategy, ReplayConfig};
+pub use config::{Acceptance, AdvantageMode, CampaignConfig, LearningStrategy, ReplayConfig};
 pub use controller::{ArmReport, CampaignController, CampaignReport, Parts, Stopwatch, WallClock};
 pub use environments::EnvironmentLabels;
 pub use records::{BatchRecords, RecordCounts};
 pub use replay::ReplayBuffer;
-pub use state::{CampaignState, PendingCandidate};
+pub use state::{CampaignState, EvidenceSpent, PendingCandidate};
 pub use types::{
     AllFailHandler, CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector,
     RolloutGroup, RolloutTrace, TraceSequence, TrainReport, TrainRequest, Trained, Trainer,

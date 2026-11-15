@@ -393,26 +393,50 @@ impl Validator for ServedValidator<'_> {
         self.family.retention().len()
     }
 
-    fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError> {
+    fn dev_tasks(&self) -> Vec<String> {
+        self.family.dev()
+    }
+
+    /// Asks only what `policy` was not asked before: a policy's answers are
+    /// kept, so a champion graded in one round is not graded again.
+    fn validate_on(
+        &mut self,
+        policy: &PolicyRef,
+        dev: &[String],
+    ) -> Result<DevResult, CampaignError> {
         let held = key(policy);
-        if let Some(result) = self
+        let mut known = self
             .kept
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&held)
-        {
-            return Ok(result.clone());
+            .cloned()
+            .unwrap_or_default();
+        let new_dev: Vec<String> = dev
+            .iter()
+            .filter(|t| !known.dev.contains_key(*t))
+            .cloned()
+            .collect();
+        let new_retention: Vec<String> = self
+            .family
+            .retention()
+            .into_iter()
+            .filter(|t| !known.retention.contains_key(t))
+            .collect();
+        if !new_dev.is_empty() || !new_retention.is_empty() {
+            let model = self.models.model(policy, true)?;
+            known.dev.extend(self.pass_each(&model, &new_dev)?);
+            known
+                .retention
+                .extend(self.pass_each(&model, &new_retention)?);
+            self.kept
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(held, known.clone());
         }
-        let model = self.models.model(policy, true)?;
-        let result = DevResult {
-            dev: self.pass_each(&model, &self.family.dev())?,
-            retention: self.pass_each(&model, &self.family.retention())?,
-        };
-        self.kept
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(held, result.clone());
-        Ok(result)
+        let wanted: std::collections::BTreeSet<&String> = dev.iter().collect();
+        known.dev.retain(|task, _| wanted.contains(task));
+        Ok(known)
     }
 }
 
