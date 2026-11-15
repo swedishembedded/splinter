@@ -81,3 +81,22 @@ Nothing until the verdicts evaluate F1, F2 and M1; each is recorded whatever it 
      token-set Jaccard, reported as a distribution).
   4. **Descriptive baselines on F** (no criterion): the base with thinking on; the base's majority answer over 4 samples at
      temperature 1.0; and Qwen/Qwen3.8-27B-FP8 zero-shot under the same protocol.
+- 2026-11-15 ~11:30, before any F or M verdict for the lineage concerned existed (m0 had handed off no candidate):
+  5. **A frontier program longer than the training row.** Control lineage m0 (`run-control.sh m0 0 8785991200924142667`, RSI4's
+     `lineage-86f13672a`) found 2184 frontier programs among 2400 proposals after 3584 requests and selected 2100, and its training
+     job was refused before submission: `g1r1-mispredicted.jsonl:394 (prop-e33f535a2d3b8ac2) is 1217 tokens`, longer than the
+     row of 1024 tokens (RSI4's `max_block`). The registered driver has no rule for such a record, so the lineage failed outright;
+     RSI4 never proposed one. **Rule:** before a round's training job is submitted, each candidate record is measured as the
+     trainer measures it (brain's `ExampleMeter` through `splinter_model::measure::RecordMeter`, the same chat line, thinking off,
+     unpacked; that record measures 1217 tokens, and the line measured is byte-equal to line 394 of the refused dataset), and the
+     round trains on the first 2100 frontier programs, in the order proposed, whose records fit; the skipped ones are recorded by
+     id and length in the round record (`frontier.overlong`), and a round with fewer than 2100 that fit fails with that reason.
+     With no over-length record the selection, the training request and the round record equal the registered binary's, so the
+     rule changes nothing where RSI4's behaviour was defined. **Build:** splinter `05729ef09fa3bb772bc2a37881ee5ac2f3820c8e`
+     (tag `rsi4f-lineage-05729ef09`: RSI4's `86f13672a` plus this rule alone; the same rule is main's `019239f10`), against the
+     pinned sven `fc99a2f1` and brain `79687164` crates, binary `lineage-05729ef09`, SHA-256
+     `37da9a795ebe7afa99d5ef967d70e69e3ee16cc497a8effc4df24f53ca552b02`; script `~/project/shared/rsi4f/run-control-overlong.sh`
+     (SHA-256 `e31f94d7cdcd9e759476cdb296f4b72c34a4cda8f43f73ecaf330bba3b8f3a61`), `run-control.sh` with only the binary and the
+     stated splinter commit changed. **Scope:** used only for lineages that hit the over-length refusal, resumed from their own
+     journals with the same seed, settings and directory (the frontier journal is reused; nothing is proposed again): m0 now, and
+     any other M or M-900 lineage that fails the same way later, each listed here when it is resumed.
