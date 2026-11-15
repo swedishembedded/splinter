@@ -86,3 +86,7 @@ does not establish: transfer to other tasks or models, or behaviour beyond three
 - 2026-11-15 (correction): the one exam item excluded from r2's comparisons matched a program of r2's **dev set**
   (`prop-4b577924c4aeb8df`, `print(math.modf(45))`, role `dev` in the hand-off list), not a program r2 trained on. The
   examiner excludes against the whole hand-off list (train, dev and retention programs). The counts and the criterion are unchanged.
+- 2026-11-15 (correction of the correction above): the earlier dated line saying the excluded item "equalled a program r2
+  trained on from generation 1 (a base proposal)" is wrong; the item matched r2's dev-set program `prop-4b577924c4aeb8df`
+  (`print(math.modf(45))`), as the last correction states. The original outcome text's "matched a training program" is wrong
+  in the same way.
