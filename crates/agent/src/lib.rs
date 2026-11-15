@@ -48,6 +48,12 @@
 //!   observer of every event, and suspend and resume; and
 //!   [`work::solve_in_workspace`], a whole episode on a task that changes a
 //!   repository, ending in the patch read back from git.
+//! * [`workspace_episode`] - one episode in a workspace under the
+//!   small-context profile (three tools, a short prompt, no compaction), for
+//!   a model too small for sven's full coding toolset.
+//! * [`policy_endpoint`] - an OpenAI-compatible endpoint answered by a
+//!   program, keeping every request it was sent: a scripted policy behind
+//!   real sven, or a recording proxy in front of a served model.
 //! * [`flywheel`] - the flywheel harnesses (invent, validate) run as `sven
 //!   harness run` subprocesses, and what their runs left on disk read back.
 //! * [`runner`] - one contract (prepare, run, cancel, collect) for every agent
@@ -78,6 +84,7 @@ pub mod judge;
 pub mod knowledge;
 pub mod mapper;
 pub mod object_proposer;
+pub mod policy_endpoint;
 pub mod prompts;
 pub mod proposer;
 pub mod repair;
@@ -94,6 +101,7 @@ pub mod tool_turn;
 pub mod typed;
 pub mod voice;
 pub mod work;
+pub mod workspace_episode;
 mod workspace_shell;
 
 pub use sven_sdk as sven;
