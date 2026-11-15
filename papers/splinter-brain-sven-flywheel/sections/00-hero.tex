@@ -7,7 +7,7 @@
 \begin{center}
 \begin{minipage}{\textwidth}
 \centering
-{\large\bfseries Learning from the interpreter's answers on a self-proposed frontier that doubles each
+{\large\bfseries Learning from the interpreter's answers on a self-proposed frontier that grows each
 round: Qwen3-4B goes from 8.3\% to 16.7\% on a fresh exam.\par}
 \vspace{2mm}
 \begin{tikzpicture}[font=\normalsize, >={Stealth[length=2.6mm]}]
@@ -30,13 +30,22 @@ round: Qwen3-4B goes from 8.3\% to 16.7\% on a fresh exam.\par}
   tick label style={font=\small}, label style={font=\small}]
 \addplot[okBlue, line width=1.6pt, mark=*, mark size=2.4pt] table[col sep=comma,x=records,y=mean] {generated/scaling_s4.csv};
 \addplot[okVermillion, line width=1.3pt, densely dashed, mark=square*, mark size=2.2pt] table[col sep=comma,x=records,y=mean] {generated/scaling_m.csv};
+\addplot[okBlue, only marks, mark=*, mark size=1.2pt, opacity=0.55, forget plot] table[col sep=comma,x=records,y=l0] {generated/scaling_s4.csv};
+\addplot[okBlue, only marks, mark=*, mark size=1.2pt, opacity=0.55, forget plot] table[col sep=comma,x=records,y=l1] {generated/scaling_s4.csv};
+\addplot[okBlue, only marks, mark=*, mark size=1.2pt, opacity=0.55, forget plot] table[col sep=comma,x=records,y=l2] {generated/scaling_s4.csv};
+\addplot[okBlue, only marks, mark=*, mark size=1.2pt, opacity=0.55, forget plot] table[col sep=comma,x=records,y=l3] {generated/scaling_s4.csv};
+\addplot[okVermillion, only marks, mark=square*, mark size=1.2pt, opacity=0.55, forget plot] table[col sep=comma,x=records,y=l0] {generated/scaling_m.csv};
+\addplot[okVermillion, only marks, mark=square*, mark size=1.2pt, opacity=0.55, forget plot] table[col sep=comma,x=records,y=l1] {generated/scaling_m.csv};
+\addplot[okVermillion, only marks, mark=square*, mark size=1.2pt, opacity=0.55, forget plot] table[col sep=comma,x=records,y=l2] {generated/scaling_m.csv};
+\addplot[okVermillion, only marks, mark=square*, mark size=1.2pt, opacity=0.55, forget plot] table[col sep=comma,x=records,y=l3] {generated/scaling_m.csv};
 \node[anchor=west, font=\small\bfseries, text=okBlue, align=left] at (axis cs:2150,16.7) {S4\\rounds};
 \node[anchor=west, font=\small\bfseries, text=okVermillion, align=left] at (axis cs:2150,14.3) {one fit,\\base\\data};
 \node[anchor=north, font=\footnotesize, text=black!70] at (axis cs:300,8.3) {round 1};
 \end{axis}
 \end{tikzpicture}
 \captionof{figure}{\textbf{S4 at a glance.} Left: one round; rounds share no parameters, only the growing
-pool. Right: share of a freshly drawn 2340-item exam answered, means of four lineages, against the
+pool. Right: share of a freshly drawn 2340-item exam answered (large marks: means of four lineages; small
+marks: single lineages), against the
 interpreter-labelled records trained on: S4's rounds (300, 900, 2100 cumulative records) and one fit from
 the base on frontier data the base proposed (900, 2100). The rounds' 2.1-point lead at 2100 records is
 inconclusive under the registered analysis (\cref{sec:followups,sec:matched}).}\label{fig:hero}

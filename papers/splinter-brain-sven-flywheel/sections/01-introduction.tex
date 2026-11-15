@@ -15,19 +15,19 @@ did not.
 The procedure, S4, is pool-growing self-training (\cref{fig:hero}, detailed in \cref{fig:cycle}). In
 each round the current champion proposes programs and predicts each four times; those it gets wrong at
 least once join a pool labelled by the interpreter, and a fresh adapter is trained from the base on the
-whole pool, which doubles each round (300, 900 and 2100 records).\cl{RS25,RS26} The rounds share no
+whole pool; each round adds twice as many programs as the last (300, 900 and 2100 in total).\cl{RS25,RS26} The rounds share no
 parameters; the state that persists is the dataset.
 
 \begin{center}
 \fbox{\begin{minipage}{0.94\linewidth}\small
 \textbf{Outcome of S4 (four lineages, three rounds; \cref{sec:rsi,sec:followups,sec:matched}).}\\[2pt]
-\emph{Fresh exam} (2340 items, 78 templates, not selected by the base): 8.3\% $\to$ 8.7\% $\to$ 13.8\%
-$\to$ 16.7\% answered; round 1 holds in no lineage, rounds 2 and 3 in all four by the sign test (round 3
-in three by the clustered bound); the registered 3-of-4 criteria are not met.\cl{FU03,FU04}\\
+\emph{Fresh exam} (2340 items, 78 templates, drawn after S4 ran, not selected by the base): 8.3\%
+$\to$ 8.7\% $\to$ 13.8\% $\to$ 16.7\% answered; rounds 2 and 3 add 5.0 and 2.9 points on average,
+both intervals above zero; round 1 adds nothing, so the registered criteria are not met.\cl{FU04,FU12}\\
 \emph{Matched data} (one fit on 2100 base-proposed frontier programs): 14.6\%; the rounds' advantage of
 2.1 points is inconclusive under the registered analysis.\cl{FU07}\\
-\emph{Original exam} (889 items the base missed at selection): the registered criterion is met in 4 of 4
-lineages; generation 3 holds in 1 or 2 of 4 under the clustered intervals.\cl{RS29,RS38}
+\emph{Original exam} (889 items the base missed at selection; adapter level): the registered criterion
+is met in 4 of 4 lineages; generation 3 holds in 1 or 2 of 4 under the clustered intervals.\cl{RS29,RS38}
 \end{minipage}}
 \end{center}
 

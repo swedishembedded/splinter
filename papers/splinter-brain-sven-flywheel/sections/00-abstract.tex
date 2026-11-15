@@ -4,13 +4,14 @@
 \begin{abstract}
 A model can learn from problems it poses itself when an executable oracle supplies the answers.
 Qwen3-4B proposed Lua~5.1 programs; those it predicted wrong at least once in four samples joined a pool
-labelled by the interpreter, and each round trained a fresh adapter from the base on the pool, which
-doubled each round. Registered beforehand and judged by a separate examiner, four lineages raised
-accuracy on a freshly drawn 2340-item exam from 8.3\% to 16.7\% in three rounds: the first round gained
-nothing, the second and third gained in every lineage. One fit on the same amount of base-proposed
-frontier data reached 14.6\%, so the rounds' 2.1-point advantage is inconclusive under the registered
-analysis, while base-proposed data scaled from 900 to 2100 records. Accuracy grew with the verified
-frontier; that the model proposing it must improve is not shown. Three earlier registered series did not
-meet their criteria, and the same loop showed no gain on repository tasks or for a 27B agent in those
-configurations.
+labelled by the interpreter, each round adding twice as many programs as the last (300, 900, 2100 in
+total), and each round trained a fresh adapter from the base on the pool. On the original exam the
+procedure met its registered criterion, an item-level test of each adapter against its predecessor. On a
+2340-item exam drawn afterwards, accuracy rose from 8.3\% to 16.7\%; that follow-up's registered criteria
+were not met because round 1 gained nothing, while rounds 2 and 3 added 5.0 and 2.9 points on average,
+both intervals above zero. One fit on the same amount of base-proposed frontier data reached 14.6\%, so
+the rounds' 2.1-point advantage is inconclusive. ``Must'' in the title names the condition observed
+across the registered runs and the data-scaling result, not a proven necessity. Three earlier
+registered series met no per-lineage criterion, and the same loop showed no gain on repository tasks or
+for a 27B agent in those configurations.
 \end{abstract}

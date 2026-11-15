@@ -3,7 +3,7 @@
 
 \section{Results}\label{sec:rsi}
 
-\subsection{S4: retraining from the base on a doubling frontier}\label{sec:rsi4}
+\subsection{S4: retraining from the base on a frontier that grows each round}\label{sec:rsi4}
 
 S4 changed what S3's records pointed at (\cref{sec:earlier}), and with it the schedule
 (\cref{fig:cycle}). \emph{Retraining from the base}: generation $g$'s candidate is a fresh LoRA trained
@@ -193,6 +193,9 @@ also decides how to read the registered item-level M1: all four generation-3 cha
 controls (129/81, 122/94, 119/80 and 136/56), but identical-data retrains already split 87/57, 70/56,
 48/56 and 35/55 against the originals, so item-level comparisons of single adapters measure seed noise
 as much as treatment and are not evidence here, as the registration's amendment anticipated.\cl{FU08}
+One identical-data retrain even passes the item-level step rule against its original (87/57,
+$p=0.0077$), so per-lineage item sign tests, including the original exam's 4 of 4, are facts about pairs
+of adapters, not evidence that the procedure gains.\cl{FU15}
 M is matched in data, not in compute: S4 spent 825 training steps over three rounds against 525 for one
 fit, 57\% more before the cost of proposing and predicting.\cl{FU09}
 
@@ -207,7 +210,7 @@ their 8192-token budget while thinking.}\label{tab:fresh}
 
 \paragraph{What the base can do by reasoning.} S4 improves direct prediction without thinking, from 8.3\%
 to 16.7\% of F (\cref{tab:fresh}). The same base with thinking on answers at least 47.3\% (1107 items,
-with 372 replies cut by the 8192-token budget), a 27B sibling answers 39.3\% zero-shot without thinking,
+with 372 replies cut by the 8192-token budget), Qwen3.8-27B-FP8 answers 39.3\% zero-shot without thinking,
 and the base's majority over four samples answers 8.1\%.\cl{FU13} The gain is therefore in direct
 prediction, not beyond what the base reaches by reasoning, which is why verified, compact reasoning is
 the natural target for the next oracle-supervised step. In the direct protocol, replies cut by the

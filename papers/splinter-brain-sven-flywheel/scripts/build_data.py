@@ -1162,8 +1162,8 @@ def rsi_dev_csv(series, m):
 
 def scaling_csv(m):
     """Accuracy on the fresh exam (percent) against training records: S4's generations (0, 300, 900 and
-    2100 cumulative records) and the base-proposed matched-data controls (900 and 2100), group means and
-    each lineage, for the figure."""
+    2100 cumulative records) and the base-proposed matched-data controls (900 and 2100 only: no control
+    was trained on less), group means and each lineage, for the figure."""
     g = "rsi4f.mgroups"
     if f"{g}.gen3_share" not in m:
         return "records,arm,mean,l0,l1,l2,l3\n"
@@ -1173,7 +1173,6 @@ def scaling_csv(m):
     rows.append(f"0,s4,{base},{base},{base},{base},{base}")
     for records, grp in ((300, "gen1"), (900, "gen2"), (2100, "gen3")):
         rows.append(f"{records},s4,{pct(f'{g}.{grp}_share')}," + ",".join(pct(f"{g}.{grp}_share_{i}") for i in range(4)))
-    rows.append(f"0,m,{base},{base},{base},{base},{base}")
     for records, grp in ((900, "m900"), (2100, "m2100")):
         rows.append(f"{records},m,{pct(f'{g}.{grp}_share')}," + ",".join(pct(f"{g}.{grp}_share_{i}") for i in range(4)))
     return "\n".join(rows) + "\n"
