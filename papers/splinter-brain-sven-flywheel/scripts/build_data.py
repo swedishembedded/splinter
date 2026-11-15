@@ -696,7 +696,7 @@ def experiment_status(key):
 
 def results_table():
     rows = read_results()
-    lines = [r"\begin{tabular}{lllrrrrl}", r"\toprule",
+    lines = [r"\begin{tabular}{@{}lp{2.9cm}p{4.5cm}rrrrl@{}}", r"\toprule",
              r"Exp. & Repository & Arm & Families & Wins & Losses & $p$ & Status \\", r"\midrule"]
     for key in COMPARISONS:
         mine = [r for r in rows if r["experiment"] == key]

@@ -10,6 +10,13 @@ repeatedly.~\citep{star2022,rest2023}\cl{CT02} The flywheel shares the principle
 decides what is trained on; its checks are typed verifiers of different strengths
 (\cref{sec:verify}) and the admission of tasks is itself done by code
 (\cref{sec:admission}).
+\emph{Self-improvement across generations.} ReST-EM iterates generating samples, filtering them by
+binary feedback and fine-tuning on them;~\citep{restem2023}\cl{CT16} the RSI series of \cref{sec:rsi}
+are of this family, with an executable oracle as the filter and the policy's own proposals as the
+samples. TRUST argues that a gate accepting an update on any higher validation score lets inferior
+updates through across rounds, and controls their rate by online multiple
+testing;~\citep{trust2026}\cl{CT15} our learner's gate is of the greedy kind, and we measure what it let
+through against an independent exam (\cref{sec:rsi4}).
 \emph{Parameter-efficient training.} LoRA freezes the base and trains low-rank
 adapters;~\citep{lora2021}\cl{CT03} QLoRA does so over a base quantised to 4~bits;~\citep{qlora2023}\cl{CT04} DPO optimises
 preferences without a separate reward model.~\citep{dpo2023}\cl{CT05} The flywheel uses LoRA and DPO as
@@ -36,6 +43,6 @@ instances, by procedural generation from commits and by modifying code so that t
 fail.~\citep{swegym2024,r2egym2025,swesmith2025}\cl{CT14} We take the mutation-and-validate
 idea and the commit-based idea as task producers (\cref{sec:protocol}). The difference
 in aim is that the target here is one repository's own tasks, reserved before rollouts and
-evaluated paired against the base under an identical harness, followed by retention on earlier
-repositories and a replication on a second one; we read abstracts of these works and verified
+evaluated paired against the base under an identical harness, with retention on earlier
+repositories and a replication on a second one registered (and not run, \cref{sec:limitations}); we read abstracts of these works and verified
 their identifiers, not their evaluation sections, and we make no claim about priority.

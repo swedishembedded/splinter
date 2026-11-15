@@ -2,38 +2,25 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 \begin{abstract}
-A local model can keep learning from a team's documents, tools and repositories only if the
-path from a source to a released model can be inspected stage by stage. We describe a
-self-learning loop built from three cooperating projects, Splinter (what is learned), Brain
-(training and serving) and Sven (agents): a model proposes tasks that code admits or refuses
-for named reasons, an agent attempts them, typed verifiers keep what they confirm, verified
-experience becomes training data for a LoRA adapter, and the result is released only if four
-checks over unseen material pass, with immutable releases and rollback. We state the
-requirements that make such a loop work (independent held-out units, a retention check that
-tests what was acquired, an anchor bound that counts net lost answers on a large enough suite,
-a verifier that proves the tests ran, canaries in the gate), tie each to the code that
-implements it or mark it planned, and report what the training substrate of one 95~GiB card
-holds for a 27B model (bf16 LoRA and NF4 QLoRA qualified; a probe step at
-\mThrNfFourEightOneNineTwoTokensPerS{} tokens/s, as measured). Every statement about the system
-or a measurement carries an id in a claims ledger and is re-checked against the three
-repositories at pinned commits or against a raw run record. Finally we report the experiment the loop exists for, registered before any run: whether a small
-model's adapter, trained on verified trajectories that a larger teacher produced, raises completion
-of unseen repository tasks over the untrained small model. The registered confirmatory query does
-\emph{not} show it: on 46 qualification families the candidate registered in advance reaches a mean
-pass@1 of 23.0 against 20.0 for its base (18 families won, 12 lost, 16 tied; one-sided sign test
-$p=0.18$). The same-seed contrast that changes only the supervision, decisive actions against all
-actions, does separate (26 wins, 11 losses, 9 ties, $p=0.010$), as did the six-seed development
-comparison of the candidate against its base ($p=0.040$).\cl{QUAL1,PROTO6} The larger model's training on
-its own trajectories was stopped by its registered memorisation guard before any evaluation, a pilot
-of its guarded variant showed no improvement, and the registered replication on a second repository
-was not run. We then run the loop with no teacher at all: a 4B model reads raw HTML of a language
-manual, writes its own tasks, has them checked by the language's interpreter, and is fully fine-tuned
-each round. At a small learning rate each arm accepted 5 rounds, and on final probes no round trained
-on the model went from 26 to 35 of 53 when it wrote every round's tasks itself and from 26 to 40 when
-its untrained base wrote them; two more replicates on a fresh exam gave 20 to 30 and 20 to 29, and
-20 to 33 and 20 to 32 of 46. Every arm learned from tasks its own model wrote. Over 22 replicates
-on one exam the arm in which the trained model writes the tasks, the arm in which its base writes
-them and an arm in which a 27B model writes them gained 10.86, 10.89 and 11.17 passes of 46 on average,
-with no difference between any two (permutation p of at least 0.87): the loop, not the task writer,
-carries the gain.\cl{SL20,SL21,SL22,SL23}
+A local model can keep learning from a team's documents, tools and repositories only if the path
+from a source to a released model can be inspected stage by stage and its effect is measured on
+material the learner never saw. We describe a self-learning loop built from three cooperating
+projects, Splinter (what is learned), Brain (training and serving) and Sven (agents): code admits
+the tasks a model proposes, an agent attempts them, typed verifiers keep what they confirm, verified
+experience becomes training data, and a candidate is released only through a four-check gate, with
+immutable releases and rollback. We report what the loop did under tests registered before their
+runs, including those that did not show a gain. On repository tasks the registered confirmatory query
+did not show an 8B adapter distilled from a 27B teacher better than its base (18 families won, 12 lost,
+$p=0.18$), while a same-seed contrast of the supervision did separate (26 won, 11 lost, $p=0.010$).\cl{QUAL1}
+Two promoted generations of a 27B model trained on its own agent experience did not beat their base
+on one measurement.\cl{G2703,G2704} With no teacher, a 4B model learned a language's standard library
+from the raw manual, and whether it, its base or a 27B model wrote its tasks did not change the
+gain.\cl{SL23} Four registered series then asked whether a model teaching itself improves at every
+generation on an exam it never reads, judged by an independent examiner. Three did not meet their
+criterion. The fourth did, in all four lineages: Qwen3-4B, retrained from the base each generation on
+the interpreter-verified frontier of its own Lua~5.1 programs, beat its predecessor at each of three
+generations on 889 items its base could not answer, rising from 12 items right to between 192 and
+241, with the weakest step won 67 to 36 ($p=0.00146$).\cl{RS28,RS29} Every statement about the system
+or a measurement carries an id in a claims ledger that is re-checked against the three repositories at
+pinned commits or against the raw records.
 \end{abstract}

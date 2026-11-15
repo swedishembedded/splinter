@@ -4,43 +4,51 @@
 \section{Reproducibility}\label{sec:repro}
 
 \paragraph{Verification.} \code{make -C papers/splinter-brain-sven-flywheel verify} first runs the
-specification of the pin rule, then re-runs every structure check against the commits in
-\code{data/commits.json}, then \code{scripts/build_data.py --check}, which resolves each measured,
-computed, registered and planned claim to its record, requires the claim text to contain the value,
-and requires every ledger row to be cited in the text and every citation to be in the ledger.
-The ledger holds \mLedgerClaims{} claims, \mLedgerStructure{} of them structure claims backed by
-\mLedgerChecks{} checks. A pin must be contained in a remote-tracking ref of its repository, so a
-fresh clone of the three remotes reproduces the result; the verification was run on such a clone
-of the remotes, with the sibling repositories given by \code{--sven} and \code{--brain}. The
-splinter pin is the reachable twin of an earlier pin that no branch contained.
-\code{make check} includes this verification as \code{check/papers}. The bibliography entries
-were checked against the archive's abstract pages on 2026-10-16.
+specifications of the pin rule and of the record parsers, then re-runs every structure check against
+the commits in \code{data/commits.json}, then \code{scripts/build_data.py --check}, which resolves
+each measured and computed claim to its value, requires the claim text to contain the value, requires
+every ledger row to be cited in the text and every citation to be in the ledger, and checks that the
+pooled steps computed from the examiner's lineage verdicts equal its plan verdicts. The ledger holds
+\mLedgerClaims{} claims, \mLedgerStructure{} of them structure claims backed by \mLedgerChecks{}
+checks. A pin must be contained in a remote-tracking ref of its repository, so a fresh clone of the
+three remotes reproduces the result; the sibling repositories are given by \code{--sven} and
+\code{--brain}. \code{make check} includes this verification as \code{check/papers}. The bibliography
+entries were checked against the archive's abstract pages on 2026-11-15.
 
-\paragraph{Draft and final.} The paper is marked a draft in \code{status.txt}. A draft may
-contain registered but not yet validated results, as REGISTERED and PLANNED claims, and \code{verify}
-passes with them; this version holds none. \code{make -C papers/splinter-brain-sven-flywheel final}
-runs \code{build\_data.py --check --final}, which fails while the paper is marked draft or any
-REGISTERED or PLANNED claim remains, so a final paper contains validated results only.
+\paragraph{Draft and final.} The paper's status is recorded in \code{status.txt}; when it reads
+final, \code{build\_data.py --check} also fails while any registered-but-unmeasured or planned claim
+remains, so a final version holds only structure facts, measurements, computations from measurements
+and citations.
 
-\paragraph{Training qualification and throughput.} The raw logs are not kept in the repository; \code{data/measurements.json} records, per log, the
-values the claims cite, the exact command and the log's sha256, and \code{make verify EVIDENCE=DIR}
-checks them against the logs. The qualification logs are Brain's
-qualification logs at commit \mEFourCommit{}; each log's header records its command. They contain
-only the runs that finished; runs that were planned and not run are not reported as results. The
-throughput probe is a copy of a log kept with the correction plan;
-its header says what the roadmap records about its command and revision, and that the log itself
-carries no commit.
+\paragraph{Raw records.} The raw logs are not kept in the repository. \code{data/measurements.json}
+records, per log, the values the claims cite, the exact command, the Brain commit and the log's
+SHA-256, and \code{make verify EVIDENCE=DIR} re-extracts the values from the logs found in \code{DIR}
+and compares digests and values. The records of the documentation runs, the 27B generations and every
+RSI series are published in the evidence dataset \code{splinter-flywheel-evidence} under the paths
+\code{data/measurements.json} names: for RSI2 to RSI4 the examiner's signed step and plan verdicts and
+the registered rule it applied, the learner's round records, each candidate's record and list of
+trained programs and, for RSI4, the twelve champion adapters; for RSI1 each arm's registered analysis
+and per-model grades. The qualification logs of the training substrate and the logs of the coding-task
+pilots and probes were kept with the runs that made them; their values, digests and commands are in
+\code{data/measurements.json}.
 
-\paragraph{Coding-task experiments.} The paired outcomes of the pilots are rows of
-\code{data/results.csv} with status PILOT, whose \code{experiences compare} reports are recorded in
-\code{data/measurements.json} beside the training logs. The G8 agreement check of the 27B adapter is
-recorded the same way, as one report that carries the sha256 of each of the four score files it read,
-the manifest of the held-out split they were taken on, and every number the three conditions rest on.
-The registered confirmatory query and the six-decoding-seed development comparison are recorded there
-as well (\code{runs/g8.qual}, \code{runs/g8.proto6}). The registration is
-\code{prereg/coding-tasks.md}; a result carries the commands, commits, harness profile and seeds of
-the run, and the tables of \cref{sec:coding-results} are generated from them.
+\paragraph{The examiner.} The examiner of RSI2 to RSI4 is specified in \cref{sec:rsi-design} at the
+level needed to build an equivalent one: exam custody, the one-way hand-off and its two files, the
+training-overlap exclusion, the direct-completion protocol (request, decoding, answer extraction and
+comparison, the token limit and the treatment of a cut reply), serving every model on one pinned build
+and tier with the base identified from the checkpoint's own files, the per-step exact one-sided sign
+test, the per-lineage plan rule and aggregate-only signed verdicts. With the published candidate
+records, trained-program lists and adapters, and the exam file released with RSI1, an equivalent
+examiner re-grades every RSI4 champion.
 
-\paragraph{Build.} \code{make papers/splinter-brain-sven-flywheel/pdf} builds the paper to
-\code{target/papers}; the tables and numbers are generated from \code{data/} into the
-build directory.
+\paragraph{Registrations.} All registrations are in the paper's \code{prereg/} directory: the
+coding-task protocol in \code{coding-tasks.md}, the acquisition experiments in \code{acquisition.md},
+RSI1 in \code{recursive-improvement.md}, and RSI2 to RSI4 each in its own file (\code{rsi4.md} for
+RSI4) with a launch record (\code{rsi4-launch.md}) that fixes builds, binary digests, settings and
+seeds before the first generation and carries the series' dated deviations; the outcome of each series
+is appended to its registration.
+
+\paragraph{Build.} From the repository root the paper is built by
+\begin{center}\code{make papers/splinter-brain-sven-flywheel/pdf}\end{center}
+into \code{target/papers}; every table, plot and number of the RSI series and of the coding-task pilots
+is generated from \code{data/} into the build directory.

@@ -3,8 +3,8 @@
 
 \section{A small model teaching itself from raw documentation}\label{sec:documentation}
 
-The coding experiment measures one generation of a 27B model learning from a teacher's
-or its own verified trajectories. This section closes the whole loop on a smaller scale:
+The coding experiment trains an 8B model on a 27B teacher's verified trajectories and a 27B
+model on its own. This section closes the whole loop on a smaller scale:
 a 4B model is given nothing but raw documentation and an objective, writes its own
 tasks, is graded by an interpreter, is trained on every weight, and, once trained, writes
 the next round's tasks itself. No stronger model takes part.
@@ -28,7 +28,47 @@ the same again, and that output becomes the reference whatever the model predict
 An answer is graded by the formal verifier, which takes an output given in a fenced
 block as the answer and treats two different blocks as a hedge.\cl{SL05}
 
-\paragraph{The loop.} Probes are written once, before any training, by the model as it
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}[fig]
+\tikzset{cell/.style={text width=29mm}}
+\def\dx{39mm}
+% set-up row
+\node[data, cell] (html) at (0,0) {\textbf{raw manual}:\\three Lua 5.1\\chapters, HTML};
+\node[proc=okSky!22, cell] (graph) at (\dx,0) {sections and a\\skill graph, one\\skill per function};
+\node[proc=okSky!22, cell] (probes) at (2*\dx,0) {base writes all\\probes once, before\\any training};
+\node[data, cell] (split) at (3*\dx,0) {per skill: \textbf{dev}\\and sealed \textbf{final}\\probes};
+% round row, right to left
+\node[proc=okSky!22, cell] (pick) at (3*\dx,-28mm) {pick the skill\\expected to\\gain most};
+\node[proc=okSky!22, cell] (write) at (2*\dx,-28mm) {\textbf{task writer}\\(self, base or 27B)\\writes programs};
+\node[verif, cell] (lua) at (\dx,-28mm) {Lua 5.1.5 output\\is the reference;\\4 attempts each};
+\node[proc=okPurple!22, cell] (ft) at (0,-28mm) {full fine-tune of\\every weight, lr\\$10^{-6}$, with replay};
+% decision row
+\node[decide, aspect=2, inner sep=0.5pt, text width=10mm] (acc) at (\dx,-52mm) {accept?};
+\node[lab, anchor=north] at ($(acc.south)+(0,-1mm)$) {target skill up on dev, no\\other skill down past the bound};
+\node[data, cell] (fin) at (3*\dx,-52mm) {closing: \textbf{final}\\probes, before\\and after};
+\draw[flow] (html) -- (graph);
+\draw[flow] (graph) -- (probes);
+\draw[flow] (probes) -- (split);
+\draw[flow] (split) -- node[lab, left] {dev half} (pick);
+\draw[flow] (pick) -- (write);
+\draw[flow] (write) -- (lua);
+\draw[flow] (lua) -- (ft);
+\draw[flow] (ft) |- (acc.west);
+\draw[ctrl] (acc.east) -- node[lab, above] {yes: new incumbent} (2.45*\dx,-52mm) |- ($(pick.south)+(0,-5mm)$) -- (pick.south);
+\draw[refuse] (acc.north) -- ++(0,4.5mm) node[reflabel, right] {no: the incumbent stays};
+\draw[refuse] (lua.north) -- ++(0,4mm) node[reflabel, above, align=center] {refused: random, clock,\\input, unstable output};
+\draw[flow] (split.east) -- ++(4mm,0) coordinate (a) -- node[lab, sloped, above] {final half, never trained on} (a |- fin.east) -- (fin.east);
+\end{tikzpicture}
+\caption{The teacher-less documentation loop of \cref{sec:documentation}, read from the raw manual.
+Probes are written once by the untrained model and split per skill: the dev half decides every round,
+the final half is touched only by the closing assessment. Each round a task writer (the incumbent
+itself, the untrained base, or a 27B model in the third arm) writes programs, the interpreter fixes
+their answers, and every weight of the 4B incumbent is trained on the attempts it solved sometimes;
+dotted arrows are what is refused.}\label{fig:doc-loop}
+\end{figure}
+
+\paragraph{The loop (\cref{fig:doc-loop}).} Probes are written once, before any training, by the model as it
 is, and split per skill into dev probes (the baseline and every round's decision) and
 final probes (the closing assessment only); a skill is asked for probes again while it
 has fewer than both halves need.\cl{SL06} Each round picks the skill expected to benefit
@@ -51,7 +91,7 @@ card and the AdamW moments and master weights in host memory; \code{samples/text
 runs it on any base in the model store.\cl{SL09} \Cref{tab:fullft} gives what eight steps
 cost on one GH200 at a 631-token block.\cl{SL10}
 
-\begin{table}[t]
+\begin{table}[tbp]
   \centering
   \small
   \begin{tabular}{lrrrr}

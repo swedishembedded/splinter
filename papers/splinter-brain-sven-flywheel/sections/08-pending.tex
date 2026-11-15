@@ -35,7 +35,7 @@ cap (the 34 conclusions labelled cancelled), and the solve report now names the 
 Every workspace command has since been confined by the kernel and a call naming a path outside the
 tree marks the episode exposed (\cref{sec:audit}).\cl{CN01}
 
-\begin{table}[t]
+\begin{table}[tbp]
 \centering\small
 \input{generated/results_table}
 \caption{Paired outcomes over qualification-partition families (wins: the adapter resolves more
@@ -45,7 +45,7 @@ read from a finished run; none is an estimate.}\label{tab:results}
 
 \paragraph{CE1: the teacher's first pass, finished.} The 27B teacher has solved the eight development sets once, greedily, confined and under the registered bounds; \cref{tab:ce1} lists every set, each row read from \code{data/measurements.json} and each backed by a ledger entry that quotes its counts.\cl{M39,M40,M41,M42,M43,M44,M45,M46} ``Stopped'' counts the runs that ended at the harness's own bounds (the cap on tool calls or the repetition stop, \cref{sec:protocol}), not infrastructure failures. The exposure audit is applied as registered: an attempt whose trajectory names a path outside its tree is excluded from training evidence and counted, whatever its patch did; the columns ``Hidden pass'' and ``Passed clean'' show how much of the evidence the rule removes in each set.
 
-\begin{table}[t]
+\begin{table}[tbp]
 \centering\small
 \input{generated/ce1_table}
 \caption{CE1, teacher pass 1 on development sets that have finished. Success and cancelled count solve conclusions, the other columns the verified outcome; exposed attempts are counted among the failed.}\label{tab:ce1}
@@ -93,9 +93,7 @@ loses 6 and ties 8 ($p=0.96484375$).\cl{M53} Neither comparison reaches the regi
 that labels an underpowered comparison a pilot applies (13 and 16 non-tied families against the 25 the rule
 requires): the outcome of both arms is reported as \emph{no held-out improvement}, and no confirmatory query
 follows for CE8-T. The adapter does change behaviour on many of the same tasks, but not in one direction, and
-the trained adapter is not distinguishable from its shuffled-instruction control in size or direction. The
-next levers are a decision-level view of the same trajectories and more verified teacher data, not a longer
-run of this recipe.
+the trained adapter is not distinguishable from its shuffled-instruction control in size or direction.
 
 \paragraph{CE8-T-u1b: decision-level supervision, the same outcome.} The pilot's result motivated a third
 candidate that changes one variable of the data rather than the recipe: CE8-T-u1b trains on the unpacked
@@ -134,7 +132,7 @@ The second series recovers the all-action adapter \code{win1}, damaged to 12/46,
 
 \paragraph{Generation 2: rehearsal protected nothing at this budget.} The decisive seed-1 champion (D46 23/46, S1 16/23) continued on S1's verified successes (25 records) for 120 steps at $5\times10^{-5}$, seed 1; the arms differ only by \code{--rehearsal} of the decisive corpus at 0.25. On D46 the no-rehearsal arm verifies 28 of 46 with 7 exposed (32 paired, 8W-4L-20T, $p=0.19384765625$) and the rehearsal arm 19 with 5 exposed (34 paired, 4W-7L-23T, $p=0.88671875$); the direct same-start contrast pairs 37 families with 3 rehearsal wins and 13 losses ($p=0.9979095458984375$ with rehearsal as the candidate, 13W-3L the other way), so rehearsal cost nine tasks relative to the same update without it.\cl{G2A,G2B,G2C} On S1 they verify 12 (5 exposed) and 11 (1 exposed) against the base's 8 (13 paired, 2W-2L, $p=0.6875$; 15 paired, 1W-0L, $p=0.5$), so acquisition over the champion's 16/23 is not demonstrated.\cl{G2D} At this budget the new data did not make the model forget D46 (the no-rehearsal arm added five tasks over its start), so there was nothing for rehearsal to protect and it cost tasks instead. These are one-seed greedy runs on the development benchmark, not the registered query, and the run-to-run variation in the limitations applies to them.\cl{REP1}
 
-\begin{table}[t]
+\begin{table}[tbp]
 \centering\small
 \input{generated/pilot_results_table}
 \caption{Development probes on D46 (pilot, not the registered confirmatory query): paired families among the 46, wins and losses from the adapter's side, and the exact one-sided sign test computed from them. A row is a probe, not a confirmatory result.}\label{tab:pilots-d46}

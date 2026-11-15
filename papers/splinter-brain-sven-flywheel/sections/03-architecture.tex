@@ -3,7 +3,7 @@
 
 \section{Division of labour}\label{sec:architecture}
 
-The flywheel is a composition of three projects with one rule of ownership.
+The flywheel (\cref{fig:arch}) is a composition of three projects with one rule of ownership.
 \textbf{Sven} runs agents (tools, sessions, delegation) and keeps the authoritative
 record of what an agent did. \textbf{Brain} computes: inference, training algorithms,
 checkpoints, adapters and serving. \textbf{Splinter} decides what is learned, which
@@ -23,30 +23,50 @@ router) and configuration decides which checkpoint plays it.\cl{S06} Experience 
 immutable; verdicts, rewards, step labels and dataset membership are facts derived
 about it, never written into it.\cl{S07}
 
-\begin{figure}[t]
+\begin{figure}[tbp]
 \centering
-\begin{tikzpicture}[
-  box/.style={draw,rounded corners,align=center,minimum width=2.5cm,minimum height=0.9cm,font=\footnotesize},
-  arr/.style={-{Stealth[length=2mm]},thick}]
-\node[box,fill=blue!8] (src) {Sources\\(\S\ref{sec:intake})};
-\node[box,fill=green!10,right=0.7cm of src] (task) {Tasks +\\admission};
-\node[box,fill=orange!15,right=0.7cm of task] (roll) {Rollouts\\(Sven)};
-\node[box,fill=green!10,right=0.7cm of roll] (ver) {Verifiers +\\leakage};
-\node[box,fill=green!10,below=0.9cm of ver] (data) {Dataset\\projection};
-\node[box,fill=red!10,left=0.7cm of data] (train) {LoRA /\\consolidate\\(Brain)};
-\node[box,fill=green!10,left=0.7cm of train] (gate) {Release\\gate};
-\node[box,fill=green!10,left=0.7cm of gate] (rel) {Release\\+ alias};
-\draw[arr] (src) -- (task);
-\draw[arr] (task) -- (roll);
-\draw[arr] (roll) -- (ver);
-\draw[arr] (ver) -- (data);
-\draw[arr] (data) -- (train);
-\draw[arr] (train) -- (gate);
-\draw[arr] (gate) -- (rel);
-\draw[arr,dashed] (rel.north) -- ++(0,0.5) -| (roll.north west);
+\begin{tikzpicture}[fig]
+\tikzset{cell/.style={text width=29mm}}
+\def\dx{39mm}
+% row 1, left to right
+\node[data, cell] (src) at (0,0) {\textbf{source}:\\document, repository,\\command or session};
+\node[proc=okSky!22, cell] (task) at (\dx,0) {\textbf{tasks}: a model\\proposes, code\\admits (16 kinds)};
+\node[proc=okOrange!22, cell] (roll) at (2*\dx,0) {\textbf{attempts}: a Sven\\agent in a confined\\copy of the tree};
+\node[verif, cell] (ver) at (3*\dx,0) {\textbf{verifiers} and\\exposure audit\\(13 verifier kinds)};
+% row 2, right to left
+\node[data, cell] (data) at (3*\dx,-31mm) {\textbf{dataset}: views of\\verified experience,\\held-out groups};
+\node[proc=okPurple!22, cell] (train) at (2*\dx,-31mm) {\textbf{training} in Brain:\\LoRA, DPO or full,\\from the champion};
+\node[verif, cell] (gate) at (\dx,-31mm) {\textbf{release gate}:\\improvement,\\retention, anchor,\\serve};
+\node[data, cell] (rel) at (0,-31mm) {\textbf{release}:\\written once; an\\alias moves; rollback};
+% flows
+\draw[flow] (src) -- (task);
+\draw[flow] (task) -- (roll);
+\draw[flow] (roll) -- node[lab, right, pos=0.5] {} (ver);
+\draw[flow] (ver) -- node[lab, right] {verified\\experience} (data);
+\draw[flow] (data) -- (train);
+\draw[flow] (train) -- node[lab, above] {} (gate);
+\draw[flow] (gate) -- (rel);
+\draw[ctrl] (rel.north) -- node[lab, right, align=left] {next turn runs on\\the released policy} ++(0,9mm) -| ($(roll.south)+(-6mm,0)$);
+% what each stage refuses
+\draw[refuse] (src.north) -- ++(0,5mm) node[reflabel, above, align=center] {over 1 MiB, not text,\\dirty tree, no user step};
+\draw[refuse] (task.north) -- ++(0,5mm) node[reflabel, above, align=center] {21 reasons: ungrounded,\\duplicate, contradiction};
+\draw[refuse] (roll.north) -- ++(0,5mm) node[reflabel, above, align=center] {outside the tree,\\network: kernel-refused};
+\draw[refuse] (ver.north) -- ++(0,5mm) node[reflabel, above, align=center] {failed, exposed,\\undecided: withheld};
+\draw[refuse] (data.south) -- ++(0,-5mm) node[reflabel, below, align=center] {compacted, over the\\block, near-duplicate};
+\draw[refuse] (gate.south) -- ++(0,-5mm) node[reflabel, below, align=center] {any check failed\\or not measured};
+\draw[refuse] (rel.south) -- ++(0,-5mm) node[reflabel, below, align=center] {exists already,\\terms forbid it};
+% legend of the projects
+\node[proc=okSky!22, text width=14mm, minimum height=5mm, inner sep=1.5pt] (k1) at (0.6*\dx,-59mm) {Splinter};
+\node[proc=okOrange!22, text width=14mm, minimum height=5mm, inner sep=1.5pt, right=4mm of k1] (k2) {Sven};
+\node[proc=okPurple!22, text width=14mm, minimum height=5mm, inner sep=1.5pt, right=4mm of k2] (k3) {Brain};
+\node[verif, text width=14mm, minimum height=5mm, inner sep=1.5pt, right=4mm of k3] (k4) {verifier};
+\node[data, text width=14mm, minimum height=5mm, inner sep=1.5pt, right=4mm of k4] (k5) {record};
 \end{tikzpicture}
-\caption{The flywheel. Green: Splinter; orange: Sven; red: Brain. The dashed arrow is the
-next turn: rollouts run on the policy the release alias points at.}\label{fig:arch}
+\caption{The self-learning loop, read clockwise from the source. Every stage keeps what passes and
+refuses the rest with a named reason (dotted arrows; \cref{sec:intake,sec:admission,sec:verify,sec:dataset,sec:gate}
+give the full lists). Splinter owns tasks, verification, datasets, the gate and releases; Sven runs
+the attempts; Brain trains and serves. The dashed arrow is the next turn: attempts run on the policy
+the release alias points at.}\label{fig:arch}
 \end{figure}
 
 \section{Source intake}\label{sec:intake}
@@ -154,23 +174,14 @@ deduplication by the same near-duplicate rule as admission,\cl{D07,C03,C04} whic
 split of whole families (at least three, default share 0.1) supports early
 stopping.\cl{D08}
 
-% DRAFT: written with the packed sft-step view; no claim ids yet.
-\paragraph{Packing and weighting.} The step view can write a trajectory as one record
-instead of one record per action. The packed record supervises every admitted action
-of the trajectory as an assistant message and keeps every other turn as context, so it
-supervises the same targets as the per-action records together while the conversation is
-rendered once and not once per action; a step labelled bad stays context in it. The two
-forms train the same targets, and in both a step's gradient is the mean over every
-supervised token of the records it accumulates, so each token weighs the same whichever
-record holds it. What differs is the unit a step counts: a step of eight records
-averages eight single actions in the per-action form and eight whole trajectories in the
-packed form, so the same record count per step moves the adapter on far more tokens, and
-an epoch of $n$ trajectories takes $n$ record draws instead of one per action.
-Packing also shows a later action the earlier ones in the form they were trained in,
-which can differ in the template's reasoning markers from the form a model asked at that
-turn is shown. Both differences are fixed by the choice of form and the same for the
-trained arm and its controls; they are reported, not tuned, and packing is used for the
-confirmatory run because the per-action form does not fit a lease.
+\paragraph{Packing.} The step view can also write a trajectory as one record instead of one record
+per action: the conversation up to its last admitted action, with every admitted action supervised
+and every other message as context. It supervises exactly what the per-action records supervise
+together, with the context rendered once instead of once per action, and within a step each supervised
+token weighs the same in both forms.\cl{D10} What differs is the unit a step counts: a step of eight
+packed records spans eight whole trajectories rather than eight actions, so the same step count moves
+the adapter on far more tokens. The choice of form is reported with every run that uses it
+(\cref{sec:coding-results}).
 
 \paragraph{Expansion beyond the first pass.} The corpus grows by five mechanisms, each
 with its own gate. (i)~\emph{Variants}: a model-written task may be given up to three

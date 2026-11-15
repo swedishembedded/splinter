@@ -3,64 +3,74 @@
 
 \section{Introduction}\label{sec:intro}
 
-A deployed local model does not know what its users' documents, tools and repositories
-say, and what it is taught by hand is lost the next time it is replaced. The
-\emph{self-learning flywheel} is the closed loop that Splinter, Brain and Sven implement
-to address this: take a source, write tasks from it, have an agent attempt them, keep
-only what code can verify, project the verified experience into training data, train a
-LoRA adapter (and later consolidate it into the weights), measure on material the
-learner cannot influence, and release the result only if it is measurably better without
-being worse at what it already did. The released artifact is an ordinary Brain adapter
-that runs on plain \code{brain serve}; the next turn starts from it.
+A deployed local model does not know what its users' documents, tools and repositories say, and what
+it is taught by hand is lost the next time it is replaced. The \emph{self-learning flywheel} is the
+closed loop that Splinter, Brain and Sven implement to address this: take a source, write tasks from
+it, have an agent attempt them, keep only what code can verify, project the verified experience into
+training data, train an adapter (or every weight), measure on material the learner cannot influence,
+and release the result only if it is measurably better without being worse at what it already did.
+The released artifact is an ordinary Brain adapter that runs on plain \code{brain serve}; the next
+turn starts from it.
 
-\paragraph{The result this work is for, and its status.} The practical question is
-operational: \emph{can a team take its own git repository and tune a local agentic model
-that is measurably better at completing unseen tasks in it, repeatedly, without losing what it
-had?} The registered test is a paired comparison on repository tasks reserved before any
-rollout (\cref{sec:protocol,sec:coding-results}). \textbf{It did not show the improvement}: the
-candidate registered before the query reached a mean pass@1 of 23.0 against 20.0 for its base on
-the 46 qualification families (18 wins, 12 losses, 16 ties, $p=0.18$). What did separate is the
-supervision: against the same corpus, recipe and seed with every action supervised instead of the
-decisive ones, the candidate won 26 families and lost 11 ($p=0.010$), and the six-seed development
-comparison of the candidate against its base had given $p=0.040$.\cl{QUAL1,PROTO6} The paper
-establishes what is needed to measure such a result honestly and reports what was measured: the
-architecture, a task and verification funnel, a training substrate that fits a 27B model on one card, a
-release gate, the requirements that make the loop work, and the coding-task protocol with
-its results.
+\paragraph{The question.} The practical question is operational: \emph{can a model be made
+measurably better, repeatedly, by a loop that learns from verified experience, and how would one know
+without fooling oneself?} We answer it in two parts. First, what each stage of such a loop must do and
+what the code contains for it, so that a turn can add a capability without losing one
+(\cref{sec:architecture,sec:intake,sec:admission,sec:verify,sec:dataset,sec:training,sec:gate,sec:substrate,sec:requirements}).
+Second, what the loop did when its effect was decided by tests fixed before the runs: on repository
+tasks with a stronger teacher (\cref{sec:protocol,sec:coding-results}), on a language's documentation
+without any teacher (\cref{sec:documentation}), on a 27B model's own agent experience
+(\cref{sec:generations}), and in four registered series of self-taught generations judged by an
+independent examiner (\cref{sec:rsi}).
 
-\paragraph{Scope.} The paper asks two questions. \emph{What must each stage of the loop do,
-and what does the code contain for it, so that a turn of the loop can add a capability without
-losing one?} (\cref{sec:architecture,sec:training,sec:substrate,sec:requirements}.)
-\emph{Can the same loop be pointed at a repository and its effect on unseen tasks be decided
-by a registered test?} (\cref{sec:protocol,sec:coding-results}, with the recipe for another
-repository in \cref{sec:replicate}.) It claims
-no general improvement of any benchmark score and contains no plans: a mechanism the code does not contain is marked planned, and a measurement that
-was not made is stated as not made.
+\paragraph{What was found.} On repository tasks the registered confirmatory query \emph{did not show}
+the candidate better than its base: on 46 qualification families the candidate reached a mean pass@1
+of 23.0 against 20.0 (18 families won, 12 lost, 16 tied; $p=0.18$); what separated was the
+supervision, decisive actions against every action with corpus, recipe and seed fixed (26 won, 11
+lost, $p=0.010$).\cl{QUAL1} The 27B model's two promoted generations did not beat their base on one
+measurement on one stack.\cl{G2703,G2704} Without a teacher, a 4B model gained on probes written
+from a raw manual whichever model wrote its training tasks.\cl{SL23} Of the four registered
+self-improvement series three did not meet their criterion, and the fourth, RSI4, met it in every
+lineage: four independent lineages of Qwen3-4B, each generation retrained from the base on the
+interpreter-verified frontier of its own proposals, improved at each of three consecutive generations
+on a sealed 889-item Lua exam that an independent examiner held, graded and signed.\cl{RS28,RS29}
 
-\paragraph{How claims are verified.} Every statement about the system or a measurement
-carries the id of a row in a claims ledger (\code{data/claims.csv}, rendered as grey
-bracketed ids). A \textsc{structure} claim is a fact about the code, a command line, the registration file or the
-history of a repository and is re-checked by \code{make verify} against the repositories at
-pinned commits that a fresh clone can reach (\cref{sec:repro}); a \textsc{measured} claim is a
-number computed by \code{scripts/build_data.py} from the measurements recorded in \code{data/measurements.json};
-a \textsc{computed} claim is a number derived by that script from a stated formula; a \textsc{cited} claim states what a published work does and points
-at its bibliography entry. A structure check shows that a definition, constant or message exists
-in a file; it does not show that the code behaves accordingly, which only the experiments do.
+\paragraph{Scope.} This paper covers the loop as a whole, from source to release, and the registered
+experiments that tested it. Its positive self-improvement result is bounded: one task family
+(predicting the output of Lua~5.1 programs), one base model, three generations, LoRA training on the
+interpreter's labels, and an exam of items the base could not answer; it makes no claim of transfer to
+other tasks or models, nor that the improvement compounds because an improved model is a better
+improver (\cref{sec:rsi-scope}). It claims no improvement of any public benchmark score. A mechanism
+the code does not contain is stated as missing, and a measurement that was not made is stated as not
+made.
+
+\paragraph{How claims are verified.} Every statement about the system or a measurement carries the
+id of a row in a claims ledger (\code{data/claims.csv}, rendered as grey bracketed ids). A
+\textsc{structure} claim is a fact about the code, a command line, a registration file or the history
+of a repository and is re-checked by \code{make verify} against the repositories at pinned commits
+that a fresh clone can reach (\cref{sec:repro}); a \textsc{measured} claim is a number that
+\code{scripts/build_data.py} reads from the measurements recorded in \code{data/measurements.json},
+each of which names its raw record and that record's digest; a \textsc{computed} claim is a number the
+same script derives by a stated formula; a \textsc{cited} claim states what a published work does and
+points at its bibliography entry. A structure check shows that a definition, constant or message
+exists in a file; it does not show that the code behaves accordingly, which only the experiments do.
 
 \paragraph{Contributions.}
-(i)~A description of the division of labour among the three projects and of its enforcement
-(\cref{sec:architecture}), and of the intake, admission, verification and leakage-control funnel
-with its rejection reasons (\cref{sec:intake,sec:admission,sec:verify,sec:dataset}).
-(ii)~The training, release-gate, rollback and lineage machinery (\cref{sec:training,sec:gate}) and
-what the training substrate of one card holds and was measured to do for a 27B model
-(\cref{sec:substrate}).
-(iii)~The requirements that make the loop work, each tied to its implementation or marked
-planned (\cref{sec:requirements}).
-(iv)~A coding-task protocol fixed before any run, and its results: a registered confirmatory
-query that does not show the candidate better than its base, and a same-seed supervision contrast
-that separates (\cref{sec:protocol,sec:coding-results}), with a replication recipe whose steps are
-marked available or planned (\cref{sec:replicate}).
-(v)~The loop without a teacher, on a 4B model learning a language's standard library from the raw
-manual: what a small model needs from the loop, full fine-tuning within one card, and the measured
-rounds and final probes of a model that writes its own tasks against one whose base writes them
-and one whose tasks a 27B model writes, which learn alike (\cref{sec:documentation}).
+(i)~The division of labour among the three projects and its enforcement (\cref{sec:architecture}), and
+the intake, admission, verification and leakage-control funnel with its rejection reasons
+(\cref{sec:intake,sec:admission,sec:verify,sec:dataset}).
+(ii)~The training, release-gate, rollback and lineage machinery (\cref{sec:training,sec:gate}), and
+what one card holds and was measured to do when training a 27B model (\cref{sec:substrate}).
+(iii)~The requirements that make the loop work, each tied to its implementation, with the ones not
+implemented stated as such (\cref{sec:requirements}).
+(iv)~A coding-task protocol fixed before any run and its outcome: a confirmatory query that does not
+show the candidate better than its base, and a same-seed supervision contrast that separates
+(\cref{sec:protocol,sec:coding-results}), with the recipe for another repository
+(\cref{sec:replicate}).
+(v)~The loop without a teacher on a 4B model learning from a raw manual, with full fine-tuning on one
+card, in which the task writer did not matter (\cref{sec:documentation}).
+(vi)~Two generations of a 27B model on its own agent experience that did not hold on one measurement,
+and the conditions an exam must meet before its decision means anything (\cref{sec:generations}).
+(vii)~Four registered series of self-taught generations with a learner that never reads the exam and
+an independent examiner whose protocol is specified fully enough to re-implement, ending in a met
+per-lineage criterion, with the failures that located what it needed (\cref{sec:rsi}).

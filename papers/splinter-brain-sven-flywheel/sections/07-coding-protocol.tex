@@ -24,27 +24,26 @@ repair passes when the hidden files are overlaid fresh on the patched tree and t
 fail-to-pass and pass-to-pass commands pass; a patch that touches a protected path
 fails.\cl{V07}
 
-\begin{figure}[t]
+\begin{figure}[tbp]
 \centering
-\begin{tikzpicture}[
-  stp/.style={draw,rounded corners,align=center,minimum width=2.2cm,minimum height=0.9cm,font=\scriptsize},
-  arr/.style={-{Stealth[length=1.6mm]},thick},
-  rej/.style={draw,dashed,rounded corners,align=center,font=\scriptsize,text=red!60!black}]
-\node[stp] (a) {Baseline\\passes $\times2$};
-\node[stp,right=0.55cm of a] (b) {Apply\\change};
-\node[stp,right=0.55cm of b] (c) {Some test\\fails};
-\node[stp,right=0.55cm of c] (d) {Failure\\reproducible};
-\node[stp,right=0.55cm of d] (e) {Reverse patch\\restores green};
-\node[stp,right=0.55cm of e,fill=green!12] (f) {Seal hidden\\files};
-\foreach \x/\y in {a/b,b/c,c/d,d/e,e/f} \draw[arr] (\x) -- (\y);
-\node[rej,below=0.5cm of a] (ra) {flaky or red:\\refuse};
-\node[rej,below=0.5cm of c] (rc) {no failing test\\(equivalent): refuse};
-\node[rej,below=0.5cm of e] (re) {not restorable:\\refuse};
-\draw[arr,dashed,red!60!black] (a) -- (ra);
-\draw[arr,dashed,red!60!black] (c) -- (rc);
-\draw[arr,dashed,red!60!black] (e) -- (re);
+\begin{tikzpicture}[fig]
+\tikzset{cell/.style={text width=20.5mm}}
+\def\dx{26.5mm}
+\node[verif, cell] (a) at (0,0) {baseline\\passes twice};
+\node[proc=okSky!22, cell] (b) at (\dx,0) {apply the\\seeded fault};
+\node[verif, cell] (c) at (2*\dx,0) {a selected\\test fails};
+\node[verif, cell] (d) at (3*\dx,0) {the failure\\reproduces};
+\node[verif, cell] (e) at (4*\dx,0) {undoing it\\restores green};
+\node[data, cell] (f) at (5*\dx,0) {admitted:\\hidden files\\sealed};
+\foreach \x/\y in {a/b,b/c,c/d,d/e,e/f} \draw[flow] (\x) -- (\y);
+\draw[refuse] (a.south) -- ++(0,-6mm) node[reflabel, below, align=center] {red or flaky:\\the run stops};
+\draw[refuse] (c.south) -- ++(0,-6mm) node[reflabel, below, align=center] {no failing test:\\equivalent, refused};
+\draw[refuse] (d.south) -- ++(0,-6mm) node[reflabel, below, align=center] {flaky failure:\\refused};
+\draw[refuse] (e.south) -- ++(0,-6mm) node[reflabel, below, align=center] {not restorable:\\refused};
 \end{tikzpicture}
-\caption{Admission of a mutation-seeded repository task. Every refusal is counted by reason.}\label{fig:valid}
+\caption{Admission of a mutation-seeded repository task, left to right. Every check is run on a fresh
+copy of the snapshot, every refusal is counted by its reason, and an admitted task's failing tests are
+moved out of the tree the solver receives.}\label{fig:valid}
 \end{figure}
 
 \paragraph{Solving, recording and trajectory data.} The solver is a Sven coding worker with
@@ -84,7 +83,7 @@ decision is a one-sided exact sign test over the non-tied qualification families
 $\alpha=\alphalevel$, on the adapter served through Brain and driven by Sven; a result that is
 not significant is \emph{not shown}, never equivalence.\cl{PR04,G03}
 
-\begin{table}[t]
+\begin{table}[tbp]
 \centering\small
 \input{generated/design_table}
 \caption{The exact one-sided sign test at $\alpha=\alphalevel$: wins required and power if
@@ -101,16 +100,15 @@ twenty-five non-tied qualification families, registered as 46 families (28 Pytho
 discordance on development families reported as the sizing input, and labels a smaller comparison a pilot without changing the
 rule.\cl{PR04}
 
-\begin{figure}[t]
+\begin{figure}[tbp]
 \centering
 \begin{tikzpicture}
-\begin{axis}[width=0.75\linewidth,height=5.2cm,xlabel={non-tied qualification families $n$},
-  ylabel={power},ymin=0,ymax=1.02,xmin=2,xmax=40,legend pos=south east,
-  legend style={font=\scriptsize},grid=major,
+\begin{axis}[paper, width=0.75\linewidth,height=5.2cm,xlabel={non-tied qualification families $n$},
+  ylabel={power of the sign test},ymin=0,ymax=1.02,xmin=2,xmax=40,legend pos=south east,
   every axis plot/.append style={thick}]
-\addplot[blue,mark=none] table[col sep=comma,x=n,y=q70] {generated/power_curve.csv};
-\addplot[red!70!black,mark=none,dashed] table[col sep=comma,x=n,y=q80] {generated/power_curve.csv};
-\addplot[green!50!black,mark=none,dotted] table[col sep=comma,x=n,y=q90] {generated/power_curve.csv};
+\addplot[okBlue,mark=none] table[col sep=comma,x=n,y=q70] {generated/power_curve.csv};
+\addplot[okVermillion,mark=none,dashed] table[col sep=comma,x=n,y=q80] {generated/power_curve.csv};
+\addplot[okGreen,mark=none,dotted] table[col sep=comma,x=n,y=q90] {generated/power_curve.csv};
 \legend{$P(\text{win})=0.7$,$P(\text{win})=0.8$,$P(\text{win})=0.9$}
 \end{axis}
 \end{tikzpicture}
@@ -147,4 +145,4 @@ sample). \code{splinter experiences compare CANDIDATE BASELINE} pairs the two ar
 by task, counts a family once, and reports the exact one-sided sign test the release gate uses,
 the per-family wins, losses and ties, quality, cost and autonomy with family-bootstrap
 intervals, and the share of tasks on which the arms' verdicts agree; exposed and harness-failed
-attempts are left out and counted.\cl{PS09} \Cref{sec:replicate} marks each step of the replication as available or planned.\cl{PL01}
+attempts are left out and counted.\cl{PS09} \Cref{sec:replicate} gives the command for each step of a replication.\cl{PL01}
