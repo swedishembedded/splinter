@@ -30,6 +30,10 @@ record is absent is printed as NOT MEASURED, never as zero.
 Raw logs (run on a GPU, generated output, kept outside the repository; see DEFAULT_EVIDENCE):
   qual/*                 training-substrate qualification logs
   throughput/*.log       a later probe of the 27B architecture's training step rate
+  rsi{2,3,4}/verdicts/   the independent examiner's signed step and plan verdicts of the RSI series
+  rsi{3,4}/lineages/*/rounds.jsonl   the learner's round records of those series
+  rsi1-*/                RSI1's registered analyses and arm R/P/P2 evaluations
+  (the RSI records are folders of the evidence dataset splinter-flywheel-evidence)
 data/measurements.json records, per log, the values the claims cite, the brain commit, the exact
 command and the log's sha256. ../results.csv holds paired outcomes of the registered
 coding-task experiments (none yet).
@@ -306,6 +310,146 @@ def proto6_metrics(record):
     return {k: record[k] for k in keys if k in record}
 
 
+# ---------------------------------------------------------------- RSI series
+# The recursive-improvement series (prereg/recursive-improvement.md, rsi2.md, rsi3.md, rsi4.md). RSI2-4 are
+# decided by an independent examiner's signed aggregate verdicts (one per lineage and step, and one plan
+# verdict over the registered rule); the learner's side is each lineage's rounds.jsonl. RSI1's arms were
+# measured by their own registered analysis scripts.
+RSI_SERIES = (("rsi3", "RSI3"), ("rsi4", "RSI4"))
+RSI_LINEAGES = ("r0", "r1", "r2", "r3")
+RSI_STEPS = (1, 2, 3)
+
+
+def fmt_p(p):
+    """A p value as the paper prints it: three significant digits from 0.001 up, two below."""
+    return f"{p:.3g}" if p >= 1e-3 else f"{p:.2g}"
+
+
+def rsi_verdict_metrics(v):
+    """One step verdict of the examiner: items right for the candidate and its predecessor, the paired
+    wins and losses over the compared items, the one-sided exact sign test and whether the step holds,
+    the exam's identity, the training-overlap audit and, where the record carries them, the exclusion
+    counts and the serving and protocol settings. An absent exclusion record stays absent."""
+    m = {"right": v["items_right"], "predecessor_right": v["predecessor_items_right"],
+         "wins": v["wins"], "losses": v["losses"], "p": fmt_p(v["p_one_sided"]),
+         "holds": "yes" if v["step_holds"] else "no",
+         "exam": v["collection"]["exam_sha256"][:12], "items": v["collection"]["items"],
+         "exact_matches": v["overlap"]["exact_matches"], "flags": len(v["integrity_flags"]),
+         "signature": v["signature"]["alg"]}
+    if "exclusion" in v:
+        m.update(excluded=v["exclusion"]["excluded"], compared=v["exclusion"]["compared"])
+    if "brain_sha256" in v.get("serving_build", {}):
+        m["serving_brain"] = v["serving_build"]["brain_sha256"][:9]
+    if "kv_cache" in v.get("serving", {}):
+        m["kv"] = v["serving"]["kv_cache"]
+    for key in ("max_tokens", "truncated"):
+        if key in v["protocol"]:
+            m[key] = v["protocol"][key]
+    return m
+
+
+def rsi_plan_metrics(plan):
+    """The plan verdict: whether the registered rule is met, how many lineages succeeded and failed,
+    and the pooled sign test of every step."""
+    m = {"plan_met": "true" if plan["plan_met"] else "false",
+         "succeeded": plan["series_succeeded"], "failed": plan["series_failed"]}
+    for step, pooled in sorted(plan["pooled_steps"].items()):
+        m.update({f"g{step}_wins": pooled["wins"], f"g{step}_losses": pooled["losses"],
+                  f"g{step}_p": fmt_p(pooled["p_one_sided"]), f"g{step}_series": pooled["series"]})
+    return m
+
+
+def rsi_rounds_metrics(text):
+    """A lineage's rounds.jsonl (the learner's side): per generation what the champion proposed and
+    mispredicted, what was replayed and trained, the frontier measurement, the dev gate's paired
+    counts and rates and its retention losses, and the lineage's learner hours in all."""
+    m, seconds = {}, 0.0
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        g, d = f"g{r['generation']}", r["decision"]
+        m.update({f"{g}_proposed": r["proposed"], f"{g}_mispredicted": r["mispredicted"],
+                  f"{g}_replayed": r["replayed"], f"{g}_steps": r["trained"]["steps"],
+                  f"{g}_dev_wins": d["wins"], f"{g}_dev_losses": d["losses"],
+                  f"{g}_dev_p": fmt_p(d["p_value"]), f"{g}_dev_before": d["champion_rate"],
+                  f"{g}_dev_after": d["candidate_rate"], f"{g}_retention_losses": d["retention_losses"],
+                  f"{g}_advanced": "yes" if r["advanced"] else "no"})
+        if r.get("trained_records") is not None:
+            m[f"{g}_trained_records"] = r["trained_records"]
+        if r.get("frontier"):
+            m.update({f"{g}_{k}": r["frontier"][k] for k in ("measured", "on_frontier", "requests")})
+        seconds += r["seconds"]
+    m["hours"] = f"{seconds / 3600:.1f}"
+    return m
+
+
+def rsi1_analysis_metrics(a):
+    """An RSI1 arm's registered analysis: per step the pooled wins, losses and sign test and whether a
+    replicate fell, per replicate its items right at each generation and its step counts (arms H, HP and
+    HR); for arm HL's per-lineage analysis, each lineage's steps, whether it succeeds and the pooled steps."""
+    m = {}
+    if "lineages" in a:
+        for lineage in a["lineages"]:
+            r = lineage["lineage"]
+            for i, step in enumerate(lineage["steps"], 1):
+                m.update({f"{r}_g{i}_wins": step["wins"], f"{r}_g{i}_losses": step["losses"],
+                          f"{r}_g{i}_p": fmt_p(step["p"]), f"{r}_g{i}_right": step["right"]})
+            m[f"{r}_succeeds"] = "yes" if lineage["succeeds"] else "no"
+        m.update(succeeding=a["lineages_succeeding"], met="yes" if a["criterion_met"] else "no")
+        for step, pooled in sorted(a["pooled"].items()):
+            m.update({f"{step}_wins": pooled["wins"], f"{step}_losses": pooled["losses"], f"{step}_p": fmt_p(pooled["p"])})
+        return m
+    for key, step in sorted(a.items()):
+        g = int(key.split("-")[0].removeprefix("gen"))
+        m.update({f"g{g}_wins": step["wins"], f"g{g}_losses": step["losses"], f"g{g}_p": fmt_p(step["sign_p"]),
+                  f"g{g}_falls": "no" if step["no_replicate_falls"] else "yes"})
+        for rep, counts in sorted(step["per_replicate"].items()):
+            m.update({f"r{rep}_g{g - 1}_right": counts["from"], f"r{rep}_g{g}_right": counts["to"],
+                      f"r{rep}_g{g}_wins": counts["wins"], f"r{rep}_g{g}_losses": counts["losses"]})
+    return m
+
+
+def rsi1_rl_metrics(e):
+    """One iteration's evaluation of RSI1 arms R, P and P2: pass@1 and pass@4 on the fresh items of the
+    trained families and on the never-trained families, and the items right on arm H's exam."""
+    return {"seen_p1": e["test-seen"]["pass@1"], "seen_p4": e["test-seen"]["pass@4"],
+            "held_p1": e["test-held"]["pass@1"], "held_p4": e["test-held"]["pass@4"],
+            "exam_right": e["exam-h"]["right"], "exam_items": e["exam-h"]["items"]}
+
+
+def rsi_pooled_metrics(series, m):
+    """COMPUTED: each step's wins and losses summed over the lineages' step verdicts, with the exact
+    one-sided sign test of the sums (the plan verdict states the same figures; check() compares them)."""
+    out = {}
+    for step in RSI_STEPS:
+        wins = sum(v for k, v in m.items() if re.fullmatch(rf"{series}\.v\.r\d\.g{step}\.wins", k))
+        losses = sum(v for k, v in m.items() if re.fullmatch(rf"{series}\.v\.r\d\.g{step}\.losses", k))
+        if wins + losses:
+            out.update({f"{series}.pooled.g{step}.wins": wins, f"{series}.pooled.g{step}.losses": losses,
+                        f"{series}.pooled.g{step}.p": fmt_p(upper_tail(wins, wins + losses))})
+    return out
+
+
+def rsi_gate_metrics(series, m):
+    """COMPUTED: how many steps the learner's dev gate accepted and how many of those the examiner's
+    step verdict found not to hold, and per generation the proposals and mispredicted (trained-on)
+    programs summed over the lineages."""
+    accepted = not_held = 0
+    for r in RSI_LINEAGES:
+        for step in RSI_STEPS:
+            if m.get(f"{series}.dev.{r}.g{step}_advanced") == "yes":
+                accepted += 1
+                not_held += m.get(f"{series}.v.{r}.g{step}.holds") == "no"
+    out = {f"{series}.gate.accepted": accepted, f"{series}.gate.not_held": not_held}
+    for step in RSI_STEPS:
+        for field in ("proposed", "mispredicted"):
+            values = [m[k] for r in RSI_LINEAGES if (k := f"{series}.dev.{r}.g{step}_{field}") in m]
+            if values:
+                out[f"{series}.signal.g{step}.{field}"] = sum(values)
+    return out
+
+
 class NoParser(Exception):
     """A run whose metric prefix names no log shape this script reads: its values cannot be re-extracted."""
 
@@ -314,6 +458,16 @@ def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
     m = {}
+    if prefix.startswith("rsi1.arm."):
+        return rsi1_analysis_metrics(json.loads(text))
+    if prefix.startswith("rsi1.rl."):
+        return rsi1_rl_metrics(json.loads(text))
+    if re.match(r"rsi\d\.v\.", prefix):
+        return rsi_verdict_metrics(json.loads(text))
+    if re.match(r"rsi\d\.plan$", prefix):
+        return rsi_plan_metrics(json.loads(text))
+    if re.match(r"rsi\d\.dev\.", prefix):
+        return rsi_rounds_metrics(text)
     if prefix.startswith("ce1."):
         return ce1_summary_metrics(json.loads(text))
     if prefix.startswith("ce4."):
@@ -470,7 +624,19 @@ def metrics():
     m.update(prefixed_metrics("gen2."))
     m.update(prefixed_metrics("lua."))
     m.update(prefixed_metrics("gen27b"))
+    m.update(prefixed_metrics("rsi"))
+    for series in ("rsi2", "rsi3", "rsi4"):
+        m.update(rsi_pooled_metrics(series, m))
+        m.update(rsi_gate_metrics(series, m))
+    m.update(frontier_entry_metrics())
     return m
+
+
+def frontier_entry_metrics(samples=4):
+    """COMPUTED: the chance that RSI4's frontier rule (a program enters when at least one of `samples`
+    sampled predictions is wrong) admits a program the champion predicts right with probability q per
+    sample, 1 - q**samples, at q = 0.5 and 0.9."""
+    return {f"rsi4.frontier.entry_q{int(100 * q)}": f"{1 - q ** samples:.2f}" for q in (0.5, 0.9)}
 
 
 # ---------------------------------------------------------------- outputs
@@ -565,6 +731,80 @@ def pilot_results_table(rows=None):
     return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
 
 
+def tex_p(p):
+    """A p value string of fmt_p as LaTeX: 1.8e-22 as 1.8 times ten to the -22."""
+    mantissa, _, exponent = p.partition("e")
+    return f"${mantissa}{{\\times}}10^{{{int(exponent)}}}$" if exponent else p
+
+
+def rsi_step_rows(series, label, m):
+    """One row per lineage of a series: items right at the base and each generation (the base as the
+    examiner measured it at step 1), each step's wins/losses and sign test, and whether every step held."""
+    rows = []
+    for r in RSI_LINEAGES:
+        key = f"{series}.v.{r}"
+        if f"{key}.g1.right" not in m:
+            continue
+        right = [m[f"{key}.g1.predecessor_right"]] + [m[f"{key}.g{g}.right"] for g in RSI_STEPS]
+        steps = [f"{m[f'{key}.g{g}.wins']}/{m[f'{key}.g{g}.losses']} & {tex_p(m[f'{key}.g{g}.p'])}" for g in RSI_STEPS]
+        held = all(m[f"{key}.g{g}.holds"] == "yes" for g in RSI_STEPS)
+        rows.append(f"{r} & " + " & ".join(map(str, right)) + " & " + " & ".join(steps)
+                    + f" & {'yes' if held else 'no'} \\\\")
+    return "\n".join(rows)
+
+
+def rsi_table(m=None):
+    """The per-step outcomes of RSI3 and RSI4 from the examiner's verdicts, with the pooled steps
+    computed from them and the plan verdict's outcome."""
+    m = metrics() if m is None else m
+    lines = [r"\begin{tabular}{@{}l rrrr rr rr rr l@{}}", r"\toprule",
+             r" & \multicolumn{4}{c}{Items right of 889} & \multicolumn{2}{c}{Gen.~1 vs base}"
+             r" & \multicolumn{2}{c}{Gen.~2 vs gen.~1} & \multicolumn{2}{c}{Gen.~3 vs gen.~2} & \\",
+             r"\cmidrule(lr){2-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}",
+             r"Lineage & base & g1 & g2 & g3 & W/L & $p$ & W/L & $p$ & W/L & $p$ & All hold \\", r"\midrule"]
+    for series, label in RSI_SERIES:
+        if f"{series}.plan.plan_met" not in m:
+            lines.append(rf"\multicolumn{{12}}{{l}}{{{label}: \textbf{{NOT MEASURED}}}} \\")
+            continue
+        lines.append(rf"\multicolumn{{12}}{{@{{}}l}}{{\emph{{{label}}}}} \\")
+        lines.append(rsi_step_rows(series, label, m))
+        # summed over lineages that share the exam's items: a description, so no p is printed
+        pooled = " & ".join(f"{m[f'{series}.pooled.g{g}.wins']}/{m[f'{series}.pooled.g{g}.losses']} & --"
+                            for g in RSI_STEPS)
+        verdict = "met" if m[f"{series}.plan.plan_met"] == "true" else "not met"
+        lines.append(rf"pooled & \multicolumn{{4}}{{l}}{{{m[f'{series}.plan.succeeded']} of 4 lineages succeed}} & {pooled}"
+                     rf" & {verdict} \\")
+        lines.append(r"\addlinespace")
+    lines[-1:] = [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines)
+
+
+def rsi_items_csv(series, m):
+    """Items right per generation (0 = the base) and lineage, for the figure."""
+    out = ["gen," + ",".join(RSI_LINEAGES)]
+    for g in (0, *RSI_STEPS):
+        cells = []
+        for r in RSI_LINEAGES:
+            key = f"{series}.v.{r}.g{max(g, 1)}.{'predecessor_right' if g == 0 else 'right'}"
+            cells.append(str(m.get(key, "nan")))
+        out.append(f"{g}," + ",".join(cells))
+    return "\n".join(out) + "\n"
+
+
+def rsi_steps_csv(series, m):
+    """Each lineage step's wins and losses (losses negative) on one axis position each, for the figure."""
+    out = ["x,lineage,step,wins,losses,holds"]
+    x = 0
+    for r in RSI_LINEAGES:
+        for g in RSI_STEPS:
+            key = f"{series}.v.{r}.g{g}"
+            if f"{key}.wins" in m:
+                out.append(f"{x},{r},{g},{m[key + '.wins']},{-m[key + '.losses']},{1 if m[key + '.holds'] == 'yes' else 0}")
+            x += 1
+        x += 1
+    return "\n".join(out) + "\n"
+
+
 def design_table():
     lines = [r"\begin{tabular}{rrrrrr}", r"\toprule",
              r"Non-tied & Wins needed & Smallest $p$ & \multicolumn{3}{c}{Power if $P(\text{win})=$} \\",
@@ -615,6 +855,10 @@ def write_outputs(out):
     (out / "design_table.tex").write_text(design_table() + "\n")
     (out / "power_curve.csv").write_text(power_curve())
     (out / "families_table.tex").write_text(families_table() + "\n")
+    (out / "rsi_table.tex").write_text(rsi_table(m) + "\n")
+    for series, _ in RSI_SERIES:
+        (out / f"{series}_items.csv").write_text(rsi_items_csv(series, m))
+        (out / f"{series}_steps.csv").write_text(rsi_steps_csv(series, m))
     macros_extra = f"\\newcommand{{\\alphalevel}}{{{ALPHA}}}\n"
     with open(out / "macros.tex", "a") as handle:
         handle.write(macros_extra)
@@ -661,6 +905,23 @@ def check_evidence(c, m, problems):
                 problems.append(f"{c['id']}: {key} is not in references.bib")
 
 
+def check_rsi_consistency(m, problems):
+    """The pooled steps computed from the lineages' step verdicts must equal the plan verdict's, and the
+    lineages whose every step holds must be the number the plan verdict counts as succeeded."""
+    for series in ("rsi2", "rsi3", "rsi4"):
+        if f"{series}.plan.plan_met" not in m:
+            continue
+        for g in RSI_STEPS:
+            for field in ("wins", "losses"):
+                computed = m.get(f"{series}.pooled.g{g}.{field}", 0)
+                stated = m.get(f"{series}.plan.g{g}_{field}")
+                if stated is not None and computed != stated:
+                    problems.append(f"{series} step {g}: pooled {field} {computed} from the lineages, {stated} in the plan verdict")
+        held = sum(all(m.get(f"{series}.v.{r}.g{g}.holds") == "yes" for g in RSI_STEPS) for r in RSI_LINEAGES)
+        if held != m[f"{series}.plan.succeeded"]:
+            problems.append(f"{series}: {held} lineages hold at every step, the plan verdict counts {m[f'{series}.plan.succeeded']}")
+
+
 def paper_status():
     status = (ROOT / "status.txt").read_text().strip()
     if status not in ("draft", "final"):
@@ -689,6 +950,7 @@ def check(final, evidence):
         if c["status"] != allowed:
             problems.append(f"{c['id']}: status {c['status']!r}, expected {allowed!r}")
         check_evidence(c, m, problems)
+    check_rsi_consistency(m, problems)
     check_evidence_dir(evidence, problems)
     if final:
         if paper_status() == "draft":

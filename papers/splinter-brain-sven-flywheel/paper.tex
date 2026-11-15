@@ -20,9 +20,53 @@
 \usepackage{xcolor}
 \usepackage{amsmath,amssymb}
 \usepackage{tikz}
-\usetikzlibrary{positioning,arrows.meta,fit,calc,shapes.geometric}
+\usetikzlibrary{positioning,arrows.meta,fit,calc,shapes.geometric,shapes.misc,backgrounds,patterns}
 \usepackage{pgfplots}
+\usepgfplotslibrary{groupplots}
 \pgfplotsset{compat=1.17}
+
+% One visual language for every figure. Colours are the Okabe-Ito palette (distinguishable with
+% colour-blindness) and every pair used together also differs in lightness, line style or marker, so
+% the figures read in grayscale. Node shapes: process (rounded box), data or store (plain box with a
+% thick left rule), verifier (double border), decision (diamond), boundary (dashed frame). Arrows:
+% data flow solid, control or the next turn dashed, a refused path dotted in vermillion.
+\definecolor{okBlue}{HTML}{0072B2}
+\definecolor{okOrange}{HTML}{E69F00}
+\definecolor{okGreen}{HTML}{009E73}
+\definecolor{okVermillion}{HTML}{D55E00}
+\definecolor{okSky}{HTML}{56B4E9}
+\definecolor{okPurple}{HTML}{CC79A7}
+\definecolor{okGrey}{HTML}{6E6E6E}
+\tikzset{
+  fig/.style={font=\footnotesize, node distance=6mm and 7mm, >={Stealth[length=2.2mm]}},
+  proc/.style={draw=black!75, rounded corners=2pt, fill=#1, align=center, inner sep=3pt,
+    minimum height=9mm, text width=22mm, line width=0.5pt},
+  proc/.default=white,
+  data/.style={draw=black!75, fill=white, align=center, inner sep=3pt, minimum height=8mm,
+    text width=22mm, line width=0.5pt, path picture={\draw[line width=2pt,black!60]
+      (path picture bounding box.north west) -- (path picture bounding box.south west);}},
+  verif/.style={draw=black!75, double, double distance=1pt, fill=okGreen!12, align=center,
+    inner sep=3pt, minimum height=9mm, text width=22mm},
+  decide/.style={diamond, aspect=2, draw=black!75, fill=okOrange!18, align=center, inner sep=1pt,
+    font=\footnotesize},
+  bound/.style={draw=black!55, dashed, rounded corners=4pt, inner sep=3mm},
+  boundlabel/.style={font=\footnotesize\bfseries, text=black!70, anchor=south west, inner sep=1pt, yshift=1.5pt},
+  flow/.style={->, line width=0.7pt, black!80},
+  ctrl/.style={->, line width=0.7pt, dashed, black!60},
+  refuse/.style={->, line width=0.8pt, densely dotted, okVermillion},
+  reflabel/.style={font=\footnotesize\itshape, text=okVermillion!85!black, align=left},
+  lab/.style={font=\footnotesize, fill=white, inner sep=1.2pt, align=center},
+  tag/.style={font=\footnotesize\scshape, text=black!65},
+}
+\pgfplotsset{
+  paper/.style={tick label style={font=\footnotesize}, label style={font=\footnotesize},
+    title style={font=\footnotesize\bfseries}, legend style={font=\footnotesize, draw=black!40},
+    grid=major, grid style={black!12}, axis line style={black!70}},
+  lineage r0/.style={okBlue, thick, mark=*, mark size=1.8pt},
+  lineage r1/.style={okOrange, thick, dashed, mark=square*, mark size=1.7pt},
+  lineage r2/.style={okGreen, thick, dotted, mark=triangle*, mark size=2.3pt},
+  lineage r3/.style={okPurple, thick, dash dot, mark=diamond*, mark size=2.3pt},
+}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{caption}
 \usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
@@ -58,6 +102,7 @@ Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded
 \input{sections/08-pending}
 \input{sections/08b-documentation}
 \input{sections/08c-generations}
+\input{sections/08d-rsi}
 \input{sections/09-replication}
 \input{sections/10-limitations}
 \input{sections/11-reproducibility}

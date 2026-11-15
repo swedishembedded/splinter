@@ -7,7 +7,7 @@
 # recomputed rather than retyped, you can procure our services by sending an
 # email to info@swedishembedded.com.
 
-"""Spec: the development-probe table and the probe evidence parsers.
+"""Spec: the development-probe table, the probe evidence parsers and the examiner records.
 
 The pilot table is built from data/results.csv, and its p values are the exact
 one-sided sign test of its wins and losses, never typed. The verify and time
@@ -96,6 +96,94 @@ class ProbeParsers(unittest.TestCase):
         flat = {"g0_sd_wins": 16, "g0_sd_mean_delta": "0.034"}
         self.assertEqual(build_data.parse_log("gen27b", json.dumps(flat)), flat)
         self.assertEqual(build_data.parse_log("gen27b.tw", json.dumps(flat)), flat)
+
+
+def verdict(right, before, wins, losses, p, holds, excluded=None, kv=None):
+    """An examiner's step verdict of the shape the hand-off carries (aggregates only)."""
+    v = {"items_right": right, "predecessor_items_right": before, "wins": wins, "losses": losses,
+         "p_one_sided": p, "step_holds": holds, "integrity_flags": [],
+         "collection": {"exam_sha256": "60ac3ae44651500f5cdfdf821770b3b4", "items": 889},
+         "overlap": {"exact_matches": 0, "near_duplicates": 0, "records_checked": 1000},
+         "protocol": {"name": "direct-completion", "temperature": 0.0, "thinking": "off"},
+         "serving": {}, "signature": {"alg": "hmac-sha256"}}
+    if excluded is not None:
+        v["exclusion"] = {"enabled": True, "excluded": excluded, "compared": 889 - excluded}
+    if kv is not None:
+        v["serving"]["kv_cache"] = kv
+        v["protocol"].update(max_tokens=2048, truncated="graded")
+    return v
+
+
+class ExaminerRecords(unittest.TestCase):
+    """The RSI series are decided by an independent examiner's signed aggregate verdicts and by the
+    learner's own round records; their values are read, never retyped."""
+
+    def test_a_step_verdict_is_read_as_its_counts_its_sign_test_and_its_exclusions(self):
+        m = build_data.parse_log("rsi4.v.r2.g1", json.dumps(verdict(118, 12, 109, 3, 4.511e-29, True, 1, "f32")))
+        self.assertEqual((m["right"], m["predecessor_right"], m["wins"], m["losses"]), (118, 12, 109, 3))
+        self.assertEqual((m["p"], m["holds"], m["excluded"], m["compared"]), ("4.5e-29", "yes", 1, 888))
+        self.assertEqual((m["kv"], m["max_tokens"], m["truncated"]), ("f32", 2048, "graded"))
+        self.assertEqual(m["exam"], "60ac3ae44651")
+
+    def test_a_verdict_without_an_exclusion_record_reports_none_rather_than_zero(self):
+        m = build_data.parse_log("rsi2.v.r0.g1", json.dumps(verdict(4, 0, 4, 0, 0.0625, False)))
+        self.assertNotIn("excluded", m)
+        self.assertEqual((m["p"], m["holds"]), ("0.0625", "no"))
+
+    def test_a_plan_verdict_is_read_as_its_rule_outcome_and_pooled_steps(self):
+        plan = {"plan_met": True, "series_succeeded": 4, "series_failed": 0,
+                "pooled_steps": {"1": {"wins": 422, "losses": 8, "p_one_sided": 9.98e-114, "series": 4}}}
+        m = build_data.parse_log("rsi4.plan", json.dumps(plan))
+        self.assertEqual(m, {"plan_met": "true", "succeeded": 4, "failed": 0, "g1_wins": 422,
+                             "g1_losses": 8, "g1_p": "1e-113", "g1_series": 4})
+
+    def test_lineage_rounds_are_read_per_generation(self):
+        rounds = [{"generation": g, "proposed": 600 * g, "mispredicted": 300 * g, "replayed": 0,
+                   "trained_records": 300 * g, "trained": {"steps": 75 * g},
+                   "frontier": {"measured": 600 * g, "on_frontier": 500 * g, "requests": 900 * g},
+                   "decision": {"wins": 25, "losses": 19, "p_value": 0.2257, "champion_rate": 0.6375,
+                                "candidate_rate": 0.6525, "retention_losses": 1},
+                   "advanced": True, "seconds": 1800.0} for g in (1, 2)]
+        m = build_data.parse_log("rsi4.dev.r1", "\n".join(json.dumps(r) for r in rounds))
+        self.assertEqual((m["g2_dev_wins"], m["g2_dev_losses"], m["g2_dev_p"]), (25, 19, "0.226"))
+        self.assertEqual((m["g1_mispredicted"], m["g2_trained_records"], m["g2_steps"]), (300, 600, 150))
+        self.assertEqual((m["g2_on_frontier"], m["g1_advanced"], m["hours"]), (1000, "yes", "1.0"))
+
+    def test_the_pooled_steps_are_computed_from_the_lineages_and_agree_with_the_plan_verdict(self):
+        steps = {"rsi9.v.r0.g1.wins": 3, "rsi9.v.r0.g1.losses": 1, "rsi9.v.r1.g1.wins": 5,
+                 "rsi9.v.r1.g1.losses": 0, "rsi9.v.r0.g1.holds": "no", "rsi9.v.r1.g1.holds": "yes"}
+        m = build_data.rsi_pooled_metrics("rsi9", steps)
+        self.assertEqual((m["rsi9.pooled.g1.wins"], m["rsi9.pooled.g1.losses"]), (8, 1))
+        self.assertEqual(m["rsi9.pooled.g1.p"], build_data.fmt_p(build_data.upper_tail(8, 9)))
+
+    def test_the_step_table_renders_every_lineage_with_its_counts(self):
+        m = {}
+        for r in ("r0", "r1"):
+            for g in (1, 2, 3):
+                m.update({f"rsi9.v.{r}.g{g}.right": 10 * g, f"rsi9.v.{r}.g{g}.predecessor_right": 10 * g - 10,
+                          f"rsi9.v.{r}.g{g}.wins": 7, f"rsi9.v.{r}.g{g}.losses": 2,
+                          f"rsi9.v.{r}.g{g}.p": "0.07", f"rsi9.v.{r}.g{g}.holds": "no"})
+        tex = build_data.rsi_step_rows("rsi9", "RSI9", m)
+        self.assertIn("r0 & 0 & 10 & 20 & 30", tex)
+        self.assertIn("7/2", tex)
+        self.assertEqual(tex.count("\\\\"), 2)
+
+    def test_the_frontier_rule_admits_a_mostly_right_program_with_the_stated_chance(self):
+        m = build_data.frontier_entry_metrics()
+        self.assertEqual((m["rsi4.frontier.entry_q90"], m["rsi4.frontier.entry_q50"]), ("0.34", "0.94"))
+
+    def test_an_rsi1_analysis_is_read_per_step_and_per_replicate(self):
+        a = {"gen1-vs-gen0": {"per_replicate": {"0": {"from": 0, "to": 38, "wins": 38, "losses": 0}},
+                              "wins": 103, "losses": 0, "sign_p": 9.86e-32, "no_replicate_falls": True}}
+        m = build_data.parse_log("rsi1.arm.h", json.dumps(a))
+        self.assertEqual((m["g1_wins"], m["g1_losses"], m["g1_p"], m["g1_falls"]), (103, 0, "9.9e-32", "no"))
+        self.assertEqual((m["r0_g0_right"], m["r0_g1_right"]), (0, 38))
+        hl = {"lineages": [{"lineage": "r3", "steps": [{"wins": 16, "losses": 0, "p": 1.5e-05, "right": 16}],
+                            "succeeds": True}], "lineages_succeeding": 1, "criterion_met": False,
+              "pooled": {"g1": {"wins": 149, "losses": 0, "p": 1.4e-45}}}
+        m = build_data.parse_log("rsi1.arm.hl2", json.dumps(hl))
+        self.assertEqual((m["r3_g1_wins"], m["r3_succeeds"], m["succeeding"], m["met"]), (16, "yes", 1, "no"))
+        self.assertEqual((m["g1_wins"], m["g1_p"]), (149, "1.4e-45"))
 
 
 if __name__ == "__main__":
