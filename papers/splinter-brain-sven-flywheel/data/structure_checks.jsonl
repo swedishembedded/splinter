@@ -417,3 +417,4 @@
 {"id": "SL16.2", "repo": "splinter", "path": "crates/knowledge/src/tasks/shown.rs", "kind": "regex", "pattern": "\"math\\.random\",", "min": 1, "pin": "splinter_lua"}
 {"id": "SL17.1", "repo": "splinter", "path": "crates/pipelines/src/acquire/probes.rs", "kind": "regex", "pattern": "SamplingChoice::Prefer\\(GREEDY_SAMPLING\\)", "min": 1, "pin": "splinter_lua"}
 {"id": "SL14.1", "repo": "splinter", "path": "crates/pipelines/src/curriculum/repository_teacher.rs", "kind": "regex", "pattern": "Demonstration::answer", "min": 1, "pin": "splinter_lua"}
+{"id": "G2706.1", "repo": "splinter", "path": "papers/splinter-brain-sven-flywheel/prereg/recursive-improvement.md", "kind": "regex", "pattern": "H-EFF,\\s+registered\\s+from\\s+an\\s+exploratory\\s+finding", "min": 1, "pin": "splinter_rsi"}

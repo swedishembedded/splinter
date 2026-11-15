@@ -65,15 +65,13 @@ A comparison of agents is only a comparison of models if the software around the
 arm. Two failures of that kind were found while running the loop and are part of the protocol now.
 First, a wall-clock limit per trial makes the server's load part of the outcome: with about a
 hundred agents on one card, per-stream decoding slowed until correct trajectories were cut off, and
-the base's held-out repository pass rate read 46\,\% against 94\,\% at a fifth of the load. The loop
-therefore gives a model examined on a share of the cards that share of a workload's trials.
+the base's held-out repository pass rate read far below its rate on the same exam at a fifth of the
+load. The loop therefore gives a model examined on a share of the cards that share of a workload's trials.
 Second, a serving engine that ran out of device memory for one prefill round failed every request
 of that round; it now returns the sequences to its queue and narrows admission instead. An exam in
 which any trial was ended by the server, the environment or the harness decides nothing.
 
 \subsection{Results}
-
-% Filled from the run records only; every number below is a claim in the ledger.
 
 \paragraph{Generation 0.} The base explored the training tasks of single faults, firmware and
 mechanical design, and two candidates were trained on its attempts; the generation was decided on
@@ -84,9 +82,9 @@ all of the exam was already solved by the base: the gain is made on the few held
 solved only sometimes, and most of what first looked like failures of the base were trials the
 serving engine or the per-trial limit ended (\cref{sec:generations-harness}).
 
-\paragraph{Generation 1.} Exploring every training task again teaches little: in generation 0,
-114 of 138 single-fault training tasks were solved by every attempt, and a group whose attempts all
-earn the same reward has no advantage to learn from. Generation 1 therefore practises a frontier:
+\paragraph{Generation 1.} Exploring every training task again teaches little: most single-fault
+training tasks were solved by every attempt of generation 0, and a group whose attempts all earn the
+same reward has no advantage to learn from. Generation 1 therefore practises a frontier:
 the training tasks the base did not always solve and the training tasks with several faults it had
 never attempted, with the promoted champion. Its GRPO candidate was promoted on a gain that is
 not significant.\cl{G2704}
@@ -95,12 +93,14 @@ not significant.\cl{G2704}
 a base exam taken on an older serving build, part of which the serving engine had ended. When the
 base sat the same exam on generation 1's stack, the generation-0 champion no longer beat
 it,\cl{G2703} and after two generations no gain over the base is measured.\cl{G2704} The exams are
-near their ceiling for this model: the base already solves about nine held-out tasks in ten, so the
+near their ceiling for this model: the base already solves about nine held-out tasks in ten,\cl{G2703} so the
 few tasks it solves only sometimes carry the whole comparison, and two promotions on small
 positive means were not enough to move it. The generations did change the model, in one direction: on the tasks both solved, the
 generation-1 champion needed about a tenth fewer completion tokens per solved task than the base on every
 workload.\cl{G2705} That was found after the data and over several comparisons, so it is exploratory; it
-is registered as a co-primary outcome for the next runs (\code{prereg/recursive-improvement.md}).
+was registered as a co-primary outcome for later generations of these workloads,\cl{G2706} and no later
+run of this paper measured it, because the series that followed moved to a task with headroom for a
+small model.
 Self-improvement in pass rate across generations is therefore not shown by these runs; what they establish is the loop itself, run end to end without a stronger
 model, and the conditions an exam must meet before its decision means anything
 (\cref{sec:generations-harness}).
