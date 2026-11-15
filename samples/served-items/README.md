@@ -15,7 +15,10 @@ training jobs on the same card):
   driver, no system prompt, thinking off, greedy), with the policy trace when `trace` is set (the prompt
   ids the model read, the generated ids, the policy's log-probabilities and the served identity);
 - `train`: a supervised training job of the same server (`fine_tune_served`) on a chat dataset, its
-  adapter hot-loaded and named;
+  adapter hot-loaded and named; besides the required settings in the example below it takes
+  `base_precision` (`bf16` when absent, or `fp32`), `max_block` (the longest training row in tokens,
+  4096 when absent) and `weight_decay` (0 when absent), so another driver's job can be repeated with
+  exactly its request; an unknown setting is refused;
 - `adapter`: an adapter file offered under a name (refused unless the server lists its digest);
 - `restart`: stops the server, so the next step runs in a new server session.
 

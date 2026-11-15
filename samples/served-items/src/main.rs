@@ -91,21 +91,84 @@ enum Step {
     Adapter { name: String, file: PathBuf },
     /// A supervised training job of the server on `records`, its adapter
     /// kept under `name`.
-    Train {
-        name: String,
-        records: PathBuf,
-        held_out: PathBuf,
-        steps: u32,
-        lr: f32,
-        rank: u32,
-        alpha: f32,
-        grad_accum: u32,
-        seed: u64,
-        #[serde(default)]
-        base_precision: Option<String>,
-    },
+    Train(TrainStep),
     /// Stops the server; the next step starts a new server session.
     Restart,
+}
+
+/// The longest training row, in tokens, when a step does not say.
+const DEFAULT_MAX_BLOCK: u32 = 4096;
+
+/// A training step: every setting of the request brain's job receives, so a
+/// driver's job can be reproduced exactly by stating its settings.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TrainStep {
+    name: String,
+    records: PathBuf,
+    held_out: PathBuf,
+    steps: u32,
+    lr: f32,
+    rank: u32,
+    alpha: f32,
+    grad_accum: u32,
+    seed: u64,
+    /// `bf16` (when absent) or `fp32`.
+    #[serde(default)]
+    base_precision: Option<String>,
+    /// The longest training row, in tokens; [`DEFAULT_MAX_BLOCK`] when absent.
+    #[serde(default)]
+    max_block: Option<u32>,
+    /// Weight decay on the adapter; none when absent.
+    #[serde(default)]
+    weight_decay: Option<f32>,
+}
+
+/// The files a training request names.
+struct TrainPaths<'a> {
+    model: &'a Path,
+    records: &'a Path,
+    held_out: &'a Path,
+    attempt: &'a Path,
+}
+
+impl TrainStep {
+    /// The request brain's training job receives.
+    fn request<'a>(&self, paths: &TrainPaths<'a>) -> Result<FineTune<'a>> {
+        let base = match self.base_precision.as_deref() {
+            None | Some("bf16") => BasePrecision::Bf16,
+            Some("fp32") => BasePrecision::Fp32,
+            Some(other) => anyhow::bail!("{other:?} is not a base precision: bf16 or fp32"),
+        };
+        Ok(FineTune {
+            model_dir: paths.model,
+            train: paths.records,
+            held_out: paths.held_out,
+            held_out_text: None,
+            monitor: None,
+            eval_every: 0,
+            patience: 0,
+            attempt_dir: paths.attempt,
+            steps: self.steps,
+            rank: self.rank,
+            alpha: self.alpha,
+            replay: &[],
+            replay_share: None,
+            weighted_replay: &[],
+            grad_accum: self.grad_accum,
+            continue_from: None,
+            cancel: None,
+            base,
+            learning_rate: Some(self.lr),
+            weight_decay: self.weight_decay.unwrap_or(0.0),
+            seed: self.seed,
+            max_block: Some(self.max_block.unwrap_or(DEFAULT_MAX_BLOCK)),
+            thinking: false,
+            pack_answers: false,
+            on_step: None,
+            keep_evaluations: None,
+        })
+    }
 }
 
 struct Run<'a> {
@@ -213,48 +276,16 @@ impl Run<'_> {
         Ok(json!({"adapter": name, "digest": digest.to_string()}))
     }
 
-    fn train(
-        &mut self,
-        name: &str,
-        records: &Path,
-        held_out: &Path,
-        recipe: &TrainRecipe,
-    ) -> Result<Value> {
+    fn train(&mut self, step: &TrainStep) -> Result<Value> {
+        let name = &step.name;
         let attempt = self.cli.out.join("attempts").join(name);
         let endpoints = self.host.endpoints()?;
-        let base = match recipe.base_precision.as_deref() {
-            None | Some("bf16") => BasePrecision::Bf16,
-            Some("fp32") => BasePrecision::Fp32,
-            Some(other) => anyhow::bail!("{other:?} is not a base precision: bf16 or fp32"),
-        };
-        let request = FineTune {
-            model_dir: &self.cli.model,
-            train: records,
-            held_out,
-            held_out_text: None,
-            monitor: None,
-            eval_every: 0,
-            patience: 0,
-            attempt_dir: &attempt,
-            steps: recipe.steps,
-            rank: recipe.rank,
-            alpha: recipe.alpha,
-            replay: &[],
-            replay_share: None,
-            weighted_replay: &[],
-            grad_accum: recipe.grad_accum,
-            continue_from: None,
-            cancel: None,
-            base,
-            learning_rate: Some(recipe.lr),
-            weight_decay: 0.0,
-            seed: recipe.seed,
-            max_block: Some(4096),
-            thinking: false,
-            pack_answers: false,
-            on_step: None,
-            keep_evaluations: None,
-        };
+        let request = step.request(&TrainPaths {
+            model: &self.cli.model,
+            records: &step.records,
+            held_out: &step.held_out,
+            attempt: &attempt,
+        })?;
         let started = Instant::now();
         let trained =
             fine_tune_served(&endpoints, &request).with_context(|| format!("training {name}"))?;
@@ -266,16 +297,6 @@ impl Run<'_> {
                   "held_out_loss_tuned": trained.tuned.loss, "speed": format!("{:?}", trained.curve.speed)}),
         )
     }
-}
-
-struct TrainRecipe {
-    steps: u32,
-    lr: f32,
-    rank: u32,
-    alpha: f32,
-    grad_accum: u32,
-    seed: u64,
-    base_precision: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -328,29 +349,7 @@ fn main() -> Result<()> {
                 trace,
             } => run.answer(&name, &policy, &items, trace)?,
             Step::Adapter { name, file } => run.adopt(&name, &file)?,
-            Step::Train {
-                name,
-                records,
-                held_out,
-                steps,
-                lr,
-                rank,
-                alpha,
-                grad_accum,
-                seed,
-                base_precision,
-            } => {
-                let recipe = TrainRecipe {
-                    steps,
-                    lr,
-                    rank,
-                    alpha,
-                    grad_accum,
-                    seed,
-                    base_precision,
-                };
-                run.train(&name, &records, &held_out, &recipe)?
-            }
+            Step::Train(step) => run.train(&step)?,
             Step::Restart => {
                 run.host.stop();
                 run.session += 1;
@@ -362,4 +361,70 @@ fn main() -> Result<()> {
         writeln!(summary, "{done}")?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn train_step(extra: &str) -> TrainStep {
+        let text = format!(
+            r#"[{{"train": {{"name": "fit", "records": "t.jsonl", "held_out": "h.jsonl", "steps": 525,
+                "lr": 3e-5, "rank": 16, "alpha": 32, "grad_accum": 8, "seed": 11{extra}}}}}]"#
+        );
+        let mut steps: Vec<Step> = serde_json::from_str(&text).unwrap();
+        match steps.remove(0) {
+            Step::Train(step) => step,
+            other => panic!("not a training step: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_training_step_reproduces_a_drivers_request_including_its_block_and_weight_decay() {
+        let step =
+            train_step(r#", "max_block": 1024, "weight_decay": 0.01, "base_precision": "fp32""#);
+        let paths = TrainPaths {
+            model: Path::new("base"),
+            records: Path::new("t.jsonl"),
+            held_out: Path::new("h.jsonl"),
+            attempt: Path::new("attempt"),
+        };
+        let request = step.request(&paths).unwrap();
+        assert_eq!(request.max_block, Some(1024));
+        assert!((request.weight_decay - 0.01).abs() < f32::EPSILON);
+        assert_eq!(request.base, BasePrecision::Fp32);
+        assert_eq!(
+            (
+                request.steps,
+                request.rank,
+                request.grad_accum,
+                request.seed
+            ),
+            (525, 16, 8, 11)
+        );
+        assert_eq!(request.learning_rate, Some(3e-5));
+        assert!(request.continue_from.is_none() && request.replay.is_empty());
+    }
+
+    #[test]
+    fn a_training_step_without_block_or_weight_decay_keeps_the_samples_defaults() {
+        let step = train_step("");
+        let paths = TrainPaths {
+            model: Path::new("base"),
+            records: Path::new("t.jsonl"),
+            held_out: Path::new("h.jsonl"),
+            attempt: Path::new("attempt"),
+        };
+        let request = step.request(&paths).unwrap();
+        assert_eq!(request.max_block, Some(DEFAULT_MAX_BLOCK));
+        assert!(request.weight_decay.abs() < f32::EPSILON);
+        assert_eq!(request.base, BasePrecision::Bf16);
+    }
+
+    #[test]
+    fn a_misnamed_training_setting_is_refused() {
+        let text = r#"[{"train": {"name": "fit", "records": "t", "held_out": "h", "steps": 1, "lr": 1e-5,
+            "rank": 4, "alpha": 8, "grad_accum": 1, "seed": 1, "max_blocks": 1024}}]"#;
+        assert!(serde_json::from_str::<Vec<Step>>(text).is_err());
+    }
 }
