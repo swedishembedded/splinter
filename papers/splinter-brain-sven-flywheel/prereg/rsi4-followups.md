@@ -58,3 +58,26 @@ on through the one-way hand-off and returns signed aggregate verdicts only.
 ## What is not claimed
 
 Nothing until the verdicts evaluate F1, F2 and M1; each is recorded whatever it is.
+
+## Deviations (dated; all before any F or M verdict existed)
+
+- 2026-11-15 ~11:30, on an independent referee's review, before any verdict of F or M was produced or read:
+  1. **M's primary analysis is lineage-level.** The registered M1 compares adapters of different seeds item by item, which confounds
+     the treatment with seed-to-seed variation (RSI4's generation-3 champions range from 192 to 241 items right on the RSI4 exam), and
+     its pairing by index is arbitrary. The primary M analysis is now the difference between the mean share of F's items right of the
+     four RSI4 generation-3 champions and that of the four M controls, with a 95% interval from a bootstrap that resamples templates and
+     lineages (seeds) jointly, and an equivalence margin of 0.02 (two percentage points of F's items): **generation 3 better** (lower
+     bound above 0), **equivalent** (interval within plus or minus 0.02), **control better** (upper bound below 0), otherwise
+     **inconclusive**. The original M1 is kept and reported as a secondary analysis.
+  2. **Arms added.** M-900: four lineages as M with a frontier of 900 base-proposed programs (225 steps, generation 2's amount),
+     so that the matched-data controls trace a data-scaling curve beside RSI4's generational curve. S (seed null): each RSI4
+     generation-3 champion's training set retrained from the base with a new training seed, measuring the adapter-to-adapter
+     variation that item-level comparisons between adapters carry. A control on unfiltered base proposals (2100 records without
+     frontier selection) is not run: the registered lineage build cannot draw them.
+  3. **F reports more, judged the same way.** Beside F1 and F2: the exact construction of F2's interval (stated in the launch record);
+     the lineage-averaged step gain with its template-clustered interval; strata of F by template (families whose name also occurs in
+     the RSI4 exam vs new ones) and by the base's answer (base right vs base wrong); per-template aggregate right counts; and a
+     similarity audit (for each F item, its nearest program among everything any examined candidate trained on, by normalised
+     token-set Jaccard, reported as a distribution).
+  4. **Descriptive baselines on F** (no criterion): the base with thinking on; the base's majority answer over 4 samples at
+     temperature 1.0; and Qwen/Qwen3.8-27B-FP8 zero-shot under the same protocol.
