@@ -22,6 +22,7 @@ captured on the wire, and only verifier-accepted episodes become records.
 |---|---|---|
 | Stage ledger (key = hash of config slice, inputs, revisions; begin/commit/invalidate pack; attempt ids never reused; outputs re-hashed on reuse; one process per run dir) | `crates/store/src/stage_ledger.rs`, shared pack lock `pack.rs` | done, specs in `crates/store/tests/it/stage_ledger.rs` |
 | Agent episode under sven's compact profile (`compact/1`, three tools, first request under 4 KB measured by its spec) and the policy endpoint (an OpenAI-compatible endpoint answered by a program, every request kept; also a recording proxy to a served model) | `crates/agent/src/workspace_episode.rs`, `policy_endpoint.rs` | done; sven pinned to 6f4b1716 |
+| Training records from recorded model calls (`generic-messages-v2`, one record per call, the request as sven sent it as context, its reply the one supervised message) | `crates/data/src/wire.rs` | done |
 
 ## Open
 

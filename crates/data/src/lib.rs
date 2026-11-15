@@ -48,7 +48,9 @@
 //! it.
 //! [`DatasetStore`] keeps such datasets under the state root, each named by
 //! its manifest's digest. [`replay_sample`] picks which earlier records are
-//! replayed beside new ones.
+//! replayed beside new ones. [`wire`] makes chat records straight from an
+//! agent's recorded model calls, the request as sent and its reply
+//! supervised, for episodes whose requests were captured on the wire.
 //!
 //! Record datasets (one subject per line, such as `timeline-v1`) are not
 //! projected from experiences; what this crate decides for them is how they
@@ -92,6 +94,7 @@ pub mod timeline_store;
 mod trajectory;
 mod unprojectable;
 mod views;
+pub mod wire;
 
 use std::collections::BTreeMap;
 
@@ -639,6 +642,9 @@ pub enum ViewError {
         /// The experience the annotation is about.
         annotation_of: ExperienceId,
     },
+    /// A recorded model call cannot be made a training record.
+    #[error("a recorded model call cannot be a record: {0}")]
+    Call(String),
     /// An experience was added to a corpus twice.
     #[error("experience {0} is already in the corpus")]
     DuplicateExperience(ExperienceId),
