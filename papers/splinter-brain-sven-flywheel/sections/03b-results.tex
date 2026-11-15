@@ -98,9 +98,26 @@ removes this.\cl{RS39}
 base.\cl{RS48} Without a retrain of the same data under another training seed, which is registered
 (\cref{sec:followups}), this churn has no noise floor.
 
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[paper, width=0.6\linewidth, height=5.2cm, xmin=-0.25, xmax=3.25, ymin=35, ymax=80,
+  xtick={0,1,2,3}, xticklabels={base,1,2,3}, xlabel={generation}, ylabel={dev-set accuracy (\%)},
+  legend pos=outer north east, legend cell align=left]
+\addplot[lineage r0] table[col sep=comma,x=gen,y=r0] {generated/rsi4_dev.csv};
+\addplot[lineage r1] table[col sep=comma,x=gen,y=r1] {generated/rsi4_dev.csv};
+\addplot[lineage r2] table[col sep=comma,x=gen,y=r2] {generated/rsi4_dev.csv};
+\addplot[lineage r3] table[col sep=comma,x=gen,y=r3] {generated/rsi4_dev.csv};
+\legend{r0,r1,r2,r3}
+\end{axis}
+\end{tikzpicture}
+\caption{S4 accuracy on each lineage's own 400-program dev set (100 generator programs and 300 base
+proposals, not selected by failure), the absolute effect size the learner's records give.}\label{fig:dev}
+\end{figure}
+
 \paragraph{Dev accuracy and frontier yield.} On each lineage's own 400-program dev set, which was not
 selected by failure, accuracy rose from 0.4025, 0.40, 0.435 and 0.545 at the base to 0.67, 0.6525, 0.65
-and 0.725 at generation~3 (\cref{fig:teaser}).\cl{RS46} The champions kept proposing programs they could
+and 0.725 at generation~3 (\cref{fig:dev}).\cl{RS46} The champions kept proposing programs they could
 not predict: the share of predicted proposals on the frontier fell from 84--93\% at generation~1 to
 61--71\% at generation~2 and 47--54\% at generation~3, so even the third champion missed about half of
 its own proposals.\cl{RS47}

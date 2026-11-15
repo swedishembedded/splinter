@@ -9,7 +9,7 @@ study this on one task, predicting what a Lua~5.1 program prints, with Qwen3-4B,
 registered before their runs and judged by an examiner program that holds an exam the learner never
 reads (\cref{sec:method}).
 
-The method that worked, S4, is pool-growing self-training (\cref{fig:cycle}). In each round the current
+The method that worked, S4, is pool-growing self-training (\cref{fig:hero}, detailed in \cref{fig:cycle}). In each round the current
 champion proposes programs about the language manual and predicts each one four times; the programs it
 gets wrong at least once enter a pool, the interpreter supplies their outputs as labels, and a fresh
 adapter is trained \emph{from the base} on the whole pool. The rounds share no parameters: only the pool
@@ -17,48 +17,7 @@ is passed on, so a ``generation'' is an acquisition round in which the current m
 and its own disagreement over four samples selects them. The pool doubles each round (300, 600 and 1200
 new programs).\cl{RS25,RS26}
 
-\begin{figure}[tbp]
-\centering
-\begin{tikzpicture}[fig]
-\tikzset{cell/.style={text width=28mm}}
-\def\dx{40mm}
-% row 0: the source
-\node[data, cell] (manual) at (\dx,0) {Lua 5.1 manual,\\one section per request};
-% row 1
-\node[proc=okSky!22, cell] (champ) at (0,-21mm) {champion of\\generation $g-1$\\(the base at $g=1$)};
-\node[proc=okSky!22, cell] (prop) at (\dx,-21mm) {champion proposes\\a program (own\\word and number)};
-\node[verif, cell] (lua) at (2*\dx,-21mm) {Lua 5.1.5 runs it\\twice; the equal\\output is the label};
-\node[proc=okSky!22, cell] (pred) at (3*\dx,-21mm) {champion predicts\\the output $k=4$\\times, $T=1.0$};
-% row 2, right to left
-\node[decide, aspect=2.2, inner sep=0.5pt, text width=15mm] (front) at (3*\dx,-49mm) {any of the\\4 wrong?};
-\node[data, cell] (union) at (2*\dx,-49mm) {frontier union:\\300, 900, 2100\\programs};
-\node[proc=okSky!22, cell] (lora) at (\dx,-49mm) {fresh LoRA from\\the base, 2 passes:\\75, 225, 525 steps};
-\node[verif, cell] (gate) at (0,-49mm) {learner's gate:\\dev 400 units,\\retention 300};
-% row 3
-\node[data, cell] (hand) at (\dx,-76mm) {hand-off: every\\trained program,\\candidate record};
-% flows
-\draw[flow] (champ) -- (prop);
-\draw[flow] (manual) -- (prop);
-\draw[flow] (prop) -- (lua);
-\draw[flow] (lua) -- (pred);
-\draw[flow] (pred) -- (front);
-\draw[flow] (front) -- node[lab, above] {yes} (union);
-\draw[flow] (union) -- (lora);
-\draw[flow] (lora) -- (gate);
-\draw[flow] ($(gate.south)+(6mm,0)$) |- node[lab, pos=0.3, right] {accepted} (hand.west);
-\draw[ctrl] (gate) -- node[lab, right, align=left] {new\\champion} (champ);
-\draw[refuse] ($(gate.south)+(-6mm,0)$) -- ++(0,-9mm) node[reflabel, below, align=center] {rejected:\\champion stays};
-\draw[refuse] (front.south) -- ++(0,-8mm) node[reflabel, below] {all 4 right: not trained};
-\draw[refuse] (lua.north) -- ++(0,6mm) node[reflabel, above, align=center] {refused: no stable output,\\a repeat, a nondeterministic call};
-\draw[ctrl] (hand.east) -- node[lab, above] {to the examiner} ++(30mm,0);
-\end{tikzpicture}
-\caption{One generation of S4, the series that met its criterion, read clockwise from the champion. The champion proposes programs about
-the manual and the interpreter labels them; a program joins the frontier when the champion predicts it
-wrong in at least one of 4 sampled attempts (300, 600 and 1200 new programs at generations 1 to 3); the
-candidate is a fresh LoRA trained from the base on the union of every generation's frontier; the
-learner's gate decides whether it becomes the next champion, and the examiner, not the gate, decides
-the registered outcome. Dotted arrows are what each stage refuses.}\label{fig:cycle}
-\end{figure}
+
 
 \begin{center}
 \fbox{\begin{minipage}{0.94\linewidth}\small
@@ -72,39 +31,12 @@ registered, not yet run.\cl{RS39}
 \end{minipage}}
 \end{center}
 
-\begin{figure}[tbp]
-\centering
-\begin{tikzpicture}
-\begin{groupplot}[paper, group style={group size=2 by 1, horizontal sep=16mm},
-  width=0.47\linewidth, height=5.3cm, xmin=-0.25, xmax=3.25, xtick={0,1,2,3}]
-\nextgroupplot[title={held-out exam (889 items)}, ymin=0, ymax=30,
-  xticklabels={base,{1\\300},{2\\900},{3\\2100}}, xticklabel style={align=center},
-  xlabel={generation and cumulative training records}, ylabel={items right (\%)}]
-\addplot[lineage r0] table[col sep=comma,x=gen,y=r0] {generated/rsi4_pct.csv};
-\addplot[lineage r1] table[col sep=comma,x=gen,y=r1] {generated/rsi4_pct.csv};
-\addplot[lineage r2] table[col sep=comma,x=gen,y=r2] {generated/rsi4_pct.csv};
-\addplot[lineage r3] table[col sep=comma,x=gen,y=r3] {generated/rsi4_pct.csv};
-\nextgroupplot[title={learner's own dev set (400 programs)}, ymin=35, ymax=80,
-  xticklabels={base,1,2,3}, xlabel={generation}, ylabel={accuracy (\%)},
-  legend style={at={(-0.18,-0.45)}, anchor=north, legend columns=4, /tikz/every even column/.append style={column sep=4mm}}]
-\addplot[lineage r0] table[col sep=comma,x=gen,y=r0] {generated/rsi4_dev.csv};
-\addplot[lineage r1] table[col sep=comma,x=gen,y=r1] {generated/rsi4_dev.csv};
-\addplot[lineage r2] table[col sep=comma,x=gen,y=r2] {generated/rsi4_dev.csv};
-\addplot[lineage r3] table[col sep=comma,x=gen,y=r3] {generated/rsi4_dev.csv};
-\legend{lineage r0, lineage r1, lineage r2, lineage r3}
-\end{groupplot}
-\end{tikzpicture}
-\caption{S4 at a glance. Left: share of the held-out exam answered, per lineage; the exam holds items the
-base missed when it was selected, so the base sits near zero by construction, and the cumulative
-training records under each generation show that every step also adds data. Right: accuracy on each
-lineage's own dev set, which was not selected by failure (100 generator programs and 300 base
-proposals, different per lineage), the only absolute effect size the records give.}\label{fig:teaser}
-\end{figure}
+
 
 \paragraph{What it shows, and what decides the rest.} Every S4 generation beat its predecessor on the
 exam by the registered test, the share answered rising from 1.3\% to between 21.6\% and 27.1\%, and
 accuracy on the learner's unselected dev sets rose from 40--55\% to 65--73\%
-(\cref{fig:teaser}).\cl{RS28,RS46} Two things limit the reading. The third step does not survive the
+(\cref{fig:hero,fig:dev}).\cl{RS28,RS46} Two things limit the reading. The third step does not survive the
 examiner's template-clustered intervals in most lineages (\cref{sec:rsi-robust}), and each round trains
 on more data than the last, so the gains may come from the amount of verified data rather than from an
 improved model proposing better material. A registered matched-data control decides between these:

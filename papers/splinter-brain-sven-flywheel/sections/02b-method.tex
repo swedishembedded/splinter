@@ -27,6 +27,49 @@ expression) that shares no code or templates with the exam's generator, although
 functions for which the exam has templates (\code{string.upper}, \code{string.rep}, the length
 operator, \code{table.sort}).\cl{RS51}
 
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}[fig]
+\tikzset{cell/.style={text width=28mm}}
+\def\dx{40mm}
+% row 0: the source
+\node[data, cell] (manual) at (\dx,0) {Lua 5.1 manual,\\one section per request};
+% row 1
+\node[proc=okSky!22, cell] (champ) at (0,-21mm) {champion of\\generation $g-1$\\(the base at $g=1$)};
+\node[proc=okSky!22, cell] (prop) at (\dx,-21mm) {champion proposes\\a program (own\\word and number)};
+\node[verif, cell] (lua) at (2*\dx,-21mm) {Lua 5.1.5 runs it\\twice; the equal\\output is the label};
+\node[proc=okSky!22, cell] (pred) at (3*\dx,-21mm) {champion predicts\\the output $k=4$\\times, $T=1.0$};
+% row 2, right to left
+\node[decide, aspect=2.2, inner sep=0.5pt, text width=15mm] (front) at (3*\dx,-49mm) {any of the\\4 wrong?};
+\node[data, cell] (union) at (2*\dx,-49mm) {frontier union:\\300, 900, 2100\\programs};
+\node[proc=okSky!22, cell] (lora) at (\dx,-49mm) {fresh LoRA from\\the base, 2 passes:\\75, 225, 525 steps};
+\node[verif, cell] (gate) at (0,-49mm) {learner's gate:\\dev 400 units,\\retention 300};
+% row 3
+\node[data, cell] (hand) at (\dx,-76mm) {hand-off: every\\trained program,\\candidate record};
+% flows
+\draw[flow] (champ) -- (prop);
+\draw[flow] (manual) -- (prop);
+\draw[flow] (prop) -- (lua);
+\draw[flow] (lua) -- (pred);
+\draw[flow] (pred) -- (front);
+\draw[flow] (front) -- node[lab, above] {yes} (union);
+\draw[flow] (union) -- (lora);
+\draw[flow] (lora) -- (gate);
+\draw[flow] ($(gate.south)+(6mm,0)$) |- node[lab, pos=0.3, right] {accepted} (hand.west);
+\draw[ctrl] (gate) -- node[lab, right, align=left] {new\\champion} (champ);
+\draw[refuse] ($(gate.south)+(-6mm,0)$) -- ++(0,-9mm) node[reflabel, below, align=center] {rejected:\\champion stays};
+\draw[refuse] (front.south) -- ++(0,-8mm) node[reflabel, below] {all 4 right: not trained};
+\draw[refuse] (lua.north) -- ++(0,6mm) node[reflabel, above, align=center] {refused: no stable output,\\a repeat, a nondeterministic call};
+\draw[ctrl] (hand.east) -- node[lab, above] {to the examiner} ++(30mm,0);
+\end{tikzpicture}
+\caption{One generation of S4, the series that met its criterion, read clockwise from the champion. The champion proposes programs about
+the manual and the interpreter labels them; a program joins the frontier when the champion predicts it
+wrong in at least one of 4 sampled attempts (300, 600 and 1200 new programs at generations 1 to 3); the
+candidate is a fresh LoRA trained from the base on the union of every generation's frontier; the
+learner's gate decides whether it becomes the next champion, and the examiner, not the gate, decides
+the registered outcome. Dotted arrows are what each stage refuses.}\label{fig:cycle}
+\end{figure}
+
 \paragraph{The exam.} The exam is 889 Lua~5.1 programs written by code from 25 standard-library
 templates over randomised and edge-case arguments, the items the base never answered in four sampled
 attempts under a neutral request at selection (at S4's serving tier it answers 12 of them); the reference of each is what the interpreter prints (twice,
