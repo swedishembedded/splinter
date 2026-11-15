@@ -23,4 +23,5 @@ mod projection;
 mod recovery;
 mod run_log;
 mod source_store;
+mod stage_ledger;
 mod task_store;

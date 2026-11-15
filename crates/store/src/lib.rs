@@ -38,7 +38,8 @@
 //! [`decision`] is the rule that turns an experience's verdicts into one
 //! decision. The sources, tasks, experiences and annotations themselves are
 //! `splinter-core`'s vocabulary. [`campaign`] is a continuous campaign's
-//! resumable state and its experiment ledger. [`error`] is the error every
+//! resumable state and its experiment ledger; [`stage_ledger`] a run
+//! directory's record of which stages are done under which inputs. [`error`] is the error every
 //! store reports.
 
 #![warn(missing_docs)]
@@ -58,12 +59,14 @@ pub mod jsonl;
 pub mod lineage;
 pub mod longitudinal;
 pub mod maintenance;
+mod pack;
 pub mod pointers;
 mod projection;
 pub mod recovery;
 pub mod runs;
 pub mod sources;
 pub mod space;
+pub mod stage_ledger;
 pub mod tasks;
 pub mod workspace;
 

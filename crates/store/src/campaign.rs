@@ -36,15 +36,15 @@
 //! never `0`.
 
 use std::collections::BTreeMap;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::{canonical_json, Digest};
 
+use crate::pack::Locked;
 use crate::StateRoot;
 
 /// States kept when a pack is compacted.
@@ -127,29 +127,6 @@ pub struct Loaded<S> {
     pub version: u64,
 }
 
-/// An exclusive lock on the pack, released when dropped.
-struct Locked {
-    file: File,
-}
-
-impl Locked {
-    fn new(file: File) -> std::io::Result<Self> {
-        // SAFETY: `file` is an open descriptor for the lifetime of the call.
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        Ok(Self { file })
-    }
-}
-
-impl Drop for Locked {
-    fn drop(&mut self) {
-        // SAFETY: the descriptor is still open; closing it would release the
-        // lock as well, so a failure here has nothing left to undo.
-        unsafe { libc::flock(self.file.as_raw_fd(), libc::LOCK_UN) };
-    }
-}
-
 impl CampaignStore {
     /// The store of campaign `name` under `root`.
     ///
@@ -195,47 +172,11 @@ impl CampaignStore {
     /// locked; a torn last line is cut off. A pack replaced by a compaction
     /// while this waited for the lock is opened again.
     fn lock(&self) -> Result<Locked, CampaignError> {
-        use std::os::unix::fs::MetadataExt;
-        if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| self.io(&e))?;
-        }
-        loop {
-            let file = OpenOptions::new()
-                .create(true)
-                .read(true)
-                .write(true)
-                .truncate(false)
-                .open(&self.path)
-                .map_err(|e| self.io(&e))?;
-            let mut locked = Locked::new(file).map_err(|e| self.io(&e))?;
-            let held = locked.file.metadata().map_err(|e| self.io(&e))?;
-            let current = std::fs::metadata(&self.path).map_err(|e| self.io(&e))?;
-            if (held.dev(), held.ino()) != (current.dev(), current.ino()) {
-                continue;
-            }
-            let len = held.len();
-            if len > 0 {
-                let mut last = [0u8; 1];
-                locked
-                    .file
-                    .seek(SeekFrom::Start(len - 1))
-                    .and_then(|_| locked.file.read_exact(&mut last))
-                    .map_err(|e| self.io(&e))?;
-                if last[0] != b'\n' {
-                    let bytes = self.read_all(&mut locked.file)?;
-                    let sound = bytes.iter().rposition(|b| *b == b'\n').map_or(0, |i| i + 1);
-                    locked.file.set_len(sound as u64).map_err(|e| self.io(&e))?;
-                }
-            }
-            return Ok(locked);
-        }
+        Locked::open(&self.path).map_err(|e| self.io(&e))
     }
 
-    fn read_all(&self, file: &mut File) -> Result<Vec<u8>, CampaignError> {
-        let mut bytes = Vec::new();
-        file.seek(SeekFrom::Start(0)).map_err(|e| self.io(&e))?;
-        file.read_to_end(&mut bytes).map_err(|e| self.io(&e))?;
-        Ok(bytes)
+    fn read_all(&self, locked: &mut Locked) -> Result<Vec<u8>, CampaignError> {
+        locked.read_all().map_err(|e| self.io(&e))
     }
 
     /// The last head of the pack, found from its tail.
@@ -439,7 +380,7 @@ impl CampaignStore {
     }
 
     fn compact_locked(&self, locked: &mut Locked, keep: usize) -> Result<(), CampaignError> {
-        let bytes = self.read_all(&mut locked.file)?;
+        let bytes = self.read_all(locked)?;
         // Each state line is followed by its head line; pair them.
         let mut kept_ledger: Vec<&[u8]> = Vec::new();
         let mut pairs: Vec<(&[u8], &[u8])> = Vec::new();
