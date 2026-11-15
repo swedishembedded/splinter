@@ -83,3 +83,6 @@ does not establish: transfer to other tasks or models, or behaviour beyond three
   at generation 1 but only 229 of 554 at generation 2" are RSI3 lineage r3's counts. Over RSI3's four lineages the greedy misprediction
   counts were 2127 of 2400, 1125 of 2228 and 860 of 1942 at generations 1 to 3. The direction of the argument (the signal shrank) is
   the same; the design, criterion and outcome are unchanged.
+- 2026-11-15 (correction): the one exam item excluded from r2's comparisons matched a program of r2's **dev set**
+  (`prop-4b577924c4aeb8df`, `print(math.modf(45))`, role `dev` in the hand-off list), not a program r2 trained on. The
+  examiner excludes against the whole hand-off list (train, dev and retention programs). The counts and the criterion are unchanged.
