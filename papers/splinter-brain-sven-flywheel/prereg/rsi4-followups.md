@@ -100,3 +100,10 @@ Nothing until the verdicts evaluate F1, F2 and M1; each is recorded whatever it 
      stated splinter commit changed. **Scope:** used only for lineages that hit the over-length refusal, resumed from their own
      journals with the same seed, settings and directory (the frontier journal is reused; nothing is proposed again): m0 now, and
      any other M or M-900 lineage that fails the same way later, each listed here when it is resumed.
+6. **Proposer state removed mid-run by a housekeeping script (2026-11-15 ~12:17, before any verdict of n0 or n3).** A script
+   meant to pack each finished lineage's proposer state into one archive fired early, when n1 finished, and removed the state
+   directories of two running lineages: n3 had just started and failed at once ("no task set ... in the store", nothing
+   proposed or trained); n0 had finished proposing and was training. Both archives were verified complete (n3: 1636 entries,
+   n0: 10605). n0's state was restored from its archive while it trained; n3's state was restored and n3 relaunched with the
+   same script (`run-control-900.sh`), seed, binary and settings, starting from its journals. The packing script was stopped
+   and is not used again; no other lineage was affected.
