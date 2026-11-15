@@ -52,11 +52,24 @@ states as supervision).
 9. **Other domains** (cross-domain plan): Python output prediction (near free), the compiled document-rule environment, then
    stateful and agentic domains once reasoning and policy-gradient numerics are qualified.
 
-10. **Learning to learn across task families (the decisive test).** Train sequentially on three or four distinct environments
-    sharing one evidence format (Lua output prediction, Python output prediction, a vemu peripheral, repository tasks), then start
-    an unseen family with identical tool access, memory and budget: does the trained policy reach a fixed competence threshold
-    with fewer verified experiences and less compute than the original policy? Primary metrics: time-to-competence, experiences
-    to threshold, learning-curve area; retention of earlier families beside it.
+10. **Learning to learn across task families (the decisive test).** Train sequentially on a sequence of distinct domains
+    sharing one evidence format, then start a domain chosen only after that learning is complete, with identical tool access,
+    memory and budget: does the trained system reach a fixed competence threshold with fewer verified experiences and less
+    compute than an otherwise equivalent baseline, under matched compute, on unseen instances, with irrelevant recent context
+    removed, and with earlier domains retained? Primary metrics: time-to-competence, experiences to threshold, learning-curve
+    area. Remembering A-E is learning those domains; transferring a procedure from A to F is transfer; acquiring structurally
+    different domains faster is learning to learn.
+    - **Invented systems, so nothing is already known.** The cheapest decisive environments are generated: a counterfactual Lua
+      dialect (changed indexing base, operator meaning, scoping or library rules) with a generated manual and a modified
+      reference interpreter as its verifier; a new virtual microcontroller in vemu; an invented API or workflow with a reference
+      implementation. The model starts uncertain, the verifier is exact, and a family of dialects gives as many related but
+      distinct domains as needed. Learning the manual's rules is shown by applying them to new programs, not by repeating it.
+    - **Which mechanism learned** (same base model, comparable inference budgets, training cost recorded separately):
+      A frozen, no manual; B frozen + manual (in-context acquisition); C + tools/experiments (learning by interaction); D +
+      persistent skills or memory (external acquisition and reuse); E parameter updates; F the trained model without the
+      manual (retained parametric learning).
+    - **Three curves at once:** training-task performance, held-out performance in the same family, and performance on
+      entirely new families. Training rising while held-out stays flat is not learning.
 11. **Memory vs weights.** Where a task family has external memory (procedures, verified claims, retrieval), every checkpoint is
     examined in four conditions: base without memory, base with the updated memory, updated weights without memory, both. Store
     knowledge in the cheapest form that makes it reliably usable (an exact fact in retrieval, a tested procedure in procedural
@@ -100,6 +113,22 @@ Per-generation and per-domain learning curves with intervals, forward and backwa
 verified gain per GPU-hour (proposal, prediction, training and gating included), worst-case regression, and the full history of
 accepted and rejected updates with each parent checkpoint and its evidence.
 
+## When a skill counts as acquired (six gates, all on independent unseen tests)
+
+Correctness (the outcome checked by the verifier, never the model's account of it); generalisation (variants, changed
+descriptions, unseen combinations); robustness (disturbed inputs, missing information, tool failures, injected instructions);
+calibration (confidence matches accuracy; abstention improves accepted accuracy); retention and transfer (persists without the
+original context; context-use and consolidated learning reported separately); efficiency (time-to-competence, training tokens
+and GPU-hours, verified gain per feedback event, execution cost). Thresholds are set per task by difficulty and consequence;
+the weakest important category must pass, not only the average; around 200 or more independent held-out cases per important
+skill with intervals, several learning seeds and independently generated environments. Each skill keeps one record: definition,
+prerequisites, materials, environment, allowed tools, verifier, baseline, learning history, held-out and retention results,
+costs. A new skill category changes materials, environment and verifier, never the learning loop.
+
+Skills to train first because every domain reuses them: understanding new documentation, selecting informative experiments,
+executing and verifying procedures, diagnosing failure, constructing reusable skills, transferring knowledge, maintaining
+reliable memory, improving learning efficiency.
+
 ## Risks to design against
 
 Faulty environment feedback (reference implementations, an environment reliability status: a wrong emulator teaches wrong rules
@@ -115,7 +144,10 @@ that took no part in learning).
 AgentCL (arXiv 2606.02461), When Continual Learning Moves to Memory (2604.27003), Revisiting Replay and Gradient Alignment
 (PMLR v330, abbes26a), AgentHER (2603.21357), Agent Lightning (microsoft/agent-lightning), Active Inference and Artificial
 Reasoning (Nature Communications 2026), Building World Models from Intrinsic Motivation (2611.13113), Agent-R1, AgentFly, a
-bandit-sampled GRPO study on Qwen2.5-1.5B arithmetic. DAPO (2503.14476) is a known, existing paper.
+bandit-sampled GRPO study on Qwen2.5-1.5B arithmetic. DAPO (2503.14476) is a known, existing paper. From a second synthesis (also unverified unless noted): SkillLearnBench (2604.20087;
+self-feedback alone drifts), SkillGenBench (2605.18693), ContinualSkillBench (2608.03874; apparent gains from recent context),
+test-time training for few-shot learning (PMLR v267, akyurek25a), IFBench (unseen instruction constraints). Known existing
+evaluations: HELM, AgentDojo, PaperBench, SWE-bench, LiveCodeBench, Terminal-Bench, OSWorld, BFCL, ARC-AGI.
 
 ## Known gaps to close on the way
 
