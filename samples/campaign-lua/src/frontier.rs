@@ -16,6 +16,10 @@
 //! champion always predicts right teach it nothing new. Proposing continues,
 //! wave after wave, until the frontier holds `target` programs, within a hard
 //! cap on proposal requests that fails loudly when it is reached.
+//!
+//! A frontier program whose training record is longer than the training row
+//! cannot be trained on: it is skipped, recorded with its length, and the next
+//! frontier program in the order proposed takes its place.
 
 use anyhow::{ensure, Result};
 use clap::Args;
@@ -145,16 +149,74 @@ pub struct Filled {
     pub calls: usize,
 }
 
+/// A frontier program left out of a round's training because its record is
+/// longer than the training row.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Overlong {
+    /// The proposal's task id.
+    pub task: String,
+    /// Its record's length in tokens, as the trainer measures it.
+    pub tokens: usize,
+}
+
+/// The programs a round trains on, and the frontier programs passed over on
+/// the way to them because their records do not fit the row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Selection {
+    /// The training programs, in the order proposed.
+    pub tasks: Vec<String>,
+    /// The over-length ones skipped, in the order proposed.
+    pub overlong: Vec<Overlong>,
+}
+
 impl Filled {
-    /// The first `target` programs on the frontier, in the order proposed.
-    #[must_use]
-    pub fn selected(&self, target: usize) -> Vec<String> {
-        self.measured
-            .iter()
-            .filter(|m| m.on_frontier())
-            .take(target)
-            .map(|m| m.task.clone())
-            .collect()
+    /// The first `target` programs on the frontier, in the order proposed,
+    /// whose training records fit `max_block` tokens; `tokens` measures a
+    /// program's record as the trainer will. Programs past the last one
+    /// chosen are not measured, so with no over-length record this is the
+    /// first `target` programs on the frontier.
+    ///
+    /// # Errors
+    /// Fewer than `target` frontier programs fit, or a record cannot be
+    /// measured.
+    pub fn selected(
+        &self,
+        target: usize,
+        max_block: usize,
+        mut tokens: impl FnMut(&str) -> Result<usize>,
+    ) -> Result<Selection> {
+        let mut selection = Selection {
+            tasks: Vec::new(),
+            overlong: Vec::new(),
+        };
+        for m in self.measured.iter().filter(|m| m.on_frontier()) {
+            if selection.tasks.len() == target {
+                break;
+            }
+            let length = tokens(&m.task)?;
+            if length > max_block {
+                selection.overlong.push(Overlong {
+                    task: m.task.clone(),
+                    tokens: length,
+                });
+            } else {
+                selection.tasks.push(m.task.clone());
+            }
+        }
+        ensure!(
+            selection.tasks.len() == target,
+            "{} of the {target} frontier programs a round trains on fit max_block {max_block}: {} of {} on the frontier are longer: {}",
+            selection.tasks.len(),
+            selection.overlong.len(),
+            self.on_frontier(),
+            selection
+                .overlong
+                .iter()
+                .map(|o| format!("{} ({} tokens)", o.task, o.tokens))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        Ok(selection)
     }
 
     /// Programs on the frontier.
@@ -271,10 +333,70 @@ mod tests {
         // 5 of each wave of 10 are on the frontier: three waves reach 15.
         assert_eq!((filled.measured.len(), filled.calls), (30, 21));
         assert_eq!(filled.on_frontier(), 15);
-        let chosen = filled.selected(12);
+        let chosen = filled.selected(12, 1024, |_| Ok(1)).unwrap().tasks;
         assert_eq!(chosen.len(), 12);
         assert_eq!(&chosen[..3], ["p0", "p2", "p4"], "in the order proposed");
         assert_eq!(stage.asked, [100, 93, 86], "each wave sees what is left");
+    }
+
+    fn filled(correct: &[u32]) -> Filled {
+        Filled {
+            measured: correct
+                .iter()
+                .enumerate()
+                .map(|(n, &correct)| Measured {
+                    task: format!("p{n}"),
+                    samples: 4,
+                    correct,
+                })
+                .collect(),
+            calls: 1,
+        }
+    }
+
+    #[test]
+    fn an_over_length_frontier_program_gives_its_place_to_the_next_that_fits() {
+        // p0, p2, p3, p5, p6 are on the frontier; p2's record is too long.
+        let filled = filled(&[0, 4, 3, 1, 4, 2, 0]);
+        let mut asked = Vec::new();
+        let chosen = filled
+            .selected(3, 100, |task| {
+                asked.push(task.to_string());
+                Ok(if task == "p2" { 101 } else { 100 })
+            })
+            .unwrap();
+        assert_eq!(chosen.tasks, ["p0", "p3", "p5"]);
+        assert_eq!(
+            chosen.overlong,
+            [Overlong {
+                task: "p2".into(),
+                tokens: 101
+            }]
+        );
+        assert_eq!(
+            asked,
+            ["p0", "p2", "p3", "p5"],
+            "nothing past the target is measured"
+        );
+    }
+
+    #[test]
+    fn with_no_over_length_record_the_selection_is_the_first_target_on_the_frontier() {
+        let filled = filled(&[0, 4, 3, 1, 4, 2, 0]);
+        let chosen = filled.selected(4, 100, |_| Ok(7)).unwrap();
+        assert_eq!(chosen.tasks, ["p0", "p2", "p3", "p5"]);
+        assert!(chosen.overlong.is_empty());
+    }
+
+    #[test]
+    fn a_frontier_short_of_fitting_programs_fails_the_round_with_the_reason() {
+        let filled = filled(&[0, 3, 1]);
+        let error = filled
+            .selected(3, 100, |task| Ok(if task == "p1" { 1217 } else { 9 }))
+            .unwrap_err();
+        let text = format!("{error}");
+        assert!(text.contains("2 of the 3"), "{text}");
+        assert!(text.contains("p1 (1217 tokens)"), "{text}");
     }
 
     #[test]

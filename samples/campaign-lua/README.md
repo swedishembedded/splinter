@@ -84,7 +84,11 @@ Two options change steps 2 and 3, both off by default:
   goes on in waves of `--proposals-per-round` programs until N frontier
   programs are found, within C proposal requests per round; the round fails
   with the numbers found when C is reached, and running it again with a larger
-  C continues from the journalled waves and predictions.
+  C continues from the journalled waves and predictions. The round trains on
+  the first N frontier programs, in the order proposed, whose training records
+  fit `--max-block` tokens (measured as the trainer measures them); a longer
+  one is skipped and listed with its length under `frontier.overlong` in the
+  round's record, and the round fails when fewer than N fit.
 
 `--gate evidence` replaces the dev gate of step 4 with the evidence gate,
 which holds the false evolution rate (the share of accepted rounds that are

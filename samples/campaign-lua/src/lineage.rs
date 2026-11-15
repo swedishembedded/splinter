@@ -63,7 +63,7 @@ use crate::plan::training_ids;
 pub use crate::plan::{Acceptance, Plan, TrainFrom};
 use crate::proposer::{as_proposals, Budget, Origin, Proposed, Proposer, Steering};
 use crate::sections::{family_accuracy, Accuracy};
-use crate::sft::{write_chat, Example, Recipe};
+use crate::sft::{write_chat, Example, Recipe, TRAIN_PACKED, TRAIN_THINKING};
 
 /// What a round trained: the adapter and what brain reported of the run.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -569,7 +569,7 @@ impl Lineage<'_> {
         Ok(answers)
     }
 
-    fn example(&self, id: &str) -> Result<Example> {
+    pub(crate) fn example(&self, id: &str) -> Result<Example> {
         let proposal = self
             .family
             .proposal(id)
@@ -674,8 +674,8 @@ impl Lineage<'_> {
             weight_decay: self.recipe.weight_decay,
             seed: self.seed ^ (u64::from(generation) << 32 | u64::from(round)),
             max_block: Some(self.recipe.max_block),
-            thinking: false,
-            pack_answers: false,
+            thinking: TRAIN_THINKING,
+            pack_answers: TRAIN_PACKED,
             on_step: None,
             keep_evaluations: None,
         };

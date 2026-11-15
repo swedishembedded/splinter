@@ -10,7 +10,10 @@
 //! A frontier round: the champion proposes in waves and predicts every
 //! program several times until its frontier has the target size (see
 //! [`crate::frontier`] for the rule); each wave and each prediction is
-//! journalled so a round that is started again continues.
+//! journalled so a round that is started again continues. Before training,
+//! each chosen program's record is measured as the trainer will measure it,
+//! and one longer than the training row gives its place to the next frontier
+//! program that fits.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,10 +21,12 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::campaign::PolicyRef;
 use splinter_sdk::measure::campaign::gate::DevResult;
+use splinter_sdk::model::measure::RecordMeter;
 
-use crate::frontier::{self, Frontier, Measured, Stage, Wave};
+use crate::frontier::{self, Frontier, Measured, Overlong, Stage, Wave};
 use crate::lineage::{fail, policy_key, Lineage, RoundRecord};
 use crate::proposer::Budget;
+use crate::sft::{chat_line, TRAIN_PACKED, TRAIN_THINKING};
 
 /// What a round's search for its frontier came to.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -37,6 +42,10 @@ pub struct FrontierOutcome {
     pub requests: usize,
     /// Waves of proposing.
     pub waves: usize,
+    /// Frontier programs skipped because their records are longer than the
+    /// training row (absent when none was).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overlong: Vec<Overlong>,
 }
 
 /// One wave of proposing, journalled so a round that is started again counts
@@ -121,7 +130,22 @@ impl Lineage<'_> {
             spent,
             measured,
         )?;
-        let selected = filled.selected(settings.target);
+        let meter = RecordMeter::for_model(stage.lineage.base, TRAIN_THINKING, TRAIN_PACKED)
+            .map_err(fail)?;
+        let max_block = stage.lineage.recipe.max_block as usize;
+        let selection = filled.selected(settings.target, max_block, |task| {
+            let line = chat_line(&stage.lineage.example(task)?);
+            meter
+                .tokens(&line)
+                .map_err(|e| anyhow::anyhow!("measuring {task}: {e}"))
+        })?;
+        for skipped in &selection.overlong {
+            eprintln!(
+                "generation {generation} round {round}: {} is {} tokens, longer than max_block {max_block}: skipped",
+                skipped.task, skipped.tokens
+            );
+        }
+        let selected = selection.tasks;
         eprintln!(
             "generation {generation} round {round}: {} of {} proposals on the frontier after {} requests; training on {}",
             filled.on_frontier(),
@@ -136,6 +160,7 @@ impl Lineage<'_> {
             on_frontier: filled.on_frontier(),
             requests: filled.calls,
             waves: stage.wave,
+            overlong: selection.overlong,
         });
         Ok((selected, Vec::new()))
     }

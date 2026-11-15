@@ -140,3 +140,4 @@ in the same commit.
 | [152](152-a-reply-the-output-limit-cut-was-graded-as-a-wrong-answer-and-one-failed-call-failed-a-whole-exam.md) | A reply the output limit cut was graded as a wrong answer, and one failed call failed a whole exam |
 | [153](153-a-confinement-whose-network-was-all-or-nothing-could-not-hold-an-agent-to-its-one-model-server.md) | A confinement whose network was all or nothing could not hold an agent to its one model server |
 | [154](154-the-greedy-dev-gate-accepted-12-of-12-rsi3-steps-and-the-sealed-exam-found-2-were-not-improvements-the-two-smallest-dev-margins.md) | The greedy dev gate accepted 12 of 12 RSI3 steps, and the sealed exam found 2 were not improvements: the two smallest dev margins |
+| [155](155-a-frontier-program-longer-than-the-training-row-failed-a-whole-lineage.md) | A frontier program longer than the training row failed a whole lineage |

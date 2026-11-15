@@ -23,6 +23,12 @@ use clap::Args;
 use serde_json::json;
 use splinter_sdk::model::precision::BasePrecision;
 
+/// A round's fine-tune trains without thinking mode and each record as its
+/// own sequence; a record's length is measured in the same mode.
+pub const TRAIN_THINKING: bool = false;
+/// See [`TRAIN_THINKING`].
+pub const TRAIN_PACKED: bool = false;
+
 /// The settings of a round's training.
 #[derive(Args, Clone, Debug)]
 pub struct Recipe {
@@ -117,6 +123,20 @@ pub fn target(expected: &str) -> String {
     format!("```\n{}\n```", expected.trim())
 }
 
+/// The dataset line of `example`: one conversation, only the assistant's
+/// turn supervised. What [`write_chat`] writes and a record is measured by.
+#[must_use]
+pub fn chat_line(example: &Example) -> String {
+    json!({
+        "messages": [
+            {"role": "user", "content": example.request, "train": false},
+            {"role": "assistant", "content": target(&example.expected), "train": true},
+        ],
+        "metadata": {"task": example.id},
+    })
+    .to_string()
+}
+
 /// Writes `examples` as a chat dataset (one conversation per line, only the
 /// assistant's turn supervised), whole or not at all.
 ///
@@ -127,14 +147,7 @@ pub fn write_chat(path: &Path, examples: &[Example]) -> Result<()> {
     let mut file = std::fs::File::create(&partial)
         .with_context(|| format!("creating {}", partial.display()))?;
     for example in examples {
-        let line = json!({
-            "messages": [
-                {"role": "user", "content": example.request, "train": false},
-                {"role": "assistant", "content": target(&example.expected), "train": true},
-            ],
-            "metadata": {"task": example.id},
-        });
-        writeln!(file, "{line}")?;
+        writeln!(file, "{}", chat_line(example))?;
     }
     file.sync_all()?;
     std::fs::rename(&partial, path).with_context(|| format!("placing {}", path.display()))
