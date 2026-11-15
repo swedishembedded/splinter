@@ -147,8 +147,9 @@ campaign instead of rounds glued together by scripts (`scripts/campaigns/flywhee
   are used. Brain's reported KL is 1e2 to 1e7 and a token ratio near 1e-8 appears from step 2 (finding 144): open in
   brain. Entropy is unmeasured in process. Not run: the lr/rank sweep (gap 19), the equal-compute method matrix (gap 20),
   the distillation strategy on real weights.
-- Open: an `EpisodeExecutor` over sven's rollout executor (landed in sven: `sven_sdk::rollout`; the adapter that reads
-  its `attempt.jsonl` into `Episode` is not written); the training
+- Open: an `EpisodeExecutor` over sven's rollout executor (recorded earlier as landed in sven as `sven_sdk::rollout`, but sven main
+  on 2026-11-15 has no `rollout` module; see `generalized-autonomous-learning.md` P0; the adapter that reads its
+  `attempt.jsonl` into `Episode` is not written); the training
   records do not yet carry the sampler's behaviour log-probabilities (`WireMessage` has no field for brain's
   `behavior_logprobs`, so every campaign step trains on the start-of-run proxy, exact for on-policy rollouts only);
   a hot refit of the champion's adapter through a serving endpoint (the in-process collector reloads the model on
