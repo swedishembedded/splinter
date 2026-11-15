@@ -185,8 +185,12 @@ fn nothing_outlives_a_supervisor_that_is_killed_mid_run() {
     let marker = marker("supervisor");
     // The helper finds its orders in a file named for its parent (this test).
     std::fs::write(dir.join("marker"), &marker).unwrap();
+    // libtest names a test by its module path without the crate's own name
+    // (`process_runner::supervisor_for_the_death_test` in the `it` binary).
+    let module = module_path!().split_once("::").map_or("", |(_, rest)| rest);
+    let helper = format!("{module}::supervisor_for_the_death_test");
     let mut supervisor = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "supervisor_for_the_death_test", "--nocapture"])
+        .args(["--exact", &helper, "--nocapture"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
