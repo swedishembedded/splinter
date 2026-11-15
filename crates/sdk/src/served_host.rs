@@ -64,6 +64,94 @@ pub struct HostSettings {
     pub runtime_dirs: Vec<PathBuf>,
     /// The sampling temperature of [`ServedHost::predicting`].
     pub predict_temperature: f32,
+    /// Let the predicting and the greedy (exam) models reason first; `None`
+    /// asks every model for no reasoning block, as before.
+    pub reasoning: Option<ReasoningHost>,
+}
+
+/// How the models that answer with reasoning on decode. The proposing model
+/// ([`ServedHost::context`]) never reasons.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ReasoningHost {
+    /// Nucleus sampling of the predicting model (`1.0` cuts nothing).
+    pub top_p: f32,
+    /// `top_k` of the predicting model (`0` cuts nothing).
+    pub top_k: u32,
+    /// How the exam model decodes.
+    pub exam: ExamDecoding,
+}
+
+/// How the exam model ([`PolicyModels::model`] asked greedily) decodes when
+/// it reasons.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ExamDecoding {
+    /// Temperature zero.
+    Greedy,
+    /// Sampled at the predicting temperature and top-p / top-k, every request
+    /// carrying `seed`, so the same weights answer the same question alike.
+    Sampled {
+        /// The seed of the draws.
+        seed: u64,
+    },
+}
+
+/// What a handle asks of the server on every request.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Asked {
+    temperature: f32,
+    top_p: f32,
+    top_k: u32,
+    thinking: bool,
+    seed: Option<u64>,
+}
+
+impl Asked {
+    /// The training distribution itself, no reasoning: the proposing handle.
+    const fn sampled(temperature: f32) -> Self {
+        Self {
+            temperature,
+            top_p: 1.0,
+            top_k: 0,
+            thinking: false,
+            seed: None,
+        }
+    }
+}
+
+impl HostSettings {
+    /// What the predicting handle asks.
+    fn predicting_asked(&self) -> Asked {
+        match self.reasoning {
+            None => Asked::sampled(self.predict_temperature),
+            Some(r) => Asked {
+                temperature: self.predict_temperature,
+                top_p: r.top_p,
+                top_k: r.top_k,
+                thinking: true,
+                seed: None,
+            },
+        }
+    }
+
+    /// What the exam (greedy) handle asks.
+    fn exam_asked(&self) -> Asked {
+        match self.reasoning {
+            None => Asked::sampled(0.0),
+            Some(r) => {
+                let (temperature, seed) = match r.exam {
+                    ExamDecoding::Greedy => (0.0, None),
+                    ExamDecoding::Sampled { seed } => (self.predict_temperature, Some(seed)),
+                };
+                Asked {
+                    temperature,
+                    top_p: r.top_p,
+                    top_k: r.top_k,
+                    thinking: true,
+                    seed,
+                }
+            }
+        }
+    }
 }
 
 /// The running server and the handles that ask it; the server is stopped
@@ -100,11 +188,7 @@ impl ServedHost {
         }
     }
 
-    fn handle(
-        &self,
-        endpoints: &BrainEndpoints,
-        temperature: f32,
-    ) -> Result<Splinter, CampaignError> {
+    fn handle(&self, endpoints: &BrainEndpoints, asked: Asked) -> Result<Splinter, CampaignError> {
         let s = &self.settings;
         let absolute = |p: &PathBuf| {
             std::path::absolute(p)
@@ -119,14 +203,17 @@ impl ServedHost {
             .iter()
             .map(absolute)
             .collect::<Result<_, _>>()?;
-        config.thinking = false;
+        config.thinking = asked.thinking;
         config.allow_remote = false;
         config.brain = Some(endpoints.clone());
-        // The training distribution itself: temperature as asked, no nucleus
-        // or top-k cut.
-        config.served_temperature = Some(temperature);
-        config.served_top_p = Some(1.0);
-        config.served_top_k = Some(0);
+        // Without reasoning, the training distribution itself: temperature
+        // as asked, no nucleus or top-k cut.
+        config.served_temperature = Some(asked.temperature);
+        config.served_top_p = Some(asked.top_p);
+        config.served_top_k = Some(asked.top_k);
+        if asked.seed.is_some() {
+            config.served_seed = asked.seed;
+        }
         Splinter::builder(config)
             .build()
             .map_err(|e| failed("starting a Splinter handle on the server")(e.to_string()))
@@ -168,9 +255,9 @@ impl ServedHost {
         .with_attempt_concurrency(s.slots as usize)
         .with_artifact_store(store);
         Ok(Running {
-            sampled: self.handle(&endpoints, 1.0)?,
-            greedy: self.handle(&endpoints, 0.0)?,
-            predicting: self.handle(&endpoints, s.predict_temperature)?,
+            sampled: self.handle(&endpoints, Asked::sampled(1.0))?,
+            greedy: self.handle(&endpoints, s.exam_asked())?,
+            predicting: self.handle(&endpoints, s.predicting_asked())?,
             endpoints,
             _server: Mutex::new(server),
         })
@@ -297,5 +384,72 @@ impl PolicyModels for ServedHost {
                 &running.sampled
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn settings(reasoning: Option<ReasoningHost>) -> HostSettings {
+        HostSettings {
+            brain: PathBuf::new(),
+            models: PathBuf::new(),
+            base: PathBuf::new(),
+            work: PathBuf::new(),
+            state: PathBuf::new(),
+            store: PathBuf::new(),
+            adapters: PathBuf::new(),
+            log: PathBuf::new(),
+            device: String::new(),
+            kv_cache: None,
+            slots: 1,
+            runtime_dirs: Vec::new(),
+            predict_temperature: 0.7,
+            reasoning,
+        }
+    }
+
+    #[test]
+    fn without_reasoning_every_handle_asks_what_it_always_asked() {
+        let s = settings(None);
+        assert_eq!(s.predicting_asked(), Asked::sampled(0.7));
+        assert_eq!(s.exam_asked(), Asked::sampled(0.0));
+    }
+
+    #[test]
+    fn with_reasoning_the_predicting_and_exam_handles_think_and_the_exam_decodes_as_stated() {
+        let host = |exam| {
+            settings(Some(ReasoningHost {
+                top_p: 0.95,
+                top_k: 20,
+                exam,
+            }))
+        };
+        let greedy = host(ExamDecoding::Greedy);
+        assert_eq!(
+            greedy.predicting_asked(),
+            Asked {
+                temperature: 0.7,
+                top_p: 0.95,
+                top_k: 20,
+                thinking: true,
+                seed: None
+            }
+        );
+        assert_eq!(
+            (
+                greedy.exam_asked().temperature,
+                greedy.exam_asked().thinking,
+                greedy.exam_asked().seed
+            ),
+            (0.0, true, None)
+        );
+        // seed: it is the value every request must carry
+        let sampled = host(ExamDecoding::Sampled { seed: 9 }).exam_asked();
+        assert_eq!(
+            (sampled.temperature, sampled.thinking, sampled.seed),
+            (0.7, true, Some(9))
+        );
     }
 }

@@ -105,6 +105,12 @@ pub enum ChatError {
 pub struct Reply {
     /// The text the model wrote, trimmed.
     pub text: String,
+    /// The reasoning the model wrote before the text, trimmed; empty when it
+    /// did not reason (or its server returns none).
+    pub thinking: String,
+    /// Tokens generated, reasoning included, when the server reported its
+    /// usage; `None` otherwise.
+    pub output_tokens: Option<u32>,
     /// The output-token limit ended the generation: the text is cut, so a
     /// verifier's verdict on it is not the model's answer.
     pub truncated: bool,
@@ -190,6 +196,7 @@ async fn ask(
         .await
         .map_err(|_| ChatError::TimedOut(options.deadline))??;
     reply.text = reply.text.trim().to_string();
+    reply.thinking = reply.thinking.trim().to_string();
     Ok(reply)
 }
 
@@ -215,6 +222,8 @@ async fn collect(
         }
         match event.map_err(|e| ChatError::Model(e.to_string()))? {
             ResponseEvent::TextDelta(delta) => reply.text.push_str(&delta),
+            ResponseEvent::ThinkingDelta(delta) => reply.thinking.push_str(&delta),
+            ResponseEvent::Usage { output_tokens, .. } => reply.output_tokens = Some(output_tokens),
             ResponseEvent::MaxTokens => reply.truncated = true,
             ResponseEvent::PromptTokens { ids } => reply.prompt_token_ids = ids,
             ResponseEvent::Tokens { ids, logprobs } => {
@@ -313,6 +322,47 @@ mod tests {
         assert_eq!(said.token_ids, [7, 8]);
         assert_eq!(said.logprobs, [-0.5, -0.25]);
         assert_eq!(*provider.0.lock().unwrap(), [true]);
+    }
+
+    /// Reasons, then answers, and reports its usage.
+    struct Reasons;
+
+    #[async_trait::async_trait]
+    impl ModelProvider for Reasons {
+        fn name(&self) -> &str {
+            "scripted"
+        }
+
+        fn model_name(&self) -> &str {
+            "scripted"
+        }
+
+        async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
+            Ok(Box::pin(futures::stream::iter([
+                Ok(ResponseEvent::ThinkingDelta(" 2 + 2 is 4. ".into())),
+                Ok(ResponseEvent::TextDelta(" 4 ".into())),
+                Ok(ResponseEvent::Usage {
+                    input_tokens: 9,
+                    output_tokens: 12,
+                    cache_read_tokens: 0,
+                    cache_write_tokens: 0,
+                    cost_usd: None,
+                }),
+                Ok(ResponseEvent::Done),
+            ])))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_bare_reply_keeps_the_reasoning_apart_from_the_answer() {
+        let model = Model::new(Arc::new(Reasons), "scripted");
+        let options = ChatOptions::new(Duration::from_secs(30));
+        let said = reply_bare(&model, &[Turn::user("2+2?")], &options)
+            .await
+            .unwrap();
+        assert_eq!(said.thinking, "2 + 2 is 4.");
+        assert_eq!(said.text, "4");
+        assert_eq!(said.output_tokens, Some(12));
     }
 
     #[tokio::test]

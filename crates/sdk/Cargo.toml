@@ -26,6 +26,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
+[features]
+# The tiny chat checkpoint of `splinter_model::fixture`, for specs of samples
+# that measure records as the trainer does without weights or a device.
+scripted = ["splinter-model/scripted"]
+
 [dev-dependencies]
 tempfile = { workspace = true }
 

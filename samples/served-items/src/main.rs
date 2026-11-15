@@ -322,6 +322,7 @@ fn main() -> Result<()> {
         slots: cli.slots,
         runtime_dirs: Vec::new(),
         predict_temperature: 1.0,
+        reasoning: None,
     });
     let calls = std::fs::OpenOptions::new()
         .create(true)
