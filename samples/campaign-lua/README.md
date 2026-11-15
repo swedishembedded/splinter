@@ -90,6 +90,49 @@ Two options change steps 2 and 3, both off by default:
   one is skipped and listed with its length under `frontier.overlong` in the
   round's record, and the round fails when fewer than N fit.
 
+Three more options, all off by default (with them absent, every request,
+journal line, record and round record is what it was before them, so a lineage
+that began without them continues unchanged; a lineage refuses to continue
+under other values of them than its journal holds):
+
+- `--frontier-admit boundary` admits a measured program only when at least one
+  sample was right and at least one wrong (the learnable boundary); the
+  default `any-wrong` admits every program with a wrong sample. The round's
+  `frontier.admit` records a non-default rule.
+- `--reasoning on --reasoning-max-tokens N` lets the champion think. Needs
+  `--frontier-samples`. The frontier predictions are sampled with thinking on
+  at `--frontier-temperature`, `--reasoning-top-p` (default 1) and
+  `--reasoning-top-k` (default 0, no cut); the dev and retention exams are
+  asked with thinking on too, decoded `--reasoning-gate greedy` (default) or
+  `--reasoning-gate sampled --reasoning-gate-seed S` (the frontier temperature,
+  seed `S` on every request). `N` bounds a whole reply, reasoning included,
+  and replaces `--max-tokens`. The decoding is stated in the round's
+  `reasoning` field and in the hand-off's serving terms (`"thinking": true`,
+  `"decoding"`, `"max_tokens"`, and with a sampled exam `"temperature"`,
+  `"top_p"`, `"top_k"`, `"seed"`). The candidate is then trained in thinking
+  mode and its records measured in it.
+- `--train-on verified-traces` trains each program that has a verified trace
+  on one record: its prompt, the shortest verified trace as `reasoning_content`
+  and the interpreter's output, formatted as in the answer-only record, as the
+  answer. A trace is verified when its answer is whole (the token budget did
+  not cut it) and the interpreter's output matches it; the shortest has the
+  fewest characters of reasoning and answer together. `--frontier-target`
+  then counts these records, and a program with no verified trace is not
+  trained on. `verified-traces+labels` adds, for a program with none, the
+  answer-only record with an empty reasoning (an empty think block in the
+  Qwen3 template), trained in thinking mode too. `--train-on answers` (the
+  default) is the interpreter-labelled records of before; with `--reasoning
+  on` it trains them in thinking mode. The round's `frontier.records` counts
+  traces and labels.
+
+`traces.jsonl` holds, with reasoning on, one line per program and policy
+measured: `samples`, `correct`, `exhausted` (replies the budget cut), the
+length of each sample (`chars`, and `tokens` when the server reports its
+usage) and `shortest`, the shortest verified trace (`reasoning`, `answer`,
+`length`). It is written before the program's line in `frontier.jsonl`, which
+is what a restarted round counts as measured, so no program is asked twice
+and a program asked again after a stop keeps its later line.
+
 `--gate evidence` replaces the dev gate of step 4 with the evidence gate,
 which holds the false evolution rate (the share of accepted rounds that are
 worse by `--gate-eps` or more) to `--gate-q` over every planned round
@@ -114,7 +157,7 @@ directory.
 
 The lineage's journals (`rounds.jsonl`, `dev-results.jsonl`,
 `predictions.jsonl`, `proposals.jsonl`, and with a frontier `waves.jsonl` and
-`frontier.jsonl`) hold everything it knows; running the command again
+`frontier.jsonl`, and with reasoning `traces.jsonl`) hold everything it knows; running the command again
 continues from them.
 
 ```bash

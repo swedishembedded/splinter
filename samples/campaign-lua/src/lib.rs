@@ -24,7 +24,9 @@ pub mod lineage;
 pub mod neutral;
 pub mod plan;
 pub mod proposer;
+pub mod reasoning;
 pub mod recipe;
+pub mod records;
 pub mod sections;
 pub mod sft;
 

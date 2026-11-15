@@ -36,17 +36,16 @@
 //! Everything the lineage knows is in append-only journals and the proposals
 //! file, so a lineage that is started again continues from them.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::time::Instant;
 
 use anyhow::{Context as _, Result};
-use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::chat::Reply;
 use splinter_sdk::campaign::brain::TaskFamily;
 use splinter_sdk::campaign::served::{Answered, ServedValidator};
 use splinter_sdk::campaign::{PolicyRef, Validator};
-use splinter_sdk::measure::campaign::gate::{decide, Action, Decision, DevGate, DevResult};
+use splinter_sdk::measure::campaign::gate::{decide, Action, DevGate, DevResult};
 use splinter_sdk::measure::campaign::plan::{
     plan_arm, retention_units_needed, ArmGoal, ExamShape, PlannedArm,
 };
@@ -57,147 +56,14 @@ use splinter_sdk::served_host::ServedHost;
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::family::{proposal_id, Part, ProposalFamily};
-use crate::frontier_round::FrontierOutcome;
-use crate::journal::Journal;
 use crate::plan::training_ids;
-pub use crate::plan::{Acceptance, Plan, TrainFrom};
+pub use crate::plan::{Acceptance, Plan, TrainFrom, TrainOn};
 use crate::proposer::{as_proposals, Budget, Origin, Proposed, Proposer, Steering};
+use crate::reasoning::TraceBook;
+pub use crate::records::{champion_of, trained_up_to, Files, RoundRecord, Trained};
+pub(crate) use crate::records::{fail, policy_key, DevRecord, Prediction};
 use crate::sections::{family_accuracy, Accuracy};
-use crate::sft::{write_chat, Example, Recipe, TRAIN_PACKED, TRAIN_THINKING};
-
-/// What a round trained: the adapter and what brain reported of the run.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Trained {
-    /// The adapter file.
-    pub adapter: PathBuf,
-    /// Its digest, `sha256:...`.
-    pub digest: String,
-    /// Optimiser steps run.
-    pub steps: usize,
-    /// Brain's held-out loss of the base model on the held-out dev programs.
-    pub held_out_loss_base: Option<f32>,
-    /// Brain's held-out loss of the candidate on the same programs.
-    pub held_out_loss_tuned: Option<f32>,
-}
-
-/// The journal entry of one round.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RoundRecord {
-    /// The generation.
-    pub generation: u32,
-    /// The round of it.
-    pub round: u32,
-    /// The champion the round started from (its adapter digest; none for the
-    /// base).
-    pub started_from: Option<String>,
-    /// Programs proposed this round.
-    pub proposed: usize,
-    /// Of those, the ones the champion mispredicted.
-    pub mispredicted: usize,
-    /// Records replayed from earlier accepted rounds.
-    pub replayed: usize,
-    /// What was trained; none when nothing could be.
-    pub trained: Option<Trained>,
-    /// The gate's decision on it.
-    pub decision: Option<Decision>,
-    /// Whether the candidate became the champion.
-    pub advanced: bool,
-    /// Why the round ended as it did, when it trained nothing.
-    pub note: String,
-    /// Ids of the proposals this round trained on.
-    pub trained_on: Vec<String>,
-    /// Wall-clock seconds the round took.
-    pub seconds: f64,
-    /// What the candidate was trained from.
-    #[serde(default)]
-    pub train_from: TrainFrom,
-    /// Records the candidate trained on in all (the union, when it is one).
-    #[serde(default)]
-    pub trained_records: usize,
-    /// How the frontier was found, when it was.
-    #[serde(default)]
-    pub frontier: Option<FrontierOutcome>,
-}
-
-/// One policy's dev and retention answers as graded, so a restart asks once.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct DevRecord {
-    pub(crate) policy: String,
-    pub(crate) result: DevResult,
-}
-
-/// One proposal predicted by a policy.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct Prediction {
-    generation: u32,
-    round: u32,
-    policy: String,
-    task: String,
-    completion: String,
-    passed: bool,
-}
-
-/// The files a lineage keeps in its directory.
-#[derive(Clone, Debug)]
-pub struct Files {
-    root: PathBuf,
-}
-
-impl Files {
-    /// The files under `root`.
-    #[must_use]
-    pub fn at(root: &Path) -> Self {
-        Self {
-            root: root.to_path_buf(),
-        }
-    }
-
-    /// The proposals, by round.
-    #[must_use]
-    pub fn proposals(&self) -> PathBuf {
-        self.root.join("proposals.jsonl")
-    }
-
-    fn rounds(&self) -> Journal {
-        Journal::at(&self.root.join("rounds.jsonl"))
-    }
-
-    pub(crate) fn dev(&self) -> Journal {
-        Journal::at(&self.root.join("dev-results.jsonl"))
-    }
-
-    fn predictions(&self) -> Journal {
-        Journal::at(&self.root.join("predictions.jsonl"))
-    }
-
-    pub(crate) fn waves(&self) -> Journal {
-        Journal::at(&self.root.join("waves.jsonl"))
-    }
-
-    pub(crate) fn frontier(&self) -> Journal {
-        Journal::at(&self.root.join("frontier.jsonl"))
-    }
-
-    fn datasets(&self) -> PathBuf {
-        self.root.join("datasets")
-    }
-
-    fn adapters(&self) -> PathBuf {
-        self.root.join("adapters")
-    }
-}
-
-/// The key a policy is known by in the journals.
-pub(crate) fn policy_key(policy: &PolicyRef) -> String {
-    policy
-        .digest
-        .as_ref()
-        .map_or_else(|| "base".to_string(), ToString::to_string)
-}
-
-pub(crate) fn fail<E: std::fmt::Display>(e: E) -> anyhow::Error {
-    anyhow::anyhow!("{e}")
-}
+use crate::sft::{write_chat, Example, Recipe, TRAIN_PACKED};
 
 /// What the lineage works with.
 pub struct Lineage<'a> {
@@ -221,33 +87,6 @@ pub struct Lineage<'a> {
     pub gate: DevGate,
     /// The seed training seeds are derived from.
     pub seed: u64,
-}
-
-/// The champion a journal of rounds leaves: the adapter of the last advance.
-#[must_use]
-pub fn champion_of(rounds: &[RoundRecord]) -> PolicyRef {
-    let mut champion = PolicyRef::default();
-    for round in rounds.iter().filter(|r| r.advanced) {
-        if let Some(trained) = &round.trained {
-            champion = PolicyRef {
-                version: champion.version + 1,
-                adapter: Some(trained.adapter.clone()),
-                digest: Digest::parse(&trained.digest).ok(),
-            };
-        }
-    }
-    champion
-}
-
-/// The proposals the champion at the end of `generation` was trained on:
-/// those of every advanced round up to it.
-#[must_use]
-pub fn trained_up_to(rounds: &[RoundRecord], generation: u32) -> BTreeSet<String> {
-    rounds
-        .iter()
-        .filter(|r| r.advanced && r.generation <= generation)
-        .flat_map(|r| r.trained_on.iter().cloned())
-        .collect()
 }
 
 impl Lineage<'_> {
@@ -392,6 +231,7 @@ impl Lineage<'_> {
         {
             return Ok(done.clone());
         }
+        self.ensure_same_reasoning(&rounds)?;
         let started = Instant::now();
         let champion = champion_of(&rounds);
         let started_from = champion.digest.as_ref().map(ToString::to_string);
@@ -413,6 +253,8 @@ impl Lineage<'_> {
             train_from: self.plan.train_from,
             trained_records: 0,
             frontier: None,
+            reasoning: self.plan.reasoning,
+            train_on: self.plan.train_on,
         };
         let (wrong, right) = match self.plan.frontier {
             Some(settings) => {
@@ -429,6 +271,30 @@ impl Lineage<'_> {
         record.seconds = started.elapsed().as_secs_f64();
         self.files.rounds().append(&record)?;
         Ok(record)
+    }
+
+    /// Refuses to continue a lineage under other reasoning settings, records
+    /// or admission than its journal holds: its dev results and its records
+    /// were made under those.
+    fn ensure_same_reasoning(&self, rounds: &[RoundRecord]) -> Result<()> {
+        let admit = |r: &RoundRecord| r.frontier.as_ref().map(|f| f.admit);
+        for earlier in rounds {
+            anyhow::ensure!(
+                earlier.reasoning == self.plan.reasoning
+                    && earlier.train_on == self.plan.train_on
+                    && admit(earlier).is_none_or(|a| a == self.plan.admit),
+                "generation {} round {} ran with reasoning {:?}, train-on {:?} and admission {:?}; this run asks for {:?}, {:?} and {:?}: a lineage continues under the settings it began with",
+                earlier.generation,
+                earlier.round,
+                earlier.reasoning,
+                earlier.train_on,
+                admit(earlier),
+                self.plan.reasoning,
+                self.plan.train_on,
+                self.plan.admit
+            );
+        }
+        Ok(())
     }
 
     /// The champion proposes the round's programs once and predicts each once,
@@ -578,7 +444,23 @@ impl Lineage<'_> {
             id: proposal.id,
             request: proposal.request,
             expected: proposal.expected,
+            reasoning: None,
         })
+    }
+
+    /// The training record of proposal `id` as the plan trains: answer-only,
+    /// or with the reasoning of its verified trace.
+    pub(crate) fn training_example(&self, id: &str, book: &TraceBook) -> Result<Example> {
+        book.record(self.plan.train_on, self.example(id)?)
+    }
+
+    /// The verified traces of the lineage's journal; empty when the plan
+    /// trains on answers alone.
+    pub(crate) fn trace_book(&self) -> Result<TraceBook> {
+        if !self.plan.train_on.uses_traces() {
+            return Ok(TraceBook::default());
+        }
+        Ok(TraceBook::from_journal(self.files.traces().read()?))
     }
 
     /// Trains the round's candidate and lets the gate decide on it.
@@ -594,8 +476,11 @@ impl Lineage<'_> {
         let tag = format!("g{generation}r{round}");
         let dir = self.files.datasets();
         std::fs::create_dir_all(&dir)?;
+        let book = self.trace_book()?;
         let examples = |ids: &[String]| -> Result<Vec<Example>> {
-            ids.iter().map(|i| self.example(i)).collect()
+            ids.iter()
+                .map(|i| self.training_example(i, &book))
+                .collect()
         };
         let accepted: Vec<String> = trained_up_to(&self.rounds()?, u32::MAX)
             .into_iter()
@@ -674,7 +559,7 @@ impl Lineage<'_> {
             weight_decay: self.recipe.weight_decay,
             seed: self.seed ^ (u64::from(generation) << 32 | u64::from(round)),
             max_block: Some(self.recipe.max_block),
-            thinking: TRAIN_THINKING,
+            thinking: self.plan.train_thinking(),
             pack_answers: TRAIN_PACKED,
             on_step: None,
             keep_evaluations: None,
@@ -721,79 +606,5 @@ impl Lineage<'_> {
         record.advanced = decision.action == Action::Advance;
         record.decision = Some(decision);
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_round_journalled_before_these_options_still_reads() {
-        let old = r#"{"generation":1,"round":1,"started_from":null,"proposed":2,"mispredicted":1,"replayed":0,"trained":null,"decision":null,"advanced":false,"note":"","trained_on":[],"seconds":1.0}"#;
-        let record: RoundRecord = serde_json::from_str(old).unwrap();
-        assert_eq!(record.train_from, TrainFrom::Previous);
-        assert!(record.frontier.is_none());
-    }
-
-    fn round(generation: u32, round: u32, advanced: bool, tag: &str) -> RoundRecord {
-        RoundRecord {
-            generation,
-            round,
-            started_from: None,
-            proposed: 2,
-            mispredicted: 1,
-            replayed: 0,
-            trained: Some(Trained {
-                adapter: PathBuf::from(format!("/adapters/{tag}.safetensors")),
-                digest: format!(
-                    "sha256:{:064x}",
-                    u64::from(generation) * 10 + u64::from(round)
-                ),
-                steps: 4,
-                held_out_loss_base: None,
-                held_out_loss_tuned: None,
-            }),
-            decision: None,
-            advanced,
-            note: String::new(),
-            trained_on: vec![format!("prop-{tag}")],
-            seconds: 0.0,
-            train_from: TrainFrom::Previous,
-            trained_records: 0,
-            frontier: None,
-        }
-    }
-
-    #[test]
-    fn the_champion_is_the_last_advanced_candidate_and_a_rolled_back_round_changes_nothing() {
-        assert_eq!(champion_of(&[]), PolicyRef::default());
-        let rounds = [
-            round(1, 1, true, "a"),
-            round(1, 2, false, "b"),
-            round(2, 1, true, "c"),
-            round(2, 2, false, "d"),
-        ];
-        let champion = champion_of(&rounds);
-        assert_eq!(champion.version, 2);
-        assert_eq!(
-            champion.adapter,
-            Some(PathBuf::from("/adapters/c.safetensors"))
-        );
-        assert_eq!(champion_of(&rounds[..2]).version, 1);
-    }
-
-    #[test]
-    fn a_candidate_is_audited_for_what_its_chain_trained_on_and_nothing_it_rolled_back() {
-        let rounds = [
-            round(1, 1, true, "a"),
-            round(1, 2, false, "b"),
-            round(2, 1, true, "c"),
-        ];
-        let ids = |generation| -> Vec<String> {
-            trained_up_to(&rounds, generation).into_iter().collect()
-        };
-        assert_eq!(ids(1), vec!["prop-a"]);
-        assert_eq!(ids(2), vec!["prop-a", "prop-c"]);
     }
 }

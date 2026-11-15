@@ -23,10 +23,9 @@ use clap::Args;
 use serde_json::json;
 use splinter_sdk::model::precision::BasePrecision;
 
-/// A round's fine-tune trains without thinking mode and each record as its
-/// own sequence; a record's length is measured in the same mode.
-pub const TRAIN_THINKING: bool = false;
-/// See [`TRAIN_THINKING`].
+/// A round's fine-tune trains each record as its own sequence; a record's
+/// length is measured in the same mode. Thinking mode is the plan's
+/// (`Plan::train_thinking`).
 pub const TRAIN_PACKED: bool = false;
 
 /// The settings of a round's training.
@@ -115,6 +114,10 @@ pub struct Example {
     pub request: String,
     /// What the interpreter printed.
     pub expected: String,
+    /// The reasoning that precedes the answer, trained as the model's own
+    /// thinking; none for an answer-only record, an empty string for one
+    /// trained in thinking mode with no reasoning.
+    pub reasoning: Option<String>,
 }
 
 /// The assistant's side of an example: the output in one fenced block.
@@ -127,10 +130,15 @@ pub fn target(expected: &str) -> String {
 /// turn supervised. What [`write_chat`] writes and a record is measured by.
 #[must_use]
 pub fn chat_line(example: &Example) -> String {
+    let mut answer =
+        json!({"role": "assistant", "content": target(&example.expected), "train": true});
+    if let Some(reasoning) = &example.reasoning {
+        answer["reasoning_content"] = json!(reasoning);
+    }
     json!({
         "messages": [
             {"role": "user", "content": example.request, "train": false},
-            {"role": "assistant", "content": target(&example.expected), "train": true},
+            answer,
         ],
         "metadata": {"task": example.id},
     })
@@ -196,6 +204,7 @@ mod tests {
                 id: "p".into(),
                 request: "```lua\nprint(1)\n```\nWhat?".into(),
                 expected: "1".into(),
+                reasoning: None,
             }],
         )
         .unwrap();
@@ -205,5 +214,66 @@ mod tests {
         assert_eq!(line["messages"][1]["train"], true);
         assert_eq!(line["messages"][1]["content"], "```\n1\n```");
         assert!(!path.with_extension("partial").exists());
+    }
+
+    #[test]
+    fn a_record_without_reasoning_is_the_line_it_always_was() {
+        let line = chat_line(&Example {
+            id: "p".into(),
+            request: "q".into(),
+            expected: "1".into(),
+            reasoning: None,
+        });
+        assert_eq!(
+            line,
+            r#"{"messages":[{"content":"q","role":"user","train":false},{"content":"```\n1\n```","role":"assistant","train":true}],"metadata":{"task":"p"}}"#
+        );
+    }
+
+    /// A Qwen3-style chat template: the last assistant turn is rendered with
+    /// its reasoning in a think block, empty or not.
+    const THINKING_TEMPLATE: &str = "{% for m in messages %}<|im_start|>{{ m.role }}\n{% if m.role == 'assistant' and loop.last %}<think>\n{{ m.reasoning_content or '' }}\n</think>\n\n{% endif %}{{ m.content }}<|im_end|>\n{% endfor %}";
+
+    #[test]
+    fn a_label_trained_in_thinking_mode_is_measured_as_the_trainer_renders_its_empty_think_block() {
+        use splinter_sdk::model::fixture::byte_level_checkpoint;
+        use splinter_sdk::model::measure::RecordMeter;
+
+        let dir = tempfile::tempdir().unwrap();
+        byte_level_checkpoint(dir.path());
+        std::fs::write(
+            dir.path().join("tokenizer_config.json"),
+            json!({"chat_template": THINKING_TEMPLATE}).to_string(),
+        )
+        .unwrap();
+        let record = |reasoning: Option<&str>| Example {
+            id: "p".into(),
+            request: "q".into(),
+            expected: "1".into(),
+            reasoning: reasoning.map(str::to_string),
+        };
+        let measure = |thinking, example: &Example| {
+            RecordMeter::for_model(dir.path(), thinking, TRAIN_PACKED)
+                .unwrap()
+                .tokens(&chat_line(example))
+                .unwrap()
+        };
+        let (empty, traced) = (record(Some("")), record(Some("one and one")));
+        // The assistant turn is `<|im_start|>assistant\n<think>\n` + reasoning
+        // + `\n</think>\n\n` + the fenced answer + `<|im_end|>\n`; the bytes of
+        // the prompt are the same either way, so the difference is exactly
+        // the reasoning's bytes.
+        assert_eq!(
+            measure(true, &traced) - measure(true, &empty),
+            "one and one".len()
+        );
+        // What the trainer renders for the empty reasoning is what the
+        // record's own turn holds: the think block with nothing in it.
+        let rendered_empty = measure(true, &empty);
+        let rendered_answer_only = measure(true, &record(None));
+        assert_eq!(
+            rendered_empty, rendered_answer_only,
+            "an empty reasoning and none render the same think block"
+        );
     }
 }

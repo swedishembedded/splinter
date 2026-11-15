@@ -22,6 +22,7 @@ use serde_json::{json, Value};
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::family::TaskRecord;
+use crate::reasoning::{GateDecoding, Reasoning};
 
 /// What built the candidate: the commits and the binary, as the launch record
 /// states them.
@@ -68,6 +69,14 @@ pub struct Candidate {
 /// reply read greedily with reasoning off.
 #[must_use]
 pub fn serving(base: &Path, adapter: Option<&Path>) -> Value {
+    serving_for(base, adapter, None)
+}
+
+/// [`serving`] under the protocol the lineage ran: with `reasoning`, thinking
+/// is on and the terms state the decoding of the exams the candidate was
+/// gated on and the token budget of a reply.
+#[must_use]
+pub fn serving_for(base: &Path, adapter: Option<&Path>, reasoning: Option<&Reasoning>) -> Value {
     let mut flags = vec!["--checkpoint".to_string(), base.display().to_string()];
     if let Some(adapter) = adapter {
         flags.push("--adapter".into());
@@ -75,7 +84,23 @@ pub fn serving(base: &Path, adapter: Option<&Path>) -> Value {
         flags.push("--adapter-targets".into());
         flags.push("all".into());
     }
-    json!({"flags": flags, "thinking": false, "decoding": "greedy"})
+    let Some(r) = reasoning else {
+        return json!({"flags": flags, "thinking": false, "decoding": "greedy"});
+    };
+    let mut terms = json!({
+        "flags": flags,
+        "thinking": true,
+        "decoding": "greedy",
+        "max_tokens": r.max_tokens,
+    });
+    if let GateDecoding::Sampled { seed } = r.gate {
+        terms["decoding"] = json!("sampled");
+        terms["temperature"] = json!(r.temperature);
+        terms["top_p"] = json!(r.top_p);
+        terms["top_k"] = json!(r.top_k);
+        terms["seed"] = json!(seed);
+    }
+    terms
 }
 
 /// A digest of a checkpoint directory: the SHA-256 of the lines
@@ -174,6 +199,55 @@ pub fn write(root: &Path, candidate: &Candidate, tasks: &[TaskRecord]) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn reasoning(gate: GateDecoding) -> Reasoning {
+        Reasoning {
+            max_tokens: 4096,
+            temperature: 0.6,
+            top_p: 0.95,
+            top_k: 20,
+            gate,
+        }
+    }
+
+    #[test]
+    fn the_terms_without_reasoning_are_the_ones_every_earlier_candidate_carried() {
+        let terms = serving_for(Path::new("/m"), None, None);
+        assert_eq!(
+            terms.to_string(),
+            r#"{"decoding":"greedy","flags":["--checkpoint","/m"],"thinking":false}"#
+        );
+        assert_eq!(terms, serving(Path::new("/m"), None));
+    }
+
+    #[test]
+    fn the_terms_of_a_reasoning_lineage_state_thinking_and_the_decoding_it_was_gated_with() {
+        let greedy = serving_for(
+            Path::new("/m"),
+            None,
+            Some(&reasoning(GateDecoding::Greedy)),
+        );
+        assert_eq!(
+            (
+                &greedy["thinking"],
+                &greedy["decoding"],
+                &greedy["max_tokens"]
+            ),
+            (&json!(true), &json!("greedy"), &json!(4096))
+        );
+        assert!(greedy.get("seed").is_none());
+        let sampled = serving_for(
+            Path::new("/m"),
+            None,
+            // seed: it is the value the hand-off must state back verbatim
+            Some(&reasoning(GateDecoding::Sampled { seed: 7 })),
+        );
+        assert_eq!(sampled["decoding"], "sampled");
+        assert_eq!(
+            (&sampled["seed"], &sampled["top_p"], &sampled["top_k"]),
+            (&json!(7), &json!(0.95f32), &json!(20))
+        );
+    }
 
     fn candidate(generation: u32) -> Candidate {
         Candidate {

@@ -22,8 +22,56 @@
 //! frontier program in the order proposed takes its place.
 
 use anyhow::{ensure, Result};
-use clap::Args;
+use clap::{Args, ValueEnum};
 use serde::{Deserialize, Serialize};
+
+/// Which programs of a policy's measurement are admitted to the frontier.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum Admit {
+    /// At least one prediction was wrong (the registered lineages).
+    #[default]
+    AnyWrong,
+    /// At least one prediction was right and at least one wrong: the
+    /// learnable boundary, where the policy can solve the program but does
+    /// not always.
+    Boundary,
+}
+
+impl Admit {
+    /// Whether this is the default (journals leave the default out).
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        *self == Self::AnyWrong
+    }
+}
+
+/// The rule that picks the programs a round trains on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Rule {
+    /// Which programs are admitted.
+    pub admit: Admit,
+    /// Whether a program must also have a right prediction, which is the
+    /// trace a training record is made of.
+    pub require_trace: bool,
+}
+
+impl Rule {
+    /// Whether `m` is admitted to the frontier.
+    #[must_use]
+    pub fn admits(&self, m: &Measured) -> bool {
+        match self.admit {
+            Admit::AnyWrong => m.correct < m.samples,
+            Admit::Boundary => m.correct > 0 && m.correct < m.samples,
+        }
+    }
+
+    /// Whether `m` yields a training record.
+    #[must_use]
+    pub fn trainable(&self, m: &Measured) -> bool {
+        self.admits(m) && (!self.require_trace || m.correct > 0)
+    }
+}
 
 /// The frontier settings as the command line states them: all absent (today's
 /// greedy selection) or all present.
@@ -45,6 +93,11 @@ pub struct FrontierArgs {
     /// are; the round fails when the frontier is short at that point.
     #[arg(long = "frontier-request-cap", requires = "samples")]
     pub request_cap: Option<usize>,
+    /// Which measured programs are admitted: `any-wrong` (default) takes
+    /// every program with a wrong prediction; `boundary` only those with
+    /// both a right and a wrong one.
+    #[arg(long = "frontier-admit", value_enum, requires = "samples")]
+    pub admit: Option<Admit>,
 }
 
 /// The settings of frontier selection.
@@ -61,6 +114,12 @@ pub struct Frontier {
 }
 
 impl FrontierArgs {
+    /// The admission rule: `any-wrong` unless the flag says otherwise.
+    #[must_use]
+    pub fn admit(&self) -> Admit {
+        self.admit.unwrap_or_default()
+    }
+
     /// The settings, or none when selection is greedy.
     ///
     /// # Errors
@@ -147,6 +206,8 @@ pub struct Filled {
     pub measured: Vec<Measured>,
     /// Proposal requests spent, those of earlier runs of the round included.
     pub calls: usize,
+    /// The rule the programs were picked by.
+    pub rule: Rule,
 }
 
 /// A frontier program left out of a round's training because its record is
@@ -170,8 +231,8 @@ pub struct Selection {
 }
 
 impl Filled {
-    /// The first `target` programs on the frontier, in the order proposed,
-    /// whose training records fit `max_block` tokens; `tokens` measures a
+    /// The first `target` programs that yield a training record, in the order
+    /// proposed, whose records fit `max_block` tokens; `tokens` measures a
     /// program's record as the trainer will. Programs past the last one
     /// chosen are not measured, so with no over-length record this is the
     /// first `target` programs on the frontier.
@@ -189,7 +250,7 @@ impl Filled {
             tasks: Vec::new(),
             overlong: Vec::new(),
         };
-        for m in self.measured.iter().filter(|m| m.on_frontier()) {
+        for m in self.measured.iter().filter(|m| self.rule.trainable(m)) {
             if selection.tasks.len() == target {
                 break;
             }
@@ -208,7 +269,7 @@ impl Filled {
             "{} of the {target} frontier programs a round trains on fit max_block {max_block}: {} of {} on the frontier are longer: {}",
             selection.tasks.len(),
             selection.overlong.len(),
-            self.on_frontier(),
+            self.trainable(),
             selection
                 .overlong
                 .iter()
@@ -219,15 +280,25 @@ impl Filled {
         Ok(selection)
     }
 
-    /// Programs on the frontier.
+    /// Programs admitted to the frontier.
     #[must_use]
     pub fn on_frontier(&self) -> usize {
-        self.measured.iter().filter(|m| m.on_frontier()).count()
+        self.measured.iter().filter(|m| self.rule.admits(m)).count()
+    }
+
+    /// Programs that yield a training record.
+    #[must_use]
+    pub fn trainable(&self) -> usize {
+        self.measured
+            .iter()
+            .filter(|m| self.rule.trainable(m))
+            .count()
     }
 }
 
 /// Proposes until `measured` (the round's predictions so far, `spent` the
-/// requests so far) holds `target` programs on the frontier.
+/// requests so far) holds `target` programs that yield a training record
+/// under `rule`.
 ///
 /// # Errors
 /// The cap is reached with the frontier short, proposing yields nothing it
@@ -235,12 +306,13 @@ impl Filled {
 /// is lost: a longer cap continues from it.
 pub fn fill(
     stage: &mut dyn Stage,
+    rule: Rule,
     target: usize,
     request_cap: usize,
     mut spent: usize,
     mut measured: Vec<Measured>,
 ) -> Result<Filled> {
-    let count = |measured: &[Measured]| measured.iter().filter(|m| m.on_frontier()).count();
+    let count = |measured: &[Measured]| measured.iter().filter(|m| rule.trainable(m)).count();
     while count(&measured) < target {
         ensure!(
             spent < request_cap,
@@ -262,6 +334,7 @@ pub fn fill(
     Ok(Filled {
         measured,
         calls: spent,
+        rule,
     })
 }
 
@@ -329,7 +402,7 @@ mod tests {
     #[test]
     fn proposing_continues_until_the_frontier_holds_the_target_and_only_it_is_selected() {
         let mut stage = scripted(10, 7, 2);
-        let filled = fill(&mut stage, 12, 100, 0, Vec::new()).unwrap();
+        let filled = fill(&mut stage, Rule::default(), 12, 100, 0, Vec::new()).unwrap();
         // 5 of each wave of 10 are on the frontier: three waves reach 15.
         assert_eq!((filled.measured.len(), filled.calls), (30, 21));
         assert_eq!(filled.on_frontier(), 15);
@@ -351,6 +424,7 @@ mod tests {
                 })
                 .collect(),
             calls: 1,
+            rule: Rule::default(),
         }
     }
 
@@ -410,7 +484,7 @@ mod tests {
             };
             3
         ];
-        let filled = fill(&mut stage, 3, 100, 40, held).unwrap();
+        let filled = fill(&mut stage, Rule::default(), 3, 100, 40, held).unwrap();
         assert!(stage.asked.is_empty());
         assert_eq!(filled.calls, 40);
     }
@@ -419,7 +493,7 @@ mod tests {
     fn the_cap_fails_loudly_with_what_was_found() {
         // One program in a hundred is on the frontier: the cap runs out first.
         let mut stage = scripted(10, 7, 100);
-        let error = fill(&mut stage, 5, 20, 0, Vec::new()).unwrap_err();
+        let error = fill(&mut stage, Rule::default(), 5, 20, 0, Vec::new()).unwrap_err();
         let text = format!("{error}");
         assert!(text.contains("cap of 20"), "{text}");
         assert!(text.contains("1 of the 5"), "{text}");
@@ -433,7 +507,56 @@ mod tests {
     #[test]
     fn a_wave_that_asks_nothing_and_adds_nothing_is_an_error_not_a_loop() {
         let mut stage = scripted(0, 0, 2);
-        assert!(fill(&mut stage, 3, 100, 0, Vec::new()).is_err());
+        assert!(fill(&mut stage, Rule::default(), 3, 100, 0, Vec::new()).is_err());
+    }
+
+    #[test]
+    fn the_admission_rules_pick_the_programs_the_spec_names() {
+        let m = |correct| Measured {
+            task: "t".into(),
+            samples: 4,
+            correct,
+        };
+        let any = Rule::default();
+        let boundary = Rule {
+            admit: Admit::Boundary,
+            require_trace: false,
+        };
+        let traced = Rule {
+            admit: Admit::AnyWrong,
+            require_trace: true,
+        };
+        // correct = 0, 1, 3, 4 of 4
+        let picked = |rule: Rule| [0, 1, 3, 4].map(|c| rule.trainable(&m(c)));
+        assert_eq!(picked(any), [true, true, true, false]);
+        assert_eq!(picked(boundary), [false, true, true, false]);
+        assert_eq!(
+            picked(traced),
+            [false, true, true, false],
+            "a trace needs a right prediction"
+        );
+        assert!(
+            traced.admits(&m(0)) && !traced.trainable(&m(0)),
+            "admitted, but nothing to train on"
+        );
+    }
+
+    #[test]
+    fn proposing_goes_on_until_the_target_counts_programs_that_yield_a_record() {
+        // every 2nd program has 3 of 4 right, the others 4 of 4: under the
+        // boundary rule the same frontier as any-wrong; with the target 12
+        // and no program with 0 right, the counts agree.
+        let mut stage = scripted(10, 7, 2);
+        let rule = Rule {
+            admit: Admit::Boundary,
+            require_trace: true,
+        };
+        let filled = fill(&mut stage, rule, 12, 100, 0, Vec::new()).unwrap();
+        assert_eq!(filled.trainable(), 15);
+        assert_eq!(
+            filled.selected(12, 1024, |_| Ok(1)).unwrap().tasks.len(),
+            12
+        );
     }
 
     #[test]
@@ -443,6 +566,7 @@ mod tests {
             temperature,
             target,
             request_cap,
+            admit: None,
         };
         assert_eq!(args(None, None, None, None).settings().unwrap(), None);
         let ok = args(Some(4), Some(1.0), Some(300), Some(1500))

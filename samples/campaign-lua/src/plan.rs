@@ -17,7 +17,8 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::measure::campaign::evidence::EvidenceGate;
 
-use crate::frontier::Frontier;
+use crate::frontier::{Admit, Frontier, Rule};
+use crate::reasoning::Reasoning;
 use crate::sft::Recipe;
 
 /// What a round's candidate is trained from.
@@ -31,6 +32,41 @@ pub enum TrainFrom {
     /// A fresh adapter on the base, trained on the union of every accepted
     /// round's records and this round's.
     BaseCumulative,
+}
+
+/// What a round's training records are made of.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrainOn {
+    /// The interpreter's output, in one fenced block (the registered
+    /// lineages).
+    #[default]
+    Answers,
+    /// A program with at least one verified reasoning trace contributes one
+    /// record: its prompt, the shortest verified trace as the reasoning, and
+    /// the interpreter's output as the answer. A program with none
+    /// contributes nothing.
+    VerifiedTraces,
+    /// As [`Self::VerifiedTraces`], and a program with no verified trace
+    /// contributes the answer-only record with an empty reasoning, so it is
+    /// trained in thinking mode too.
+    #[value(name = "verified-traces+labels")]
+    #[serde(rename = "verified-traces+labels")]
+    VerifiedTracesLabels,
+}
+
+impl TrainOn {
+    /// Whether the records are trained as a model that reasons answers them.
+    #[must_use]
+    pub fn uses_traces(self) -> bool {
+        self != Self::Answers
+    }
+
+    /// Whether this is the default (journals leave the default out).
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        *self == Self::Answers
+    }
 }
 
 /// How a round's candidate is accepted.
@@ -89,6 +125,14 @@ pub struct Plan {
     pub epochs: Option<f32>,
     /// How a candidate is accepted.
     pub acceptance: Acceptance,
+    /// Which programs of the frontier's measurement are admitted.
+    pub admit: Admit,
+    /// Let the champion reason when it predicts and answers the exams, and
+    /// train in thinking mode; none keeps every model answering without
+    /// reasoning.
+    pub reasoning: Option<Reasoning>,
+    /// What the training records are made of.
+    pub train_on: TrainOn,
 }
 
 impl Plan {
@@ -97,6 +141,22 @@ impl Plan {
     #[must_use]
     pub fn horizon(&self) -> u32 {
         self.generations * self.rounds
+    }
+
+    /// The rule that picks the programs a round trains on.
+    #[must_use]
+    pub fn rule(&self) -> Rule {
+        Rule {
+            admit: self.admit,
+            require_trace: self.train_on == TrainOn::VerifiedTraces,
+        }
+    }
+
+    /// Whether the candidate is trained in thinking mode, and its records
+    /// measured so: when the lineage reasons.
+    #[must_use]
+    pub fn train_thinking(&self) -> bool {
+        self.reasoning.is_some()
     }
 
     /// Refuses combinations whose meaning would change silently.
@@ -121,6 +181,21 @@ impl Plan {
         anyhow::ensure!(
             self.epochs.is_none_or(|e| e.is_finite() && e > 0.0),
             "--cumulative-epochs is a positive number of passes"
+        );
+        anyhow::ensure!(
+            self.reasoning.is_none() || self.frontier.is_some(),
+            "--reasoning on needs --frontier-samples: reasoning traces are sampled, several per program"
+        );
+        anyhow::ensure!(
+            !self.train_on.uses_traces() || self.reasoning.is_some(),
+            "--train-on {} needs --reasoning on: there are no traces without it",
+            self.train_on
+                .to_possible_value()
+                .map_or_else(String::new, |v| v.get_name().to_string())
+        );
+        anyhow::ensure!(
+            self.admit == Admit::default() || self.frontier.is_some(),
+            "--frontier-admit needs --frontier-samples"
         );
         if let Acceptance::Evidence(evidence) = self.acceptance {
             evidence
@@ -202,6 +277,9 @@ mod tests {
             }),
             epochs,
             acceptance: Acceptance::Greedy,
+            admit: Admit::default(),
+            reasoning: None,
+            train_on: TrainOn::Answers,
         }
     }
 
@@ -229,6 +307,41 @@ mod tests {
         assert!(plan(TrainFrom::BaseCumulative, false, Some(0.0))
             .validate(&recipe(40, 0.0, 0.0))
             .is_err());
+    }
+
+    #[test]
+    fn reasoning_settings_that_mean_nothing_without_each_other_are_refused() {
+        let r = recipe(40, 0.0, 0.0);
+        let reasoning = Reasoning {
+            max_tokens: 2048,
+            temperature: 1.0,
+            top_p: 1.0,
+            top_k: 0,
+            gate: crate::reasoning::GateDecoding::Greedy,
+        };
+        let mut p = plan(TrainFrom::Previous, true, None);
+        assert!(p.validate(&r).is_ok());
+        p.train_on = TrainOn::VerifiedTraces;
+        assert!(p.validate(&r).is_err(), "traces without reasoning");
+        p.reasoning = Some(reasoning);
+        assert!(p.validate(&r).is_ok());
+        assert!(p.train_thinking());
+        assert_eq!(
+            p.rule(),
+            Rule {
+                admit: Admit::AnyWrong,
+                require_trace: true
+            }
+        );
+        p.train_on = TrainOn::VerifiedTracesLabels;
+        assert!(!p.rule().require_trace, "labels fill in for no trace");
+        let mut greedy = plan(TrainFrom::Previous, false, None);
+        greedy.reasoning = Some(reasoning);
+        assert!(greedy.validate(&r).is_err(), "reasoning needs a frontier");
+        greedy.reasoning = None;
+        greedy.admit = Admit::Boundary;
+        assert!(greedy.validate(&r).is_err(), "admission needs a frontier");
+        assert!(!plan(TrainFrom::Previous, true, None).train_thinking());
     }
 
     #[test]

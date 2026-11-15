@@ -15,7 +15,7 @@
 //! and one longer than the training row gives its place to the next frontier
 //! program that fits.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -23,10 +23,11 @@ use splinter_sdk::campaign::PolicyRef;
 use splinter_sdk::measure::campaign::gate::DevResult;
 use splinter_sdk::model::measure::RecordMeter;
 
-use crate::frontier::{self, Frontier, Measured, Overlong, Stage, Wave};
-use crate::lineage::{fail, policy_key, Lineage, RoundRecord};
+use crate::frontier::{self, Admit, Frontier, Measured, Overlong, Stage, Wave};
+use crate::lineage::{fail, policy_key, Lineage, RoundRecord, TrainOn};
 use crate::proposer::Budget;
-use crate::sft::{chat_line, TRAIN_PACKED, TRAIN_THINKING};
+use crate::reasoning::{fold, RecordMix, TraceRecord};
+use crate::sft::{chat_line, TRAIN_PACKED};
 
 /// What a round's search for its frontier came to.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -46,6 +47,13 @@ pub struct FrontierOutcome {
     /// training row (absent when none was).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub overlong: Vec<Overlong>,
+    /// Which programs were admitted (absent for the default, any wrong
+    /// prediction).
+    #[serde(default, skip_serializing_if = "Admit::is_default")]
+    pub admit: Admit,
+    /// What the training records are made of, when they carry reasoning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub records: Option<RecordMix>,
 }
 
 /// One wave of proposing, journalled so a round that is started again counts
@@ -101,6 +109,7 @@ impl Lineage<'_> {
             .map(|m| m.measured)
             .collect();
         let spent: usize = waves.iter().map(|w| w.calls).sum();
+        let rule = self.plan.rule();
         let mut stage = Round {
             lineage: self,
             champion,
@@ -125,16 +134,22 @@ impl Lineage<'_> {
         }
         let filled = frontier::fill(
             &mut stage,
+            rule,
             settings.target,
             settings.request_cap,
             spent,
             measured,
         )?;
-        let meter = RecordMeter::for_model(stage.lineage.base, TRAIN_THINKING, TRAIN_PACKED)
-            .map_err(fail)?;
+        let meter = RecordMeter::for_model(
+            stage.lineage.base,
+            stage.lineage.plan.train_thinking(),
+            TRAIN_PACKED,
+        )
+        .map_err(fail)?;
+        let book = stage.lineage.trace_book()?;
         let max_block = stage.lineage.recipe.max_block as usize;
         let selection = filled.selected(settings.target, max_block, |task| {
-            let line = chat_line(&stage.lineage.example(task)?);
+            let line = chat_line(&stage.lineage.training_example(task, &book)?);
             meter
                 .tokens(&line)
                 .map_err(|e| anyhow::anyhow!("measuring {task}: {e}"))
@@ -161,6 +176,9 @@ impl Lineage<'_> {
             requests: filled.calls,
             waves: stage.wave,
             overlong: selection.overlong,
+            admit: stage.lineage.plan.admit,
+            records: (stage.lineage.plan.train_on != TrainOn::Answers)
+                .then(|| RecordMix::of(&book, &selected)),
         });
         Ok((selected, Vec::new()))
     }
@@ -218,18 +236,25 @@ impl Stage for Round<'_, '_> {
             .validator
             .answer_with(&model, &asked)
             .map_err(fail)?;
-        let mut correct: BTreeMap<&str, u32> = BTreeMap::new();
-        for answer in &answers {
-            *correct.entry(answer.task.as_str()).or_default() += u32::from(answer.passed);
+        let folded = fold(
+            ids,
+            samples,
+            &answers,
+            self.lineage.plan.reasoning.is_some(),
+        );
+        // The traces are journalled before the measurements: a round that
+        // stops between the two asks the programs again, and the later trace
+        // record stands.
+        for (task, traces) in folded.traces {
+            self.lineage.files.traces().append(&TraceRecord {
+                generation: self.generation,
+                round: self.round,
+                policy: self.key.clone(),
+                task,
+                traces,
+            })?;
         }
-        let measured: Vec<Measured> = ids
-            .iter()
-            .map(|id| Measured {
-                task: id.clone(),
-                samples,
-                correct: correct.get(id.as_str()).copied().unwrap_or(0),
-            })
-            .collect();
+        let measured = folded.measured;
         for m in &measured {
             self.lineage.files.frontier().append(&MeasuredRecord {
                 generation: self.generation,
@@ -240,5 +265,55 @@ impl Stage for Round<'_, '_> {
             })?;
         }
         Ok(measured)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontier::Frontier;
+
+    /// An outcome of a lineage with the options off journals the lines it
+    /// always did.
+    #[test]
+    fn a_default_outcome_journals_without_the_new_fields() {
+        let outcome = FrontierOutcome {
+            settings: Frontier {
+                samples: 4,
+                temperature: 1.0,
+                target: 3,
+                request_cap: 9,
+            },
+            measured: 5,
+            on_frontier: 4,
+            requests: 2,
+            waves: 1,
+            overlong: Vec::new(),
+            admit: Admit::default(),
+            records: None,
+        };
+        assert_eq!(
+            serde_json::to_string(&outcome).unwrap(),
+            r#"{"settings":{"samples":4,"temperature":1.0,"target":3,"request_cap":9},"measured":5,"on_frontier":4,"requests":2,"waves":1}"#
+        );
+    }
+
+    #[test]
+    fn an_outcome_states_the_admission_rule_and_the_records_when_they_are_not_the_default() {
+        let mut outcome: FrontierOutcome = serde_json::from_str(
+            r#"{"settings":{"samples":4,"temperature":1.0,"target":3,"request_cap":9},"measured":5,"on_frontier":4,"requests":2,"waves":1}"#,
+        )
+        .unwrap();
+        outcome.admit = Admit::Boundary;
+        outcome.records = Some(RecordMix {
+            traces: 2,
+            labels: 1,
+        });
+        let line = serde_json::to_string(&outcome).unwrap();
+        assert!(line.contains(r#""admit":"boundary""#), "{line}");
+        assert!(
+            line.contains(r#""records":{"traces":2,"labels":1}"#),
+            "{line}"
+        );
     }
 }

@@ -27,10 +27,11 @@ use campaign_lua::family::ProposalFamily;
 use campaign_lua::frontier::FrontierArgs;
 use campaign_lua::handoff::{self, Build, Candidate};
 use campaign_lua::lineage::{
-    champion_of, trained_up_to, Acceptance, Files, Lineage, Plan, TrainFrom,
+    champion_of, trained_up_to, Acceptance, Files, Lineage, Plan, TrainFrom, TrainOn,
 };
 use campaign_lua::plan::EvidencePlan;
 use campaign_lua::proposer::{Budget, Proposer};
+use campaign_lua::reasoning::ReasoningArgs;
 use campaign_lua::sft::Recipe;
 use campaign_lua::{LuaPredict, Sizes};
 use splinter_sdk::served_host::{HostSettings, ServedHost};
@@ -199,7 +200,8 @@ struct Cli {
     /// Requests of a round of proposing asked at once.
     #[arg(long, default_value_t = 8)]
     proposal_parallel: usize,
-    /// Tokens a prediction may take.
+    /// Tokens a prediction may take (with `--reasoning on`,
+    /// `--reasoning-max-tokens` replaces it).
     #[arg(long, default_value_t = 256)]
     max_tokens: u32,
     /// The lead (share of dev programs won) a round is meant to produce.
@@ -221,8 +223,18 @@ struct Cli {
     /// this many passes' worth, rounded up.
     #[arg(long)]
     cumulative_epochs: Option<f32>,
+    /// What the training records are made of: `answers` (the interpreter's
+    /// output, the registered lineages), `verified-traces` (the shortest
+    /// verified reasoning of each program that has one), or
+    /// `verified-traces+labels` (and the answer-only record, with an empty
+    /// reasoning, for a program that has none). The traces need
+    /// `--reasoning on`.
+    #[arg(long, value_enum, default_value_t = TrainOn::Answers)]
+    train_on: TrainOn,
     #[command(flatten)]
     frontier: FrontierArgs,
+    #[command(flatten)]
+    reasoning: ReasoningArgs,
     #[command(flatten)]
     evidence: EvidenceArgs,
     /// Where the Splinter state of the proposing handle lives (task records,
@@ -247,6 +259,7 @@ struct Cli {
 
 fn hand_over(
     cli: &Cli,
+    plan: &Plan,
     lineage: &Lineage<'_>,
     handoff_dir: &Path,
     generation: u32,
@@ -283,7 +296,7 @@ fn hand_over(
         step: generation,
         base: cli.base_name.clone(),
         base_digest: base_digest.to_string(),
-        serving: handoff::serving(&cli.model, adapter.as_deref()),
+        serving: handoff::serving_for(&cli.model, adapter.as_deref(), plan.reasoning.as_ref()),
         adapter,
         adapter_digest: digest,
         advanced,
@@ -348,6 +361,7 @@ fn main() -> Result<()> {
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
     let frontier = cli.frontier.settings()?;
+    let reasoning = cli.reasoning.settings(frontier)?;
     let files = Files::at(&cli.out);
     let family =
         ProposalFamily::open(generator, &files.proposals()).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -372,10 +386,11 @@ fn main() -> Result<()> {
         slots: cli.slots,
         runtime_dirs: vec![lua_dir],
         predict_temperature: frontier.map_or(1.0, |f| f.temperature),
+        reasoning: reasoning.map(|r| r.host()),
     });
     let proposer = Proposer::new(&cli.model, &cli.manuals);
     let mut model = ModelSettings::new(&cli.model);
-    model.max_tokens = cli.max_tokens;
+    model.max_tokens = reasoning.map_or(cli.max_tokens, |r| r.max_tokens);
     model.concurrency = cli.slots as usize;
     let mut validator =
         ServedValidator::new(&family, &host, model).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -391,6 +406,9 @@ fn main() -> Result<()> {
         frontier,
         epochs: cli.cumulative_epochs,
         acceptance: cli.evidence.acceptance(cli.slots)?,
+        admit: cli.frontier.admit(),
+        reasoning,
+        train_on: cli.train_on,
     };
     plan.validate(&cli.recipe)?;
     let base_digest = handoff::base_digest(&cli.model)?;
@@ -452,7 +470,7 @@ fn main() -> Result<()> {
             println!("{}", serde_json::to_string(&record)?);
         }
         if let Some(dir) = &cli.handoff {
-            hand_over(&cli, &lineage, dir, generation, &base_digest)?;
+            hand_over(&cli, &plan, &lineage, dir, generation, &base_digest)?;
         }
     }
     host.stop();

@@ -303,6 +303,8 @@ mod tests {
             train_from: TrainFrom::Previous,
             trained_records: 0,
             frontier: None,
+            reasoning: None,
+            train_on: crate::plan::TrainOn::Answers,
         }
     }
 
