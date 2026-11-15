@@ -33,7 +33,9 @@ baseline against its own arm, a replicate that shows how far two identical runs
 differ. A promotion stores the candidate document with its evidence and the
 experience sets behind it and moves the `harness/champion` pointer, whose
 history is the lineage of champions. `--search-seed` has no default: the same
-seed draws the same candidates.
+seed draws the same candidates. `--gate evidence` with `--gate-eps`, `--gate-q` and `--gate-beta` replaces the sign
+test with the evidence gate, which holds the share of promoted-worse candidates to a budget over the search's
+evaluations; see [Choose an acceptance gate](acceptance-gates.md).
 
 `--proposer model --proposer-model REF` has a model propose the candidates instead of
 the mutation space: it is shown the parent document and how that document did when

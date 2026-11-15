@@ -174,6 +174,33 @@ campaign instead of rounds glued together by scripts (`scripts/campaigns/flywhee
 - Open: the factory program-output plugin as source (b) (the generator is used); the serve/train numerics gate on the pilot's
   own rollouts (brain's finding 446 is cited); outcome entry after the examiner's verdicts.
 
+### Acceptance gate (2026-11-15)
+
+The lineage's dev gate is greedy in the sense of TRUST (arXiv 2611.10787v1): it advances on any net dev gain over the same
+400 units every generation. Against bench's sealed exam it accepted 12 of 12 RSI3 steps, 2 of them not improvements (r0 g3
+29/28, r1 g3 18/28), the two smallest dev margins: FER_0 2/12 (finding 154).
+
+- Done: the evidence gate as an opt-in beside the greedy default (`eval::campaign::evidence`, `dev_pool`,
+  `gate::decide_evidence`): a noninferiority e-process per round (Y = (1+D)/2, boundary (1-eps)/2 + beta*zeta, the
+  equal-weight mixture over betting fractions 0.10/0.25/0.50/0.75, anytime-valid acceptance at 1/alpha_t), levels from a
+  false evolution budget q over the planned rounds scaled by the accepted count, and dev items drawn per round without
+  replacement from a pool with the used set tracked; alpha_max (= q) and rho in [0.01, 0.5] are parameters the paper
+  leaves unstated. Wired as a typed choice into the lineage (`--gate evidence --gate-eps --gate-q --gate-beta --dev-draw
+  [--dev-batch]`, several rounds per generation, the champion kept on rejection, used set and budget rebuilt from
+  `rounds.jsonl`), the campaign controller (`CampaignConfig::acceptance`, budget and used set in the state, evidence
+  measurements in the ledger; a greedy configuration's digest is unchanged) and `harness optimise --gate evidence` (each
+  evaluation a round of one budget). Property tests: null at -eps accepted <= 0.06 at alpha 0.1; best of 8 nulls on a fully
+  reused set greedy 0.36, uncorrected 0.19, beta 0.06 0.03; FER over 12 rounds 0.12 (all null) and 0.05 (half null,
+  0.66 of true gains accepted) at q 0.3; power 0.87 fresh and 0.76 fully reused for a +0.05 gain at 200 items.
+- Retrospective on RSI3's dev counts (single-step counterfactual, finding 154): eps 0.02, beta 0.01, q 0.3 would accept
+  7.9 of 12 steps in expectation, 0.13 of them exam non-improvements; the paper's eps 0.10 accepts all 12 (ties are
+  noninferiority evidence at that tolerance).
+- Open: X7 (scratchpad section 11: greedy vs significance-required vs evidence gate on one lineage recipe and budget, exam
+  FER_0 and gain from bench's verdicts); a dev pool larger than one round's draw for the lineage (the current dev set is
+  400 programs, so a draw of 150 reuses most items by round 3); the controller grades a whole draw at once (batched
+  early stopping is in the lineage only) and its sign-test power plan still sizes arms under the evidence gate; the
+  brain held-out loss of a lineage's training job reads the first 8 dev programs (reported, never selected on).
+
 ### brain
 
 Rule for everything below: training is architecture-generic. SFT, policy gradient, self-distillation, full

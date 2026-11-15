@@ -28,6 +28,7 @@ navigation:
       - docs/guides/evaluation.md
       - docs/guides/releases.md
       - docs/guides/improving-a-harness.md
+      - docs/guides/acceptance-gates.md
       - docs/guides/harbor-tasks.md
       - docs/guides/bench-trials.md
       - docs/guides/invented-tasks.md

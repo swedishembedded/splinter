@@ -100,7 +100,9 @@ results on those alone. The rounds journal records the e-value, the level, the
 budget left, the exposure and the programs spent, and a lineage refuses to
 continue under another gate or other gate settings. The four settings have no
 defaults (they are fixed before a lineage runs); the default `--gate greedy`
-is the gate every registered lineage ran with.
+is the gate every registered lineage ran with. How to choose the settings is
+in https://swedishembedded.com/docs/splinter/guides/acceptance-gates (the
+manual's page on acceptance gates).
 
 `--proposer-state DIR` moves the proposing handle's task records (one file per
 record, disposable) off the project disk, for instance to a memory-backed
