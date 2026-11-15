@@ -6,10 +6,10 @@
 \paragraph{Terms.} A \emph{series} is a registered experiment of four \emph{lineages}, each a chain
 of three \emph{generations} from the base that differs from its siblings only in its seed; the
 \emph{champion} is the model a generation's material comes from; a \emph{step} compares a generation with
-the one before. The registrations call the series S1 to S4 (``recursive self-improvement''); we call
+the one before. The registrations call the series RSI1 to RSI4 (``recursive self-improvement''); we call
 them S1 to S4, because what they test is multi-round self-training on self-proposed, oracle-labelled
-material, and whether it is recursive in the sense that an improved model is a better improver is what
-the matched-data control decides (\cref{sec:followups}).\cl{RS01}
+material; whether an improved model is a better improver is what the matched-data control tested
+(\cref{sec:matched}).\cl{RS01}
 
 \paragraph{The learner.} The task family is predicting what a Lua~5.1 program prints. The learner is
 the loop of \cref{sec:documentation} reduced to this one kind: the policy, Qwen3-4B with thinking off,
@@ -80,9 +80,10 @@ selected once, in S1, and every series uses the same file (its SHA-256 begins
 it, and no run of the learner reads it. The reuse has a cost: S1 graded this exam item by item with
 its own scripts, and each later design was chosen after the aggregate results of the series before it
 on the same exam, so across the series the exam is a holdout reused adaptively, a setting in which a
-reused holdout can be overfitted~\citep{holdout2015}\cl{CT22}; each registration on its own is clean.
-A re-examination of S4's champions on a freshly drawn exam is registered for this
-reason.\cl{RS39}
+reused holdout can be overfitted.~\citep{holdout2015}\cl{CT22} Each registration fixed its criterion before
+its run, but what the earlier series showed on the reused exam informed each later design, so the
+registrations are not independent of it. S4's champions were therefore re-examined on a freshly drawn
+exam (\cref{sec:followups}).\cl{FU01}
 
 \paragraph{The examiner.} From S2 on the exam is held by an examiner, a separate program operated
 beside the learner by the same operators; it is independent of the learner, not of the authors. The

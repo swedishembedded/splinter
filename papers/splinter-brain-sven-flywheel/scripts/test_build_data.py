@@ -308,6 +308,38 @@ class EvidenceDirectory(unittest.TestCase):
         self.assertTrue(any("a: sha256" in p for p in problems), problems)
         self.assertTrue(any("b: b.json is missing" in p for p in problems), problems)
 
+class FollowUps(unittest.TestCase):
+    """The fresh-exam and matched-data follow-ups: group-level comparisons, a null replicate and the
+    reference examiner's re-grade, each read from its record."""
+
+    def test_a_group_comparison_is_read_with_both_intervals_its_outcome_and_strata(self):
+        c = {"treatment": "gen3", "control": "m2100", "treatment_share": 0.16688, "control_share": 0.14605,
+             "difference": 0.020833, "interval": [-0.002137, 0.045513], "outcome": "inconclusive",
+             "clustered": {"interval": [0.001882, 0.039784], "mean": 0.020833},
+             "strata": {"baseline_right": {"difference": -0.0232}, "baseline_wrong": {"difference": 0.0248}}}
+        g = {"comparisons": {"M-primary": c}, "margin": 0.02, "groups": {"gen3": {"share": 0.16688, "shares": [0.1, 0.2]}},
+             "similarity": {"quantiles": {"0.5": 0.5385, "0.9": 0.6667}, "mean": 0.5416, "max": 1.0, "at_least": {"1.0": 1}}}
+        m = build_data.parse_log("rsi4f.groups", json.dumps(g))
+        self.assertEqual((m["m_primary_diff"], m["m_primary_lo"], m["m_primary_hi"]), ("0.021", "-0.002", "0.046"))
+        self.assertEqual((m["m_primary_clo"], m["m_primary_chi"], m["m_primary_outcome"]), ("0.002", "0.040", "inconclusive"))
+        self.assertEqual((m["m_primary_right_diff"], m["m_primary_wrong_diff"]), ("-0.023", "0.025"))
+        self.assertEqual((m["gen3_share"], m["margin"], m["sim_median"], m["sim_p90"], m["sim_full"]), ("0.167", 0.02, "0.54", "0.67", 1))
+
+    def test_a_null_replicate_without_exclusion_or_overlap_records_is_read(self):
+        v = verdict(194, 194, 0, 0, 1.0, False)
+        v["overlap"], v["exclusion"] = None, None
+        m = build_data.parse_log("rsi4f.null", json.dumps(v))
+        self.assertEqual((m["right"], m["wins"], m["losses"]), (194, 0, 0))
+        self.assertNotIn("excluded", m)
+
+    def test_the_reference_examiner_regrade_is_read_per_step(self):
+        a = {"base_agreement": {"right": {"r0": 12, "r1": 13}},
+             "steps": [{"series": "r1", "step": 1, "items_right": 131, "wins": 120, "losses": 2, "excluded": 0,
+                        "step_holds": True, "truncated_replies": 21}]}
+        m = build_data.parse_log("repro.examine", json.dumps(a))
+        self.assertEqual((m["r1_g1_right"], m["r1_g1_wins"], m["r1_g1_holds"], m["r1_g1_truncated"]), (131, 120, "yes", 21))
+        self.assertEqual(m["base_r1"], 13)
+
 
 if __name__ == "__main__":
     unittest.main()

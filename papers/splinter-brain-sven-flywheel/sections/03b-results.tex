@@ -82,21 +82,23 @@ interval does (0.0811, from 0.0267 to 0.1355); r0's, r1's and r3's include zero.
 95\% bounds are $-0.0054$, $-0.0071$, 0.0360 and 0.0003 for r0 to r3. At the template level, then, the
 third generation improves in one lineage (two-sided) or two (one-sided) of four, and a 3-of-4 rule would
 not be met; in S3 no lineage clears all three steps.\cl{RS38} The average generation-3 gain over the
-lineages is 5.7 points; its clustered interval needs the item-level grades, which the verdicts do not
-carry, as they carry no per-template counts.\cl{RS53}
+lineages is 5.7 points.\cl{RS53} On the fresh exam, where the examiner computed the lineage-averaged
+estimate with an interval over templates and lineages, the third round adds 0.029 (0.011 to 0.050) and
+the second 0.050 (0.026 to 0.079).\cl{FU12}
 
 \subsection{What the learner's records show}\label{sec:rsi-process}
 
 \paragraph{Step 1 is inflated by selection.} The exam was selected from items the base got wrong, so
 at step 1 the base can lose at most the 12 items it answers, and lost 2, 2, 3 and 1; steps 2 and 3 are
-not so constrained.\cl{RS28} The fresh exam, whose items are not selected by the base's answers,
-removes this.\cl{RS39}
+not so constrained.\cl{RS28} On the fresh exam, whose items were not selected by the base's answers,
+step 1 holds in no lineage (\cref{sec:followups}).\cl{FU03}
 
 \paragraph{Churn.} Items right are not cumulative mastery. At step 3 the new adapter lost 28\%, 30\%,
 14\% and 19\% of the items its predecessor answered (r0 to r3) while winning 12.4\%, 14.0\%, 13.2\% and
 9.5\% of those it missed, although it was trained on a superset of its predecessor's data from the same
-base.\cl{RS48} Without a retrain of the same data under another training seed, which is registered
-(\cref{sec:followups}), this churn has no noise floor.
+base.\cl{RS48} Retraining the same data under another training seed shows how much of this is noise:
+on the fresh exam such retrains split 87/57, 70/56, 48/56 and 35/55 items against the originals while
+their mean accuracy agreed (\cref{sec:matched}).\cl{FU08}
 
 \begin{figure}[tbp]
 \centering
@@ -131,23 +133,80 @@ showed 99 against 55.\cl{RS49,RS24,RS33} TRUST replaces such a greedy gate with 
 controls the rate of accepted inferior updates;~\citep{trust2026}\cl{CT15} a gate of that kind exists in
 the learner as an option but no series used it.\cl{RS34}
 
-\subsection{Registered follow-ups (not yet run)}\label{sec:followups}
+\subsection{The fresh exam}\label{sec:followups}
 
-Two follow-ups were registered after S4's outcome and before any of their runs, and amended once, before
-any verdict.\cl{RS41,RS52} \emph{F}, a re-examination of the base and the twelve S4 champions on an exam
-drawn afresh by the examiner (at least 50 templates and 1500 items, not selected by the base's answers),
-judged by the registered per-lineage sign test and, co-primary, by the one-sided template-clustered
-interval, with the lineage-averaged step gain, strata by old and new template and by the base's answer,
-per-template counts, a similarity audit, and descriptive baselines (the base with thinking on, its
-four-sample majority answer, and a 27B sibling). \emph{M}, the matched-data control: four lineages in
-which the \emph{base} proposes until it holds 2100 frontier programs, trained once from the base, compared
-with the four generation-3 champions on F by the difference of mean accuracy with an interval resampling
-templates and lineages jointly and an equivalence margin of 2 points, with arms at 900 records (M-900)
-and a seed-null retrain of each generation-3 training set.\cl{RS52} Their outcome decides the framing:
-generation~3 better than M means the improvement compounds; equivalence means verified data volume
-suffices; M better means one round is enough; an inconclusive result leaves the question open. None of
-their results is part of this version.\cl{RS39}
+Both follow-ups were registered after S4's outcome and amended once before any of their verdicts
+(\code{prereg/rsi4-followups.md}).\cl{RS41,RS52} \emph{F} re-examined the base and the twelve S4
+champions on an exam the examiner drew afresh: 2340 programs from 78 templates, never published and not
+selected by the base's answers; the base answers 194 of them (8.3\%), and the examiner's base-against-base
+replicate was exact.\cl{FU01} Neither registered criterion is met: step~1 holds in no lineage, by the sign
+test or by the one-sided clustered bound; steps 2 and 3 hold in every lineage by the sign test, and by
+the clustered bound step~2 in four and step~3 in three.\cl{FU02,FU03} Averaged over the lineages, the
+share answered was 8.3\% at the base, 8.7\% after generation~1, 13.8\% after generation~2 and 16.7\%
+after generation~3, a gain of 0.084 over the base (95\% interval over templates and lineages 0.046 to
+0.124); the first round's gain, 0.004 ($-0.016$ to 0.023), is indistinguishable from
+zero.\cl{FU04} The first round's apparent gain on the original exam was therefore largely selection:
+on F the items the base answered fell by 0.371 at generation~1 while those it missed rose by 0.038,
+the signature of regression to the mean, and by generation~3 the base-wrong items had gained
+0.119.\cl{FU05} The similarity audit puts the median exam item at a token-set Jaccard of 0.54 to its
+nearest training program (0.67 at the 90th percentile); one item has exactly the token set of a training
+program without matching it textually, so it was not excluded.\cl{FU06}
 
-\paragraph{Scope.} The result holds for one task family, one base model, three rounds and LoRA training
-on interpreter labels, on an exam of 25 templates reused across the four series; it makes no claim of
-transfer to other tasks or models.
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[paper, width=0.72\linewidth, height=6cm, xmin=-100, xmax=2300, ymin=6, ymax=20,
+  xtick={0,300,900,2100}, xlabel={interpreter-labelled training records}, ylabel={fresh exam F answered (\%)},
+  legend pos=north west, legend cell align=left]
+\addplot[okBlue, very thick, mark=*, mark size=2.4pt] table[col sep=comma,x=records,y=mean] {generated/scaling_s4.csv};
+\addplot[okVermillion, very thick, densely dashed, mark=square*, mark size=2.2pt] table[col sep=comma,x=records,y=mean] {generated/scaling_m.csv};
+\addplot[okBlue, only marks, mark=*, mark size=1.1pt, opacity=0.5, forget plot] table[col sep=comma,x=records,y=l0] {generated/scaling_s4.csv};
+\addplot[okBlue, only marks, mark=*, mark size=1.1pt, opacity=0.5, forget plot] table[col sep=comma,x=records,y=l1] {generated/scaling_s4.csv};
+\addplot[okBlue, only marks, mark=*, mark size=1.1pt, opacity=0.5, forget plot] table[col sep=comma,x=records,y=l2] {generated/scaling_s4.csv};
+\addplot[okBlue, only marks, mark=*, mark size=1.1pt, opacity=0.5, forget plot] table[col sep=comma,x=records,y=l3] {generated/scaling_s4.csv};
+\addplot[okVermillion, only marks, mark=square*, mark size=1.1pt, opacity=0.5, forget plot] table[col sep=comma,x=records,y=l0] {generated/scaling_m.csv};
+\addplot[okVermillion, only marks, mark=square*, mark size=1.1pt, opacity=0.5, forget plot] table[col sep=comma,x=records,y=l1] {generated/scaling_m.csv};
+\addplot[okVermillion, only marks, mark=square*, mark size=1.1pt, opacity=0.5, forget plot] table[col sep=comma,x=records,y=l2] {generated/scaling_m.csv};
+\addplot[okVermillion, only marks, mark=square*, mark size=1.1pt, opacity=0.5, forget plot] table[col sep=comma,x=records,y=l3] {generated/scaling_m.csv};
+\legend{S4 generations (champion proposes and selects), one fit on base-proposed frontier data}
+\end{axis}
+\end{tikzpicture}
+\caption{Accuracy on the fresh exam against the amount of interpreter-labelled training data. Blue: S4's
+generations, each a fresh adapter from the base on 300, 900 and 2100 cumulative records; red: the
+matched-data controls, one fit from the base on 900 or 2100 frontier programs the base proposed. Large
+marks are group means, small marks single lineages. Accuracy grows with the verified frontier in both;
+the first 300 records gain nothing on F.}\label{fig:scaling}
+\end{figure}
+
+\subsection{Matched data: is the improvement recursive?}\label{sec:matched}
+
+\emph{M} trained one adapter from the base, in each of four new lineages, on 2100 frontier programs the
+\emph{base} proposed and selected, the same amount of data as generation~3. On F it answered 14.6\%
+against generation~3's 16.7\%: a difference of 0.021 whose registered interval, resampling templates and
+lineages jointly, runs from $-0.002$ to 0.046, so the registered outcome is \emph{inconclusive}; an
+interval over templates alone (0.002 to 0.040), which ignores seed variation, is reported only as a
+secondary reading.\cl{FU07} The base-proposed data scale: 900 records gave 12.4\% and 2100 gave 14.6\%
+(difference 0.022, interval 0.004 to 0.043), and generation~3 exceeds the 900-record control by 0.043
+(\cref{fig:scaling}).\cl{FU07} Retraining each generation-3 training set with another seed gave 16.9\%,
+equivalent to generation~3 within the registered margin (difference 0.002).\cl{FU07} That seed-null arm
+also decides how to read the registered item-level M1: all four generation-3 champions beat their paired
+controls (129/81, 122/94, 119/80 and 136/56), but identical-data retrains already split 87/57, 70/56,
+48/56 and 35/55 against the originals, so item-level comparisons of single adapters measure seed noise
+as much as treatment and are not evidence here, as the registration's amendment anticipated.\cl{FU08}
+M is matched in data, not in compute: S4 spent 825 training steps over three rounds against 525 for one
+fit, 57\% more before the cost of proposing and predicting.\cl{FU09}
+
+\paragraph{What this says about recursion.} S4 has a recursive \emph{structure}: each round's training
+data is proposed and selected by the model the previous round produced; resetting the weights does not
+remove it, because the state that persists is the dataset. A \emph{benefit} of that recursion is not
+shown: generation~3 beats data the base proposed and selected by a point estimate of 2.1 points, with a
+registered interval that includes zero. An \emph{improving efficiency} of improvement is not shown
+either. The comparison tests the whole adaptive acquisition, in which the champion both proposes and
+selects; which of the two matters would need a proposer by selector design.
+
+\paragraph{The frontier is a failure filter.} A program enters when at least one of four sampled
+predictions is wrong, so a program predicted right with probability 0.99 per sample enters with
+probability 3.9\%, one at 0.90 with 34.4\%, one at 0.50 with 93.8\%; four identical wrong answers qualify
+too.\cl{FU10} The filter selects difficulty, not learnability, and keeps programs the champion never
+solves, which is right here because the interpreter supplies the correct output: S4 is learning from the
+environment's targets, not reinforcement of the model's own successes.

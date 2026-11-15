@@ -2,14 +2,15 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 \begin{abstract}
-Can a small model improve over several rounds by training on problems it proposes itself, with labels
-only from an executable oracle? Qwen3-4B proposed Lua~5.1 programs; those it mispredicted at least once
-in four samples joined a growing pool labelled by the interpreter, and each round trained a fresh
-adapter from the base on the whole pool. In four seeds, registered beforehand and judged by a separate
-examiner on 889 held-out items the base had missed, every round beat its predecessor by the registered
-item-level test, raising accuracy from 1.3\% to 21.6--27.1\%. Two caveats: under intervals clustered
-over the exam's 25 templates the third round holds in only one or two seeds, and the pool grows each
-round, so verified data volume and a better proposer are not yet separated; a registered matched-data
-control and a fresh exam will decide. Three earlier registered series failed, and the same loop showed
-no gain on repository tasks or for a 27B agent.
+A model can learn from problems it poses itself when an executable oracle supplies the answers.
+Qwen3-4B proposed Lua~5.1 programs; those it predicted wrong at least once in four samples joined a pool
+labelled by the interpreter, and each round trained a fresh adapter from the base on the pool, which
+doubled each round. Registered beforehand and judged by a separate examiner, four lineages raised
+accuracy on a freshly drawn 2340-item exam from 8.3\% to 16.7\% in three rounds: the first round gained
+nothing, the second and third gained in every lineage. One fit on the same amount of base-proposed
+frontier data reached 14.6\%, so the rounds' 2.1-point advantage is inconclusive under the registered
+analysis, while base-proposed data scaled from 900 to 2100 records. Accuracy grew with the verified
+frontier; that the model proposing it must improve is not shown. Three earlier registered series did not
+meet their criteria, and the same loop showed no gain on repository tasks or for a 27B agent in those
+configurations.
 \end{abstract}

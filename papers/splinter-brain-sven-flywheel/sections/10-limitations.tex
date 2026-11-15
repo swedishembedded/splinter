@@ -4,21 +4,33 @@
 \section{Limitations}\label{sec:limitations}
 
 \paragraph{What the result is about.} One task family (predicting what Lua~5.1 programs print), one base
-model with thinking off, three rounds of LoRA training on interpreter labels, and one exam of 25
-templates selected on the base's failures and reused while the four series were designed; nothing is
-claimed about other tasks, models, longer series or thinking-on use, and no baseline yet sizes the
-effect against the base with reasoning or a larger sibling.
+model, three rounds of LoRA training on interpreter labels, and no tools and no reasoning: thinking is
+off everywhere and the training records are answers only. S4 improves direct prediction without
+thinking; nothing is claimed about other tasks, models, longer series or reasoning, where the base with
+thinking on may already do far better.
 
-\paragraph{What the statistics support.} The registered test is item-level and supports claims about
-pairs of adapters; at the template level the third round holds in one or two of four lineages; at the
-procedure level four lineages are a replication count.\cl{RS38,RS53} The step-1 test is inflated by
-the exam's selection, churn between adapters has no measured noise floor, and the training data grows
-with the round, so more verified data and a better proposer are not yet separated; the registered
-follow-ups address each of these.\cl{RS39} The overlap exclusion catches exact and comment- or
-whitespace-normalised matches only. The examiner is a separate program run by the same operators, its
-verdicts are signed with a symmetric key that protects them against the learner and not against the
-authors, and it reports no per-template counts and no truncation counts; it tolerated no failed request
-and none occurred.\cl{RS50} The learner's dev gate advanced on any net gain and filtered nothing.\cl{RS49}
+\paragraph{What the statistics support.} Four lineages are encouraging, not a reliability estimate.
+``Every generation improves'' is the registrations' strict criterion, not the measure of useful learning;
+the learning curves of \cref{fig:scaling} are. On the fresh exam the first round gains nothing and the
+registered 3-of-4 criteria are not met; the third round holds in three lineages by the clustered bound.
+The advantage of the rounds over matched base-proposed data is inconclusive, and M is matched in data,
+not in compute.\cl{FU03,FU07,FU09} The exam that guided the design was reused; the fresh exam was drawn
+afterwards, but its templates include those of the old exam.\cl{CT22} The overlap exclusion catches
+exact and normalised matches only, and the similarity audit shows the fresh exam lies close to the
+training programs (median token-set Jaccard 0.54).\cl{FU06} The examiner is a separate program run by the
+same operators, and its symmetric signature protects the verdicts against the learner, not against the
+authors. The learner's dev gate advanced on any net gain and filtered nothing.\cl{RS49}
+
+\paragraph{Not continual learning.} Each round retrains from the base, a consolidation baseline rather
+than a solution for an unbounded stream: an adapter loses 14 to 30\% of the items its predecessor
+answered, and a retention test of what each round acquired is not implemented. The seed-null retrains
+show that this churn is mostly training noise at the level of items while lineage means are
+stable.\cl{RS48,FU07,FU08}
 
 \paragraph{The rest of the paper.} The limits of the system specification and of the coding, 27B and
 documentation experiments are in \cref{app:limits}.
+
+\paragraph{Open directions.} The questions the evidence leaves are richer oracle supervision (execution
+traces, compact verified reasoning), a proposer-by-selector design to separate who proposes from who
+selects, compute-matched baselines, a learnability rather than a failure curriculum, and a retention
+matrix over acquired capabilities.

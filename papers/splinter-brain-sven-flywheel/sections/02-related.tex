@@ -16,8 +16,14 @@ the result;~\citep{exit2017}\cl{CT19} an interpreter is ground truth, not an amp
 generate--filter--retrain skeleton is shared. In self-play designs a proposer is trained to set
 learnable tasks, as in asymmetric self-play and in Absolute Zero, where a code executor validates the
 proposed tasks;~\citep{asymselfplay2017,absolutezero2025}\cl{CT28,CT18} our proposer is not trained to
-propose, only filtered. STOP makes a recursive claim for a scaffold that improves
-itself;~\citep{stop2023}\cl{CT25} we use the word only if the matched-data control earns it.
+propose, only filtered. Other self-improvement work changes a model's own context or scaffold rather than
+its training data: STOP improves the improver scaffold itself,~\citep{stop2023}\cl{CT25} Learning to
+Self-Evolve trains a model to improve its context at test time,~\citep{lse2026}\cl{CT31} and hyperagents
+let a meta agent modify the agent;~\citep{hyperagents2026}\cl{CT32} SEAL has a model write its own
+fine-tuning data and directives.~\citep{seal2025}\cl{CT33} Our matched-data control does not show that the
+recursion itself helps here. On reinforcement learning with verifiable rewards, Yue et al.\ find gains at
+small $k$ bounded by the base model at large $k$, and new patterns from distillation;~\citep{rlvrbound2025}\cl{CT34}
+our own RL arms are too narrow to add to that question.
 
 \emph{Selection and curricula.} Selecting what to label is active learning, here by query synthesis with
 the model's own disagreement as the acquisition function; ordering by difficulty is curriculum

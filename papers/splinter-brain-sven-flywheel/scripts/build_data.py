@@ -335,9 +335,10 @@ def rsi_verdict_metrics(v):
          "wins": v["wins"], "losses": v["losses"], "p": fmt_p(v["p_one_sided"]),
          "holds": "yes" if v["step_holds"] else "no",
          "exam": v["collection"]["exam_sha256"][:12], "items": v["collection"]["items"],
-         "exact_matches": v["overlap"]["exact_matches"], "flags": len(v["integrity_flags"]),
-         "signature": v["signature"]["alg"]}
-    if "exclusion" in v:
+         "flags": len(v["integrity_flags"]), "signature": v["signature"]["alg"]}
+    if v.get("overlap"):
+        m["exact_matches"] = v["overlap"]["exact_matches"]
+    if v.get("exclusion"):
         m.update(excluded=v["exclusion"]["excluded"], compared=v["exclusion"]["compared"])
         if v["exclusion"].get("unexcluded"):
             m["unexcluded_right"] = v["exclusion"]["unexcluded"]["items_right"]
@@ -348,6 +349,8 @@ def rsi_verdict_metrics(v):
         gain = v["paired_gain"]
         m.update(gain=f"{gain['mean']:.4f}", gain_lo=f"{gain['interval'][0]:.4f}",
                  gain_hi=f"{gain['interval'][1]:.4f}", gain_families=gain["families"])
+        if gain.get("one_sided_lower") is not None:
+            m["gain_lb"] = f"{gain['one_sided_lower']:.4f}"
     if "failures" in v:
         # failed requests of either side, and the failure rate the examiner tolerates
         f = v["failures"]
@@ -583,6 +586,46 @@ def lua_arms_metrics(report):
     return m
 
 
+def groups_metrics(g):
+    """The examiner's group-level analysis: per comparison the difference of the groups' mean share right,
+    its 95% interval from the bootstrap over templates and candidates jointly and from template clustering
+    alone, the registered outcome, and the base-right and base-wrong strata; each group's share; the margin;
+    and the similarity audit (token-set Jaccard of each item to its nearest training program)."""
+    m = {"margin": g["margin"]}
+    for name, c in g["comparisons"].items():
+        k = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+        m.update({f"{k}_diff": f"{c['difference']:.3f}", f"{k}_lo": f"{c['interval'][0]:.3f}",
+                  f"{k}_hi": f"{c['interval'][1]:.3f}", f"{k}_clo": f"{c['clustered']['interval'][0]:.3f}",
+                  f"{k}_chi": f"{c['clustered']['interval'][1]:.3f}", f"{k}_outcome": c["outcome"],
+                  f"{k}_treatment": f"{c['treatment_share']:.3f}", f"{k}_control": f"{c['control_share']:.3f}"})
+        for stratum, short in (("baseline_right", "right"), ("baseline_wrong", "wrong")):
+            if stratum in c.get("strata", {}):
+                m[f"{k}_{short}_diff"] = f"{c['strata'][stratum]['difference']:.3f}"
+    for name, grp in g.get("groups", {}).items():
+        key = re.sub(r'[^a-z0-9]+', '_', name.lower())
+        m[f"{key}_share"] = f"{grp['share']:.3f}"
+        for i, share in enumerate(grp.get("shares", [])):
+            m[f"{key}_share_{i}"] = f"{share:.4f}"
+    sim = g.get("similarity")
+    if sim:
+        m.update(sim_median=f"{sim['quantiles']['0.5']:.2f}", sim_p90=f"{sim['quantiles']['0.9']:.2f}",
+                 sim_mean=f"{sim['mean']:.2f}", sim_full=sim["at_least"].get("1.0", 0))
+    return m
+
+
+def regrade_metrics(a):
+    """The reference examiner's re-grade of the S4 steps on the learner's Brain build: per step items
+    right, wins, losses, exclusions, whether it holds and the replies the token limit cut, and the base's
+    items right as each lineage's server measured it."""
+    m = {f"base_{r}": n for r, n in a["base_agreement"]["right"].items()}
+    for st in a["steps"]:
+        k = f"{st['series']}_g{st['step']}"
+        m.update({f"{k}_right": st["items_right"], f"{k}_wins": st["wins"], f"{k}_losses": st["losses"],
+                  f"{k}_excluded": st["excluded"], f"{k}_holds": "yes" if st["step_holds"] else "no",
+                  f"{k}_truncated": st["truncated_replies"]})
+    return m
+
+
 class NoParser(Exception):
     """A run whose metric prefix names no log shape this script reads: its values cannot be re-extracted."""
 
@@ -608,9 +651,15 @@ def parse_log(prefix, text):
         return rsi1_analysis_metrics(json.loads(text))
     if prefix.startswith("rsi1.rl."):
         return rsi1_rl_metrics(json.loads(text))
-    if re.match(r"rsi\d\.v\.", prefix):
+    if re.match(r"rsi4f\.(m?groups)$", prefix):
+        return groups_metrics(json.loads(text))
+    if prefix == "repro.examine":
+        return regrade_metrics(json.loads(text))
+    if re.match(r"rsi4f\.(null|mfwd\.|snull\.)", prefix):
         return rsi_verdict_metrics(json.loads(text))
-    if re.match(r"rsi\d\.plan$", prefix):
+    if re.match(r"rsi\d\w*\.v\.", prefix):
+        return rsi_verdict_metrics(json.loads(text))
+    if re.match(r"rsi\d\w*\.plan\w*$", prefix):
         return rsi_plan_metrics(json.loads(text))
     if re.match(r"rsi\d\.dev\.", prefix):
         return rsi_rounds_metrics(text)
@@ -778,12 +827,14 @@ def metrics():
     m.update(prefixed_metrics("lua."))
     m.update(prefixed_metrics("gen27b"))
     m.update(prefixed_metrics("rsi"))
-    for series in ("rsi2", "rsi3", "rsi4"):
+    m.update(prefixed_metrics("repro"))
+    for series in ("rsi2", "rsi3", "rsi4", "rsi4f"):
         m.update(rsi_pooled_metrics(series, m))
         m.update(rsi_gate_metrics(series, m))
         m.update(rsi_cluster_metrics(series, m))
         m.update(rsi_process_metrics(series, m))
     m.update(frontier_entry_metrics())
+    m.update(fresh_exam_metrics(m))
     m.update(multiplicity_metrics(m))
     return m
 
@@ -885,7 +936,40 @@ def frontier_entry_metrics(samples=4):
     """COMPUTED: the chance that RSI4's frontier rule (a program enters when at least one of `samples`
     sampled predictions is wrong) admits a program the champion predicts right with probability q per
     sample, 1 - q**samples, at q = 0.5 and 0.9."""
-    return {f"rsi4.frontier.entry_q{int(100 * q)}": f"{1 - q ** samples:.2f}" for q in (0.5, 0.9)}
+    out = {f"rsi4.frontier.entry_q{int(100 * q)}": f"{1 - q ** samples:.2f}" for q in (0.5, 0.9)}
+    out.update({f"rsi4.frontier.admit_q{int(100 * q)}": f"{100 * (1 - q ** samples):.1f}" for q in (0.5, 0.9, 0.99)})
+    return out
+
+
+def fresh_exam_metrics(m):
+    """COMPUTED: on the fresh exam F, per step how many lineages hold by the registered sign test and by
+    the one-sided template-clustered bound the verdict carries; S4's training steps over three rounds
+    against one fit on the same final data; and how the reference examiner's re-grade on the learner's
+    build compares with the published verdicts step by step."""
+    out = {}
+    lineages = [r for r in RSI_LINEAGES if f"rsi4f.v.{r}.g1.holds" in m]
+    for g in RSI_STEPS:
+        out[f"rsi4f.g{g}.holds_sign"] = sum(m[f"rsi4f.v.{r}.g{g}.holds"] == "yes" for r in lineages)
+        out[f"rsi4f.g{g}.holds_clustered"] = sum(float(m[f"rsi4f.v.{r}.g{g}.gain_lb"]) > 0 for r in lineages)
+    steps = [m[f"rsi4.dev.r0.g{g}_steps"] for g in RSI_STEPS if f"rsi4.dev.r0.g{g}_steps" in m]
+    if len(steps) == 3:
+        out["rsi4.compute.steps_total"] = sum(steps)
+        out["rsi4.compute.steps_last"] = steps[-1]
+        out["rsi4.compute.extra_pct"] = f"{100 * (sum(steps) / steps[-1] - 1):.0f}"
+    agree = same_counts = 0
+    differ = []
+    for r in RSI_LINEAGES:
+        for g in RSI_STEPS:
+            a, b = f"repro.examine.{r}_g{g}", f"rsi4.v.{r}.g{g}"
+            if f"{a}_holds" not in m or f"{b}.holds" not in m:
+                continue
+            agree += m[f"{a}_holds"] == m[f"{b}.holds"]
+            same_counts += all(m[f"{a}_{x}"] == m[f"{b}.{y}"] for x, y in (("right", "right"), ("losses", "losses"), ("excluded", "excluded")))
+            if m[f"{a}_wins"] != m[f"{b}.wins"]:
+                differ.append(f"{r} g{g}")
+    if agree:
+        out.update({"repro.agree": agree, "repro.same_counts": same_counts, "repro.wins_differ": ", ".join(differ) or "none"})
+    return out
 
 
 # ---------------------------------------------------------------- outputs
@@ -1063,6 +1147,25 @@ def rsi_dev_csv(series, m):
     return "\n".join(out) + "\n"
 
 
+def scaling_csv(m):
+    """Accuracy on the fresh exam (percent) against training records: S4's generations (0, 300, 900 and
+    2100 cumulative records) and the base-proposed matched-data controls (900 and 2100), group means and
+    each lineage, for the figure."""
+    g = "rsi4f.mgroups"
+    if f"{g}.gen3_share" not in m:
+        return "records,arm,mean,l0,l1,l2,l3\n"
+    rows = ["records,arm,mean,l0,l1,l2,l3"]
+    pct = lambda k: f"{100 * float(m[k]):.2f}"
+    base = pct(f"{g}.base_share")
+    rows.append(f"0,s4,{base},{base},{base},{base},{base}")
+    for records, grp in ((300, "gen1"), (900, "gen2"), (2100, "gen3")):
+        rows.append(f"{records},s4,{pct(f'{g}.{grp}_share')}," + ",".join(pct(f"{g}.{grp}_share_{i}") for i in range(4)))
+    rows.append(f"0,m,{base},{base},{base},{base},{base}")
+    for records, grp in ((900, "m900"), (2100, "m2100")):
+        rows.append(f"{records},m,{pct(f'{g}.{grp}_share')}," + ",".join(pct(f"{g}.{grp}_share_{i}") for i in range(4)))
+    return "\n".join(rows) + "\n"
+
+
 def rsi_forest_csv(series, m):
     """Each lineage step's paired gain with the examiner's family-clustered 95% interval, top to bottom
     (y counts down), and whether the registered item-level step holds, for the forest plot."""
@@ -1145,6 +1248,9 @@ def write_outputs(out):
     (out / "power_curve.csv").write_text(power_curve())
     (out / "families_table.tex").write_text(families_table() + "\n")
     (out / "rsi_table.tex").write_text(rsi_table(m) + "\n")
+    (out / "scaling_s4.csv").write_text("\n".join(l for l in scaling_csv(m).splitlines() if not l.split(",")[1:2] == ["m"]) + "\n")
+    (out / "scaling_m.csv").write_text("\n".join(l for l in scaling_csv(m).splitlines() if not l.split(",")[1:2] == ["s4"]) + "\n")
+    (out / "rsi4f_forest.csv").write_text(rsi_forest_csv("rsi4f", m))
     for series, _ in RSI_SERIES:
         (out / f"{series}_items.csv").write_text(rsi_items_csv(series, m))
         (out / f"{series}_steps.csv").write_text(rsi_steps_csv(series, m))

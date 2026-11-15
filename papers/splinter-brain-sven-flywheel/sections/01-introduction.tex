@@ -3,51 +3,50 @@
 
 \section{Introduction}\label{sec:intro}
 
-Can a small local model get better, round after round, by training on material it proposes itself,
-when every label comes from an executable oracle and no stronger model or human answer takes part? We
-study this on one task, predicting what a Lua~5.1 program prints, with Qwen3-4B, under four series
-registered before their runs and judged by an examiner program that holds an exam the learner never
-reads (\cref{sec:method}).
+A model that poses its own problems can learn from them if something outside it supplies the correct
+answers. Here that is an executable oracle: Qwen3-4B writes Lua~5.1 programs about the language manual,
+and the interpreter says what each prints. This is environment-supervised learning: the model is trained
+on the interpreter's targets for problems it gets wrong, including problems it never solves, not
+reinforced on its own successes, and no stronger model or human answer takes part. Executable feedback
+for self-improvement is not new;~\citep{haluptzok2022}\cl{CT24} our contribution is a registered procedure
+that worked, the evidence that it did and what limits it, and the failure analysis of the series that
+did not.
 
-The method that worked, S4, is pool-growing self-training (\cref{fig:hero}, detailed in \cref{fig:cycle}). In each round the current
-champion proposes programs about the language manual and predicts each one four times; the programs it
-gets wrong at least once enter a pool, the interpreter supplies their outputs as labels, and a fresh
-adapter is trained \emph{from the base} on the whole pool. The rounds share no parameters: only the pool
-is passed on, so a ``generation'' is an acquisition round in which the current model synthesises queries
-and its own disagreement over four samples selects them. The pool doubles each round (300, 600 and 1200
-new programs).\cl{RS25,RS26}
-
-
+The procedure, S4, is pool-growing self-training (\cref{fig:hero}, detailed in \cref{fig:cycle}). In
+each round the current champion proposes programs and predicts each four times; those it gets wrong at
+least once join a pool labelled by the interpreter, and a fresh adapter is trained from the base on the
+whole pool, which doubles each round (300, 900 and 2100 records).\cl{RS25,RS26} The rounds share no
+parameters; the state that persists is the dataset.
 
 \begin{center}
 \fbox{\begin{minipage}{0.94\linewidth}\small
-\textbf{Outcome of S4 (four lineages, three generations; \cref{tab:rsi,fig:rsi-forest}).}\\[2pt]
-\emph{Registered criterion} (per lineage, exact sign test over items, at least 3 of 4 lineages):
-\textbf{met}, 4 of 4, every step.\cl{RS29}\\
-\emph{Template-clustered intervals} (25 templates): generations 1 and 2 improve in 4 of 4 lineages;
-generation 3 in 1 of 4 (two-sided 95\%), 2 of 4 (one-sided 95\%).\cl{RS38}\\
-\emph{Controls} deciding between more verified data and a better proposer, and a fresh exam:
-registered, not yet run.\cl{RS39}
+\textbf{Outcome of S4 (four lineages, three rounds; \cref{sec:rsi,sec:followups,sec:matched}).}\\[2pt]
+\emph{Fresh exam} (2340 items, 78 templates, not selected by the base): 8.3\% $\to$ 8.7\% $\to$ 13.8\%
+$\to$ 16.7\% answered; round 1 holds in no lineage, rounds 2 and 3 in all four by the sign test (round 3
+in three by the clustered bound); the registered 3-of-4 criteria are not met.\cl{FU03,FU04}\\
+\emph{Matched data} (one fit on 2100 base-proposed frontier programs): 14.6\%; the rounds' advantage of
+2.1 points is inconclusive under the registered analysis.\cl{FU07}\\
+\emph{Original exam} (889 items the base missed at selection): the registered criterion is met in 4 of 4
+lineages; generation 3 holds in 1 or 2 of 4 under the clustered intervals.\cl{RS29,RS38}
 \end{minipage}}
 \end{center}
 
+\paragraph{What it shows.} Accuracy grows with the verified frontier: on an exam drawn after the
+fact, three rounds roughly doubled the share the base answered, and base-proposed frontier data scaled
+the same way from 900 to 2100 records (\cref{fig:scaling}).\cl{FU04,FU07} Whether the rounds help beyond
+the data they accumulate is not shown. We separate three senses of recursion: S4 has a recursive
+\emph{structure}, since each round's data is proposed and selected by the previous round's model; a
+\emph{benefit} of that recursion over matched data is not demonstrated; and an improving \emph{rate} of
+improvement is not demonstrated (\cref{sec:matched}). The title states the condition we observed across
+the registered runs and the scaling result, not a proven necessity: the growing frontier is what the
+runs that improved share, while a fixed-size but better-selected frontier, more optimisation on fixed
+data and other replay schedules were not tested. The first round's gain on the original exam was largely
+the exam's selection on the base's failures (\cref{sec:followups}). The earlier series show what S4 needed
+(\cref{sec:earlier}); the same loop on repository tasks and on a 27B agent showed no gain, in those
+configurations (\cref{sec:elsewhere}).
 
-
-\paragraph{What it shows, and what decides the rest.} Every S4 generation beat its predecessor on the
-exam by the registered test, the share answered rising from 1.3\% to between 21.6\% and 27.1\%, and
-accuracy on the learner's unselected dev sets rose from 40--55\% to 65--73\%
-(\cref{fig:hero,fig:dev}).\cl{RS28,RS46} Two things limit the reading. The third step does not survive the
-examiner's template-clustered intervals in most lineages (\cref{sec:rsi-robust}), and each round trains
-on more data than the last, so the gains may come from the amount of verified data rather than from an
-improved model proposing better material. A registered matched-data control decides between these:
-if generation~3 beats base-proposed data of the same size the improvement compounds and earns the word
-recursive; if they are equivalent, verified data volume suffices; if the control is better, one round
-is enough (\cref{sec:followups}).\cl{RS39,RS52} The earlier series, which failed, show what S4 needed
-(\cref{sec:earlier}); the same loop on repository tasks and on a 27B agent showed no gain
-(\cref{sec:elsewhere}).
-
-\paragraph{Contributions.} (i)~A registered multi-round self-training procedure with a self-proposed,
-oracle-labelled frontier that met a per-lineage criterion on a held-out exam, with its template-level
-and procedure-level reading. (ii)~A learner/examiner separation specified fully enough to re-implement.
-(iii)~A registry of every test of the four series, most of which did not meet their criterion.
-(iv)~A claims ledger tying every statement to pinned code or a raw record (\cref{sec:repro}).
+\paragraph{Contributions.} (i)~A registered multi-round, environment-supervised training procedure on a
+self-proposed frontier, examined on a fresh exam and against matched data. (ii)~A learner/examiner
+separation specified fully enough to re-implement, with a reference implementation that reproduces the
+published decisions. (iii)~A registry of every test of the four series and why most did not meet their
+criterion. (iv)~A claims ledger tying every statement to pinned code or a raw record (\cref{sec:repro}).

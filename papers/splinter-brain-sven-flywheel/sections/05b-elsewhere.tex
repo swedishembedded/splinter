@@ -11,4 +11,8 @@ than only file edits, does harm (\cref{sec:coding-summary}).\cl{QUAL1} Two promo
 27B model trained on its own agent experience did not beat their base on one measurement
 (\cref{sec:generations}).\cl{G2703,G2704} An exploratory, unregistered run in which a 4B model learned
 from a raw manual gained on its own probes, with no detected effect of which model wrote its tasks
-(\cref{sec:documentation}).\cl{SL23}
+(\cref{sec:documentation}).\cl{SL23} These negative results hold for those configurations: small
+corpora, records truncated to the training block, harness failures, and an exam the 27B model already
+solved nine times in ten; they do not show that supervised training memorises and reinforcement learning
+generalises, or the reverse. The supervision finding, that training on every agent action does worse than
+training on the decisive edits, is secondary but held at the registered seeds.

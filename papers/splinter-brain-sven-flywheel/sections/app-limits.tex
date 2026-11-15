@@ -43,3 +43,11 @@ seen public repositories in pretraining; the paired base arm bounds that effect,
 workloads, on exams the base already solved about nine times in ten, so the few tasks it solved only
 sometimes carried every comparison.\cl{G2703} The token-efficiency finding was made after the data
 over several comparisons and is exploratory.\cl{G2705}
+
+\paragraph{Verification and grounding.} Lexical grounding of a task in its source (\cref{sec:admission})
+establishes provenance, not entailment: a task whose reference shares the source's words can still be
+wrong about it. The verifier kinds check different properties, and no ranking among them makes a
+stronger verdict override a failure of another kind. Aggregate gates (\cref{sec:gate}) can hide the loss
+of a rare skill inside an unchanged total. The engineering defects found and fixed along the way
+(\cref{sec:requirements,sec:small-model-needs}) are part of the result: each would have produced a
+plausible but wrong measurement.

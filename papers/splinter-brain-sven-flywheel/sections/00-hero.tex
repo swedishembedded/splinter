@@ -1,14 +1,14 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 %
-% The page-1 figure: the S4 procedure in five steps beside its result, drawn from the ledgered
-% data (generated/rsi4_pct.csv, generated/rsi3_pct.csv). Set in the title area, not floated.
+% The page-1 figure: the S4 procedure in five steps beside its result on the fresh exam, drawn from
+% the ledgered data (generated/scaling_s4.csv, generated/scaling_m.csv). Set in the title area, not floated.
 
 \begin{center}
 \begin{minipage}{\textwidth}
 \centering
-{\large\bfseries Retrained from the base on a doubling frontier, every generation beats the last in 4 of 4
-lineages (registered per-item test) on an exam the learner never sees.\par}
+{\large\bfseries Learning from the interpreter's answers on a self-proposed frontier that doubles each
+round: Qwen3-4B goes from 8.3\% to 16.7\% on a fresh exam.\par}
 \vspace{2mm}
 \begin{tikzpicture}[font=\normalsize, >={Stealth[length=2.6mm]}]
 \tikzset{hstep/.style={draw=black!75, rounded corners=3pt, fill=#1, align=center, text width=40mm,
@@ -25,26 +25,21 @@ lineages (registered per-item test) on an exam the learner never sees.\par}
 \draw[->, line width=0.9pt, dashed, black!55] (t.east) -- ++(5mm,0) |- node[pos=0.25, right, font=\footnotesize, align=left] {next\\round} (p.east);
 \foreach \n/\k in {p/1, l/2, f/3, t/4, e/5} \node[hnum, anchor=east] at ([xshift=-1.5mm]\n.west) {\k};
 \begin{axis}[paper, at={(60mm,-67mm)}, anchor=south west, width=87mm, height=80mm,
-  xmin=-0.2, xmax=3.45, ymin=0, ymax=30, xtick={0,1,2,3}, xticklabels={base,1,2,3},
-  xlabel={generation}, ylabel={held-out items right (\% of 889)},
-  tick label style={font=\small}, label style={font=\small},]
-\addplot[okBlue, line width=1.6pt, mark=*, mark size=2.2pt] table[col sep=comma,x=gen,y=r0] {generated/rsi4_pct.csv};
-\addplot[okBlue, line width=1.6pt, mark=*, mark size=2.2pt, forget plot] table[col sep=comma,x=gen,y=r1] {generated/rsi4_pct.csv};
-\addplot[okBlue, line width=1.6pt, mark=*, mark size=2.2pt, forget plot] table[col sep=comma,x=gen,y=r2] {generated/rsi4_pct.csv};
-\addplot[okBlue, line width=1.6pt, mark=*, mark size=2.2pt, forget plot] table[col sep=comma,x=gen,y=r3] {generated/rsi4_pct.csv};
-\addplot[okVermillion, line width=1.1pt, densely dashed, mark=o, mark size=2pt] table[col sep=comma,x=gen,y=r0] {generated/rsi3_pct.csv};
-\addplot[okVermillion, line width=1.1pt, densely dashed, mark=o, mark size=2pt, forget plot] table[col sep=comma,x=gen,y=r1] {generated/rsi3_pct.csv};
-\addplot[okVermillion, line width=1.1pt, densely dashed, mark=o, mark size=2pt, forget plot] table[col sep=comma,x=gen,y=r2] {generated/rsi3_pct.csv};
-\addplot[okVermillion, line width=1.1pt, densely dashed, mark=o, mark size=2pt, forget plot] table[col sep=comma,x=gen,y=r3] {generated/rsi3_pct.csv};
-\node[anchor=west, font=\normalsize\bfseries, text=okBlue] at (axis cs:3.07,24.3) {S4};
-\node[anchor=west, font=\normalsize\bfseries, text=okVermillion] at (axis cs:3.07,13.2) {S3};
+  xmin=-150, xmax=2700, ymin=6, ymax=19, xtick={0,300,900,2100}, xticklabels={0,300,900,2100}, clip=false,
+  xlabel={interpreter-labelled training records}, ylabel={fresh exam answered (\% of 2340)},
+  tick label style={font=\small}, label style={font=\small}]
+\addplot[okBlue, line width=1.6pt, mark=*, mark size=2.4pt] table[col sep=comma,x=records,y=mean] {generated/scaling_s4.csv};
+\addplot[okVermillion, line width=1.3pt, densely dashed, mark=square*, mark size=2.2pt] table[col sep=comma,x=records,y=mean] {generated/scaling_m.csv};
+\node[anchor=west, font=\small\bfseries, text=okBlue, align=left] at (axis cs:2150,16.7) {S4\\rounds};
+\node[anchor=west, font=\small\bfseries, text=okVermillion, align=left] at (axis cs:2150,14.3) {one fit,\\base\\data};
+\node[anchor=north, font=\footnotesize, text=black!70] at (axis cs:300,8.3) {round 1};
 \end{axis}
 \end{tikzpicture}
 \captionof{figure}{\textbf{S4 at a glance.} Left: one round; rounds share no parameters, only the growing
-pool. Right: share of 889 held-out items answered (items the base had missed at selection) by the four S4 lineages (solid), retrained from the base each round, and the four S3 lineages (dashed), which continued one adapter. Under
-intervals clustered over the exam's 25 templates the third step holds in one or two lineages, and a
-registered matched-data control, not yet run, decides whether the gain needs the improved proposer or
-only more verified data (\cref{sec:rsi,sec:followups}).}\label{fig:hero}
+pool. Right: share of a freshly drawn 2340-item exam answered, means of four lineages, against the
+interpreter-labelled records trained on: S4's rounds (300, 900, 2100 cumulative records) and one fit from
+the base on frontier data the base proposed (900, 2100). The rounds' 2.1-point lead at 2100 records is
+inconclusive under the registered analysis (\cref{sec:followups,sec:matched}).}\label{fig:hero}
 \end{minipage}
 \end{center}
 \vspace{1mm}

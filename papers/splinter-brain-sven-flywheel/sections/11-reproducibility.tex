@@ -38,7 +38,7 @@ step beside the published verdict. & One GPU (the paper's runs used a GH200); ti
 the proposer reads, checked against their digests), builds Lua~5.1.5 from its official tarball
 (SHA-256 pinned), runs the four S4 lineages with the launch record's settings and seeds, then grades
 the new champions as \code{reproduce/examine} does. & One GH200; about 12\,h, since S4's lineages took
-2.6 to 3.4\,h each on a card of their own. \\
+2.4 to 3.4\,h each on a card of their own.\cl{RS26} \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -56,10 +56,13 @@ base against the declared base digest and each adapter file against its declared
 serves one lineage at a time, because adapters of different lineages carry the same card ids. Its
 unit tests run in \code{make verify}. It serves on the learner's Brain \code{796871647}: the build the
 published verdicts were served on (binary SHA-256 \code{d11e9134...}) was made from a Brain source
-that is not in Brain's published history.
+that is not in Brain's published history. Run on that build, the reference examiner agrees with the published verdicts on
+all 12 S4 step decisions, with identical items right, losses and exclusions at every step; the only
+differences are the base answering 13 items instead of 12 on lineage r1's server, and r1's first step
+counting 120 wins instead of 121.\cl{FU11}
 
 \paragraph{What a reader cannot reproduce.} (1) The fresh exam F of the registered follow-ups and its
-generator are not released; when F's verdicts exist, only their signed aggregates are published.
+generator are not released; only its signed aggregate verdicts are published.
 (2) The published verdicts were produced by a different implementation of the examiner than the
 reference one, on a different Brain build, so \code{reproduce/examine} re-measures the result rather
 than replaying the published grades; a difference within serving nondeterminism is expected, and
@@ -87,8 +90,8 @@ abstract pages on 2026-11-15.
 \paragraph{Draft and final.} The paper's status is recorded in \code{status.txt}; when it reads
 final, \code{build\_data.py --check} also fails while any registered-but-unmeasured or planned claim
 remains, so a final version holds only structure facts, measurements, computations from measurements
-and citations. This version is a draft because one planned claim remains: the two registered S4
-follow-ups, whose results it will report when they exist.\cl{RS39}
+and citations. This version is final: the registered follow-ups have reported, and their verdicts are in
+the evidence dataset (\code{records/followups.tar.xz}).\cl{FU02,FU07}
 
 \paragraph{Registrations.} All registrations are in the paper's \code{prereg/} directory: the
 coding-task protocol in \code{coding-tasks.md}, the acquisition experiments in \code{acquisition.md},
