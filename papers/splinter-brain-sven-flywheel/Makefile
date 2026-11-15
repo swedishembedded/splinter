@@ -45,3 +45,21 @@ verify:
 # REGISTERED or PLANNED claim remains (results not yet validated).
 final: verify
 	python3 scripts/build_data.py --check --final $(if $(EVIDENCE),--evidence $(EVIDENCE))
+
+# ---------------------------------------------------------------- reproduction
+# Three tiers, each from the public remotes of brain, sven and splinter and the evidence dataset
+# (reproduce/dataset.json pins its revision and every file's digest). Downloads and builds land
+# under target/papers/, never in this directory. Variables:
+#   EVIDENCE_DIR  the dataset copy (default: where `make verify` looks for it); a local copy is used
+#                 as is, only files missing or not at their digest are downloaded
+EVIDENCE_DIR ?= $(OUT)/.evidence/$(NAME)
+
+.PHONY: reproduce reproduce/verify
+## reproduce - lists the reproduction tiers; runs nothing
+reproduce:
+	@echo "reproduce/verify   tier 1, CPU: download the evidence dataset and check every record (minutes)"
+
+## reproduce/verify - tier 1 (CPU, a 1.6 GB download, minutes): fetch the evidence dataset at its pinned revision, check every file, archive member and adapter digest, then `make verify` on it
+reproduce/verify:
+	python3 reproduce/evidence.py fetch --dir $(EVIDENCE_DIR)
+	$(MAKE) verify EVIDENCE=$(EVIDENCE_DIR)

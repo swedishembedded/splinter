@@ -1,0 +1,280 @@
+{
+ "repo": "swedishembedded/the-frontier-must-grow-evidence",
+ "revision": "532dd99308e1d1227a70bcbad07c554fbd6cec27",
+ "files": [
+  {
+   "path": "adapters/rsi4/r0/1/adapter.safetensors",
+   "size": 132184032,
+   "sha256": "e55f0da7c7266c6bfd492ddfb2ace1db72062476de937014ef8540bda7756308"
+  },
+  {
+   "path": "adapters/rsi4/r0/2/adapter.safetensors",
+   "size": 132184032,
+   "sha256": "97afed7c7f9b47d4edd88a03c32c4b992f4257e2fc856e1b9de828d2b8252a2f"
+  },
+  {
+   "path": "adapters/rsi4/r0/3/adapter.safetensors",
+   "size": 132184040,
+   "sha256": "a1304bb54215b11f3e99cf83a61652ade76747bf34f7ecf15823d89eb58a283c"
+  },
+  {
+   "path": "adapters/rsi4/r1/1/adapter.safetensors",
+   "size": 132184032,
+   "sha256": "196dcd93e979ab89674d2f008eb57447159676a746739486c4d17c8dd2fa3c66"
+  },
+  {
+   "path": "adapters/rsi4/r1/2/adapter.safetensors",
+   "size": 132184032,
+   "sha256": "a2ceda0c3a22f05cfb095b2354effa185c799aa2a2ec3bf596da4f657ad56384"
+  },
+  {
+   "path": "adapters/rsi4/r1/3/adapter.safetensors",
+   "size": 132184040,
+   "sha256": "69b7bc2e7bbac1a1190ff4b055af0edfa4d7331e5bbb3597a49efd61d358bce6"
+  },
+  {
+   "path": "adapters/rsi4/r2/1/adapter.safetensors",
+   "size": 132184032,
+   "sha256": "3eeabd882b88607e79647f4d5f9f71be20cb4ddaf02fef6ca0b7acdc9fada336"
+  },
+  {
+   "path": "adapters/rsi4/r2/2/adapter.safetensors",
+   "size": 132184032,
+   "sha256": "42049962b65f0cb698309c5977b989ee2d21c606a9b0e9f9ca0c203dfc943c89"
+  },
+  {
+   "path": "adapters/rsi4/r2/3/adapter.safetensors",
+   "size": 132184040,
+   "sha256": "8457b7a0e5c6d219cfaf05be770625fe953255e3bef89195ff4b79ee46e37775"
+  },
+  {
+   "path": "adapters/rsi4/r3/1/adapter.safetensors",
+   "size": 132184032,
+   "sha256": "3e97e324d51b67dd3665d6c8dfc3bc9b56c3f4bd79021a47c20033837254fe92"
+  },
+  {
+   "path": "adapters/rsi4/r3/2/adapter.safetensors",
+   "size": 132184032,
+   "sha256": "be7524f74cd1f15f5855b8b91a2d3a3ef2205149adfaf97b078ac08a85613448"
+  },
+  {
+   "path": "adapters/rsi4/r3/3/adapter.safetensors",
+   "size": 132184040,
+   "sha256": "0c9f2c10c9b624b855ae22a1ab4e83686dc82dbfbd8b4fad69454572b3044bea"
+  },
+  {
+   "path": "exam.jsonl",
+   "size": 156065,
+   "sha256": "60ac3ae44651500f5cdfdf821770b3b46cb042522a1cd66b6724d10db6fca16a"
+  },
+  {
+   "path": "records/documentation.tar.xz",
+   "size": 38224,
+   "sha256": "218bf41b21d62b36a0cfe1ad1cf2b365ed839d20f64d77ba7f67e07b477d1322",
+   "members": {
+    "full-ft-footprint/footprint.jsonl": "13d02b72c89c87f42cf1d5c82321e58953cf358db9caa824c77dd89240ce1e1c",
+    "lua-flywheel/arms-comparison.json": "c394f58457e17dbabf2279ccdea12d0047d86327bd1b415c12e0916444fd16e8",
+    "lua-flywheel/runs/fixed-generator-lr1e-6.json": "fa53386d7e60b8345980c6a7b5f326db74f47dcf3256a0d8665ec98827d5fc67",
+    "lua-flywheel/runs/greedy-baselines.json": "192c8511d57c486f37edd771ee636b44502c3b34bdd60513e6b22464b49c2e1b",
+    "lua-flywheel/runs/replicate2-fixed-generator-lr1e-6.json": "2f3b1696f46e838d3c9da8ee9040859215815969ce573659186f5bd62f6c4f1d",
+    "lua-flywheel/runs/replicate2-self-generate-lr1e-6.json": "d28902ec7c207708e66fa21b1768cc1fd6b1c35b555f17ee1ae546863e44aefb",
+    "lua-flywheel/runs/replicate3-fixed-generator-lr1e-6.json": "5f2c6209661b894e03c58c40312df3a1b651fff128c7caf8dc015ce81391ac71",
+    "lua-flywheel/runs/replicate3-self-generate-lr1e-6.json": "c4617db42e6a16cb8f762037940b9533eb9c1f5c2aa4a2f9d9a7500cfccfbed4",
+    "lua-flywheel/runs/self-generate-lr1e-5.json": "3fd758701a2bba4b6e7bb99728b0e996f5c1f61053102ac9f3a2bce62eceb000",
+    "lua-flywheel/runs/self-generate-lr1e-6.json": "54b3a86a0a1ae20e8517e3f26197baeb2c082eb649bc9adfb82b1bbf4c2b846e"
+   }
+  },
+  {
+   "path": "records/gen27b.tar.xz",
+   "size": 980,
+   "sha256": "9b784d63d6c16aade55a32539662bc72bc030d31ee5e41bc1f1c1ed3a7d25faa",
+   "members": {
+    "gen27b/efficiency-flat.json": "55f2884b5978b822b84f564cdb94bc4142a2825da2c2f72318a32293a6e46c75",
+    "gen27b/g0-decision.json": "60b14b4a174a45bcc3407dfef6201a5bc23ece6d32fe9a2db28023e56ba41149",
+    "gen27b/three-way.json": "58fa95ac4455dcb754c7dc66b98afe8b18ff60944bb011db1bcc9973d8001951"
+   }
+  },
+  {
+   "path": "records/rsi1.tar.xz",
+   "size": 14032,
+   "sha256": "5708703fc0ad8007eca85892e196259370d3cce04f5919b6c4d38a87e55ce00a",
+   "members": {
+    "rsi1-hard/analysis-h.json": "077ad110164b0a738d74510818914cad6a0e0c42a8958f7b4395600d4c5a591e",
+    "rsi1-hard/analysis-h.py": "fd3fe78af1181324f6fed2676dde2caa9f0494b83c6813d98905cb3b57db5dc6",
+    "rsi1-hard/eval-base.json": "9c9173284ecd489d642fe91cb84f4e407312273d799d9fec922292fa854f3451",
+    "rsi1-hard/eval-r0-g1.json": "d13953629664f100bb56b2499c7b0b6aa099f2928ab9522bdf6cbc3598bddf6f",
+    "rsi1-hard/eval-r0-g2.json": "460db294f55a9f971491f8eaf838f5587454aae08b1f0711224811ef1f490eb6",
+    "rsi1-hard/eval-r0-g3.json": "1d7dcf37316c2b3b8acabf947fa894c3b3532b9a4d4bbe1515e0fd418d6d318c",
+    "rsi1-hard/eval-r1-g1.json": "539e30970f98fe0b75fa6a90b68e36b8ce271b83374f805f5316140ef48bf6be",
+    "rsi1-hard/eval-r1-g2.json": "76ebcf63f5f6f7c7136afd16250227f037d524f6cccfa2206cd6e8faa8d8a528",
+    "rsi1-hard/eval-r1-g3.json": "fac307efad0eaeac3925140973f3d01617c28bc3c1683f84f6518107c11a4009",
+    "rsi1-hard/eval-r2-g1.json": "af858fef02fe1305bb101e1693fc30c21ee7a10c8f410f309c93ca7c2f334e9e",
+    "rsi1-hard/eval-r2-g2.json": "f5afc1ae571195241a23b80cb2877544382e8a9bfad23d5e04684f34f86f4b5c",
+    "rsi1-hard/eval-r2-g3.json": "92e0005b8be18ea5603f067e92eba1b2c7e7608c1ec91939c0fd3336088fd043",
+    "rsi1-hl2/analysis-hl2.json": "93df678d6d53d733f0c681acf77bc72067098c02b6dbcb2b8fc979b452fd781c",
+    "rsi1-hl2/analyze_hl.py": "b227b4fc52cd62bbd4ff76615017d49e9f40e88fe2d2875eea5d1d6fdef02898",
+    "rsi1-hl2/eval-hl-r0-g1.json": "5a886b177116b184ff034f7297637aed5d07e28ce97983fad0ae63fd1ce610cf",
+    "rsi1-hl2/eval-hl-r0-g2.json": "ff5937297b6de43dbed228b7ec09ee1b4abe1bf6182cc2004636efdf5922930f",
+    "rsi1-hl2/eval-hl-r0-g3.json": "ac3c4b197db0957d95f4defb5509363027d6d032d07792b9597c518e0507ca79",
+    "rsi1-hl2/eval-hl-r1-g1.json": "81119006ef13e3dc44e13d652e3a67a78aaf768257fbc6a5625fa2622be358bb",
+    "rsi1-hl2/eval-hl-r2-g1.json": "e766390de2f272eaa1234679bea6e8d3debd981fa77dde1522a2507adf665ba3",
+    "rsi1-hl2/eval-hl-r2-g2.json": "abd68ad813b43a1852cda35cf4fd2ef41f3dd74291dd8dd245b6a5fe00e4030c",
+    "rsi1-hl2/eval-hl-r2-g3.json": "9bf60fef6d4c718e38a7f5b168640a307779d2477a5fbe4c4876524fbb019b1f",
+    "rsi1-hl2/eval-hl-r3-g1.json": "79143b34008dedb28cc43cc56d98a3012ca54405a9bb56f8d3ec3195039648ff",
+    "rsi1-hl2/eval-hl-r3-g2.json": "762f46281fdc6669551980dc648573928892569f0f64de190b5966e3dd255766",
+    "rsi1-hl2/eval-hl-r3-g3.json": "fc87f3d669006a9723cbf90d9bc15a83773700d86174344efbbf410f1f9910b9",
+    "rsi1-hr/analysis-hr.json": "9dfa7144c341d47f00b9c73e481369202c244070a6e49096b020806fe8b1c1aa",
+    "rsi1-hr/analysis-hr.py": "caca56691a73aaa06585dbc7968e992958c296021e0dc54e9b74aa1f135a8d5c",
+    "rsi1-hr/eval-hr-r0-g1.json": "9ab89b4ce5a721def290f2625ebbe260180277154c41be0607ac5b248d6cf0ed",
+    "rsi1-hr/eval-hr-r1-g3.json": "876810c0114a11a4185ed1eff7da8634aa083399788e0207d54562075f43aa67",
+    "rsi1-hr/eval-hr-r2-g3.json": "c71ededad4b00bb843389871e464dcb39ee92c3124200cca86300bf81aa21f3d",
+    "rsi1-hr/eval-hr-r3-g1.json": "9851c60990625dcf4a4f81875cecda8815ff3e77a222898de3126588dd0afdf2",
+    "rsi1-hr/eval-hr-r3-g2.json": "ebf9b235b79b53dc5bcfe7740879f28b737e822d4ae822a0ddc48117b248020a",
+    "rsi1-py/analysis-py.json": "74c27f12e31327de9cc6726b514a5438189e817c60b201ef29b6415f2a33a3d8",
+    "rsi1-py/analysis-py.py": "5ead836031c55c3c21f871f6efb73865fb502f338ca5ff1bc53822857dbacff7",
+    "rsi1-py/eval-base.json": "3569e9aa7fb16d57cb2bf5148c179810d6e3c41672f176b990fae64381c07c23",
+    "rsi1-py/eval-r0-g1.json": "b8638d2079a9a4caf13dc948f14f3d23571b3f00aa1735ff30467ee5fbd8cd4f",
+    "rsi1-py/eval-r0-g2.json": "c058cfda009a24816026a80a139e7a92b33713d5438997cd6c146e754b739e49",
+    "rsi1-py/eval-r0-g3.json": "9f6919c02dbd5c682a268bffd4d6059cd50e9fff2e5f99b3370b7bc9faabaff5",
+    "rsi1-py/eval-r1-g1.json": "c8498d16693d134290a977d151fcf47ae5e8708b1cb689db91ce5311d9f04921",
+    "rsi1-py/eval-r1-g2.json": "c8498d16693d134290a977d151fcf47ae5e8708b1cb689db91ce5311d9f04921",
+    "rsi1-py/eval-r1-g3.json": "c8498d16693d134290a977d151fcf47ae5e8708b1cb689db91ce5311d9f04921",
+    "rsi1-py/eval-r2-g1.json": "f76c0d69c9ced8240346f4db94673a6ab4bb3a2e142451875fae5538a784c0b7",
+    "rsi1-py/eval-r2-g2.json": "33ac28f8ec2513cb878f036f308a4232e6dddbfaadb1f6144e65b30e97f68a74",
+    "rsi1-py/eval-r2-g3.json": "a8924c2727588c6e2e4d62c4b7109261bcc8a4ac27c40af3e261021af1e7935b",
+    "rsi1-py/eval-r3-g1.json": "06acd9aecc3ab8b7a3a82713db88c2bec18dd1020f74b1ea1cda22f4b58e7f65",
+    "rsi1-py/eval-r3-g2.json": "40a41239756d78ccde3810c3a937e7eb4f533e20780548b4af2a260fd55726a2",
+    "rsi1-py/eval-r3-g3.json": "85cf427b5645f9f21041bbd6acef1d8b42cf8d55b040d69cd12657ddc19848c3",
+    "rsi1-rl/eval-0.json": "a8d6ba9a3b45e0f8e8605b964edd8d66044c7d2304c73c7c46f0b63255f252be",
+    "rsi1-rl/eval-1.json": "f5377748766b403c698856756810b9449098dceb5e124f9a727b89855cb10c15",
+    "rsi1-rl/eval-2.json": "b08dab07f49af0d9ee3eb12d3adb4f921d7e21c98af3848f739419c24d2999d9",
+    "rsi1-rl/eval-3.json": "27cc7e61cdca6a0886077d3b95b068b143c37e3cb7e9ac7349c4d9c576992ecc",
+    "rsi1-rl/pg-eval-0.json": "bfb6db2a3ce74a090c3100017eb90e4931fda11fada4069a0f04c159553e8f1f",
+    "rsi1-rl/pg-eval-1.json": "e7467ea094742410a63a6b6b7a570bb0dfc5381e3cc8d19c2b2c768f4e8899a2",
+    "rsi1-rl/pg-eval-2.json": "77e4fa966a159f294d7475a7fd5524beb257383a5d11efd649193a8dcdc1028d",
+    "rsi1-rl/pg-eval-3.json": "999e3719fb3faf47a693424044268b80fe1bd58245476c19e114985b85c5e39a",
+    "rsi1-rl/pg2-eval-0.json": "2056502651ae83c26933a002cd1438c454298fd613f9e3399303ea55b911dd7b",
+    "rsi1-rl/pg2-eval-1.json": "948b5d503807aa002785af482fc9ab01bd14e5d9d25d3aff896f45fe119fef74",
+    "rsi1-rl/pg2-eval-2.json": "d41c83aa9c85c9888258d23dcd516e4703a3094022e87238116e9db24d523a78",
+    "rsi1-rl/pg2-eval-3.json": "2bdcfdba1167615aa270a1618681b756536896b0d0c9185d4f864972bb2995c8"
+   }
+  },
+  {
+   "path": "records/rsi2.tar.xz",
+   "size": 79080,
+   "sha256": "addf45848bc1352aa9d5dbd987436c1f85a76b0fca4a7a47f8a6aa4868de8927",
+   "members": {
+    "rsi2/handoff/candidates/r0/1/candidate.json": "bea5402c264245e99fc45694dabe8863e41e6a1e9fa10544e424ffa52723eaac",
+    "rsi2/handoff/candidates/r0/1/training-tasks.jsonl": "155a8adea3143694a6a68735dd11a5a3e2a1a2b3bcd5701d39e564e8e303d6f7",
+    "rsi2/handoff/candidates/r1/1/candidate.json": "62c1c948eb43fb2421163a315bb72b5bace3ee33a98764251bc200a542b05c07",
+    "rsi2/handoff/candidates/r1/1/training-tasks.jsonl": "382c2a7a124e4286a32560595961f562037d44b41c816e9e0bb6897ef92ddf55",
+    "rsi2/handoff/candidates/r2/1/candidate.json": "d0ee2555f4f9098d8f06f41650cd0a0694535728e4e5e14807301a7d6c849da5",
+    "rsi2/handoff/candidates/r2/1/training-tasks.jsonl": "c987b9daab581599bfbc8de5552ebd4fd9522c042466247d5417a57e0d399cce",
+    "rsi2/handoff/candidates/r3/1/candidate.json": "a1e6e2cca44a027eb287b8410c4d9f3608c13512e189947ce69837b0118fb946",
+    "rsi2/handoff/candidates/r3/1/training-tasks.jsonl": "aa6beadd958d8d7e1896308fd37a7137f92cade4f9c175c88f6e8075b3829e77",
+    "rsi2/verdicts/plan-verdict.json": "07785a539c0fcd86c535fe4ffd3d5c880f067bf278e4dbb4d3b8984d2f29f3ec",
+    "rsi2/verdicts/r0/1.json": "2854a10b10b8695006277eccf3e0f6505db26e14d8a0ddc11f3947d5f96a6af0",
+    "rsi2/verdicts/r1/1.json": "9c96a6b6db26e27c001127ab306de2a375cc1004465af4962ed6c917616ebb34",
+    "rsi2/verdicts/r2/1.json": "b6463ee10efc8c6d538324cd27c0433676a58ad96e4e46f961997151fec10aa7",
+    "rsi2/verdicts/r3/1.json": "c705c3f34a1811e122b9c0aaca5660e4c43fc8508e32fce896b84d5604ccb3e8"
+   }
+  },
+  {
+   "path": "records/rsi3.tar.xz",
+   "size": 571304,
+   "sha256": "93b0fd62d1a2b18eb27d95d6dc96949b53731984fb096b1ccd4c4d0047e8e5a1",
+   "members": {
+    "rsi3/handoff/candidates/r0/1/candidate.json": "ca03fd93e33ff99412c63f12d66c1ecd52c8872aaa905738859bb19f4e37add9",
+    "rsi3/handoff/candidates/r0/1/training-tasks.jsonl": "728967fb9ce505892e09246c23ade4c8a316d649d0d754b30feab100f184d4a1",
+    "rsi3/handoff/candidates/r0/2/candidate.json": "bbcc309729de8a14b55bdbb038e5cd9a32d7253626fc3df41c2c0e3dbb42970c",
+    "rsi3/handoff/candidates/r0/2/training-tasks.jsonl": "45dc4bc54d6d70254b509b9506890ee2a042635031c0d5121765ff0264cf3f7c",
+    "rsi3/handoff/candidates/r0/3/candidate.json": "17d413911f08a28525032d1623be90c36314e01f8992638d6754142c332e816b",
+    "rsi3/handoff/candidates/r0/3/training-tasks.jsonl": "274296ea02e4150012b1c4893ae5e3f4ae5fd5e5de38f3d4234d5b6001b70c9d",
+    "rsi3/handoff/candidates/r1/1/candidate.json": "fc5b3bec145327cb21d3eb4daedd66d8a92aca957246f88dbc7c990395920048",
+    "rsi3/handoff/candidates/r1/1/training-tasks.jsonl": "0ba7ed6ac6b517f8088bd81df8257bc13cf23763cb0f20007536fc31eec5caf4",
+    "rsi3/handoff/candidates/r1/2/candidate.json": "f6546a467ce30b823bf9a79a4fb5048b13d3deda608d6a5e00a786bfae75f4de",
+    "rsi3/handoff/candidates/r1/2/training-tasks.jsonl": "24985103a85031ddad29565cbe1cfcc8413e4c15af2c7460299353219e803bc5",
+    "rsi3/handoff/candidates/r1/3/candidate.json": "af308e1d3ba0668c7d5e41b71444feec5ea322903c8c1c2041bf6ea98c25b0f3",
+    "rsi3/handoff/candidates/r1/3/training-tasks.jsonl": "116242ec2666e807e1d2168d8945cfd39e3c9986236371455dba018d9fa5b462",
+    "rsi3/handoff/candidates/r2/1/candidate.json": "e86f881c70d3b24afafa18ecc176f0663453ea3cbae7e52907a0e063cfe4923f",
+    "rsi3/handoff/candidates/r2/1/training-tasks.jsonl": "1db3be386917ce7ad7cd1d19b8fcef5679118c9b03d57ba5571f1f9766e29558",
+    "rsi3/handoff/candidates/r2/2/candidate.json": "2a2b942bd95a7d2b338960b40848ddbdec64147042e063ed818e76368cbeb941",
+    "rsi3/handoff/candidates/r2/2/training-tasks.jsonl": "f521f1aef26b26aac2bf9300732321b0d762cf952446e08fa11d801f13167825",
+    "rsi3/handoff/candidates/r2/3/candidate.json": "0a6b235e1ec79227c8e7c5073e7ab52ad751522a41e99968dcfcf7def335c1dd",
+    "rsi3/handoff/candidates/r2/3/training-tasks.jsonl": "2ae408b27863797fe845e3806cbaee0af846d6752174e68eea5986b836d3c88d",
+    "rsi3/handoff/candidates/r3/1/candidate.json": "ce4e243d8fa9bb19fd44939bca0a03a1121c9d1edd03b86c71115ac7b9b26d69",
+    "rsi3/handoff/candidates/r3/1/training-tasks.jsonl": "09560310b4a737d05b3c24eaba71e726a8938058e8f9e4e200933cc1c1b6bbbf",
+    "rsi3/handoff/candidates/r3/2/candidate.json": "28e7c510734bdb2341abe3e29e70293818bf447303ac3b5d1b9799489a6cce83",
+    "rsi3/handoff/candidates/r3/2/training-tasks.jsonl": "f72a75b9165629cc9ef7d839f01c1f73adbb017f4320b5a966aa3a9b36a53606",
+    "rsi3/handoff/candidates/r3/3/candidate.json": "13f9be8a0e53c34c7d4015591390a9a8bce7549e664dd94470a5328f6a2991c4",
+    "rsi3/handoff/candidates/r3/3/training-tasks.jsonl": "ae34ceb39c95f14acb90b805d5e1f9da499a63461f81a14f152a01019b52e900",
+    "rsi3/lineages/r0/rounds.jsonl": "c80e843140759eeac7a65fca856cc16ec18906fc6db4a561960c2c2968bee636",
+    "rsi3/lineages/r1/rounds.jsonl": "ca332038e60a13b6337ebcfa71f7a088abcd10b2441b39a48ce284f832f2eceb",
+    "rsi3/lineages/r2/rounds.jsonl": "33afcc99947fc3233ad47207d4b18df681e64039fd1e8301d2a01e538b091483",
+    "rsi3/lineages/r3/rounds.jsonl": "86a4a7453e6b19165a691b83ad01df6d1d6ea4d167f7145bab06b7fada76d3d6",
+    "rsi3/verdicts/plan-verdict.json": "aee34b48b3ad0fcf0f324f91231d324f1e7f314b53ddedcb6f31a95743f3537a",
+    "rsi3/verdicts/r0/1.json": "e5d3bd7781df82fd6979074aa64412741be0822dbffd62ae57155412d9fd647f",
+    "rsi3/verdicts/r0/2.json": "14f5521c42a2238a0bd54a46694bb4a44dd9eec0e98bee49926c22f1d1720201",
+    "rsi3/verdicts/r0/3.json": "0336d39c358ac5574e4393419de080051f1c08b711d7488a0ba7a4d14bdf86a4",
+    "rsi3/verdicts/r1/1.json": "924a53db30f4d21a8f96766acb4a1f49dfe8c658f02972275815f59d78549e8c",
+    "rsi3/verdicts/r1/2.json": "e7f3ef9e7664681080ef0c7152cd65b5164eb11c356cbf00871044a719585f1a",
+    "rsi3/verdicts/r1/3.json": "e410e573df6da9706408051fa2287b9686782a0a7bd8fbd4f91700f458f37931",
+    "rsi3/verdicts/r2/1.json": "13d68286698c3c33079c57bfa1ad2fd5d363751654f38a95df2eafcaec73d76f",
+    "rsi3/verdicts/r2/2.json": "8ce958fb4716bab81ebefa03bdc0aab414112d95fe4028e3fa30de7f41992819",
+    "rsi3/verdicts/r2/3.json": "5a6c4405f1dcefcfbf2273f4348ff5991cb46cc73ba574a651ddd7a2c7b1a350",
+    "rsi3/verdicts/r3/1.json": "10395e4ba0ee1a64f8f947761268cbe34ce0017985b835e4cec11d5771765a65",
+    "rsi3/verdicts/r3/2.json": "c20da5cdcf84b8698dff983517d21dd33536f9bfdb95559e3a95770e884b7459",
+    "rsi3/verdicts/r3/3.json": "e2cf56d86228e2085685814fa1d87e0f6d3b774883b8d01ce30057a1e951cf4a"
+   }
+  },
+  {
+   "path": "records/rsi4.tar.xz",
+   "size": 714284,
+   "sha256": "a23f91dbb4efff3c66abe6888e5cf3aa42645320b7e1f7dabdafc48c390b73da",
+   "members": {
+    "rsi4/handoff/candidates/r0/1/candidate.json": "759732e621ceedc58b2f22b3288fc3701da8a9f1eb772ccd3ea42b4d815d1a71",
+    "rsi4/handoff/candidates/r0/1/training-tasks.jsonl": "00aa48c34b789e301e89edabaca0eb5a916bc69788274b25c29a4f82ad4bfebf",
+    "rsi4/handoff/candidates/r0/2/candidate.json": "1e116963d04906c34c413c5c58b006765f63eabfd3370f7166e36b0ea979b555",
+    "rsi4/handoff/candidates/r0/2/training-tasks.jsonl": "73c45f0b2c95a4d836fcdd736a639c29ee7e445a0c984f18c7756139e2f2aba8",
+    "rsi4/handoff/candidates/r0/3/candidate.json": "db5407027a081ec0d8f2df64c27e93b19acb3a0b15451f6100c8bb140dd92337",
+    "rsi4/handoff/candidates/r0/3/training-tasks.jsonl": "2cfa3bc3350e5df9f61aedf414b39824188de3c8830124a72f60a8ac4ad0f84e",
+    "rsi4/handoff/candidates/r1/1/candidate.json": "3b95ebc5498bfbb1fc812a9ca096c40ee30677e9054bdca1796a7a8c0407f777",
+    "rsi4/handoff/candidates/r1/1/training-tasks.jsonl": "844f6857cfd07923df8ce76e67dbca113af1dfed2c6f944cab40e4d9d2c3c137",
+    "rsi4/handoff/candidates/r1/2/candidate.json": "88aac9c47354119550c02535bc12ef50b96294674ee3c4213a9d0feb4a505abc",
+    "rsi4/handoff/candidates/r1/2/training-tasks.jsonl": "9b292fd8e1745bc77d6c95a5f63cdb0a2b2edd50cb0407327bd85c25c0d19d22",
+    "rsi4/handoff/candidates/r1/3/candidate.json": "56f18ce59e8a9215b9e1929e07a9569a2cd195740da3ebeaa9c6411404fa474c",
+    "rsi4/handoff/candidates/r1/3/training-tasks.jsonl": "17f7bf3be4957c388ee135eae4aa1fe1596ca2572c879dfe8b620fae5e3c678f",
+    "rsi4/handoff/candidates/r2/1/candidate.json": "5a6b4f642b8ffb20f385df6ff5273c49b1de704637085711badf89d4a17f1cb7",
+    "rsi4/handoff/candidates/r2/1/training-tasks.jsonl": "6562ef026c7d02cee8f9d2d526ce8154f13662ba66e9e7e387b004a12be0bce9",
+    "rsi4/handoff/candidates/r2/2/candidate.json": "3226bbe1306eb1bcbfc439cc1838e896a9d9a21b20289c392ee7af15f6d928a0",
+    "rsi4/handoff/candidates/r2/2/training-tasks.jsonl": "038e0a955552bc11d7700f35931b548fa45234b339380af58a416b87ca26e98b",
+    "rsi4/handoff/candidates/r2/3/candidate.json": "e9c489b48b990b8dfd7159fa9de1e5d182fbd0d3971c49caf720584ec7990774",
+    "rsi4/handoff/candidates/r2/3/training-tasks.jsonl": "ae896a221843a139310702cc4c49dca56be7a3b3ea13c234bdd29e102947f4d8",
+    "rsi4/handoff/candidates/r3/1/candidate.json": "42b9e89b3f536f82be755ff68bed0220e7b9409fe46c1413e91c2ea2e692f93e",
+    "rsi4/handoff/candidates/r3/1/training-tasks.jsonl": "e721f71cad38dfdf6da1112b9d19a198f708443395ff130cbcb40577e8be29c1",
+    "rsi4/handoff/candidates/r3/2/candidate.json": "ef268b7b9f3ea666ef640a28bb14707dd142006811afc1fee6bd5ebd3c4f7643",
+    "rsi4/handoff/candidates/r3/2/training-tasks.jsonl": "12ea73a5699f983259599dad3eb937d060d8dad2019fd48bab264e543af18f35",
+    "rsi4/handoff/candidates/r3/3/candidate.json": "e3aa56070059d76f80c9aa3a6413d0e01034ce0233ad1070d57265d42e724b5c",
+    "rsi4/handoff/candidates/r3/3/training-tasks.jsonl": "717b18b14aebf146e5579f38545d66237330b16bc770c101a5e0fca1854facad",
+    "rsi4/lineages/r0/rounds.jsonl": "3c7d9975c5491d4153ad9069b28ccc3eb99597a9de061fd0ed4741da077876c3",
+    "rsi4/lineages/r1/rounds.jsonl": "8c11c910767699aa6141564ee32ea6d72152c8bb2c7912d8c340b4e878c5552a",
+    "rsi4/lineages/r2/rounds.jsonl": "b049358a8f80192fadbccc5c1e16bac778de5f0f37a702ec96d905fc0d815d42",
+    "rsi4/lineages/r3/rounds.jsonl": "2506d3a7d3b47d9e72b6d0b74a53a9dbf1ae704182ca4ca50ebabe3c54bd50e5",
+    "rsi4/plan.toml": "77c0111b7264f1ca77925d22e9f3d174dd99b6f38118e49a1196a965b7fb389d",
+    "rsi4/verdicts/plan-verdict.json": "ff5a246f11fd74cd9d8e34a20ed9ba226ad9eeccca4222a44999fe9da51e1d38",
+    "rsi4/verdicts/r0/1.json": "dc7154937d9762a10c6c0bc8d5410f72a1cbd906622b8b98a547dcd075399cb8",
+    "rsi4/verdicts/r0/2.json": "6a1d6fffbca1511bf4a2d19dc612caf83267da3cef701a7c9f541a5e0ef8f57f",
+    "rsi4/verdicts/r0/3.json": "22101661d5054c016d1a97239a8bbc77dc216b0ee13c8fc111cd1f6843249d97",
+    "rsi4/verdicts/r1/1.json": "e0afaf525894f13960f261485541a5307e66dba3cc9d22eb285930e8b31a65ce",
+    "rsi4/verdicts/r1/2.json": "5ebdd4238f3d29cea3ed8027b0c4b92ced3cd2838f8ea38b2548c592c57a0b6f",
+    "rsi4/verdicts/r1/3.json": "32985b61e24c010c422056af7b1281b5c99ad0612a25b0e8d97e0252c5d2c601",
+    "rsi4/verdicts/r2/1.json": "299da44663cd67b7f8dfbbd7264e2c08f2c22a3cab3482063d1fa83e695ccfb2",
+    "rsi4/verdicts/r2/2.json": "88b075975773097a789dfa42ac3546c56ee74485748d83b0121d0505f92c674e",
+    "rsi4/verdicts/r2/3.json": "7e04e13bdb396fb5cf9c5b8217c5826fe787a5c8541a526a1da2e00a4ca73a08",
+    "rsi4/verdicts/r3/1.json": "48addd1c5c84492b53bb92069264c1184da553c698dcf2f41d9494492e9bc1f7",
+    "rsi4/verdicts/r3/2.json": "bd5f4d40fa11d6e95ac4f26d17f636ad0d0677a17be3fc7822e06df5393858cd",
+    "rsi4/verdicts/r3/3.json": "ffeedf3cfd185c1a06a7c08ca4e71c937e8dbff9efe55b3682717815d50a36b7"
+   }
+  }
+ ]
+}

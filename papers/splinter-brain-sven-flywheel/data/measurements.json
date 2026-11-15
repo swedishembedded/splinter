@@ -1,5 +1,5 @@
 {
-  "_about": "Values the MEASURED claims cite, extracted from raw logs kept outside the repository (default evidence directory: ~/project/shared/containers/runs/paper-evidence/flywheel). Each run names its log, the log's sha256, the brain commit and the exact command. `build_data.py --check --evidence DIR` re-extracts every value from DIR/<log> and compares; without DIR only this file is read.",
+  "_about": "Values the MEASURED claims cite, extracted from raw records kept outside the repository: the evidence dataset swedishembedded/the-frontier-must-grow-evidence (`make reproduce/verify` downloads and unpacks it; default evidence directory: target/papers/.evidence/splinter-brain-sven-flywheel). Each run names its record, the record's sha256, the brain commit and the exact command; a run marked \"kept\": false is one whose raw record was not kept (the qualification, probe and coding-task pilot logs), so only its values, digest and command remain. `build_data.py --check --evidence DIR` re-extracts every value from DIR/<log> and compares; without DIR only this file is read.",
   "runs": {
     "r1-nf4-64L-8192": {
       "log": "qual/r1-nf4-64L-8192.log",
@@ -13,7 +13,8 @@
         "step_s": "404.74",
         "tokens_per_s": "20",
         "exit": 0
-      }
+      },
+      "kept": false
     },
     "r2-bf16-64L-8192": {
       "log": "qual/r2-bf16-64L-8192.log",
@@ -27,7 +28,8 @@
         "step_s": "435.47",
         "tokens_per_s": "19",
         "exit": 0
-      }
+      },
+      "kept": false
     },
     "r2-bf16-64L-16384": {
       "log": "qual/r2-bf16-64L-16384.log",
@@ -41,7 +43,8 @@
         "step_s": "873.64",
         "tokens_per_s": "19",
         "exit": 0
-      }
+      },
+      "kept": false
     },
     "r3-real-nf4-1step": {
       "log": "qual/r3-real-nf4-1step.log",
@@ -56,7 +59,8 @@
         "device_mib": 27989,
         "loss_first": "2.9928",
         "loss_last": "3.5773"
-      }
+      },
+      "kept": false
     },
     "r3-real-nf4-40step": {
       "log": "qual/r3-real-nf4-40step.log",
@@ -71,7 +75,8 @@
         "device_mib": 24559,
         "loss_first": "2.7806",
         "loss_last": "0.0002"
-      }
+      },
+      "kept": false
     },
     "r4-real-bf16-1step": {
       "log": "qual/r4-real-bf16-1step.log",
@@ -86,7 +91,8 @@
         "device_mib": 59053,
         "loss_first": "3.0704",
         "loss_last": "3.6435"
-      }
+      },
+      "kept": false
     },
     "r3a-real-nf4-default-batch32-OOM": {
       "log": "qual/r3a-real-nf4-default-batch32-OOM.log",
@@ -99,7 +105,8 @@
         "wall_s": "322.8",
         "host_rss_mib": 6923,
         "device_mib": 92571
-      }
+      },
+      "kept": false
     },
     "probe-nf4-8192": {
       "log": "throughput/probe-nf4-8192.log",
@@ -111,7 +118,8 @@
         "tokens_per_s": 622,
         "step_s": "13.18",
         "peak_mib": 44725
-      }
+      },
+      "kept": false
     },
     "tj-cancel-attribution": {
       "log": "traj/cancel-attribution.log",
@@ -131,7 +139,8 @@
         "cap_counted_max": 62,
         "cap_exported_min": 4,
         "cap_exported_max": 42
-      }
+      },
+      "kept": false
     },
     "ce1-p1-ttlcache": {
       "log": "ce1/ce1-p1-ttlcache.summary.json",
@@ -153,7 +162,8 @@
       },
       "splinter": "b5fb1674",
       "brain": "5c1aa4863",
-      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-ttlcache); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-ttlcache"
+      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-ttlcache); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-ttlcache",
+      "kept": false
     },
     "ce1-p1-mdrender": {
       "log": "ce1/ce1-p1-mdrender.summary.json",
@@ -175,7 +185,8 @@
       },
       "splinter": "64cad0e6",
       "brain": "98106c845",
-      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-mdrender); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-mdrender"
+      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-mdrender); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-mdrender",
+      "kept": false
     },
     "ce1-p1-iniparse": {
       "log": "ce1/ce1-p1-iniparse.summary.json",
@@ -197,7 +208,8 @@
       },
       "splinter": "64cad0e6",
       "brain": "98106c845",
-      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-iniparse); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-iniparse"
+      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-iniparse); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-iniparse",
+      "kept": false
     },
     "ce1-p1-exprcalc": {
       "log": "ce1/ce1-p1-exprcalc.summary.json",
@@ -219,7 +231,8 @@
       },
       "splinter": "64cad0e6",
       "brain": "98106c845",
-      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-exprcalc); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-exprcalc"
+      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-exprcalc); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-exprcalc",
+      "kept": false
     },
     "ce1-p1-graphkit": {
       "log": "ce1/ce1-p1-graphkit.summary.json",
@@ -241,7 +254,8 @@
       },
       "splinter": "64cad0e6",
       "brain": "98106c845",
-      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-graphkit); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-graphkit"
+      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-graphkit); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-graphkit",
+      "kept": false
     },
     "ce1-p1-tokenbucket": {
       "log": "ce1/ce1-p1-tokenbucket.summary.json",
@@ -263,7 +277,8 @@
       },
       "splinter": "64cad0e6",
       "brain": "98106c845",
-      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-tokenbucket); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-tokenbucket"
+      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-tokenbucket); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-tokenbucket",
+      "kept": false
     },
     "ce1-p1-linediff": {
       "log": "ce1/ce1-p1-linediff.summary.json",
@@ -285,7 +300,8 @@
       },
       "splinter": "64cad0e6",
       "brain": "98106c845",
-      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-linediff); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-linediff"
+      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-linediff); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-linediff",
+      "kept": false
     },
     "ce1-p1-caldate": {
       "log": "ce1/ce1-p1-caldate.summary.json",
@@ -307,7 +323,8 @@
       },
       "splinter": "64cad0e6",
       "brain": "98106c845",
-      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-caldate); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-caldate"
+      "command": "runs/ce/queue2-ce1.sh / runset.sh (ce1-p1-caldate); splinter verify; python3 runs/ce/ce1-evidence.py ce1-p1-caldate",
+      "kept": false
     },
     "ce4-s1-compare": {
       "log": "ce4/pq-S1-compare.json",
@@ -329,7 +346,8 @@
       },
       "splinter": "64cad0e6",
       "brain": "502e12d46",
-      "command": "splinter experiences compare blake3:5cf778ec... blake3:76c8ea5c... --interval-seed 20261019 (runs/ce/logs/pq-S1-compare.json)"
+      "command": "splinter experiences compare blake3:5cf778ec... blake3:76c8ea5c... --interval-seed 20261019 (runs/ce/logs/pq-S1-compare.json)",
+      "kept": false
     },
     "ce8-r3-train": {
       "log": "ce8/train-a22-bf16-r3.log",
@@ -347,7 +365,8 @@
       },
       "splinter": "3330c206c",
       "brain": "77e510fbf",
-      "command": "splinter train blake3:75b4734d... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 65 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 9 --patience 2 --keep-evaluations (runs/ce8/train.sh; log runs/ce8/logs/train-a22-bf16-r3.json)"
+      "command": "splinter train blake3:75b4734d... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 65 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 9 --patience 2 --keep-evaluations (runs/ce8/train.sh; log runs/ce8/logs/train-a22-bf16-r3.json)",
+      "kept": false
     },
     "ce8-r4-train": {
       "log": "ce8/train-a25-r4.log",
@@ -365,7 +384,8 @@
       },
       "splinter": "3330c206c",
       "brain": "77e510fbf",
-      "command": "splinter train blake3:75b4734d... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 33 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 5 --patience 2 --keep-evaluations (runs/ce8/train.sh; log runs/ce8/logs/train-a25-r4.json)"
+      "command": "splinter train blake3:75b4734d... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 33 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 5 --patience 2 --keep-evaluations (runs/ce8/train.sh; log runs/ce8/logs/train-a25-r4.json)",
+      "kept": false
     },
     "ce8t-r1-train": {
       "log": "ce8/train-ce8t-r1.log",
@@ -382,7 +402,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter train blake3:8da1371b... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 57 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 8 --patience 2 --keep-evaluations (runs/ce8/ce8t.sh)"
+      "command": "splinter train blake3:8da1371b... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 57 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 8 --patience 2 --keep-evaluations (runs/ce8/ce8t.sh)",
+      "kept": false
     },
     "ce8ts-r1-train": {
       "log": "ce8/train-ce8ts-r1.log",
@@ -399,7 +420,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter train blake3:7e0aa54f... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 57 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 8 --patience 2 --keep-evaluations (runs/ce8/ce8t.sh)"
+      "command": "splinter train blake3:7e0aa54f... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 57 --records-per-step 2 --monitor-share 0.2 --seed 1 --eval-every 8 --patience 2 --keep-evaluations (runs/ce8/ce8t.sh)",
+      "kept": false
     },
     "ce8-p1-t1-compare": {
       "log": "ce8/pilot-compare-ce8t.json",
@@ -421,7 +443,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter experiences compare blake3:8c4825ce... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-ce8t.json; arms from runs/g8/pilot.sh)"
+      "command": "splinter experiences compare blake3:8c4825ce... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-ce8t.json; arms from runs/g8/pilot.sh)",
+      "kept": false
     },
     "ce8-p1-ts1-compare": {
       "log": "ce8/pilot-compare-ce8ts.json",
@@ -443,7 +466,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter experiences compare blake3:82a28fbb... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-ce8ts.json; arms from runs/g8/pilot.sh)"
+      "command": "splinter experiences compare blake3:82a28fbb... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-ce8ts.json; arms from runs/g8/pilot.sh)",
+      "kept": false
     },
     "g8-ce8t-agreement": {
       "log": "ce8/g8-agreement-ce8t.report.json",
@@ -466,7 +490,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "36e902322",
-      "command": "g8-compare.py --served-base lease10-served-base.jsonl --served-adapter lease10-served-ce8t.jsonl --inproc-base inproc-base.jsonl --inproc-adapter inproc-ce8t.jsonl --manifest held-out-ce8t.manifest.json (runs/g8) on brain 36e902322 for the in-process side and the evaluation server bin-brain-cbe84f44b-eval for the served side"
+      "command": "g8-compare.py --served-base lease10-served-base.jsonl --served-adapter lease10-served-ce8t.jsonl --inproc-base inproc-base.jsonl --inproc-adapter inproc-ce8t.jsonl --manifest held-out-ce8t.manifest.json (runs/g8) on brain 36e902322 for the in-process side and the evaluation server bin-brain-cbe84f44b-eval for the served side",
+      "kept": false
     },
     "ce8t-u1b-train": {
       "log": "ce8/train-ce8t-u1b.log",
@@ -483,7 +508,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter train blake3:328125ca... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 1200 --records-per-step 2 --monitor-share 0.05 --seed 1 --eval-every 240 --patience 2 --keep-evaluations (runs/ce8/ce8t-u1b.sh)"
+      "command": "splinter train blake3:328125ca... --from local:Qwen/Qwen3.8-27B-FP8 --base-precision bf16 --rank 16 --lr 5e-5 --steps 1200 --records-per-step 2 --monitor-share 0.05 --seed 1 --eval-every 240 --patience 2 --keep-evaluations (runs/ce8/ce8t-u1b.sh)",
+      "kept": false
     },
     "ce8-p1-u1-eval": {
       "log": "ce8/pilot-compare-u1b.json",
@@ -505,7 +531,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter experiences compare blake3:d3e96985... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-u1b.json; arm from runs/g8/eval-arm.sh)"
+      "command": "splinter experiences compare blake3:d3e96985... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-u1b.json; arm from runs/g8/eval-arm.sh)",
+      "kept": false
     },
     "ce8-p1-base-s2-eval": {
       "log": "ce8/pilot-compare-base-s2.json",
@@ -527,7 +554,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter experiences compare blake3:35c7bd9d... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-base-s2.json; the same model solved twice, seeds 16022413115216019911 and 3017204225152849161)"
+      "command": "splinter experiences compare blake3:35c7bd9d... blake3:d6937cb3... --interval-seed 1 (runs/g8/pilot-compare-base-s2.json; the same model solved twice, seeds 16022413115216019911 and 3017204225152849161)",
+      "kept": false
     },
     "ce8-p1-arm-shape": {
       "log": "ce8/arm-shape.json",
@@ -561,7 +589,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "python3 arm-shape.py (reads runs/g8 pilot experience sets blake3:d6937cb3, 8c4825ce, 82a28fbb, d3e96985 from the state and the solve-in conclusion counts)"
+      "command": "python3 arm-shape.py (reads runs/g8 pilot experience sets blake3:d6937cb3, 8c4825ce, 82a28fbb, d3e96985 from the state and the solve-in conclusion counts)",
+      "kept": false
     },
     "ce8-build-t1": {
       "log": "ce8/build-ce8t.json",
@@ -576,7 +605,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter dataset build --view sft-step --pack --drop-leaking --min-strength executable --max-block 16384 over the eight pass-1 sets (runs/ce8/ce8t.sh; log runs/ce8/logs/ds-ce8t.json)"
+      "command": "splinter dataset build --view sft-step --pack --drop-leaking --min-strength executable --max-block 16384 over the eight pass-1 sets (runs/ce8/ce8t.sh; log runs/ce8/logs/ds-ce8t.json)",
+      "kept": false
     },
     "ce8-build-u1": {
       "log": "ce8/build-ce8t-u1.json",
@@ -591,7 +621,8 @@
       },
       "splinter": "3330c206c+6521a67ab",
       "brain": "77e510fbf",
-      "command": "splinter dataset build --view sft-step (unpacked) over the eight pass-1 sets (runs/ce8/ce8t-u1.sh; log runs/ce8/logs/ds-ce8t-u1.json)"
+      "command": "splinter dataset build --view sft-step (unpacked) over the eight pass-1 sets (runs/ce8/ce8t-u1.sh; log runs/ce8/logs/ds-ce8t-u1.json)",
+      "kept": false
     },
     "d46-base-verify": {
       "log": "g8/pilot-d46-base.verify.json",
@@ -605,7 +636,8 @@
         "failed": 25,
         "exposed": 9,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "d46-s1-verify": {
       "log": "g8/pilot-d46-decisive.verify.json",
@@ -619,7 +651,8 @@
         "failed": 23,
         "exposed": 4,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "d46-s7-verify": {
       "log": "g8/pilot-d46-decisive2.verify.json",
@@ -633,7 +666,8 @@
         "failed": 22,
         "exposed": 0,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "d46-s13-verify": {
       "log": "g8/pilot-s13-d46-decisive-s13.verify.json",
@@ -647,7 +681,8 @@
         "failed": 16,
         "exposed": 1,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "d46-s1-verify-all": {
       "log": "g8/pilot-d46-allnew.verify.json",
@@ -661,7 +696,8 @@
         "failed": 28,
         "exposed": 4,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "d46-s13-verify-all": {
       "log": "g8/pilot-ctl-allnew-s13.verify.json",
@@ -675,7 +711,8 @@
         "failed": 33,
         "exposed": 3,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "d46-s13-compare": {
       "log": "g8/compare-decisive13-vs-allnew13.json",
@@ -696,7 +733,8 @@
         "adapter_exposed": 1,
         "base_verified": 13,
         "base_exposed": 3
-      }
+      },
+      "kept": false
     },
     "d46-s1-compare": {
       "log": "g8/compare-decisive1-vs-allnew1.json",
@@ -717,7 +755,8 @@
         "adapter_exposed": 4,
         "base_verified": 18,
         "base_exposed": 4
-      }
+      },
+      "kept": false
     },
     "d46-s13-compare-all-base": {
       "log": "g8/pilot-compare-ctl-allnew-s13.json",
@@ -738,7 +777,8 @@
         "adapter_exposed": 3,
         "base_verified": 21,
         "base_exposed": 9
-      }
+      },
+      "kept": false
     },
     "rcv-6-verify": {
       "log": "g8/pilot-rcvA-rcv-win1-6.verify.json",
@@ -752,7 +792,8 @@
         "failed": 23,
         "exposed": 2,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "rcv-6-compare": {
       "log": "g8/pilot-compare-rcvA-rcv-win1-6.json",
@@ -773,7 +814,8 @@
         "adapter_exposed": 2,
         "base_verified": 21,
         "base_exposed": 9
-      }
+      },
+      "kept": false
     },
     "rcv-18-verify": {
       "log": "g8/pilot-d46-recov.verify.json",
@@ -787,7 +829,8 @@
         "failed": 26,
         "exposed": 5,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "rcv-18-compare": {
       "log": "g8/pilot-compare-d46-recov.json",
@@ -808,7 +851,8 @@
         "adapter_exposed": 5,
         "base_verified": 21,
         "base_exposed": 9
-      }
+      },
+      "kept": false
     },
     "rcv-36-verify": {
       "log": "g8/pilot-rcvA-rcv-win1-36.verify.json",
@@ -822,7 +866,8 @@
         "failed": 18,
         "exposed": 7,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "rcv-36-compare": {
       "log": "g8/pilot-compare-rcvA-rcv-win1-36.json",
@@ -843,7 +888,8 @@
         "adapter_exposed": 7,
         "base_verified": 21,
         "base_exposed": 9
-      }
+      },
+      "kept": false
     },
     "rcv-ctl18-verify": {
       "log": "g8/pilot-rcvA-rcv-decisive-18.verify.json",
@@ -857,7 +903,8 @@
         "failed": 22,
         "exposed": 10,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "rcv-ctl18-compare": {
       "log": "g8/pilot-compare-rcvA-rcv-decisive-18.json",
@@ -878,7 +925,8 @@
         "adapter_exposed": 10,
         "base_verified": 21,
         "base_exposed": 9
-      }
+      },
+      "kept": false
     },
     "rcv-6-train": {
       "log": "ce8/logs/train-rcv-win1-6.time",
@@ -889,7 +937,8 @@
       "metrics": {
         "wall_s": 303,
         "steps": 6
-      }
+      },
+      "kept": false
     },
     "rcv-36-train": {
       "log": "ce8/logs/train-rcv-win1-36.time",
@@ -900,7 +949,8 @@
       "metrics": {
         "wall_s": 815,
         "steps": 36
-      }
+      },
+      "kept": false
     },
     "rcv-ctl18-train": {
       "log": "ce8/logs/train-rcv-pc1-18.time",
@@ -912,7 +962,8 @@
         "wall_s": 578,
         "steps": 18,
         "binary_sha256": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab"
-      }
+      },
+      "kept": false
     },
     "d46-behaviour-edit-rate": {
       "log": "g8/edit-rate-2026-10-25.txt",
@@ -936,7 +987,8 @@
         "all_actions_s1_attempts": 46,
         "all_actions_s1_edited": 22,
         "all_actions_s1_aborted": 10
-      }
+      },
+      "kept": false
     },
     "gen2-noreh-verify": {
       "log": "g8/pilot-gen2-gen2-noreh.verify.json",
@@ -950,7 +1002,8 @@
         "failed": 18,
         "exposed": 7,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "gen2-noreh-compare": {
       "log": "g8/pilot-compare-gen2-gen2-noreh.json",
@@ -971,7 +1024,8 @@
         "adapter_exposed": 7,
         "base_verified": 21,
         "base_exposed": 9
-      }
+      },
+      "kept": false
     },
     "gen2-reh-verify": {
       "log": "g8/pilot-gen2-gen2-reh.verify.json",
@@ -985,7 +1039,8 @@
         "failed": 27,
         "exposed": 5,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "gen2-reh-compare": {
       "log": "g8/pilot-compare-gen2-gen2-reh.json",
@@ -1006,7 +1061,8 @@
         "adapter_exposed": 5,
         "base_verified": 21,
         "base_exposed": 9
-      }
+      },
+      "kept": false
     },
     "gen2-s1-noreh-verify": {
       "log": "g8/pilot-gen2s1-gen2-noreh.verify.json",
@@ -1020,7 +1076,8 @@
         "failed": 11,
         "exposed": 5,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "gen2-s1-noreh-compare": {
       "log": "g8/pilot-compare-gen2s1-gen2-noreh.json",
@@ -1041,7 +1098,8 @@
         "adapter_exposed": 5,
         "base_verified": 8,
         "base_exposed": 8
-      }
+      },
+      "kept": false
     },
     "gen2-s1-reh-verify": {
       "log": "g8/pilot-gen2s1-gen2-reh.verify.json",
@@ -1055,7 +1113,8 @@
         "failed": 12,
         "exposed": 1,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "gen2-s1-reh-compare": {
       "log": "g8/pilot-compare-gen2s1-gen2-reh.json",
@@ -1076,7 +1135,8 @@
         "adapter_exposed": 1,
         "base_verified": 8,
         "base_exposed": 8
-      }
+      },
+      "kept": false
     },
     "gen2-direct-compare": {
       "log": "g8/compare-gen2reh-vs-noreh.json",
@@ -1097,7 +1157,8 @@
         "adapter_exposed": 5,
         "base_verified": 28,
         "base_exposed": 7
-      }
+      },
+      "kept": false
     },
     "gen2-noreh-train": {
       "log": "ce8/logs/train-gen2-noreh.time",
@@ -1109,7 +1170,8 @@
         "wall_s": 2299,
         "steps": 120,
         "binary_sha256": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab"
-      }
+      },
+      "kept": false
     },
     "gen2-reh-train": {
       "log": "ce8/logs/train-gen2-reh.time",
@@ -1121,7 +1183,8 @@
         "wall_s": 2538,
         "steps": 120,
         "binary_sha256": "1d366e597bb504bc222304ebbe07ef0165c442f503091340e740004475a120ab"
-      }
+      },
+      "kept": false
     },
     "det-arms": {
       "log": "g8/determinism-record.json",
@@ -1136,7 +1199,8 @@
         "c1_verdict_differences": 2,
         "c8a_passed": 5,
         "c8_verdict_differences": 2
-      }
+      },
+      "kept": false
     },
     "det-proto6": {
       "log": "g8/protocol-6seed.json",
@@ -1161,7 +1225,8 @@
         "base_vs_all_losses": 15,
         "base_vs_all_ties": 14,
         "base_vs_all_p": 0.4300250329542905
-      }
+      },
+      "kept": false
     },
     "qual-query": {
       "log": "g8/qual-query.json",
@@ -1186,7 +1251,8 @@
         "base_vs_all_losses": 11,
         "base_vs_all_ties": 19,
         "base_vs_all_p": 0.22103416919708252
-      }
+      },
+      "kept": false
     },
     "train-determinism": {
       "log": "g8/train-determinism.json",
@@ -1199,7 +1265,8 @@
         "distinct_adapters": 2,
         "run_a_monitor": 0.06736854463815689,
         "run_b_monitor": 0.06726567
-      }
+      },
+      "kept": false
     },
     "det-probe": {
       "log": "g8/determinism-record.json",
@@ -1217,7 +1284,8 @@
         "concurrent8_distinct": 2,
         "short_prompt_concurrent_distinct": 3,
         "long_prompt_concurrent_distinct": 5
-      }
+      },
+      "kept": false
     },
     "repeat-differences": {
       "log": "g8/repeat-verdict-differences.json",
@@ -1233,7 +1301,8 @@
         "diff_s13_rep": 9,
         "diff_s13_rep2": 12,
         "diff_rep_rep2": 11
-      }
+      },
+      "kept": false
     },
     "repeat-rep-verify": {
       "log": "g8/pilot-rep-decisive-s13.verify.json",
@@ -1247,7 +1316,8 @@
         "failed": 15,
         "exposed": 0,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "repeat-rep2-verify": {
       "log": "g8/pilot-rep2-decisive-s13.verify.json",
@@ -1261,11 +1331,12 @@
         "failed": 20,
         "exposed": 0,
         "undecided": 0
-      }
+      },
+      "kept": false
     },
     "lua-fullft-footprint": {
       "log": "full-ft-footprint/footprint.jsonl",
-      "sha256": "470e2a79185e5ffc6b886d0deb8052ba82e84dec5e10cf54bf6aa60be78f2598",
+      "sha256": "13d02b72c89c87f42cf1d5c82321e58953cf358db9caa824c77dd89240ce1e1c",
       "brain_commit": "e4a9eec3844397d8c44cc987ab0f36267932d241",
       "command": "samples/text/chat-full-finetune --steps 8 --max-block 1024 on probe-dataset.jsonl, one GH200 per run",
       "metric_prefix": "lua.fullft",
@@ -1310,7 +1381,7 @@
       "brain_commit": "local checkout at splinter a2a88c84d's build",
       "command": "splinter learn --source <manual 5.4-5.6> --kinds predict-lua --structural-graph --full-fine-tune --reference-teacher --probes-from run-20261026T005521.665-df97 --max-rounds 40 --lr 1e-6 --steps 6 --retention-drop 0.5 --self-generate",
       "log": "lua-flywheel/runs/self-generate-lr1e-6.json",
-      "sha256": "d5eb7000ef85f5ba3c824c313b1af210dc0fb45f1d7478d071cadc86abc768bc",
+      "sha256": "54b3a86a0a1ae20e8517e3f26197baeb2c082eb649bc9adfb82b1bbf4c2b846e",
       "metric_prefix": "lua.sg6",
       "metrics": {
         "accepted": 5,
@@ -1325,7 +1396,7 @@
       "brain_commit": "local checkout at splinter a2a88c84d's build",
       "command": "splinter learn --source <manual 5.4-5.6> --kinds predict-lua --structural-graph --full-fine-tune --reference-teacher --probes-from run-20261026T005521.665-df97 --max-rounds 40 --lr 1e-6 --steps 6 --retention-drop 0.5",
       "log": "lua-flywheel/runs/fixed-generator-lr1e-6.json",
-      "sha256": "8cc0c508892a5f1d01bfc020d3614ad7a4564ae50662165d96cfc3baddca6b6b",
+      "sha256": "fa53386d7e60b8345980c6a7b5f326db74f47dcf3256a0d8665ec98827d5fc67",
       "metric_prefix": "lua.fg6",
       "metrics": {
         "accepted": 5,
@@ -1340,7 +1411,7 @@
       "brain_commit": "5e85f323c (splinter 42f9b5826)",
       "command": "splinter learn --source <manual 5.4-5.6> --kinds predict-lua --structural-graph --full-fine-tune --reference-teacher --probes-from run-20261026T142254.958-8303 --max-rounds 60 --lr 1e-6 --steps 6 --retention-drop 0.5 --self-generate",
       "log": "lua-flywheel/runs/replicate2-self-generate-lr1e-6.json",
-      "sha256": "c9b367b97895ae2b4236daca67e92117ee03faac40a028e77d1bf270d82ed21b",
+      "sha256": "d28902ec7c207708e66fa21b1768cc1fd6b1c35b555f17ee1ae546863e44aefb",
       "metric_prefix": "lua.sgr2",
       "metrics": {
         "rounds": 13,
@@ -1356,7 +1427,7 @@
       "brain_commit": "5e85f323c (splinter 42f9b5826)",
       "command": "splinter learn --source <manual 5.4-5.6> --kinds predict-lua --structural-graph --full-fine-tune --reference-teacher --probes-from run-20261026T142254.958-8303 --max-rounds 60 --lr 1e-6 --steps 6 --retention-drop 0.5",
       "log": "lua-flywheel/runs/replicate2-fixed-generator-lr1e-6.json",
-      "sha256": "39dfb6ef6614682cfcd18de54c34d23c14d31b52a67cb15d5d69fb4d41ee6a97",
+      "sha256": "2f3b1696f46e838d3c9da8ee9040859215815969ce573659186f5bd62f6c4f1d",
       "metric_prefix": "lua.fgr2",
       "metrics": {
         "rounds": 8,
@@ -1372,7 +1443,7 @@
       "brain_commit": "5e85f323c (splinter 42f9b5826)",
       "command": "as lua-rep2-*, on the same exam (run-20261026T142254.958-8303), budget 55m",
       "log": "lua-flywheel/runs/replicate3-self-generate-lr1e-6.json",
-      "sha256": "8f493f30f055626b0f62bf146f1dc7fde567088c6330fec8005fd3130598a218",
+      "sha256": "c4617db42e6a16cb8f762037940b9533eb9c1f5c2aa4a2f9d9a7500cfccfbed4",
       "metric_prefix": "lua.sgr3",
       "metrics": {
         "rounds": 10,
@@ -1388,7 +1459,7 @@
       "brain_commit": "5e85f323c (splinter 42f9b5826)",
       "command": "as lua-rep2-*, on the same exam (run-20261026T142254.958-8303), budget 55m",
       "log": "lua-flywheel/runs/replicate3-fixed-generator-lr1e-6.json",
-      "sha256": "efc171a178f7825f0007468638e669eae82ead5c4e2772e3750118ffaeff11e6",
+      "sha256": "5f2c6209661b894e03c58c40312df3a1b651fff128c7caf8dc015ce81391ac71",
       "metric_prefix": "lua.fgr3",
       "metrics": {
         "rounds": 9,
@@ -2505,7 +2576,7 @@
     },
     "rsi3-rounds-r0": {
       "log": "rsi3/lineages/r0/rounds.jsonl",
-      "sha256": "82d70cce09a7074394146b436ffec613744c7bdad73891a25c28b0b832b323f1",
+      "sha256": "c80e843140759eeac7a65fca856cc16ec18906fc6db4a561960c2c2968bee636",
       "brain_commit": "learner splinter 5ce8666c5, brain 796871647",
       "command": "the learner's round record of lineage r0 (proposals, frontier, training, dev and retention gate); launch record prereg/rsi3-launch.md",
       "metric_prefix": "rsi3.dev.r0",
@@ -2554,7 +2625,7 @@
     },
     "rsi3-rounds-r1": {
       "log": "rsi3/lineages/r1/rounds.jsonl",
-      "sha256": "40eabcd706a935a0dec63b3819daa866e9e1e780e3bd7c16a59fe3be32996222",
+      "sha256": "ca332038e60a13b6337ebcfa71f7a088abcd10b2441b39a48ce284f832f2eceb",
       "brain_commit": "learner splinter 5ce8666c5, brain 796871647",
       "command": "the learner's round record of lineage r1 (proposals, frontier, training, dev and retention gate); launch record prereg/rsi3-launch.md",
       "metric_prefix": "rsi3.dev.r1",
@@ -2603,7 +2674,7 @@
     },
     "rsi3-rounds-r2": {
       "log": "rsi3/lineages/r2/rounds.jsonl",
-      "sha256": "bb4a730b89d6580d9e3816b359ff082da88cd8a8102326d5529fec6d22a52a2c",
+      "sha256": "33afcc99947fc3233ad47207d4b18df681e64039fd1e8301d2a01e538b091483",
       "brain_commit": "learner splinter 5ce8666c5, brain 796871647",
       "command": "the learner's round record of lineage r2 (proposals, frontier, training, dev and retention gate); launch record prereg/rsi3-launch.md",
       "metric_prefix": "rsi3.dev.r2",
@@ -2652,7 +2723,7 @@
     },
     "rsi3-rounds-r3": {
       "log": "rsi3/lineages/r3/rounds.jsonl",
-      "sha256": "4ea746f2699826126609a5f91dbfd186d58e26fa8c7bd47af8ee2993c471be5d",
+      "sha256": "86a4a7453e6b19165a691b83ad01df6d1d6ea4d167f7145bab06b7fada76d3d6",
       "brain_commit": "learner splinter 5ce8666c5, brain 796871647",
       "command": "the learner's round record of lineage r3 (proposals, frontier, training, dev and retention gate); launch record prereg/rsi3-launch.md",
       "metric_prefix": "rsi3.dev.r3",
@@ -2701,7 +2772,7 @@
     },
     "rsi4-rounds-r0": {
       "log": "rsi4/lineages/r0/rounds.jsonl",
-      "sha256": "bc5f0221d377e83bd517002992c6596b2950b7ea6e03d341cfffb8ba3d99e052",
+      "sha256": "3c7d9975c5491d4153ad9069b28ccc3eb99597a9de061fd0ed4741da077876c3",
       "brain_commit": "learner splinter 86f13672a, brain 796871647",
       "command": "the learner's round record of lineage r0 (proposals, frontier, training, dev and retention gate); launch record prereg/rsi4-launch.md",
       "metric_prefix": "rsi4.dev.r0",
@@ -2762,7 +2833,7 @@
     },
     "rsi4-rounds-r1": {
       "log": "rsi4/lineages/r1/rounds.jsonl",
-      "sha256": "7455c67108e53b56f602098d5ff78850b2404df55e46e049794369bb6d4cd5cd",
+      "sha256": "8c11c910767699aa6141564ee32ea6d72152c8bb2c7912d8c340b4e878c5552a",
       "brain_commit": "learner splinter 86f13672a, brain 796871647",
       "command": "the learner's round record of lineage r1 (proposals, frontier, training, dev and retention gate); launch record prereg/rsi4-launch.md",
       "metric_prefix": "rsi4.dev.r1",
@@ -2823,7 +2894,7 @@
     },
     "rsi4-rounds-r2": {
       "log": "rsi4/lineages/r2/rounds.jsonl",
-      "sha256": "5948623403661d9d3df3a7f4880663c7678531ff6545f6917b2ab5c487a6e49f",
+      "sha256": "b049358a8f80192fadbccc5c1e16bac778de5f0f37a702ec96d905fc0d815d42",
       "brain_commit": "learner splinter 86f13672a, brain 796871647",
       "command": "the learner's round record of lineage r2 (proposals, frontier, training, dev and retention gate); launch record prereg/rsi4-launch.md",
       "metric_prefix": "rsi4.dev.r2",
@@ -2884,7 +2955,7 @@
     },
     "rsi4-rounds-r3": {
       "log": "rsi4/lineages/r3/rounds.jsonl",
-      "sha256": "211bb9d51b8fca25b93ccd8f72ff3c20d588b2503af8fcd6e40f76b16c38bb55",
+      "sha256": "2506d3a7d3b47d9e72b6d0b74a53a9dbf1ae704182ca4ca50ebabe3c54bd50e5",
       "brain_commit": "learner splinter 86f13672a, brain 796871647",
       "command": "the learner's round record of lineage r3 (proposals, frontier, training, dev and retention gate); launch record prereg/rsi4-launch.md",
       "metric_prefix": "rsi4.dev.r3",

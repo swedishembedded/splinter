@@ -13,7 +13,7 @@
     build_data.py --out DIR     write macros.tex and the tables into DIR
     build_data.py --check       verify the ledger against the measurements and the text
     build_data.py --check --evidence DIR   also compare data/measurements.json with the raw logs in DIR
-                                (default ~/project/shared/containers/runs/paper-evidence/flywheel; absent = skipped)
+                                (default: the copy `make reproduce/verify` unpacks; absent = skipped)
     build_data.py --check --final   also fail while any REGISTERED or PLANNED claim remains
                                 or the paper is still marked draft (status.txt)
 
@@ -27,13 +27,14 @@ resolves each against that file, requires the claim's text to contain the
 value, and requires that the paper's text cites the claim. An experiment whose
 record is absent is printed as NOT MEASURED, never as zero.
 
-Raw logs (run on a GPU, generated output, kept outside the repository; see DEFAULT_EVIDENCE):
+Raw records (run on a GPU, generated output, kept outside the repository; see DEFAULT_EVIDENCE):
   qual/*                 training-substrate qualification logs
   throughput/*.log       a later probe of the 27B architecture's training step rate
   rsi{2,3,4}/verdicts/   the independent examiner's signed step and plan verdicts of the RSI series
   rsi{3,4}/lineages/*/rounds.jsonl   the learner's round records of those series
   rsi1-*/                RSI1's registered analyses and arm R/P/P2 evaluations
-  (the RSI records are folders of the evidence dataset splinter-flywheel-evidence)
+  (the published records are in the evidence dataset the-frontier-must-grow-evidence, one archive
+  per series; a run marked "kept": false had its raw record discarded and is not required)
 data/measurements.json records, per log, the values the claims cite, the brain commit, the exact
 command and the log's sha256. ../results.csv holds paired outcomes of the registered
 coding-task experiments (none yet).
@@ -63,7 +64,7 @@ SECTIONS = ROOT / "sections"
 # repository. data/measurements.json holds the values the claims cite, with each log's sha256, the
 # brain commit and the exact command; `--evidence DIR` re-extracts every value from the logs.
 MEASUREMENTS = ROOT / "data" / "measurements.json"
-DEFAULT_EVIDENCE = "~/project/shared/containers/runs/paper-evidence/flywheel"
+DEFAULT_EVIDENCE = ROOT.parent.parent / "target" / "papers" / ".evidence" / ROOT.name
 E4_COMMIT_RUN = "r1-nf4-64L-8192"
 
 
@@ -507,6 +508,81 @@ def arm_interval_metrics(report):
     return m
 
 
+def gib_text(value):
+    """A GiB figure as text with one decimal, halves rounded up (the float 32.55 reads 32.6)."""
+    from decimal import ROUND_HALF_UP, Decimal
+    return str(Decimal(str(value)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
+def fullft_footprint_metrics(text):
+    """The full fine-tune footprint probes, one JSONL row per model and optimizer state: the first
+    measurement of each (a row carrying a "note" is a later re-probe and is not this table). Keys are
+    the model size without its dot (0.6B -> q06) plus i8 for int8 moments; host peak is reported for
+    every row, the card peak (MiB as GiB) only for the fp32 state."""
+    m = {}
+    for row in (json.loads(l) for l in text.splitlines() if l.strip()):
+        if "note" in row:
+            continue
+        size = re.search(r"-(\d+(?:\.\d+)?)B$", row["model"]).group(1).replace(".", "")
+        int8 = row["optimizer_state"].startswith("int8")
+        key = f"q{size}i8" if int8 else f"q{size}"
+        if not int8:
+            m[f"{key}_card_gib"] = gib_text(row["card_peak_run_mib"] / 1024)
+        m[f"{key}_host_gib"] = gib_text(row["host_peak_rss_gib"])
+    return m
+
+
+def lua_round1_metrics(record):
+    """The one round of the lr 1e-5 run: the target skill's passes before and after, and the sums of
+    the other skills' passes (the retention check)."""
+    r = record["stages"]["round-1"]
+    others = r["others"].values()
+    return {"target_before": r["target"]["before"]["passes"], "target_after": r["target"]["after"]["passes"],
+            "others_before": sum(o["before"]["passes"] for o in others),
+            "others_after": sum(o["after"]["passes"] for o in others)}
+
+
+def lua_greedy_metrics(record):
+    """The base model's greedy baselines on the shared exam, per arm."""
+    arms = record["arms"]
+    return {"self_generate_passes": arms["self-generate"]["passes"],
+            "fixed_generator_passes": arms["fixed-generator"]["passes"],
+            "graded": arms["self-generate"]["graded"]}
+
+
+def lua_arm_metrics(record, with_rounds):
+    """One Lua flywheel arm: its accepted rounds (and, for the replicates, all rounds run) and its
+    final probe score summed over the assessed skills with the skills that rose and fell."""
+    skills = record["record"]["assessment"]["skills"]
+    outcomes = [r["outcome"]["outcome"] for r in record["rounds"]]
+    m = {"rounds": len(outcomes)} if with_rounds else {}
+    m.update(accepted=outcomes.count("accepted"),
+             final_before=sum(s["baseline"]["passes"] for s in skills),
+             final_after=sum(s["final_score"]["passes"] for s in skills),
+             final_graded=sum(s["final_score"]["graded"] for s in skills),
+             skills_up=sum(s["final_score"]["passes"] > s["baseline"]["passes"] for s in skills),
+             skills_down=sum(s["final_score"]["passes"] < s["baseline"]["passes"] for s in skills))
+    return m
+
+
+def lua_arms_metrics(report):
+    """The arm comparison: replicates and mean gain per arm, the replicate permutation p of each
+    pair, and the per-skill counts of the fixed-generator against teacher-generator comparison."""
+    arms = {"sg": "self-generate", "fg": "fixed-generator", "tg": "teacher-generator"}
+    m = {}
+    for tag, name in arms.items():
+        m[f"{tag}_replicates"] = report["arms"][name]["replicates"]
+    for tag, name in arms.items():
+        m[f"{tag}_mean_gain"] = round(report["arms"][name]["mean_gain"], 2)
+    by_pair = {(c["a"], c["b"]): c for c in report["comparisons"]}
+    for a, b in (("sg", "fg"), ("sg", "tg"), ("fg", "tg")):
+        m[f"p_{a}_{b}"] = round(by_pair[(arms[a], arms[b])]["replicate_permutation_p_two_sided"], 2)
+    fg_tg = by_pair[(arms["fg"], arms["tg"])]
+    m.update(tg_skills_better=fg_tg["skills_b_better"], fg_skills_better=fg_tg["skills_a_better"],
+             skills_tied=fg_tg["ties"])
+    return m
+
+
 class NoParser(Exception):
     """A run whose metric prefix names no log shape this script reads: its values cannot be re-extracted."""
 
@@ -517,6 +593,17 @@ def parse_log(prefix, text):
     m = {}
     if prefix.startswith("lua.armsci"):
         return arm_interval_metrics(json.loads(text))
+    if prefix == "lua.arms":
+        return lua_arms_metrics(json.loads(text))
+    if prefix == "lua.fullft":
+        return fullft_footprint_metrics(text)
+    if prefix == "lua.r1":
+        return lua_round1_metrics(json.loads(text))
+    if prefix == "lua.greedy":
+        return lua_greedy_metrics(json.loads(text))
+    if re.fullmatch(r"lua\.(sg|fg)r?\d", prefix):
+        # the first lr 1e-6 pair (sg6, fg6) did not report its round count; the replicates (r2, r3) do
+        return lua_arm_metrics(json.loads(text), with_rounds="r" in prefix[4:])
     if prefix.startswith("rsi1.arm."):
         return rsi1_analysis_metrics(json.loads(text))
     if prefix.startswith("rsi1.rl."):
@@ -597,12 +684,18 @@ def parse_log(prefix, text):
 def check_evidence_dir(evidence, problems):
     """Compare measurements.json with the raw logs in `evidence`: the sha256 of each log, the values
     extracted from it, and (for the qualification logs) the commit and command of its header. An
-    absent directory is not checked and not a failure."""
+    absent directory is not checked and not a failure; a run marked "kept": false, whose raw record
+    was not kept, is not required."""
     if not evidence.is_dir():
         print(f"evidence directory {evidence} absent: log digests not checked")
         return
+    not_kept = 0
     for name, run in load_measurements().items():
         path = evidence / run["log"]
+        if not path.is_file() and run.get("kept", True) is False:
+            # The raw record was not kept: its values, digest and command are all that remain.
+            not_kept += 1
+            continue
         if not path.is_file():
             problems.append(f"{name}: {run['log']} is missing from {evidence}")
             continue
@@ -620,7 +713,8 @@ def check_evidence_dir(evidence, problems):
         if run["metric_prefix"].startswith("e4."):
             if f"# commit: {run['brain_commit']}" not in text or f"# command: {run['command']}" not in text:
                 problems.append(f"{name}: commit or command differs from the header of {run['log']}")
-    print(f"evidence directory {evidence}: {len(load_measurements())} logs checked")
+    print(f"evidence directory {evidence}: {len(load_measurements()) - not_kept} logs checked, "
+          f"{not_kept} recorded as not kept")
 
 
 ALPHA = 0.05

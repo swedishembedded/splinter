@@ -89,13 +89,79 @@ class ProbeParsers(unittest.TestCase):
     def test_a_log_of_a_shape_no_parser_reads_is_named_not_guessed(self):
         # Before: an unknown prefix fell through to the throughput probe's regex and crashed the check.
         with self.assertRaises(build_data.NoParser) as raised:
-            build_data.parse_log("lua.sgr2", json.dumps({"arm": "self-generate", "rounds": []}))
-        self.assertIn("lua.sgr2", str(raised.exception))
+            build_data.parse_log("zz.unknown", json.dumps({"arm": "self-generate", "rounds": []}))
+        self.assertIn("zz.unknown", str(raised.exception))
 
     def test_a_flat_metrics_record_is_its_own_metrics(self):
         flat = {"g0_sd_wins": 16, "g0_sd_mean_delta": "0.034"}
         self.assertEqual(build_data.parse_log("gen27b", json.dumps(flat)), flat)
         self.assertEqual(build_data.parse_log("gen27b.tw", json.dumps(flat)), flat)
+
+
+def skill_row(name, before, after, graded=4):
+    return {"skill": name, "baseline": {"graded": graded, "passes": before},
+            "final_score": {"graded": graded, "passes": after}}
+
+
+def flywheel_run(outcomes, skills):
+    return json.dumps({"arm": "self-generate", "rounds": [{"outcome": {"outcome": o}} for o in outcomes],
+                       "record": {"assessment": {"skills": skills}}})
+
+
+class LuaFlywheelParsers(unittest.TestCase):
+    def test_a_footprint_row_per_model_gives_card_and_host_gib_to_one_decimal(self):
+        rows = [
+            {"model": "Qwen/Qwen3-0.6B", "optimizer_state": "fp32", "card_peak_run_mib": 7957, "host_peak_rss_gib": 10.9},
+            {"model": "Qwen/Qwen3-1.7B", "optimizer_state": "fp32", "card_peak_run_mib": 16262, "host_peak_rss_gib": 32.55},
+            {"model": "Qwen/Qwen3-8B", "optimizer_state": "int8 moments (state=int8)", "card_peak_run_mib": 67253,
+             "host_peak_rss_gib": 107.49},
+            {"model": "Qwen/Qwen3-8B", "optimizer_state": "fp32", "card_peak_run_mib": 1, "host_peak_rss_gib": 1.0,
+             "note": "a later probe after code changes, not the first measurement"},
+        ]
+        m = build_data.parse_log("lua.fullft", "\n".join(json.dumps(r) for r in rows))
+        self.assertEqual(m, {"q06_card_gib": "7.8", "q06_host_gib": "10.9", "q17_card_gib": "15.9",
+                             "q17_host_gib": "32.6", "q8i8_host_gib": "107.5"})
+
+    def test_a_round_one_record_is_its_target_and_the_sum_of_the_others_passes(self):
+        stage = {"target": {"before": {"graded": 4, "passes": 0}, "after": {"graded": 4, "passes": 4}},
+                 "others": {"a": {"before": {"passes": 3}, "after": {"passes": 1}},
+                            "b": {"before": {"passes": 2}, "after": {"passes": 2}}}}
+        m = build_data.parse_log("lua.r1", json.dumps({"stages": {"baseline": [], "round-1": stage}}))
+        self.assertEqual(m, {"target_before": 0, "target_after": 4, "others_before": 5, "others_after": 3})
+
+    def test_greedy_baselines_are_each_arms_passes_and_the_graded_count(self):
+        arm = {"passes": 34, "graded": 56}
+        m = build_data.parse_log("lua.greedy", json.dumps({"arms": {"self-generate": arm, "fixed-generator": arm}}))
+        self.assertEqual(m, {"self_generate_passes": 34, "fixed_generator_passes": 34, "graded": 56})
+
+    def test_a_flywheel_arm_is_its_accepted_rounds_and_its_assessed_skill_totals(self):
+        text = flywheel_run(["accepted", "rejected", "skipped", "accepted"],
+                            [skill_row("a", 1, 3), skill_row("b", 2, 1), skill_row("c", 2, 2)])
+        expected = {"accepted": 2, "final_before": 5, "final_after": 6, "final_graded": 12,
+                    "skills_up": 1, "skills_down": 1}
+        self.assertEqual(build_data.parse_log("lua.sg6", text), expected)
+        self.assertEqual(build_data.parse_log("lua.fg6", text), expected)
+
+    def test_a_replicate_also_reports_how_many_rounds_it_ran(self):
+        text = flywheel_run(["accepted", "rejected", "skipped"], [skill_row("a", 1, 3)])
+        for prefix in ("lua.sgr2", "lua.fgr3"):
+            self.assertEqual(build_data.parse_log(prefix, text)["rounds"], 3)
+
+    def test_the_arms_comparison_is_replicates_mean_gains_p_values_and_skill_counts(self):
+        report = {"arms": {"self-generate": {"replicates": 7, "mean_gain": 10.857142857142858},
+                           "fixed-generator": {"replicates": 9, "mean_gain": 10.88888888888889},
+                           "teacher-generator": {"replicates": 6, "mean_gain": 11.166666666666666}},
+                  "comparisons": [
+                      {"a": "self-generate", "b": "fixed-generator", "skills_a_better": 5, "skills_b_better": 4,
+                       "ties": 4, "sign_test_p_two_sided": 1.0, "replicate_permutation_p_two_sided": 1.0},
+                      {"a": "self-generate", "b": "teacher-generator", "skills_a_better": 4, "skills_b_better": 5,
+                       "ties": 4, "sign_test_p_two_sided": 1.0, "replicate_permutation_p_two_sided": 0.8881118881118881},
+                      {"a": "fixed-generator", "b": "teacher-generator", "skills_a_better": 5, "skills_b_better": 5,
+                       "ties": 3, "sign_test_p_two_sided": 1.0, "replicate_permutation_p_two_sided": 0.8709290709290709}]}
+        m = build_data.parse_log("lua.arms", json.dumps(report))
+        self.assertEqual(m, {"sg_replicates": 7, "fg_replicates": 9, "tg_replicates": 6, "sg_mean_gain": 10.86,
+                             "fg_mean_gain": 10.89, "tg_mean_gain": 11.17, "p_sg_fg": 1.0, "p_sg_tg": 0.89,
+                             "p_fg_tg": 0.87, "tg_skills_better": 5, "fg_skills_better": 5, "skills_tied": 3})
 
 
 def verdict(right, before, wins, losses, p, holds, excluded=None, kv=None):
@@ -207,6 +273,40 @@ class ExaminerRecords(unittest.TestCase):
         m = build_data.parse_log("rsi1.arm.hl2", json.dumps(hl))
         self.assertEqual((m["r3_g1_wins"], m["r3_succeeds"], m["succeeding"], m["met"]), (16, "yes", 1, "no"))
         self.assertEqual((m["g1_wins"], m["g1_p"]), (149, "1.4e-45"))
+
+
+class EvidenceDirectory(unittest.TestCase):
+    """A run whose raw record was not kept ("kept": false) is reported, not required; every other run's
+    record must be in the evidence directory with its recorded digest."""
+
+    def check(self, runs, files):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            for name, data in files.items():
+                (Path(d) / name).write_bytes(data)
+            saved = build_data.load_measurements
+            build_data.load_measurements = lambda: runs
+            try:
+                problems = []
+                build_data.check_evidence_dir(Path(d), problems)
+            finally:
+                build_data.load_measurements = saved
+            return problems
+
+    def record(self, log, data, **extra):
+        import hashlib
+        return dict({"log": log, "sha256": hashlib.sha256(data).hexdigest(), "metric_prefix": "none",
+                     "metrics": {}}, **extra)
+
+    def test_a_record_not_kept_is_not_required(self):
+        runs = {"gone": self.record("gone.log", b"x", kept=False)}
+        self.assertEqual(self.check(runs, {}), [])
+
+    def test_a_kept_record_must_be_present_with_its_digest(self):
+        runs = {"a": self.record("a.json", b"1"), "b": self.record("b.json", b"2")}
+        problems = self.check(runs, {"a.json": b"changed"})
+        self.assertTrue(any("a: sha256" in p for p in problems), problems)
+        self.assertTrue(any("b: b.json is missing" in p for p in problems), problems)
 
 
 if __name__ == "__main__":
