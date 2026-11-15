@@ -75,3 +75,8 @@ raised before its first round (see `rsi3-launch.md`); r3's generation 3 failed o
 was resumed from its journals with the same build and settings. Learning-signal decay is visible in the learner's
 records: generation 1 trained on 568 mispredicted programs of 600 proposals, generation 2 on 229 of 554. RSI4
 (`rsi4.md`) tests cumulative retraining from the base on frontier-selected programs.
+- 2026-11-15 (correction to the outcome text above): "generation 1 trained on 568 mispredicted programs of 600 proposals,
+  generation 2 on 229 of 554" are lineage r3's counts, not the series'. Over the four lineages the champions mispredicted (greedy, one
+  prediction per program) 2127 of 2400 proposals at generation 1, 1125 of 2228 at generation 2 and 860 of 1942 at generation 3
+  (`lineages/r*/rounds.jsonl`). These greedy counts are not comparable with RSI4's frontier, which admits a program wrong in at least one
+  of four sampled predictions. The outcome and the criterion are unchanged.

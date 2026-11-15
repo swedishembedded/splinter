@@ -79,3 +79,7 @@ does not establish: transfer to other tasks or models, or behaviour beyond three
   `training_material_overlaps_collection` flag on all three of r2's verdicts, for the one exam item that equalled a program r2 trained
   on from generation 1 (a base proposal) and that it excluded from r2's comparisons; no other verdict carries a flag. The table, the
   exclusion counts and the criterion are unchanged.
+- 2026-11-15 (correction to the "Why" section above, written before any run): "the policy mispredicted 568 of 600 of its own proposals
+  at generation 1 but only 229 of 554 at generation 2" are RSI3 lineage r3's counts. Over RSI3's four lineages the greedy misprediction
+  counts were 2127 of 2400, 1125 of 2228 and 860 of 1942 at generations 1 to 3. The direction of the argument (the signal shrank) is
+  the same; the design, criterion and outcome are unchanged.
