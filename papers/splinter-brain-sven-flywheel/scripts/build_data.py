@@ -613,6 +613,17 @@ def groups_metrics(g):
     return m
 
 
+def descriptive_metrics(b):
+    """A descriptive baseline of the examiner (no criterion): items right of the exam, as a percentage,
+    the other outcome counts, and the protocol terms that make it differ from the direct-completion
+    protocol (thinking, the token limit, samples per item)."""
+    p = b["protocol"]
+    m = {"right": b["items_right"], "pct": f"{100 * b['items_right'] / b['collection']['items']:.1f}",
+         "thinking": p["thinking"], "max_tokens": p["max_tokens"], "samples": p["completions_per_item"]}
+    m.update({k: v for k, v in b["outcomes"].items() if k != "right"})
+    return m
+
+
 def regrade_metrics(a):
     """The reference examiner's re-grade of the S4 steps on the learner's Brain build: per step items
     right, wins, losses, exclusions, whether it holds and the replies the token limit cut, and the base's
@@ -653,6 +664,8 @@ def parse_log(prefix, text):
         return rsi1_rl_metrics(json.loads(text))
     if re.match(r"rsi4f\.(m?groups)$", prefix):
         return groups_metrics(json.loads(text))
+    if prefix.startswith("rsi4f.baseline."):
+        return descriptive_metrics(json.loads(text))
     if prefix == "repro.examine":
         return regrade_metrics(json.loads(text))
     if re.match(r"rsi4f\.(null|mfwd\.|snull\.)", prefix):
@@ -1166,6 +1179,29 @@ def scaling_csv(m):
     return "\n".join(rows) + "\n"
 
 
+def fresh_exam_table(m):
+    """Every model examined on the fresh exam F: its training (records and how they were got) and the
+    share of F answered, from the group analysis and the descriptive baselines."""
+    g, b = "rsi4f.mgroups", "rsi4f.baseline"
+    if f"{g}.gen3_share" not in m:
+        return r"\textbf{NOT MEASURED}"
+    pct = lambda k: f"{100 * float(m[k]):.1f}"
+    rows = [("Qwen3-4B base", "--", "off", pct(f"{g}.base_share")),
+            ("S4 generation 1", "300, own frontier", "off", pct(f"{g}.gen1_share")),
+            ("S4 generation 2", "900, own frontier", "off", pct(f"{g}.gen2_share")),
+            ("S4 generation 3", "2100, own frontier", "off", pct(f"{g}.gen3_share")),
+            ("same data, new seed", "2100, own frontier", "off", pct(f"{g}.s_retrain_share")),
+            ("M-900 (one fit)", "900, base frontier", "off", pct(f"{g}.m900_share")),
+            ("M (one fit)", "2100, base frontier", "off", pct(f"{g}.m2100_share")),
+            ("base, majority of 4 samples", "--", "off", m[f"{b}.majority4.pct"]),
+            ("base, thinking on (8192 tokens)", "--", "on", "$\\ge$" + m[f"{b}.thinking.pct"]),
+            ("Qwen3.8-27B-FP8, zero-shot", "--", "off", m[f"{b}.qwen27b.pct"])]
+    lines = [r"\begin{tabular}{@{}llcr@{}}", r"\toprule",
+             r"Model & Training records & Thinking & F answered (\%) \\", r"\midrule"]
+    lines += [f"{a} & {t} & {k} & {v} \\\\" for a, t, k, v in rows]
+    return "\n".join(lines + [r"\bottomrule", r"\end{tabular}"])
+
+
 def rsi_forest_csv(series, m):
     """Each lineage step's paired gain with the examiner's family-clustered 95% interval, top to bottom
     (y counts down), and whether the registered item-level step holds, for the forest plot."""
@@ -1251,6 +1287,7 @@ def write_outputs(out):
     (out / "scaling_s4.csv").write_text("\n".join(l for l in scaling_csv(m).splitlines() if not l.split(",")[1:2] == ["m"]) + "\n")
     (out / "scaling_m.csv").write_text("\n".join(l for l in scaling_csv(m).splitlines() if not l.split(",")[1:2] == ["s4"]) + "\n")
     (out / "rsi4f_forest.csv").write_text(rsi_forest_csv("rsi4f", m))
+    (out / "fresh_exam_table.tex").write_text(fresh_exam_table(m) + "\n")
     for series, _ in RSI_SERIES:
         (out / f"{series}_items.csv").write_text(rsi_items_csv(series, m))
         (out / f"{series}_steps.csv").write_text(rsi_steps_csv(series, m))

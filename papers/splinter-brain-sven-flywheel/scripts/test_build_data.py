@@ -332,6 +332,14 @@ class FollowUps(unittest.TestCase):
         self.assertEqual((m["right"], m["wins"], m["losses"]), (194, 0, 0))
         self.assertNotIn("excluded", m)
 
+    def test_a_descriptive_baseline_is_read_as_its_outcome_counts_and_protocol(self):
+        b = {"items_right": 1107, "share_right": 0.47308, "outcomes": {"no_reply": 372, "right": 1107, "wrong": 861},
+             "collection": {"items": 2340}, "protocol": {"thinking": "on", "max_tokens": 8192, "completions_per_item": 1,
+             "temperature": 0.0}, "role": "descriptive_baseline"}
+        m = build_data.parse_log("rsi4f.baseline.thinking", json.dumps(b))
+        self.assertEqual((m["right"], m["pct"], m["no_reply"], m["wrong"]), (1107, "47.3", 372, 861))
+        self.assertEqual((m["thinking"], m["max_tokens"], m["samples"]), ("on", 8192, 1))
+
     def test_the_reference_examiner_regrade_is_read_per_step(self):
         a = {"base_agreement": {"right": {"r0": 12, "r1": 13}},
              "steps": [{"series": "r1", "step": 1, "items_right": 131, "wins": 120, "losses": 2, "excluded": 0,

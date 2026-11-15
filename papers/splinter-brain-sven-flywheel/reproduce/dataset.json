@@ -1,6 +1,6 @@
 {
  "repo": "swedishembedded/the-frontier-must-grow-evidence",
- "revision": "bcffae431ea7c8aed6c02fc6d7cc2ab46b33bb6e",
+ "revision": "dd0bac57475f816a379a8db71b6756fa7d880718",
  "files": [
   {
    "path": "adapters/rsi4/r0/1/adapter.safetensors",
@@ -86,11 +86,14 @@
   },
   {
    "path": "records/followups.tar.xz",
-   "size": 16524,
-   "sha256": "a88bb5fac3c2553cbcfde2ab61e740a343297e363144a0d6c753f001427af090",
+   "size": 17020,
+   "sha256": "cb859fa3cd0778051149524c064931151a2b260f928687ba3073f18632efbc36",
    "members": {
     "repro/examine/aggregate.json": "69ab73a9390cedf3c2c671db97aad002d40a733bbafbbb8bf4435d03a90c5553",
     "repro/examine/compare.md": "38119ced63994093b1ab3f7c6e3d60b97c6acfa39f17c305bc23c8cd78fc888f",
+    "rsi4f/verdicts/F/baselines/majority4.json": "449464984822b7953e71c0eb3d94daf393ff5c3d9fac5a969d9bb2475fc9c535",
+    "rsi4f/verdicts/F/baselines/qwen27b.json": "b14a43a9951bf2f65a3459b15a964c99c296c6554208d3ea734e8ba262dfee71",
+    "rsi4f/verdicts/F/baselines/thinking.json": "39e540ca3ed18cdf047209f2aa17fc216bbc8bf3288b2c5738e1e2be1966353a",
     "rsi4f/verdicts/F/groups-lineage.json": "47571f76b4061ab3f72989efa168d441ef712ad69edbfb4985cb926041d4d14d",
     "rsi4f/verdicts/F/null-replicate.json": "3ccf3ac5df4d205bb6b48183c28bdcbdc446b48b385fd7de7666231895937611",
     "rsi4f/verdicts/F/plan-verdict-F1.json": "b8fdcb6c8ca9662286a1f3dc8fb740af0f53ad0e547766335d0a0ddc41e3c808",

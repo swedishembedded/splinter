@@ -4445,6 +4445,52 @@
         "r3_g3_holds": "yes",
         "r3_g3_truncated": 1
       }
+    },
+    "f-baseline-thinking": {
+      "log": "rsi4f/verdicts/F/baselines/thinking.json",
+      "sha256": "39e540ca3ed18cdf047209f2aa17fc216bbc8bf3288b2c5738e1e2be1966353a",
+      "brain_commit": "examiner serving binary d11e9134 (learner brain 796871647)",
+      "command": "the examiner's descriptive baseline on F (no criterion): the base with thinking on, greedy, an 8192-token budget",
+      "metric_prefix": "rsi4f.baseline.thinking",
+      "metrics": {
+        "right": 1107,
+        "pct": "47.3",
+        "thinking": "on",
+        "max_tokens": 8192,
+        "samples": 1,
+        "no_reply": 372,
+        "wrong": 861
+      }
+    },
+    "f-baseline-majority4": {
+      "log": "rsi4f/verdicts/F/baselines/majority4.json",
+      "sha256": "449464984822b7953e71c0eb3d94daf393ff5c3d9fac5a969d9bb2475fc9c535",
+      "brain_commit": "examiner serving binary d11e9134 (learner brain 796871647)",
+      "command": "the examiner's descriptive baseline on F (no criterion): the base's majority answer over 4 samples at temperature 1.0, thinking off",
+      "metric_prefix": "rsi4f.baseline.majority4",
+      "metrics": {
+        "right": 190,
+        "pct": "8.1",
+        "thinking": "off",
+        "max_tokens": 2048,
+        "samples": 4,
+        "wrong": 2150
+      }
+    },
+    "f-baseline-qwen27b": {
+      "log": "rsi4f/verdicts/F/baselines/qwen27b.json",
+      "sha256": "b14a43a9951bf2f65a3459b15a964c99c296c6554208d3ea734e8ba262dfee71",
+      "brain_commit": "examiner serving binary d11e9134 (learner brain 796871647)",
+      "command": "the examiner's descriptive baseline on F (no criterion): Qwen/Qwen3.8-27B-FP8 zero-shot, thinking off, greedy",
+      "metric_prefix": "rsi4f.baseline.qwen27b",
+      "metrics": {
+        "right": 919,
+        "pct": "39.3",
+        "thinking": "off",
+        "max_tokens": 2048,
+        "samples": 1,
+        "wrong": 1421
+      }
     }
   }
 }
