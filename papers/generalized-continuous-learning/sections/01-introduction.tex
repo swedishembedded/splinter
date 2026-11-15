@@ -1,0 +1,15 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+\section{Introduction}\label{sec:introduction}
+
+A companion paper~\cite{frontier2026} showed that a 4B model trained on programs it proposed itself, labelled by a Lua 5.1
+interpreter, roughly doubled its accuracy at predicting program output on a fresh exam over three generations. Its first
+generation did not improve on that exam, the model never reasoned before answering, and a matched-data control could not
+separate the generational loop from the amount of verified data. Thinking enabled, the untrained base already answered far more
+of the same exam than the best trained generation answered directly.
+
+\paragraph{Scope.} This paper asks whether the same three systems (Splinter as the learning controller, Sven as the model
+client, Brain as the serving and training engine) produce continuous improvement: every generation better than its predecessor
+on held-out exams judged by a separate examiner, for as many generations as are run, and on task families beyond the first.
+A finding belongs here if it changes what is claimed about, or how one would measure, improvement across successive generations
+of a model taught by an executable environment.
