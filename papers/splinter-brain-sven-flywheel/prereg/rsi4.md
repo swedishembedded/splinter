@@ -75,3 +75,7 @@ does not establish: transfer to other tasks or models, or behaviour beyond three
 - 2026-11-15 (correction to the outcome text above): "the generation-3 steps are the largest absolute gains of two lineages" is wrong.
   The gains per generation are r0 +80/+46/+54, r1 +119/+50/+44, r2 +106/+51/+72, r3 +109/+66/+31: generation 1 is every lineage's
   largest step; the generation-3 step exceeds the generation-2 step in two lineages (r0, r2). The table and the criterion are unchanged.
+- 2026-11-15 (correction to the outcome text above): "no other overlap and no integrity flag" is wrong. The examiner raised its
+  `training_material_overlaps_collection` flag on all three of r2's verdicts, for the one exam item that equalled a program r2 trained
+  on from generation 1 (a base proposal) and that it excluded from r2's comparisons; no other verdict carries a flag. The table, the
+  exclusion counts and the criterion are unchanged.
