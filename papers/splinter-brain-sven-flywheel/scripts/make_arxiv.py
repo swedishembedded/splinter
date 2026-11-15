@@ -125,9 +125,15 @@ def leaks(text, allowed_emails, users):
                 continue
             found.append((kind, m.group(0)))
     for user in users:
-        if user and re.search(rf"\b{re.escape(user)}\b", text):
+        if user and re.search(USER_CONTEXT.format(user=re.escape(user)), text):
             found.append(("user name", user))
     return found
+
+
+# A user name identifies someone only where it names an account: a path segment (`/name/`, `\\name\\`),
+# after a tilde (`~name`) or before an at sign (`name@host`). As a bare word it is ordinary prose: an
+# account called "user" must not make "the user" a leak.
+USER_CONTEXT = r"(?:[/\\]{user}(?=[/\\]|\b)|~{user}\b|\b{user}@)"
 
 
 def write_archive(path, files):

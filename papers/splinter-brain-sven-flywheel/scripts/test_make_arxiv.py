@@ -65,6 +65,15 @@ class Leaks(unittest.TestCase):
         kinds = {k for k, _ in found}
         self.assertEqual(kinds, {"machine path", "home path", "host name", "token", "email", "user name"})
 
+    def test_a_user_name_that_is_an_ordinary_word_is_only_a_leak_where_it_names_someone(self):
+        # On a machine whose account is called "user", prose about "the user" publishes nothing; the
+        # name inside a path, after a tilde or before an @ still does.
+        prose = "The user asks; a user-facing gate; the users of the loop."
+        self.assertEqual(make_arxiv.leaks(prose, allowed_emails=set(), users=("user",)), [])
+        for leak in ("/".join(["", "data", "user", "x"]), "C:\\Users\\user\\x", "~user/x", "scp user@host:x"):
+            kinds = {k for k, _ in make_arxiv.leaks(leak, allowed_emails=set(), users=("user",))}
+            self.assertIn("user name", kinds, leak)
+
     def test_ordinary_paper_text_is_clean(self):
         text = "On two GH200 cards the 27B model ran; see \\code{prereg/rsi4.md} and arXiv:2207.14502."
         self.assertEqual(make_arxiv.leaks(text, allowed_emails=set(), users=("someone",)), [])
