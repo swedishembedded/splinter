@@ -131,9 +131,9 @@ pub struct Worked {
 }
 
 impl HarnessConfig {
-    /// The shipped documents, run with the `repo-replay` executable found beside
-    /// this process (this process itself when it is not a test binary; a test binary finds the
-    /// one cargo built for it; none found, the gates fail closed). `decoding` is what the documents state to the models.
+    /// The shipped documents, run with the `repo-replay` executable: this process
+    /// when it is that executable, else the one cargo built into the nearest
+    /// profile directory above it (none found, the gates fail closed). `decoding` is what the documents state to the models.
     pub fn shipped(decoding: Decoding) -> Self {
         let me = std::env::current_exe().unwrap_or_default();
         let name = if cfg!(windows) {
@@ -141,21 +141,21 @@ impl HarnessConfig {
         } else {
             "repo-replay"
         };
-        // A test binary sits in cargo's `deps` directory; anything else is the
-        // sample's own executable, whatever name it was copied to.
-        let is_test_binary = me
-            .parent()
-            .and_then(|dir| dir.file_name())
-            .is_some_and(|n| n == "deps");
-        let check_bin = if !is_test_binary && me.is_file() {
+        // This process, when it is the sample's executable. Otherwise (a test
+        // binary: cargo puts it in `<profile>/deps/`, or with its newer
+        // build-directory layout under `<profile>/build/<package>/<hash>/out/`)
+        // the `repo-replay` cargo built into the nearest profile directory above
+        // it. Not found: the bare name, so the gates fail closed and say so
+        // (the sample's own `main` names its executable explicitly).
+        let named = me.file_name().is_some_and(|n| n == name);
+        let check_bin = if named {
             me
         } else {
             me.ancestors()
                 .skip(1)
-                .take(3)
+                .take(5)
                 .map(|dir| dir.join(name))
                 .find(|candidate| candidate.is_file())
-                // Not found: the gates fail closed and say so.
                 .unwrap_or_else(|| name.into())
         };
         Self {
