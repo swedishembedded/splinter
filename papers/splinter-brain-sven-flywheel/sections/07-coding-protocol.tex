@@ -1,7 +1,7 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-\section{The coding-task experiment: protocol}\label{sec:protocol}
+\section{The coding-task experiment: protocol}\label{sec:protocol}\label{app:coding}
 
 The question that matters to a team, once the loop of
 \cref{sec:architecture,sec:admission,sec:verify,sec:dataset} exists, is:
@@ -37,7 +37,7 @@ fails.\cl{V07}
 \node[data, cell] (f) at (5*\dx,0) {admitted:\\hidden files\\sealed};
 \foreach \x/\y in {a/b,b/c,c/d,d/e,e/f} \draw[flow] (\x) -- (\y);
 \draw[refuse] (a.south) -- ++(0,-6mm) node[reflabel, below, align=center] {red or flaky:\\the run stops};
-\draw[refuse] (c.south) -- ++(0,-6mm) node[reflabel, below, align=center] {no failing test:\\equivalent, refused};
+\draw[refuse] (c.south) -- ++(0,-6mm) node[reflabel, below, align=center] {no failing\\test: refused};
 \draw[refuse] (d.south) -- ++(0,-6mm) node[reflabel, below, align=center] {flaky failure:\\refused};
 \draw[refuse] (e.south) -- ++(0,-6mm) node[reflabel, below, align=center] {not restorable:\\refused};
 \end{tikzpicture}
@@ -138,7 +138,7 @@ single-repository round from a revision to a gated release.\cl{PS01} Eight autho
 families ship with the repository (\cref{tab:families}); a family's tests must pass five times
 identically and its faults be caught before it is catalogued.\cl{PS02} Two verbs apply the partitions and the paired comparison of this section to the base and the
 served adapter.
-\code{splinter tasks pick SET\ldots{} --family-share F --seed S} divides the union of task sets
+\code{splinter tasks pick SET... --family-share F --seed S} divides the union of task sets
 into a picked set and the rest by a stable hash of the seed and the family, whole families at a
 time (\code{--per-family N} caps each family instead, for the one-task-per-family verdict
 sample). \code{splinter experiences compare CANDIDATE BASELINE} pairs the two arms' experiences

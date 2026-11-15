@@ -16,7 +16,11 @@ are of this family, with an executable oracle as the filter and the policy's own
 samples. TRUST argues that a gate accepting an update on any higher validation score lets inferior
 updates through across rounds, and controls their rate by online multiple
 testing;~\citep{trust2026}\cl{CT15} our learner's gate is of the greedy kind, and we measure what it let
-through against an independent exam (\cref{sec:rsi4}).
+through against the examiner's exam (\cref{sec:rsi4}). With execution feedback in the loop, CodeRL
+trains a code generator by reinforcement learning with a critic that predicts functional correctness
+from unit tests;~\citep{coderl2022}\cl{CT20} and training repeatedly on a model's own generated content
+can make the tails of the original distribution disappear,~\citep{collapse2023}\cl{CT21} which the
+series guard against only by labelling every program with the interpreter's output.
 \emph{Parameter-efficient training.} LoRA freezes the base and trains low-rank
 adapters;~\citep{lora2021}\cl{CT03} QLoRA does so over a base quantised to 4~bits;~\citep{qlora2023}\cl{CT04} DPO optimises
 preferences without a separate reward model.~\citep{dpo2023}\cl{CT05} The flywheel uses LoRA and DPO as
@@ -44,5 +48,4 @@ fail.~\citep{swegym2024,r2egym2025,swesmith2025}\cl{CT14} We take the mutation-a
 idea and the commit-based idea as task producers (\cref{sec:protocol}). The difference
 in aim is that the target here is one repository's own tasks, reserved before rollouts and
 evaluated paired against the base under an identical harness, with retention on earlier
-repositories and a replication on a second one registered (and not run, \cref{sec:limitations}); we read abstracts of these works and verified
-their identifiers, not their evaluation sections, and we make no claim about priority.
+repositories and a replication on a second one registered (and not run, \cref{sec:limitations}); we make no claim about priority.

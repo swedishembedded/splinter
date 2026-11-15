@@ -44,22 +44,21 @@ workloads, on exams the base already solved about nine times in ten, so the few 
 sometimes carried every comparison.\cl{G2703} The token-efficiency finding was made after the data
 over several comparisons and is exploratory.\cl{G2705}
 
-\paragraph{The self-improvement series.} RSI4's result holds for one task family (predicting what
-Lua~5.1 programs print), one base model (Qwen3-4B), LoRA training on the interpreter's labels and three
-generations; transfer to other tasks, models or longer series is not tested. The exam holds items the
-base could not answer, so items right on it measure progress on that subset, not general accuracy, and
-the base's count depends on the serving tier (0 for RSI3's baseline, 12 at RSI4's f32 tier).\cl{RS27}
-RSI4 changed several things together (retraining from the base on the cumulative union, frontier
-selection that also admits programs the champion usually predicts right, a geometric schedule with
-growing steps, no separate replay), and no ablation separates them. No series ran the control that
-would show that improvement compounds because an improved model is a better improver: the same amount
-of interpreter-verified frontier material proposed by the base or by a fixed earlier policy, trained
-from the base; on the documentation task the task writer did not change the gain.\cl{SL23} The four
-lineages share the exam's items, so pooled sign tests over lineages are descriptive. The exam's items
-are not secret (they were released with RSI1's records); the separation is that the learner's code
-never opens them and that overlapping programs are excluded. The verdicts are signed with the
-examiner's symmetric key, which protects them against the learner, not a public-key signature a
-reader can check. RSI1's arms were graded by their own analysis scripts, not by an independent
-examiner. The learner's dev gate, reused across generations, accepted two RSI3 steps the exam found
-not to hold, and the evidence gate that would control such acceptances was not used in any
+\paragraph{The self-improvement series.} \Cref{sec:rsi-scope} states what the series does and does not
+establish; the limits that affect how far the result can be trusted are these. The registered test
+treats the exam's items as independent; under the examiner's template-clustered intervals the third
+generation's gain excludes zero in one lineage, or two under a one-sided reading, not in the three the
+rule asks for (\cref{sec:rsi-robust}).\cl{RS38} One exam served all four series, and each design was
+chosen after the results of the one before on it, so the series as a whole reused a holdout
+adaptively.\cl{CT22} The exam measures generalisation within its 25 templates, to items the base did not
+answer at selection; the overlap exclusion catches only exact and comment- or whitespace-normalised
+matches, and a similarity audit that abstracts arguments or syntax was not run. Training data grows
+with the generation, and the matched-data control that would separate that from an improved proposer
+has not run, nor has the re-examination on a freshly drawn exam; both are registered.\cl{RS39} Items-right
+levels and the coding-task and 27B means are reported as point estimates with their paired tests;
+intervals are given where the records allow them (\cref{fig:rsi-forest}, \cref{sec:documentation}).
+The examiner is a separate program run by the same operators, its verdicts are signed with a symmetric
+key that protects them against the learner and not against the authors, and RSI1's arms were graded by
+their own analysis scripts. The learner's dev gate, reused across generations, accepted two RSI3 steps
+the exam did not hold, and the gate that would control such acceptances was not used in any
 run.\cl{RS24,RS34}

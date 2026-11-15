@@ -4,73 +4,62 @@
 \section{Introduction}\label{sec:intro}
 
 A deployed local model does not know what its users' documents, tools and repositories say, and what
-it is taught by hand is lost the next time it is replaced. The \emph{self-learning flywheel} is the
-closed loop that Splinter, Brain and Sven implement to address this: take a source, write tasks from
-it, have an agent attempt them, keep only what code can verify, project the verified experience into
-training data, train an adapter (or every weight), measure on material the learner cannot influence,
-and release the result only if it is measurably better without being worse at what it already did.
-The released artifact is an ordinary Brain adapter that runs on plain \code{brain serve}; the next
-turn starts from it.
+it is taught by hand is lost the next time it is replaced. A loop that lets the model learn from its
+own verified experience, and releases a better version of itself, would remove that; the hard part is
+knowing, without fooling oneself, whether a turn of the loop made the model better.
 
-\paragraph{The question.} The practical question is operational: \emph{can a model be made
-measurably better, repeatedly, by a loop that learns from verified experience, and how would one know
-without fooling oneself?} We answer it in two parts. First, what each stage of such a loop must do and
-what the code contains for it, so that a turn can add a capability without losing one
-(\cref{sec:architecture,sec:intake,sec:admission,sec:verify,sec:dataset,sec:training,sec:gate,sec:substrate,sec:requirements}).
-Second, what the loop did when its effect was decided by tests fixed before the runs: on repository
-tasks with a stronger teacher (\cref{sec:protocol,sec:coding-results}), on a language's documentation
-without any teacher (\cref{sec:documentation}), on a 27B model's own agent experience
-(\cref{sec:generations}), and in four registered series of self-taught generations judged by an
-independent examiner (\cref{sec:rsi}).
+\paragraph{The question and the result.} We ask whether a model that teaches itself improves at every
+one of several consecutive generations on items it never saw. We call a series \emph{self-taught} when
+every generation's training material is proposed by the previous generation's champion and labelled
+only by an executable oracle (here the Lua~5.1 interpreter): the policy writes the curriculum, never the
+labels, and no stronger model and no human answer enters training. This is iterated self-training with
+an oracle labeller, in the family of expert iteration and ReST-EM (\cref{sec:related}). Four series,
+RSI1 to RSI4, were registered before their runs; from RSI2 on an examiner program separate from the
+learner held the exam, excluded items that matched any trained program, and returned signed aggregate
+verdicts (\cref{sec:rsi}).\cl{RS01,RS04,RS05} In RSI4, four lineages of Qwen3-4B, each generation
+retrained from the base on the frontier of its predecessor's own proposals, met the registered
+per-lineage criterion: every generation beat its predecessor by an exact sign test over the exam's
+items, rising from 12 items right to between 192 and 241.\cl{RS28,RS29} The result has two qualifications
+that the paper states with it. Under the examiner's own intervals clustered over the exam's 25 program
+templates, the third generation's gain excludes zero in only one or two of the four lineages
+(\cref{sec:rsi-robust}).\cl{RS38} And each generation trains on more data than the one before
+(300, 900 and 2100 records), so the gains may come from the amount of verified data rather than from an
+improved model proposing better material; a matched-data control and a re-examination on a freshly
+drawn exam are registered and not yet run.\cl{RS26,RS39}
 
-\paragraph{What was found.} On repository tasks the registered confirmatory query \emph{did not show}
-the candidate better than its base: on 46 qualification families the candidate reached a mean pass@1
-of 23.0 against 20.0 (18 families won, 12 lost, 16 tied; $p=0.18$); what separated was the
-supervision, decisive actions against every action with corpus, recipe and seed fixed (26 won, 11
-lost, $p=0.010$).\cl{QUAL1} The 27B model's two promoted generations did not beat their base on one
-measurement on one stack.\cl{G2703,G2704} Without a teacher, a 4B model gained on probes written
-from a raw manual whichever model wrote its training tasks.\cl{SL23} Of the four registered
-self-improvement series three did not meet their criterion, and the fourth, RSI4, met it in every
-lineage: four independent lineages of Qwen3-4B, each generation retrained from the base on the
-interpreter-verified frontier of its own proposals, improved at each of three consecutive generations
-on a sealed 889-item Lua exam that an independent examiner held, graded and signed.\cl{RS28,RS29}
+\paragraph{What did not show a gain.} The same loop, run in full on repository tasks, was registered
+with an 8B student trained on a 27B teacher's verified trajectories: the confirmatory query did not show
+the student better than its base (\cref{sec:coding-summary}).\cl{QUAL1} Two promoted generations of a
+27B model trained on its own agent experience did not beat their base on one measurement
+(\cref{sec:generations}).\cl{G2703,G2704} An exploratory run in which a 4B model learned from a raw
+language manual gained on its own probes whoever wrote its training tasks
+(\cref{sec:documentation}).\cl{SL23} The earlier RSI series located what the met criterion needed
+(\cref{sec:rsi1,sec:rsi2,sec:rsi3}).
 
-\paragraph{Scope.} This paper covers the loop as a whole, from source to release, and the registered
-experiments that tested it. Its positive self-improvement result is bounded: one task family
-(predicting the output of Lua~5.1 programs), one base model, three generations, LoRA training on the
-interpreter's labels, and an exam of items the base could not answer; it makes no claim of transfer to
-other tasks or models, nor that the improvement compounds because an improved model is a better
-improver (\cref{sec:rsi-scope}). It claims no improvement of any public benchmark score. A mechanism
-the code does not contain is stated as missing, and a measurement that was not made is stated as not
-made.
+\paragraph{Scope.} The positive result is bounded: one task family (predicting the output of Lua~5.1
+programs, the task of CRUXEval's output prediction~\citep{cruxeval2024}\cl{CT17} in another language),
+one base model, three generations, LoRA training on the interpreter's labels, and an exam of items the
+base did not answer when it was selected, generated from 25 templates, so it measures progress within
+that distribution. It makes no claim of transfer to other tasks or models, of compounding, or of an
+improvement on any public benchmark.
 
-\paragraph{How claims are verified.} Every statement about the system or a measurement carries the
-id of a row in a claims ledger (\code{data/claims.csv}, rendered as grey bracketed ids). A
-\textsc{structure} claim is a fact about the code, a command line, a registration file or the history
-of a repository and is re-checked by \code{make verify} against the repositories at pinned commits
-that a fresh clone can reach (\cref{sec:repro}); a \textsc{measured} claim is a number that
-\code{scripts/build_data.py} reads from the measurements recorded in \code{data/measurements.json},
-each of which names its raw record and that record's digest; a \textsc{computed} claim is a number the
-same script derives by a stated formula; a \textsc{cited} claim states what a published work does and
-points at its bibliography entry. A structure check shows that a definition, constant or message
-exists in a file; it does not show that the code behaves accordingly, which only the experiments do.
+\paragraph{How claims are verified.} Every statement about the system or a measurement carries the id
+of a row in a claims ledger (grey bracketed ids). A \textsc{structure} claim is a fact about the code,
+a command line or a registration file, re-checked by \code{make verify} against the repositories at
+pinned commits a fresh clone can reach; a \textsc{measured} claim is a number that
+\code{scripts/build_data.py} reads from a raw record named, with its digest, in
+\code{data/measurements.json}; a \textsc{computed} claim is derived from measured ones by a stated
+formula; a \textsc{cited} claim points at a bibliography entry; a \textsc{planned} claim names a
+registered experiment that has not run. A structure check shows that code exists, not that it behaves
+accordingly, which only the experiments show (\cref{sec:repro}).
 
 \paragraph{Contributions.}
-(i)~The division of labour among the three projects and its enforcement (\cref{sec:architecture}), and
-the intake, admission, verification and leakage-control funnel with its rejection reasons
-(\cref{sec:intake,sec:admission,sec:verify,sec:dataset}).
-(ii)~The training, release-gate, rollback and lineage machinery (\cref{sec:training,sec:gate}), and
-what one card holds and was measured to do when training a 27B model (\cref{sec:substrate}).
-(iii)~The requirements that make the loop work, each tied to its implementation, with the ones not
-implemented stated as such (\cref{sec:requirements}).
-(iv)~A coding-task protocol fixed before any run and its outcome: a confirmatory query that does not
-show the candidate better than its base, and a same-seed supervision contrast that separates
-(\cref{sec:protocol,sec:coding-results}), with the recipe for another repository
-(\cref{sec:replicate}).
-(v)~The loop without a teacher on a 4B model learning from a raw manual, with full fine-tuning on one
-card, in which the task writer did not matter (\cref{sec:documentation}).
-(vi)~Two generations of a 27B model on its own agent experience that did not hold on one measurement,
-and the conditions an exam must meet before its decision means anything (\cref{sec:generations}).
-(vii)~Four registered series of self-taught generations with a learner that never reads the exam and
-an independent examiner whose protocol is specified fully enough to re-implement, ending in a met
-per-lineage criterion, with the failures that located what it needed (\cref{sec:rsi}).
+(i)~A self-taught series that met a registered per-lineage criterion on a held-out exam, with the
+examiner's protocol specified fully enough to re-implement, its cluster-robust reading, and the
+failures of the earlier series that located what it needed (\cref{sec:rsi}).
+(ii)~The learning loop and the division of labour among three projects that runs it
+(\cref{sec:loop}, specified in \cref{app:system}).
+(iii)~Registered tests of the loop that did not show a gain, reported as such: repository tasks with a
+stronger teacher (\cref{sec:coding-summary}, \cref{app:coding}) and two generations of a 27B model
+(\cref{sec:generations}), and an exploratory documentation run (\cref{sec:documentation}).
+(iv)~A claims ledger that ties every statement to pinned code or a raw record (\cref{sec:repro}).

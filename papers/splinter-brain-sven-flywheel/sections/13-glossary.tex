@@ -1,0 +1,35 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Glossary}\label{app:glossary}
+
+\begin{description}[leftmargin=2.2em, style=nextline, itemsep=2pt]
+\item[base] The untrained checkpoint a series or comparison starts from (Qwen3-4B in the RSI series).
+\item[candidate, champion] A candidate is a newly trained model; the champion is the model the next
+  round starts from. A candidate replaces the champion when the learner's gate accepts it.
+\item[lineage, generation, step] A lineage is one chain of generations from the base, differing from
+  its siblings only in its seed; generation $g$ is trained from material generation $g-1$'s champion
+  produced; a step compares generation $g$ with generation $g-1$ (generation 1 with the base).
+\item[frontier, frontier union] In RSI4, the programs a champion predicts wrong in at least one of 4
+  sampled attempts; the union is every accepted generation's frontier so far.
+\item[held-out exam] The 889 code-written Lua items of the RSI series: held by the examiner, never read
+  by the learner, items overlapping a trained program excluded. Its file is published, so held-out
+  means kept from the learner, not secret.
+\item[examiner, hand-off, verdict] The examiner is a separate program that holds the exam and grades
+  candidates; the hand-off is the one-way directory through which the learner gives it each candidate
+  and its trained programs; a verdict is its signed aggregate result for one step, and the plan
+  verdict applies the registered rule over a series.
+\item[dev set, retention set, probes] The learner's own measurement sets, built from its generator and
+  the base's proposals (RSI) or written by the base from the manual (probes, \cref{sec:documentation});
+  never exam items.
+\item[family] The unit a sign test counts once: in the coding experiments the file a fault was seeded
+  in; on the RSI exam the program template an item was generated from (25 templates).
+\item[exposed] An agent attempt whose tool calls named a hidden path or whose output repeated hidden
+  content; it is withheld from training and from the paired test.
+\item[D46, S1] Development benchmarks of the coding experiments: D46 is 46 development tasks, one per
+  family; S1 is 23 tasks, one per family of the first qualification half.
+\item[CE1, CE4, CE8, CE8-T, CE8-T-S, CE8-T-u1b] Coding experiments: the teacher's first pass (CE1), the
+  pilot of the headline (CE4), the 27B model on its own trajectories (CE8), its variant with its own
+  guard (CE8-T), the shuffled-instruction control (CE8-T-S) and the decision-level variant (CE8-T-u1b).
+\item[pass@1 (coding)] In the coding results, tasks solved out of 46, averaged over decoding seeds.
+\end{description}

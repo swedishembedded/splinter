@@ -1,0 +1,27 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Repository tasks with a stronger teacher: the confirmatory query}\label{sec:coding-summary}
+
+\paragraph{Question and design.} Can verified engineering-agent experience improve completion of
+unseen repository tasks?\cl{PR09} The registered test (\cref{sec:protocol}, registered before any run)
+trains an 8B student on the verified trajectories a 27B teacher produced on development families and
+compares it with the untrained 8B on a frozen qualification set of 46 task families, each task solved
+at three registered decoding seeds, by a one-sided exact sign test over families at
+$\alpha=0.05$.\cl{PR15,PR04}
+
+\paragraph{Outcome: not shown.} The candidate registered before the query, the decisive-action adapter
+of training seed 13, solved 23.0 of the 46 tasks on average over the three seeds against 20.0 for its
+base, winning 18 families, losing 12 and tying 16 ($p=0.18$): the candidate is not demonstrated better
+than its base.\cl{QUAL1} It had been chosen on a six-seed development read in which it solved 24.5
+against the base's 19.67 ($p=0.040$), so part of that margin was selection.\cl{PROTO6} A secondary
+contrast did separate: against its all-action control, trained on the same corpus with the same recipe,
+seed and binary but supervising every action instead of only file edits and writes, it won 26 families
+and lost 11 ($p=0.010$). The control itself solved 16.33, below the base, so the contrast shows that
+supervising every action does harm rather than that supervising decisive actions helps.\cl{QUAL1}
+
+\paragraph{What else ran.} Before the query, pilots of the headline and of a 27B model trained on its
+own trajectories showed no held-out improvement on a 23-task subset, and the base solved twice at two
+protocol seeds differed from itself by as much as either adapter did from it.\cl{M47,M52,M53,M56,M57}
+\Cref{app:coding} holds the protocol, the pilots, the development probes and the run-to-run variation
+they exposed.

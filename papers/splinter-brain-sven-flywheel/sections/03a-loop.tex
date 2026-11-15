@@ -1,0 +1,70 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{The learning loop}\label{sec:loop}
+
+Three projects divide the work, and the division is enforced by a layering file and a gate rather than
+by convention: \textbf{Sven} runs agents and keeps the record of what an agent did, \textbf{Brain}
+computes (inference, training, checkpoints, adapters, serving), and \textbf{Splinter} decides what is
+learned, which experience qualifies as training data, what to train and whether to release
+it.\cl{S05,S01,S02} \Cref{fig:arch} shows one turn. A source is captured with its provenance; a model
+proposes tasks and code admits or refuses each for a named reason; an agent attempts them in a confined
+copy of the tree; verifiers that the policy cannot reach keep what they confirm and an exposure audit
+withholds attempts that touched hidden material; verified experience is projected into training records
+with whole held-out groups; Brain trains an adapter or every weight from the current champion; and a
+release gate admits the candidate only if four checks on material it was not trained on pass
+(improvement by a paired sign test, retention of earlier releases, an anchor of general tasks, and
+agreement of the served model with the trained one). Releases are immutable, an alias moves, and
+rollback moves it back.\cl{A03,V02,L08,G01,X02,X06} Every stage is specified, with its ledger, in
+\cref{app:system}; this section is what the experiments below need.
+
+In the experiments of \cref{sec:rsi} the loop is reduced to one task kind whose answers an interpreter
+fixes, the verifier is the interpreter, and the release gate is replaced by the learner's own dev gate
+and, for the registered decision, by a separate examiner program. In \cref{sec:coding-summary} the full
+loop runs on repository tasks.
+
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}[fig]
+\tikzset{cell/.style={text width=29mm}}
+\def\dx{39mm}
+% row 1, left to right
+\node[data, cell] (src) at (0,0) {\textbf{source}:\\document, repository,\\command or session};
+\node[proc=okSky!22, cell] (task) at (\dx,0) {\textbf{tasks}: a model\\proposes, code\\admits (16 kinds)};
+\node[proc=okOrange!22, cell] (roll) at (2*\dx,0) {\textbf{attempts}: a Sven\\agent in a confined\\copy of the tree};
+\node[verif, cell] (ver) at (3*\dx,0) {\textbf{verifiers} and\\exposure audit\\(13 verifier kinds)};
+% row 2, right to left
+\node[data, cell] (data) at (3*\dx,-31mm) {\textbf{dataset}: views of\\verified experience,\\held-out groups};
+\node[proc=okPurple!22, cell] (train) at (2*\dx,-31mm) {\textbf{training} in Brain:\\LoRA, DPO or full,\\from the champion};
+\node[verif, cell] (gate) at (\dx,-31mm) {\textbf{release gate}:\\improvement,\\retention, anchor,\\serve};
+\node[data, cell] (rel) at (0,-31mm) {\textbf{release}:\\written once; an\\alias moves; rollback};
+% flows
+\draw[flow] (src) -- (task);
+\draw[flow] (task) -- (roll);
+\draw[flow] (roll) -- node[lab, right, pos=0.5] {} (ver);
+\draw[flow] (ver) -- node[lab, right] {verified\\experience} (data);
+\draw[flow] (data) -- (train);
+\draw[flow] (train) -- node[lab, above] {} (gate);
+\draw[flow] (gate) -- (rel);
+\draw[ctrl] (rel.north) -- node[lab, right, align=left] {next turn runs on\\the released policy} ++(0,9mm) -| ($(roll.south)+(-6mm,0)$);
+% what each stage refuses
+\draw[refuse] (src.north) -- ++(0,5mm) node[reflabel, above, align=center] {over 1 MiB, not text,\\dirty tree, no user step};
+\draw[refuse] (task.north) -- ++(0,5mm) node[reflabel, above, align=center] {21 reasons: ungrounded,\\duplicate, contradiction};
+\draw[refuse] (roll.north) -- ++(0,5mm) node[reflabel, above, align=center] {outside the tree,\\network: kernel-refused};
+\draw[refuse] (ver.north) -- ++(0,5mm) node[reflabel, above, align=center] {failed, exposed,\\undecided: withheld};
+\draw[refuse] (data.south) -- ++(0,-5mm) node[reflabel, below, align=center] {compacted, over the\\block, near-duplicate};
+\draw[refuse] (gate.south) -- ++(0,-5mm) node[reflabel, below, align=center] {any check failed\\or not measured};
+\draw[refuse] (rel.south) -- ++(0,-5mm) node[reflabel, below, align=center] {exists already,\\terms forbid it};
+% legend of the projects
+\node[proc=okSky!22, text width=14mm, minimum height=5mm, inner sep=1.5pt] (k1) at (0.6*\dx,-59mm) {Splinter};
+\node[proc=okOrange!22, text width=14mm, minimum height=5mm, inner sep=1.5pt, right=4mm of k1] (k2) {Sven};
+\node[proc=okPurple!22, text width=14mm, minimum height=5mm, inner sep=1.5pt, right=4mm of k2] (k3) {Brain};
+\node[verif, text width=14mm, minimum height=5mm, inner sep=1.5pt, right=4mm of k3] (k4) {verifier};
+\node[data, text width=14mm, minimum height=5mm, inner sep=1.5pt, right=4mm of k4] (k5) {record};
+\end{tikzpicture}
+\caption{The self-learning loop, read clockwise from the source. Every stage keeps what passes and
+refuses the rest with a named reason (dotted arrows; \cref{sec:intake,sec:admission,sec:verify,sec:dataset,sec:gate}
+give the full lists). Splinter owns tasks, verification, datasets, the gate and releases; Sven runs
+the attempts; Brain trains and serves. The dashed arrow is the next turn: attempts run on the policy
+the release alias points at.}\label{fig:arch}
+\end{figure}

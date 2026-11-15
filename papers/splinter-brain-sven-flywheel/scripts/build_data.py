@@ -338,6 +338,15 @@ def rsi_verdict_metrics(v):
          "signature": v["signature"]["alg"]}
     if "exclusion" in v:
         m.update(excluded=v["exclusion"]["excluded"], compared=v["exclusion"]["compared"])
+        if v["exclusion"].get("unexcluded"):
+            m["unexcluded_right"] = v["exclusion"]["unexcluded"]["items_right"]
+    if v.get("paired_gain"):
+        # the examiner's paired gain in the fraction of items right, with its 95% interval clustered over
+        # the exam's template families (the verdict states the family count, not the method's degrees
+        # of freedom; the interval is symmetric about the mean)
+        gain = v["paired_gain"]
+        m.update(gain=f"{gain['mean']:.4f}", gain_lo=f"{gain['interval'][0]:.4f}",
+                 gain_hi=f"{gain['interval'][1]:.4f}", gain_families=gain["families"])
     if "brain_sha256" in v.get("serving_build", {}):
         m["serving_brain"] = v["serving_build"]["brain_sha256"][:9]
     if "kv_cache" in v.get("serving", {}):
@@ -450,6 +459,48 @@ def rsi_gate_metrics(series, m):
     return out
 
 
+def t_cdf(x, df, steps=4000):
+    """P(T <= x) for Student's t with df degrees of freedom, by Simpson's rule over the density."""
+    from math import gamma, pi, sqrt
+    c = gamma((df + 1) / 2) / (sqrt(df * pi) * gamma(df / 2))
+    f = lambda t: c * (1 + t * t / df) ** (-(df + 1) / 2)
+    a, b = 0.0, abs(x)
+    h = (b - a) / steps
+    area = f(a) + f(b) + sum((4 if i % 2 else 2) * f(a + i * h) for i in range(1, steps))
+    half = area * h / 3
+    return 0.5 + half if x >= 0 else 0.5 - half
+
+
+def t_quantile(q, df):
+    """The q quantile of Student's t, by bisection on t_cdf."""
+    lo, hi = 0.0, 50.0
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if t_cdf(mid, df) < q else (lo, mid)
+    return (lo + hi) / 2
+
+
+def arm_interval_metrics(report):
+    """The documentation runs' arm comparison read again with uncertainty: for each pair of task-writer
+    arms, the difference of mean final-probe gains with its pooled two-sample t 95% interval, and the
+    smallest difference the replicates could detect (two-sided 0.05, power 0.8)."""
+    from math import sqrt
+    arms = {"sg": "self-generate", "fg": "fixed-generator", "tg": "teacher-generator"}
+    m = {}
+    for a, b in (("sg", "fg"), ("sg", "tg"), ("fg", "tg")):
+        x, y = report["arms"][arms[a]]["gains"], report["arms"][arms[b]]["gains"]
+        nx, ny = len(x), len(y)
+        mx, my = sum(x) / nx, sum(y) / ny
+        ss = sum((v - mx) ** 2 for v in x) + sum((v - my) ** 2 for v in y)
+        df = nx + ny - 2
+        se = sqrt(ss / df * (1 / nx + 1 / ny))
+        t975, t80 = t_quantile(0.975, df), t_quantile(0.8, df)
+        d = mx - my
+        m.update({f"{a}_{b}_diff": f"{d:.2f}", f"{a}_{b}_lo": f"{d - t975 * se:.2f}",
+                  f"{a}_{b}_hi": f"{d + t975 * se:.2f}", f"{a}_{b}_mde": f"{(t975 + t80) * se:.2f}"})
+    return m
+
+
 class NoParser(Exception):
     """A run whose metric prefix names no log shape this script reads: its values cannot be re-extracted."""
 
@@ -458,6 +509,8 @@ def parse_log(prefix, text):
     """The metrics of one raw log, by the shape its prefix names: a probe, a command-line run or
     the throughput probe. Used only to check measurements.json against the logs."""
     m = {}
+    if prefix.startswith("lua.armsci"):
+        return arm_interval_metrics(json.loads(text))
     if prefix.startswith("rsi1.arm."):
         return rsi1_analysis_metrics(json.loads(text))
     if prefix.startswith("rsi1.rl."):
@@ -628,8 +681,58 @@ def metrics():
     for series in ("rsi2", "rsi3", "rsi4"):
         m.update(rsi_pooled_metrics(series, m))
         m.update(rsi_gate_metrics(series, m))
+        m.update(rsi_cluster_metrics(series, m))
     m.update(frontier_entry_metrics())
+    m.update(multiplicity_metrics(m))
     return m
+
+
+# Two-sided 0.975 and one-sided 0.95 quantiles of the normal distribution.
+Z_975, Z_95 = 1.95996, 1.64485
+
+
+def rsi_cluster_metrics(series, m):
+    """COMPUTED, from the examiner's family-clustered 95% intervals: per step whether the two-sided interval
+    excludes zero, and the one-sided 95% lower bound read from it under two assumptions about how it was
+    formed (a t interval with families - 1 degrees of freedom, or a normal one); per series how many
+    lineages clear every step under the two-sided interval and under each one-sided bound."""
+    out, clears = {}, {"two_sided": 0, "lb_t": 0, "lb_z": 0}
+    for r in RSI_LINEAGES:
+        ok = {"two_sided": True, "lb_t": True, "lb_z": True}
+        for step in RSI_STEPS:
+            key = f"{series}.v.{r}.g{step}"
+            if f"{key}.gain" not in m:
+                ok = None
+                break
+            mean, lo = float(m[f"{key}.gain"]), float(m[f"{key}.gain_lo"])
+            df = m[f"{key}.gain_families"] - 1
+            half = mean - lo
+            lb_t = mean - half * t_quantile(0.95, df) / t_quantile(0.975, df)
+            lb_z = mean - half * Z_95 / Z_975
+            out[f"{key}.excludes_zero"] = "yes" if lo > 0 else "no"
+            out[f"{key}.lb_t"], out[f"{key}.lb_z"] = f"{lb_t:.4f}", f"{lb_z:.4f}"
+            ok["two_sided"] &= lo > 0
+            ok["lb_t"] &= lb_t > 0
+            ok["lb_z"] &= lb_z > 0
+        if ok:
+            for k in clears:
+                clears[k] += ok[k]
+    if any(k.endswith(".lb_t") for k in out):
+        out.update({f"{series}.cluster.lineages_{k}": v for k, v in clears.items()})
+    return out
+
+
+# Every registered test of self-improvement in the series, evaluated or not (prereg/recursive-improvement.md
+# and rsi2.md to rsi4.md); the multiplicity row of the summary table counts them.
+RSI_REGISTERED_TESTS = ("RSI1 A", "RSI1 B", "RSI1 H", "RSI1 HP", "RSI1 HR", "RSI1 R", "RSI1 P", "RSI1 P2",
+                        "RSI1 HL", "RSI1 HL rerun", "RSI2", "RSI3", "RSI4")
+
+
+def multiplicity_metrics(m):
+    """COMPUTED: the Bonferroni bound over every registered test of the weakest RSI4 step's item-level p."""
+    weakest = max(float(m[f"rsi4.v.{r}.g{g}.p"]) for r in RSI_LINEAGES for g in RSI_STEPS if f"rsi4.v.{r}.g{g}.p" in m)
+    n = len(RSI_REGISTERED_TESTS)
+    return {"rsi.tests": n, "rsi.weakest_p": fmt_p(weakest), "rsi.bonferroni": f"{min(1, weakest * n):.3f}"}
 
 
 def frontier_entry_metrics(samples=4):
@@ -745,7 +848,10 @@ def rsi_step_rows(series, label, m):
         key = f"{series}.v.{r}"
         if f"{key}.g1.right" not in m:
             continue
-        right = [m[f"{key}.g1.predecessor_right"]] + [m[f"{key}.g{g}.right"] for g in RSI_STEPS]
+        # a step compared on fewer items than the exam holds (an overlapping item excluded) is marked
+        right = [m[f"{key}.g1.predecessor_right"]] + [
+            f"{m[f'{key}.g{g}.right']}" + (r"$^\dagger$" if m.get(f"{key}.g{g}.compared", 0)
+                                            < m.get(f"{key}.g{g}.items", 0) else "") for g in RSI_STEPS]
         steps = [f"{m[f'{key}.g{g}.wins']}/{m[f'{key}.g{g}.losses']} & {tex_p(m[f'{key}.g{g}.p'])}" for g in RSI_STEPS]
         held = all(m[f"{key}.g{g}.holds"] == "yes" for g in RSI_STEPS)
         rows.append(f"{r} & " + " & ".join(map(str, right)) + " & " + " & ".join(steps)
@@ -788,6 +894,23 @@ def rsi_items_csv(series, m):
             key = f"{series}.v.{r}.g{max(g, 1)}.{'predecessor_right' if g == 0 else 'right'}"
             cells.append(str(m.get(key, "nan")))
         out.append(f"{g}," + ",".join(cells))
+    return "\n".join(out) + "\n"
+
+
+def rsi_forest_csv(series, m):
+    """Each lineage step's paired gain with the examiner's family-clustered 95% interval, top to bottom
+    (y counts down), and whether the registered item-level step holds, for the forest plot."""
+    out = ["y,label,gain,minus,plus,holds"]
+    y = 0
+    for r in RSI_LINEAGES:
+        for g in RSI_STEPS:
+            key = f"{series}.v.{r}.g{g}"
+            if f"{key}.gain" in m:
+                gain, lo, hi = (float(m[f"{key}.{f}"]) for f in ("gain", "gain_lo", "gain_hi"))
+                out.append(f"{y},{r} g{g},{gain:.4f},{gain - lo:.4f},{hi - gain:.4f},"
+                           f"{1 if m[key + '.holds'] == 'yes' else 0}")
+            y -= 1
+        y -= 1
     return "\n".join(out) + "\n"
 
 
@@ -859,6 +982,7 @@ def write_outputs(out):
     for series, _ in RSI_SERIES:
         (out / f"{series}_items.csv").write_text(rsi_items_csv(series, m))
         (out / f"{series}_steps.csv").write_text(rsi_steps_csv(series, m))
+        (out / f"{series}_forest.csv").write_text(rsi_forest_csv(series, m))
     macros_extra = f"\\newcommand{{\\alphalevel}}{{{ALPHA}}}\n"
     with open(out / "macros.tex", "a") as handle:
         handle.write(macros_extra)

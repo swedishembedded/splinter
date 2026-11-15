@@ -14,6 +14,8 @@
 \usepackage{lmodern}
 \usepackage[margin=2.5cm]{geometry}
 \usepackage{microtype}
+% Commands must copy as typed: no -- or --- ligatures in typewriter text.
+\DisableLigatures[-]{family=tt*}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{enumitem}
@@ -54,7 +56,7 @@
   flow/.style={->, line width=0.7pt, black!80},
   ctrl/.style={->, line width=0.7pt, dashed, black!60},
   refuse/.style={->, line width=0.8pt, densely dotted, okVermillion},
-  reflabel/.style={font=\footnotesize\itshape, text=okVermillion!85!black, align=left},
+  reflabel/.style={font=\small\itshape, text=okVermillion!85!black, align=left},
   lab/.style={font=\footnotesize, fill=white, inner sep=1.2pt, align=center},
   tag/.style={font=\footnotesize\scshape, text=black!65},
 }
@@ -83,7 +85,7 @@
 % measurement carries the ids of its rows in data/claims.csv.
 \newcommand{\cl}[1]{\textsuperscript{\scriptsize\textcolor{gray}{[#1]}}}
 
-\title{Verified Agent Experience to Released Adapters: A Self-Learning Loop for Local Models}
+\title{Self-Taught Generations on a Held-Out Exam:\\ A Verified, Preregistered Learning Loop for Local Models}
 \author{Martin Schröder\\
 Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
 \date{November 2026\\[0.3em]\textsc{\mPaperStatus} version}
@@ -94,23 +96,29 @@ Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded
 \input{sections/00-abstract}
 \input{sections/01-introduction}
 \input{sections/02-related}
+\input{sections/03a-loop}
+\input{sections/08d-rsi}
+\input{sections/04b-coding-summary}
+\input{sections/08c-generations}
+\input{sections/08b-documentation}
+\input{sections/10-limitations}
+\input{sections/11-reproducibility}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\crefalias{section}{appendix}
+\crefalias{subsection}{subappendix}
 \input{sections/03-architecture}
 \input{sections/04-training-release}
 \input{sections/05-substrate}
 \input{sections/06-requirements}
 \input{sections/07-coding-protocol}
 \input{sections/08-pending}
-\input{sections/08b-documentation}
-\input{sections/08c-generations}
-\input{sections/08d-rsi}
 \input{sections/09-replication}
-\input{sections/10-limitations}
-\input{sections/11-reproducibility}
-
-\appendix
 \input{sections/12-deviations}
+\input{sections/13-glossary}
 
-\bibliographystyle{plainnat}
-\bibliography{references}
 
 \end{document}

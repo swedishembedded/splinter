@@ -125,6 +125,14 @@ class ExaminerRecords(unittest.TestCase):
         self.assertEqual((m["kv"], m["max_tokens"], m["truncated"]), ("f32", 2048, "graded"))
         self.assertEqual(m["exam"], "60ac3ae44651")
 
+    def test_a_verdict_carries_its_family_clustered_interval_and_its_count_before_exclusion(self):
+        v = verdict(225, 181, 99, 55, 2.45e-4, True, 0, "f32")
+        v["paired_gain"] = {"families": 25, "interval": [-0.01876857, 0.11775620], "items": 889, "mean": 0.04949381}
+        v["exclusion"]["unexcluded"] = {"items_right": 226}
+        m = build_data.parse_log("rsi4.v.r1.g3", json.dumps(v))
+        self.assertEqual((m["gain"], m["gain_lo"], m["gain_hi"], m["gain_families"]), ("0.0495", "-0.0188", "0.1178", 25))
+        self.assertEqual(m["unexcluded_right"], 226)
+
     def test_a_verdict_without_an_exclusion_record_reports_none_rather_than_zero(self):
         m = build_data.parse_log("rsi2.v.r0.g1", json.dumps(verdict(4, 0, 4, 0, 0.0625, False)))
         self.assertNotIn("excluded", m)
@@ -171,6 +179,20 @@ class ExaminerRecords(unittest.TestCase):
     def test_the_frontier_rule_admits_a_mostly_right_program_with_the_stated_chance(self):
         m = build_data.frontier_entry_metrics()
         self.assertEqual((m["rsi4.frontier.entry_q90"], m["rsi4.frontier.entry_q50"]), ("0.34", "0.94"))
+
+    def test_t_quantiles_match_the_tables(self):
+        self.assertAlmostEqual(build_data.t_quantile(0.975, 24), 2.0639, places=3)
+        self.assertAlmostEqual(build_data.t_quantile(0.95, 24), 1.7109, places=3)
+
+    def test_a_lineage_clears_the_clustered_test_only_if_every_step_does(self):
+        m = {}
+        for r, lo3 in (("r0", "-0.0190"), ("r1", "0.0100")):
+            for g in (1, 2, 3):
+                m.update({f"rsi9.v.{r}.g{g}.gain": "0.0607", f"rsi9.v.{r}.g{g}.gain_lo": lo3 if g == 3 else "0.0200",
+                          f"rsi9.v.{r}.g{g}.gain_families": 25})
+        out = build_data.rsi_cluster_metrics("rsi9", m)
+        self.assertEqual((out["rsi9.v.r0.g3.excludes_zero"], out["rsi9.cluster.lineages_two_sided"]), ("no", 1))
+        self.assertEqual(out["rsi9.v.r0.g3.lb_t"], "-0.0054")
 
     def test_an_rsi1_analysis_is_read_per_step_and_per_replicate(self):
         a = {"gen1-vs-gen0": {"per_replicate": {"0": {"from": 0, "to": 38, "wins": 38, "losses": 0}},

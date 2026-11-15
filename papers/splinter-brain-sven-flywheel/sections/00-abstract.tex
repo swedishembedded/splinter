@@ -2,25 +2,25 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 \begin{abstract}
-A local model can keep learning from a team's documents, tools and repositories only if the path
-from a source to a released model can be inspected stage by stage and its effect is measured on
-material the learner never saw. We describe a self-learning loop built from three cooperating
-projects, Splinter (what is learned), Brain (training and serving) and Sven (agents): code admits
-the tasks a model proposes, an agent attempts them, typed verifiers keep what they confirm, verified
-experience becomes training data, and a candidate is released only through a four-check gate, with
-immutable releases and rollback. We report what the loop did under tests registered before their
-runs, including those that did not show a gain. On repository tasks the registered confirmatory query
-did not show an 8B adapter distilled from a 27B teacher better than its base (18 families won, 12 lost,
-$p=0.18$), while a same-seed contrast of the supervision did separate (26 won, 11 lost, $p=0.010$).\cl{QUAL1}
-Two promoted generations of a 27B model trained on its own agent experience did not beat their base
-on one measurement.\cl{G2703,G2704} With no teacher, a 4B model learned a language's standard library
-from the raw manual, and whether it, its base or a 27B model wrote its tasks did not change the
-gain.\cl{SL23} Four registered series then asked whether a model teaching itself improves at every
-generation on an exam it never reads, judged by an independent examiner. Three did not meet their
-criterion. The fourth did, in all four lineages: Qwen3-4B, retrained from the base each generation on
-the interpreter-verified frontier of its own Lua~5.1 programs, beat its predecessor at each of three
-generations on 889 items its base could not answer, rising from 12 items right to between 192 and
-241, with the weakest step won 67 to 36 ($p=0.00146$).\cl{RS28,RS29} Every statement about the system
-or a measurement carries an id in a claims ledger that is re-checked against the three repositories at
-pinned commits or against the raw records.
+We study whether a local model can improve over several generations by training on material it
+produces itself. We call a series of generations self-taught when each generation's training material
+is proposed by the previous generation's model and labelled only by an executable oracle, with no
+stronger model and no human answer, and we say it improves when each generation beats the one it was
+trained from on a held-out exam. This is iterated self-training with an oracle labeller; we do not test
+whether an improved model is a better improver. Four series were registered before their runs and
+judged per lineage by a separate examiner program that holds the exam, which the learner never reads,
+excludes items that match any trained program, and returns signed aggregate verdicts. In the first
+three series no per-lineage criterion was met (two early arms met pooled criteria that cannot tell one
+improving model from gains spread over replicates). The fourth met it: in four lineages of Qwen3-4B predicting the output of Lua~5.1
+programs, each generation retrained from the base on every program its predecessors proposed and
+predicted wrong at least once, with the interpreter's output as the label, beat its predecessor at all three generations by an
+exact sign test over 889 items the base never answered when the exam was selected (it answers 12 of them
+at the serving tier used), reaching 192 to 241 items. Under the examiner's intervals clustered over the
+exam's 25 program templates, generations 1 and 2 improve in every lineage but generation 3 does so in
+only one or two of the four, and the training data grows from 300 to 2100 records across generations, a
+confound that a registered matched-data control and a fresh-exam re-examination, not yet run, address.
+The same loop, built from Splinter (what is learned), Brain (training, serving) and Sven (agents), did not
+show a gain where it was registered on repository tasks with a stronger teacher, nor over two generations
+of a 27B model on its own agent experience. Every statement carries an id in a claims ledger checked
+against pinned code or raw records.
 \end{abstract}
