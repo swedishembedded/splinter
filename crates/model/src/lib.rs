@@ -19,6 +19,9 @@
 //!   base checkpoint, shared by every model on it, each model's adapter
 //!   attached before its generation, and every base released when other
 //!   work needs the device.
+//! * [`scratch`] - a model trained from random weights through brain's API:
+//!   a tokenizer and random-init checkpoint of a named architecture,
+//!   pretraining, a full chat fine-tune, serving; missing capabilities named.
 //! * [`seed`] - where the seed of a run that was given none comes from.
 //! * [`selection`] - which model a stage runs on (local weights, or a model
 //!   reached over an API), the identity every record gives it, and the
@@ -63,6 +66,7 @@ pub mod precision;
 mod progress;
 pub mod report;
 pub mod rl;
+pub mod scratch;
 #[cfg(feature = "scripted")]
 pub mod scripted_endpoint;
 #[cfg(feature = "scripted")]
