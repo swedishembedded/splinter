@@ -193,6 +193,19 @@ $(PAPER_DIRS): %: %/pdf
 $(PAPER_TARGETS): papers/%/pdf:
 	$(MAKE) -C papers/$*
 
+# Papers whose Makefile builds an arXiv source archive beside the PDF.
+ARXIV_DIRS := $(patsubst %/Makefile,%,$(shell grep -l '^arxiv/check:' papers/*/Makefile))
+ARXIV_TARGETS := $(addsuffix /arxiv,$(ARXIV_DIRS))
+ARXIV_CHECK_TARGETS := $(addsuffix /arxiv/check,$(ARXIV_DIRS))
+
+## papers/<name>/arxiv - build that paper's arXiv source archive (built with its PDF too)
+$(ARXIV_TARGETS): papers/%/arxiv:
+	$(MAKE) -C papers/$* arxiv
+
+## papers/<name>/arxiv/check - rebuild the archive and compile it in a clean room as arXiv would
+$(ARXIV_CHECK_TARGETS): papers/%/arxiv/check:
+	$(MAKE) -C papers/$* arxiv/check
+
 ## samples - lists the sample targets; runs nothing (build one with build/crate/<package>)
 samples:
 	@bash scripts/make-help.sh samples
@@ -502,7 +515,7 @@ help:
 	deps deps/local deps/lua deps/tlaplus deps/lock \
 	hooks hooks/install \
 	qualify qualify/list qualify/test qualify/run \
-	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) \
+	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) $(ARXIV_TARGETS) $(ARXIV_CHECK_TARGETS) \
 	samples samples/generations samples/generations/anchor-200 samples/tool-syntax samples/tool-syntax/audit samples/repo-replay samples/repo-replay/audit samples/model-check samples/model-check/audit samples/model-check/report \
 	docs docs/build docs/check docs/pdf docs/clean _docs-publisher-pin \
 	agents agents/roadmap agents/roadmap/index

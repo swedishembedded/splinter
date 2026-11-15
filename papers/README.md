@@ -8,6 +8,11 @@ Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 `make papers/<name>/pdf` (or `make papers/pdf` for all) builds a paper into
 `target/papers/<name>.pdf`.
 
+A paper whose Makefile has an `arxiv/check` target also writes its arXiv source archive,
+`target/papers/<name>-arxiv.tar.gz`, in the same build, and checks it by compiling it in an empty
+directory (`make papers/<name>/arxiv/check` reruns that check). Upload the archive to arXiv as it is;
+it holds only what pdflatex reads, with comments removed.
+
 Each paper has one question, stated as its scope in the introduction. A new
 verified finding goes into the paper whose scope it falls in, in the same change
 that produces it (see `.agents/rules/papers.md`). A paper is a draft until it

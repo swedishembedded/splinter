@@ -14,13 +14,13 @@ each cited record by its path in the unpacked dataset and its digest. Every comm
 contained in a branch of its repository's remote; \code{make verify} fails on a pin that is not.
 
 \paragraph{Three tiers.} The targets are run in the paper's directory
-(\code{make -C papers/splinter-brain-sven-flywheel <target>}); downloads, builds and outputs land
+(\code{make -C} with the paper's directory); downloads, builds and outputs land
 under \code{target/papers}, and \code{EVIDENCE\_DIR}, \code{REPRO}, \code{BRAIN\_SRC}, \code{SVEN\_SRC},
 \code{DEVICE} and \code{LOCK} move them, name the clones and the card (\code{make reproduce} lists
 the tiers).
 
 \begin{center}\small
-\begin{tabular}{@{}p{0.17\linewidth}p{0.47\linewidth}p{0.30\linewidth}@{}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.21\linewidth}>{\raggedright\arraybackslash}p{0.47\linewidth}>{\raggedright\arraybackslash}p{0.26\linewidth}@{}}
 \toprule
 Target & What it reproduces & Hardware and time \\
 \midrule
@@ -101,3 +101,9 @@ is appended to its registration.
 \begin{center}\code{make papers/splinter-brain-sven-flywheel/pdf}\end{center}
 into \code{target/papers}; every table, plot and number of the series S1--S4 and of the coding-task pilots
 is generated from \code{data/} into the build directory.
+The same build writes \code{target/papers/splinter-brain-sven-flywheel-arxiv.tar.gz}, the source archive
+for arXiv: the main file, the sections, the generated tables, macros and plot data at the paths the
+source names, the bibliography and its \code{.bbl}, with comments removed. The build compiles the
+archive in an empty directory with \code{pdflatex} and \code{bibtex} and with \code{latexmk}, and
+fails unless both give the main PDF's page count with no error or undefined reference; the archive is
+uploaded as it is.
