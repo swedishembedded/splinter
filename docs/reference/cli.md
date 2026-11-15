@@ -1298,7 +1298,7 @@ Subcommands:
 
 #### splinter harness optimise
 
-Search a space of variants of a baseline harness for one that verifiably beats it: each candidate is run on the task set through sven, its attempts verified by the tasks' own verifiers and compared with the baseline's (a family counted once). A candidate is promoted only when no family got worse and the sign test over families finds it better; the promotion moves the `harness/champion` pointer
+Search a space of variants of a baseline harness for one that verifiably beats it: each candidate is run on the task set through sven, its attempts verified by the tasks' own verifiers and compared with the baseline's (a family counted once). A candidate is promoted only when no family got worse and the sign test over families finds it better (or, with `--gate evidence`, the evidence gate's e-process crosses its level); the promotion moves the `harness/champion` pointer
 
 ```text
 splinter harness optimise [OPTIONS] --baseline <FILE> --evaluations <N> --search-seed <N> <TASKSET-ID>
@@ -1321,7 +1321,11 @@ Options:
 - `--strategy <STRATEGY>`: How candidates are searched. Default: `annealing`. Values: `best-of-n`, `annealing`.
 - `--evaluations <N>` (required): Harnesses to evaluate, the baseline's replicate (the first) included.
 - `--attempts <K>`: Solves per task and harness. Default: `1`.
+- `--gate <GATE>`: The test a candidate must pass to be promoted. Default: `sign-test`. Values: `sign-test`, `evidence`.
 - `--alpha <P>`: A candidate's sign test must have a p-value below this to be promoted. Default: `0.05`.
+- `--gate-eps <EPS>`: With `--gate evidence`: the tolerated loss, on the paired difference scale [-1, 1]; a candidate worse by this much is a false evolution.
+- `--gate-q <Q>`: With `--gate evidence`: the false evolution rate budget over the search's evaluations.
+- `--gate-beta <BETA>`: With `--gate evidence`: the overlap correction, the optimism allowed on a task an earlier evaluation was graded on (every task after the first evaluation)
 - `--min-paired <N>`: The fewest tasks with a verdict in both arms for a promotion. Default: `5`.
 - `--search-seed <N>` (required): Seeds the search's draws; the same seed reproduces the candidates drawn.
 - `--interval-seed <N>`: The seed the comparisons' intervals are resampled with (drawn and printed when not given)

@@ -17,18 +17,99 @@
 //! Anything short of that is rejected (a regression) or inconclusive (no
 //! regression, but no evidence of improvement), and the dense score the
 //! search follows is only guidance: it never promotes.
+//!
+//! The sign test is the default. [`PromotionTest::Evidence`] replaces it with
+//! the evidence gate: a noninferiority e-process over the paired tasks, each
+//! evaluation a round of a false evolution budget planned over the search
+//! ([`evidence_outcome`]); the family-regression veto applies to both.
 
 use serde::Serialize;
+use splinter_eval::campaign::evidence::{Allocation, EProcess, EvidenceError, EvidenceGate};
 
 use crate::compare::SetComparison;
+
+/// The test a candidate's evidence must pass.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PromotionTest {
+    /// The one-sided sign test over families, its p-value below `alpha`.
+    SignTest {
+        /// The level.
+        alpha: f64,
+    },
+    /// The evidence gate over the paired tasks.
+    Evidence(EvidenceGate),
+}
 
 /// What the evidence has to show.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PromotionRule {
-    /// The sign test's p-value must be below this.
-    pub alpha: f64,
+    /// The test.
+    pub test: PromotionTest,
     /// The fewest tasks with a verdict in both arms; fewer is inconclusive.
     pub min_paired: usize,
+}
+
+/// What the evidence gate found for one candidate.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct EvidenceOutcome {
+    /// The evaluation's level and budget.
+    pub allocation: Allocation,
+    /// The mixture e-value at the stop.
+    pub e_value: f64,
+    /// The threshold, `1 / alpha`.
+    pub threshold: f64,
+    /// Paired tasks the e-process took (up to the crossing).
+    pub observed: usize,
+    /// The paired task, from 1, at which it crossed.
+    pub crossed_at: Option<usize>,
+    /// The exposure of every task: one once an earlier evaluation was graded
+    /// on the same frozen set, zero for the first.
+    pub zeta: f64,
+}
+
+/// The paired differences of a comparison, one per paired task (a win
+/// `1`, a loss `-1`, a tie `0`), family by family; the caller orders them
+/// at random before the e-process reads them.
+#[must_use]
+pub fn differences(comparison: &SetComparison) -> Vec<f64> {
+    comparison
+        .families
+        .iter()
+        .flat_map(|f| {
+            std::iter::repeat_n(1.0, f.wins)
+                .chain(std::iter::repeat_n(-1.0, f.losses))
+                .chain(std::iter::repeat_n(0.0, f.ties))
+        })
+        .collect()
+}
+
+/// The evidence gate's e-process over `differences`, in the order given, at
+/// the level of `allocation`, every task with exposure `zeta`.
+///
+/// # Errors
+/// A difference outside `[-1, 1]` or an exposure outside `[0, 1]`.
+pub fn evidence_outcome(
+    gate: &EvidenceGate,
+    allocation: &Allocation,
+    differences: &[f64],
+    zeta: f64,
+) -> Result<EvidenceOutcome, EvidenceError> {
+    let mut process = EProcess::new(gate, allocation.alpha);
+    if allocation.alpha > 0.0 {
+        for &difference in differences {
+            if process.observe(difference, zeta)? {
+                break;
+            }
+        }
+    }
+    Ok(EvidenceOutcome {
+        allocation: *allocation,
+        e_value: process.value(),
+        threshold: process.threshold(),
+        observed: process.observed(),
+        crossed_at: process.crossed_at(),
+        zeta,
+    })
 }
 
 /// The numbers a decision rests on, read from a comparison.
@@ -46,6 +127,9 @@ pub struct Evidence {
     pub improved_families: usize,
     /// The one-sided sign test's p-value over families.
     pub p_value: f64,
+    /// What the evidence gate found; only under [`PromotionTest::Evidence`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<EvidenceOutcome>,
 }
 
 impl Evidence {
@@ -64,6 +148,7 @@ impl Evidence {
                 .collect(),
             improved_families: comparison.clusters.wins,
             p_value: comparison.sign_test.p_value,
+            evidence: None,
         }
     }
 
@@ -119,20 +204,45 @@ pub fn decide(evidence: &Evidence, rule: &PromotionRule) -> Decision {
             ),
         );
     }
-    if evidence.improved_families > 0 && evidence.p_value < rule.alpha {
+    let alpha = match rule.test {
+        PromotionTest::SignTest { alpha } => alpha,
+        PromotionTest::Evidence(_) => {
+            return match &evidence.evidence {
+                Some(found) if found.crossed_at.is_some() => decision(
+                    Verdict::Promote,
+                    format!(
+                        "no family regressed, e-value {:.3} reached 1/{:.4} after {} paired tasks",
+                        found.e_value, found.allocation.alpha, found.observed
+                    ),
+                ),
+                Some(found) => decision(
+                    Verdict::Inconclusive,
+                    format!(
+                        "no family regressed, but e-value {:.3} stayed below 1/{:.4} over {} paired tasks",
+                        found.e_value, found.allocation.alpha, found.observed
+                    ),
+                ),
+                None => decision(
+                    Verdict::Inconclusive,
+                    "the evidence gate was not computed for this candidate".to_string(),
+                ),
+            };
+        }
+    };
+    if evidence.improved_families > 0 && evidence.p_value < alpha {
         return decision(
             Verdict::Promote,
             format!(
-                "{} families improved, none regressed, sign test p = {:.4} < {}",
-                evidence.improved_families, evidence.p_value, rule.alpha
+                "{} families improved, none regressed, sign test p = {:.4} < {alpha}",
+                evidence.improved_families, evidence.p_value
             ),
         );
     }
     decision(
         Verdict::Inconclusive,
         format!(
-            "no family regressed, but sign test p = {:.4} is not below {}",
-            evidence.p_value, rule.alpha
+            "no family regressed, but sign test p = {:.4} is not below {alpha}",
+            evidence.p_value
         ),
     )
 }
@@ -140,9 +250,10 @@ pub fn decide(evidence: &Evidence, rule: &PromotionRule) -> Decision {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use splinter_eval::campaign::evidence::Budget;
 
     const RULE: PromotionRule = PromotionRule {
-        alpha: 0.05,
+        test: PromotionTest::SignTest { alpha: 0.05 },
         min_paired: 4,
     };
 
@@ -154,6 +265,7 @@ mod tests {
             regressed_families: regressed.iter().map(ToString::to_string).collect(),
             improved_families: improved,
             p_value,
+            evidence: None,
         }
     }
 
@@ -183,6 +295,49 @@ mod tests {
         assert_eq!(
             decide(&evidence(&[], 0, 1.0, 10), &RULE).verdict,
             Verdict::Inconclusive
+        );
+    }
+
+    #[test]
+    fn under_the_evidence_gate_only_a_crossing_promotes_and_a_regression_still_rejects() {
+        let gate = EvidenceGate::new(0.02, 0.3, 0.01).unwrap();
+        let rule = PromotionRule {
+            test: PromotionTest::Evidence(gate),
+            min_paired: 4,
+        };
+        let allocation = Budget::start(&gate).allocate(&gate, 4);
+        let wins = [1.0; 12];
+        let ties = [0.0; 12];
+        let with = |found: EvidenceOutcome, regressed: &[&str]| {
+            let mut e = evidence(regressed, 0, 1.0, 12);
+            e.evidence = Some(found);
+            decide(&e, &rule)
+        };
+        let crossed = evidence_outcome(&gate, &allocation, &wins, 1.0).unwrap();
+        assert!(crossed.crossed_at.is_some());
+        assert_eq!(
+            with(crossed.clone(), &[]).verdict,
+            Verdict::Promote,
+            "the p-value is not read"
+        );
+        assert_eq!(with(crossed, &["parsing"]).verdict, Verdict::Reject);
+        let flat = evidence_outcome(&gate, &allocation, &ties, 1.0).unwrap();
+        assert_eq!((flat.crossed_at, flat.observed), (None, 12));
+        assert_eq!(with(flat, &[]).verdict, Verdict::Inconclusive);
+        assert_eq!(
+            decide(&evidence(&[], 5, 0.001, 12), &rule).verdict,
+            Verdict::Inconclusive,
+            "no e-process, no promotion"
+        );
+        let skipped = Allocation {
+            alpha: 0.0,
+            ..allocation
+        };
+        assert_eq!(
+            evidence_outcome(&gate, &skipped, &wins, 1.0)
+                .unwrap()
+                .observed,
+            0
         );
     }
 

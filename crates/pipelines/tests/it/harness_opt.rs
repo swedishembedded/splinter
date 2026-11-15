@@ -32,9 +32,10 @@ use splinter_agent::solve::Model;
 use splinter_core::clock::FixedClock;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
+use splinter_eval::campaign::evidence::EvidenceGate;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
-use splinter_pipelines::harness_opt::gate::{PromotionRule, Verdict};
+use splinter_pipelines::harness_opt::gate::{PromotionRule, PromotionTest, Verdict};
 use splinter_pipelines::harness_opt::space::MutationSpace;
 use splinter_pipelines::harness_opt::{
     optimise, OptimiseRequest, ProposerChoice, CHAMPION_POINTER,
@@ -203,7 +204,7 @@ fn request<'a>(
         parallelism: 1,
         attempts: 1,
         rule: PromotionRule {
-            alpha: 0.1,
+            test: PromotionTest::SignTest { alpha: 0.1 },
             min_paired: 3,
         },
         // seed: the search seed fixes which candidates are drawn, and the
@@ -241,6 +242,50 @@ fn a_candidate_that_verifiably_solves_what_the_baseline_does_not_is_promoted() {
         .unwrap()
         .unwrap();
     assert!(champion["document"].as_str().unwrap().contains("MEND"));
+}
+
+#[test]
+fn under_the_evidence_gate_each_evaluation_is_a_round_of_one_budget_and_the_improvement_crosses() {
+    let (_scratch, ctx, tasks) = context_with_tasks("harness-opt-evidence");
+    let solver = ModelRef::policy_default();
+    let baseline = harness(PLAIN);
+    let gate = EvidenceGate::new(0.02, 0.6, 0.01).unwrap();
+    let mut asked = request(&tasks, &solver, &baseline);
+    asked.rule.test = PromotionTest::Evidence(gate);
+
+    let report = optimise(&ctx, &asked).unwrap();
+
+    let rounds: Vec<_> = report
+        .candidates
+        .iter()
+        .map(|c| {
+            c.evidence
+                .evidence
+                .clone()
+                .expect("every evaluation is tested")
+        })
+        .collect();
+    assert_eq!(
+        rounds
+            .iter()
+            .map(|r| r.allocation.round)
+            .collect::<Vec<_>>(),
+        (1..=report.candidates.len() as u32).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        rounds[0].zeta, 0.0,
+        "nothing was graded before the replicate"
+    );
+    assert!(rounds[1..].iter().all(|r| r.zeta == 1.0));
+    assert!(rounds.iter().map(|r| r.allocation.charge).sum::<f64>() <= gate.q + 1e-12);
+    assert_eq!(report.candidates[0].decision.verdict, Verdict::Inconclusive);
+    let promoted = report.promoted.as_ref().expect("the improvement crosses");
+    let line = &report.candidates[promoted.index as usize];
+    let found = line.evidence.evidence.as_ref().unwrap();
+    assert!(
+        found.crossed_at.is_some() && found.e_value >= found.threshold,
+        "{line:#?}"
+    );
 }
 
 #[test]

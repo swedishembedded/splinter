@@ -14,16 +14,17 @@ use std::path::Path;
 
 use serde_json::json;
 use splinter_sdk::agent::sven::search::Strategy;
-use splinter_sdk::harness_opt::gate::PromotionRule;
+use splinter_sdk::harness_opt::gate::{PromotionRule, PromotionTest};
 use splinter_sdk::harness_opt::space::MutationSpace;
 use splinter_sdk::harness_opt::{optimise, OptimiseRequest, ProposerChoice};
+use splinter_sdk::measure::campaign::evidence::EvidenceGate;
 use splinter_sdk::runs::record;
 use splinter_sdk::solving::{harness_protocol, solve_tasks, SamplingChoice, SolveRequest};
 use splinter_sdk::tasks::resolve_set as resolve_task_set;
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::{HarnessCommand, ProposerArg, SolveArgs, StrategyArg};
+use crate::cli::{HarnessCommand, PromotionGateArg, ProposerArg, SolveArgs, StrategyArg};
 use crate::output::emit;
 use crate::session::Exit;
 
@@ -78,6 +79,20 @@ pub fn harness(ctx: &Context, json: bool, command: HarnessCommand) -> Result<Exi
         .map(MutationSpace::parse)
         .transpose()
         .map_err(|e| Error::Refused(e.to_string()))?;
+    let test = match (args.gate, args.gate_eps, args.gate_q, args.gate_beta) {
+        (PromotionGateArg::SignTest, None, None, None) => {
+            PromotionTest::SignTest { alpha: args.alpha }
+        }
+        (PromotionGateArg::Evidence, Some(eps), Some(q), Some(beta)) => PromotionTest::Evidence(
+            EvidenceGate::new(eps, q, beta).map_err(|e| Error::Refused(e.to_string()))?,
+        ),
+        _ => {
+            return Err(Error::Refused(
+                "--gate-eps, --gate-q and --gate-beta go together, with --gate evidence only"
+                    .into(),
+            ))
+        }
+    };
     let proposer = match (args.proposer, &args.proposer_model) {
         (ProposerArg::Model, Some(model)) => ProposerChoice::Model {
             model: model.clone(),
@@ -105,6 +120,10 @@ pub fn harness(ctx: &Context, json: bool, command: HarnessCommand) -> Result<Exi
         "evaluations": args.evaluations,
         "attempts": args.attempts,
         "alpha": args.alpha,
+        "gate": format!("{:?}", args.gate),
+        "gate_eps": args.gate_eps,
+        "gate_q": args.gate_q,
+        "gate_beta": args.gate_beta,
         "min_paired": args.min_paired,
         "search_seed": args.search_seed,
         "interval_seed": args.interval_seed,
@@ -123,7 +142,7 @@ pub fn harness(ctx: &Context, json: bool, command: HarnessCommand) -> Result<Exi
                 parallelism: args.parallel,
                 attempts: args.attempts,
                 rule: PromotionRule {
-                    alpha: args.alpha,
+                    test,
                     min_paired: args.min_paired,
                 },
                 search_seed: args.search_seed,

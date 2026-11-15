@@ -24,6 +24,14 @@
 //! The first evaluation of a search is the baseline itself against the
 //! baseline's own arm: a replicate that shows how much two identical runs
 //! differ, and the search's starting point.
+//!
+//! Under [`gate::PromotionTest::Evidence`] every evaluation is a round of one
+//! false evolution budget planned over `evaluations`: its level is taken from
+//! the budget when it starts, before its arm runs, and its paired tasks are
+//! read by the e-process in an order drawn from the search seed. Every task
+//! of the frozen set was graded by each earlier evaluation, so from the
+//! second evaluation on every draw counts as reused. The budget lives for one
+//! run: a new `optimise` starts from the whole of `q`.
 
 pub mod gate;
 pub mod llm;
@@ -41,7 +49,8 @@ use splinter_agent::sven::search::{
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
-use splinter_core::rng::Seed;
+use splinter_core::rng::{Seed, SplitMix64};
+use splinter_eval::campaign::evidence::{Allocation, Budget};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::experiences::SetId;
@@ -50,9 +59,16 @@ use splinter_store::tasks::TaskSetId;
 use crate::compare::compare;
 use crate::solving::{harness_protocol, solve_tasks, SamplingChoice, SolveRequest};
 use crate::verify::{verify_set, Grading};
-use gate::{decide, Decision, Evidence, PromotionRule, Verdict};
+use gate::{
+    decide, differences, evidence_outcome, Decision, Evidence, PromotionRule, PromotionTest,
+    Verdict,
+};
 use llm::{Feedback, LlmProposer, ProposalStats};
 use space::{MutationProposer, MutationSpace};
+
+/// Mixed into the search seed so the order the e-process reads an
+/// evaluation's tasks in is a stream of its own.
+const EVIDENCE_ORDER_SALT: u64 = 0x0D0E_5EED_DEF0_0D03;
 
 /// The document class a promotion is stored under.
 const CHAMPION: &str = "harness_champion";
@@ -216,6 +232,31 @@ struct HarnessEnvironment<'scope, 'env: 'scope> {
     baseline_set: SetId,
     feedback: &'env Feedback,
     findings: Findings,
+    /// The evidence gate's budget, shared by evaluations in flight; `None`
+    /// under the sign test.
+    budget: Mutex<Option<Budget>>,
+}
+
+impl HarnessEnvironment<'_, '_> {
+    fn lock_budget(&self) -> Result<std::sync::MutexGuard<'_, Option<Budget>>, SearchError> {
+        self.budget
+            .lock()
+            .map_err(|_| SearchError::environment("the evidence budget is poisoned"))
+    }
+
+    /// Under the evidence gate, the level of the evaluation about to start,
+    /// taken from the budget before its arm runs.
+    fn reserve(&self) -> Result<Option<Allocation>, SearchError> {
+        let PromotionTest::Evidence(gate) = self.request.rule.test else {
+            return Ok(None);
+        };
+        let horizon = u32::try_from(self.request.evaluations).unwrap_or(u32::MAX);
+        let mut held = self.lock_budget()?;
+        let budget = held.get_or_insert_with(|| Budget::start(&gate));
+        let allocation = budget.allocate(&gate, horizon);
+        budget.reserve(&allocation);
+        Ok(Some(allocation))
+    }
 }
 
 impl CandidateEnvironment<String> for HarnessEnvironment<'_, '_> {
@@ -227,6 +268,7 @@ impl CandidateEnvironment<String> for HarnessEnvironment<'_, '_> {
         // The pipeline stages are blocking and drive runtimes of their own,
         // so each runs on its own thread and is awaited through a channel.
         let (done, reply) = tokio::sync::oneshot::channel();
+        let round = self.reserve()?;
         let (ctx, request, baseline_set) = (self.ctx, self.request, self.baseline_set.clone());
         let document = candidate.clone();
         self.scope.spawn(move || {
@@ -240,8 +282,27 @@ impl CandidateEnvironment<String> for HarnessEnvironment<'_, '_> {
             .await
             .map_err(|_| SearchError::environment("the evaluation thread panicked"))?
             .map_err(SearchError::environment)?;
-        let evidence = Evidence::of(&comparison);
+        let mut evidence = Evidence::of(&comparison);
+        if let (PromotionTest::Evidence(gate), Some(allocation)) = (self.request.rule.test, round) {
+            let mut order = differences(&comparison);
+            SplitMix64::new(
+                self.request.search_seed
+                    ^ EVIDENCE_ORDER_SALT
+                    ^ u64::from(allocation.round).rotate_left(32),
+            )
+            .shuffle(&mut order);
+            let zeta = if allocation.round > 1 { 1.0 } else { 0.0 };
+            evidence.evidence = Some(
+                evidence_outcome(&gate, &allocation, &order, zeta)
+                    .map_err(|e| SearchError::environment(e.to_string()))?,
+            );
+        }
         let decision = decide(&evidence, &self.request.rule);
+        if decision.verdict == Verdict::Promote {
+            if let Some(budget) = self.lock_budget()?.as_mut() {
+                budget.accept();
+            }
+        }
         self.feedback.record(
             candidate,
             format!(
@@ -304,6 +365,11 @@ pub fn optimise(
     if matches!(request.proposer, ProposerChoice::Mutation) && request.space.is_none() {
         return refuse("the mutation proposer needs a mutation space");
     }
+    if let PromotionTest::Evidence(gate) = request.rule.test {
+        if let Err(e) = gate.validate() {
+            return refuse(&e.to_string());
+        }
+    }
     let baseline_set = run_arm(ctx, request, request.baseline)?;
     let feedback = Feedback::default();
     let budget = SearchBudget {
@@ -344,6 +410,7 @@ pub fn optimise(
             baseline_set: baseline_set.clone(),
             feedback: &feedback,
             findings: Mutex::default(),
+            budget: Mutex::default(),
         };
         let report = match (&llm, &mutation) {
             (Some(proposer), _) => {

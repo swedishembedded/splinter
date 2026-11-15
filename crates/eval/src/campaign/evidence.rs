@@ -237,11 +237,27 @@ impl Budget {
         }
     }
 
-    /// Records the outcome of the round `allocation` was made for.
+    /// Records the outcome of the round `allocation` was made for:
+    /// [`Self::reserve`], then [`Self::accept`] when it was accepted.
     pub fn settle(&mut self, allocation: &Allocation, accepted: bool) {
+        self.reserve(allocation);
+        if accepted {
+            self.accept();
+        }
+    }
+
+    /// Takes the round's charge before its outcome is known, as the paper's
+    /// algorithm does: rounds that run at once each get the level the budget
+    /// leaves them, and an acceptance not yet known only makes a level
+    /// smaller.
+    pub fn reserve(&mut self, allocation: &Allocation) {
         self.remaining = allocation.budget_after;
         self.rounds = allocation.round;
-        self.accepted += u32::from(accepted);
+    }
+
+    /// Counts an accepted round.
+    pub fn accept(&mut self) {
+        self.accepted += 1;
     }
 
     /// The budget spent so far out of `gate.q`.
@@ -462,6 +478,19 @@ mod tests {
         let beyond = budget.allocate(&g, 4);
         assert_eq!((beyond.alpha, beyond.charge), (0.0, 0.0));
         assert_eq!(budget.accepted, 1);
+    }
+
+    #[test]
+    fn reserving_before_the_outcome_and_accepting_after_is_settling() {
+        let g = gate(0.1, 0.3, 0.01);
+        let (mut settled, mut split) = (Budget::start(&g), Budget::start(&g));
+        let first = settled.allocate(&g, 5);
+        settled.settle(&first, true);
+        split.reserve(&first);
+        let concurrent = split.allocate(&g, 5);
+        split.accept();
+        assert_eq!(split, settled);
+        assert!(concurrent.alpha <= settled.allocate(&g, 5).alpha);
     }
 
     #[test]

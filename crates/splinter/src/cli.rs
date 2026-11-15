@@ -775,7 +775,7 @@ pub use generation::GenerationCommand;
 pub use global::Global;
 pub use goal::GoalCommand;
 pub use harbor::{HarborCommand, OracleArg};
-pub use harness::{HarnessCommand, ProposerArg, StrategyArg};
+pub use harness::{HarnessCommand, PromotionGateArg, ProposerArg, StrategyArg};
 pub use improve::ImproveArgs;
 pub use jobs::{help as jobs_help, JobsArgs, JobsCommand};
 pub use learn::{LearnArgs, TaskHarnessArgs};
