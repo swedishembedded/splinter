@@ -57,7 +57,7 @@ signed plan verdict reads `plan_met: true` (3 series succeeded, 0 failed). The l
 | r0 | 92 (82/2, 1.8e-22) | 138 (69/23, 8.4e-7) | 192 (93/39, 1.5e-6) | yes |
 | r1 | 131 (121/2, 7.2e-34) | 181 (79/29, 8.0e-7) | 225 (99/55, 2.5e-4) | yes |
 | r2 | 118 (109/3, 4.5e-29) | 169 (79/28, 4.2e-7) | 241 (95/23, 6.9e-12) | yes |
-| r3 | 121 (110/1, 4.3e-32) | 187 (93/27, 5.6e-10) | pending at writing | - |
+| r3 | 121 (110/1, 4.3e-32) | 187 (93/27, 5.6e-10) | 218 (67/36, 0.0015) | yes |
 
 Pooled over the lineages examined: gen 1 vs base 422/8 (p 1.0e-113), gen 2 vs gen 1 320/107 (p 4.8e-26), gen 3 vs gen 2 287/117 over
 three lineages (p 6.9e-18). One exam item matched a training program in r2 and was excluded from r2's comparisons; no other overlap and
@@ -68,3 +68,7 @@ and the examiner served on gpu3 instead of gpu1. What this establishes: on this 
 and no stronger model or human answer, three independent lineages of self-taught generations, each retrained from the base on the
 interpreter-verified frontier of its own proposals, improved at each of three generations on an exam the learner never saw. What it
 does not establish: transfer to other tasks or models, or behaviour beyond three generations.
+
+- 2026-11-15 ~06:50 (r3 generation 3, examined after the outcome above was written): 218 vs 187 (67/36, p 0.0015), the step holds, 0
+  excluded, no flag. The signed plan verdict now reads 4 series succeeded, 0 failed; pooled gen 3 vs gen 2 over four lineages 354/153
+  (p 1.1e-19). All four lineages improved at every generation.
