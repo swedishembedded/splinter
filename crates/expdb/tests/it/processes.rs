@@ -19,19 +19,20 @@ use std::process::{Child, Command};
 
 use common::Scratch;
 
-/// The `probe` example, built next to the test binary.
+/// The `probe` example: `examples/probe` in the profile directory the test
+/// binary was built under. Cargo puts the test binary in `deps/` of that
+/// directory, or (with its newer build-directory layout) deeper, under
+/// `build/<package>/<hash>/out/`; the example stays in `<profile>/examples/`,
+/// so the nearest ancestor that holds it is the one.
 fn probe() -> PathBuf {
-    let mut dir = std::env::current_exe().unwrap();
-    dir.pop();
-    if dir.ends_with("deps") {
-        dir.pop();
-    }
-    let path = dir.join("examples").join("probe");
-    assert!(
-        path.exists(),
-        "missing {path:?}: run `cargo test -p splinter-expdb`, which builds the probe example"
-    );
-    path
+    let exe = std::env::current_exe().unwrap();
+    let found = exe
+        .ancestors()
+        .map(|dir| dir.join("examples").join("probe"))
+        .find(|path| path.exists());
+    found.unwrap_or_else(|| {
+        panic!("no examples/probe above {exe:?}: run `cargo test -p splinter-expdb`, which builds the probe example")
+    })
 }
 
 fn spawn(args: &[&str]) -> Child {
