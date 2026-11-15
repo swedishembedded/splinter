@@ -17,7 +17,6 @@
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -79,8 +78,20 @@ impl Rig {
         let root = tempfile::tempdir().unwrap();
         let sven = root.path().join("bin/sven");
         std::fs::create_dir_all(sven.parent().unwrap()).unwrap();
-        std::fs::write(&sven, FAKE_SVEN).unwrap();
-        std::fs::set_permissions(&sven, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // The executable is written by another process (`install`), never
+        // through a descriptor of this one: a test thread forking while this
+        // process held the file open for writing would carry that descriptor
+        // until its exec, and running the fake then fails "text file busy".
+        let draft = root.path().join("sven.draft");
+        std::fs::write(&draft, FAKE_SVEN).unwrap();
+        let installed = std::process::Command::new("install")
+            .arg("-m")
+            .arg("0755")
+            .arg(&draft)
+            .arg(&sven)
+            .status()
+            .unwrap();
+        assert!(installed.success(), "install {draft:?} -> {sven:?}");
         // The fake reads its settings from beside itself.
         let solve = root.path().join("solve");
         std::fs::create_dir_all(&solve).unwrap();
