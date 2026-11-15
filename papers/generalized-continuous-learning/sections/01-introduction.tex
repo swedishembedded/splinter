@@ -8,8 +8,13 @@ generation did not improve on that exam, the model never reasoned before answeri
 separate the generational loop from the amount of verified data. Thinking enabled, the untrained base already answered far more
 of the same exam than the best trained generation answered directly.
 
+Continuous learning in the sense of this paper is not training on everything a model encounters. It is a system that turns
+verified experience into competence that is reused: every generation better than the last on tasks it never trained on, earlier
+competence retained, and, ultimately, new task families acquired faster than before. Each of these is a separate measurement,
+and none follows from a rising training score.
+
 \paragraph{Scope.} This paper asks whether the same three systems (Splinter as the learning controller, Sven as the model
 client, Brain as the serving and training engine) produce continuous improvement: every generation better than its predecessor
-on held-out exams judged by a separate examiner, for as many generations as are run, and on task families beyond the first.
-A finding belongs here if it changes what is claimed about, or how one would measure, improvement across successive generations
-of a model taught by an executable environment.
+on held-out exams judged by a separate examiner, for as many generations as are run, with retention and the compute spent
+reported beside the gain, and on task families beyond the first. A finding belongs here if it changes what is claimed about, or
+how one would measure, improvement across successive generations of a model taught by an executable environment.

@@ -4,8 +4,12 @@
 
 Each generation repeats one cycle. The current champion proposes programs; the interpreter runs them and records their output.
 The champion then answers each program several times with thinking enabled, and the interpreter checks every final answer.
-For each program answered correctly at least once, the shortest correct reasoning trace is kept, in the spirit of
-self-taught reasoning~\cite{zelikman2022star} and self-training on verified samples~\cite{singh2023rest}. A fresh adapter is
-trained from the base on all verified traces kept so far, and it replaces the champion only if it passes a gate on the
-learner's own development tasks. The learner hands each new champion, with the list of programs it trained on, to the examiner,
-and never receives anything back except signed aggregate verdicts.
+A program enters the training set only where the champion's answers disagree with each other in correctness: sometimes right,
+sometimes wrong. Problems the model always solves teach little, and problems it never solves give no verified trace to learn
+from; the same rule is what makes a group of sampled answers informative for policy-gradient training (dynamic sampling
+in~\cite{yu2025dapo}). For each admitted program the shortest correct reasoning trace is kept, in the spirit of self-taught
+reasoning~\cite{zelikman2022star} and self-training on verified samples~\cite{singh2023rest}. A fresh adapter is trained from
+the base on all verified traces kept so far, and it replaces the champion only if it passes a gate on the learner's own
+development tasks; the gate may reject, and a rejected candidate is recorded with its evidence. The learner hands each new
+champion, with the list of programs it trained on, to the examiner, and never receives anything back except signed aggregate
+verdicts.

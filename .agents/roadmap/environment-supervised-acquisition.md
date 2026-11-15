@@ -52,12 +52,70 @@ states as supervision).
 9. **Other domains** (cross-domain plan): Python output prediction (near free), the compiled document-rule environment, then
    stateful and agentic domains once reasoning and policy-gradient numerics are qualified.
 
+10. **Learning to learn across task families (the decisive test).** Train sequentially on three or four distinct environments
+    sharing one evidence format (Lua output prediction, Python output prediction, a vemu peripheral, repository tasks), then start
+    an unseen family with identical tool access, memory and budget: does the trained policy reach a fixed competence threshold
+    with fewer verified experiences and less compute than the original policy? Primary metrics: time-to-competence, experiences
+    to threshold, learning-curve area; retention of earlier families beside it.
+11. **Memory vs weights.** Where a task family has external memory (procedures, verified claims, retrieval), every checkpoint is
+    examined in four conditions: base without memory, base with the updated memory, updated weights without memory, both. Store
+    knowledge in the cheapest form that makes it reliably usable (an exact fact in retrieval, a tested procedure in procedural
+    memory, a general decision skill in weights); a weight update is justified only by what the memory-only condition cannot do.
+12. **Partial-success extraction.** Long episodes (agentic, vemu) fail as wholes but contain verified subgoals, verified failures
+    and recoveries. Re-verify each successful segment in a fresh environment before promoting it (procedure memory, SFT record);
+    hindsight relabelling of what an episode did achieve; local counterfactual corrections (observed state, actual action, a
+    better action that was executed and verified). A failure is classified (wrong action, missing information, wrong order,
+    environment nondeterminism, impossible task, verifier wrong) before anything learns from it.
+13. **Learning-value selection.** Separate features rather than one hand-tuned scalar: verified correctness, novelty, learning
+    progress, decision uncertainty (the boundary rule: sometimes right, sometimes wrong, which is also what makes a policy-gradient
+    group informative, cf. dynamic sampling in DAPO, arXiv 2503.14476), transfer potential, regression relevance, cost.
+    A starting allocation to ablate, not a validated one: 40% frontier, 20% transfer and composition, 15% prioritised replay,
+    15% uncertainty-driven experiments, 10% random coverage. The examiner's distribution stays fixed so a shifted measurement
+    cannot pass for improvement.
+14. **Retention by prioritised replay.** Five collections (current, historical replay, boundary cases, transfer tests, protected
+    evaluations); replay prefers items with demonstrated regression over uniform sampling; compare ordinary mixed replay,
+    priority replay, replay with a gradient-alignment term (conflict diagnostic g_new . g_old < 0), a frozen base with per-skill
+    adapters (bounded: no adapter per task forever) and periodic consolidation into one shared adapter.
+15. **Exploration as experiment.** Epistemic actions (choose the experiment that best separates competing hypotheses about the
+    environment per cost) beside instrumental ones, conditioned on the objective and expected reuse; an optional small outcome
+    predictor guides exploration but never replaces a real observation when grading.
+16. **Method by evidence.** Memory, then verified demonstrations, then SFT, then online RL, then consolidation, as a default, not
+    a rule: RL with all-equal rewards in a group has no signal, so bootstrap by verified demonstrations or decomposition first.
+    Distil expensive teacher discoveries into short verified procedures, judged on different tasks that need the same principle.
+
+The essential ablation for each domain, at matched compute and separately at matched environment interactions, several seeds:
+baseline; memory only; memory + SFT; + RL; + active curriculum. A component that does not beat the simpler variant is removed or
+redesigned. The system may decide that no weight update is justified (better data, a corrected verifier, more memory instead).
+
 ## Evaluation streams (kept separate)
 
 - Development feedback: available to the learning controller.
 - Retention probes: fresh variants of previously acquired capabilities.
 - Final transfer tests: sealed, never available to curriculum or method selection; the examiner keeps item-level results for
   later analysis, the learner never receives them.
+
+## Reporting (every experiment)
+
+Per-generation and per-domain learning curves with intervals, forward and backward transfer, retention, sample efficiency,
+verified gain per GPU-hour (proposal, prediction, training and gating included), worst-case regression, and the full history of
+accepted and rejected updates with each parent checkpoint and its evidence.
+
+## Risks to design against
+
+Faulty environment feedback (reference implementations, an environment reliability status: a wrong emulator teaches wrong rules
+efficiently); reward hacking (the learner never controls grading; hidden tests and verifier definitions outside writable
+environments); exploration that finds nothing to learn from; memorisation without transfer; forgetting; contaminated or
+contradictory memory (provenance, uncertainty and contradiction stored, not flattened into facts); skill-library explosion;
+capacity limits of a 4B model; redundant rollouts; measurement noise accepted as gain; self-confirming world models; drift;
+agent, memory, examiner and environment co-adapting (answered only by independent evaluation on environments and distributions
+that took no part in learning).
+
+## Sources to check before citing (from a November 2026 research synthesis; none verified yet)
+
+AgentCL (arXiv 2606.02461), When Continual Learning Moves to Memory (2604.27003), Revisiting Replay and Gradient Alignment
+(PMLR v330, abbes26a), AgentHER (2603.21357), Agent Lightning (microsoft/agent-lightning), Active Inference and Artificial
+Reasoning (Nature Communications 2026), Building World Models from Intrinsic Motivation (2611.13113), Agent-R1, AgentFly, a
+bandit-sampled GRPO study on Qwen2.5-1.5B arithmetic. DAPO (2503.14476) is a known, existing paper.
 
 ## Known gaps to close on the way
 
