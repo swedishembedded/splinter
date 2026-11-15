@@ -1,0 +1,33 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Related work for the system}\label{app:related-system}
+
+\emph{Parameter-efficient training.} LoRA freezes the base and trains low-rank
+adapters;~\citep{lora2021}\cl{CT03} QLoRA does so over a base quantised to 4~bits;~\citep{qlora2023}\cl{CT04} DPO optimises
+preferences without a separate reward model.~\citep{dpo2023}\cl{CT05} The flywheel uses LoRA and DPO as
+objectives it selects, and delegates their computation to Brain (\cref{sec:training}).
+\emph{Retrieval-aware fine-tuning.} RAFT trains a model on domain documents with
+distractor passages;~\citep{raft2024}\cl{CT06} Splinter has an optional passage-mixing share of the same
+family (\cref{sec:dataset}), which we do not evaluate here.
+\emph{Forgetting.} Catastrophic forgetting is the loss of earlier capability when a
+network is trained on new data;~\citep{ewc2016}\cl{CT07} Splinter's response is empirical: it measures
+retention against every earlier release at release time (\cref{sec:gate}).
+\emph{Memory and compute for training.} Recomputing activations trades compute for memory
+in the backward pass;~\citep{recompute2016}\cl{CT08} fused or chunked cross-entropy avoids materialising the
+logits of a large vocabulary;~\citep{cutxent2024}\cl{CT09} FlashAttention computes exact attention without
+materialising the score matrix;~\citep{flashattention2022}\cl{CT10} Gated DeltaNet is a gated linear-attention layer based on the delta rule
+and is the recurrent layer type of the 27B model Brain implements (three Gated DeltaNet
+layers to one attention layer).~\citep{gateddelta2024}\cl{CT11,B11} Section~\ref{sec:substrate}
+reports which of these Brain contains.
+\emph{Repository tasks and agents.} SWE-bench poses resolving real GitHub issues as the task,
+graded by the repository's tests;~\citep{swebench2023}\cl{CT12} SWE-agent shows that the
+interface between the model and the repository changes what a model achieves, so the interaction,
+not only the final patch, is what is recorded and trained on.~\citep{sweagent2024}\cl{CT13}
+SWE-Gym, R2E-Gym and SWE-smith build executable \emph{training} environments, by collecting
+instances, by procedural generation from commits and by modifying code so that tests
+fail.~\citep{swegym2024,r2egym2025,swesmith2025}\cl{CT14} We take the mutation-and-validate
+idea and the commit-based idea as task producers (\cref{sec:protocol}). The difference
+in aim is that the target here is one repository's own tasks, reserved before rollouts and
+evaluated paired against the base under an identical harness, with retention on earlier
+repositories and a replication on a second one registered (and not run, \cref{sec:limitations}); we make no claim about priority.

@@ -1,0 +1,43 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{What did not work before S4}\label{sec:earlier}
+
+\Cref{tab:rsi-all} lists every registered test; \cref{app:series} gives each with its numbers. S1 (one
+registration with dated arms, graded by its own scripts before the examiner existed) found that gains on
+the loop's own probes were mostly adaptation to the probing protocol, built the exam, and showed large
+first steps on it with self-proposed programs labelled by the interpreter; third steps did not hold
+within a lineage, and arms that replaced the labels with rewards on the policy's own attempts (self-imitation
+of reasoning, policy gradient) did not move the exam.\cl{RS11,RS12,RS15,RS17} S2, on-policy policy
+gradient, moved the exam by 2 to 4 items per lineage at generation~1 and no step held.\cl{RS19} S3 trained
+a continued adapter on the champion's greedy mispredictions: all four lineages improved at generations 1
+and 2, but at generation 3 one held flat and one fell, and over the four lineages the mispredicted share
+of proposals fell from 2127 of 2400 to 860 of 1942.\cl{RS22,RS23} S4 therefore retrained from the base
+on a growing frontier. The adaptive design search on one exam is why a fresh exam is
+registered.\cl{CT22,RS39}
+
+\begin{table}[tbp]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.13\linewidth}>{\raggedright\arraybackslash}p{0.33\linewidth}>{\raggedright\arraybackslash}p{0.21\linewidth}>{\raggedright\arraybackslash}p{0.27\linewidth}@{}}
+\toprule
+Test & What it trained on & Registered criterion & Outcome \\
+\midrule
+S1 A & own tasks, closed-book loop & gen.~3 beats gen.~2 & not met; gains were protocol adaptation\cl{RS11,RS42} \\
+S1 B & A without starving proposals & gen.~2 and 3 each improve & not met\cl{RS42} \\
+S1 H & own programs, interpreter labels & pooled steps, no replicate falls & met (pooled)\cl{RS12} \\
+S1 HP & H in Python & as H & not met at gen.~3\cl{RS13} \\
+S1 HR & HP with replay and pooled retention & as H & met (pooled), each step's gain from one replicate\cl{RS14} \\
+S1 R & own verified reasoning & monotone gain on unseen families & not met\cl{RS15} \\
+S1 P, P2 & policy gradient, two update scales & as R & not met\cl{RS15} \\
+S1 HL & H's recipe, four lineages & 2 of 4 lineages & not evaluated (disk quota)\cl{RS16} \\
+S1 HL rerun & as HL & 2 of 4 lineages & not met, 1 of 4\cl{RS17} \\
+S2 & on-policy policy gradient & 3 of 4 lineages & not met, 0 of 4\cl{RS19} \\
+S3 & own frontier, continued adapter & 3 of 4 lineages & not met, 2 of 4\cl{RS22} \\
+S4 & own frontier, retrained from the base & 3 of 4 lineages & met, 4 of 4 (clustered: 1 or 2 of 4)\cl{RS29,RS38} \\
+\bottomrule
+\end{tabular}
+\caption{Every registered test of the four series, in order (P and P2 are two tests). One per-lineage
+criterion was met, S4's; the pooled criteria H and HR met cannot tell one improving model from gains
+spread over replicates.}\label{tab:rsi-all}
+\end{table}

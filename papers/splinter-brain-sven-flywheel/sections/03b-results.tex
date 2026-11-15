@@ -1,0 +1,136 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Results}\label{sec:rsi}
+
+\subsection{S4: retraining from the base on a doubling frontier}\label{sec:rsi4}
+
+S4 changed what S3's records pointed at (\cref{sec:earlier}), and with it the schedule
+(\cref{fig:cycle}). \emph{Retraining from the base}: generation $g$'s candidate is a fresh LoRA trained
+from the base on the union of every generation's frontier, not a continuation of generation $g-1$'s
+adapter; only the data of generation $g$ is new, proposed and predicted by generation $g-1$'s
+champion. \emph{Frontier selection}: a program enters when at least one of the champion's 4 sampled
+predictions (temperature 1.0) is wrong, so the frontier also holds programs it usually gets right: one
+predicted right with probability 0.9 per sample enters with probability 0.34.\cl{RS25,RS35}
+\emph{Schedule}: 300, 600 and 1200 new programs per generation, two passes over the union, no separate
+replay, so the generations trained on 300, 900 and 2100 records for 75, 225 and 525 steps.\cl{RS25,RS26}
+These changes were made together and no ablation separates them. Before any verdict, the examiner's
+null replicate (base against base) found no discordant item, the base was served at the configuration
+under which it answers 12 exam items (\cref{app:series}), and the examiner's build was changed so that
+it identifies the declared base by the checkpoint's content.\cl{RS07,RS27,RS06}
+
+\begin{table}[tbp]
+\centering\small
+\setlength{\tabcolsep}{3.4pt}
+\input{generated/rsi_table}
+\caption{S3 and S4 as the examiner decided them: items right of 889 and each step's wins/losses
+with the exact one-sided sign test (a step holds at $p<0.05$ with wins above losses; the criterion is
+3 of 4 lineages holding at every step). Pooled rows sum the lineage rows (they equal the plan verdict's) and are descriptive, without a test, because the lineages share the exam's items.\cl{RS30} $^\dagger$~r2 is compared on the 888 items left after one overlapping item was excluded; at generation~3 it answered 242 of the 889 before the exclusion. S4 trained on \mRsiFourDevRZeroGOneTrainedRecords{}, \mRsiFourDevRZeroGTwoTrainedRecords{} and \mRsiFourDevRZeroGThreeTrainedRecords{} cumulative records at generations 1 to 3. S3's base was served under a different configuration from S4's (\cref{app:series}), so compare steps, not levels.}\label{tab:rsi}
+\end{table}
+
+\paragraph{Outcome (adapter level).} All twelve S4 steps held (\cref{tab:rsi}). From 12 items at the
+base the lineages reached 192, 225, 241 and 218 at generation~3; the weakest step, r3's third, won 67
+items and lost 36 ($p=0.0015$).\cl{RS28} The plan verdict reads met, 4 of 4 lineages where the rule
+needed 3.\cl{RS29} One exam item equalled a program lineage r2 trained on from generation~1, a base
+proposal; the examiner excluded it from r2's comparisons and raised its overlap flag on r2's three
+verdicts; no other overlap or flag was raised, and no request failed.\cl{RS31,RS40,RS50}
+
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[paper, group style={group size=2 by 1, horizontal sep=6mm, y descriptions at=edge left},
+  width=0.5\linewidth, height=7.4cm, xmin=-0.06, xmax=0.19, ymin=-14.7, ymax=0.7,
+  xtick={-0.05,0,0.05,0.1,0.15}, xticklabel style={/pgf/number format/fixed, /pgf/number format/precision=2},
+  ytick={0,-1,-2,-4,-5,-6,-8,-9,-10,-12,-13,-14},
+  yticklabels={r0 g1,r0 g2,r0 g3,r1 g1,r1 g2,r1 g3,r2 g1,r2 g2,r2 g3,r3 g1,r3 g2,r3 g3},
+  ymajorgrids=false, xlabel={paired gain (share of 889 items)},
+  extra x ticks={0}, extra x tick labels={}, extra x tick style={grid style={black!80, thick}},
+  error bars/error bar style={line width=0.9pt}, error bars/error mark options={rotate=90, mark size=2.5pt}]
+\nextgroupplot[title={S3},
+  legend style={at={(1.03,-0.2)}, anchor=north, legend columns=2, /tikz/every even column/.append style={column sep=5mm}}]
+\addplot[only marks, mark=*, mark size=2.2pt, okBlue, error bars/.cd, x dir=both, x explicit]
+  table[col sep=comma, x=gain, y=y, x error minus=minus, x error plus=plus,
+        restrict expr to domain={\thisrow{holds}}{1:1}] {generated/rsi3_forest.csv};
+\addplot[only marks, mark=o, mark size=2.4pt, thick, okVermillion, error bars/.cd, x dir=both, x explicit]
+  table[col sep=comma, x=gain, y=y, x error minus=minus, x error plus=plus,
+        restrict expr to domain={\thisrow{holds}}{0:0}] {generated/rsi3_forest.csv};
+\legend{registered sign test holds, registered sign test does not hold}
+\nextgroupplot[title={S4}]
+\addplot[only marks, mark=*, mark size=2.2pt, okBlue, error bars/.cd, x dir=both, x explicit]
+  table[col sep=comma, x=gain, y=y, x error minus=minus, x error plus=plus,
+        restrict expr to domain={\thisrow{holds}}{1:1}] {generated/rsi4_forest.csv};
+\addplot[only marks, mark=o, mark size=2.4pt, thick, okVermillion, error bars/.cd, x dir=both, x explicit]
+  table[col sep=comma, x=gain, y=y, x error minus=minus, x error plus=plus,
+        restrict expr to domain={\thisrow{holds}}{0:0}] {generated/rsi4_forest.csv};
+\end{groupplot}
+\end{tikzpicture}
+\caption{Every step's paired gain with the examiner's 95\% interval clustered over the exam's 25
+program templates, read from the signed verdicts. Filled points are steps whose registered item-level
+sign test holds, open points steps whose test does not. Every first and second S4 step excludes zero;
+of the third steps only r2's does, and r0's, r1's and r3's reach below zero, so the third generation's
+gain is not robust to the clustering of items by template in three lineages.}\label{fig:rsi-forest}
+\end{figure}
+
+\subsection{Template level: the clustered intervals}\label{sec:rsi-robust}
+
+The sign test counts the 889 items as independent, but they come from 25 templates. The examiner also
+reports, for every step, the mean per-item paired difference $d_i\in\{-1,0,1\}$ with a cluster-robust
+standard error over templates, $\sqrt{\tfrac{G}{G-1}\sum_{c}\big(\sum_{i\in c}(d_i-\bar d)\big)^2}\,/\,n$
+with $G=25$, and a two-sided Student-$t$ 95\% interval with $G-1=24$ degrees of freedom
+(\cref{fig:rsi-forest}). Every S4 step at generations 1 and 2 excludes zero. At generation~3 only r2's
+interval does (0.0811, from 0.0267 to 0.1355); r0's, r1's and r3's include zero. The matching one-sided
+95\% bounds are $-0.0054$, $-0.0071$, 0.0360 and 0.0003 for r0 to r3. At the template level, then, the
+third generation improves in one lineage (two-sided) or two (one-sided) of four, and a 3-of-4 rule would
+not be met; in S3 no lineage clears all three steps.\cl{RS38} The average generation-3 gain over the
+lineages is 5.7 points; its clustered interval needs the item-level grades, which the verdicts do not
+carry, as they carry no per-template counts.\cl{RS53}
+
+\subsection{What the learner's records show}\label{sec:rsi-process}
+
+\paragraph{Step 1 is inflated by selection.} The exam was selected from items the base got wrong, so
+at step 1 the base can lose at most the 12 items it answers, and lost 2, 2, 3 and 1; steps 2 and 3 are
+not so constrained.\cl{RS28} The fresh exam, whose items are not selected by the base's answers,
+removes this.\cl{RS39}
+
+\paragraph{Churn.} Items right are not cumulative mastery. At step 3 the new adapter lost 28\%, 30\%,
+14\% and 19\% of the items its predecessor answered (r0 to r3) while winning 12.4\%, 14.0\%, 13.2\% and
+9.5\% of those it missed, although it was trained on a superset of its predecessor's data from the same
+base.\cl{RS48} Without a retrain of the same data under another training seed, which is registered
+(\cref{sec:followups}), this churn has no noise floor.
+
+\paragraph{Dev accuracy and frontier yield.} On each lineage's own 400-program dev set, which was not
+selected by failure, accuracy rose from 0.4025, 0.40, 0.435 and 0.545 at the base to 0.67, 0.6525, 0.65
+and 0.725 at generation~3 (\cref{fig:teaser}).\cl{RS46} The champions kept proposing programs they could
+not predict: the share of predicted proposals on the frontier fell from 84--93\% at generation~1 to
+61--71\% at generation~2 and 47--54\% at generation~3, so even the third champion missed about half of
+its own proposals.\cl{RS47}
+
+\paragraph{The dev gate filtered nothing.} As run, the learner's gate advanced every candidate with a
+positive net dev gain; significance at its spent alpha (0.025, 0.0083 and 0.0042 at generations 1 to 3)
+was recorded, not required. Three of S4's twelve accepted steps (r1's third, r3's second and third) and
+six of S3's twelve were not significant at that alpha, and in S3 two accepted steps did not hold on the
+exam. At r1's third step the gate saw 25 dev wins against 19 losses ($p=0.226$) while the exam
+showed 99 against 55.\cl{RS49,RS24,RS33} TRUST replaces such a greedy gate with an online multiple-testing procedure that
+controls the rate of accepted inferior updates;~\citep{trust2026}\cl{CT15} a gate of that kind exists in
+the learner as an option but no series used it.\cl{RS34}
+
+\subsection{Registered follow-ups (not yet run)}\label{sec:followups}
+
+Two follow-ups were registered after S4's outcome and before any of their runs, and amended once, before
+any verdict.\cl{RS41,RS52} \emph{F}, a re-examination of the base and the twelve S4 champions on an exam
+drawn afresh by the examiner (at least 50 templates and 1500 items, not selected by the base's answers),
+judged by the registered per-lineage sign test and, co-primary, by the one-sided template-clustered
+interval, with the lineage-averaged step gain, strata by old and new template and by the base's answer,
+per-template counts, a similarity audit, and descriptive baselines (the base with thinking on, its
+four-sample majority answer, and a 27B sibling). \emph{M}, the matched-data control: four lineages in
+which the \emph{base} proposes until it holds 2100 frontier programs, trained once from the base, compared
+with the four generation-3 champions on F by the difference of mean accuracy with an interval resampling
+templates and lineages jointly and an equivalence margin of 2 points, with arms at 900 records (M-900)
+and a seed-null retrain of each generation-3 training set.\cl{RS52} Their outcome decides the framing:
+generation~3 better than M means the improvement compounds; equivalence means verified data volume
+suffices; M better means one round is enough; an inconclusive result leaves the question open. None of
+their results is part of this version.\cl{RS39}
+
+\paragraph{Scope.} The result holds for one task family, one base model, three rounds and LoRA training
+on interpreter labels, on an exam of 25 templates reused across the four series; it makes no claim of
+transfer to other tasks or models.

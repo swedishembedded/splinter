@@ -1,0 +1,103 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{The earlier series in detail}\label{app:series}
+
+\subsection{S1: self-taught generations, judged first pooled and then per lineage}\label{sec:rsi1}
+
+S1 is one registration with dated arms, each added before it ran; its exams were selected and
+graded by the arm's own registered analysis script, without a separate examiner.\cl{RS01} Arms A and B
+ran the closed-book loop of \cref{sec:documentation} for three generations and were judged on the
+loop's own probes; re-graded under a neutral request, most of the gain they measured was adaptation
+to the probing protocol and did not transfer.\cl{RS11} Arm H therefore built the exam described
+above and measured every generation on it greedily under the neutral request. Its three replicates,
+trained only on tasks their own models wrote, answered 38, 31 and 34 of the 889 items at
+generation~1, 60, 63 and 49 at generation~2 and 67, 83 and 59 at generation~3 (base 0); pooled over the
+replicates the steps were 103/0, 95/26 and 103/66 wins/losses ($p=0.00273$ at the third) with no
+replicate falling, which met the registered pooled criterion.\cl{RS12} The same design in Python
+(arm HP, 820 items, base 2) met its first two steps (49/7 and 83/8) and not the third (59/50,
+$p=0.222$), where one replicate fell from 69 to 60.\cl{RS13} Arm HR added replay across generations
+and a pooled retention bound and met the pooled criterion (66/4, 16/1, 25/3), but each step's gain came
+from a single replicate, so it is not evidence that one lineage improved twice.\cl{RS14} Three arms
+changed the update instead: self-imitation of the model's own verified reasoning (R) and policy
+gradient with negative rewards at two update scales (P, P2). After three iterations they answered 21,
+4 and 12 of the 889 items, and on six families none of them trained on their pass@1 went from 0.41
+to 0.4479, 0.4408 to 0.4242 and 0.4419 to 0.4408: none met its criterion.\cl{RS15}
+
+Because a pooled test cannot tell staggered single gains from one model improving repeatedly, arm HL
+repeated arm H's recipe in four fresh lineages under a per-lineage criterion: a lineage succeeds when
+all three of its steps hold, and the arm when two of four do. Its first run ended on the project disk's
+inode quota before any lineage finished and was not evaluated.\cl{RS16} The rerun met the criterion in
+1 of 4 lineages: r3 rose at every step (16/0; 14/5, $p=0.0318$; 33/12, $p=0.00123$), r2 rose twice and
+fell at generation~3 (27/36), r0's later steps were not significant (35/25, $p=0.123$; 37/28,
+$p=0.161$), and r1 accepted no round after generation~1. Pooled, the third step was 97/76
+($p=0.0641$).\cl{RS17} S1 thus showed large first steps on items the base never answered and
+third steps that did not hold within a lineage.
+
+\subsection{S2: on-policy policy gradient}\label{sec:rsi2}
+
+S2 asked whether replacing the update with on-policy policy gradient under powered gates makes the
+later steps hold. Each generation trained on the current policy's own graded attempts at programs it
+solves sometimes ($k=8$ attempts, group-standardised advantages, clip edges 0.2 and 0.28, learning
+rate $6\times10^{-6}$ for 24 steps, LoRA rank 16), and the exam moved to the independent
+examiner.\cl{RS10,RS18} At generation~1 the four lineages won 4, 2, 3 and 3 items against the base and
+lost none ($p$ from 0.0625 to 0.25): no step held, so no lineage could succeed, and the examiner's
+plan verdict reads not met.\cl{RS19} The examiner's overlap audit found that the policy's own
+proposals had reproduced 1, 1 and 2 exam programs exactly in three lineages; S2 had no exclusion
+and those items count as scored.\cl{RS19} Generation~2 could not be served, because every trained
+candidate carried the same adapter card id; the criterion was already decided, so it was not rerun
+after the fix.\cl{RS08} The recipe raised the learner's own dev set in its pilot but moved the exam by
+two to four items.
+
+\subsection{S3: training on the interpreter's answers to the policy's own programs}\label{sec:rsi3}
+
+S3 returned to arm H's source of information, training on the interpreter's output for programs the
+policy itself proposed, and replaced what had failed in S1: acceptance on a dev set powered for an
+effect of 0.08, replay of earlier generations, proposals diversified per manual section, and the whole
+learner behind Brain's API. A generation proposes up to 600 programs, predicts each greedily and
+trains a LoRA continued from the champion (rank 16, learning rate $3\times10^{-5}$, 40 steps) on the
+mispredicted programs, with the correctly predicted ones and earlier generations' records each drawn
+at a share of 0.25; the examiner now excludes overlapping items.\cl{RS09,RS05}
+
+Every lineage improved at generations~1 and~2; at generation~3 r2 and r3 improved again, r0 held
+flat (29/28, $p=0.5$) and r1 fell (18/28) (\cref{tab:rsi}). Two of four lineages succeeded and the
+plan verdict reads not met; pooled, the steps were 288/0, 199/60 and 142/92, and no exam item matched a
+training program.\cl{RS21,RS22} The learner's records show the signal running out: over the four
+lineages the champions mispredicted 2127 of 2400 proposals at generation~1, 1125 of 2228 at
+generation~2 and 860 of 1942 at generation~3, so later generations trained mostly on what their
+predecessor already knew, while each also continued the previous adapter.\cl{RS23} The learner's dev
+gate accepted all 12 steps, and the examiner found 2 of them not to hold: r0's and r1's third steps,
+the two smallest dev margins (13/8 and 7/5).\cl{RS24}
+
+
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[paper, group style={group size=2 by 1, horizontal sep=12mm},
+  width=0.48\linewidth, height=5.4cm, xmin=-0.25, xmax=3.25, ymin=0, ymax=260,
+  xtick={0,1,2,3}, xticklabels={base,1,2,3}, xlabel={generation},
+  ylabel={items right of 889 (exam subset)}]
+\nextgroupplot[title={S3: continued adapter (not met)}]
+\addplot[lineage r0] table[col sep=comma,x=gen,y=r0] {generated/rsi3_items.csv};
+\addplot[lineage r1] table[col sep=comma,x=gen,y=r1] {generated/rsi3_items.csv};
+\addplot[lineage r2] table[col sep=comma,x=gen,y=r2] {generated/rsi3_items.csv};
+\addplot[lineage r3] table[col sep=comma,x=gen,y=r3] {generated/rsi3_items.csv};
+\nextgroupplot[title={S4: retrained from the base (met)}, ylabel={},
+  legend style={at={(-0.11,-0.3)}, anchor=north, legend columns=4, /tikz/every even column/.append style={column sep=4mm}}]
+\addplot[lineage r0] table[col sep=comma,x=gen,y=r0] {generated/rsi4_items.csv};
+\addplot[lineage r1] table[col sep=comma,x=gen,y=r1] {generated/rsi4_items.csv};
+\addplot[lineage r2] table[col sep=comma,x=gen,y=r2] {generated/rsi4_items.csv};
+\addplot[lineage r3] table[col sep=comma,x=gen,y=r3] {generated/rsi4_items.csv};
+\legend{lineage r0, lineage r1, lineage r2, lineage r3}
+\end{groupplot}
+\end{tikzpicture}
+\caption{Items right on the held-out exam per generation and lineage, as the examiner measured them; the
+exam holds items the base did not answer when it was selected, so these are counts on that hard
+subset, not an accuracy on Lua programs. In S3 two lineages stop rising at generation~3 (r0 flat, r1 down); in S4
+every lineage rises at every generation. The base level differs between the panels because the base
+was served at a different KV tier (\cref{tab:rsi}).}\label{fig:rsi-items}
+\end{figure}
+
+\paragraph{Serving configuration.} The examiner served S4's models with an f32 KV cache, at which the base
+answers 12 exam items; S3's stored baseline was served at the build's default tier, at which it answered
+none, so S3's and S4's levels are not comparable, only their steps are.\cl{RS27}

@@ -1,0 +1,46 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Limitations of the system and of the other experiments}\label{app:limits}
+
+\paragraph{What the structure claims show.} They show that definitions, constants, tests and messages
+exist at the pinned commits; they do not show that the code behaves accordingly. Behaviour is
+established only by the measurements of
+\cref{sec:substrate,sec:coding-results,sec:documentation,sec:generations,sec:rsi}. The qualification
+of the 27B training substrate used random weights for the long sequences and a handful of examples for
+the real checkpoint, and no sequence longer than 16384 tokens was run. The requirements of
+\cref{sec:requirements} include one that is not implemented: the retention check does not test what
+each release demonstrably acquired, so for a domain of facts a passed retention check is not evidence
+that taught facts were kept. The workspace verifier's reading of the runner's report and the practice
+gate's canaries exist at the current head, not at the revision the architecture claims are pinned
+to.\cl{OP04,OP05} The corpus expansion mechanisms (variants, retention queue, rehearsal, claims) are
+described from the code and none was evaluated for the value it adds.
+
+\paragraph{Single greedy runs and run-to-run variation.} The development probes of \cref{sec:coding-results} (the supervision ablation, the recovery dose-response and the generation-2 rehearsal ablation) are one run per arm at greedy decoding. The same adapter evaluated three times on the same benchmark decoded 30, 31 and 26 of 46 tasks, and the three reports' verdicts differ pairwise on 9, 12 and 11 of the 46 tasks; a single greedy arm therefore carries about 2.5 tasks of standard deviation, so the paired p-values of single-run comparisons overstate their precision.\cl{REP1} The variation is two different things, and the decode batch is only one of them.\cl{REP2} A single-row decode is reproducible: five sequential identical task-derived requests, sent greedily with the requested seed echoed by the server, returned identical completion token ids and bitwise identical per-token log-probabilities, and a never-seen prompt sent once cold and then twice warm was identical both times. A row's arithmetic does depend on its co-batch: six or eight identical requests sent at once return two distinct sequences, because the int8 projections run a block that is bit-identical below five rows and switch to an int8 tensor-core block from five, while the fused decode attention sizes its split-key count from the batch. But one request in flight does not make a whole episode reproducible either: the same adapter on the same eight tasks, greedy at concurrency one, passed three and then five of eight with two verdicts flipped. The registered multi-seed protocol is therefore the instrument for agent episodes. Training is not bit-reproducible either: two runs of one recipe with the same binary, corpus, start and seed produced two distinct adapters whose losses agree to the fourth digit while their gradient norms and weights do not.\cl{REP3} A same-seed comparison therefore means the same data, recipe and binary, not a bit-identical run. The series' examiner protocol is greedy at one request per item on one build and tier, and its base-against-base null replicate found no discordant item (\cref{sec:rsi-design}).
+
+\paragraph{The coding-task experiment.} The registered confirmatory query does not show the claim
+(\cref{sec:coding-results}), and the same-seed supervision contrast that does separate is a secondary
+analysis, not the registered decision. Registered experiments that were not run: the ten-stage
+training and deployment experiment for the 27B model (CE6), the replication of the unchanged procedure
+on a second independent repository (CE7), and the acquisition, choice-of-improvement and generations
+experiments of \code{prereg/acquisition.md} (ACQ1, INT1, GEN1). The paper therefore reports no
+replication of the headline, no result of the registered retention check or of the three controls of
+\cref{sec:protocol}, and no result of ACQ1 (the documentation runs of \cref{sec:documentation} were not
+run under that registration). The memorisation guard of CE8 as registered reads one step's training
+loss and any rise at the last evaluation, so it can stop a run on noise; it was kept unchanged.\cl{M48,M49}
+Both pilots of the adapter are inside the same variation the base shows against itself on a second
+protocol seed.\cl{M57} The registration fixes one model size for the first training result (Qwen3-8B),
+trained on a stronger teacher's verified trajectories because the untrained 8B produced too few edits
+to supply its own, so a gain there would be distillation from the teacher, not
+self-improvement;\cl{PR15,PR16} one agent harness; and process isolation \code{none} on the node (a
+solver's commands are confined by the kernel to their tree and have no network, but the node is not a
+container; \cref{sec:audit}).\cl{AU09,CN01,CN08} Mutation-seeded tasks test whether a model can undo a
+synthetic fault, not whether it can debug a historical one. A family is the file a fault was seeded in
+for the authored repositories, so clusters are files, not subsystems.\cl{PR02} The base model may have
+seen public repositories in pretraining; the paired base arm bounds that effect, it does not remove it.
+
+\paragraph{The 27B generations.} Two generations were run, not the three planned, on three of four
+workloads, on exams the base already solved about nine times in ten, so the few tasks it solved only
+sometimes carried every comparison.\cl{G2703} The token-efficiency finding was made after the data
+over several comparisons and is exploratory.\cl{G2705}
+

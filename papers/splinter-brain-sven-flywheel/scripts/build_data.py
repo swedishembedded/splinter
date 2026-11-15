@@ -315,7 +315,7 @@ def proto6_metrics(record):
 # decided by an independent examiner's signed aggregate verdicts (one per lineage and step, and one plan
 # verdict over the registered rule); the learner's side is each lineage's rounds.jsonl. RSI1's arms were
 # measured by their own registered analysis scripts.
-RSI_SERIES = (("rsi3", "RSI3"), ("rsi4", "RSI4"))
+RSI_SERIES = (("rsi3", "S3"), ("rsi4", "S4"))
 RSI_LINEAGES = ("r0", "r1", "r2", "r3")
 RSI_STEPS = (1, 2, 3)
 
@@ -347,6 +347,11 @@ def rsi_verdict_metrics(v):
         gain = v["paired_gain"]
         m.update(gain=f"{gain['mean']:.4f}", gain_lo=f"{gain['interval'][0]:.4f}",
                  gain_hi=f"{gain['interval'][1]:.4f}", gain_families=gain["families"])
+    if "failures" in v:
+        # failed requests of either side, and the failure rate the examiner tolerates
+        f = v["failures"]
+        m["failed_requests"] = sum(sum(f.get(side, {}).values()) for side in ("candidate", "predecessor"))
+        m["tolerated_failures"] = f.get("tolerated_rate")
     if "brain_sha256" in v.get("serving_build", {}):
         m["serving_brain"] = v["serving_build"]["brain_sha256"][:9]
     if "kv_cache" in v.get("serving", {}):
@@ -383,6 +388,7 @@ def rsi_rounds_metrics(text):
                   f"{g}_dev_wins": d["wins"], f"{g}_dev_losses": d["losses"],
                   f"{g}_dev_p": fmt_p(d["p_value"]), f"{g}_dev_before": d["champion_rate"],
                   f"{g}_dev_after": d["candidate_rate"], f"{g}_retention_losses": d["retention_losses"],
+                  f"{g}_dev_alpha": fmt_p(d["alpha"]), f"{g}_dev_significant": "yes" if d["significant"] else "no",
                   f"{g}_advanced": "yes" if r["advanced"] else "no"})
         if r.get("trained_records") is not None:
             m[f"{g}_trained_records"] = r["trained_records"]
@@ -682,6 +688,7 @@ def metrics():
         m.update(rsi_pooled_metrics(series, m))
         m.update(rsi_gate_metrics(series, m))
         m.update(rsi_cluster_metrics(series, m))
+        m.update(rsi_process_metrics(series, m))
     m.update(frontier_entry_metrics())
     m.update(multiplicity_metrics(m))
     return m
@@ -733,6 +740,51 @@ def multiplicity_metrics(m):
     weakest = max(float(m[f"rsi4.v.{r}.g{g}.p"]) for r in RSI_LINEAGES for g in RSI_STEPS if f"rsi4.v.{r}.g{g}.p" in m)
     n = len(RSI_REGISTERED_TESTS)
     return {"rsi.tests": n, "rsi.weakest_p": fmt_p(weakest), "rsi.bonferroni": f"{min(1, weakest * n):.3f}"}
+
+
+def rsi_process_metrics(series, m):
+    """COMPUTED, from the step verdicts and the learner's rounds: items right as a percentage of the exam;
+    churn (losses as a share of the predecessor's right items, wins as a share of its wrong ones); the
+    frontier share (proposals the champion got wrong at least once, of those it predicted); the dev gate's
+    accepted steps that its own spent alpha did not call significant; the spread of the last generation over
+    lineages, the average last step's gain, and the one-sided sign test of the lineage count."""
+    out = {}
+    lineages = [r for r in RSI_LINEAGES if f"{series}.v.{r}.g1.right" in m]
+    if not lineages:
+        return out
+    for r in lineages:
+        v = f"{series}.v.{r}"
+        out[f"{v}.g0.pct"] = f"{100 * m[v + '.g1.predecessor_right'] / m[v + '.g1.items']:.1f}"
+        for g in RSI_STEPS:
+            k = f"{v}.g{g}"
+            if f"{k}.right" not in m:
+                continue
+            items, before = m[f"{k}.items"], m[f"{k}.predecessor_right"]
+            out[f"{k}.pct"] = f"{100 * m[k + '.right'] / m.get(k + '.compared', items):.1f}"
+            out[f"{k}.lost_share"] = f"{100 * m[k + '.losses'] / before:.0f}" if before else "--"
+            out[f"{k}.won_share"] = f"{100 * m[k + '.wins'] / (m.get(k + '.compared', items) - before):.1f}"
+            d = f"{series}.dev.{r}.g{g}"
+            if f"{d}_measured" in m:
+                out[f"{d}_frontier_share"] = f"{100 * m[d + '_on_frontier'] / m[d + '_measured']:.0f}"
+    last = [m[f"{series}.v.{r}.g3.right"] for r in lineages if f"{series}.v.{r}.g3.right" in m]
+    if len(last) > 1:
+        mean = sum(last) / len(last)
+        sd = (sum((x - mean) ** 2 for x in last) / (len(last) - 1)) ** 0.5
+        out[f"{series}.g3.mean_right"], out[f"{series}.g3.sd_right"] = f"{mean:.1f}", f"{sd:.1f}"
+        gains = [float(m[f"{series}.v.{r}.g3.gain"]) for r in lineages]
+        out[f"{series}.g3.mean_gain_points"] = f"{100 * sum(gains) / len(gains):.1f}"
+        held = sum(all(m.get(f"{series}.v.{r}.g{g}.holds") == "yes" for g in RSI_STEPS) for r in lineages)
+        out[f"{series}.replication_p"] = f"{upper_tail(held, len(lineages)):.4g}"
+    accepted = [(r, g) for r in lineages for g in RSI_STEPS if m.get(f"{series}.dev.{r}.g{g}_advanced") == "yes"]
+    if accepted:
+        out[f"{series}.gate.not_significant"] = sum(m.get(f"{series}.dev.{r}.g{g}_dev_significant") == "no" for r, g in accepted)
+    shares = {}
+    for g in RSI_STEPS:
+        vals = [int(out[f"{series}.dev.{r}.g{g}_frontier_share"]) for r in lineages
+                if f"{series}.dev.{r}.g{g}_frontier_share" in out]
+        if vals:
+            out[f"{series}.frontier.g{g}_min"], out[f"{series}.frontier.g{g}_max"] = min(vals), max(vals)
+    return out
 
 
 def frontier_entry_metrics(samples=4):
@@ -897,6 +949,26 @@ def rsi_items_csv(series, m):
     return "\n".join(out) + "\n"
 
 
+def rsi_pct_csv(series, m):
+    """Exam accuracy in percent per generation (0 = the base) and lineage, for the teaser."""
+    out = ["gen," + ",".join(RSI_LINEAGES)]
+    for g in (0, *RSI_STEPS):
+        out.append(f"{g}," + ",".join(str(m.get(f"{series}.v.{r}.g{g}.pct", "nan")) for r in RSI_LINEAGES))
+    return "\n".join(out) + "\n"
+
+
+def rsi_dev_csv(series, m):
+    """The learner's dev-set accuracy in percent per generation (0 = the base) and lineage."""
+    out = ["gen," + ",".join(RSI_LINEAGES)]
+    for g in (0, *RSI_STEPS):
+        cells = []
+        for r in RSI_LINEAGES:
+            key = f"{series}.dev.{r}.g{max(g, 1)}_{'dev_before' if g == 0 else 'dev_after'}"
+            cells.append(f"{100 * m[key]:.2f}" if key in m else "nan")
+        out.append(f"{g}," + ",".join(cells))
+    return "\n".join(out) + "\n"
+
+
 def rsi_forest_csv(series, m):
     """Each lineage step's paired gain with the examiner's family-clustered 95% interval, top to bottom
     (y counts down), and whether the registered item-level step holds, for the forest plot."""
@@ -983,6 +1055,8 @@ def write_outputs(out):
         (out / f"{series}_items.csv").write_text(rsi_items_csv(series, m))
         (out / f"{series}_steps.csv").write_text(rsi_steps_csv(series, m))
         (out / f"{series}_forest.csv").write_text(rsi_forest_csv(series, m))
+        (out / f"{series}_pct.csv").write_text(rsi_pct_csv(series, m))
+        (out / f"{series}_dev.csv").write_text(rsi_dev_csv(series, m))
     macros_extra = f"\\newcommand{{\\alphalevel}}{{{ALPHA}}}\n"
     with open(out / "macros.tex", "a") as handle:
         handle.write(macros_extra)

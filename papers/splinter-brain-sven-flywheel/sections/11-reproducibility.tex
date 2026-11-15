@@ -18,38 +18,38 @@ entries were checked against the archive's abstract pages on 2026-11-15.
 \paragraph{Draft and final.} The paper's status is recorded in \code{status.txt}; when it reads
 final, \code{build\_data.py --check} also fails while any registered-but-unmeasured or planned claim
 remains, so a final version holds only structure facts, measurements, computations from measurements
-and citations. This version is a draft because one planned claim remains: the two registered RSI4
+and citations. This version is a draft because one planned claim remains: the two registered S4
 follow-ups, whose results it will report when they exist.\cl{RS39}
 
 \paragraph{Raw records.} The raw logs are not kept in the repository. \code{data/measurements.json}
 records, per log, the values the claims cite, the exact command, the Brain commit and the log's
 SHA-256, and \code{make verify EVIDENCE=DIR} re-extracts the values from the logs found in \code{DIR}
 and compares digests and values. The records of the documentation runs, the 27B generations and every
-RSI series are published in the evidence dataset \code{splinter-flywheel-evidence} under the paths
-\code{data/measurements.json} names: for RSI2 to RSI4 the examiner's signed step and plan verdicts and
+S series are published in the evidence dataset \code{splinter-flywheel-evidence} under the paths
+\code{data/measurements.json} names: for S2 to S4 the examiner's signed step and plan verdicts and
 the registered rule it applied, the learner's round records, each candidate's record and list of
-trained programs and, for RSI4, the twelve champion adapters; for RSI1 each arm's registered analysis
+trained programs and, for S4, the twelve champion adapters; for S1 each arm's registered analysis
 and per-model grades. The qualification logs of the training substrate and the logs of the coding-task
 pilots and probes were kept with the runs that made them; their values, digests and commands are in
 \code{data/measurements.json}.
 
-\paragraph{The examiner.} The examiner of RSI2 to RSI4 is specified in \cref{sec:rsi-design} at the
+\paragraph{The examiner.} The examiner of S2 to S4 is specified in \cref{sec:rsi-design} at the
 level needed to build an equivalent one: exam custody, the one-way hand-off and its two files, the
 training-overlap exclusion, the direct-completion protocol (request, decoding, answer extraction and
 comparison, the token limit and the treatment of a cut reply), serving every model on one pinned build
 and tier with the base identified from the checkpoint's own files, the per-step exact one-sided sign
 test, the per-lineage plan rule and aggregate-only signed verdicts. With the published candidate
-records, trained-program lists and adapters, and the exam file released with RSI1, an equivalent
-examiner re-grades every RSI4 champion.
+records, trained-program lists and adapters, and the exam file released with S1, an equivalent
+examiner re-grades every S4 champion.
 
 \paragraph{Registrations.} All registrations are in the paper's \code{prereg/} directory: the
 coding-task protocol in \code{coding-tasks.md}, the acquisition experiments in \code{acquisition.md},
-RSI1 in \code{recursive-improvement.md}, and RSI2 to RSI4 each in its own file (\code{rsi4.md} for
-RSI4) with a launch record (\code{rsi4-launch.md}) that fixes builds, binary digests, settings and
+S1 in \code{recursive-improvement.md}, and S2 to S4 each in its own file (\code{rsi4.md} for
+S4) with a launch record (\code{rsi4-launch.md}) that fixes builds, binary digests, settings and
 seeds before the first generation and carries the series' dated deviations; the outcome of each series
 is appended to its registration.
 
 \paragraph{Build.} From the repository root the paper is built by
 \begin{center}\code{make papers/splinter-brain-sven-flywheel/pdf}\end{center}
-into \code{target/papers}; every table, plot and number of the RSI series and of the coding-task pilots
+into \code{target/papers}; every table, plot and number of the series S1--S4 and of the coding-task pilots
 is generated from \code{data/} into the build directory.

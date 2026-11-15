@@ -149,13 +149,14 @@ class ExaminerRecords(unittest.TestCase):
         rounds = [{"generation": g, "proposed": 600 * g, "mispredicted": 300 * g, "replayed": 0,
                    "trained_records": 300 * g, "trained": {"steps": 75 * g},
                    "frontier": {"measured": 600 * g, "on_frontier": 500 * g, "requests": 900 * g},
-                   "decision": {"wins": 25, "losses": 19, "p_value": 0.2257, "champion_rate": 0.6375,
+                   "decision": {"wins": 25, "losses": 19, "p_value": 0.2257, "alpha": 0.0042, "significant": False, "champion_rate": 0.6375,
                                 "candidate_rate": 0.6525, "retention_losses": 1},
                    "advanced": True, "seconds": 1800.0} for g in (1, 2)]
         m = build_data.parse_log("rsi4.dev.r1", "\n".join(json.dumps(r) for r in rounds))
         self.assertEqual((m["g2_dev_wins"], m["g2_dev_losses"], m["g2_dev_p"]), (25, 19, "0.226"))
         self.assertEqual((m["g1_mispredicted"], m["g2_trained_records"], m["g2_steps"]), (300, 600, 150))
         self.assertEqual((m["g2_on_frontier"], m["g1_advanced"], m["hours"]), (1000, "yes", "1.0"))
+        self.assertEqual((m["g2_dev_alpha"], m["g2_dev_significant"]), ("0.0042", "no"))
 
     def test_the_pooled_steps_are_computed_from_the_lineages_and_agree_with_the_plan_verdict(self):
         steps = {"rsi9.v.r0.g1.wins": 3, "rsi9.v.r0.g1.losses": 1, "rsi9.v.r1.g1.wins": 5,

@@ -3,49 +3,38 @@
 
 \section{Related work}\label{sec:related}
 
-\emph{Self-generated training data.} Self-Instruct has a model write its own
-instructions and filters them before fine-tuning on them;~\citep{selfinstruct2022}\cl{CT01} STaR and ReST keep
-only the model's own outputs that a reward or answer check confirms and train on those,
-repeatedly.~\citep{star2022,rest2023}\cl{CT02} The flywheel shares the principle that the check, not the model,
-decides what is trained on; its checks are typed verifiers of different strengths
-(\cref{sec:verify}) and the admission of tasks is itself done by code
-(\cref{sec:admission}).
-\emph{Self-improvement across generations.} ReST-EM iterates generating samples, filtering them by
-binary feedback and fine-tuning on them;~\citep{restem2023}\cl{CT16} the RSI series of \cref{sec:rsi}
-are of this family, with an executable oracle as the filter and the policy's own proposals as the
-samples. TRUST argues that a gate accepting an update on any higher validation score lets inferior
-updates through across rounds, and controls their rate by online multiple
-testing;~\citep{trust2026}\cl{CT15} our learner's gate is of the greedy kind, and we measure what it let
-through against the examiner's exam (\cref{sec:rsi4}). With execution feedback in the loop, CodeRL
-trains a code generator by reinforcement learning with a critic that predicts functional correctness
-from unit tests;~\citep{coderl2022}\cl{CT20} and training repeatedly on a model's own generated content
-can make the tails of the original distribution disappear,~\citep{collapse2023}\cl{CT21} which the
-series guard against only by labelling every program with the interpreter's output.
-\emph{Parameter-efficient training.} LoRA freezes the base and trains low-rank
-adapters;~\citep{lora2021}\cl{CT03} QLoRA does so over a base quantised to 4~bits;~\citep{qlora2023}\cl{CT04} DPO optimises
-preferences without a separate reward model.~\citep{dpo2023}\cl{CT05} The flywheel uses LoRA and DPO as
-objectives it selects, and delegates their computation to Brain (\cref{sec:training}).
-\emph{Retrieval-aware fine-tuning.} RAFT trains a model on domain documents with
-distractor passages;~\citep{raft2024}\cl{CT06} Splinter has an optional passage-mixing share of the same
-family (\cref{sec:dataset}), which we do not evaluate here.
-\emph{Forgetting.} Catastrophic forgetting is the loss of earlier capability when a
-network is trained on new data;~\citep{ewc2016}\cl{CT07} Splinter's response is empirical: it measures
-retention against every earlier release at release time (\cref{sec:gate}).
-\emph{Memory and compute for training.} Recomputing activations trades compute for memory
-in the backward pass;~\citep{recompute2016}\cl{CT08} fused or chunked cross-entropy avoids materialising the
-logits of a large vocabulary;~\citep{cutxent2024}\cl{CT09} FlashAttention computes exact attention without
-materialising the score matrix;~\citep{flashattention2022}\cl{CT10} Gated DeltaNet is a gated linear-attention layer based on the delta rule
-and is the recurrent layer type of the 27B model Brain implements (three Gated DeltaNet
-layers to one attention layer).~\citep{gateddelta2024}\cl{CT11,B11} Section~\ref{sec:substrate}
-reports which of these Brain contains.
-\emph{Repository tasks and agents.} SWE-bench poses resolving real GitHub issues as the task,
-graded by the repository's tests;~\citep{swebench2023}\cl{CT12} SWE-agent shows that the
-interface between the model and the repository changes what a model achieves, so the interaction,
-not only the final patch, is what is recorded and trained on.~\citep{sweagent2024}\cl{CT13}
-SWE-Gym, R2E-Gym and SWE-smith build executable \emph{training} environments, by collecting
-instances, by procedural generation from commits and by modifying code so that tests
-fail.~\citep{swegym2024,r2egym2025,swesmith2025}\cl{CT14} We take the mutation-and-validate
-idea and the commit-based idea as task producers (\cref{sec:protocol}). The difference
-in aim is that the target here is one repository's own tasks, reserved before rollouts and
-evaluated paired against the base under an identical harness, with retention on earlier
-repositories and a replication on a second one registered (and not run, \cref{sec:limitations}); we make no claim about priority.
+\emph{Self-training on self-proposed problems.} The closest prior design is Haluptzok et al.: a model
+synthesises programming problems with solutions, an interpreter filters them for correctness, and the
+model is fine-tuned on the result.~\citep{haluptzok2022}\cl{CT24} STaR and ReST-EM also restart from the
+base each iteration on accumulated, filtered self-generated data, but they filter the model's
+\emph{outputs} against known answers;~\citep{star2022,restem2023}\cl{CT02,CT16} here the model generates
+the \emph{inputs} and the oracle supplies the outputs. Self-Instruct generates inputs too, but labels them
+with the same model;~\citep{selfinstruct2022}\cl{CT01} ReST iterates grow and improve steps on filtered
+samples.~\citep{rest2023} Noisy Student iterates generations on a growing pool, with a teacher's
+labels.~\citep{noisystudent2019}\cl{CT26} Expert iteration amplifies the policy by search and imitates
+the result;~\citep{exit2017}\cl{CT19} an interpreter is ground truth, not an amplified policy, so only the
+generate--filter--retrain skeleton is shared. In self-play designs a proposer is trained to set
+learnable tasks, as in asymmetric self-play and in Absolute Zero, where a code executor validates the
+proposed tasks;~\citep{asymselfplay2017,absolutezero2025}\cl{CT28,CT18} our proposer is not trained to
+propose, only filtered. STOP makes a recursive claim for a scaffold that improves
+itself;~\citep{stop2023}\cl{CT25} we use the word only if the matched-data control earns it.
+
+\emph{Selection and curricula.} Selecting what to label is active learning, here by query synthesis with
+the model's own disagreement as the acquisition function; ordering by difficulty is curriculum
+learning;~\citep{settles2012,curriculum2009}\cl{CT29} learned curricula over problem categories are a
+recent variant.~\citep{sec2025}\cl{CT23}
+
+\emph{Predicting execution.} Predicting what a program prints is CRUXEval's output-prediction
+task;~\citep{cruxeval2024}\cl{CT17} models have been trained to predict execution since Learning to
+Execute, and more recently with execution traces.~\citep{learningtoexecute2014,codeexecutor2023,semcoder2024}\cl{CT27}
+CodeRL trains a generator with a critic of functional correctness from unit tests;~\citep{coderl2022}\cl{CT20}
+training repeatedly on a model's own generated content can make the tails of the original distribution
+disappear,~\citep{collapse2023}\cl{CT21} which our series counter only by labelling every program with the
+interpreter.
+
+\emph{Evaluation.} A greedy gate that accepts any higher validation score lets inferior updates through
+across rounds; TRUST controls their rate by online multiple testing.~\citep{trust2026}\cl{CT15} Reusing a
+holdout adaptively can overfit it,~\citep{holdout2015}\cl{CT22} and fresh test sets test
+replication;~\citep{recht2019} evaluations need clustered standard errors and seed-level
+variance.~\citep{errorbars2024,benchvariance2021,precipice2021}\cl{CT30} Related work for the system
+components is in \cref{app:related-system}.

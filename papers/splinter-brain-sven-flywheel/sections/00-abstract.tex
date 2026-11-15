@@ -2,25 +2,14 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 \begin{abstract}
-We study whether a local model can improve over several generations by training on material it
-produces itself. We call a series of generations self-taught when each generation's training material
-is proposed by the previous generation's model and labelled only by an executable oracle, with no
-stronger model and no human answer, and we say it improves when each generation beats the one it was
-trained from on a held-out exam. This is iterated self-training with an oracle labeller; we do not test
-whether an improved model is a better improver. Four series were registered before their runs and
-judged per lineage by a separate examiner program that holds the exam, which the learner never reads,
-excludes items that match any trained program, and returns signed aggregate verdicts. In the first
-three series no per-lineage criterion was met (two early arms met pooled criteria that cannot tell one
-improving model from gains spread over replicates). The fourth met it: in four lineages of Qwen3-4B predicting the output of Lua~5.1
-programs, each generation retrained from the base on every program its predecessors proposed and
-predicted wrong at least once, with the interpreter's output as the label, beat its predecessor at all three generations by an
-exact sign test over 889 items the base never answered when the exam was selected (it answers 12 of them
-at the serving tier used), reaching 192 to 241 items. Under the examiner's intervals clustered over the
-exam's 25 program templates, generations 1 and 2 improve in every lineage but generation 3 does so in
-only one or two of the four, and the training data grows from 300 to 2100 records across generations, a
-confound that a registered matched-data control and a fresh-exam re-examination, not yet run, address.
-The same loop, built from Splinter (what is learned), Brain (training, serving) and Sven (agents), did not
-show a gain where it was registered on repository tasks with a stronger teacher, nor over two generations
-of a 27B model on its own agent experience. Every statement carries an id in a claims ledger checked
-against pinned code or raw records.
+Can a small model improve over several rounds by training on problems it proposes itself, with labels
+only from an executable oracle? Qwen3-4B proposed Lua~5.1 programs; those it mispredicted at least once
+in four samples joined a growing pool labelled by the interpreter, and each round trained a fresh
+adapter from the base on the whole pool. In four seeds, registered beforehand and judged by a separate
+examiner on 889 held-out items the base had missed, every round beat its predecessor by the registered
+item-level test, raising accuracy from 1.3\% to 21.6--27.1\%. Two caveats: under intervals clustered
+over the exam's 25 templates the third round holds in only one or two seeds, and the pool grows each
+round, so verified data volume and a better proposer are not yet separated; a registered matched-data
+control and a fresh exam will decide. Three earlier registered series failed, and the same loop showed
+no gain on repository tasks or for a 27B agent.
 \end{abstract}

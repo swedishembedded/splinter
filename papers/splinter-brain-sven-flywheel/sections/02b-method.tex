@@ -1,0 +1,137 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+\section{Method}\label{sec:method}\label{sec:rsi-design}
+
+\paragraph{Terms.} A \emph{series} is a registered experiment of four \emph{lineages}, each a chain
+of three \emph{generations} from the base that differs from its siblings only in its seed; the
+\emph{champion} is the model a generation's material comes from; a \emph{step} compares a generation with
+the one before. The registrations call the series S1 to S4 (``recursive self-improvement''); we call
+them S1 to S4, because what they test is multi-round self-training on self-proposed, oracle-labelled
+material, and whether it is recursive in the sense that an improved model is a better improver is what
+the matched-data control decides (\cref{sec:followups}).\cl{RS01}
+
+\paragraph{The learner.} The task family is predicting what a Lua~5.1 program prints. The learner is
+the loop of \cref{sec:documentation} reduced to this one kind: the policy, Qwen3-4B with thinking off,
+writes programs about sections of the Lua~5.1 manual, the pinned Lua~5.1.5 interpreter runs each
+program and its output becomes the reference, and the policy is trained on its own programs with the
+interpreter's output as the target. From S2 on every model call and every training run goes through
+Brain's API: one \code{brain serve} per lineage serves the proposals, the predictions and the dev and
+retention exams, and trains each candidate as a Brain training job.\cl{RS09,RS10} A lineage is a chain
+of generations from the base that differs from its siblings only in its seed; each series runs four
+lineages of three generations. Inside the loop a candidate is accepted by a dev gate on 400 units
+(100 generator programs and 300 programs the base proposed, held out from training) with a retention
+set of 300 units; neither holds an exam item.\cl{RS09} The generator programs come from a separate seeded generator of six levels
+(a sum, a product, a short string transformation, a loop, a three-item table sort, an arithmetic
+expression) that shares no code or templates with the exam's generator, although two of its levels call
+functions for which the exam has templates (\code{string.upper}, \code{string.rep}, the length
+operator, \code{table.sort}).\cl{RS51}
+
+\paragraph{The exam.} The exam is 889 Lua~5.1 programs written by code from 25 standard-library
+templates over randomised and edge-case arguments, the items the base never answered in four sampled
+attempts under a neutral request at selection (at S4's serving tier it answers 12 of them); the reference of each is what the interpreter prints (twice,
+equal).\cl{RS03} Because it was selected as what the base could not do, a count of items right on it
+measures progress on that hard subset, not a model's accuracy on Lua programs in general. It was
+selected once, in S1, and every series uses the same file (its SHA-256 begins
+\code{60ac3ae44651} in every verdict).\cl{RS20,RS31} No model writes or answers an exam item to build
+it, and no run of the learner reads it. The reuse has a cost: S1 graded this exam item by item with
+its own scripts, and each later design was chosen after the aggregate results of the series before it
+on the same exam, so across the series the exam is a holdout reused adaptively, a setting in which a
+reused holdout can be overfitted~\citep{holdout2015}\cl{CT22}; each registration on its own is clean.
+A re-examination of S4's champions on a freshly drawn exam is registered for this
+reason.\cl{RS39}
+
+\paragraph{The examiner.} From S2 on the exam is held by an examiner, a separate program operated
+beside the learner by the same operators; it is independent of the learner, not of the authors. The
+learner's only contact with it is a one-way hand-off (\cref{fig:examiner}).\cl{RS04} For each lineage and generation the learner writes a directory with
+the list of every program the candidate's chain trained on and, last, a candidate record (base model,
+base digest, adapter path and digest, serving flags, commits). The examiner then
+\begin{enumerate}
+\item serves the base and every candidate itself, on one pinned Brain serving binary (SHA-256
+  \code{d11e9134...}, a different Brain build from the learner's commit \code{796871647}) and, in S4, at one KV-cache tier (f32), and marks a verdict invalid when the
+  served base is not the declared checkpoint (identified from the checkpoint's own files) or the
+  adapter does not have the declared digest;\cl{RS06,RS32}
+\item excludes from each step's comparison every exam item that equals, exactly or after removing
+  comments and whitespace, any program either compared model was trained on, and reports how many
+  it excluded; it also reports a near-duplicate count whose similarity measure the verdicts do not
+  define, and a program of the same template with other arguments is not excluded;\cl{RS05}
+\item asks each item once under the direct-completion protocol: the program and its question as the
+  only user message, no system prompt, one greedy completion with thinking off and, in S4, at most
+  2048 tokens; the answer is the last fenced block of the reply, or the whole reply if it has none,
+  compared with the reference token by token per line with whitespace runs collapsed and blank lines
+  ignored; a reply the token limit cut is graded as written;\cl{RS32,RS36}
+\item pairs the candidate with its predecessor item by item (a win: the candidate is right and the
+  predecessor wrong; a loss: the reverse), computes the exact one-sided sign test over the discordant
+  items, and decides the registered rule: a step holds when wins exceed losses at $p<0.05$, a lineage
+  succeeds when all three of its steps hold, and the series meets its criterion when at least three of
+  the four lineages succeed;\cl{RS02}
+\item returns, per step, a verdict with aggregates only (items right, wins, losses, $p$, whether the
+  step holds, exclusion and overlap counts, integrity flags) and, over the series, a plan verdict;
+  each is signed with the examiner's HMAC-SHA256 key, so the learner, which does not hold the key,
+  cannot alter or forge one; the key protects against the learner, not against the authors. Each verdict
+  also carries the paired gain in the fraction of items right with a 95\% interval clustered over the
+  exam's 25 templates (\cref{sec:rsi-robust}). No item text and no item-level grade leaves the
+  examiner.\cl{RS04,RS31,RS38}
+\end{enumerate}
+The items themselves are not secret: the exam file was released with S1's records, so the
+separation rests on the learner's code never opening it and on the exclusion of overlapping programs,
+not on secrecy.\cl{RS03}
+
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}[fig]
+\tikzset{cell/.style={text width=29mm}}
+% learner column
+\node[proc=okSky!22, cell] (gen) at (0,0) {generation $g$:\\propose, label,\\train via Brain};
+\node[verif, cell] (lgate) at (0,-22mm) {learner's gate:\\dev 400 units,\\retention 300};
+% hand-off, between the two
+\node[data, cell] (hand) at (37mm,-22mm) {\textbf{hand-off}:\\trained programs,\\then candidate};
+% examiner, down the first column and up the second
+\node[data, cell] (exam) at (76mm,0) {\textbf{held-out exam}:\\889 items the base\\missed at selection};
+\node[verif, cell] (excl) at (76mm,-22mm) {drop each item\\equal to a trained\\program (also with\\comments removed)};
+\node[proc=okOrange!20, cell] (serve) at (76mm,-46mm) {serve all models:\\one pinned build\\and KV tier,\\digests checked};
+\node[proc=okOrange!20, cell] (grade) at (113mm,-46mm) {direct completion:\\greedy decoding,\\thinking off,\\last fenced block};
+\node[decide, aspect=2, inner sep=0.5pt, text width=14mm] (rule) at (113mm,-22mm) {$W>L$,\\$p<0.05$?};
+\node[data, cell] (verd) at (113mm,0) {\textbf{signed verdict}:\\counts, $p$, holds;\\no item, no grade};
+\begin{scope}[on background layer]
+\node[bound, fit=(gen)(lgate), inner sep=2.5mm] (L) {};
+\node[bound, fit=(exam)(serve)(grade)(verd)(rule), inner sep=2.5mm] (E) {};
+\end{scope}
+\node[boundlabel] at (L.north west) {Learner};
+\node[boundlabel] at (E.north west) {Examiner (separate program)};
+\draw[flow] (gen) -- (lgate);
+\draw[flow] (lgate) -- (hand);
+\draw[flow] (hand) -- (excl);
+\draw[flow] (hand.south) |- (serve.west);
+\draw[flow] (exam) -- (excl);
+\draw[flow] (excl) -- (serve);
+\draw[flow] (serve) -- (grade);
+\draw[flow] (grade) -- node[lab, left, align=right] {wins,\\losses} (rule);
+\draw[flow] (rule) -- node[lab, left] {step holds?} (verd);
+\draw[refuse] (exam.west) -- node[reflabel, above, align=center] {no path back: no item,\\grade or verdict} (gen.east);
+\end{tikzpicture}
+\caption{The learner and the examiner. The only channel is one-way: per lineage and
+generation the learner writes the list of every program the candidate's chain trained on and then the
+candidate record (base, adapter and their digests). The examiner holds the exam, drops items that
+match a trained program (exactly, or after removing comments and whitespace), serves every model itself
+on one pinned build, grades by the direct-completion protocol, applies the registered per-step rule
+and signs aggregates only, which are published with the learner's records after the series. The
+dotted path does not exist.}\label{fig:examiner}
+\end{figure}
+
+\paragraph{What is compared.} Every comparison is within a lineage and between consecutive
+generations, on the items no compared model trained on, so a model's gain is measured against the
+model it was trained from. The registered decision is per lineage. The four lineages share the exam's
+items, so a sign test pooled over lineages treats correlated pairs as independent; the pooled figures
+are reported as a description, not as a test. The examiner's base-against-base null replicate, run before S4, answered
+12 of the 889 items on both sides with 0 discordant items and 0 failed requests: the protocol is
+deterministic at the serving build and tier, so a discordant item is a difference between the
+models.\cl{RS07}
+
+
+\paragraph{Three levels of claim.} The item-level sign test supports a claim about two adapters: this
+adapter answers more of these items than its predecessor. The template-clustered interval supports a
+claim about programs of these templates. Only replication over seeds supports a claim about the
+procedure, and with four lineages that is a count, not a test: 4 of 4 has a one-sided sign-test $p$ of
+0.0625, and the generation-3 champions answered 219.0 items on average with a standard deviation of 20.4
+between seeds.\cl{RS53} Each result below is stated at its level.

@@ -85,7 +85,7 @@
 % measurement carries the ids of its rows in data/claims.csv.
 \newcommand{\cl}[1]{\textsuperscript{\scriptsize\textcolor{gray}{[#1]}}}
 
-\title{Self-Taught Generations on a Held-Out Exam:\\ A Verified, Preregistered Learning Loop for Local Models}
+\title{The Frontier Must Grow:\\[0.2em] \large Self-proposed, interpreter-labelled training improves a 4B model for three generations when each retrains from the base on a doubling frontier}
 \author{Martin Schröder\\
 Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
 \date{November 2026\\[0.3em]\textsc{\mPaperStatus} version}
@@ -95,12 +95,11 @@ Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded
 
 \input{sections/00-abstract}
 \input{sections/01-introduction}
+\input{sections/02b-method}
+\input{sections/03b-results}
+\input{sections/04c-earlier}
+\input{sections/05b-elsewhere}
 \input{sections/02-related}
-\input{sections/03a-loop}
-\input{sections/08d-rsi}
-\input{sections/04b-coding-summary}
-\input{sections/08c-generations}
-\input{sections/08b-documentation}
 \input{sections/10-limitations}
 \input{sections/11-reproducibility}
 
@@ -110,15 +109,21 @@ Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded
 \appendix
 \crefalias{section}{appendix}
 \crefalias{subsection}{subappendix}
+\input{sections/app-series}
+\input{sections/03a-loop}
 \input{sections/03-architecture}
 \input{sections/04-training-release}
 \input{sections/05-substrate}
 \input{sections/06-requirements}
+\input{sections/04b-coding-summary}
 \input{sections/07-coding-protocol}
 \input{sections/08-pending}
+\input{sections/08c-generations}
+\input{sections/08b-documentation}
 \input{sections/09-replication}
+\input{sections/app-related-system}
+\input{sections/app-limits}
 \input{sections/12-deviations}
 \input{sections/13-glossary}
-
 
 \end{document}
