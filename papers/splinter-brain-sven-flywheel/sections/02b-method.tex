@@ -93,13 +93,16 @@ base digest, adapter path and digest, serving flags, commits). The examiner then
 \item serves the base and every candidate itself, on one pinned Brain serving binary (SHA-256
   \code{d11e9134...}, a different Brain build from the learner's commit \code{796871647}) and, in S4, at one KV-cache tier (f32), and marks a verdict invalid when the
   served base is not the declared checkpoint (identified from the checkpoint's own files) or the
-  adapter does not have the declared digest;\cl{RS06,RS32}
+  adapter does not have the declared digest; that build's source is not in Brain's published
+  history, so the reference examiner of \cref{sec:repro} serves on the learner's Brain instead;\cl{RS06,RS32}
 \item excludes from each step's comparison every exam item that equals, exactly or after removing
-  comments and whitespace, any program either compared model was trained on, and reports how many
+  comments and whitespace, any program on either compared model's hand-off list (the programs its
+  chain trained on and, beside them, its held-out dev and retention programs), and reports how many
   it excluded; it also reports a near-duplicate count whose similarity measure the verdicts do not
   define, and a program of the same template with other arguments is not excluded;\cl{RS05}
-\item asks each item once under the direct-completion protocol: the program and its question as the
-  only user message, no system prompt, one greedy completion with thinking off and, in S4, at most
+\item asks each item once under the direct-completion protocol: the program and its question, followed
+  by the sentence ``Answer with exactly what it prints, in one fenced code block.'' (the request S1
+  registered), as the only user message, no system prompt, one greedy completion with thinking off and, in S4, at most
   2048 tokens; the answer is the last fenced block of the reply, or the whole reply if it has none,
   compared with the reference token by token per line with whitespace runs collapsed and blank lines
   ignored; a reply the token limit cut is graded as written;\cl{RS32,RS36}
@@ -131,7 +134,7 @@ not on secrecy.\cl{RS03}
 \node[data, cell] (hand) at (37mm,-22mm) {\textbf{hand-off}:\\trained programs,\\then candidate};
 % examiner, down the first column and up the second
 \node[data, cell] (exam) at (76mm,0) {\textbf{held-out exam}:\\889 items the base\\missed at selection};
-\node[verif, cell] (excl) at (76mm,-22mm) {drop each item\\equal to a trained\\program (also with\\comments removed)};
+\node[verif, cell] (excl) at (76mm,-22mm) {drop each item\\equal to a listed\\program (also with\\comments removed)};
 \node[proc=okOrange!20, cell] (serve) at (76mm,-46mm) {serve all models:\\one pinned build\\and KV tier,\\digests checked};
 \node[proc=okOrange!20, cell] (grade) at (113mm,-46mm) {direct completion:\\greedy decoding,\\thinking off,\\last fenced block};
 \node[decide, aspect=2, inner sep=0.5pt, text width=14mm] (rule) at (113mm,-22mm) {$W>L$,\\$p<0.05$?};
@@ -154,9 +157,9 @@ not on secrecy.\cl{RS03}
 \draw[refuse] (exam.west) -- node[reflabel, above, align=center] {no path back: no item,\\grade or verdict} (gen.east);
 \end{tikzpicture}
 \caption{The learner and the examiner. The only channel is one-way: per lineage and
-generation the learner writes the list of every program the candidate's chain trained on and then the
-candidate record (base, adapter and their digests). The examiner holds the exam, drops items that
-match a trained program (exactly, or after removing comments and whitespace), serves every model itself
+generation the learner writes the list of every program the candidate's chain trained on (with its
+held-out dev and retention programs) and then the candidate record (base, adapter and their digests).
+The examiner holds the exam, drops items that match a listed program (exactly, or after removing comments and whitespace), serves every model itself
 on one pinned build, grades by the direct-completion protocol, applies the registered per-step rule
 and signs aggregates only, which are published with the learner's records after the series. The
 dotted path does not exist.}\label{fig:examiner}

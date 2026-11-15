@@ -3,44 +3,92 @@
 
 \section{Reproducibility}\label{sec:repro}
 
-\paragraph{Verification.} \code{make -C papers/splinter-brain-sven-flywheel verify} first runs the
-specifications of the pin rule and of the record parsers, then re-runs every structure check against
-the commits in \code{data/commits.json}, then \code{scripts/build_data.py --check}, which resolves
-each measured and computed claim to its value, requires the claim text to contain the value, requires
-every ledger row to be cited in the text and every citation to be in the ledger, and checks that the
-pooled steps computed from the examiner's lineage verdicts equal its plan verdicts. The ledger holds
-\mLedgerClaims{} claims, \mLedgerStructure{} of them structure claims backed by \mLedgerChecks{}
-checks. A pin must be contained in a remote-tracking ref of its repository, so a fresh clone of the
-three remotes reproduces the result; the sibling repositories are given by \code{--sven} and
-\code{--brain}. \code{make check} includes this verification as \code{check/papers}. The bibliography
-entries were checked against the archive's abstract pages on 2026-11-15.
+\paragraph{What is needed.} Brain, Sven and Splinter, cloned from their remotes, and the evidence
+dataset \code{swedishembedded/the-frontier-must-grow-evidence}. The dataset holds only what this
+paper cites: the 889-item exam, the examiner's signed step and plan verdicts and the rule it applied,
+the learner's round records, every candidate record with its hand-off list of programs, the twelve
+S4 champion adapters, S1's analyses and per-model grades, and the records of the documentation runs
+and the 27B generations, one archive per series. \code{reproduce/dataset.json} pins the dataset's
+revision and the SHA-256 of every file and archive member, and \code{data/measurements.json} names
+each cited record by its path in the unpacked dataset and its digest. Every commit named below is
+contained in a branch of its repository's remote; \code{make verify} fails on a pin that is not.
+
+\paragraph{Three tiers.} The targets are run in the paper's directory
+(\code{make -C papers/splinter-brain-sven-flywheel <target>}); downloads, builds and outputs land
+under \code{target/papers}, and \code{EVIDENCE\_DIR}, \code{REPRO}, \code{BRAIN\_SRC}, \code{SVEN\_SRC},
+\code{DEVICE} and \code{LOCK} move them, name the clones and the card (\code{make reproduce} lists
+the tiers).
+
+\begin{center}\small
+\begin{tabular}{@{}p{0.17\linewidth}p{0.47\linewidth}p{0.30\linewidth}@{}}
+\toprule
+Target & What it reproduces & Hardware and time \\
+\midrule
+\code{reproduce/verify} & Downloads the dataset at its pinned revision (or uses a local copy), checks
+every file, archive member and adapter digest, unpacks it and runs \code{make verify} on it: the
+structure checks at the pinned commits, and every measured value re-extracted from its record and
+compared with \code{data/measurements.json}. & CPU; a 1.6\,GB download; under a minute on our host. \\
+\code{reproduce/examine} & Builds Brain at \code{796871647}, fetches Qwen/Qwen3-4B at its pinned
+revision (every file checked), serves the base and each lineage's three adapters with the paper's
+flags (\code{--kv-cache f32}, \code{--max-batch 64}, adapters by digest, the base identified by the
+checkpoint's content digest), re-grades all 889 items with the reference examiner and writes each
+step beside the published verdict. & One GPU (the paper's runs used a GH200); time not yet measured. \\
+\code{reproduce/rerun} & Builds the S4 lineage driver at Splinter \code{86f13672a} against Sven
+\code{fc99a2f1} and Brain \code{796871647}, fetches the Lua~5.1 manual (and cuts the three sections
+the proposer reads, checked against their digests), builds Lua~5.1.5 from its official tarball
+(SHA-256 pinned), runs the four S4 lineages with the launch record's settings and seeds, then grades
+the new champions as \code{reproduce/examine} does. & One GH200; about 12\,h, since S4's lineages took
+2.6 to 3.4\,h each on a card of their own. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{The reference examiner.} \code{reproduce/examiner.py} implements the examination protocol
+of \cref{sec:rsi-design} from that specification: the neutral request (the item's instruction and the
+sentence ``Answer with exactly what it prints, in one fenced code block.''), no system prompt,
+thinking off, one greedy completion of at most 2048 tokens, the last complete fenced block or else the
+whole reply as the answer, a reply cut at the limit graded as written, the comparison token by token
+per line with whitespace runs collapsed and blank lines ignored, the exclusion of every item equal to
+a program on either compared model's hand-off list (exactly, or once comments and whitespace are
+removed), the exact one-sided sign test, the paired gain with its template-clustered Student-$t$
+interval ($G-1$ degrees of freedom) and the registered per-lineage plan rule. It checks the served
+base against the declared base digest and each adapter file against its declared digest, and
+serves one lineage at a time, because adapters of different lineages carry the same card ids. Its
+unit tests run in \code{make verify}. It serves on the learner's Brain \code{796871647}: the build the
+published verdicts were served on (binary SHA-256 \code{d11e9134...}) was made from a Brain source
+that is not in Brain's published history.
+
+\paragraph{What a reader cannot reproduce.} (1) The fresh exam F of the registered follow-ups and its
+generator are not released; when F's verdicts exist, only their signed aggregates are published.
+(2) The published verdicts were produced by a different implementation of the examiner than the
+reference one, on a different Brain build, so \code{reproduce/examine} re-measures the result rather
+than replaying the published grades; a difference within serving nondeterminism is expected, and
+the comparison reports it. (3) The verdicts are signed with a symmetric HMAC key, so a reader cannot
+verify a signature; the signature guards against the learner, not against the authors.
+(4) \code{reproduce/rerun} is a statistical replication, not a bit-identical one: proposals and
+frontier predictions are sampled at temperature 1.0 and GPU kernels are not deterministic across
+hosts, so the reproduced lineages are new draws of the same procedure. (5) The raw logs of the
+training-substrate qualification and throughput probes, a trajectory probe, and the coding-task pilots
+and probes were not kept; \code{data/measurements.json} records their values, digests and commands, marked
+\code{"kept": false}, and \code{make verify} reports them as not kept.
+
+\paragraph{Verification.} \code{make verify} first runs the specifications of the pin rule, of the
+record parsers and of the reference examiner, then re-runs every structure check against the commits
+in \code{data/commits.json}, then \code{scripts/build\_data.py --check}, which resolves each measured
+and computed claim to its value, requires the claim text to contain the value, requires every ledger
+row to be cited in the text and every citation to be in the ledger, and checks that the pooled steps
+computed from the examiner's lineage verdicts equal its plan verdicts; with \code{EVIDENCE=DIR} it
+also re-extracts every value from the records in \code{DIR}. The ledger holds \mLedgerClaims{}
+claims, \mLedgerStructure{} of them structure claims backed by \mLedgerChecks{} checks. The sibling
+repositories are given by \code{--sven} and \code{--brain}. \code{make check} includes this
+verification as \code{check/papers}. The bibliography entries were checked against the archive's
+abstract pages on 2026-11-15.
 
 \paragraph{Draft and final.} The paper's status is recorded in \code{status.txt}; when it reads
 final, \code{build\_data.py --check} also fails while any registered-but-unmeasured or planned claim
 remains, so a final version holds only structure facts, measurements, computations from measurements
 and citations. This version is a draft because one planned claim remains: the two registered S4
 follow-ups, whose results it will report when they exist.\cl{RS39}
-
-\paragraph{Raw records.} The raw logs are not kept in the repository. \code{data/measurements.json}
-records, per log, the values the claims cite, the exact command, the Brain commit and the log's
-SHA-256, and \code{make verify EVIDENCE=DIR} re-extracts the values from the logs found in \code{DIR}
-and compares digests and values. The records of the documentation runs, the 27B generations and every
-S series are published in the evidence dataset \code{splinter-flywheel-evidence} under the paths
-\code{data/measurements.json} names: for S2 to S4 the examiner's signed step and plan verdicts and
-the registered rule it applied, the learner's round records, each candidate's record and list of
-trained programs and, for S4, the twelve champion adapters; for S1 each arm's registered analysis
-and per-model grades. The qualification logs of the training substrate and the logs of the coding-task
-pilots and probes were kept with the runs that made them; their values, digests and commands are in
-\code{data/measurements.json}.
-
-\paragraph{The examiner.} The examiner of S2 to S4 is specified in \cref{sec:rsi-design} at the
-level needed to build an equivalent one: exam custody, the one-way hand-off and its two files, the
-training-overlap exclusion, the direct-completion protocol (request, decoding, answer extraction and
-comparison, the token limit and the treatment of a cut reply), serving every model on one pinned build
-and tier with the base identified from the checkpoint's own files, the per-step exact one-sided sign
-test, the per-lineage plan rule and aggregate-only signed verdicts. With the published candidate
-records, trained-program lists and adapters, and the exam file released with S1, an equivalent
-examiner re-grades every S4 champion.
 
 \paragraph{Registrations.} All registrations are in the paper's \code{prereg/} directory: the
 coding-task protocol in \code{coding-tasks.md}, the acquisition experiments in \code{acquisition.md},
