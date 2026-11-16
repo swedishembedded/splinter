@@ -43,6 +43,8 @@ use crate::world;
 pub enum Stage {
     /// Pretraining on raw text.
     Pretrain,
+    /// Mid-training: raw text mixed with verified agent trajectories.
+    Midtrain,
     /// Supervised fine-tuning on the expert's demonstrations.
     Sft,
     /// Training on the model's own verified episodes.
@@ -285,6 +287,8 @@ impl<'a> Run<'a> {
                         .map(|p| world::Document { kind: "fetched", text: p.to_string() }),
                 );
             }
+            let texts: Vec<String> = docs.iter().map(|d| d.text.clone()).collect();
+            let checks = crate::datacheck::corpus(&texts, &run.config.data_checks)?;
             let text = world::to_jsonl(&docs);
             write(&run.path("world/corpus.jsonl"), &text)?;
             // Every tenth document is held out of pretraining and scored.
@@ -297,7 +301,7 @@ impl<'a> Run<'a> {
                 *kinds.entry(doc.kind).or_default() += 1;
             }
             let sample = docs.iter().find(|d| d.kind == "world").map(|d| d.text.clone());
-            Ok(StageWork::new(json!({ "documents": docs.len(), "bytes": text.len(), "kinds": kinds, "sample": sample }))
+            Ok(StageWork::new(json!({ "documents": docs.len(), "bytes": text.len(), "kinds": kinds, "sample": sample, "data": checks }))
                 .output("corpus", "world/corpus.jsonl")
                 .output("train", "world/train.jsonl")
                 .output("held_out", "world/held_out.jsonl"))
@@ -471,11 +475,6 @@ impl<'a> Run<'a> {
         let commit = self.unit(&unit, &key, |run, _| {
             let out = run.path(&rel);
             reset(&out)?;
-            // The vocabulary is learned from this text; it is derived from
-            // the corpus and the settings in the key, so it is no output.
-            let tokenizer_text = run.path(&format!("tokenizer/{label}.jsonl"));
-            let corpus = std::fs::read_to_string(run.path("world/corpus.jsonl"))?;
-            write(&tokenizer_text, &tokenizer_corpus(&corpus, split_digits))?;
             let made = run.brain.make_checkpoint(&CheckpointRequest {
                 model: &spec,
                 format: &ChatFormat {
@@ -484,7 +483,8 @@ impl<'a> Run<'a> {
                     eos: run.template.end.clone(),
                     pad: Some(run.template.pad.clone()),
                 },
-                tokenizer_corpus: &tokenizer_text,
+                tokenizer_corpus: &run.path("world/corpus.jsonl"),
+                split_digits,
                 seed: run.seed,
                 install_as: &install_name(&key, &format!("{label}-init")),
                 identity: &identity(&key),
@@ -521,6 +521,7 @@ impl<'a> Run<'a> {
         let rel = format!("checkpoints/{label}/{name}");
         let (objective, budget) = match stage {
             Stage::Pretrain => (Objective::Pretrain, self.config.pretrain.clone()),
+            Stage::Midtrain => (Objective::Pretrain, self.config.midtrain.budget.clone()),
             Stage::Sft => (Objective::ChatFull, self.config.sft.clone()),
             Stage::Improve => (Objective::ChatFull, self.config.improve.clone()),
         };
@@ -541,7 +542,8 @@ impl<'a> Run<'a> {
             &["brain"],
         );
         let base_checkpoint = base.1.clone();
-        let held_out = (stage == Stage::Pretrain).then(|| self.path("world/held_out.jsonl"));
+        let held_out = matches!(stage, Stage::Pretrain | Stage::Midtrain)
+            .then(|| self.path("world/held_out.jsonl"));
         let unit_name = unit.clone();
         let commit = self.unit(&unit, &key, |run, attempt| {
             let out = run.path(&rel);
@@ -607,7 +609,7 @@ impl<'a> Run<'a> {
             // state. Chat records vary in length, so no rate is claimed for a
             // chat run.
             let trained_steps = u64::from(budget.steps).saturating_sub(resume["resumed_at"].as_u64().unwrap_or(0));
-            let rate = (stage == Stage::Pretrain && seconds > 0.0).then(|| {
+            let rate = (objective == Objective::Pretrain && seconds > 0.0).then(|| {
                 trained_steps as f64 * f64::from(budget.batch) * f64::from(budget.block) / seconds
             });
             Ok(StageWork::new(json!({
@@ -615,7 +617,7 @@ impl<'a> Run<'a> {
                 "losses": trained.losses, "resumed": trained.resumed, "attempt": attempt.id(),
                 "resume": { "state": resume["state"], "resumed_at": resume["resumed_at"] },
                 "train_seconds": started.elapsed().as_secs(), "tokens_per_second": rate,
-                "tokens": (stage == Stage::Pretrain).then(|| u64::from(budget.steps) * u64::from(budget.batch) * u64::from(budget.block)),
+                "tokens": (objective == Objective::Pretrain).then(|| u64::from(budget.steps) * u64::from(budget.batch) * u64::from(budget.block)),
             }))
             .output("checkpoint", &rel))
         })?;
@@ -637,20 +639,6 @@ fn identity(key: &StageKey) -> String {
 fn install_name(key: &StageKey, stage: &str) -> String {
     let hex = key.as_str().rsplit(':').next().unwrap_or(key.as_str());
     format!("minimind-{stage}-{}", &hex[..12.min(hex.len())])
-}
-
-/// The text the vocabulary is learned from: the corpus, without its digits
-/// when they are to stay single tokens. A byte-level vocabulary learns no
-/// merge it never sees, so with no digit in its text every digit is a token
-/// of its own and a number reads the same after a space, a colon or a quote:
-/// the model copies a value digit by digit instead of mapping one multi-digit
-/// piece to another.
-fn tokenizer_corpus(corpus: &str, split_digits: bool) -> String {
-    if split_digits {
-        corpus.chars().filter(|c| !c.is_ascii_digit()).collect()
-    } else {
-        corpus.to_string()
-    }
 }
 
 fn checkpoint_of(commit: &Commit, rel: &str) -> anyhow::Result<Checkpoint> {

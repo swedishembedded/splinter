@@ -19,3 +19,10 @@ episodes; improving on those with `full_train` fell to 0 of 12, with `pretrain` 
 trains its chat stages as text by default (`chat_training.as_text`); the `full_train` path for Ouro is
 reported to brain. A record whose conversation holds a tool call with unparseable arguments is now left
 out (`data::wire`), since brain refuses the whole dataset over one.
+
+**Root cause (brain, 2026-11-16, ed9deabfa):** not the chat objective. The from-scratch checkpoints carried
+`early_exit_threshold` 1.0, so serving always used the last loop pass, while the objective trains the pass
+where the exit mass sits (pass 0, about 0.96-0.98 of it); `full_train` improved pass 0 and degraded the last
+pass the server answered with. A from-scratch Ouro now initialises with 0.5 (the median exit). The sample
+trains its fine-tune and improvement with `full_train` again (tool results unsupervised) and keeps
+whole-trajectory text for the mid-training stage.

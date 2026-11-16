@@ -47,10 +47,12 @@ fi
 export TMPDIR="$run_dir/tmp"
 mkdir -p "$TMPDIR"
 
-# A brain the run starts compiles its CUDA kernels at run time with NVRTC:
-# found in the loader's cache, the library path, beside nvcc, or given with
-# --nvrtc-dir. Only that library is put first on the path (prepended, so the
-# loader still finds every other driver library the cards need).
+# A brain the run starts compiles its CUDA kernels at run time with NVRTC and
+# runs its training products through cuBLAS; without cuBLAS it trains about
+# ten times slower. Both are found in the loader's cache, the library path,
+# beside nvcc, or in --nvrtc-dir (a CUDA toolkit's library directory). Only
+# those libraries are put first on the path (prepended, so the loader still
+# finds every other driver library the cards need).
 if [ -n "$brain_bin" ]; then
     if [ -z "$nvrtc_dir" ]; then
         for dir in $(ldconfig -p 2>/dev/null | awk '/libnvrtc\.so/ { print $NF }' | xargs -r -n1 dirname) \
@@ -63,9 +65,15 @@ if [ -n "$brain_bin" ]; then
         echo "run.sh: no libnvrtc found (loader cache, library path, beside nvcc); give --nvrtc-dir DIR, the directory holding libnvrtc.so of a CUDA toolkit" >&2
         exit 2
     fi
+    if ! ls "$nvrtc_dir"/libcublas.so* >/dev/null 2>&1 && ! ldconfig -p 2>/dev/null | grep -q libcublas.so; then
+        echo "run.sh: no libcublas beside $nvrtc_dir/libnvrtc.so or in the loader cache; brain would train about ten times slower: give --nvrtc-dir DIR, a CUDA toolkit's library directory holding both" >&2
+        exit 2
+    fi
     links="$run_dir/nvrtc"
     mkdir -p "$links"
-    for lib in "$nvrtc_dir"/libnvrtc*.so*; do ln -sfn "$lib" "$links/$(basename "$lib")"; done
+    for lib in "$nvrtc_dir"/libnvrtc*.so* "$nvrtc_dir"/libcublas*.so*; do
+        [ -e "$lib" ] && ln -sfn "$lib" "$links/$(basename "$lib")"
+    done
     export LD_LIBRARY_PATH="$links${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 

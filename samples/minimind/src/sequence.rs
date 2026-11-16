@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use anyhow::Context as _;
 use serde_json::Value;
 use splinter_sdk::model::scratch::Checkpoint;
-use splinter_sdk::store::stage_ledger::Commit;
+use splinter_sdk::store::stage_ledger::{Commit, StageWork};
 
 use crate::stages::{Run, Stage};
 use crate::template::Template;
@@ -65,6 +65,10 @@ pub(crate) fn model_stages(
         .output("train")
         .context("the world has no training corpus")?
         .clone();
+    let demos = demonstrations
+        .output("records")
+        .context("the demonstrations have no records")?
+        .clone();
     let init = run.checkpoint(label, world)?;
     run.probe(&format!("{label}/init"), (&init.0, &init.1))?;
     run.retrieval(&format!("{label}/init"), (&init.0, &init.1))?;
@@ -90,23 +94,68 @@ pub(crate) fn model_stages(
         run.config.pretrain = full.clone();
         pretrained = trained?;
         run.retrieval(&format!("{label}/{name}"), (&pretrained.0, &pretrained.1))?;
+        // Headroom: what a small fixed fine-tune makes of this checkpoint.
+        if run.config.headroom_steps > 0 {
+            let sft = run.config.sft.clone();
+            run.config.sft.steps = run.config.headroom_steps;
+            let tiny = run.train(
+                Stage::Sft,
+                label,
+                &format!("headroom-{i}"),
+                (&pretrained.0, &pretrained.1),
+                (&demos, "data/demonstrate.jsonl"),
+            );
+            run.config.sft = sft;
+            let tiny = tiny?;
+            run.probe(&format!("{label}/headroom-{i}"), (&tiny.0, &tiny.1))?;
+        }
     }
     run.probe(
         &format!("{label}/pretrained"),
         (&pretrained.0, &pretrained.1),
     )?;
     let sat_pretrained = run.sit(label, "pretrained", (&pretrained.0, &pretrained.1), false)?;
-    let demos = demonstrations
-        .output("records")
-        .context("the demonstrations have no records")?
-        .clone();
-    let sft = run.train(
-        Stage::Sft,
-        label,
-        "sft",
-        (&pretrained.0, &pretrained.1),
-        (&demos, "data/demonstrate.jsonl"),
-    )?;
+    // Mid-training: raw text with a share of verified trajectories.
+    let mut base = pretrained.clone();
+    if run.config.midtrain.budget.steps > 0 {
+        let mix = run.midtrain_data(label, demonstrations, world)?;
+        let digest = mix.output("mix").context("the mix has no output")?.clone();
+        let rel = format!("data/{label}/midtrain.jsonl");
+        base = run.train(
+            Stage::Midtrain,
+            label,
+            "midtrain",
+            (&base.0, &base.1),
+            (&digest, &rel),
+        )?;
+        run.retrieval(&format!("{label}/midtrain"), (&base.0, &base.1))?;
+        run.probe(&format!("{label}/midtrained"), (&base.0, &base.1))?;
+    }
+    // The fine-tune in segments, the probe after each: the points of the
+    // learning-aptitude fit; the last is the fine-tuned checkpoint.
+    let segments = run.config.sft_segments.max(1);
+    let full = run.config.sft.clone();
+    let mut sft = base;
+    for i in 1..=segments {
+        run.config.sft.steps = full.steps / segments + u32::from(i <= full.steps % segments);
+        let name = if i == segments {
+            "sft".to_string()
+        } else {
+            format!("sft-{i}")
+        };
+        let trained = run.train(
+            Stage::Sft,
+            label,
+            &name,
+            (&sft.0, &sft.1),
+            (&demos, "data/demonstrate.jsonl"),
+        );
+        run.config.sft = full.clone();
+        sft = trained?;
+        if i < segments {
+            run.probe(&format!("{label}/{name}"), (&sft.0, &sft.1))?;
+        }
+    }
     run.probe(&format!("{label}/sft"), (&sft.0, &sft.1))?;
     let sat_sft = run.sit(label, "sft", (&sft.0, &sft.1), false)?;
     run.judge(
@@ -162,3 +211,76 @@ fn train_on(
     let rel = format!("data/{label}/{name}.jsonl");
     run.train(Stage::Improve, label, name, base, (&digest, &rel))
 }
+
+impl Run<'_> {
+    /// The mid-training mix of `label`, as unit `<label>/midtrain/data`
+    /// writing `data/<label>/midtrain.jsonl`: every demonstration as text
+    /// in the template, and pretraining documents drawn (seeded) until the
+    /// demonstrations are `midtrain.agentic_share` of the bytes.
+    ///
+    /// # Errors
+    /// The inputs cannot be read or the mix written.
+    pub fn midtrain_data(
+        &mut self,
+        label: &str,
+        demonstrations: &Commit,
+        world: &Commit,
+    ) -> anyhow::Result<Commit> {
+        let demos = demonstrations
+            .output("records")
+            .context("the demonstrations have no records")?
+            .clone();
+        let train = world
+            .output("train")
+            .context("the world has no training corpus")?
+            .clone();
+        let unit = format!("{label}/midtrain/data");
+        let slice = serde_json::json!({ "share": self.config.midtrain.agentic_share, "template": self.template });
+        let key = self.key(
+            &slice,
+            &unit,
+            &[("demonstrations", &demos), ("world", &train)],
+            crate::recipe::TRAIN,
+            &[],
+        );
+        let rel = format!("data/{label}/midtrain.jsonl");
+        self.unit(&unit, &key, |run, _| {
+            let records = std::fs::read_to_string(run.path("data/demonstrate.jsonl"))?;
+            let agentic = conversations_as_text(&run.template, &records)?;
+            let world_text = std::fs::read_to_string(run.path("world/train.jsonl"))?;
+            let mut docs: Vec<&str> = world_text.lines().collect();
+            splinter_sdk::vocabulary::rng::SplitMix64::new(run.seed ^ MIDTRAIN_SALT)
+                .shuffle(&mut docs);
+            let share = run.config.midtrain.agentic_share.clamp(0.01, 1.0);
+            // Bytes are a proxy for tokens here: both corpora are text in
+            // one tokenizer.
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            let want = (agentic.len() as f64 * (1.0 - share) / share) as usize;
+            let mut mix = agentic.clone();
+            let mut general = 0usize;
+            let mut taken = 0usize;
+            for d in docs {
+                if general >= want {
+                    break;
+                }
+                general += d.len() + 1;
+                taken += 1;
+                mix.push_str(d);
+                mix.push('\n');
+            }
+            crate::stages::write(&run.path(&rel), &mix)?;
+            Ok(StageWork::new(serde_json::json!({
+                "trajectories": agentic.lines().count(), "documents": taken,
+                "agentic_bytes": agentic.len(), "general_bytes": general,
+            }))
+            .output("mix", &rel))
+        })
+    }
+}
+
+/// A world constant: the stream mid-training documents are drawn from.
+const MIDTRAIN_SALT: u64 = 0x6d69_6474_7261_696e;

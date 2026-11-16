@@ -50,7 +50,7 @@ impl Recipe {
 /// the tool results as rendered), the held-out split and the tokenizer text.
 pub const WORLD: Recipe = Recipe {
     stage: "world",
-    version: 5,
+    version: 6,
 };
 
 /// The task families, their instance draw and the Harbor export.
@@ -63,19 +63,19 @@ pub const TASKS: Recipe = Recipe {
 /// the verifier and the records an accepted episode writes.
 pub const EPISODE: Recipe = Recipe {
     stage: "episode",
-    version: 4,
+    version: 5,
 };
 
 /// Gathering accepted episodes into a dataset.
 pub const GATHER: Recipe = Recipe {
     stage: "gather",
-    version: 2,
+    version: 3,
 };
 
 /// The tokenizer and random-init request.
 pub const CHECKPOINT: Recipe = Recipe {
     stage: "checkpoint",
-    version: 1,
+    version: 2,
 };
 
 /// A training request (pretraining, fine-tuning, improvement) and the data
@@ -88,7 +88,7 @@ pub const TRAIN: Recipe = Recipe {
 /// A probe's summary and its raw-text continuation.
 pub const PROBE: Recipe = Recipe {
     stage: "probe",
-    version: 2,
+    version: 3,
 };
 
 /// The examination request.
@@ -158,7 +158,7 @@ mod tests {
     }
 
     const PINNED: [&str; 3] = [
-        "world (WORLD, EPISODE): blake3:a7da6152dedf350d03ab0fae4ec28b94b2e34b05f3333d6e693e597880ed443b",
+        "world (WORLD, EPISODE): blake3:58577f4ec08e1067c09d7bba8680f3fcb565503c6b42fe02fe68e62ada65c0f3",
         "template (WORLD, CHECKPOINT): blake3:354117630131a85c444d649decf8b227f76e57221451ea66e3cd18ede9066edc",
         "tasks (TASKS): blake3:6c61c10760bd20f4818483d942fe77497519be58e12ca723986db413879afa1a",
     ];

@@ -89,6 +89,11 @@ fn outcome(commit: &Commit) -> bool {
     commit.summary["passed"].as_bool().unwrap_or(false)
 }
 
+/// Whether a verified episode is admitted as training material.
+pub(crate) fn admitted(commit: &Commit) -> bool {
+    commit.summary["admitted"].as_bool().unwrap_or(false)
+}
+
 /// What an episode runs with: the parts of the run its work reads, shared
 /// by the episodes running at once.
 struct EpisodeCtx<'a> {
@@ -196,14 +201,22 @@ fn episode_work(
     // The evidence, with sven's timestamps: kept, never digested.
     let doc = json!({ "attempt": attempt.id(), "instance": instance.id, "trajectory": trajectory });
     write(&dir.join("episode.json"), &doc.to_string())?;
+    // A verified episode is training material only when it got there
+    // faithfully (crate::admission).
+    let replies: Vec<Value> = exchanges
+        .iter()
+        .filter_map(|x| x.reply.clone().ok())
+        .collect();
+    let flags = crate::admission::flags(instance, &crate::admission::calls(&replies));
+    let admitted = verdict.passed && flags.is_empty();
     let outcome = json!({
-        "instance": instance.id, "passed": verdict.passed, "reason": verdict.reason,
+        "instance": instance.id, "passed": verdict.passed, "admitted": admitted, "flags": flags, "reason": verdict.reason,
         "conclusion": conclusion, "tool_calls": calls, "answer": answer, "last_text": last_text,
         "actions": actions(&exchanges),
     });
     write(&dir.join("outcome.json"), &outcome.to_string())?;
     let mut work = StageWork::new(json!({
-        "passed": verdict.passed, "reason": verdict.reason, "tool_calls": calls, "conclusion": conclusion,
+        "passed": verdict.passed, "admitted": admitted, "flags": outcome["flags"], "reason": verdict.reason, "tool_calls": calls, "conclusion": conclusion,
         "answer": answer, "last_text": last_text, "attempt": attempt.id(), "actions": outcome["actions"],
     }))
     .output("outcome", &format!("{rel}/outcome.json"));
@@ -434,10 +447,13 @@ impl Run<'_> {
             let reader = run.episode_reader(name)?;
             let mut lines = String::new();
             let mut accepted = 0;
+            let mut flagged = 0;
             for commit in &episodes {
-                if outcome(commit) {
+                if admitted(commit) {
                     accepted += 1;
                     lines.push_str(&reader.read(commit, "records")?);
+                } else if outcome(commit) {
+                    flagged += 1;
                 }
             }
             if require && accepted == 0 {
@@ -445,7 +461,8 @@ impl Run<'_> {
             }
             write(&run.path(&rel), &lines)?;
             let packed = run.pack_episodes(name)?;
-            Ok(StageWork::new(json!({ "episodes": episodes.len(), "accepted": accepted, "records": lines.lines().count() }))
+            let checks = crate::datacheck::demonstrations(&lines, &run.config.data_checks)?;
+            Ok(StageWork::new(json!({ "episodes": episodes.len(), "accepted": accepted, "flagged": flagged, "records": lines.lines().count(), "data": checks }))
                 .output("records", &rel)
                 .output("episodes", &packed))
         })?;

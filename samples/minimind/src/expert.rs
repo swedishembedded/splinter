@@ -285,12 +285,33 @@ pub fn next(instance: &Instance, messages: &[Value], tools: &[Value]) -> anyhow:
     let seen = tool_results(messages);
     Ok(match plan_step(&instance.plan, &seen, tools)? {
         Ok(action) => action,
-        Err(said) => Action::Finish(if said.ends_with("updated") {
-            format!("Done: {said}.")
-        } else {
-            format!("Done: {said} is in {ANSWER_FILE}.")
-        }),
+        Err(said) => Action::Finish(closing(&instance.id, &said)),
     })
+}
+
+/// The final reply, in one of several phrasings chosen by the instance, so no
+/// stock sentence dominates the demonstrations.
+fn closing(id: &str, said: &str) -> String {
+    let pick = id.bytes().fold(0usize, |h, b| {
+        h.wrapping_mul(31).wrapping_add(usize::from(b))
+    });
+    if said.ends_with("updated") {
+        let forms = [
+            "Done: {s}.",
+            "{s} as asked.",
+            "I changed it: {s}.",
+            "{s}; the other entries are unchanged.",
+        ];
+        return forms[pick % forms.len()].replace("{s}", said);
+    }
+    let forms = [
+        "Done: {s} is in answer.txt.",
+        "{s}",
+        "answer.txt now holds {s}.",
+        "The result is {s}, written to answer.txt.",
+        "Wrote {s} to answer.txt.",
+    ];
+    forms[pick % forms.len()].replace("{s}", said)
 }
 
 /// Runs one tool call in the workspace `ws` and returns its result as the

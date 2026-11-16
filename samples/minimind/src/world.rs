@@ -128,9 +128,10 @@ fn expression(rng: &mut SplitMix64) -> Document {
 
 /// A tiny program and what it prints.
 fn program(rng: &mut SplitMix64) -> Document {
-    let x = rng.between(1, 12) as i64;
-    let k = rng.between(2, 9) as i64;
-    let d = rng.between(0, 15) as i64;
+    // Ranges wide enough that a corpus of programs repeats almost none.
+    let x = rng.between(1, 99) as i64;
+    let k = rng.between(2, 19) as i64;
+    let d = rng.between(0, 99) as i64;
     let y = x * k;
     let out = y + d;
     Document {

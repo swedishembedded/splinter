@@ -20,8 +20,10 @@
 //! recorded calls (`data::wire`), brain over its API (`model::scratch`) and
 //! bench's examination (`bench::examine`).
 
+pub mod admission;
 pub mod collect;
 pub mod config;
+pub mod datacheck;
 pub mod exam;
 pub mod experience;
 pub mod expert;

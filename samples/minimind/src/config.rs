@@ -24,13 +24,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Profile {
-    /// About two million parameters on one card in about a quarter of an hour:
+    /// About two million parameters pretrained on about 100M tokens, past the
+    /// point where copying from context appears, on one card in about a
+    /// quarter of an hour:
     /// the quick check, and (shrunk) the acceptance specs'
     /// profile.
     Smoke,
-    /// The smoke model pretrained ten times longer on a world dense in copy
-    /// drills, past the point where it learns to copy a value out of its
-    /// context: the showcase, about two hours on one card.
+    /// About five million parameters (vocabulary 4096, four loop passes)
+    /// pretrained on about a billion tokens of a world dense in copy drills:
+    /// the showcase.
     Default,
     /// About sixty-four million parameters; needs a GPU.
     #[serde(rename = "64m")]
@@ -147,12 +149,24 @@ pub struct ChatTraining {
     pub as_text: bool,
 }
 
+/// Mid-training: after general pretraining, raw text with a share of
+/// verified agent trajectories rendered in the model's template.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MidTrain {
+    /// The share of the mix's bytes that are trajectories.
+    pub agentic_share: f64,
+    /// The run's budget; no steps skips the stage.
+    pub budget: TrainBudget,
+}
+
 /// How the vocabulary is learned.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TokenizerText {
-    /// Every digit stays a token of its own: the vocabulary is learned from
-    /// the corpus without its digits, so it has no multi-digit piece.
+    /// Every digit is a token of its own (brain's `split_digits`), so a
+    /// number reads the same after a space, a colon or a quote and is
+    /// copied digit by digit.
     pub split_digits: bool,
 }
 
@@ -203,8 +217,17 @@ pub struct Config {
     /// with the retrieval probe after each: the curve of what it learns
     /// against tokens.
     pub pretrain_segments: u32,
+    /// Mid-training between pretraining and the fine-tune.
+    pub midtrain: MidTrain,
     /// Supervised fine-tuning on the expert's demonstrations.
     pub sft: TrainBudget,
+    /// The fine-tune runs as this many segments, each continuing the last,
+    /// with the probe after each: the points of the learning-aptitude fit.
+    pub sft_segments: u32,
+    /// After every pretraining segment, a fine-tune of this many steps (the
+    /// fine-tune's other settings) and the probe: post-fine-tune headroom
+    /// per checkpoint. No steps skips it.
+    pub headroom_steps: u32,
     /// How the chat stages train.
     pub chat_training: ChatTraining,
     /// Training on the model's own verified episodes.
@@ -213,6 +236,8 @@ pub struct Config {
     pub experience: Experience,
     /// Episode bounds.
     pub agent: AgentLimits,
+    /// Bounds on degenerate generated data.
+    pub data_checks: crate::datacheck::DataChecks,
     /// Corpora fetched at run time, none by default.
     #[serde(default)]
     pub fetch: Vec<FetchedCorpus>,
@@ -244,19 +269,19 @@ impl Config {
         let (model, world, tasks, pretrain, sft, improve) = match profile {
             Profile::Smoke => (
                 ouro(256, 4, 2, 4, 1024, 2048),
-                world(200, 4_000, 1_500, 1_000, 6_000, 20_000),
+                world(200, 4_000, 1_500, 1_000, 6_000, 60_000),
                 tasks(1_600, 96, 12),
-                budget(600, 64, 2e-3, 512),
-                budget(400, 32, 1e-3, 1024),
-                budget(40, 8, 3e-4, 1024),
+                budget(3_000, 64, 2e-3, 512),
+                budget(600, 8, 5e-4, 2048),
+                budget(100, 8, 2e-4, 2048),
             ),
             Profile::Default => (
-                ouro(256, 4, 2, 4, 1024, 2048),
-                world(200, 4_000, 1_500, 1_000, 12_000, 150_000),
+                ouro(256, 4, 4, 4, 4096, 2048),
+                world(400, 20_000, 6_000, 3_000, 30_000, 600_000),
                 tasks(3_000, 384, 12),
-                budget(6_000, 64, 2e-3, 512),
-                budget(800, 32, 5e-4, 1024),
-                budget(80, 8, 2e-4, 1024),
+                budget(15_000, 64, 1e-3, 1024),
+                budget(2_000, 8, 3e-4, 2048),
+                budget(200, 8, 1e-4, 2048),
             ),
             Profile::M64 => (
                 ouro(512, 8, 4, 8, 8192, 2048),
@@ -275,10 +300,21 @@ impl Config {
             tasks,
             pretrain,
             pretrain_segments: if profile == Profile::Smoke { 1 } else { 6 },
+            midtrain: MidTrain {
+                agentic_share: 0.15,
+                budget: if profile == Profile::Smoke {
+                    budget(300, 64, 1e-3, 512)
+                } else {
+                    budget(1_500, 64, 1e-3, 1024)
+                },
+            },
+            sft_segments: 4,
+            headroom_steps: if profile == Profile::Smoke { 0 } else { 100 },
             sft,
-            chat_training: ChatTraining { as_text: true },
+            chat_training: ChatTraining { as_text: false },
             improve,
             experience: Experience { rehearsal: 1.0 },
+            data_checks: crate::datacheck::DataChecks::default(),
             agent: AgentLimits {
                 max_tool_calls: 12,
                 deadline_secs: 300,

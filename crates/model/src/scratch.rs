@@ -113,6 +113,8 @@ pub struct CheckpointRequest<'a> {
     pub tokenizer_corpus: &'a Path,
     /// The seed of the weights' initialisation and the tokenizer's training.
     pub seed: u64,
+    /// Every digit is its own token: no learned merge holds a digit.
+    pub split_digits: bool,
     /// The name it is installed under.
     pub install_as: &'a str,
     /// The run's durable identity (brain's `resume_key`).
@@ -485,6 +487,9 @@ impl ModelService for ServedBrain {
         });
         if let Some(pad) = &request.format.pad {
             tokenizer["pad_token"] = json!(pad);
+        }
+        if request.split_digits {
+            tokenizer["split_digits"] = json!(true);
         }
         let params = json!({
             "arch": request.model.arch,

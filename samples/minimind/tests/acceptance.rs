@@ -86,6 +86,8 @@ fn smoke() -> Config {
     config.tasks.probes = 4;
     config.world.trajectories = 6;
     config.world.recall = 20;
+    // One fine-tune segment, so the specs name one fine-tune unit.
+    config.sft_segments = 1;
     config
 }
 

@@ -23,8 +23,74 @@ fn family(task: &str) -> &str {
     task.rsplit('-').next().unwrap_or(task)
 }
 
-/// The probe stages in the order a model goes through them.
-const STAGES: [&str; 4] = ["init", "pretrained", "sft", "improved"];
+/// The probed checkpoints of `label`, in the order this run probed them.
+fn stages(commits: &[Commit], label: &str) -> Vec<String> {
+    let prefix = format!("probe/{label}/");
+    let mut out: Vec<String> = Vec::new();
+    for c in commits {
+        if let Some(stage) = c.unit.strip_prefix(&prefix).filter(|s| !s.contains('/')) {
+            if !out.iter().any(|s| s == stage) {
+                out.push(stage.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// The development pass rate the aptitude's `N*` is reported for.
+const APTITUDE_TARGET: f64 = 0.75;
+
+/// The fit `s(N) = b + k log10(N / N0)` of the development pass rate over
+/// fine-tune steps (least squares), from the probes after each fine-tune
+/// segment: the slope `k` is the learning aptitude, and `N*` the steps the
+/// fit puts at `target`.
+fn aptitude(commits: &[Commit], label: &str, target: f64) -> Option<String> {
+    let mut points: Vec<(f64, f64)> = Vec::new();
+    let mut steps = 0.0;
+    for stage in stages(commits, label) {
+        if stage != "sft" && !stage.starts_with("sft-") {
+            continue;
+        }
+        let t = find(commits, &format!("{label}/{stage}"))?;
+        steps += t.summary["steps"].as_f64()?;
+        let p = find(commits, &format!("probe/{label}/{stage}"))?;
+        points.push((
+            steps,
+            p.summary["passed"].as_f64()? / p.summary["total"].as_f64()?.max(1.0),
+        ));
+    }
+    if points.len() < 2 {
+        return None;
+    }
+    let n0 = points[0].0;
+    let xs: Vec<f64> = points.iter().map(|(n, _)| (n / n0).log10()).collect();
+    let count = xs.len() as f64;
+    let (mx, my) = (
+        xs.iter().sum::<f64>() / count,
+        points.iter().map(|p| p.1).sum::<f64>() / count,
+    );
+    let sxx: f64 = xs.iter().map(|x| (x - mx).powi(2)).sum();
+    let sxy: f64 = xs
+        .iter()
+        .zip(&points)
+        .map(|(x, p)| (x - mx) * (p.1 - my))
+        .sum();
+    let k = if sxx > 0.0 { sxy / sxx } else { 0.0 };
+    let b = my - k * mx;
+    let reach = if k > 0.0 {
+        format!(
+            "N* = {:.0} steps to {target:.2}",
+            n0 * 10f64.powf((target - b) / k)
+        )
+    } else {
+        "no rise, so no N*".to_string()
+    };
+    let shown: Vec<String> = points
+        .iter()
+        .map(|(n, s)| format!("{n:.0}:{s:.2}"))
+        .collect();
+    Some(format!("learning aptitude (dev pass rate over fine-tune steps {}): k = {k:.3} per decade, b = {b:.3} at N0 = {n0:.0}; {reach}", shown.join(" ")))
+}
 
 /// Passes by family, in first-seen order: `combine 1/4, lookup 0/4`.
 fn by_family(examples: &[Value]) -> String {
@@ -167,10 +233,11 @@ fn exam_rates(commits: &[Commit], label: &str, stage: &str) -> BTreeMap<String, 
 /// Training throughput of the stage that made the checkpoint at `stage`.
 fn training(commits: &[Commit], label: &str, stage: &str) -> String {
     let unit = match stage {
+        "init" => return String::new(),
         "pretrained" => "pretrain",
-        "sft" => "sft",
+        "midtrained" => "midtrain",
         "improved" => "improve",
-        _ => return String::new(),
+        other => other,
     };
     let Some(c) = find(commits, &format!("{label}/{unit}")) else {
         return String::new();
@@ -196,7 +263,8 @@ pub fn summary(commits: &[Commit], labels: &[String]) -> String {
             "\n{label}: what each checkpoint can do\n  {:<11} {:<7} {:<9} {:<9} {:<40} {:<26} training",
             "stage", "probe", "held-out", "1st tool", "by skill", "exam a / b / c / anchor"
         );
-        for stage in STAGES {
+        for stage in stages(commits, label) {
+            let stage = stage.as_str();
             let Some(p) = find(commits, &format!("probe/{label}/{stage}")) else {
                 continue;
             };
@@ -244,6 +312,9 @@ pub fn summary(commits: &[Commit], labels: &[String]) -> String {
                 c.summary["path"],
                 2 * c.summary["per_kind"].as_u64().unwrap_or(0)
             ));
+        }
+        if let Some(line) = aptitude(commits, label, APTITUDE_TARGET) {
+            let _ = writeln!(s, "  {line}");
         }
         if !curve.is_empty() {
             let _ = writeln!(

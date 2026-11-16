@@ -69,7 +69,7 @@ impl Run<'_> {
                 .collect();
             let accepted = episodes
                 .iter()
-                .filter(|c| c.summary["passed"].as_bool().unwrap_or(false))
+                .filter(|c| crate::collect::admitted(c))
                 .count();
             let chosen: Vec<&Commit> = if control {
                 let mut pool = with_records.clone();
@@ -78,7 +78,7 @@ impl Run<'_> {
             } else {
                 with_records
                     .into_iter()
-                    .filter(|c| c.summary["passed"].as_bool().unwrap_or(false))
+                    .filter(|c| crate::collect::admitted(c))
                     .collect()
             };
             let reader = run.episode_reader(&format!("{label}/explore"))?;
@@ -95,7 +95,7 @@ impl Run<'_> {
             let rehearsed: Vec<&str> = pool.into_iter().take(wanted).collect();
             let passed_chosen = chosen
                 .iter()
-                .filter(|c| c.summary["passed"].as_bool().unwrap_or(false))
+                .filter(|c| crate::collect::admitted(c))
                 .count();
             let mut text = String::new();
             for line in own
