@@ -36,7 +36,7 @@ and bench's examination.
 ```
 
 - brain is one `brain serve --training` process: given with `--brain-endpoint`,
-  or started on the CPU for the run with `--brain-bin` and stopped when it ends.
+  or started on a CUDA card for the run with `--brain-bin` and stopped when it ends.
   The sample reaches it only over HTTP.
 - sven runs each episode against an OpenAI-compatible endpoint: the expert's
   for demonstrations, a recording proxy to brain for the model's own episodes
@@ -52,9 +52,16 @@ and bench's examination.
   collect episodes.
 - A brain service: either a running `brain serve --training` given with
   `--brain-endpoint http://host:port/v1`, or a `brain` binary given with
-  `--brain-bin PATH --models-dir DIR`, which the run starts on the CPU
-  (`--device cpu --backend cpu`) on a free port, with its state under
-  `RUN_DIR/brain`, and stops when it ends.
+  `--brain-bin PATH --device gpuN`, which the run starts on that CUDA card
+  (`--device gpuN,cpu --backend cuda`; the CPU only for making a checkpoint
+  from nothing, which is host work) on a free port, with its model store and
+  artifact store under `RUN_DIR/brain`, and stops when it ends. Training never
+  runs on the CPU: a brain that does not schedule the card is refused before
+  any work. The brain process needs NVRTC findable, for example
+  `export LD_LIBRARY_PATH=<cuda>/lib-with-libnvrtc:$LD_LIBRARY_PATH`, and the
+  run directory must be on a disk with 10 GB free (brain's training floor).
+- On a shared card, run the command under the card's lock, for example
+  `flock <locks>/gpu3.lock samples/minimind/run.sh ...`.
 - For the examination (optional): a bench checkout (`--bench DIR`), its private
   exam seed file (`--bench-seed-file`), the verdict signing key (`--bench-key`,
   made once with `./bench keygen --out KEY`) and the sven binary bench runs the
@@ -64,10 +71,11 @@ and bench's examination.
 ## The one command
 
 ```bash
-samples/minimind/run.sh --run-dir ~/runs/minimind-smoke --brain-endpoint http://127.0.0.1:8811/v1
+samples/minimind/run.sh --run-dir ~/runs/minimind-smoke --brain-bin /path/to/brain --device gpu3
 ```
 
-(or `--brain-bin PATH --models-dir DIR` for a brain the run starts and owns).
+(or `--brain-endpoint URL --brain-artifact-store DIR` for a `brain serve
+--training` that is already running).
 
 `run.sh` builds the sample and runs `splinter-minimind run` with every option it
 was given; `--profile` (default `smoke`) picks the profile and `--run-dir`
@@ -96,22 +104,34 @@ run's manifest afterwards.
 | 13 | `<model>/experience/examine` | bench: the improved model against the fine-tuned one | the verdict |
 | 14 | `report.md` | written from the ledger | its path |
 
-Stages 1 to 5 need no model. Today, against brain, the run does them and then
-stops at stage 6 with the capability brain does not offer yet (measured on the
-smoke profile, CPU):
+Measured on the smoke profile, seed 7, one GH200 (gpu3), brain d84390ff5,
+2026-11-16 (`gpu3` run, 32 minutes end to end without the exam):
 
 ```text
-[  done] init: profile="smoke" seed=7
-[  done] world: bytes=22602 documents=344
-[  done] tasks: dev=4 explore=8 train=8
-[  done] demonstrate/train-00000-combine: answer="735" conclusion="Success" passed=true tool_calls=4
-...
-[  done] demonstrate: accepted=8 episodes=8 records=30
-[failed] ouro: ouro/checkpoint (attempt 1): needs brain's from-scratch action over brain/train: ...
+[  done] world: bytes=8501052 documents=13300
+[  done] tasks: dev=12 explore=96 train=1600
+[  done] demonstrate: accepted=1600 episodes=1600 records=5868
+[  done] ouro/checkpoint: arch="ouro" model="local/minimind-ouro-init-7c69a3e524bf"
+  probe ouro/init: 0/12 development tasks solved
+    text  "Velmora is a town by" -> "oultethtethtethteth ... = = = ="
+[  done] ouro/pretrain: first_loss=6.98 last_loss=0.34 seconds=687 steps=600
+  probe ouro/pretrained: 1/12 development tasks solved
+    text  "Velmora is a town by" -> " a forest. Its mayor is Trom Tromsoth. 568 people live in Vethmon"
+[  done] ouro/sft: first_loss=1.43 last_loss=0.11 seconds=834 steps=4000
+  probe ouro/sft: 3/12 development tasks solved
+[  done] ouro/explore: accepted=13 episodes=96 records=40
+[  done] ouro/improve: steps=1000
+  probe ouro/improved: 4/12 development tasks solved
 ```
 
-The whole sequence, every stage above, is exercised by the acceptance specs
-against a model-service double (`cargo test --release -p splinter-minimind`).
+The fine-tuned model has the protocol (it reads, runs the helper, writes
+`answer.txt`, answers); what it gets wrong is copying names and numbers out
+of tool results. Pretraining ran at about 50k tokens a second (600 steps of
+128 rows of 256 tokens); a sweep of pretraining batch on the card gave
+27k, 56k, 69k, 75k and 77k tokens a second at batch 8, 32, 128, 512 and 2048,
+so 128 is used. On the CPU the same pretraining ran at about 700 tokens a
+second. The whole sequence is also exercised by the acceptance specs against
+a model-service double (`cargo test --release -p splinter-minimind`).
 
 ## Abort, resume, re-run
 
@@ -139,9 +159,9 @@ what it reads and the code revisions it depends on.
 
 | Profile | Model (Ouro, looped) | Data | Where |
 |---|---|---|---|
-| `smoke` | hidden 64, 2 shared layers, 2 passes, vocab 1024, context 1024 | 344 documents, 8/8/4 task instances | the CPU, minutes; what the tests and CI run |
-| `default` | hidden 256, 4 shared layers, 4 passes, vocab 4096, context 2048 | 60 towns and some 30k documents, 400/200/8 instances | sized for a fast turnaround |
-| `64m` | hidden 512, 8 shared layers, 4 passes, vocab 8192, context 2048 | 200 towns, 2000/1000/8 instances | a GPU |
+| `smoke` | hidden 256, 4 shared layers, 2 passes, vocab 1024, context 2048 | 13300 documents (6000 worked tool-use conversations), 1600/96/12 task instances | one GPU, about half an hour; the tests run it, smaller, against a double |
+| `default` | hidden 256, 4 shared layers, 4 passes, vocab 4096, context 2048 | 60 towns and some 30k documents, 400/200/8 instances | a GPU; not run yet |
+| `64m` | hidden 512, 8 shared layers, 4 passes, vocab 8192, context 2048 | 200 towns, 2000/1000/8 instances | a GPU; not run yet |
 
 The architecture is configuration: `models.<label>` names an `arch` brain
 knows and that architecture's own `config`, handed to brain unread. A second
@@ -173,13 +193,16 @@ the report says "not promoted".
 
 ## Limits
 
-- Brain does not yet offer, over its API, the from-scratch checkpoint (tokenizer
-  plus random init), raw-text pretraining or a full chat fine-tune of an Ouro
-  checkpoint; the run stops at the checkpoint stage and names what it needs.
+- The bench examination has not been run against a trained checkpoint yet:
+  the measured run above makes no promotion claim.
+- A rerun after a code change recomputes the data stages; their records hold
+  the shell tool's measured duration, so the demonstrations' digest changes and
+  fine-tuning is repeated. A rerun of unchanged code reuses every stage.
 - The probes are a handful of development tasks of the training families: they
   show what a checkpoint does, they are not evidence of learning. Learning from
   scratch and learning from experience are reported apart, and a finished run
   is not a learning claim; only a verified Promote is.
 - A tiny model may learn only part of the skill; the report says what was
   measured and nothing more.
-- Episodes run one at a time.
+- The tiny model learns the protocol and only part of the values; the improve
+  stage trains on few verified episodes and fits them almost exactly.

@@ -28,6 +28,25 @@ captured on the wire, and only verifier-accepted episodes become records.
 | Sample generators: YAML configuration with smoke/default/64m profiles and models as `arch` + config; deterministic world corpus; three training families (combine via `./calc`, registry lookup, log count) as Harbor folders with a trusted verifier; the expert policy reading every value from tool results; the compact chat template and its jinja twin (rendered identically, held by a spec) | `samples/minimind/src/{config,world,tasks,expert,template}.rs` | done |
 | Stages over the ledger (init, fetch, world, tasks, demonstrate, then per model label: checkpoint, probe, pretrain, probe, sft, probe, scratch exam, explore, improve, probe, experience exam; report), the `run`/`status` program | `samples/minimind/src/{stages,collect,report,main}.rs` | done; acceptance specs (fresh run, rerun trains nothing, kill in SFT resumes, interrupted episode reruns under a new attempt and counts once, corrupt checkpoint caught, changed seed/setting, fetched corpus pinned, no promotion without a verified Promote) pass against a model-service double; against real brain the run stops at the checkpoint stage with `needs ...` |
 
+## Measured (2026-11-16, smoke, seed 7, gpu3, brain d84390ff5)
+
+| Stage | Result | Time | Throughput |
+|---|---|---|---|
+| world, tasks, demonstrations (1600 expert episodes through sven, 16 at once) | 13300 documents; 1600/1600 accepted, 5868 records | about 3 min | |
+| init_model (host) | 2.1M-param Ouro, vocab 1024 | under 1 min | |
+| pretrain 600 x 128 x 256 | loss 6.98 -> 0.34; probe 1/12 | 687 s | about 50k tok/s (batch sweep 8/32/128/512/2048: 27k/56k/69k/75k/77k tok/s; CPU 700 tok/s) |
+| full_train 4000 steps, grad_accum 4 | loss 1.43 -> 0.11; probe 3/12 (4/12 on a rerun) | 834 s | |
+| explore (96 own episodes) | 13 verified | | |
+| improve 1000 steps on 40 records | probe 4/12 | | |
+| bench exam | not run | | |
+
+The fine-tuned model has the protocol; copying names and numbers from tool results is what it gets
+wrong. Defects found on the way and fixed: brain refused records whose messages lacked `content`,
+repeated tool-call ids or carried a server's `refusal` field (`data::wire` normalises them); a
+managed brain with `--serve-adapters` refuses a store with no adapter base; seeds above 2^53;
+`--device gpuN` alone leaves no budget for `init_model`'s host work; NVRTC must be on the brain
+process's library path (prepended, or Vulkan enumeration loses the cards).
+
 ## Open
 
 - sven: before the compact profile, an embedded engine with `agent.system_prompt` set still sent
@@ -36,11 +55,14 @@ captured on the wire, and only verifier-accepted episodes become records.
   profile of an embedded engine should read the host's skills is sven's to decide.
 - `sven_sdk::rollout` does not exist on sven main; episodes are collected by splinter through
   `crates/agent` with durable attempt ids from the stage ledger.
+- Done since: brain lane B landed init_model, pretrain and full_train; the bullet below is history.
 - Brain (lane B): the from-scratch action (tokenizer + random-init checkpoint of a named architecture
   with the template's special tokens and chat template, installed as `local/<name>`), raw-text
   pretraining and a full chat fine-tune over `brain/train`, resumable by job identity, and serving an
   installed from-scratch checkpoint with tool calls. Then `ServedBrain` submits them and the model
   stages run for real; a second architecture (a tiny `qwen3`) is a configuration entry once brain
   can make it from scratch.
+- Next: run bench's exam on the improved and fine-tuned checkpoints; more model or data for copying
+  values; the default and 64m profiles on the card.
 - Not yet run: the bench examination against a real exam; GRPO as a selectable improvement method
   (needs behaviour log-probabilities from the served model); episodes in parallel.
