@@ -17,6 +17,7 @@ members = [
     "samples/jefferson",
     "samples/model-check",
     "samples/lifecourse",
+    "samples/minimind",
     "samples/persona-chat",
     "samples/repo-replay",
     "samples/served-items",

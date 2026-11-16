@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+[package]
+name = "splinter-minimind"
+description = "From random weights to a small agent that solves workspace tool-use tasks, in one resumable command"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+splinter-sdk = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+# The chat template a checkpoint carries is held to the renderer here by
+# rendering it with the template engine brain renders it with.
+minijinja = { version = "2", features = ["json"] }
+
+[lints]
+workspace = true

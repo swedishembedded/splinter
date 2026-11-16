@@ -71,6 +71,7 @@ splinter-health = "sample"
 splinter-synthetic-author = "sample"
 splinter-voice-loop = "sample"
 splinter-agent-loop = "sample"
+splinter-minimind = "sample"
 
 [[brain.exception]]
 package = "splinter-model"

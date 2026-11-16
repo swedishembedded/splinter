@@ -7166,6 +7166,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-minimind"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "minijinja",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "splinter-sdk",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "splinter-model"
 version = "0.2.0"
 dependencies = [
