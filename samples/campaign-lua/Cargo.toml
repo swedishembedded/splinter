@@ -21,6 +21,10 @@ path = "src/main.rs"
 name = "lineage"
 path = "src/lineage_cli.rs"
 
+[[bin]]
+name = "exec-trace"
+path = "src/exec_trace_cli.rs"
+
 [dependencies]
 splinter-sdk = { workspace = true }
 anyhow = { workspace = true }

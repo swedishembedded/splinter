@@ -15,6 +15,7 @@
 //! retention sets are drawn from other seeds than the training pool.
 
 pub mod evidence_round;
+pub mod exec_trace;
 pub mod family;
 pub mod frontier;
 pub mod frontier_round;

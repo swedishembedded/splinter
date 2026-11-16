@@ -163,3 +163,22 @@ continues from them.
 ```bash
 cargo run --release -p splinter-campaign-lua --bin lineage -- --help
 ```
+
+## The `exec-trace` tool: the interpreter's own reasoning
+
+`exec-trace` runs every program of a JSONL file (a `program` field per line)
+under Lua 5.1's debug hook and adds its execution trace: each executed line
+with the locals and upvalues it changed, calls and returns of the program's
+functions, and every line it prints. `--style raw` writes `[n] <source>` and
+`name=value` lines; `--style steps` says the same events as short sentences.
+A trace is deterministic (the same program gives the same bytes): values are
+rendered without addresses and table keys in sorted order, a source line is
+shown its first three runs and its later runs are counted, and a program is
+stopped after two million VM instructions. A trace longer than `--max-chars`
+is skipped and counted, never cut. The rules are stated in
+`src/exec_trace.rs`.
+
+```bash
+cargo run --release -p splinter-campaign-lua --bin exec-trace -- \
+    --lua lua5.1 --style raw --input programs.jsonl --output traced.jsonl
+```
