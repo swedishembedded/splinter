@@ -1,0 +1,224 @@
+[
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello\"):sub(0,1))",
+  "stock": "h",
+  "dialect_output": "he"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello\"):sub(1), (\"hello\"):sub(-3), (\"hello\"):sub(0,-2))",
+  "stock": "hello\tllo\thell",
+  "dialect_output": "ello\tllo\thell"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello\"):sub(5) == \"\", (\"hello\"):sub(4,4), (\"hello\"):sub(2,1) == \"\")",
+  "stock": "false\tl\ttrue",
+  "dialect_output": "true\to\ttrue"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print(string.byte(\"hello\"), string.byte(\"hello\", -1), string.byte(\"hello\", 1, 3))",
+  "stock": "104\t111\t104\t101\t108",
+  "dialect_output": "104\t111\t101\t108\t108"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello\"):find(\"l\"))",
+  "stock": "3\t3",
+  "dialect_output": "2\t2"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello\"):find(\"l\", 3))\nprint((\"hello\"):find(\"l\", -2))",
+  "stock": "3\t3\n4\t4",
+  "dialect_output": "3\t3\n3\t3"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello\"):find(\"xyz\"), (\"hello\"):find(\"\"), (\"hello\"):find(\"h\"))",
+  "stock": "nil\t1\t1\t1",
+  "dialect_output": "nil\t0\t0\t0"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello\"):find(\"l+\"))\nprint((\"hello\"):find(\"(l)(l)\"))",
+  "stock": "3\t4\n3\t4\tl\tl",
+  "dialect_output": "2\t3\n2\t3\tl\tl"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"flaaap\"):match(\"()aa()\"))",
+  "stock": "3\t5",
+  "dialect_output": "2\t4"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"abc\"):gsub(\"()\", \"[%1]\"))",
+  "stock": "[1]a[2]b[3]c[4]\t4",
+  "dialect_output": "[0]a[1]b[2]c[3]\t4"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "for p in (\"a,b,c\"):gmatch(\"()%a\") do io.write(p, \" \") end print()",
+  "stock": "1 3 5 ",
+  "dialect_output": "0 2 4 "
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print(#\"abc\", #\"\", #\"hello world\")",
+  "stock": "3\t0\t11",
+  "dialect_output": "2\t-1\t10"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "local s = \"xyz\" local t = {1,2,3,4} print(#s, #t, string.len(s))",
+  "stock": "3\t4\t3",
+  "dialect_output": "2\t4\t3"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "local s = \"abcdef\" print(s:sub(#s), s:sub(0, #s) == s)",
+  "stock": "f\ttrue",
+  "dialect_output": "f\ttrue"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello\"):find(\"l\", 1, true))\nprint((\"a.b\"):find(\".\", 0, true))",
+  "stock": "3\t3\n2\t2",
+  "dialect_output": "2\t2\n1\t1"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print(string.len(\"abc\"), (\"abc\"):upper(), (\"abc\"):reverse(), (\"ab\"):rep(3))",
+  "stock": "3\tABC\tcba\tababab",
+  "dialect_output": "3\tABC\tcba\tababab"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print(#{1,2,3}, select(\"#\", 1, 2, 3), string.format(\"%d-%s\", 5, \"x\"))",
+  "stock": "3\t3\t5-x",
+  "dialect_output": "3\t3\t5-x"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "local t = {} for i = 1, 5 do t[i] = i * i end print(table.concat(t, \",\"), #t, math.floor(3.7))",
+  "stock": "1,4,9,16,25\t5\t3",
+  "dialect_output": "1,4,9,16,25\t5\t3"
+ },
+ {
+  "dialect": "zero-index",
+  "program": "print((\"hello world\"):gsub(\"o\", \"0\"))\nprint((\"a1b22\"):match(\"%d+\"))",
+  "stock": "hell0 w0rld\t2\n1",
+  "dialect_output": "hell0 w0rld\t2\n1"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"a\" + \"b\")",
+  "stock": "ERROR",
+  "dialect_output": "ab"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"1\" + \"2\")",
+  "stock": "3",
+  "dialect_output": "12"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"10\" + 1, 1 + \"10\", 1 + 2)",
+  "stock": "11\t11\t3",
+  "dialect_output": "11\t11\t3"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"a\" + \"b\" + \"c\" + \"d\")",
+  "stock": "ERROR",
+  "dialect_output": "abcd"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"abc\" + 1)",
+  "stock": "ERROR",
+  "dialect_output": "ERROR"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"x\" + 1)",
+  "stock": "ERROR",
+  "dialect_output": "ERROR"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "local t = setmetatable({}, {__add = function(a, b) return \"mt\" end})\nprint(t + 1, 1 + t, t + \"s\", \"s\" + t)",
+  "stock": "mt\tmt\tmt\tmt",
+  "dialect_output": "mt\tmt\tmt\tmt"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"a\"..\"b\")",
+  "stock": "ab",
+  "dialect_output": "ERROR"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(1 .. 2)",
+  "stock": "12",
+  "dialect_output": "ERROR"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "local s = \"n\" print(s .. 5)",
+  "stock": "n5",
+  "dialect_output": "ERROR"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"\" + \"\", \"\" + \"x\", \"x\" + \"\")",
+  "stock": "ERROR",
+  "dialect_output": "\tx\tx"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(1 + 2 + \"3\", \"1\" + \"2\" + 3)",
+  "stock": "6\t6",
+  "dialect_output": "6\t15"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "local a, b = \"foo\", \"bar\" print(a + b, #(a + b))",
+  "stock": "ERROR",
+  "dialect_output": "foobar\t6"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(\"2\" + \"3\" == \"23\", \"2\" + \"3\" == 5)",
+  "stock": "false\ttrue",
+  "dialect_output": "true\tfalse"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(1 - 2 + 3, 2 * 3 + 4, 2 ^ 2 + 1)",
+  "stock": "2\t10\t5",
+  "dialect_output": "2\t10\t5"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "print(#\"abc\", (\"x\"):rep(3), table.concat({\"a\",\"b\"}, \"-\"))",
+  "stock": "3\txxx\ta-b",
+  "dialect_output": "3\txxx\ta-b"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "local t = {\"a\", \"b\", \"c\"} print(table.concat(t), #t, (\" x \"):len())",
+  "stock": "abc\t3\t3",
+  "dialect_output": "abc\t3\t3"
+ },
+ {
+  "dialect": "plus-concat",
+  "program": "local function f(...) return select(\"#\", ...) end print(f(1, nil, 3), f(...))",
+  "stock": "3\t0",
+  "dialect_output": "3\t0"
+ }
+]

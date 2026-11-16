@@ -1,0 +1,108 @@
+diff --git a/src/lstrlib.c b/src/lstrlib.c
+index 7a03489..e529bf4 100644
+--- a/src/lstrlib.c
++++ b/src/lstrlib.c
+@@ -40,11 +40,22 @@ static ptrdiff_t posrelat (ptrdiff_t pos, size_t len) {
+ }
+
+
++/*
++** zero-index dialect: a non-negative position p names the character at
++** offset p (stock position p+1); a negative position keeps the stock
++** meaning (-1 is the last character).  Result is a stock 1-based position.
++*/
++static ptrdiff_t posin (ptrdiff_t pos, size_t len) {
++  if (pos >= 0) return pos + 1;
++  return posrelat(pos, len);
++}
++
++
+ static int str_sub (lua_State *L) {
+   size_t l;
+   const char *s = luaL_checklstring(L, 1, &l);
+-  ptrdiff_t start = posrelat(luaL_checkinteger(L, 2), l);
+-  ptrdiff_t end = posrelat(luaL_optinteger(L, 3, -1), l);
++  ptrdiff_t start = posin(luaL_checkinteger(L, 2), l);
++  ptrdiff_t end = posin(luaL_optinteger(L, 3, -1), l);
+   if (start < 1) start = 1;
+   if (end > (ptrdiff_t)l) end = (ptrdiff_t)l;
+   if (start <= end)
+@@ -106,8 +117,9 @@ static int str_rep (lua_State *L) {
+ static int str_byte (lua_State *L) {
+   size_t l;
+   const char *s = luaL_checklstring(L, 1, &l);
+-  ptrdiff_t posi = posrelat(luaL_optinteger(L, 2, 1), l);
+-  ptrdiff_t pose = posrelat(luaL_optinteger(L, 3, posi), l);
++  ptrdiff_t posi = posin(luaL_optinteger(L, 2, 0), l);
++  ptrdiff_t pose = lua_isnoneornil(L, 3) ? posi
++                                         : posin(luaL_checkinteger(L, 3), l);
+   int n, i;
+   if (posi <= 0) posi = 1;
+   if ((size_t)pose > l) pose = l;
+@@ -475,7 +487,7 @@ static void push_onecapture (MatchState *ms, int i, const char *s,
+     ptrdiff_t l = ms->capture[i].len;
+     if (l == CAP_UNFINISHED) luaL_error(ms->L, "unfinished capture");
+     if (l == CAP_POSITION)
+-      lua_pushinteger(ms->L, ms->capture[i].init - ms->src_init + 1);
++      lua_pushinteger(ms->L, ms->capture[i].init - ms->src_init);
+     else
+       lua_pushlstring(ms->L, ms->capture[i].init, l);
+   }
+@@ -496,7 +508,7 @@ static int str_find_aux (lua_State *L, int find) {
+   size_t l1, l2;
+   const char *s = luaL_checklstring(L, 1, &l1);
+   const char *p = luaL_checklstring(L, 2, &l2);
+-  ptrdiff_t init = posrelat(luaL_optinteger(L, 3, 1), l1) - 1;
++  ptrdiff_t init = posin(luaL_optinteger(L, 3, 0), l1) - 1;
+   if (init < 0) init = 0;
+   else if ((size_t)(init) > l1) init = (ptrdiff_t)l1;
+   if (find && (lua_toboolean(L, 4) ||  /* explicit request? */
+@@ -504,8 +516,8 @@ static int str_find_aux (lua_State *L, int find) {
+     /* do a plain search */
+     const char *s2 = lmemfind(s+init, l1-init, p, l2);
+     if (s2) {
+-      lua_pushinteger(L, s2-s+1);
+-      lua_pushinteger(L, s2-s+l2);
++      lua_pushinteger(L, s2-s);
++      lua_pushinteger(L, s2-s+l2-1);
+       return 2;
+     }
+   }
+@@ -521,8 +533,8 @@ static int str_find_aux (lua_State *L, int find) {
+       ms.level = 0;
+       if ((res=match(&ms, s1, p)) != NULL) {
+         if (find) {
+-          lua_pushinteger(L, s1-s+1);  /* start */
+-          lua_pushinteger(L, res-s);   /* end */
++          lua_pushinteger(L, s1-s);      /* start */
++          lua_pushinteger(L, res-s-1);   /* end */
+           return push_captures(&ms, NULL, 0) + 2;
+         }
+         else
+diff --git a/src/lua.h b/src/lua.h
+index a4b73e7..1162358 100644
+--- a/src/lua.h
++++ b/src/lua.h
+@@ -17,7 +17,7 @@
+
+
+ #define LUA_VERSION	"Lua 5.1"
+-#define LUA_RELEASE	"Lua 5.1.5"
++#define LUA_RELEASE	"Lua 5.1.5-zero-index"
+ #define LUA_VERSION_NUM	501
+ #define LUA_COPYRIGHT	"Copyright (C) 1994-2012 Lua.org, PUC-Rio"
+ #define LUA_AUTHORS 	"R. Ierusalimschy, L. H. de Figueiredo & W. Celes"
+diff --git a/src/lvm.c b/src/lvm.c
+index e0a0cd8..8def00b 100644
+--- a/src/lvm.c
++++ b/src/lvm.c
+@@ -519,7 +519,8 @@ void luaV_execute (lua_State *L, int nexeccalls) {
+             break;
+           }
+           case LUA_TSTRING: {
+-            setnvalue(ra, cast_num(tsvalue(rb)->len));
++            /* zero-index dialect: index of the last character */
++            setnvalue(ra, cast_num(tsvalue(rb)->len) - 1);
+             break;
+           }
+           default: {  /* try metamethod */

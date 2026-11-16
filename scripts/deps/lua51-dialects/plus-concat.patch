@@ -1,0 +1,79 @@
+diff --git a/src/llex.c b/src/llex.c
+index 88c6790..5af850e 100644
+--- a/src/llex.c
++++ b/src/llex.c
+@@ -398,7 +398,8 @@ static int llex (LexState *ls, SemInfo *seminfo) {
+         if (check_next(ls, ".")) {
+           if (check_next(ls, "."))
+             return TK_DOTS;   /* ... */
+-          else return TK_CONCAT;   /* .. */
++          else  /* plus-concat dialect: `..' is not an operator */
++            luaX_lexerror(ls, "unexpected symbol", TK_CONCAT);
+         }
+         else if (!isdigit(ls->current)) return '.';
+         else {
+diff --git a/src/lparser.c b/src/lparser.c
+index dda7488..551215f 100644
+--- a/src/lparser.c
++++ b/src/lparser.c
+@@ -793,7 +793,6 @@ static BinOpr getbinopr (int op) {
+     case '/': return OPR_DIV;
+     case '%': return OPR_MOD;
+     case '^': return OPR_POW;
+-    case TK_CONCAT: return OPR_CONCAT;
+     case TK_NE: return OPR_NE;
+     case TK_EQ: return OPR_EQ;
+     case '<': return OPR_LT;
+diff --git a/src/lua.h b/src/lua.h
+index a4b73e7..9b48814 100644
+--- a/src/lua.h
++++ b/src/lua.h
+@@ -17,7 +17,7 @@
+
+
+ #define LUA_VERSION	"Lua 5.1"
+-#define LUA_RELEASE	"Lua 5.1.5"
++#define LUA_RELEASE	"Lua 5.1.5-plus-concat"
+ #define LUA_VERSION_NUM	501
+ #define LUA_COPYRIGHT	"Copyright (C) 1994-2012 Lua.org, PUC-Rio"
+ #define LUA_AUTHORS 	"R. Ierusalimschy, L. H. de Figueiredo & W. Celes"
+diff --git a/src/lvm.c b/src/lvm.c
+index e0a0cd8..1a66a5f 100644
+--- a/src/lvm.c
++++ b/src/lvm.c
+@@ -314,6 +314,22 @@ void luaV_concat (lua_State *L, int total, int last) {
+ }
+
+
++/*
++** plus-concat dialect: `+' on two strings concatenates them.  The result is
++** built in the shared buffer, as luaV_concat does; no metamethod is tried.
++*/
++static void addstrings (lua_State *L, StkId ra, const TValue *rb,
++                        const TValue *rc) {
++  size_t lb = tsvalue(rb)->len, lc = tsvalue(rc)->len;
++  char *buffer;
++  if (lc >= MAX_SIZET - lb) luaG_runerror(L, "string length overflow");
++  buffer = luaZ_openspace(L, &G(L)->buff, lb + lc);
++  memcpy(buffer, svalue(rb), lb);
++  memcpy(buffer + lb, svalue(rc), lc);
++  setsvalue2s(L, ra, luaS_newlstr(L, buffer, lb + lc));
++}
++
++
+ static void Arith (lua_State *L, StkId ra, const TValue *rb,
+                    const TValue *rc, TMS op) {
+   TValue tempb, tempc;
+@@ -472,6 +488,12 @@ void luaV_execute (lua_State *L, int nexeccalls) {
+         continue;
+       }
+       case OP_ADD: {
++        TValue *rb = RKB(i);
++        TValue *rc = RKC(i);
++        if (ttisstring(rb) && ttisstring(rc)) {
++          Protect(addstrings(L, ra, rb, rc); luaC_checkGC(L));
++          continue;
++        }
+         arith_op(luai_numadd, TM_ADD);
+         continue;
+       }

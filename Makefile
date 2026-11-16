@@ -448,6 +448,11 @@ deps/lua:
 	test -n "$(LUA_DIR)" || { echo "deps/lua: give LUA_DIR=<directory to build into>"; exit 2; }
 	bash scripts/deps/lua51.sh "$(LUA_DIR)"
 
+## deps/lua-dialects - build the two counterfactual Lua 5.1.5 dialects (zero-index, plus-concat) with their generated manuals into LUA_DIALECTS_DIR/<name>/{bin/lua,manual,DIALECT.md}, from the checksummed tarball (LUA_DIALECTS_DIR=<directory>); the dialect tests read LUA_DIALECTS_DIR
+deps/lua-dialects:
+	test -n "$(LUA_DIALECTS_DIR)" || { echo "deps/lua-dialects: give LUA_DIALECTS_DIR=<directory to build into>"; exit 2; }
+	bash scripts/deps/lua51-dialects.sh "$(LUA_DIALECTS_DIR)"
+
 ## deps/tlaplus - install the pinned TLA+ tools (tla2tools.jar) and an aarch64 Temurin JRE into TLAPLUS_DIR, both sha256-checked; TLC runs as TLAPLUS_DIR/bin/tlc (TLAPLUS_DIR=<directory>)
 deps/tlaplus:
 	test -n "$(TLAPLUS_DIR)" || { echo "deps/tlaplus: give TLAPLUS_DIR=<directory to install into>"; exit 2; }
@@ -512,7 +517,7 @@ help:
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
 	env env/measure \
-	deps deps/local deps/lua deps/tlaplus deps/lock \
+	deps deps/local deps/lua deps/lua-dialects deps/tlaplus deps/lock \
 	hooks hooks/install \
 	qualify qualify/list qualify/test qualify/run \
 	papers papers/pdf $(PAPER_DIRS) $(PAPER_TARGETS) $(ARXIV_TARGETS) $(ARXIV_CHECK_TARGETS) \
