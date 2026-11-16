@@ -20,6 +20,8 @@ splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 splinter-data = { workspace = true }
 
+# The bench examination reports a failed bench command with its context.
+anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -37,7 +39,6 @@ atif = { workspace = true }
 sven-sdk = { workspace = true }
 # The scripted base loader: the residency specs run without weights.
 splinter-model = { workspace = true, features = ["scripted"] }
-anyhow = { workspace = true }
 regex = { workspace = true }
 
 [lints]
