@@ -19,7 +19,10 @@ Committed on 2026-11-16 before any RSI5 lineage ran and before any candidate was
   `be7227546f920af4e41ab2ddffa65c44cdce9bccf6c6e880ee6a0484ff899883` after deviation 1 (`b7b13347...` before it); one process per generation under the card's lock.
 - Examiner: bench `c883edf14d2293c93372061777bdaf5b601d25eb`; group plan `rsi5-G` (SHA-256
   `30fde85afc387df3e88eaa1836c5bec03000f1182a5c5737787ce200ead91b04`): steps 1-4, generation 4 over base, strata by base answer
-  and by family set, bootstrap 10000 over templates and lineages, 95% intervals.
+  and by family set, bootstrap 10000 over templates and lineages, 95% intervals. Per-candidate secondary plans `rsi5-G-steps`
+  and `rsi5-F-steps` (one-sided exact sign tests, alpha 0.05, steps 1-4; SHA-256 `0c40464f...`, `3ebed6ce...`); examination
+  script SHA-256 `4f17fdf3ef8fe6ac64d9bc8f8f0419e51e9de929023ad623d3e91cb633445ddc` (base null replicate, every candidate vs its
+  predecessor, the group plan, then exam F); verdicts signed with the examiner's existing key.
 
 ## Exam G
 
