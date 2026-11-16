@@ -36,4 +36,5 @@ clean::
 # The analysis scripts' tests (the criteria of prereg/rsi5.md as read from the examiner's group verdict).
 verify:
 	python3 scripts/test_rsi5_criteria.py
+	python3 scripts/test_rsi6_criteria.py
 	python3 $(ARXIV_TOOL_TEST)
