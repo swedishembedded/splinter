@@ -57,16 +57,20 @@ and bench's examination.
   from nothing, which is host work) on a free port, with its model store and
   artifact store under `RUN_DIR/brain`, and stops when it ends. Training never
   runs on the CPU: a brain that does not schedule the card is refused before
-  any work. The brain process needs NVRTC findable, for example
-  `export LD_LIBRARY_PATH=<cuda>/lib-with-libnvrtc:$LD_LIBRARY_PATH`, and the
-  run directory must be on a disk with 10 GB free (brain's training floor).
+  any work. `run.sh` finds NVRTC for it (the loader cache, the library path,
+  beside `nvcc`, or `--nvrtc-dir DIR`) and puts only that library first on
+  the brain process's library path; it puts brain's scratch (`TMPDIR`) in the
+  run directory and refuses a disk with less than 10 GB free (brain's
+  training floor), naming what is missing. The server dies with the run.
 - On a shared card, run the command under the card's lock, for example
   `flock <locks>/gpu3.lock samples/minimind/run.sh ...`.
-- For the examination (optional): a bench checkout (`--bench DIR`), its private
-  exam seed file (`--bench-seed-file`), the verdict signing key (`--bench-key`,
-  made once with `./bench keygen --out KEY`) and the sven binary bench runs the
-  agent with (`--sven-bin`). Without `--bench` the run says that it makes no
-  promotion claim.
+- For the examination (optional): a bench checkout (`--bench DIR`), the
+  private seed files of its exam and its anchor (`--bench-seed-file`,
+  `--bench-anchor-seed-file`; bench draws them when they do not exist), the
+  verdict signing key (`--bench-key`, made once with `./bench keygen --out
+  KEY`) and the sven binary bench runs the agent with (`--sven-bin`). Keep the
+  seed files and the key outside the run directory. Without `--bench` the run
+  says that it makes no promotion claim.
 
 ## The one command
 

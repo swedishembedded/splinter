@@ -28,8 +28,9 @@ pub enum Profile {
     /// the quick check, and (shrunk) the acceptance specs'
     /// profile.
     Smoke,
-    /// About five million parameters (vocabulary 4096, four loop passes) and
-    /// longer pretraining: the showcase.
+    /// The smoke model pretrained ten times longer on a world dense in copy
+    /// drills, past the point where it learns to copy a value out of its
+    /// context: the showcase, about two hours on one card.
     Default,
     /// About sixty-four million parameters; needs a GPU.
     #[serde(rename = "64m")]
@@ -250,10 +251,10 @@ impl Config {
                 budget(40, 8, 3e-4, 1024),
             ),
             Profile::Default => (
-                ouro(256, 4, 4, 4, 4096, 2048),
-                world(400, 20_000, 6_000, 3_000, 12_000, 300_000),
+                ouro(256, 4, 2, 4, 1024, 2048),
+                world(200, 4_000, 1_500, 1_000, 12_000, 150_000),
                 tasks(3_000, 384, 12),
-                budget(3_000, 64, 1e-3, 512),
+                budget(6_000, 64, 2e-3, 512),
                 budget(800, 32, 5e-4, 1024),
                 budget(80, 8, 2e-4, 1024),
             ),

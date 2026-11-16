@@ -71,6 +71,12 @@ then `The code of NAME is`) and 12 request-to-path prompts, exact match of the c
 random init and after every pretraining segment (`pretrain_segments`, 6 in the default profile, each
 continuing the last), so the run shows retrieval against pretraining tokens.
 
+Retrieval against pretraining tokens (knowledge 161): smoke model on copy drills only (100000 docs),
+0/0/0 of 24 after 16/33/49M tokens, 10 of 24 after 65M; the 4-pass vocabulary-4096 model on the mixed
+world, 0/1/0/0 of 24 after 16/33/49/66M at 23k tok/s (stopped). The default profile is therefore the smoke
+model pretrained on 197M tokens of a drill-dense world in six segments; smoke stays short and does not
+reach the jump.
+
 What it still cannot do: copy a file name or a code it has not seen often (combine and lookup 0 of 4
 throughout). Pretraining throughput is about 50k tok/s at any batch from 8 x 1024 to 128 x 1024 on this
 model (sweep through `brain/train pretrain`, 20 steps each).
