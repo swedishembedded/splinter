@@ -452,7 +452,7 @@ impl AdapterOffer {
 /// its own with its own runtime, so it is safe to call from inside an async
 /// runtime. Environment proxies are not consulted: an endpoint is a direct
 /// address.
-fn get_json(url: &str, key: &str) -> Result<Value, String> {
+pub(crate) fn get_json(url: &str, key: &str) -> Result<Value, String> {
     request_json(url, key, None, LIST_TIMEOUT)
 }
 

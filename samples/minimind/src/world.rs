@@ -141,7 +141,12 @@ fn program(rng: &mut SplitMix64) -> Document {
 
 /// A conversation: a question about the world answered, or a small task
 /// done with tools in the shape the agent uses.
-fn conversation(rng: &mut SplitMix64, template: &Template, tools: &[ToolSig]) -> Document {
+fn conversation(
+    rng: &mut SplitMix64,
+    template: &Template,
+    tools: &[ToolSig],
+    system: &str,
+) -> Document {
     let (tools, turns) = if rng.coin() {
         let town = word(rng, 2);
         let mayor = format!("{} {}", word(rng, 1), word(rng, 2));
@@ -159,6 +164,7 @@ fn conversation(rng: &mut SplitMix64, template: &Template, tools: &[ToolSig]) ->
         let file = format!("{}.txt", word(rng, 1).to_lowercase());
         let value = rng.between(100, 999);
         let turns = vec![
+            Turn::System(system.to_string()),
             Turn::User(format!("What number is in {file}? Read it.")),
             Turn::Assistant {
                 text: String::new(),
@@ -182,13 +188,14 @@ fn conversation(rng: &mut SplitMix64, template: &Template, tools: &[ToolSig]) ->
 }
 
 /// The whole corpus of a world of `size`, drawn from `seed`; its tool-use
-/// conversations offer `tools`.
+/// conversations offer `tools` under the agent's `system` prompt.
 #[must_use]
 pub fn corpus(
     seed: u64,
     size: &WorldSize,
     template: &Template,
     tools: &[ToolSig],
+    system: &str,
 ) -> Vec<Document> {
     let mut rng = SplitMix64::new(seed);
     let mut docs = Vec::new();
@@ -197,9 +204,91 @@ pub fn corpus(
     }
     docs.extend((0..size.expressions).map(|_| expression(&mut rng)));
     docs.extend((0..size.programs).map(|_| program(&mut rng)));
-    docs.extend((0..size.conversations).map(|_| conversation(&mut rng, template, tools)));
+    docs.extend((0..size.conversations).map(|_| conversation(&mut rng, template, tools, system)));
     rng.shuffle(&mut docs);
     docs
+}
+
+/// One worked tool-use conversation of `instance`: the expert's procedure,
+/// each tool run for real in a scratch copy of the workspace at `scratch`,
+/// written in the chat template. Pretraining on these shows the model the
+/// protocol's shape; the instances are drawn from a stream of their own, so
+/// none is a task the model is probed or examined on.
+///
+/// # Errors
+/// The workspace cannot be written or a command cannot be run.
+pub fn trajectory(
+    instance: &crate::tasks::Instance,
+    template: &Template,
+    tools: &[ToolSig],
+    system: &str,
+    scratch: &std::path::Path,
+) -> anyhow::Result<Document> {
+    use crate::expert::{next, Action};
+    use serde_json::{json, Value};
+    if scratch.exists() {
+        std::fs::remove_dir_all(scratch)?;
+    }
+    crate::tasks::materialise(instance, scratch)?;
+    let wire_tools: Vec<Value> = tools
+        .iter()
+        .map(|t| {
+            let props: serde_json::Map<String, Value> = t.params.iter().map(|p| (p.clone(), json!({}))).collect();
+            json!({ "type": "function", "function": { "name": t.name, "parameters": { "properties": props } } })
+        })
+        .collect();
+    let mut messages = vec![json!({ "role": "user", "content": instance.instruction })];
+    let mut turns = vec![
+        Turn::System(system.to_string()),
+        Turn::User(instance.instruction.clone()),
+    ];
+    for _ in 0..8 {
+        match next(instance, &messages, &wire_tools)? {
+            Action::Finish(text) => {
+                turns.push(Turn::Assistant {
+                    text,
+                    calls: vec![],
+                });
+                break;
+            }
+            Action::Call { tool, arguments } => {
+                let arg = |k: &str| arguments[k].as_str().unwrap_or_default().to_string();
+                let result = match tool.as_str() {
+                    "read_file" => std::fs::read_to_string(scratch.join(arg("path")))?
+                        .lines()
+                        .enumerate()
+                        .map(|(i, l)| format!("L{}:{l}", i + 1))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                    "write_file" => {
+                        std::fs::write(scratch.join(arg("path")), arg("text"))?;
+                        format!("wrote {} bytes to {}", arg("text").len(), arg("path"))
+                    }
+                    _ => {
+                        let out = std::process::Command::new("sh")
+                            .arg("-c")
+                            .arg(arg("shell_command"))
+                            .current_dir(scratch)
+                            .output()?;
+                        String::from_utf8_lossy(&out.stdout).trim_end().to_string()
+                    }
+                };
+                turns.push(Turn::Assistant {
+                    text: String::new(),
+                    calls: vec![Call {
+                        name: tool,
+                        arguments,
+                    }],
+                });
+                turns.push(Turn::Tool(result.clone()));
+                messages.push(json!({ "role": "tool", "content": result }));
+            }
+        }
+    }
+    Ok(Document {
+        kind: "trajectory",
+        text: template.render(tools, &turns),
+    })
 }
 
 /// The corpus as JSON lines, one `{"text": ...}` document per line.
@@ -223,6 +312,7 @@ mod tests {
             expressions: 10,
             programs: 5,
             conversations: 6,
+            trajectories: 0,
         }
     }
 
@@ -230,9 +320,9 @@ mod tests {
     fn the_same_seed_writes_the_same_world_and_another_seed_another() {
         let t = Template::default();
         // seed: determinism is the property under test; any two seeds work.
-        let a = corpus(11, &size(), &t, &[]);
-        assert_eq!(a, corpus(11, &size(), &t, &[]));
-        assert_ne!(a, corpus(12, &size(), &t, &[]));
+        let a = corpus(11, &size(), &t, &[], "s");
+        assert_eq!(a, corpus(11, &size(), &t, &[], "s"));
+        assert_ne!(a, corpus(12, &size(), &t, &[], "s"));
         assert_eq!(a.len(), 3 * 4 + 10 + 5 + 6);
     }
 
@@ -247,9 +337,11 @@ mod tests {
                 expressions: 200,
                 programs: 0,
                 conversations: 0,
+                trajectories: 0,
             },
             &t,
             &[],
+            "s",
         ) {
             let (lhs, rhs) = doc.text.split_once(" = ").unwrap();
             let value: i64 = rhs.parse().unwrap();

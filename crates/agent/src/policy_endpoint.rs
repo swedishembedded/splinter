@@ -164,7 +164,7 @@ fn chat(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
     let message = match reply {
         Ok(message) => message,
         Err(reason) => {
-            let error = json!({ "error": { "message": format!("expert: {reason}"), "type": "server_error" } });
+            let error = json!({ "error": { "message": format!("policy: {reason}"), "type": "server_error" } });
             let _ = respond(
                 stream,
                 "500 Internal Server Error",
@@ -224,12 +224,13 @@ fn respond(
     stream.flush()
 }
 
-/// The assistant message `base_url` answers `request` with: the request is
-/// sent unchanged but for streaming, which is turned off.
+/// The assistant message `base_url` answers `request` with, asked with
+/// `key`: the request is sent unchanged but for streaming, which is turned
+/// off.
 ///
 /// # Errors
 /// The server cannot be reached, refuses, or answers with no message.
-pub fn forward(base_url: &str, request: &Value) -> anyhow::Result<Value> {
+pub fn forward(base_url: &str, key: &str, request: &Value) -> anyhow::Result<Value> {
     use anyhow::Context as _;
     let rest = base_url
         .strip_prefix("http://")
@@ -245,7 +246,7 @@ pub fn forward(base_url: &str, request: &Value) -> anyhow::Result<Value> {
     write!(
         stream,
         "POST {prefix}/chat/completions HTTP/1.1\r\nhost: {host}\r\ncontent-type: application/json\r\n\
-         authorization: Bearer minimind\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+         authorization: Bearer {key}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
         body.len()
     )?;
     let mut raw = Vec::new();
@@ -304,7 +305,7 @@ mod tests {
         };
         let endpoint = Endpoint::start("m", Box::new(policy)).unwrap();
         let request = json!({ "model": "m", "stream": true, "messages": [{ "role": "user", "content": "hi" }] });
-        let reply = forward(endpoint.url(), &request).unwrap();
+        let reply = forward(endpoint.url(), "k", &request).unwrap();
         assert_eq!(reply["content"], "saw 1");
         let kept = endpoint.exchanges();
         assert_eq!(kept.len(), 1);
@@ -320,7 +321,12 @@ mod tests {
     fn a_failing_policy_is_a_server_error_not_an_answer() {
         let endpoint =
             Endpoint::start("m", Box::new(|_: &Value| anyhow::bail!("no idea"))).unwrap();
-        let err = forward(endpoint.url(), &json!({ "model": "m", "messages": [] })).unwrap_err();
+        let err = forward(
+            endpoint.url(),
+            "k",
+            &json!({ "model": "m", "messages": [] }),
+        )
+        .unwrap_err();
         assert!(format!("{err:#}").contains("no idea"), "{err:#}");
         assert!(endpoint.exchanges()[0].reply.is_err());
     }

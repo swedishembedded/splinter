@@ -19,10 +19,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context as _};
 use splinter_minimind::config::{Config, Profile};
 use splinter_minimind::stages::{Revisions, Run};
-use splinter_sdk::agent::sven::CancelToken;
 use splinter_sdk::bench::examine::{Bench, Examiner};
+use splinter_sdk::model::endpoint::BrainEndpoints;
 use splinter_sdk::model::scratch::ServedBrain;
-use splinter_sdk::model::service::{ManagedBrain, ServiceSettings};
+use splinter_sdk::model::served_train::ArtifactStore;
+use splinter_sdk::model::service::ServiceSettings;
 
 const USAGE: &str = "\
 usage: splinter-minimind <run|status> [options]
@@ -34,8 +35,13 @@ usage: splinter-minimind <run|status> [options]
                          run's manifest afterwards; a different seed is a different run
   --cache-dir DIR        where fetched corpora are kept across runs (default RUN_DIR/cache)
   --brain-endpoint URL   a running `brain serve --training` (http://host:port/v1)
-  --brain-bin PATH       or a brain binary to start and own for the run (on the CPU)
-  --models-dir DIR       brain's model store for a started brain
+  --brain-artifact-store DIR  that server's artifact store (with --brain-endpoint)
+  --brain-bin PATH       or a brain binary to start and own for the run
+  --device gpuN          the CUDA card that brain trains and serves on (required with
+                         --brain-bin; there is no CPU fallback)
+  --models-dir DIR       the started brain's model store (default RUN_DIR/brain/models)
+  --gpu-lock FILE        held exclusively while a training job runs, shared with other users of
+                         the card
   --brain-key KEY        the key a given endpoint takes (default: none needed)
   --bench DIR            a bench checkout: examine with its sealed workspace tool-use exam
   --bench-seed-file F    the exam's private seed file (never read by this program)
@@ -43,6 +49,9 @@ usage: splinter-minimind <run|status> [options]
   --sven-bin PATH        the sven binary bench runs the exam's agent with
   --min-gain X           the gain a promotion must show (default 0.05)
 ";
+
+/// Sequences the started brain decodes together.
+const BRAIN_SLOTS: u32 = 4;
 
 /// The smallest gain a promotion must show, unless given.
 const DEFAULT_MIN_GAIN: f64 = 0.05;
@@ -77,6 +86,9 @@ fn parse(mut args: Vec<String>) -> anyhow::Result<Args> {
                 | "brain-bin"
                 | "models-dir"
                 | "brain-key"
+                | "brain-artifact-store"
+                | "device"
+                | "gpu-lock"
                 | "bench"
                 | "bench-seed-file"
                 | "bench-key"
@@ -111,7 +123,9 @@ fn seed(run_dir: &Path, given: Option<u64>) -> anyhow::Result<u64> {
     Ok(splinter_sdk::seed::resolve("seed", None))
 }
 
-/// The revision of the git checkout at `dir`, marked when it has changes.
+/// The revision of the git checkout at `dir`; a tree with uncommitted
+/// changes is marked with the digest of its diff, so other code is another
+/// revision.
 fn git_revision(dir: &Path) -> String {
     let out = |args: &[&str]| {
         std::process::Command::new("git")
@@ -125,12 +139,12 @@ fn git_revision(dir: &Path) -> String {
     match out(&["rev-parse", "HEAD"]) {
         Some(head) => {
             let head = String::from_utf8_lossy(&head.stdout).trim().to_string();
-            let dirty = out(&["status", "--porcelain", "--untracked-files=no"])
-                .is_some_and(|o| !o.stdout.is_empty());
-            if dirty {
-                format!("{head}+changes")
-            } else {
-                head
+            match out(&["diff", "HEAD"]) {
+                Some(diff) if !diff.stdout.is_empty() => {
+                    let digest = splinter_sdk::vocabulary::digest::Digest::of(&diff.stdout);
+                    format!("{head}+{}", &digest.hex()[..12])
+                }
+                _ => head,
             }
         }
         None => "unknown".into(),
@@ -185,54 +199,57 @@ fn run(
         .context("--seed is a whole number")?;
     let seed = seed(run_dir, given_seed)?;
     let context = config.models.values().map(|m| m.context).max().unwrap_or(0);
-    let cancel = CancelToken::new();
     // The brain service: one given, or one this run starts on the CPU and
     // stops when it ends.
-    let (managed, base_url, key, brain_revision) = match (flag("brain-endpoint"), flag("brain-bin"))
-    {
-        (Some(url), None) => (
-            None,
-            url,
-            flag("brain-key").unwrap_or_default(),
-            "unknown (endpoint given)".to_string(),
-        ),
+    let (brain, brain_revision) = match (flag("brain-endpoint"), flag("brain-bin")) {
+        (Some(url), None) => {
+            let store = flag("brain-artifact-store").context(
+                "--brain-endpoint needs --brain-artifact-store DIR: the server's artifact store, which this run publishes datasets to",
+            )?;
+            let store = ArtifactStore::open(Path::new(&store)).map_err(|e| anyhow::anyhow!("{e}"))?;
+            let endpoints = BrainEndpoints::new(vec![url], flag("brain-key").unwrap_or_default())
+                .map_err(|e| anyhow::anyhow!("{e}"))?
+                .with_artifact_store(store);
+            (ServedBrain::given(endpoints, context), "unknown (endpoint given)".to_string())
+        }
         (None, Some(bin)) => {
-            let models =
-                PathBuf::from(flag("models-dir").context("--brain-bin needs --models-dir")?);
+            let device = flag("device").context(
+                "--brain-bin needs --device gpuN: training runs on a CUDA card, never the CPU",
+            )?;
+            if !device
+                .strip_prefix("gpu")
+                .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+            {
+                bail!("--device {device}: name one CUDA card, gpuN; training never runs on the CPU");
+            }
+            let state = run_dir.join("brain");
             let settings = ServiceSettings {
                 binary: PathBuf::from(&bin),
-                models,
-                state: run_dir.join("brain"),
-                device: Some("cpu".into()),
-                backend: Some("cpu".into()),
-                max_batch: None,
+                models: flag("models-dir").map_or_else(|| state.join("models"), PathBuf::from),
+                state,
+                // Training reserves the card; making a checkpoint from nothing
+                // (the tokenizer, the random weights) is host work and needs
+                // the CPU schedulable beside it.
+                device: Some(format!("{device},cpu")),
+                backend: Some("cuda".into()),
+                max_batch: Some(BRAIN_SLOTS),
+                // A from-scratch run trains whole checkpoints, never adapters.
+                serve_adapters: false,
             };
-            let version = std::process::Command::new(&bin)
-                .arg("--version")
-                .output()
-                .map_or("unknown".into(), |o| {
-                    String::from_utf8_lossy(&o.stdout).trim().to_string()
-                });
-            let brain = ManagedBrain::start(&settings, &cancel)
-                .map_err(|e| anyhow::anyhow!("starting brain: {e}"))?;
-            let url = brain
-                .endpoints()
-                .urls()
-                .first()
-                .cloned()
-                .context("the started brain has no endpoint")?;
-            let key = brain.endpoints().key().to_string();
-            (Some(brain), url, key, version)
+            std::fs::create_dir_all(&settings.models)?;
+            // The binary's own digest: a rebuilt brain is other code.
+            let file = std::fs::File::open(&bin).with_context(|| format!("reading {bin}"))?;
+            let digest = splinter_sdk::vocabulary::digest::Digest::of_reader(file)
+                .with_context(|| format!("reading {bin}"))?;
+            let brain = ServedBrain::managed(settings, context)?;
+            // Training runs on the card or not at all.
+            brain.require_device(&device)?;
+            (brain, digest.to_string())
         }
         (Some(_), Some(_)) => bail!("give --brain-endpoint or --brain-bin, not both"),
         (None, None) => bail!(
-            "needs a brain service: give --brain-endpoint URL or --brain-bin PATH --models-dir DIR"
+            "needs a brain service: give --brain-bin PATH, or --brain-endpoint URL --brain-artifact-store DIR"
         ),
-    };
-    let brain = ServedBrain {
-        base_url,
-        context_tokens: context,
-        key,
     };
     let bench = match flag("bench") {
         Some(dir) => {
@@ -269,7 +286,8 @@ fn run(
     if let Some(cache) = flag("cache-dir") {
         run.cache = PathBuf::from(cache);
     }
+    run.gpu_lock = flag("gpu-lock").map(PathBuf::from);
     let result = splinter_minimind::stages::run_all(&mut run);
-    drop(managed);
+    drop(brain);
     result
 }

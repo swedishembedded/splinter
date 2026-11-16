@@ -310,7 +310,9 @@ pub struct ServiceLaunch<'a> {
     pub models: &'a Path,
     /// The directory adapters are offered in (`--serve-adapters`): one
     /// written there is served as a model of its own, with no restart.
-    pub adapters: &'a Path,
+    /// `None` serves none, for a store with no base an adapter can sit on
+    /// (brain refuses `--serve-adapters` then).
+    pub adapters: Option<&'a Path>,
     /// The directory datasets and trained adapters move through
     /// (`--artifact-store`), which also turns the training workload on.
     pub artifacts: &'a Path,
@@ -380,11 +382,14 @@ pub fn start_service(launch: &ServiceLaunch<'_>, cancel: &CancelToken) -> Result
         .args(["--openai", &address])
         .args(["--max-batch", &slots.to_string()])
         .arg("--models-dir")
-        .arg(launch.models)
-        .arg("--serve-adapters")
-        .arg(launch.adapters)
-        .arg("--adapter-targets")
-        .arg("all")
+        .arg(launch.models);
+    if let Some(adapters) = launch.adapters {
+        command
+            .arg("--serve-adapters")
+            .arg(adapters)
+            .args(["--adapter-targets", "all"]);
+    }
+    command
         .arg("--training")
         .arg("--artifact-store")
         .arg(launch.artifacts)

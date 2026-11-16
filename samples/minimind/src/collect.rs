@@ -23,7 +23,10 @@ use std::sync::Arc;
 
 use anyhow::{bail, Context as _};
 use serde_json::{json, Value};
-use splinter_sdk::store::stage_ledger::{Commit, StageWork};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+
+use splinter_sdk::store::stage_ledger::{Attempt, Commit, OnCorrupt, Ran, StageKey, StageWork};
 use splinter_sdk::vocabulary::digest::{digest_of, Digest};
 
 use splinter_sdk::agent::policy_endpoint::{forward, Endpoint, Policy};
@@ -76,101 +79,217 @@ fn outcome(commit: &Commit) -> bool {
     commit.summary["passed"].as_bool().unwrap_or(false)
 }
 
+/// What an episode runs with: the parts of the run its work reads, shared
+/// by the episodes running at once.
+struct EpisodeCtx<'a> {
+    dir: &'a std::path::Path,
+    seed: u64,
+    agent: &'a crate::config::AgentLimits,
+    expert_context: u32,
+    runtime: &'a tokio::runtime::Runtime,
+}
+
+/// The work of one episode of `instance` by `actor`, its outputs at `rel`.
+fn episode_work(
+    ctx: &EpisodeCtx<'_>,
+    rel: &str,
+    instance: &Instance,
+    actor: &Actor,
+    attempt: &Attempt,
+) -> anyhow::Result<StageWork> {
+    let dir = ctx.dir.join(rel);
+    reset(&dir)?;
+    let ws = dir.join("workspace");
+    tasks::materialise(instance, &ws)?;
+    let (policy, model, seed, context_tokens): (Box<Policy>, String, Option<u64>, u32) =
+        match &actor {
+            Actor::Expert => {
+                let task = instance.clone();
+                let policy = move |request: &Value| -> anyhow::Result<Value> {
+                    let messages = request["messages"].as_array().cloned().unwrap_or_default();
+                    let tools = request["tools"].as_array().cloned().unwrap_or_default();
+                    Ok(expert::next(&task, &messages, &tools)?.message(&messages))
+                };
+                // The expert reads any length; the episode is bounded by
+                // the largest context of the models it teaches.
+                let context = ctx.expert_context;
+                (Box::new(policy), EXPERT_MODEL.to_string(), None, context)
+            }
+            Actor::Model { target, .. } => {
+                let (upstream, key) = (target.base_url.clone(), target.key.clone());
+                let policy = move |request: &Value| forward(&upstream, &key, request);
+                (
+                    Box::new(policy),
+                    target.model.clone(),
+                    Some(ctx.seed ^ u64::from(attempt.number())),
+                    target.context_tokens,
+                )
+            }
+        };
+    let endpoint = Arc::new(Endpoint::start(&model, policy)?);
+    let mut settings = AgentConfig::default();
+    RemoteModel {
+        spec: format!("brain/{model}"),
+        base_url: Some(endpoint.url().to_string()),
+        api_key: Some("minimind".into()),
+        thinking: false,
+        seed,
+        // Greedy: a small model's best guess, the same on every rerun.
+        temperature: Some(0.0),
+        ..RemoteModel::default()
+    }
+    .apply_to(&mut settings)
+    .map_err(|e| anyhow::anyhow!("configuring the agent's model: {e}"))?;
+    let limits = Limits {
+        max_tool_calls: ctx.agent.max_tool_calls,
+        deadline_secs: ctx.agent.deadline_secs,
+        context_tokens,
+        max_output_tokens: ctx.agent.max_output_tokens,
+    };
+    let ran = ctx.runtime.block_on(workspace_episode::run(
+        &ws,
+        &instance.instruction,
+        settings,
+        &limits,
+        dir.join("audit.jsonl"),
+    ));
+    let exchanges = endpoint.exchanges();
+    let verdict = tasks::verify(instance, &ws);
+    let answer = std::fs::read_to_string(ws.join(tasks::ANSWER_FILE))
+        .ok()
+        .map(|a| a.trim().chars().take(60).collect::<String>());
+    // A run that failed outright (the endpoint down, a request
+    // refused) says nothing about the policy: the attempt stays open
+    // and runs again, never counted as a failed episode.
+    let ran = ran?;
+    let (conclusion, calls, trajectory) = (ran.conclusion, ran.tool_calls, ran.trajectory);
+    let last_text = exchanges
+        .iter()
+        .rev()
+        .find_map(|x| {
+            x.reply
+                .as_ref()
+                .ok()
+                .and_then(|m| m["content"].as_str().map(String::from))
+        })
+        .map(|t| t.chars().take(120).collect::<String>());
+    let doc = json!({
+        "attempt": attempt.id(), "instance": instance.id, "passed": verdict.passed, "reason": verdict.reason,
+        "conclusion": conclusion, "tool_calls": calls, "trajectory": trajectory,
+    });
+    write(&dir.join("episode.json"), &doc.to_string())?;
+    if verdict.passed {
+        let calls = exchanges
+            .iter()
+            .map(|x| {
+                x.reply
+                    .clone()
+                    .map(|reply| (x.request.clone(), reply))
+                    .map_err(|e| anyhow::anyhow!(e))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        write(
+            &dir.join("records.jsonl"),
+            &wire::episode_lines(&calls, &attempt.id())?,
+        )?;
+    }
+    std::fs::remove_dir_all(&ws).with_context(|| format!("removing {}", ws.display()))?;
+    Ok(StageWork::new(json!({
+        "passed": verdict.passed, "reason": verdict.reason, "tool_calls": calls, "conclusion": conclusion,
+        "answer": answer, "last_text": last_text, "attempt": attempt.id(),
+    }))
+    .output("episode", rel))
+}
+
 impl Run<'_> {
-    /// Runs one episode of `instance` by `actor` as unit `unit`.
-    fn episode(
+    /// Runs one episode per `(unit, instance)` by `actor`, as many at once as
+    /// the configuration allows (the model server batches their requests),
+    /// each a unit of its own; returns their commits in order.
+    fn episodes(
         &mut self,
-        unit: &str,
-        instance: &Instance,
+        jobs: Vec<(String, Instance)>,
         actor: &Actor,
-    ) -> anyhow::Result<Commit> {
+    ) -> anyhow::Result<Vec<Commit>> {
         let who = match actor {
             Actor::Expert => Digest::of(EXPERT_MODEL.as_bytes()),
             Actor::Model { digest, .. } => digest.clone(),
         };
-        let key = self.key(
-            &json!(self.config.agent),
-            unit,
-            &[("instance", &digest_of(instance)), ("actor", &who)],
-            &["splinter", "sven"],
-        );
-        let rel = format!("episodes/{unit}");
-        let (instance, actor) = (instance.clone(), actor.clone());
-        self.unit(unit, &key, move |run, attempt| {
-            let dir = run.path(&rel);
-            reset(&dir)?;
-            let ws = dir.join("workspace");
-            tasks::materialise(&instance, &ws)?;
-            let (policy, model, seed, context_tokens): (Box<Policy>, String, Option<u64>, u32) = match &actor {
-                Actor::Expert => {
-                    let task = instance.clone();
-                    let policy = move |request: &Value| -> anyhow::Result<Value> {
-                        let messages = request["messages"].as_array().cloned().unwrap_or_default();
-                        let tools = request["tools"].as_array().cloned().unwrap_or_default();
-                        Ok(expert::next(&task, &messages, &tools)?.message())
+        let slice = self.agent_slice();
+        let keyed: Vec<(String, StageKey, Instance)> = jobs
+            .into_iter()
+            .map(|(unit, instance)| {
+                let key = self.key(
+                    &slice,
+                    &unit,
+                    &[("instance", &digest_of(&instance)), ("actor", &who)],
+                    &["splinter", "sven"],
+                );
+                (unit, key, instance)
+            })
+            .collect();
+        let ctx = EpisodeCtx {
+            dir: self.dir(),
+            seed: self.seed,
+            agent: &self.config.agent,
+            expert_context: self
+                .config
+                .models
+                .values()
+                .map(|m| m.context)
+                .max()
+                .unwrap_or(0),
+            runtime: &self.runtime,
+        };
+        let ledger = self.ledger();
+        let next = AtomicUsize::new(0);
+        let results: Mutex<Vec<Option<anyhow::Result<Ran>>>> =
+            Mutex::new((0..keyed.len()).map(|_| None).collect());
+        let width = (self.config.agent.concurrency as usize).clamp(1, keyed.len().max(1));
+        std::thread::scope(|scope| {
+            for _ in 0..width {
+                scope.spawn(|| loop {
+                    let i = next.fetch_add(1, Ordering::SeqCst);
+                    let Some((unit, key, instance)) = keyed.get(i) else {
+                        break;
                     };
-                    // The expert reads any length; the episode is bounded by
-                    // the largest context of the models it teaches.
-                    let context = run.config.models.values().map(|m| m.context).max().unwrap_or(0);
-                    (Box::new(policy), EXPERT_MODEL.to_string(), None, context)
-                }
-                Actor::Model { target, .. } => {
-                    let upstream = target.base_url.clone();
-                    let policy = move |request: &Value| forward(&upstream, request);
-                    (Box::new(policy), target.model.clone(), Some(run.seed ^ u64::from(attempt.number())), target.context_tokens)
-                }
-            };
-            let endpoint = Arc::new(Endpoint::start(&model, policy)?);
-            let mut settings = AgentConfig::default();
-            RemoteModel {
-                spec: format!("brain/{model}"),
-                base_url: Some(endpoint.url().to_string()),
-                api_key: Some("minimind".into()),
-                thinking: false,
-                seed,
-                ..RemoteModel::default()
+                    let rel = format!("episodes/{unit}");
+                    let ran = ledger
+                        .run(unit, key, OnCorrupt::Recompute, |attempt| {
+                            episode_work(&ctx, &rel, instance, actor, attempt)
+                        })
+                        .map_err(anyhow::Error::from);
+                    if let Ok(mut slots) = results.lock() {
+                        slots[i] = Some(ran);
+                    }
+                });
             }
-            .apply_to(&mut settings)
-            .map_err(|e| anyhow::anyhow!("configuring the agent's model: {e}"))?;
-            let limits = Limits {
-                max_tool_calls: run.config.agent.max_tool_calls,
-                deadline_secs: run.config.agent.deadline_secs,
-                context_tokens,
-                max_output_tokens: run.config.agent.max_output_tokens,
-            };
-            let ran = run.runtime.block_on(workspace_episode::run(&ws, &instance.instruction, settings, &limits, dir.join("audit.jsonl")));
-            let exchanges = endpoint.exchanges();
-            let verdict = tasks::verify(&instance, &ws);
-            let answer = std::fs::read_to_string(ws.join(tasks::ANSWER_FILE)).ok().map(|a| a.trim().chars().take(60).collect::<String>());
-            // A run that failed outright (the endpoint down, a request
-            // refused) says nothing about the policy: the attempt stays open
-            // and runs again, never counted as a failed episode.
-            let ran = ran?;
-            let (conclusion, calls, trajectory) = (ran.conclusion, ran.tool_calls, ran.trajectory);
-            let last_text = exchanges
-                .iter()
-                .rev()
-                .find_map(|x| x.reply.as_ref().ok().and_then(|m| m["content"].as_str().map(String::from)))
-                .map(|t| t.chars().take(120).collect::<String>());
-            let doc = json!({
-                "attempt": attempt.id(), "instance": instance.id, "passed": verdict.passed, "reason": verdict.reason,
-                "conclusion": conclusion, "tool_calls": calls, "trajectory": trajectory,
-            });
-            write(&dir.join("episode.json"), &doc.to_string())?;
-            if verdict.passed {
-                let calls = exchanges
-                    .iter()
-                    .map(|x| x.reply.clone().map(|reply| (x.request.clone(), reply)).map_err(|e| anyhow::anyhow!(e)))
-                    .collect::<anyhow::Result<Vec<_>>>()?;
-                write(&dir.join("records.jsonl"), &wire::episode_lines(&calls, &attempt.id())?)?;
+        });
+        let results = results
+            .into_inner()
+            .map_err(|_| anyhow::anyhow!("an episode thread panicked"))?;
+        let mut commits = Vec::new();
+        let mut failed = None;
+        for ((unit, _, _), ran) in keyed.iter().zip(results) {
+            match ran {
+                Some(Ok(ran)) => {
+                    let how = if ran.reused { "reused" } else { "done" };
+                    writeln!(
+                        self.out,
+                        "[{how:>6}] {unit}: {}",
+                        crate::stages::one_line(&ran.commit.summary)
+                    )?;
+                    commits.push(ran.commit);
+                }
+                Some(Err(e)) => failed = failed.or(Some(e)),
+                None => {
+                    failed = failed.or(Some(anyhow::anyhow!("{unit}: the episode did not run")))
+                }
             }
-            std::fs::remove_dir_all(&ws).with_context(|| format!("removing {}", ws.display()))?;
-            Ok(StageWork::new(json!({
-                "passed": verdict.passed, "reason": verdict.reason, "tool_calls": calls, "conclusion": conclusion,
-                "answer": answer, "last_text": last_text, "attempt": attempt.id(),
-            }))
-            .output("episode", &rel))
-        })
+        }
+        match failed {
+            Some(e) => Err(e),
+            None => Ok(commits),
+        }
     }
 
     /// Episodes of every instance of `split` by `actor`, then one unit
@@ -182,10 +301,12 @@ impl Run<'_> {
         actor: &Actor,
         require: bool,
     ) -> anyhow::Result<Commit> {
-        let mut episodes = Vec::new();
-        for instance in self.instances(split)? {
-            episodes.push(self.episode(&format!("{name}/{}", instance.id), &instance, actor)?);
-        }
+        let jobs = self
+            .instances(split)?
+            .into_iter()
+            .map(|i| (format!("{name}/{}", i.id), i))
+            .collect();
+        let episodes = self.episodes(jobs, actor)?;
         let inputs: Vec<(String, Digest)> = episodes
             .iter()
             .map(|c| {
@@ -198,7 +319,7 @@ impl Run<'_> {
             })
             .collect();
         let refs: Vec<(&str, &Digest)> = inputs.iter().map(|(n, d)| (n.as_str(), d)).collect();
-        let key = self.key(&json!(self.config.agent), name, &refs, &["splinter"]);
+        let key = self.key(&self.agent_slice(), name, &refs, &["splinter"]);
         let rel = format!("data/{name}.jsonl");
         self.unit(name, &key, move |run, _| {
             let mut lines = String::new();
@@ -265,11 +386,13 @@ impl Run<'_> {
             .context("the stage has no checkpoint")?
             .clone();
         let unit = format!("probe/{name}");
-        let mut episodes = Vec::new();
-        for instance in self.instances(Split::Dev)? {
-            let commit = self.episode(&format!("{unit}/{}", instance.id), &instance, &actor)?;
-            episodes.push((instance, commit));
-        }
+        let instances = self.instances(Split::Dev)?;
+        let jobs = instances
+            .iter()
+            .map(|i| (format!("{unit}/{}", i.id), i.clone()))
+            .collect();
+        let commits = self.episodes(jobs, &actor)?;
+        let episodes: Vec<(Instance, Commit)> = instances.into_iter().zip(commits).collect();
         let inputs: Vec<(String, Digest)> = episodes
             .iter()
             .map(|(_, c)| {
@@ -283,7 +406,7 @@ impl Run<'_> {
             .collect();
         let mut refs: Vec<(&str, &Digest)> = inputs.iter().map(|(n, d)| (n.as_str(), d)).collect();
         refs.push(("checkpoint", &digest));
-        let key = self.key(&json!(self.config.agent), &unit, &refs, &["splinter"]);
+        let key = self.key(&self.agent_slice(), &unit, &refs, &["splinter"]);
         let checkpoint = policy.1.clone();
         let commit = self.unit(&unit, &key, move |run, _| {
             let passed = episodes.iter().filter(|(_, c)| outcome(c)).count();

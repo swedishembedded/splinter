@@ -57,6 +57,8 @@ pub enum Split {
     Explore,
     /// Probed after every model stage; never trained on.
     Dev,
+    /// Worked conversations in the pretraining corpus.
+    World,
 }
 
 impl Split {
@@ -67,6 +69,7 @@ impl Split {
             Self::Train => 0x7472_6169_6e00_0001,
             Self::Explore => 0x6578_706c_6f00_0002,
             Self::Dev => 0x6465_7600_0000_0003,
+            Self::World => 0x776f_726c_6400_0004,
         }
     }
 
@@ -77,6 +80,7 @@ impl Split {
             Self::Train => "train",
             Self::Explore => "explore",
             Self::Dev => "dev",
+            Self::World => "world",
         }
     }
 }

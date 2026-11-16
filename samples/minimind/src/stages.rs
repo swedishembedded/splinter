@@ -58,6 +58,9 @@ pub struct Run<'a> {
     /// Where fetched corpora are cached across runs (`<run>/cache` unless
     /// set).
     pub cache: PathBuf,
+    /// A lock file held exclusively while a training job runs, so the timed
+    /// work of others on the same card never overlaps it.
+    pub gpu_lock: Option<PathBuf>,
     /// The configuration.
     pub config: Config,
     /// The run seed.
@@ -93,6 +96,7 @@ impl<'a> Run<'a> {
             ledger: Some(StageLedger::open(dir)?),
             dir: dir.to_path_buf(),
             cache: dir.join("cache"),
+            gpu_lock: None,
             config,
             seed,
             revisions,
@@ -230,7 +234,15 @@ impl<'a> Run<'a> {
         let names: Vec<String> = self.config.fetch.iter().map(|f| f.name.clone()).collect();
         self.unit("world", &key, |run, _| {
             let tools = crate::collect::tool_sigs();
-            let mut docs = world::corpus(run.seed, &run.config.world, &run.template, &tools);
+            let system = splinter_sdk::agent::sven::config::compact_profile::SYSTEM_PROMPT;
+            let mut docs = world::corpus(run.seed, &run.config.world, &run.template, &tools, system);
+            let scratch = run.path("world/scratch");
+            for instance in tasks::instances(run.seed, Split::World, run.config.world.trajectories) {
+                docs.push(world::trajectory(&instance, &run.template, &tools, system, &scratch)?);
+            }
+            if scratch.exists() {
+                std::fs::remove_dir_all(&scratch)?;
+            }
             for name in &names {
                 let path = run.path(&format!("fetch/{name}.txt"));
                 let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
@@ -243,13 +255,20 @@ impl<'a> Run<'a> {
             }
             let text = world::to_jsonl(&docs);
             write(&run.path("world/corpus.jsonl"), &text)?;
+            // Every tenth document is held out of pretraining and scored.
+            let (held, train): (Vec<_>, Vec<_>) = docs.iter().cloned().enumerate().partition(|(i, _)| i % 10 == 9);
+            let strip = |v: Vec<(usize, world::Document)>| v.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
+            write(&run.path("world/train.jsonl"), &world::to_jsonl(&strip(train)))?;
+            write(&run.path("world/held_out.jsonl"), &world::to_jsonl(&strip(held)))?;
             let mut kinds: BTreeMap<&str, usize> = BTreeMap::new();
             for doc in &docs {
                 *kinds.entry(doc.kind).or_default() += 1;
             }
             let sample = docs.iter().find(|d| d.kind == "world").map(|d| d.text.clone());
             Ok(StageWork::new(json!({ "documents": docs.len(), "bytes": text.len(), "kinds": kinds, "sample": sample }))
-                .output("corpus", "world/corpus.jsonl"))
+                .output("corpus", "world/corpus.jsonl")
+                .output("train", "world/train.jsonl")
+                .output("held_out", "world/held_out.jsonl"))
         })
     }
 
@@ -361,6 +380,16 @@ impl<'a> Run<'a> {
         })
     }
 
+    /// The episode bounds as keys see them: how many run at once changes no
+    /// episode's outcome, so it is left out.
+    pub(crate) fn agent_slice(&self) -> Value {
+        let mut slice = json!(self.config.agent);
+        if let Some(fields) = slice.as_object_mut() {
+            fields.remove("concurrency");
+        }
+        slice
+    }
+
     /// The model labelled `label`.
     pub(crate) fn model(&self, label: &str) -> anyhow::Result<crate::config::ModelSpec> {
         self.config
@@ -410,10 +439,13 @@ impl<'a> Run<'a> {
                 format: &ChatFormat {
                     template: run.template.jinja(),
                     specials: run.template.specials(),
+                    eos: run.template.end.clone(),
+                    pad: Some(run.template.pad.clone()),
                 },
                 tokenizer_corpus: &run.path("world/corpus.jsonl"),
                 seed: run.seed,
                 install_as: &install_name(&key, &format!("{label}-init")),
+                identity: &identity(&key),
                 out: &out,
             })?;
             Ok(
@@ -458,30 +490,57 @@ impl<'a> Run<'a> {
             &["brain"],
         );
         let base_checkpoint = base.1.clone();
+        let held_out = (stage == Stage::Pretrain).then(|| self.path("world/held_out.jsonl"));
+        let unit_name = unit.clone();
         let commit = self.unit(&unit, &key, |run, attempt| {
             let out = run.path(&rel);
             reset(&out)?;
-            let mut curve = Vec::new();
+            // Progress on the terminal, about ten lines a run.
+            let every = (budget.steps / 10).max(1);
+            let started = std::time::Instant::now();
+            let shown = unit_name.clone();
+            let _card = match &run.gpu_lock {
+                Some(path) => {
+                    let file = std::fs::OpenOptions::new()
+                        .create(true)
+                        .truncate(false)
+                        .write(true)
+                        .open(path)
+                        .with_context(|| format!("opening {}", path.display()))?;
+                    file.lock().with_context(|| format!("locking {}", path.display()))?;
+                    Some(file)
+                }
+                None => None,
+            };
             let trained = run.brain.train(
                 &TrainRequest {
                     objective,
                     base: &base_checkpoint,
                     data: &run.path(data.1),
+                    held_out: held_out.as_deref(),
                     budget: &budget,
                     seed: run.seed,
                     install_as: &install_name(&key, &format!("{label}-{name}")),
-                    // One identity per key: a rerun after an interruption
-                    // continues the same brain job.
-                    identity: &format!("minimind-{}", &key.as_str()[key.as_str().len() - 16..]),
+                    identity: &identity(&key),
                     out: &out,
                 },
-                &mut |step, loss| curve.push((step, loss)),
+                &mut |step, loss| {
+                    if step % every == 0 {
+                        let _ = writeln!(
+                            run.out,
+                            "         {shown}: step {step}/{} loss {loss:.3} ({:.0} s)",
+                            budget.steps,
+                            started.elapsed().as_secs_f64()
+                        );
+                    }
+                },
             )?;
             let first = trained.losses.first().map(|l| l.1);
             let last = trained.losses.last().map(|l| l.1);
             Ok(StageWork::new(json!({
                 "model": trained.checkpoint.model, "arch": spec.arch, "steps": budget.steps, "first_loss": first, "last_loss": last,
                 "losses": trained.losses, "resumed": trained.resumed, "attempt": attempt.id(),
+                "seconds": started.elapsed().as_secs(),
             }))
             .output("checkpoint", &rel))
         })?;
@@ -519,7 +578,7 @@ impl<'a> Run<'a> {
             .clone();
         let unit = format!("{name}/examine");
         let key = self.key(
-            &json!(self.config.agent),
+            &self.agent_slice(),
             &unit,
             &[("candidate", &c), ("predecessor", &p)],
             &["bench", "sven", "brain"],
@@ -539,6 +598,14 @@ impl<'a> Run<'a> {
         })?;
         Ok(Some(commit))
     }
+}
+
+/// The brain job identity (`resume_key`) of a unit's key: a rerun after an
+/// interruption resubmits the same request under it, and brain continues the
+/// run or answers a completed one from its record.
+fn identity(key: &StageKey) -> String {
+    let hex = key.as_str().rsplit(':').next().unwrap_or(key.as_str());
+    format!("minimind-{}", &hex[..24.min(hex.len())])
 }
 
 /// The name a stage's checkpoint is installed under: its stage and the head
@@ -575,7 +642,7 @@ pub(crate) fn write(path: &Path, text: &str) -> anyhow::Result<()> {
 }
 
 /// A summary on one line, without the long fields.
-fn one_line(summary: &Value) -> String {
+pub(crate) fn one_line(summary: &Value) -> String {
     let Value::Object(map) = summary else {
         return summary.to_string();
     };
@@ -633,8 +700,8 @@ fn model_stages(
     demonstrations: &Commit,
 ) -> anyhow::Result<()> {
     let corpus = world
-        .output("corpus")
-        .context("the world has no corpus")?
+        .output("train")
+        .context("the world has no training corpus")?
         .clone();
     let init = run.checkpoint(label, world)?;
     run.probe(&format!("{label}/init"), (&init.0, &init.1))?;
@@ -643,7 +710,7 @@ fn model_stages(
         label,
         "pretrain",
         (&init.0, &init.1),
-        (&corpus, "world/corpus.jsonl"),
+        (&corpus, "world/train.jsonl"),
     )?;
     run.probe(
         &format!("{label}/pretrained"),

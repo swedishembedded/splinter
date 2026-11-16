@@ -43,6 +43,8 @@ pub struct Template {
     pub call_close: String,
     /// The padding token.
     pub pad: String,
+    /// Separates documents in the pretraining stream.
+    pub separator: String,
 }
 
 impl Default for Template {
@@ -56,6 +58,7 @@ impl Default for Template {
             call_open: "<tool_call>".into(),
             call_close: "</tool_call>".into(),
             pad: "<|pad|>".into(),
+            separator: "<|endoftext|>".into(),
         }
     }
 }
@@ -110,6 +113,7 @@ impl Template {
             self.end.clone(),
             self.call_open.clone(),
             self.call_close.clone(),
+            self.separator.clone(),
         ]
     }
 
@@ -154,7 +158,7 @@ impl Template {
                             body.push('\n');
                         }
                         body.push_str(&format!(
-                            "{}{{\"name\":\"{}\",\"arguments\":{}}}{}",
+                            "{}{{\"name\": \"{}\", \"arguments\": {}}}{}",
                             self.call_open, call.name, call.arguments, self.call_close
                         ));
                     }
@@ -193,7 +197,7 @@ impl Template {
              {{%- elif m.role == 'tool' -%}}{tool}{{{{ m.content }}}}{end}{{{{ \"\\n\" }}}}\
              {{%- elif m.role == 'assistant' -%}}{assistant}{{{{ m.content or '' }}}}\
              {{%- for c in (m.tool_calls or []) -%}}{{% if m.content or not loop.first %}}\n{{% endif %}}\
-             {call_open}{{\"name\":\"{{{{ c.function.name }}}}\",\"arguments\":{{{{ c.function.arguments }}}}}}{call_close}\
+             {call_open}{{\"name\": \"{{{{ c.function.name }}}}\", \"arguments\": {{{{ c.function.arguments | tojson }}}}}}{call_close}\
              {{%- endfor -%}}{end}{{{{ \"\\n\" }}}}\
              {{%- endif -%}}{{%- endfor -%}}\
              {{%- if add_generation_prompt -%}}{assistant}{{%- endif -%}}"
@@ -245,7 +249,7 @@ mod tests {
             text,
             "<|system|>Be brief.\nTools: shell(shell_command,workdir) read_file(limit,path)<|end|>\n\
              <|user|>hi<|end|>\n\
-             <|assistant|><tool_call>{\"name\":\"shell\",\"arguments\":{\"shell_command\":\"ls\"}}</tool_call><|end|>\n\
+             <|assistant|><tool_call>{\"name\": \"shell\", \"arguments\": {\"shell_command\":\"ls\"}}</tool_call><|end|>\n\
              <|tool|>a.txt<|end|>\n<|assistant|>One file.<|end|>\n"
         );
     }
@@ -264,7 +268,7 @@ mod tests {
             { "role": "system", "content": "Be brief." },
             { "role": "user", "content": "hi" },
             { "role": "assistant", "content": null, "tool_calls": [{ "id": "c0", "type": "function",
-              "function": { "name": "shell", "arguments": "{\"shell_command\":\"ls\"}" } }] },
+              "function": { "name": "shell", "arguments": { "shell_command": "ls" } } }] },
             { "role": "tool", "content": "a.txt" },
             { "role": "assistant", "content": "One file." },
         ]);

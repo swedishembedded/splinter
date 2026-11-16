@@ -91,19 +91,44 @@ fn unique_call_ids(messages: &mut [Value]) {
     }
 }
 
-/// Gives `message` the plain-text `content` a chat record holds: a missing
-/// or null content (an assistant turn that only calls tools) is empty, and a
-/// list of text parts is joined.
+/// Makes `message` the message a chat record holds: its role, plain-text
+/// `content` (a missing or null content, an assistant turn that only calls
+/// tools, is empty; a list of text parts is joined), its tool calls as
+/// `{id, type, function: {name, arguments}}` with the arguments as JSON
+/// text, and the call a tool result answers. Fields a server adds to a reply
+/// (`refusal`, `annotations`, ...) are dropped: brain refuses a record
+/// that carries one.
 fn plain_content(message: &mut Value) {
-    let text = match &message["content"] {
-        Value::String(_) => return,
+    let content = match &message["content"] {
+        Value::String(text) => text.clone(),
         Value::Array(parts) => parts
             .iter()
             .filter_map(|p| p["text"].as_str())
             .collect::<String>(),
         _ => String::new(),
     };
-    message["content"] = json!(text);
+    let mut clean = json!({ "role": message["role"].clone(), "content": content });
+    if let Some(calls) = message["tool_calls"].as_array() {
+        let calls: Vec<Value> = calls
+            .iter()
+            .map(|c| {
+                let arguments = match &c["function"]["arguments"] {
+                    Value::String(text) => text.clone(),
+                    other => other.to_string(),
+                };
+                json!({ "id": c["id"].clone(), "type": "function",
+                        "function": { "name": c["function"]["name"].clone(), "arguments": arguments } })
+            })
+            .collect();
+        clean["tool_calls"] = json!(calls);
+    }
+    if let Some(id) = message.get("tool_call_id") {
+        clean["tool_call_id"] = id.clone();
+    }
+    if let Some(train) = message.get("train") {
+        clean["train"] = train.clone();
+    }
+    *message = clean;
 }
 
 /// Every `(request, reply)` call of an accepted episode as JSON lines.
@@ -151,6 +176,16 @@ mod tests {
             "every message has plain-text content"
         );
         assert_eq!(r["tools"], json!([{ "type": "function" }]));
+        let served = json!({ "role": "assistant", "content": "ok", "refusal": null });
+        let kept = record(&request, &served, "e", 0).unwrap();
+        assert!(
+            kept["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|m| m.get("refusal").is_none()),
+            "a server's extra fields are dropped"
+        );
         assert!(record(&request, &json!({ "role": "user", "content": "x" }), "e", 0).is_err());
         let reused = json!({ "messages": [
             { "role": "user", "content": "u" },

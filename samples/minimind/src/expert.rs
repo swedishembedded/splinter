@@ -37,15 +37,17 @@ pub enum Action {
 }
 
 impl Action {
-    /// The action as an OpenAI assistant message; a call's arguments are
-    /// JSON text, as on the wire.
+    /// The action as the OpenAI assistant message answering `messages`; a
+    /// call's arguments are JSON text, as on the wire, and its id is unique in
+    /// the conversation (one per earlier tool result).
     #[must_use]
-    pub fn message(&self) -> Value {
+    pub fn message(&self, messages: &[Value]) -> Value {
+        let id = format!("call_{}", tool_results(messages).len());
         match self {
             Self::Finish(text) => serde_json::json!({ "role": "assistant", "content": text }),
             Self::Call { tool, arguments } => serde_json::json!({
                 "role": "assistant", "content": null, "tool_calls": [{
-                    "id": "call_0", "type": "function",
+                    "id": id, "type": "function",
                     "function": { "name": tool, "arguments": arguments.to_string() } }] }),
         }
     }
@@ -92,7 +94,7 @@ fn file_lines(result: &str) -> Vec<String> {
 fn first_number(result: &str) -> Option<String> {
     result
         .lines()
-        .map(str::trim)
+        .map(|l| l.trim().trim_start_matches("error:").trim())
         .find(|l| !l.is_empty() && l.chars().all(|c| c.is_ascii_digit()))
         .map(String::from)
 }
@@ -242,7 +244,9 @@ pub fn next(instance: &Instance, messages: &[Value], tools: &[Value]) -> anyhow:
             let count =
                 || first_number(&seen[0]).with_context(|| format!("grep printed {:?}", seen[0]));
             match step {
-                0 => shell(tools, &format!("grep -c {word} log.txt")),
+                // grep exits 1 when it counts nothing; the count is still
+                // the answer.
+                0 => shell(tools, &format!("grep -c {word} log.txt || true")),
                 1 => write_answer(tools, &count()?),
                 _ => Ok(answer_written(&count()?)),
             }
@@ -286,6 +290,17 @@ mod tests {
             shell(&tools(), "./calc combine 17 5").unwrap(),
             "the values come from the tool results, not from the instance"
         );
+    }
+
+    #[test]
+    fn every_call_of_a_conversation_has_its_own_id() {
+        let call = Action::Call {
+            tool: "shell".into(),
+            arguments: json!({}),
+        };
+        let first = call.message(&[]);
+        let second = call.message(&[json!({ "role": "tool", "content": "x" })]);
+        assert_ne!(first["tool_calls"][0]["id"], second["tool_calls"][0]["id"]);
     }
 
     #[test]

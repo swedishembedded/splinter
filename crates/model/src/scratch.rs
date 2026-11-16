@@ -26,7 +26,15 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::bail;
+use std::sync::Mutex;
+
+use anyhow::{anyhow, bail, Context as _};
+use serde_json::{json, Value};
+use splinter_core::digest::Digest;
+
+use crate::endpoint::BrainEndpoints;
+use crate::served_train::ArtifactStore;
+use crate::service::{ManagedBrain, ServiceSettings};
 use serde::{Deserialize, Serialize};
 
 /// A model to make: an architecture and that architecture's configuration.
@@ -49,8 +57,12 @@ pub struct ArchSpec {
 pub struct ChatFormat {
     /// Its chat template, over OpenAI-shaped `messages` and `tools`.
     pub template: String,
-    /// The special tokens the tokenizer keeps whole.
+    /// The special tokens the tokenizer keeps whole, in vocabulary order.
     pub specials: Vec<String>,
+    /// The token that ends a turn (one of `specials`).
+    pub eos: String,
+    /// The padding token, when there is one (one of `specials`).
+    pub pad: Option<String>,
 }
 
 /// One training run's budget.
@@ -63,6 +75,9 @@ pub struct Budget {
     pub batch: u32,
     /// Peak learning rate.
     pub lr: f64,
+    /// Tokens per training row: the pretraining window, the longest
+    /// fine-tuning record.
+    pub block: u32,
 }
 
 /// Where a served model is reached.
@@ -74,6 +89,8 @@ pub struct Served {
     pub model: String,
     /// The model's context window, in tokens.
     pub context_tokens: u32,
+    /// The key requests to it are made with.
+    pub key: String,
 }
 
 /// A checkpoint the service holds, by the name it is installed under.
@@ -98,6 +115,8 @@ pub struct CheckpointRequest<'a> {
     pub seed: u64,
     /// The name it is installed under.
     pub install_as: &'a str,
+    /// The run's durable identity (brain's `resume_key`).
+    pub identity: &'a str,
     /// Where its files are copied to.
     pub out: &'a Path,
 }
@@ -122,6 +141,8 @@ pub struct TrainRequest<'a> {
     pub base: &'a Checkpoint,
     /// The training data.
     pub data: &'a Path,
+    /// Data scored during the run and never trained on, when there is any.
+    pub held_out: Option<&'a Path>,
     /// Steps, batch and learning rate.
     pub budget: &'a Budget,
     /// The seed of the batch order.
@@ -142,8 +163,11 @@ pub struct Trained {
     pub checkpoint: Checkpoint,
     /// `(step, loss)` as the trainer reported them.
     pub losses: Vec<(u32, f64)>,
-    /// True when the run continued from a saved state.
+    /// True when the run continued from a saved state or was answered from
+    /// its record.
     pub resumed: bool,
+    /// The job's whole report.
+    pub report: Value,
 }
 
 /// What the stages ask of the model service.
@@ -190,53 +214,341 @@ pub fn needs(capability: &str) -> anyhow::Error {
     anyhow::anyhow!("needs {capability}")
 }
 
-/// Brain, reached over its HTTP API at `base_url`.
-#[derive(Clone, Debug)]
-pub struct ServedBrain {
-    /// The server's base URL (`http://host:port/v1`).
-    pub base_url: String,
-    /// The model's context window, in tokens.
-    pub context_tokens: u32,
-    /// The key requests are made with.
-    pub key: String,
-}
-
 /// How long a raw-text completion may take.
 const COMPLETION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
+/// How the brain service is reached.
+enum Connection {
+    /// A running server the caller gave; it cannot be restarted from here.
+    Given(BrainEndpoints),
+    /// A server this process started and restarts when a checkpoint it
+    /// installed must be served (brain scans its model store at start).
+    Managed {
+        settings: Box<ServiceSettings>,
+        brain: Option<ManagedBrain>,
+        cancel: sven_sdk::CancelToken,
+    },
+}
+
+/// Brain, reached over its HTTP API: training jobs on `brain/train`
+/// (`init_model`, `pretrain`, `full_train`), artifacts by digest, the
+/// installed checkpoints served over `/v1/chat/completions`.
+pub struct ServedBrain {
+    connection: Mutex<Connection>,
+    context_tokens: u32,
+}
+
+impl std::fmt::Debug for ServedBrain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServedBrain")
+            .field("context_tokens", &self.context_tokens)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The checkpoint a job's report names, its files fetched into `out`.
+fn installed(report: &Value, store: &ArtifactStore, out: &Path) -> anyhow::Result<Checkpoint> {
+    let name = report["installed_as"]
+        .as_str()
+        .ok_or_else(|| anyhow!("the job installed no checkpoint: {report}"))?;
+    std::fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
+    for file in report["files"].as_array().into_iter().flatten() {
+        let (Some(rel), Some(hex)) = (file["name"].as_str(), file["digest"].as_str()) else {
+            bail!("the job's report lists a file without a name and digest: {file}");
+        };
+        if Path::new(rel)
+            .components()
+            .any(|c| !matches!(c, std::path::Component::Normal(_)))
+        {
+            bail!("the job's report names a file outside its checkpoint: {rel}");
+        }
+        let dest = out.join(rel);
+        if let Some(dir) = dest.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let digest = Digest::from_content_hex(hex).map_err(|e| anyhow!("file {rel}: {e}"))?;
+        store
+            .fetch(&digest, &dest)
+            .map_err(|e| anyhow!("fetching {rel}: {e}"))?;
+    }
+    let model = if name.starts_with("local/") {
+        name.to_string()
+    } else {
+        format!("local/{name}")
+    };
+    Ok(Checkpoint {
+        model,
+        dir: out.to_path_buf(),
+    })
+}
+
+/// The seed as brain takes it: an integer JSON represents exactly, below
+/// 2^53; the run's seed is folded into that range.
+fn job_seed(seed: u64) -> u64 {
+    (seed ^ (seed >> 53)) & ((1 << 53) - 1)
+}
+
+/// A step frame's step and loss.
+fn step_of(frame: &Value) -> Option<(u32, f64)> {
+    Some((
+        u32::try_from(frame["step"].as_u64()?).ok()?,
+        frame["loss"].as_f64()?,
+    ))
+}
+
+impl ServedBrain {
+    /// A server the caller runs (`brain serve --training --artifact-store`),
+    /// with its artifact store reachable as `endpoints` says.
+    #[must_use]
+    pub fn given(endpoints: BrainEndpoints, context_tokens: u32) -> Self {
+        Self {
+            connection: Mutex::new(Connection::Given(endpoints)),
+            context_tokens,
+        }
+    }
+
+    /// A server started now from `settings`, owned, and stopped when this is
+    /// dropped.
+    ///
+    /// # Errors
+    /// The server does not start.
+    pub fn managed(settings: ServiceSettings, context_tokens: u32) -> anyhow::Result<Self> {
+        let cancel = sven_sdk::CancelToken::new();
+        let brain =
+            ManagedBrain::start(&settings, &cancel).map_err(|e| anyhow!("starting brain: {e}"))?;
+        Ok(Self {
+            connection: Mutex::new(Connection::Managed {
+                settings: Box::new(settings),
+                brain: Some(brain),
+                cancel,
+            }),
+            context_tokens,
+        })
+    }
+
+    /// Checks that the server schedules on device `id` (`gpu3`), as its
+    /// `/v1/devices` lists them: a run that must train on a card fails here,
+    /// before any work, instead of running elsewhere.
+    ///
+    /// # Errors
+    /// The server cannot be asked, or does not schedule on `id`.
+    pub fn require_device(&self, id: &str) -> anyhow::Result<()> {
+        let endpoints = self.endpoints()?;
+        let url = endpoints
+            .urls()
+            .first()
+            .ok_or_else(|| anyhow!("brain has no endpoint"))?;
+        let devices = crate::endpoint::get_json(
+            &format!("{}/devices", url.trim_end_matches('/')),
+            endpoints.key(),
+        )
+        .map_err(|e| anyhow!("asking brain for its devices: {e}"))?;
+        let listed: Vec<&str> = devices["data"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|d| d["id"].as_str())
+            .collect();
+        if listed.contains(&id) {
+            Ok(())
+        } else {
+            bail!("brain does not schedule on {id} (it lists {listed:?}): no usable card, so nothing is trained")
+        }
+    }
+
+    fn endpoints(&self) -> anyhow::Result<BrainEndpoints> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| anyhow!("the brain connection is poisoned"))?;
+        match &*connection {
+            Connection::Given(endpoints) => Ok(endpoints.clone()),
+            Connection::Managed {
+                brain: Some(brain), ..
+            } => Ok(brain.endpoints().clone()),
+            Connection::Managed { brain: None, .. } => bail!("the managed brain did not restart"),
+        }
+    }
+
+    /// Restarts a managed server, so it scans its model store again; a given
+    /// server cannot be.
+    fn rescan(&self, model: &str) -> anyhow::Result<()> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| anyhow!("the brain connection is poisoned"))?;
+        match &mut *connection {
+            Connection::Given(endpoints) => bail!(
+                "{} does not serve {model}: restart that server so it scans its model store",
+                endpoints.urls().join(", ")
+            ),
+            Connection::Managed {
+                settings,
+                brain,
+                cancel,
+            } => {
+                drop(brain.take());
+                *brain = Some(
+                    ManagedBrain::start(settings, cancel)
+                        .map_err(|e| anyhow!("restarting brain: {e}"))?,
+                );
+                Ok(())
+            }
+        }
+    }
+
+    fn job(
+        &self,
+        action: &str,
+        params: &Value,
+        out: &Path,
+        on_step: &mut dyn FnMut(u32, f64),
+    ) -> anyhow::Result<(Value, Checkpoint)> {
+        let endpoints = self.endpoints()?;
+        let report = crate::served_train::run_action(
+            &endpoints,
+            out,
+            0,
+            action,
+            params,
+            None,
+            &mut |frame| {
+                if let Some((step, loss)) = step_of(frame) {
+                    on_step(step, loss);
+                }
+            },
+        )
+        .map_err(|e| anyhow!("brain/train {action}: {e}"))?;
+        let store = endpoints.artifact_store().map_err(|e| anyhow!("{e}"))?;
+        let checkpoint = installed(&report, store, out)?;
+        Ok((report, checkpoint))
+    }
+
+    fn publish(&self, file: &Path) -> anyhow::Result<String> {
+        let endpoints = self.endpoints()?;
+        let store = endpoints.artifact_store().map_err(|e| anyhow!("{e}"))?;
+        let digest = store
+            .publish(file)
+            .map_err(|e| anyhow!("publishing {}: {e}", file.display()))?;
+        Ok(digest.hex().to_string())
+    }
+}
+
 impl ModelService for ServedBrain {
-    fn make_checkpoint(&self, _request: &CheckpointRequest<'_>) -> anyhow::Result<Checkpoint> {
-        Err(needs(
-            "brain's from-scratch action over brain/train: train a tokenizer on a text corpus with the \
-             template's special tokens, make a random-init checkpoint of a named architecture and its \
-             configuration with it, and install it as local/<name>",
-        ))
+    fn make_checkpoint(&self, request: &CheckpointRequest<'_>) -> anyhow::Result<Checkpoint> {
+        let corpus = self.publish(request.tokenizer_corpus)?;
+        let mut tokenizer = json!({
+            "vocab_size": request.model.vocab,
+            "special_tokens": request.format.specials,
+            "eos_token": request.format.eos,
+        });
+        if let Some(pad) = &request.format.pad {
+            tokenizer["pad_token"] = json!(pad);
+        }
+        let params = json!({
+            "arch": request.model.arch,
+            "config": request.model.config.to_string(),
+            "tokenizer": tokenizer.to_string(),
+            "chat_template": request.format.template,
+            "corpus_digest": corpus,
+            "seed": job_seed(request.seed),
+            "install_as": request.install_as,
+            "resume_key": request.identity,
+        });
+        Ok(self
+            .job("init_model", &params, request.out, &mut |_, _| {})?
+            .1)
     }
 
     fn train(
         &self,
         request: &TrainRequest<'_>,
-        _on_step: &mut dyn FnMut(u32, f64),
+        on_step: &mut dyn FnMut(u32, f64),
     ) -> anyhow::Result<Trained> {
-        match request.objective {
-            Objective::Pretrain => Err(needs(
-                "brain's raw-text pretraining over brain/train for any architecture that declares it, resumable by job identity, installing local/<name>",
-            )),
-            Objective::ChatFull => Err(needs(
-                "brain's full_train of a from-scratch checkpoint on generic-messages-v2 records (masked chat SFT), \
-                 resumable by job identity, installing local/<name>",
-            )),
+        let mut data = json!({ "train": { "digest": self.publish(request.data)? } });
+        let base = request.base.model.as_str();
+        let budget = request.budget;
+        let (action, params) = match request.objective {
+            Objective::Pretrain => {
+                let mut params = json!({
+                    "base": base, "steps": budget.steps, "batch": budget.batch, "block": budget.block,
+                    "lr": budget.lr, "seed": job_seed(request.seed),
+                });
+                if let Some(held_out) = request.held_out {
+                    data["held_out"] = json!({ "digest": self.publish(held_out)? });
+                    params["eval_every"] = json!((budget.steps / 4).max(1));
+                }
+                ("pretrain", params)
+            }
+            Objective::ChatFull => (
+                "full_train",
+                json!({
+                    "base": base, "steps": budget.steps, "grad_accum": budget.batch, "lr": budget.lr,
+                    "max_block": budget.block, "thinking": false, "seed": job_seed(request.seed),
+                }),
+            ),
+        };
+        let mut params = params;
+        params["data"] = json!(data.to_string());
+        params["install_as"] = json!(request.install_as);
+        params["resume_key"] = json!(request.identity);
+        let mut losses = Vec::new();
+        let (report, checkpoint) = self.job(action, &params, request.out, &mut |step, loss| {
+            losses.push((step, loss));
+            on_step(step, loss);
+        })?;
+        if losses.is_empty() {
+            // A completed run answered from its record streams no steps; its
+            // evaluations, when it kept any, are the curve.
+            losses = report["evaluations"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|e| {
+                    Some((
+                        u32::try_from(e["step"].as_u64()?).ok()?,
+                        e["train_loss"].as_f64()?,
+                    ))
+                })
+                .collect();
         }
+        let resumed = report["resume"]["state"] != "fresh";
+        Ok(Trained {
+            checkpoint,
+            losses,
+            resumed,
+            report,
+        })
     }
 
     fn serve(&self, checkpoint: &Checkpoint) -> anyhow::Result<Served> {
         if !checkpoint.model.starts_with("local/") {
             bail!("{} is not an installed local checkpoint", checkpoint.model);
         }
+        let listed = |endpoints: &BrainEndpoints| -> anyhow::Result<bool> {
+            let cards = endpoints.list(0).map_err(|e| anyhow!("{e}"))?;
+            Ok(cards.iter().any(|c| c.id == checkpoint.model))
+        };
+        if !listed(&self.endpoints()?)? {
+            self.rescan(&checkpoint.model)?;
+            if !listed(&self.endpoints()?)? {
+                bail!(
+                    "brain does not serve {} after scanning its model store",
+                    checkpoint.model
+                );
+            }
+        }
+        let endpoints = self.endpoints()?;
+        let base_url = endpoints
+            .urls()
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow!("brain has no endpoint"))?;
         Ok(Served {
-            base_url: self.base_url.clone(),
+            base_url,
             model: checkpoint.model.clone(),
             context_tokens: self.context_tokens,
+            key: endpoints.key().to_string(),
         })
     }
 
@@ -246,15 +558,17 @@ impl ModelService for ServedBrain {
         prompt: &str,
         max_tokens: u32,
     ) -> anyhow::Result<String> {
-        let body = serde_json::json!({ "model": checkpoint.model, "prompt": prompt, "max_tokens": max_tokens, "temperature": 0 });
-        let url = format!("{}/completions", self.base_url.trim_end_matches('/'));
-        let reply = crate::endpoint::post_json(&url, &self.key, &body, COMPLETION_TIMEOUT)
-            .map_err(|e| anyhow::anyhow!("raw-text completion with {}: {e}", checkpoint.model))?;
+        let served = self.serve(checkpoint)?;
+        let endpoints = self.endpoints()?;
+        let body = json!({ "model": checkpoint.model, "prompt": prompt, "max_tokens": max_tokens, "temperature": 0 });
+        let url = format!("{}/completions", served.base_url.trim_end_matches('/'));
+        let reply = crate::endpoint::post_json(&url, endpoints.key(), &body, COMPLETION_TIMEOUT)
+            .map_err(|e| anyhow!("raw-text completion with {}: {e}", checkpoint.model))?;
         reply["choices"][0]["text"]
             .as_str()
             .map(String::from)
             .ok_or_else(|| {
-                anyhow::anyhow!(
+                anyhow!(
                     "raw-text completion with {}: no text in {reply}",
                     checkpoint.model
                 )
@@ -267,49 +581,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_missing_capability_is_named_never_stood_in_for() {
-        let brain = ServedBrain {
-            base_url: "http://127.0.0.1:1/v1".into(),
-            context_tokens: 1024,
-            key: "k".into(),
-        };
-        let dir = std::env::temp_dir();
-        let spec = ArchSpec {
-            arch: "ouro".into(),
-            vocab: 512,
-            context: 256,
-            config: serde_json::json!({}),
-        };
-        let format = ChatFormat {
-            template: String::new(),
-            specials: vec![],
-        };
-        let err = brain
-            .make_checkpoint(&CheckpointRequest {
-                model: &spec,
-                format: &format,
-                tokenizer_corpus: &dir,
-                // seed: the refusal comes before any draw; any seed works.
-                seed: 1,
-                install_as: "x",
-                out: &dir,
-            })
-            .unwrap_err();
-        assert!(err.to_string().starts_with("needs "), "{err}");
-        let checkpoint = Checkpoint {
-            model: "local/x".into(),
-            dir: PathBuf::from("c"),
-        };
-        assert_eq!(brain.serve(&checkpoint).unwrap().model, "local/x");
-        assert!(brain
-            .serve(&Checkpoint {
-                model: "x".into(),
-                dir: PathBuf::from("c")
-            })
-            .is_err());
+    fn a_report_installs_only_files_inside_its_checkpoint() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("store")).unwrap();
+        let store = ArtifactStore::open(&dir.path().join("store")).unwrap();
+        let src = dir.path().join("w");
+        std::fs::write(&src, b"weights").unwrap();
+        let digest = store.publish(&src).unwrap();
+        let report = json!({ "installed_as": "tiny", "files": [{ "name": "model.safetensors", "digest": digest.hex() }] });
+        let made = installed(&report, &store, &dir.path().join("out")).unwrap();
+        assert_eq!(made.model, "local/tiny");
+        assert_eq!(
+            std::fs::read(dir.path().join("out/model.safetensors")).unwrap(),
+            b"weights"
+        );
+        let escaping = json!({ "installed_as": "tiny", "files": [{ "name": "../x", "digest": digest.hex() }] });
+        assert!(installed(&escaping, &store, &dir.path().join("out2")).is_err());
         assert!(
-            brain.complete(&checkpoint, "a", 4).is_err(),
-            "an unreachable server is an error, not text"
+            installed(&json!({}), &store, &dir.path().join("out3")).is_err(),
+            "a report that installed nothing"
         );
     }
 }

@@ -122,7 +122,7 @@ impl Cancel for sven_sdk::CancelToken {
     }
 }
 
-/// Runs the job `model`/`action`/`params` on the first of `urls` that places
+/// Runs the `brain/train` job `action` with `params` on the first of `urls` that places
 /// it, calling `on_frame` with each structured frame (a training step) as it
 /// arrives, and returns the job's report (`outputs` of its result).
 pub fn run(
@@ -130,14 +130,23 @@ pub fn run(
     key: &str,
     refused_wait: Duration,
     first: usize,
-    params: &Value,
+    (action, params): (&str, &Value),
     cancel: Option<&dyn Cancel>,
     on_frame: &mut dyn FnMut(&Value),
 ) -> Result<Value, JobError> {
     let (frames, received) = channel::<Value>();
     std::thread::scope(|scope| {
-        let worker =
-            scope.spawn(move || drive(urls, key, refused_wait, first, params, cancel, &frames));
+        let worker = scope.spawn(move || {
+            drive(
+                urls,
+                key,
+                refused_wait,
+                first,
+                (action, params),
+                cancel,
+                &frames,
+            )
+        });
         for frame in received {
             on_frame(&frame);
         }
@@ -152,7 +161,7 @@ fn drive(
     key: &str,
     refused_wait: Duration,
     first: usize,
-    params: &Value,
+    (action, params): (&str, &Value),
     cancel: Option<&dyn Cancel>,
     frames: &Sender<Value>,
 ) -> Result<Value, JobError> {
@@ -174,7 +183,9 @@ fn drive(
             key,
             cancel,
         };
-        let (url, id) = api.create(urls, refused_wait, first, params).await?;
+        let (url, id) = api
+            .create(urls, refused_wait, first, action, params)
+            .await?;
         match api.follow(&url, &id, frames).await {
             Ok(()) => api.result(&url, &id).await,
             Err(JobError::Cancelled) if cancel.is_some_and(Cancel::cancelled) => {
@@ -223,11 +234,12 @@ impl Api<'_> {
         urls: &[String],
         refused_wait: Duration,
         first: usize,
+        action: &str,
         params: &Value,
     ) -> Result<(String, String), JobError> {
         let body = serde_json::json!({
             "model": "brain/train",
-            "action": "train",
+            "action": action,
             "params": params,
         });
         loop {

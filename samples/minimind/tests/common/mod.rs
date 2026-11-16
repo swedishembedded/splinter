@@ -125,6 +125,7 @@ impl ModelService for FakeBrain {
             request.budget.steps
         );
         Ok(Trained {
+            report: json!({}),
             checkpoint: self.checkpoint(request.out, request.install_as, &made),
             losses,
             resumed: false,
@@ -155,7 +156,9 @@ impl ModelService for FakeBrain {
                     .map(|m| expert::content_text(&m["content"]))
                     .unwrap_or_default();
                 match tasks.iter().find(|t| asked.contains(&t.instruction)) {
-                    Some(task) if learned => Ok(expert::next(task, &messages, &tools)?.message()),
+                    Some(task) if learned => {
+                        Ok(expert::next(task, &messages, &tools)?.message(&messages))
+                    }
                     _ => Ok(json!({ "role": "assistant", "content": "zq zq zq" })),
                 }
             };
@@ -169,6 +172,7 @@ impl ModelService for FakeBrain {
             base_url: url,
             model: checkpoint.model.clone(),
             context_tokens: 4096,
+            key: String::new(),
         })
     }
 

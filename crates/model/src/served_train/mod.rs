@@ -192,13 +192,33 @@ fn run(
     cancel: Option<&sven_sdk::CancelToken>,
     on_frame: &mut dyn FnMut(&Value),
 ) -> Result<Value, PolicyError> {
+    run_action(brain, attempt_dir, seed, "train", params, cancel, on_frame)
+}
+
+/// Runs the `brain/train` job `action` (`train`, `init_model`, `pretrain`,
+/// `full_train`, ...) with `params` on the endpoints, calling `on_frame` with
+/// every step frame, and returns its report; how it ended maps to a
+/// [`PolicyError`] naming `attempt_dir`. `seed` pins which endpoint is asked
+/// first.
+///
+/// # Errors
+/// The job was cancelled, failed or refused, or no endpoint answered.
+pub fn run_action(
+    brain: &BrainEndpoints,
+    attempt_dir: &Path,
+    seed: u64,
+    action: &str,
+    params: &Value,
+    cancel: Option<&sven_sdk::CancelToken>,
+    on_frame: &mut dyn FnMut(&Value),
+) -> Result<Value, PolicyError> {
     let first = brain.pin(&seed.to_le_bytes());
     job::run(
         brain.urls(),
         brain.key(),
         brain.refused_wait(),
         first,
-        params,
+        (action, params),
         cancel.map(|c| c as &dyn job::Cancel),
         on_frame,
     )

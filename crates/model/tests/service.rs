@@ -44,6 +44,7 @@ fn settings(dir: &Path, binary: std::path::PathBuf) -> ServiceSettings {
         device: Some("gpu1".into()),
         backend: None,
         max_batch: Some(24),
+        serve_adapters: true,
     }
 }
 

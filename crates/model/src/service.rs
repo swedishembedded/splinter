@@ -49,6 +49,10 @@ pub struct ServiceSettings {
     /// Sequences it decodes together, which is also how many requests are
     /// asked of it at once.
     pub max_batch: Option<u32>,
+    /// Whether adapters written to its adapter directory are served; a
+    /// server whose store holds no base an adapter can sit on refuses to
+    /// start with it.
+    pub serve_adapters: bool,
 }
 
 /// A brain server this process started: stopped, and its scratch directory
@@ -79,7 +83,7 @@ impl ManagedBrain {
             binary: &settings.binary,
             work: &work,
             models: &settings.models,
-            adapters: &adapters,
+            adapters: settings.serve_adapters.then_some(adapters.as_path()),
             artifacts: &artifacts,
             device: settings.device.as_deref(),
             backend: settings.backend.as_deref(),

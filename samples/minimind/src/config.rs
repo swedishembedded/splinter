@@ -70,9 +70,14 @@ pub use splinter_sdk::model::scratch::Budget as TrainBudget;
 
 /// An Ouro looped decoder's configuration.
 fn ouro(hidden: u32, layers: u32, passes: u32, heads: u32, vocab: u32, context: u32) -> ModelSpec {
+    // The architecture's own `config.json` spelling, handed to brain unread.
     let config = serde_json::json!({
-        "hidden_size": hidden, "num_layers": layers, "loop_passes": passes,
-        "num_heads": heads, "intermediate_size": hidden * 3,
+        "architectures": ["OuroForCausalLM"], "model_type": "ouro",
+        "hidden_size": hidden, "num_hidden_layers": layers, "num_attention_heads": heads,
+        "num_key_value_heads": heads, "head_dim": hidden / heads,
+        "intermediate_size": (hidden * 11 / 4).div_ceil(32) * 32,
+        "max_position_embeddings": context, "rope_theta": 10000.0, "rms_norm_eps": 1e-6,
+        "total_ut_steps": passes, "tie_word_embeddings": false,
     });
     ModelSpec {
         arch: "ouro".into(),
@@ -94,6 +99,9 @@ pub struct WorldSize {
     pub programs: u32,
     /// Serialized conversations in the model's chat template.
     pub conversations: u32,
+    /// Worked tool-use conversations of the training families, tools run
+    /// for real, drawn from a stream no split uses.
+    pub trajectories: u32,
 }
 
 /// How many task instances each use draws.
@@ -118,6 +126,8 @@ pub struct AgentLimits {
     pub deadline_secs: u64,
     /// Longest reply the model may write, in tokens.
     pub max_output_tokens: u32,
+    /// Episodes run at once; the model server batches their requests.
+    pub concurrency: u32,
 }
 
 /// A corpus fetched at run time when the world cannot provide it.
@@ -166,93 +176,48 @@ impl Config {
     /// The complete configuration of `profile`.
     #[must_use]
     pub fn of(profile: Profile) -> Self {
+        let budget = |steps, batch, lr, block| TrainBudget {
+            steps,
+            batch,
+            lr,
+            block,
+        };
+        let world = |towns, expressions, programs, conversations, trajectories| WorldSize {
+            towns,
+            expressions,
+            programs,
+            conversations,
+            trajectories,
+        };
+        let tasks = |demonstrations, explore, probes| TaskCounts {
+            demonstrations,
+            explore,
+            probes,
+        };
         let (model, world, tasks, pretrain, sft, improve) = match profile {
             Profile::Smoke => (
-                ouro(64, 2, 2, 4, 1024, 1024),
-                WorldSize {
-                    towns: 6,
-                    expressions: 200,
-                    programs: 80,
-                    conversations: 40,
-                },
-                TaskCounts {
-                    demonstrations: 8,
-                    explore: 8,
-                    probes: 4,
-                },
-                TrainBudget {
-                    steps: 20,
-                    batch: 4,
-                    lr: 3e-3,
-                },
-                TrainBudget {
-                    steps: 20,
-                    batch: 2,
-                    lr: 1e-3,
-                },
-                TrainBudget {
-                    steps: 10,
-                    batch: 2,
-                    lr: 5e-4,
-                },
+                ouro(256, 4, 2, 4, 1024, 2048),
+                world(200, 4_000, 1_500, 1_000, 6_000),
+                tasks(1_600, 96, 12),
+                budget(600, 128, 2e-3, 256),
+                budget(4_000, 4, 7e-4, 1024),
+                budget(1_000, 4, 3e-4, 1024),
             ),
             Profile::Default => (
-                ouro(256, 4, 4, 8, 4096, 2048),
-                WorldSize {
-                    towns: 60,
-                    expressions: 20_000,
-                    programs: 6_000,
-                    conversations: 3_000,
-                },
-                TaskCounts {
-                    demonstrations: 400,
-                    explore: 200,
-                    probes: 8,
-                },
-                TrainBudget {
-                    steps: 3_000,
-                    batch: 16,
-                    lr: 1e-3,
-                },
-                TrainBudget {
-                    steps: 600,
-                    batch: 8,
-                    lr: 3e-4,
-                },
-                TrainBudget {
-                    steps: 300,
-                    batch: 8,
-                    lr: 1e-4,
-                },
+                ouro(256, 4, 4, 4, 4096, 2048),
+                world(60, 20_000, 6_000, 3_000, 3_000),
+                tasks(400, 200, 8),
+                budget(3_000, 16, 1e-3, 512),
+                budget(600, 8, 3e-4, 2048),
+                budget(300, 8, 1e-4, 2048),
             ),
             Profile::M64 => (
                 ouro(512, 8, 4, 8, 8192, 2048),
-                WorldSize {
-                    towns: 200,
-                    expressions: 100_000,
-                    programs: 30_000,
-                    conversations: 15_000,
-                },
-                TaskCounts {
-                    demonstrations: 2_000,
-                    explore: 1_000,
-                    probes: 8,
-                },
-                TrainBudget {
-                    steps: 20_000,
-                    batch: 32,
-                    lr: 6e-4,
-                },
-                TrainBudget {
-                    steps: 2_000,
-                    batch: 16,
-                    lr: 2e-4,
-                },
-                TrainBudget {
-                    steps: 1_000,
-                    batch: 16,
-                    lr: 1e-4,
-                },
+                world(200, 100_000, 30_000, 15_000, 15_000),
+                tasks(2_000, 1_000, 8),
+                budget(20_000, 32, 6e-4, 1024),
+                budget(2_000, 16, 2e-4, 2048),
+                budget(1_000, 16, 1e-4, 2048),
             ),
         };
         Self {
@@ -267,6 +232,7 @@ impl Config {
                 max_tool_calls: 8,
                 deadline_secs: 300,
                 max_output_tokens: 256,
+                concurrency: 16,
             },
             fetch: Vec::new(),
         }
@@ -367,8 +333,8 @@ mod tests {
         );
         assert_eq!(two.models["ouro"].config["hidden_size"], 32);
         assert_eq!(
-            two.models["ouro"].config["num_layers"],
-            Config::of(Profile::Smoke).models["ouro"].config["num_layers"]
+            two.models["ouro"].config["num_hidden_layers"],
+            Config::of(Profile::Smoke).models["ouro"].config["num_hidden_layers"]
         );
     }
 

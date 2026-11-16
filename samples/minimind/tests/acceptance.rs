@@ -64,8 +64,15 @@ fn begins(dir: &Path) -> usize {
         .count()
 }
 
+/// The smoke profile with fewer instances and documents, so the specs run
+/// in seconds.
 fn smoke() -> Config {
-    Config::of(Profile::Smoke)
+    let mut config = Config::of(Profile::Smoke);
+    config.tasks.demonstrations = 8;
+    config.tasks.explore = 8;
+    config.tasks.probes = 4;
+    config.world.trajectories = 6;
+    config
 }
 
 // seed: the specs compare runs of one seed with each other; any seed works.
@@ -151,11 +158,15 @@ fn an_episode_interrupted_by_a_failing_server_runs_again_under_a_new_attempt_and
         .iter()
         .filter(|c| c.unit.starts_with("probe/ouro/sft/") && c.attempt > 1)
         .collect();
-    assert_eq!(
-        retried.len(),
-        1,
-        "the interrupted episode ran again under a new attempt id"
+    // The episodes run at once, so every one the down server reached was
+    // interrupted; each ran again under its own next attempt id.
+    assert!(
+        !retried.is_empty(),
+        "an interrupted episode ran again under a new attempt id"
     );
+    assert!(retried.iter().all(|c| c.attempt == 2));
+    let units: std::collections::BTreeSet<&str> = retried.iter().map(|c| c.unit.as_str()).collect();
+    assert_eq!(units.len(), retried.len(), "no episode committed twice");
 }
 
 #[test]
