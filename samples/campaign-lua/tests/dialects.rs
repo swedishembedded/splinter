@@ -11,9 +11,10 @@
 //! definition says: every case of `data/dialect-cases.json` is run by the stock
 //! interpreter and by the dialect's, and both outputs are the recorded ones.
 //!
-//! The dialect interpreters are built by `make deps/lua-dialects`
-//! (`LUA_DIALECTS_DIR=<that directory>`); without them these tests fail, they
-//! do not skip.
+//! The dialect interpreters are a build input: `make test` (and
+//! `make test/crate/splinter-campaign-lua`) builds them with
+//! `make deps/lua-dialects` into `target/lua-dialects` of the repository, where
+//! these tests look. A missing build fails the tests, it does not skip them.
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -25,11 +26,7 @@ use serde_json::Value;
 use splinter_sdk::vocabulary::digest::Digest;
 
 fn dialects_dir() -> PathBuf {
-    std::env::var_os("LUA_DIALECTS_DIR")
-        .map(PathBuf::from)
-        .expect(
-        "LUA_DIALECTS_DIR names the directory `make deps/lua-dialects` installed the dialects into",
-    )
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/lua-dialects")
 }
 
 /// The dialect named `name`, pinned to the digest of the file installed (the

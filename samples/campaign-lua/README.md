@@ -186,7 +186,7 @@ task sandbox: no network, bounded time, memory and output; Python runs with
 The dialects are built by `make deps/lua-dialects LUA_DIALECTS_DIR=<dir>` from
 the pinned Lua 5.1.5 tarball and the patches under `scripts/deps/lua51-dialects/`;
 each installation holds `bin/lua`, `manual/*.html` and `DIALECT.md`, the exact
-definition. The dialect tests read `LUA_DIALECTS_DIR`.
+definition. `make test` builds them into `target/lua-dialects`, where the dialect tests look.
 
 ```bash
 lineage ... --train-from base-cumulative --frontier-samples 4 --frontier-temperature 1.0 \

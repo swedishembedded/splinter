@@ -76,7 +76,7 @@ $(BUILD_CRATE_TARGETS): build/crate/%:
 	$(CARGO) build $(PROFILE) -p $*
 
 ## test - default: run every test (no model, no GPU needed)
-test:
+test: deps/lua-dialects
 	$(CARGO) test $(PROFILE) --workspace -- --test-threads=$(TEST_THREADS)
 	python3 samples/adams/test_fetch.py
 	python3 scripts/qualify/test_qualify.py
@@ -88,6 +88,7 @@ test/crate:
 
 ## test/crate/<package> - run one workspace package's tests (not part of `make test`)
 TEST_CRATE_TARGETS := $(addprefix test/crate/,$(CRATE_PACKAGES))
+test/crate/splinter-campaign-lua: deps/lua-dialects
 $(TEST_CRATE_TARGETS): test/crate/%:
 	$(CARGO) test $(PROFILE) -p $*
 
@@ -448,10 +449,12 @@ deps/lua:
 	test -n "$(LUA_DIR)" || { echo "deps/lua: give LUA_DIR=<directory to build into>"; exit 2; }
 	bash scripts/deps/lua51.sh "$(LUA_DIR)"
 
-## deps/lua-dialects - build the two counterfactual Lua 5.1.5 dialects (zero-index, plus-concat) with their generated manuals into LUA_DIALECTS_DIR/<name>/{bin/lua,manual,DIALECT.md}, from the checksummed tarball (LUA_DIALECTS_DIR=<directory>); the dialect tests read LUA_DIALECTS_DIR
+## deps/lua-dialects - build the two counterfactual Lua 5.1.5 dialects (zero-index, plus-concat) with their generated manuals into LUA_DIALECTS_DIR/<name>/{bin/lua,manual,DIALECT.md} from the checksummed tarball (default target/lua-dialects, where the campaign-lua tests look; rebuilt only when the patches or the script change)
+LUA_DIALECTS_DIR ?= target/lua-dialects
 deps/lua-dialects:
-	test -n "$(LUA_DIALECTS_DIR)" || { echo "deps/lua-dialects: give LUA_DIALECTS_DIR=<directory to build into>"; exit 2; }
-	bash scripts/deps/lua51-dialects.sh "$(LUA_DIALECTS_DIR)"
+	@if [ ! -f "$(LUA_DIALECTS_DIR)/.built" ] || [ -n "$$(find scripts/deps/lua51-dialects scripts/deps/lua51-dialects.sh -newer "$(LUA_DIALECTS_DIR)/.built")" ]; then \
+		bash scripts/deps/lua51-dialects.sh "$(LUA_DIALECTS_DIR)" && touch "$(LUA_DIALECTS_DIR)/.built"; \
+	fi
 
 ## deps/tlaplus - install the pinned TLA+ tools (tla2tools.jar) and an aarch64 Temurin JRE into TLAPLUS_DIR, both sha256-checked; TLC runs as TLAPLUS_DIR/bin/tlc (TLAPLUS_DIR=<directory>)
 deps/tlaplus:
