@@ -85,3 +85,13 @@ RSI5: it has no matched-data control.
   0.09 (`--target-effect 0.09`); the gate's test, level and units are unchanged, so only the refusal threshold of the
   pre-run feasibility check moves. The refused attempt's files are kept in `rsi5/attempt0-plan-refused/`; the lineages are
   relaunched with the same seeds.
+- 2026-11-16 ~04:50, before any candidate was examined (six had been handed off): **proposer state moved to memory.** The
+  project disk's file quota reached 100% (500 000 files, shared with other work on the node). Each lineage's proposer state
+  (Splinter's per-call task records, about six files per proposal; documented by the lineage binary as disposable, the
+  proposals themselves being journalled in the lineage directory) held 114 000 of them and would have grown several-fold in
+  generations 3 and 4. Each lineage was stopped (g3 while it waited for its card, g0, g1 and g2 mid-proposal), its on-disk
+  proposer state deleted, and it was resumed from its own journals in the same generation with the same seed, binary and
+  settings, the proposer state in a private memory-backed directory (`run-lineage-shm.sh`, which differs from
+  `run-lineage.sh` only in the first generation to run and the proposer-state path). No proposal, prediction, training record or
+  gate decision is changed by this: what a resumed round reuses comes from the lineage journals, and its proposer state is
+  rebuilt. Resumed generations: g0 3, g1 3, g2 2, g3 2.
