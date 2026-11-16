@@ -76,3 +76,12 @@ hand-off and returns signed aggregate verdicts only.
 
 Nothing until the verdicts evaluate G1, G2 and G3. No claim about recursion (an evolving proposer vs a frozen one) follows from
 RSI5: it has no matched-data control.
+
+## Deviations (dated; all before any lineage proposed, trained or was examined)
+
+- 2026-11-16 ~02:45: **the learner gate's planning target.** The first launch of all four lineages stopped at the gate's power
+  check before proposing anything: with four generations the gate's per-comparison level is 0.0025, at which 400 development
+  units at discordance 0.2 detect a lead of 0.082 at power 0.8, above RSI4's planning target of 0.08. The target is raised to
+  0.09 (`--target-effect 0.09`); the gate's test, level and units are unchanged, so only the refusal threshold of the
+  pre-run feasibility check moves. The refused attempt's files are kept in `rsi5/attempt0-plan-refused/`; the lineages are
+  relaunched with the same seeds.

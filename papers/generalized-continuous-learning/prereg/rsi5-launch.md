@@ -16,7 +16,7 @@ Committed on 2026-11-16 before any RSI5 lineage ran and before any candidate was
   and the opt-in reasoning options, unused here), built against the pinned sven `6f4b1716` and brain `796871647` crates;
   binary `containers/bin/lineage-793bb9cef`, SHA-256 `2342bac33058384462cccc2d09f3ecb451c542d0b58eb86e8fd1ceb8e05e49be`.
 - Lineage script `~/project/shared/rsi5/run-lineage.sh`, SHA-256
-  `b7b133471ba53b76246902793dd77e05c9edd8b5ee630f69c930253462e39947`; one process per generation under the card's lock.
+  `be7227546f920af4e41ab2ddffa65c44cdce9bccf6c6e880ee6a0484ff899883` after deviation 1 (`b7b13347...` before it); one process per generation under the card's lock.
 - Examiner: bench `c883edf14d2293c93372061777bdaf5b601d25eb`; group plan `rsi5-G` (SHA-256
   `30fde85afc387df3e88eaa1836c5bec03000f1182a5c5737787ce200ead91b04`): steps 1-4, generation 4 over base, strata by base answer
   and by family set, bootstrap 10000 over templates and lineages, 95% intervals.
