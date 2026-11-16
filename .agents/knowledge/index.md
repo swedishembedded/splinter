@@ -149,3 +149,4 @@ in the same commit.
 | [161](161-a-two-million-parameter-ouro-learned-to-copy-a-value-from-its-context-only-after-50-to-65m-tokens-of-copy-drills.md) | A two-million-parameter Ouro learned to copy a value from its context only after 50 to 65M tokens of copy drills |
 | [162](162-brain-trained-ten-times-slower-without-cublas-on-its-library-path-and-said-nothing.md) | Brain trained ten times slower without cuBLAS on its library path, and said nothing |
 | [163](163-python-isolated-mode-ignores-pythonhashseed-so-a-string-set-prints-in-another-order-every-run.md) | Python's isolated mode ignores `PYTHONHASHSEED`, so a string set prints in another order every run |
+| [164](164-a-small-model-fenced-the-material-of-its-python-tasks-and-the-fence-was-run-as-code-so-most-were-refused.md) | A small model fenced the material of its Python tasks, the fence was run as code, and most tasks were refused |

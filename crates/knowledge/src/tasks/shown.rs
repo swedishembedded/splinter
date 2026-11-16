@@ -25,6 +25,9 @@ use super::Rejection;
 /// material is refused: a small model wraps it in other code (`x = [[...]]`)
 /// and the solver would be asked about a program that is not the one run.
 pub(super) fn shown(kind: &TaskKind, mut candidate: Candidate) -> Result<Candidate, Refusal> {
+    if kind.shows_material {
+        candidate.material = candidate.material.take().map(|m| unfenced(&m));
+    }
     let Some(material) = candidate
         .material
         .as_deref()
@@ -52,6 +55,21 @@ pub(super) fn shown(kind: &TaskKind, mut candidate: Candidate) -> Result<Candida
         material.trim_end()
     );
     Ok(candidate)
+}
+
+/// `material` without the Markdown fence a model wrapped it in: a block that
+/// opens with a fence line (```` ```python ````) and ends with a closing
+/// fence is the code between them. Anything else is returned as it is.
+fn unfenced(material: &str) -> String {
+    let trimmed = material.trim();
+    let inner = trimmed
+        .strip_prefix("```")
+        .and_then(|rest| rest.split_once('\n'))
+        .and_then(|(_language, body)| body.trim_end().strip_suffix("```"));
+    match inner {
+        Some(code) if !code.contains("```") => code.trim_end().to_string(),
+        _ => material.to_string(),
+    }
 }
 
 /// What a program of each runtime reads that the language does not define:
@@ -160,4 +178,43 @@ pub(super) fn computed(
     }
     candidate.reference = printed;
     Ok(Ok(candidate))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn candidate(material: &str) -> Candidate {
+        serde_json::from_value(serde_json::json!({
+            "instruction": "What does it print?",
+            "reference": "1",
+            "evidence": [],
+            "material": material,
+        }))
+        .unwrap()
+    }
+
+    fn python_predict() -> TaskKind {
+        crate::tasks::Catalogue::builtin()
+            .get("predict-python")
+            .unwrap()
+            .clone()
+    }
+
+    /// A small model writes the material the way it writes a chat reply, in a
+    /// fenced block; the fence is not program text (it is a syntax error in
+    /// Python) and the instruction fences the material itself, once.
+    #[test]
+    fn material_the_model_wrapped_in_a_markdown_fence_is_the_code_inside_it() {
+        for wrapped in ["```python\nprint(1)\n```", "  ```\nprint(1)\n```\n"] {
+            let shown = shown(&python_predict(), candidate(wrapped)).unwrap();
+            assert_eq!(shown.material.as_deref(), Some("print(1)"), "{wrapped:?}");
+            assert_eq!(
+                shown.instruction,
+                "What does it print?\n\n```python\nprint(1)\n```"
+            );
+        }
+        let plain = shown(&python_predict(), candidate("x = '```'\nprint(x)")).unwrap();
+        assert_eq!(plain.material.as_deref(), Some("x = '```'\nprint(x)"));
+    }
 }
