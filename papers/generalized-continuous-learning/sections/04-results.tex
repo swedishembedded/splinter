@@ -54,3 +54,13 @@ without any exam data. The frontier yield (the share of measured proposals a cha
 lineage (0.42, 0.27, 0.56, 0.34 for g0--g3), the generation whose step is flat: the champion increasingly re-proposed programs it
 had already proposed. With four lineages this is a hypothesis for the next registered run, not a finding: a controller that
 watches proposer novelty could stop, or change its source of programs, before spending a generation that does not pay.
+
+\paragraph{Registered secondary measurements.} On exam F (the companion paper's fresh exam, 2340 items, thinking off), the four
+lineages' mean share right was 8.4\% for the base and 15.3\%, 17.6\%, 19.2\% and 19.7\% after generations 1--4: the same
+shrinking steps as on G (all verdicts valid; per-lineage counts in the evidence). With thinking on (one greedy completion,
+8192-token budget, descriptive), the base and the generation-4 candidates failed to finish 437 and 466--653 of G's 2040 items;
+the examiner declares a measurement with failures invalid unless a failure rate is tolerated in advance, and with 35\% tolerated
+it excludes every item any model failed, leaving 768 items on which the base answered 66.3\% and generation 4 63.7\%
+(difference $-2.6$ points, $[-8.1, +2.8]$, inconclusive). Answer-only training raised direct answers but showed no gain in
+reasoned answers on the exam, unlike the learner's own development tasks, where most of the base's thinking-enabled misses were
+answers in the wrong format.

@@ -1,0 +1,203 @@
+{
+  "bootstrap": {
+    "replicates": 10000,
+    "resamples": "families with replacement and, within each group, candidates with replacement, jointly",
+    "seed": 20261116
+  },
+  "collection": {
+    "exam_sha256": "cd9f1920846b6939ae8622312185e06cf2858cb91fc59fd63b43d5b5cccb6bd8",
+    "items": 2040,
+    "name": "predict-lua51-g"
+  },
+  "comparisons": {
+    "gen4-over-base": {
+      "clustered": {
+        "families": 106,
+        "interval": [
+          -0.0764211679210849,
+          0.024988876254418233
+        ],
+        "mean": -0.025716145833333332,
+        "standard_error": 0.025572236989431816
+      },
+      "compared": 768,
+      "control": "base",
+      "control_share": 0.6627604166666666,
+      "difference": -0.02571614583333326,
+      "excluded": 0,
+      "families": 106,
+      "incomplete_material": false,
+      "interval": [
+        -0.08094555873925502,
+        0.0279627163781625
+      ],
+      "items": 768,
+      "outcome": "inconclusive",
+      "strata": {
+        "baseline_right": {
+          "clustered": {
+            "families": 81,
+            "interval": [
+              -0.22547070373710532,
+              -0.11441141807036032
+            ],
+            "mean": -0.16994106090373282,
+            "standard_error": 0.027903453849912614
+          },
+          "control_share": 1.0,
+          "difference": -0.16994106090373284,
+          "families": 81,
+          "interval": [
+            -0.23424369747899154,
+            -0.11556603773584906
+          ],
+          "items": 509,
+          "outcome": "control_better",
+          "treatment_share": 0.8300589390962672
+        },
+        "baseline_wrong": {
+          "clustered": {
+            "families": 73,
+            "interval": [
+              0.16886964975536745,
+              0.34657436568864797
+            ],
+            "mean": 0.2577220077220077,
+            "standard_error": 0.04457184944464626
+          },
+          "control_share": 0.0,
+          "difference": 0.2577220077220077,
+          "families": 73,
+          "interval": [
+            0.17611683848797252,
+            0.3564356435643564
+          ],
+          "items": 259,
+          "outcome": "treatment_better",
+          "treatment_share": 0.2577220077220077
+        },
+        "family_set:v1": {
+          "clustered": {
+            "families": 69,
+            "interval": [
+              -0.059662971747910507,
+              0.05871957552149541
+            ],
+            "mean": -0.0004716981132075472,
+            "standard_error": 0.029662838996089888
+          },
+          "control_share": 0.6566037735849056,
+          "difference": -0.0004716981132074638,
+          "families": 69,
+          "interval": [
+            -0.06437389770723101,
+            0.061418685121107264
+          ],
+          "items": 530,
+          "outcome": "inconclusive",
+          "treatment_share": 0.6561320754716982
+        },
+        "family_set:v2": {
+          "clustered": {
+            "families": 37,
+            "interval": [
+              -0.1815587460206794,
+              0.017693199802192014
+            ],
+            "mean": -0.0819327731092437,
+            "standard_error": 0.04912295626498248
+          },
+          "control_share": 0.6764705882352942,
+          "difference": -0.08193277310924374,
+          "families": 37,
+          "interval": [
+            -0.1833333333333334,
+            0.01882845188284521
+          ],
+          "items": 238,
+          "outcome": "inconclusive",
+          "treatment_share": 0.5945378151260504
+        }
+      },
+      "treatment": "gen4",
+      "treatment_share": 0.6370442708333334
+    }
+  },
+  "examined_at": "2026-11-16T17:35:28+00:00",
+  "groups": {
+    "base": {
+      "candidates": 1,
+      "members": [
+        "base"
+      ],
+      "share": 0.6627604166666666,
+      "shares": [
+        0.6627604166666666
+      ]
+    },
+    "gen4": {
+      "candidates": 4,
+      "members": [
+        "g0/4",
+        "g1/4",
+        "g2/4",
+        "g3/4"
+      ],
+      "share": 0.6370442708333334,
+      "shares": [
+        0.6614583333333334,
+        0.6263020833333334,
+        0.6119791666666666,
+        0.6484375
+      ]
+    }
+  },
+  "invalid_reasons": [],
+  "level": 0.95,
+  "margin": 0.02,
+  "plan": "rsi5-G-thinking",
+  "protocol": {
+    "answer": "last fenced block, else the whole reply",
+    "compare": "the collection's own check",
+    "completions_per_item": 1,
+    "max_tokens": 8192,
+    "name": "direct-completion",
+    "system_prompt": "none",
+    "temperature": 0.0,
+    "thinking": "on",
+    "truncated": "graded"
+  },
+  "rule": "difference of the groups' mean share right; 95% interval from 10000 bootstrap replicates resampling families and candidates within each group jointly; treatment_better when its lower bound is above 0, control_better when its upper bound is below 0, equivalent when it lies within +-0.02, else inconclusive; over the items no candidate of either group trained on",
+  "schema": "bench.examination.groups/1",
+  "serving_build": {
+    "brain_sha256": "01e7c73d27ce805c091c96ac25628c2300f3f6719403a64bba7fa2294eaec876"
+  },
+  "signature": {
+    "alg": "hmac-sha256",
+    "key_id": "070d75728dcf",
+    "value": "5a2b47e76e88eeeb4569b0a78a43a39f5771f245a99c4613de16469e61070ad3"
+  },
+  "similarity": {
+    "at_least": {
+      "0.5": 1089,
+      "0.7": 71,
+      "0.9": 1,
+      "1.0": 0
+    },
+    "items": 2040,
+    "material_files": 16,
+    "max": 0.9,
+    "mean": 0.513050201996472,
+    "measure": "token-set Jaccard of the item's program to its nearest training program (comments removed)",
+    "min": 0.22580645161290322,
+    "quantiles": {
+      "0.1": 0.40384615384615385,
+      "0.25": 0.45161290322580644,
+      "0.5": 0.5,
+      "0.75": 0.5769230769230769,
+      "0.9": 0.64,
+      "0.99": 0.7307692307692307
+    }
+  },
+  "valid": true
+}
