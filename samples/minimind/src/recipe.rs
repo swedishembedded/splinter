@@ -50,13 +50,13 @@ impl Recipe {
 /// the tool results as rendered), the held-out split and the tokenizer text.
 pub const WORLD: Recipe = Recipe {
     stage: "world",
-    version: 9,
+    version: 10,
 };
 
 /// The task families, their instance draw and the Harbor export.
 pub const TASKS: Recipe = Recipe {
     stage: "tasks",
-    version: 6,
+    version: 7,
 };
 
 /// One episode: the workspace, the expert's procedure, the agent settings,
@@ -158,8 +158,8 @@ mod tests {
     }
 
     const PINNED: [&str; 3] = [
-        "world (WORLD, EPISODE): blake3:ddb042992a253fe96af1b0a427852e0378f487d0299497eef0549bf59903420e",
+        "world (WORLD, EPISODE): blake3:43c52c8fa1ed3fc953a7dcb83de800df0953a95a0e650b645d0d261fcf754f9a",
         "template (WORLD, CHECKPOINT): blake3:354117630131a85c444d649decf8b227f76e57221451ea66e3cd18ede9066edc",
-        "tasks (TASKS): blake3:d0aa6348b55e51fcc92dcbe7c0bd46e0fd1802155959f652d3748944e9673326",
+        "tasks (TASKS): blake3:f2849c9e91a86f12aa175328bba4a69dc0e1993a4f54062e932ad42318779fac",
     ];
 }

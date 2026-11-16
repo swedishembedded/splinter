@@ -183,21 +183,51 @@ fn names(rng: &mut SplitMix64, n: usize) -> Vec<String> {
 }
 
 /// A data file's path for `format` (in a directory sometimes), not in
-/// `taken`. Held out, it has the format's own extension; in training, half
-/// the time any of [`TRAINING_EXTENSIONS`], so an extension says nothing the
-/// request does not and a name is copied, never completed from habit.
+/// `taken`. Held out, it has the format's own extension; in training, a
+/// third of the time the format's own, a third any of
+/// [`TRAINING_EXTENSIONS`] and a third a few random letters, and sometimes a
+/// directory of a made-up name: nothing in a path is predictable from habit,
+/// so every part of it is copied from the request, an extension or a
+/// directory training never showed included.
 pub fn data_path(rng: &mut SplitMix64, format: Format, held_out: bool, taken: &[String]) -> String {
     loop {
-        let dir = pick(rng, &["", "", "data/", "config/", "inputs/", "notes/"]);
-        let extension = if held_out || rng.coin() {
-            format.extension()
+        let dir = if !held_out && rng.below(4) == 0 {
+            format!("{}/", word(rng, 1).to_lowercase())
         } else {
-            TRAINING_EXTENSIONS[rng.below(TRAINING_EXTENSIONS.len())]
+            pick(rng, &["", "", "data/", "config/", "inputs/", "notes/"]).to_string()
+        };
+        let extension = match (held_out, rng.below(3)) {
+            (true, _) | (false, 0) => format.extension().to_string(),
+            (false, 1) => TRAINING_EXTENSIONS[rng.below(TRAINING_EXTENSIONS.len())].to_string(),
+            (false, _) => letters(rng),
         };
         let syllables = 1 + rng.below(2);
         let p = format!("{dir}{}.{extension}", word(rng, syllables).to_lowercase());
         if !taken.contains(&p) {
             return p;
+        }
+    }
+}
+
+/// Extensions that name binary files by convention; the agent runtime
+/// shows such a file as a hex dump, whatever it holds.
+const BINARY_EXTENSIONS: [&str; 38] = [
+    "o", "a", "so", "elf", "exe", "dll", "wasm", "pdb", "zip", "gz", "tar", "bz", "xz", "zst",
+    "bin", "img", "rom", "fw", "srec", "mot", "pyc", "pyo", "jar", "war", "doc", "docx", "xls",
+    "xlsx", "ppt", "pptx", "pdf", "obj", "lib", "png", "jpg", "gif", "iso", "class",
+];
+
+/// Two to four random lowercase letters, never a held-out format's
+/// extension nor one that names a binary file.
+fn letters(rng: &mut SplitMix64) -> String {
+    loop {
+        let n = 2 + rng.below(3);
+        let s: String = (0..n)
+            .map(|_| char::from(b'a' + u8::try_from(rng.below(26)).unwrap_or(0)))
+            .collect();
+        if !HELD_OUT.iter().any(|f| f.extension() == s) && !BINARY_EXTENSIONS.contains(&s.as_str())
+        {
+            return s;
         }
     }
 }
@@ -376,8 +406,11 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             }
         }
         Skill::Compute => {
-            let helper =
-                pick(rng, &["calc", "mix", "blend", "merge", "fold", "combine"]).to_string();
+            let helper = if rng.coin() {
+                pick(rng, &["calc", "mix", "blend", "merge", "fold", "combine"]).to_string()
+            } else {
+                word(rng, 1).to_lowercase()
+            };
             let style = rng.below(4);
             let (m, n, p) = (
                 rng.between(3, 17),
