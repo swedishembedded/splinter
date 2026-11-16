@@ -19,6 +19,7 @@ brain-gpu-core = { workspace = true }
 brain-data = { workspace = true }
 
 anyhow = { workspace = true }
+libc = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true }
 async-trait = { workspace = true }

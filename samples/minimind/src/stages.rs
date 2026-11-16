@@ -602,10 +602,12 @@ impl<'a> Run<'a> {
             }
             let seconds = started.elapsed().as_secs_f64();
             // Pretraining's windows are full: every step trains batch x block
-            // tokens. A chat run's records vary in length, so no rate is
-            // claimed for it.
+            // tokens; a continued run trained only the steps after its saved
+            // state. Chat records vary in length, so no rate is claimed for a
+            // chat run.
+            let trained_steps = u64::from(budget.steps).saturating_sub(resume["resumed_at"].as_u64().unwrap_or(0));
             let rate = (stage == Stage::Pretrain && seconds > 0.0).then(|| {
-                f64::from(budget.steps) * f64::from(budget.batch) * f64::from(budget.block) / seconds
+                trained_steps as f64 * f64::from(budget.batch) * f64::from(budget.block) / seconds
             });
             Ok(StageWork::new(json!({
                 "model": trained.checkpoint.model, "arch": spec.arch, "steps": budget.steps, "first_loss": first, "last_loss": last,

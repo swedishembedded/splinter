@@ -360,6 +360,31 @@ impl Service {
     }
 }
 
+/// Makes the server `command` starts die with this process, as a Ctrl-C to
+/// the terminal ends both: a killed caller never leaves a server holding its
+/// card. The signal is SIGINT, so a training job saves its state as on a
+/// cancel. (Linux sends it when the thread that spawned the server ends;
+/// servers are started from a caller's main flow, not from a short-lived
+/// worker thread.)
+fn die_with_caller(command: &mut Command) {
+    use std::os::unix::process::CommandExt as _;
+    let caller = std::process::id();
+    // SAFETY: the closure makes only async-signal-safe calls (`prctl`,
+    // `getppid`) and touches no memory shared with the parent.
+    unsafe {
+        command.pre_exec(move || {
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGINT) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            // The caller died between the fork and the prctl.
+            if u32::try_from(libc::getppid()).ok() != Some(caller) {
+                return Err(std::io::Error::from_raw_os_error(libc::ESRCH));
+            }
+            Ok(())
+        });
+    }
+}
+
 /// Starts the service `launch` describes and waits until it is ready.
 pub fn start_service(launch: &ServiceLaunch<'_>, cancel: &CancelToken) -> Result<Service, Failure> {
     let port = free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
@@ -399,6 +424,7 @@ pub fn start_service(launch: &ServiceLaunch<'_>, cancel: &CancelToken) -> Result
         .arg(&keys)
         .arg("--ready-file")
         .arg(&ready);
+    die_with_caller(&mut command);
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
