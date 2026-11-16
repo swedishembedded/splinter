@@ -102,6 +102,9 @@ pub struct WorldSize {
     /// Worked tool-use conversations of the training families, tools run
     /// for real, drawn from a stream no split uses.
     pub trajectories: u32,
+    /// Drills in copying values out of context (listings and questions,
+    /// values into commands, a read value written to the answer file).
+    pub recall: u32,
 }
 
 /// How many task instances each use draws.
@@ -128,6 +131,25 @@ pub struct AgentLimits {
     pub max_output_tokens: u32,
     /// Episodes run at once; the model server batches their requests.
     pub concurrency: u32,
+}
+
+/// How the vocabulary is learned.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TokenizerText {
+    /// Every digit stays a token of its own: the vocabulary is learned from
+    /// the corpus without its digits, so it has no multi-digit piece.
+    pub split_digits: bool,
+}
+
+/// How the model's own episodes are mixed for the improvement.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Experience {
+    /// Demonstration records mixed in per record of its own (rehearsal), so
+    /// a few passes over its own successes do not overwrite what it was
+    /// taught; 0 trains on its own episodes alone.
+    pub rehearsal: f64,
 }
 
 /// A corpus fetched at run time when the world cannot provide it.
@@ -157,6 +179,8 @@ pub struct Config {
     pub models: std::collections::BTreeMap<String, ModelSpec>,
     /// The synthetic world's size.
     pub world: WorldSize,
+    /// How the vocabulary is learned.
+    pub tokenizer: TokenizerText,
     /// Task instance counts.
     pub tasks: TaskCounts,
     /// Pretraining on raw text.
@@ -165,6 +189,8 @@ pub struct Config {
     pub sft: TrainBudget,
     /// Training on the model's own verified episodes.
     pub improve: TrainBudget,
+    /// The improvement's data mix.
+    pub experience: Experience,
     /// Episode bounds.
     pub agent: AgentLimits,
     /// Corpora fetched at run time, none by default.
@@ -182,12 +208,13 @@ impl Config {
             lr,
             block,
         };
-        let world = |towns, expressions, programs, conversations, trajectories| WorldSize {
+        let world = |towns, expressions, programs, conversations, trajectories, recall| WorldSize {
             towns,
             expressions,
             programs,
             conversations,
             trajectories,
+            recall,
         };
         let tasks = |demonstrations, explore, probes| TaskCounts {
             demonstrations,
@@ -197,15 +224,15 @@ impl Config {
         let (model, world, tasks, pretrain, sft, improve) = match profile {
             Profile::Smoke => (
                 ouro(256, 4, 2, 4, 1024, 2048),
-                world(200, 4_000, 1_500, 1_000, 6_000),
+                world(200, 4_000, 1_500, 1_000, 6_000, 0),
                 tasks(1_600, 96, 12),
-                budget(600, 128, 2e-3, 256),
-                budget(4_000, 4, 7e-4, 1024),
-                budget(1_000, 4, 3e-4, 1024),
+                budget(300, 128, 2e-3, 256),
+                budget(1_500, 4, 7e-4, 1024),
+                budget(300, 4, 3e-4, 1024),
             ),
             Profile::Default => (
                 ouro(256, 4, 4, 4, 4096, 2048),
-                world(60, 20_000, 6_000, 3_000, 3_000),
+                world(60, 20_000, 6_000, 3_000, 3_000, 0),
                 tasks(400, 200, 8),
                 budget(3_000, 16, 1e-3, 512),
                 budget(600, 8, 3e-4, 2048),
@@ -213,7 +240,7 @@ impl Config {
             ),
             Profile::M64 => (
                 ouro(512, 8, 4, 8, 8192, 2048),
-                world(200, 100_000, 30_000, 15_000, 15_000),
+                world(200, 100_000, 30_000, 15_000, 15_000, 0),
                 tasks(2_000, 1_000, 8),
                 budget(20_000, 32, 6e-4, 1024),
                 budget(2_000, 16, 2e-4, 2048),
@@ -224,10 +251,14 @@ impl Config {
             profile,
             models: [("ouro".to_string(), model)].into_iter().collect(),
             world,
+            tokenizer: TokenizerText {
+                split_digits: false,
+            },
             tasks,
             pretrain,
             sft,
             improve,
+            experience: Experience { rehearsal: 1.0 },
             agent: AgentLimits {
                 max_tool_calls: 8,
                 deadline_secs: 300,

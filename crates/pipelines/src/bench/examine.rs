@@ -7,19 +7,20 @@
 // agents, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! A paired verdict of a candidate against its predecessor from bench's
-//! sealed workspace tool-use exam, both served by brain and worked through
-//! sven. Bench keeps its jobs (item-level records) in its own data
-//! directory; only the signed document of aggregates is written for the
-//! caller.
+//! Bench's sealed workspace tool-use exam: a checkpoint served by brain
+//! *sits* the exam and its anchor through sven, once, and any two sittings
+//! are paired into a signed verdict of aggregates.
 //!
-//! The learner never reads the exam: bench generates it from a seed file the
-//! learner does not open, runs both arms through sven against the served
-//! models, and issues one signed document of aggregates. The candidate is
-//! promoted only when that document verifies under the signing key and its
-//! verdict is Promote; an unsigned, altered or unverifiable document is
-//! invalid evidence and promotes nothing.
+//! The learner never reads the exam: bench generates it from seed files the
+//! learner does not open, runs every sitting itself, keeps the jobs (which
+//! hold item-level records) in its own data directory, and issues one signed
+//! document of aggregates per pair. What crosses back is that document: the
+//! verdict, and per holdout tier the items and the pass rates of both sides.
+//! The candidate is promoted only when the document verifies under the
+//! signing key and its verdict is Promote; an unsigned, altered or
+//! unverifiable document is invalid evidence and promotes nothing.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -28,7 +29,18 @@ use serde::{Deserialize, Serialize};
 
 use splinter_model::scratch::Served as Target;
 
-/// What the examination concluded.
+/// One tier's aggregates, as the verdict document states them.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TierRates {
+    /// Exam items in the tier.
+    pub items: u64,
+    /// The base side's pass rate.
+    pub base: f64,
+    /// The candidate side's pass rate.
+    pub candidate: f64,
+}
+
+/// What a paired examination concluded.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Examined {
     /// The verdict as the examiner wrote it (`Promote`, `Reject`,
@@ -38,6 +50,11 @@ pub struct Examined {
     pub verified: bool,
     /// The document, kept in the run directory.
     pub document: PathBuf,
+    /// Per holdout tier (`a`, `b`, `c`) and for the anchor (`anchor`), the
+    /// pass rates of both sides.
+    pub tiers: BTreeMap<String, TierRates>,
+    /// Why, in the examiner's words (aggregates only).
+    pub reasons: Vec<String>,
 }
 
 impl Examined {
@@ -48,17 +65,46 @@ impl Examined {
     }
 }
 
-/// Who examines a candidate.
+/// One sitting of the exam and its anchor: where the examiner keeps its
+/// jobs. Only the examiner reads them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Sitting {
+    /// The exam job.
+    pub exam: PathBuf,
+    /// The anchor job.
+    pub anchor: PathBuf,
+}
+
+impl Sitting {
+    /// True while both jobs are still where the examiner left them.
+    #[must_use]
+    pub fn present(&self) -> bool {
+        self.exam.is_dir() && self.anchor.is_dir()
+    }
+}
+
+/// Who examines checkpoints.
 pub trait Examiner {
-    /// The paired verdict of `candidate` against `predecessor`; the signed
-    /// document is written to `out`.
+    /// `target` sits the exam and its anchor, as the sitting named `name`
+    /// (a name the caller keeps stable for the same checkpoint; an
+    /// interrupted sitting of that name starts over). A `control` sitting is
+    /// a spurious-reward control arm: it must never be promoted.
     ///
     /// # Errors
-    /// The examination could not be run.
-    fn examine(
+    /// The exam could not be generated or run.
+    fn sit(&self, target: &Target, name: &str, control: bool) -> anyhow::Result<Sitting>;
+
+    /// The paired verdict of `candidate` against `base`, with an optional
+    /// spurious-reward `control` arm; the signed document is written to
+    /// `out`.
+    ///
+    /// # Errors
+    /// The verdict could not be issued.
+    fn verdict(
         &self,
-        candidate: &Target,
-        predecessor: &Target,
+        base: &Sitting,
+        candidate: &Sitting,
+        control: Option<&Sitting>,
         out: &Path,
     ) -> anyhow::Result<Examined>;
 }
@@ -70,26 +116,34 @@ pub struct Bench {
     pub dir: PathBuf,
     /// The sven binary the exam runs the agent with.
     pub sven: PathBuf,
-    /// The private seed file the exam and anchor are generated from.
+    /// The private seed file the exam is generated from (drawn into it when
+    /// missing).
     pub seed_file: PathBuf,
+    /// The anchor's own private seed file.
+    pub anchor_seed_file: PathBuf,
     /// The verdict signing key.
     pub signing_key: PathBuf,
     /// The smallest gain a promotion must show.
     pub min_gain: f64,
-    /// The serving build both arms declare.
+    /// The serving build every arm declares.
     pub serving_build: String,
+    /// Episodes a sitting runs at once.
+    pub concurrency: u32,
 }
 
 /// The exam collection and the anchor, inside bench's own data directory.
 const EXAM: &str = ".bench-data/exams/workspace-tools";
 const ANCHOR: &str = ".bench-data/exams/workspace-tools-anchor";
 
+/// The anchor collection as `bench verdict --anchor` names it.
+const ANCHOR_NAME: &str = "workspace-tools-anchor";
+
 impl Bench {
-    fn run(&self, what: &str, command: &mut Command) -> anyhow::Result<()> {
+    fn run(&self, what: &str, key: &str, command: &mut Command) -> anyhow::Result<()> {
         let status = command
             .current_dir(&self.dir)
             .env("BENCH_SVEN_BUILD", &self.sven)
-            .env("BRAIN_KEY", "minimind")
+            .env("BRAIN_KEY", key)
             .status()
             .with_context(|| format!("starting bench to {what}"))?;
         if !status.success() {
@@ -98,11 +152,15 @@ impl Bench {
         Ok(())
     }
 
-    /// The arm profile for `target`, from bench's own base profile with the
-    /// model and the serving build replaced, written outside bench's tree;
-    /// the endpoint is given to `bench run` itself.
-    fn profile(&self, arm: &str, target: &Target, dir: &Path) -> anyhow::Result<PathBuf> {
-        let base = self.dir.join("profiles/workspace-tools-base.toml");
+    /// The arm profile for `target`, from bench's own profile (the control
+    /// profile for a control arm) with the model, the serving build and the
+    /// concurrency replaced, written beside the jobs; the endpoint is given
+    /// to `bench run` itself.
+    fn profile(&self, target: &Target, control: bool, path: &Path) -> anyhow::Result<()> {
+        let arm = if control { "control" } else { "base" };
+        let base = self
+            .dir
+            .join(format!("profiles/workspace-tools-{arm}.toml"));
         let text = std::fs::read_to_string(&base)
             .with_context(|| format!("reading {}", base.display()))?;
         let mut profile: toml::Table =
@@ -118,75 +176,102 @@ impl Bench {
             .and_then(toml::Value::as_table_mut)
             .context("bench's profile has no [run]")?;
         run.insert("serving_build".into(), self.serving_build.clone().into());
-        let path = dir.join(format!("{arm}.toml"));
-        std::fs::write(&path, toml::to_string(&profile)?)?;
-        Ok(path)
+        run.insert("concurrency".into(), i64::from(self.concurrency).into());
+        std::fs::write(path, toml::to_string(&profile)?)?;
+        Ok(())
+    }
+
+    /// Generates the exam and the anchor from their seed files; bench admits
+    /// the same collection for the same seed, so this is safe to repeat.
+    fn generate(&self) -> anyhow::Result<()> {
+        for (target, seed) in [
+            ("workspace-tools/exam/generate", &self.seed_file),
+            ("workspace-tools/anchor/generate", &self.anchor_seed_file),
+        ] {
+            let seed = format!("WT_SEED_FILE={}", seed.display());
+            self.run(
+                "generate the exam",
+                "",
+                Command::new("make").args([target, &seed]),
+            )?;
+        }
+        Ok(())
     }
 }
 
 impl Examiner for Bench {
-    fn examine(
-        &self,
-        candidate: &Target,
-        predecessor: &Target,
-        out: &Path,
-    ) -> anyhow::Result<Examined> {
-        let work = out
-            .parent()
-            .context("the verdict has a directory")?
-            .join("bench");
+    fn sit(&self, target: &Target, name: &str, control: bool) -> anyhow::Result<Sitting> {
         // The jobs hold item-level records, which stay with bench: they are
-        // written into bench's own data directory, one directory per verdict.
-        let tag = splinter_core::digest::Digest::of(out.to_string_lossy().as_bytes());
-        let jobs_root = self
+        // written into bench's own data directory, one directory per sitting.
+        let root = self
             .dir
             .join(".bench-data/jobs")
-            .join(format!("splinter-{}", &tag.hex()[..16]));
-        // An interrupted examination starts over: no partial job is reused.
-        if jobs_root.exists() {
-            std::fs::remove_dir_all(&jobs_root)
-                .with_context(|| format!("clearing {}", jobs_root.display()))?;
+            .join(format!("splinter-{name}"));
+        // An interrupted sitting starts over: no partial job is reused.
+        if root.exists() {
+            std::fs::remove_dir_all(&root)
+                .with_context(|| format!("clearing {}", root.display()))?;
         }
-        std::fs::create_dir_all(&work)?;
-        let seed = format!("WT_SEED_FILE={}", self.seed_file.display());
-        for target in [
-            "workspace-tools/exam/generate",
-            "workspace-tools/anchor/generate",
+        std::fs::create_dir_all(&root)?;
+        self.generate()?;
+        let profile = root.join("profile.toml");
+        self.profile(target, control, &profile)?;
+        let sitting = Sitting {
+            exam: root.join("exam"),
+            anchor: root.join("anchor"),
+        };
+        for (suite, collection, job) in [
+            ("exam", EXAM, &sitting.exam),
+            ("anchor", ANCHOR, &sitting.anchor),
         ] {
             self.run(
-                "generate the exam",
-                Command::new("make").args([target, &seed]),
+                &format!("run the {suite} for {}", target.model),
+                &target.key,
+                Command::new("./bench")
+                    .arg("run")
+                    .arg("--profile")
+                    .arg(&profile)
+                    .arg("--endpoint")
+                    .arg(&target.base_url)
+                    .arg(collection)
+                    .arg("--jobs-dir")
+                    .arg(job),
             )?;
         }
-        let mut jobs = Vec::new();
-        for (arm, model) in [("base", predecessor), ("candidate", candidate)] {
-            let profile = self.profile(arm, model, &work)?;
-            for (suite, collection) in [("exam", EXAM), ("anchor", ANCHOR)] {
-                let job = jobs_root.join(format!("{arm}-{suite}"));
-                self.run(
-                    &format!("run the {suite} for {arm}"),
-                    Command::new("./bench")
-                        .arg("run")
-                        .arg("--profile")
-                        .arg(&profile)
-                        .arg("--endpoint")
-                        .arg(&model.base_url)
-                        .arg(collection)
-                        .arg("--jobs-dir")
-                        .arg(&job),
-                )?;
-                jobs.push((arm, job));
+        Ok(sitting)
+    }
+
+    fn verdict(
+        &self,
+        base: &Sitting,
+        candidate: &Sitting,
+        control: Option<&Sitting>,
+        out: &Path,
+    ) -> anyhow::Result<Examined> {
+        for sitting in [Some(base), Some(candidate), control].into_iter().flatten() {
+            if !sitting.present() {
+                bail!(
+                    "bench no longer holds the jobs of a sitting ({}): sit the exam again",
+                    sitting.exam.display()
+                );
             }
         }
         let mut verdict = Command::new("./bench");
         verdict.arg("verdict");
-        for (arm, job) in &jobs {
-            verdict.arg(format!("--{arm}")).arg(job);
+        for (side, sitting) in [("base", base), ("candidate", candidate)] {
+            verdict
+                .arg(format!("--{side}"))
+                .arg(&sitting.exam)
+                .arg(format!("--{side}"))
+                .arg(&sitting.anchor);
+        }
+        if let Some(control) = control {
+            verdict.arg("--control").arg(&control.exam);
         }
         verdict
             .args([
                 "--anchor",
-                "workspace-tools-anchor",
+                ANCHOR_NAME,
                 "--min-gain",
                 &self.min_gain.to_string(),
                 "--signing-key",
@@ -194,9 +279,18 @@ impl Examiner for Bench {
             .arg(&self.signing_key)
             .arg("--out")
             .arg(out);
-        self.run("issue the verdict", &mut verdict)?;
+        self.run("issue the verdict", "", &mut verdict)?;
         read_verdict(&self.dir, &self.signing_key, out)
     }
+}
+
+/// The aggregates of one section of a verdict document.
+fn rates(section: &serde_json::Value) -> Option<TierRates> {
+    Some(TierRates {
+        items: section["items"].as_u64()?,
+        base: section["base_pass_rate"].as_f64()?,
+        candidate: section["candidate_pass_rate"].as_f64()?,
+    })
 }
 
 /// The verdict in `document`, verified by bench under `signing_key`.
@@ -220,10 +314,27 @@ pub fn read_verdict(bench: &Path, signing_key: &Path, document: &Path) -> anyhow
         .as_str()
         .context("the verdict document names no verdict")?
         .to_string();
+    let mut tiers: BTreeMap<String, TierRates> = doc["tiers"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(tier, section)| Some((tier.clone(), rates(section)?)))
+        .collect();
+    if let Some(anchor) = rates(&doc["retention"]) {
+        tiers.insert("anchor".into(), anchor);
+    }
+    let reasons = doc["reasons"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|r| r.as_str().map(String::from))
+        .collect();
     Ok(Examined {
         verdict,
         verified,
         document: document.to_path_buf(),
+        tiers,
+        reasons,
     })
 }
 
@@ -238,6 +349,8 @@ mod tests {
             verdict: verdict.into(),
             verified,
             document: doc.clone(),
+            tiers: BTreeMap::new(),
+            reasons: Vec::new(),
         };
         assert!(e("Promote", true).promotes());
         assert!(
@@ -275,5 +388,34 @@ mod tests {
             read_verdict(dir.path(), &key, &doc).is_err(),
             "a document without a verdict is refused"
         );
+    }
+
+    #[test]
+    fn the_tier_aggregates_and_the_anchor_are_read_from_the_document() {
+        let dir = tempfile::tempdir().unwrap();
+        fake_bench(dir.path());
+        let doc = dir.path().join("verdict.json");
+        std::fs::write(
+            &doc,
+            r#"{"verdict":"Inconclusive","signature":"good","reasons":["MDE exceeds min_gain"],
+                "tiers":{"a":{"items":15,"base_pass_rate":0.2,"candidate_pass_rate":0.4},"b":{"items":0,"families":0}},
+                "retention":{"items":20,"base_pass_rate":0.1,"candidate_pass_rate":0.15}}"#,
+        )
+        .unwrap();
+        let e = read_verdict(dir.path(), &dir.path().join("key"), &doc).unwrap();
+        assert_eq!(
+            e.tiers["a"],
+            TierRates {
+                items: 15,
+                base: 0.2,
+                candidate: 0.4
+            }
+        );
+        assert!(
+            !e.tiers.contains_key("b"),
+            "a tier no item was run in has no rates"
+        );
+        assert_eq!(e.tiers["anchor"].items, 20);
+        assert_eq!(e.reasons, ["MDE exceeds min_gain"]);
     }
 }

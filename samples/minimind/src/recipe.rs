@@ -50,26 +50,26 @@ impl Recipe {
 /// the tool results as rendered), the held-out split and the tokenizer text.
 pub const WORLD: Recipe = Recipe {
     stage: "world",
-    version: 1,
+    version: 2,
 };
 
 /// The task families, their instance draw and the Harbor export.
 pub const TASKS: Recipe = Recipe {
     stage: "tasks",
-    version: 1,
+    version: 2,
 };
 
 /// One episode: the workspace, the expert's procedure, the agent settings,
 /// the verifier and the records an accepted episode writes.
 pub const EPISODE: Recipe = Recipe {
     stage: "episode",
-    version: 1,
+    version: 2,
 };
 
 /// Gathering accepted episodes into a dataset.
 pub const GATHER: Recipe = Recipe {
     stage: "gather",
-    version: 1,
+    version: 2,
 };
 
 /// The tokenizer and random-init request.
@@ -88,13 +88,13 @@ pub const TRAIN: Recipe = Recipe {
 /// A probe's summary and its raw-text continuation.
 pub const PROBE: Recipe = Recipe {
     stage: "probe",
-    version: 1,
+    version: 2,
 };
 
 /// The examination request.
 pub const EXAMINE: Recipe = Recipe {
     stage: "examine",
-    version: 1,
+    version: 2,
 };
 
 #[cfg(test)]
@@ -119,6 +119,7 @@ mod tests {
             programs: 2,
             conversations: 4,
             trajectories: 0,
+            recall: 4,
         };
         let template = Template::default();
         let tools = crate::collect::tool_sigs();
@@ -157,7 +158,7 @@ mod tests {
     }
 
     const PINNED: [&str; 3] = [
-        "world (WORLD, EPISODE): blake3:81dd568a222c494a9bf19c6d032c125784fe278805fb596d5e6b71d9cd83001e",
+        "world (WORLD, EPISODE): blake3:c9260a2e3856b779ae6ee607727e23b6803c4ee48b4c68d906bf2cc0b9db443f",
         "template (WORLD, CHECKPOINT): blake3:354117630131a85c444d649decf8b227f76e57221451ea66e3cd18ede9066edc",
         "tasks (TASKS): blake3:2ec7cb549832048780dbdd54f9733d13965b8a0ff28d18d882fe1de6e8620f09",
     ];

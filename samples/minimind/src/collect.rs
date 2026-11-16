@@ -25,7 +25,6 @@
 //! as evidence and enter no digest. A checkpoint is served only when one of
 //! its episodes has to run.
 
-use std::fmt::Write as _;
 use std::sync::Arc;
 
 use anyhow::{bail, Context as _};
@@ -208,21 +207,23 @@ fn episode_work(
         "answer": answer, "last_text": last_text, "attempt": attempt.id(), "actions": outcome["actions"],
     }))
     .output("outcome", &format!("{rel}/outcome.json"));
-    if verdict.passed {
-        let calls = exchanges
-            .iter()
-            .map(|x| {
-                x.reply
-                    .clone()
-                    .map(|reply| (x.request.clone(), reply))
-                    .map_err(|e| anyhow::anyhow!(e))
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        write(
-            &dir.join("records.jsonl"),
-            &wire::episode_lines(&calls, unit)?,
-        )?;
-        work = work.output("records", &format!("{rel}/records.jsonl"));
+    // Every episode whose calls were all answered keeps its records; only
+    // the verified ones are gathered for training, and the spurious-reward
+    // control draws from all of them.
+    let calls: Option<Vec<(Value, Value)>> = exchanges
+        .iter()
+        .map(|x| x.reply.clone().ok().map(|reply| (x.request.clone(), reply)))
+        .collect();
+    match calls {
+        Some(calls) if !calls.is_empty() => {
+            write(
+                &dir.join("records.jsonl"),
+                &wire::episode_lines(&calls, unit)?,
+            )?;
+            work = work.output("records", &format!("{rel}/records.jsonl"));
+        }
+        _ if verdict.passed => bail!("{unit} passed but a call of it has no reply"),
+        _ => {}
     }
     std::fs::remove_dir_all(&ws).with_context(|| format!("removing {}", ws.display()))?;
     Ok(work)
@@ -275,6 +276,7 @@ impl Run<'_> {
     /// each a unit of its own; returns their commits in order.
     fn episodes(
         &mut self,
+        stage: &str,
         jobs: Vec<(String, Instance)>,
         actor: &Actor,
     ) -> anyhow::Result<Vec<Commit>> {
@@ -298,6 +300,28 @@ impl Run<'_> {
                 (unit, key, instance)
             })
             .collect();
+        // A packed stage whose episodes are all committed is read from its
+        // pack; one that must run more is unpacked first.
+        let (tree, packed) = self.episode_tree(stage);
+        if packed.exists() {
+            let committed: Option<Vec<Commit>> = keyed
+                .iter()
+                .map(|(unit, key, _)| match self.ledger().standing(unit, key) {
+                    Ok(Standing::Committed(c)) => Some(c),
+                    _ => None,
+                })
+                .collect();
+            if let Some(commits) = committed {
+                writeln!(
+                    self.out,
+                    "[reused] {stage}: {} episodes, read from {}",
+                    commits.len(),
+                    packed.display()
+                )?;
+                return Ok(commits);
+            }
+            crate::pack::unpack(&packed, &tree)?;
+        }
         // Serve the checkpoint only when an episode of it has to run.
         let all_done = keyed.iter().all(|(unit, key, _)| {
             matches!(self.ledger().standing(unit, key), Ok(Standing::Committed(c)) if self.ledger().verify(&c).is_ok())
@@ -375,20 +399,21 @@ impl Run<'_> {
     }
 
     /// Episodes of every instance of `split` by `actor`, then one unit
-    /// `<stage>` gathering the accepted ones' records into `data/<stage>.jsonl`.
+    /// `<stage>` gathering the accepted ones' records into `data/<stage>.jsonl`;
+    /// returns that unit and the episodes.
     fn gather(
         &mut self,
         name: &str,
         split: Split,
         actor: &Actor,
         require: bool,
-    ) -> anyhow::Result<Commit> {
+    ) -> anyhow::Result<(Commit, Vec<Commit>)> {
         let jobs = self
             .instances(split)?
             .into_iter()
             .map(|i| (format!("{name}/{}", i.id), i))
             .collect();
-        let episodes = self.episodes(jobs, actor)?;
+        let episodes = self.episodes(name, jobs, actor)?;
         let inputs: Vec<(String, Digest)> = episodes
             .iter()
             .map(|c| {
@@ -403,23 +428,27 @@ impl Run<'_> {
         let refs: Vec<(&str, &Digest)> = inputs.iter().map(|(n, d)| (n.as_str(), d)).collect();
         let key = self.key(&self.agent_slice(), name, &refs, recipe::GATHER, &[]);
         let rel = format!("data/{name}.jsonl");
-        self.unit(name, &key, move |run, _| {
+        let kept = episodes.clone();
+        let gathered = self.unit(name, &key, move |run, _| {
+            let reader = run.episode_reader(name)?;
             let mut lines = String::new();
             let mut accepted = 0;
             for commit in &episodes {
                 if outcome(commit) {
                     accepted += 1;
-                    let path = run.path(&format!("episodes/{}/records.jsonl", commit.unit));
-                    lines.push_str(&std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?);
+                    lines.push_str(&reader.read(commit, "records")?);
                 }
             }
             if require && accepted == 0 {
                 bail!("no {name} episode was accepted by the verifier: there is nothing to train on");
             }
             write(&run.path(&rel), &lines)?;
+            let packed = run.pack_episodes(name)?;
             Ok(StageWork::new(json!({ "episodes": episodes.len(), "accepted": accepted, "records": lines.lines().count() }))
-                .output("records", &rel))
-        })
+                .output("records", &rel)
+                .output("episodes", &packed))
+        })?;
+        Ok((gathered, kept))
     }
 
     /// Stage 6: the expert's demonstrations on the training split.
@@ -427,10 +456,13 @@ impl Run<'_> {
     /// # Errors
     /// An episode cannot be run, or none is accepted.
     pub fn demonstrate(&mut self) -> anyhow::Result<Commit> {
-        self.gather("demonstrate", Split::Train, &Actor::Expert, true)
+        Ok(self
+            .gather("demonstrate", Split::Train, &Actor::Expert, true)?
+            .0)
     }
 
-    /// Stage 8: the model's own episodes on fresh instances.
+    /// Stage 8: the model's own episodes on fresh instances; the gathering
+    /// unit and the episodes.
     ///
     /// # Errors
     /// The model cannot be served or an episode cannot be run.
@@ -438,7 +470,7 @@ impl Run<'_> {
         &mut self,
         label: &str,
         policy: (&Commit, &Checkpoint),
-    ) -> anyhow::Result<Commit> {
+    ) -> anyhow::Result<(Commit, Vec<Commit>)> {
         let actor = self.actor(policy)?;
         self.gather(&format!("{label}/explore"), Split::Explore, &actor, false)
     }
@@ -473,7 +505,7 @@ impl Run<'_> {
             .iter()
             .map(|i| (format!("{unit}/{}", i.id), i.clone()))
             .collect();
-        let commits = self.episodes(jobs, &actor)?;
+        let commits = self.episodes(&unit, jobs, &actor)?;
         let episodes: Vec<(Instance, Commit)> = instances.into_iter().zip(commits).collect();
         let inputs: Vec<(String, Digest)> = episodes
             .iter()
@@ -490,6 +522,7 @@ impl Run<'_> {
         refs.push(("checkpoint", &digest));
         let key = self.key(&self.agent_slice(), &unit, &refs, recipe::PROBE, &["brain"]);
         let checkpoint = policy.1.clone();
+        let unit_name = unit.clone();
         let commit = self.unit(&unit, &key, move |run, _| {
             let passed = episodes.iter().filter(|(_, c)| outcome(c)).count();
             let examples: Vec<Value> = episodes
@@ -498,51 +531,103 @@ impl Run<'_> {
                 .collect();
             let prompt = "Velmora is a town by";
             let text = run.brain.complete(&checkpoint, prompt, 24).map_err(|e| format!("{e:#}"));
+            let packed = run.pack_episodes(&unit_name)?;
             Ok(StageWork::new(json!({
                 "passed": passed, "total": examples.len(), "examples": examples,
                 "text": { "prompt": prompt, "continuation": text.as_ref().ok(), "unavailable": text.as_ref().err() },
-            })))
+            }))
+            .output("episodes", &packed))
         });
         let commit = commit?;
-        let shown = show_probe(name, &commit.summary);
+        let shown = crate::panel::probe(name, &commit.summary);
         write!(self.out, "{shown}")?;
         Ok(commit)
     }
 }
 
-/// A probe's result as the terminal shows it.
-#[must_use]
-pub fn show_probe(name: &str, summary: &Value) -> String {
-    let mut s = String::new();
-    let _ = writeln!(
-        s,
-        "  probe {name}: {}/{} development tasks solved",
-        summary["passed"], summary["total"]
-    );
-    if let Some(text) = summary["text"]["continuation"].as_str() {
-        let _ = writeln!(
-            s,
-            "    text  {:?} -> {:?}",
-            summary["text"]["prompt"].as_str().unwrap_or(""),
-            text
-        );
-    } else if let Some(why) = summary["text"]["unavailable"].as_str() {
-        let _ = writeln!(s, "    text  (not measured: {why})");
+/// The files of one stage's episodes, from their tree while it exists and
+/// from the stage's pack after it, each checked against the digest its
+/// episode committed.
+pub struct EpisodeReader {
+    stage: String,
+    tree: std::path::PathBuf,
+    pack: Option<crate::pack::Pack>,
+}
+
+impl EpisodeReader {
+    /// Output `name` (`records`, `outcome`) of the committed `episode`.
+    ///
+    /// # Errors
+    /// It is in neither the tree nor the pack, or no longer has its digest.
+    pub fn read(&self, episode: &Commit, name: &str) -> anyhow::Result<String> {
+        let file = match name {
+            "records" => "records.jsonl",
+            "outcome" => "outcome.json",
+            other => bail!("an episode has no output {other:?}"),
+        };
+        let task = episode
+            .unit
+            .strip_prefix(&format!("{}/", self.stage))
+            .with_context(|| format!("{} is not an episode of {}", episode.unit, self.stage))?;
+        let path = self.tree.join(task).join(file);
+        let text = if path.exists() {
+            std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?
+        } else {
+            self.pack
+                .as_ref()
+                .and_then(|p| p.read(&format!("{task}/{file}")))
+                .with_context(|| {
+                    format!("{} has no {file}, in its tree or its pack", episode.unit)
+                })?
+                .to_string()
+        };
+        let want = episode
+            .output(name)
+            .with_context(|| format!("{} committed no {name}", episode.unit))?;
+        if &Digest::of(text.as_bytes()) != want {
+            bail!(
+                "{}'s {file} no longer has the digest it committed",
+                episode.unit
+            );
+        }
+        Ok(text)
     }
-    for example in summary["examples"].as_array().into_iter().flatten().take(2) {
-        let o = &example["outcome"];
-        let _ = writeln!(
-            s,
-            "    task  {}  {}  answer={} last={}",
-            example["task"].as_str().unwrap_or(""),
-            if o["passed"].as_bool().unwrap_or(false) {
-                "PASS"
-            } else {
-                "fail"
-            },
-            o["answer"],
-            o["last_text"],
-        );
+}
+
+impl Run<'_> {
+    /// The tree of `stage`'s episodes and the pack it becomes.
+    fn episode_tree(&self, stage: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        (
+            self.path(&format!("episodes/{stage}")),
+            self.path(&format!("episodes/{stage}.jsonl")),
+        )
     }
-    s
+
+    /// A reader of `stage`'s episode files.
+    ///
+    /// # Errors
+    /// The stage's pack cannot be read.
+    pub fn episode_reader(&self, stage: &str) -> anyhow::Result<EpisodeReader> {
+        let (tree, packed) = self.episode_tree(stage);
+        let pack = if packed.exists() {
+            Some(crate::pack::Pack::open(&packed)?)
+        } else {
+            None
+        };
+        Ok(EpisodeReader {
+            stage: stage.to_string(),
+            tree,
+            pack,
+        })
+    }
+
+    /// Packs `stage`'s episode tree into one file, once every episode of it
+    /// committed; returns the pack's path in the run directory.
+    fn pack_episodes(&self, stage: &str) -> anyhow::Result<String> {
+        let (tree, packed) = self.episode_tree(stage);
+        if tree.exists() {
+            crate::pack::pack_tree(&tree, &packed)?;
+        }
+        Ok(format!("episodes/{stage}.jsonl"))
+    }
 }

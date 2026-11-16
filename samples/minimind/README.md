@@ -98,11 +98,13 @@ run's manifest afterwards.
 | 7 | `probe/<model>/init` | the development tasks through sven, and a raw-text continuation | `probe <model>/init: 0/4 development tasks solved`, the text, two example tasks |
 | 8 | `<model>/pretrain`, probe | raw-text pretraining on the corpus, then the probe | steps, first and last loss; the probe |
 | 9 | `<model>/sft`, probe | a full chat fine-tune on the demonstrations, then the probe | the same |
-| 10 | `<model>/scratch/examine` | bench: the fine-tuned model against its random init | the verdict |
-| 11 | `<model>/explore/<task>`, `<model>/explore` | the model itself as a sven agent on fresh instances, through a recording proxy; verified episodes become records | accepted of total |
-| 12 | `<model>/improve`, probe | training on its own verified episodes (expert iteration), then the probe | the same |
-| 13 | `<model>/experience/examine` | bench: the improved model against the fine-tuned one | the verdict |
-| 14 | `report.md` | written from the ledger | its path |
+| 10 | `<model>/sit/<stage>` | with `--bench`: the pretrained, fine-tuned and improved checkpoints (and the control arm) each sit bench's sealed exam and its anchor once | - |
+| 11 | `<model>/scratch/verdict` | bench's signed paired verdict, fine-tuned against pretrained | the verdict and the pass rate of each tier, both sides |
+| 12 | `<model>/explore/<task>`, `<model>/explore` | the model itself as a sven agent on fresh instances, through a recording proxy; verified episodes become records | accepted of total |
+| 13 | `<model>/improve/data`, `<model>/improve`, probe | its own verified episodes mixed with `experience.rehearsal` demonstration records per own record, trained on (expert iteration with rehearsal), then the probe | the same |
+| 13b | `<model>/control/data`, `<model>/control` | with `--bench`: the spurious-reward control arm, the same mix with its own episodes drawn without the verifier | - |
+| 14 | `<model>/experience/verdict` | bench: the improved model against the fine-tuned one, the control arm beside it | the verdict and the tiers |
+| 15 | `report.md` | written from the ledger; the terminal gets the table across stages | its path and the table |
 
 Measured on the smoke profile, seed 7, one GH200 (gpu3), brain d84390ff5,
 2026-11-16 (`gpu3` run, 32 minutes end to end without the exam):
@@ -192,23 +194,39 @@ stage by stage.
 
 Everything is generated at run time into the run directory, never into the
 repository: `manifest.json`, `ledger.jsonl`, `world/corpus.jsonl`,
-`tasks/{train,explore,dev}.jsonl` and `tasks/harbor/`, `episodes/<unit>/`
-(sven's trajectory and audit trail, the verdict, the records of an accepted
-episode), `data/*.jsonl` (training records), `checkpoints/<model>/<stage>/`,
-`exam/<model>/<pair>/verdict.json` and `report.md`. The smoke run's data stages
-take well under a megabyte.
+`tasks/{train,explore,dev}.jsonl`, `tasks/harbor.jsonl` (the Harbor task
+folders), `episodes/<stage>.jsonl` (each episode's outcome, records, sven
+trajectory and audit trail), `data/*.jsonl` (training records),
+`checkpoints/<model>/<stage>/`, `exam/<model>/<stage>/sitting.json`,
+`exam/<model>/<pair>/verdict.json` and `report.md`.
+
+A stage's episodes and task folders are thousands of small files while it
+runs; once it commits they are packed into one JSON-lines file per stage
+(`{"path", "mode", "text"}` per file, in path order), the tree is removed, and
+a reused stage reads its pack, each file checked against the digest its
+episode committed. A stage that must run more episodes unpacks first. Shared
+file systems bound the number of files, so a run directory stays at a few
+hundred.
 
 ## The examination
 
 With `--bench`, bench generates its sealed workspace tool-use exam and anchor
-from the private seed file (the sample never opens it), runs both arms through
-sven against the same brain (`bench run --endpoint`), and issues one signed
-verdict of aggregates (`./bench verdict --min-gain X`). The arm profiles are
-copies under the run directory; bench's jobs, which hold item-level records,
-stay in bench's own data directory. The verdict is verified with
-`./bench verify-verdict`; only a verified **Promote** promotes. Reject,
-Inconclusive, Invalid or a document that does not verify promote nothing, and
-the report says "not promoted".
+from their private seed files (`--bench-seed-file`, `--bench-anchor-seed-file`;
+the sample never opens them, bench draws them when missing), and each examined
+checkpoint sits it once through sven against the same brain (`bench run
+--endpoint`, at the run's episode concurrency): pretrained, fine-tuned,
+improved, and a spurious-reward control arm (the improvement with its own
+episodes drawn without the verifier, run under bench's control profile, which
+must never be promoted). Bench keeps the jobs, which hold item-level records,
+in its own data directory; a sitting whose jobs are gone is sat again. Two
+verdicts pair them (`./bench verdict --min-gain X`): fine-tuned against
+pretrained, and improved against fine-tuned with the control arm. Each is
+verified with `./bench verify-verdict`; only a verified **Promote** promotes.
+Reject, Inconclusive, Invalid or a document that does not verify promote
+nothing, and the report says "not promoted". What crosses back is aggregates:
+the verdict and, per tier (a: fresh seeds of trained skills, b: held-out
+templates or families, c: held-out domains) and for the anchor, the pass rates
+of both sides.
 
 ## Limits
 

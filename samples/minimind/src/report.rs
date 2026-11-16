@@ -107,8 +107,8 @@ pub fn markdown(commits: &[Commit], labels: &[String]) -> String {
         }
         let _ = writeln!(
             s,
-            "\nExamination, fine-tuned against random init: {}.\n",
-            verdict(commits, &format!("{label}/scratch/examine"))
+            "\nExamination, fine-tuned against pretrained: {}.\n",
+            verdict(commits, &format!("{label}/scratch/verdict"))
         );
         let _ = writeln!(s, "### Learning from experience\n");
         let _ = writeln!(
@@ -126,10 +126,15 @@ pub fn markdown(commits: &[Commit], labels: &[String]) -> String {
         }
         let _ = writeln!(
             s,
-            "\nExamination, improved against fine-tuned: {}.\n",
-            verdict(commits, &format!("{label}/experience/examine"))
+            "\nExamination, improved against fine-tuned (with a spurious-reward control arm): {}.\n",
+            verdict(commits, &format!("{label}/experience/verdict"))
         );
     }
+    let _ = writeln!(
+        s,
+        "## Across stages\n\n```text{}```\n",
+        crate::panel::summary(commits, labels)
+    );
     s.push_str(
         "A probe is a handful of development tasks of the training families: it shows what a checkpoint does, \
          it is not evidence of learning. Only a verified Promote from the sealed examination is a learning claim.\n",
@@ -156,7 +161,7 @@ pub fn status(commits: &[Commit]) -> String {
             .strip_prefix("probe/")
             .filter(|n| n.matches('/').count() == 1)
         {
-            s.push_str(&crate::collect::show_probe(name, &c.summary));
+            s.push_str(&crate::panel::probe(name, &c.summary));
         } else if !is_episode(&c.unit) {
             let _ = writeln!(s, "[{:>6}] {} (attempt {})", "done", c.unit, c.attempt);
         }
@@ -169,9 +174,14 @@ pub fn status(commits: &[Commit]) -> String {
 /// # Errors
 /// The ledger cannot be read or the report written.
 pub fn write(run: &mut crate::stages::Run<'_>, labels: &[String]) -> anyhow::Result<()> {
-    let text = markdown(&run.ledger().commits()?, labels);
+    let commits = run.ledger().commits()?;
+    let text = markdown(&commits, labels);
     let path = run.path("report.md");
     crate::stages::write(&path, &text)?;
-    std::io::Write::write_fmt(&mut run.out, format_args!("report: {}\n", path.display()))?;
+    let table = crate::panel::summary(&commits, labels);
+    std::io::Write::write_fmt(
+        &mut run.out,
+        format_args!("{table}\nreport: {}\n", path.display()),
+    )?;
     Ok(())
 }

@@ -187,6 +187,86 @@ fn conversation(
     }
 }
 
+/// A drill in copying values out of context, the skill every task needs:
+/// a listing of names with codes (as a file read shows it) followed by
+/// questions answered from it; values from files written into a command; or
+/// a short conversation that reads a value and writes it to the answer file
+/// with the tools, in the template.
+fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
+    let entries: Vec<(String, u64)> = (0..rng.between(3, 8))
+        .map(|_| (word(rng, 2).to_lowercase(), rng.between(10, 9999)))
+        .collect();
+    let listing = entries
+        .iter()
+        .enumerate()
+        .map(|(i, (name, code))| format!("L{}:{name}: {code}", i + 1))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let text = match rng.below(3) {
+        0 => {
+            let mut text = format!("{listing}\n");
+            for _ in 0..3 {
+                let (name, code) = &entries[rng.below(entries.len())];
+                text.push_str(&format!("The code of {name} is {code}.\n"));
+            }
+            text
+        }
+        1 => {
+            let (a, b) = (&entries[0], &entries[entries.len() - 1]);
+            format!(
+                "inputs/{}.txt holds {}. inputs/{}.txt holds {}.\n./calc combine {} {}\n",
+                a.0, a.1, b.0, b.1, a.1, b.1
+            )
+        }
+        _ => {
+            let (name, code) = entries[rng.below(entries.len())].clone();
+            let file = format!("{}.txt", word(rng, 1).to_lowercase());
+            let value = code.to_string();
+            let turns = vec![
+                Turn::User(format!("Write the code of {name} in {file} to answer.txt.")),
+                Turn::Assistant {
+                    text: String::new(),
+                    calls: vec![Call {
+                        name: "read_file".into(),
+                        arguments: serde_json::json!({ "path": file }),
+                    }],
+                },
+                Turn::Tool(listing),
+                Turn::Assistant {
+                    text: String::new(),
+                    calls: vec![Call {
+                        name: "write_file".into(),
+                        arguments: serde_json::json!({ "path": "answer.txt", "text": value }),
+                    }],
+                },
+                Turn::Tool(format!("wrote {} bytes to answer.txt", value.len())),
+                Turn::Assistant {
+                    text: value,
+                    calls: vec![],
+                },
+            ];
+            template.render(&[], &turns)
+        }
+    };
+    Document {
+        kind: "recall",
+        text,
+    }
+}
+
+/// A shell command's result as the agent's shell tool returns it: the
+/// output, then its status line (the duration as a record states it).
+#[must_use]
+pub fn shell_result(stdout: &str, exit: i32) -> String {
+    let status = format!("Exit: {exit} | Duration: 0.0s");
+    let stdout = stdout.trim_end();
+    if stdout.is_empty() {
+        status
+    } else {
+        format!("{stdout}\n\n{status}")
+    }
+}
+
 /// The whole corpus of a world of `size`, drawn from `seed`; its tool-use
 /// conversations offer `tools` under the agent's `system` prompt.
 #[must_use]
@@ -205,6 +285,7 @@ pub fn corpus(
     docs.extend((0..size.expressions).map(|_| expression(&mut rng)));
     docs.extend((0..size.programs).map(|_| program(&mut rng)));
     docs.extend((0..size.conversations).map(|_| conversation(&mut rng, template, tools, system)));
+    docs.extend((0..size.recall).map(|_| recall(&mut rng, template)));
     rng.shuffle(&mut docs);
     docs
 }
@@ -270,7 +351,10 @@ pub fn trajectory(
                             .arg(arg("shell_command"))
                             .current_dir(scratch)
                             .output()?;
-                        String::from_utf8_lossy(&out.stdout).trim_end().to_string()
+                        shell_result(
+                            &String::from_utf8_lossy(&out.stdout),
+                            out.status.code().unwrap_or(-1),
+                        )
                     }
                 };
                 turns.push(Turn::Assistant {
@@ -313,6 +397,7 @@ mod tests {
             programs: 5,
             conversations: 6,
             trajectories: 0,
+            recall: 0,
         }
     }
 
@@ -338,6 +423,7 @@ mod tests {
                 programs: 0,
                 conversations: 0,
                 trajectories: 0,
+                recall: 0,
             },
             &t,
             &[],

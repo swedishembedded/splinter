@@ -178,15 +178,21 @@ impl<'a> Run<'a> {
                 writeln!(self.out, "[corrupt] {e}; recomputing {unit}")?;
             }
         }
+        let started = std::time::Instant::now();
         let ran = ledger.run(unit, key, OnCorrupt::Recompute, |attempt| {
             work(self, attempt)
         });
         self.ledger = Some(ledger);
         let ran = ran?;
         let how = if ran.reused { "reused" } else { "done" };
+        let took = if ran.reused {
+            String::new()
+        } else {
+            format!(" ({} s)", started.elapsed().as_secs())
+        };
         writeln!(
             self.out,
-            "[{how:>6}] {unit}: {}",
+            "[{how:>6}] {unit}{took}: {}",
             one_line(&ran.commit.summary)
         )?;
         Ok(ran.commit)
@@ -397,7 +403,9 @@ impl<'a> Run<'a> {
                 }
                 work = work.output(split.name(), &rel);
             }
-            Ok(work.output("harbor", "tasks/harbor"))
+            // Thousands of small folders, kept as one file.
+            crate::pack::pack_tree(&run.path("tasks/harbor"), &run.path("tasks/harbor.jsonl"))?;
+            Ok(work.output("harbor", "tasks/harbor.jsonl"))
         })
     }
 
@@ -447,15 +455,21 @@ impl<'a> Run<'a> {
         let unit = format!("{label}/checkpoint");
         let rel = format!("checkpoints/{label}/init");
         let key = self.key(
-            &json!({ "model": spec, "template": self.template }),
+            &json!({ "model": spec, "template": self.template, "tokenizer": self.config.tokenizer }),
             &unit,
             &[("corpus", &corpus)],
             recipe::CHECKPOINT,
             &["brain"],
         );
+        let split_digits = self.config.tokenizer.split_digits;
         let commit = self.unit(&unit, &key, |run, _| {
             let out = run.path(&rel);
             reset(&out)?;
+            // The vocabulary is learned from this text; it is derived from
+            // the corpus and the settings in the key, so it is no output.
+            let tokenizer_text = run.path(&format!("tokenizer/{label}.jsonl"));
+            let corpus = std::fs::read_to_string(run.path("world/corpus.jsonl"))?;
+            write(&tokenizer_text, &tokenizer_corpus(&corpus, split_digits))?;
             let made = run.brain.make_checkpoint(&CheckpointRequest {
                 model: &spec,
                 format: &ChatFormat {
@@ -464,7 +478,7 @@ impl<'a> Run<'a> {
                     eos: run.template.end.clone(),
                     pad: Some(run.template.pad.clone()),
                 },
-                tokenizer_corpus: &run.path("world/corpus.jsonl"),
+                tokenizer_corpus: &tokenizer_text,
                 seed: run.seed,
                 install_as: &install_name(&key, &format!("{label}-init")),
                 identity: &identity(&key),
@@ -560,67 +574,27 @@ impl<'a> Run<'a> {
             )?;
             let first = trained.losses.first().map(|l| l.1);
             let last = trained.losses.last().map(|l| l.1);
+            let resume = &trained.report["resume"];
+            if resume["state"] == "continued" {
+                writeln!(run.out, "         {shown}: brain continued the run from its saved state at step {}", resume["resumed_at"])?;
+            }
+            let seconds = started.elapsed().as_secs_f64();
+            // Pretraining's windows are full: every step trains batch x block
+            // tokens. A chat run's records vary in length, so no rate is
+            // claimed for it.
+            let rate = (stage == Stage::Pretrain && seconds > 0.0).then(|| {
+                f64::from(budget.steps) * f64::from(budget.batch) * f64::from(budget.block) / seconds
+            });
             Ok(StageWork::new(json!({
                 "model": trained.checkpoint.model, "arch": spec.arch, "steps": budget.steps, "first_loss": first, "last_loss": last,
                 "losses": trained.losses, "resumed": trained.resumed, "attempt": attempt.id(),
-                "seconds": started.elapsed().as_secs(),
+                "resume": { "state": resume["state"], "resumed_at": resume["resumed_at"] },
+                "train_seconds": started.elapsed().as_secs(), "tokens_per_second": rate,
             }))
             .output("checkpoint", &rel))
         })?;
         let checkpoint = checkpoint_of(&commit, &rel)?;
         Ok((commit, checkpoint))
-    }
-
-    /// Stage 10: the paired examination of `candidate` against
-    /// `predecessor`, as unit `examine/<name>`.
-    ///
-    /// # Errors
-    /// The examination could not be run.
-    pub fn examine(
-        &mut self,
-        name: &str,
-        candidate: (&Commit, &Checkpoint),
-        predecessor: (&Commit, &Checkpoint),
-    ) -> anyhow::Result<Option<Commit>> {
-        let Some(examiner) = self.examiner else {
-            writeln!(
-                self.out,
-                "[ skip ] {name}/examine: no examiner configured; no promotion claim is made"
-            )?;
-            return Ok(None);
-        };
-        let c = candidate
-            .0
-            .output("checkpoint")
-            .context("the candidate has no checkpoint")?
-            .clone();
-        let p = predecessor
-            .0
-            .output("checkpoint")
-            .context("the predecessor has no checkpoint")?
-            .clone();
-        let unit = format!("{name}/examine");
-        let key = self.key(
-            &self.agent_slice(),
-            &unit,
-            &[("candidate", &c), ("predecessor", &p)],
-            recipe::EXAMINE,
-            &["bench", "sven", "brain"],
-        );
-        let rel = format!("exam/{name}/verdict.json");
-
-        let (cand, pred) = (candidate.1.clone(), predecessor.1.clone());
-        let commit = self.unit(&unit, &key, |run, _| {
-            let out = run.path(&rel);
-            reset(out.parent().context("a verdict has a directory")?)?;
-            let examined = examiner.examine(&run.brain.serve(&cand)?, &run.brain.serve(&pred)?, &out)?;
-            Ok(StageWork::new(json!({
-                "verdict": examined.verdict, "verified": examined.verified, "promotes": examined.promotes(),
-                "candidate": cand.model, "predecessor": pred.model,
-            }))
-            .output("verdict", &rel))
-        })?;
-        Ok(Some(commit))
     }
 }
 
@@ -637,6 +611,20 @@ fn identity(key: &StageKey) -> String {
 fn install_name(key: &StageKey, stage: &str) -> String {
     let hex = key.as_str().rsplit(':').next().unwrap_or(key.as_str());
     format!("minimind-{stage}-{}", &hex[..12.min(hex.len())])
+}
+
+/// The text the vocabulary is learned from: the corpus, without its digits
+/// when they are to stay single tokens. A byte-level vocabulary learns no
+/// merge it never sees, so with no digit in its text every digit is a token
+/// of its own and a number reads the same after a space, a colon or a quote:
+/// the model copies a value digit by digit instead of mapping one multi-digit
+/// piece to another.
+fn tokenizer_corpus(corpus: &str, split_digits: bool) -> String {
+    if split_digits {
+        corpus.chars().filter(|c| !c.is_ascii_digit()).collect()
+    } else {
+        corpus.to_string()
+    }
 }
 
 fn checkpoint_of(commit: &Commit, rel: &str) -> anyhow::Result<Checkpoint> {
@@ -740,6 +728,7 @@ fn model_stages(
         &format!("{label}/pretrained"),
         (&pretrained.0, &pretrained.1),
     )?;
+    let sat_pretrained = run.sit(label, "pretrained", (&pretrained.0, &pretrained.1), false)?;
     let demos = demonstrations
         .output("records")
         .context("the demonstrations have no records")?
@@ -752,12 +741,15 @@ fn model_stages(
         (&demos, "data/demonstrate.jsonl"),
     )?;
     run.probe(&format!("{label}/sft"), (&sft.0, &sft.1))?;
-    run.examine(
-        &format!("{label}/scratch"),
-        (&sft.0, &sft.1),
-        (&init.0, &init.1),
+    let sat_sft = run.sit(label, "sft", (&sft.0, &sft.1), false)?;
+    run.judge(
+        label,
+        "scratch",
+        sat_pretrained.as_ref(),
+        sat_sft.as_ref(),
+        None,
     )?;
-    let explored = run.explore(label, (&sft.0, &sft.1))?;
+    let (explored, episodes) = run.explore(label, (&sft.0, &sft.1))?;
     let accepted = explored.summary["accepted"].as_u64().unwrap_or(0);
     if accepted == 0 {
         writeln!(
@@ -766,23 +758,40 @@ fn model_stages(
         )?;
         return Ok(());
     }
-    let records = explored
-        .output("records")
-        .context("the exploration has no records")?
-        .clone();
-    let data = format!("data/{label}/explore.jsonl");
-    let improved = run.train(
-        Stage::Improve,
-        label,
-        "improve",
-        (&sft.0, &sft.1),
-        (&records, &data),
-    )?;
+    let mixed = run.experience(label, "improve", &episodes, demonstrations, false)?;
+    let improved = train_on(run, label, "improve", (&sft.0, &sft.1), &mixed)?;
     run.probe(&format!("{label}/improved"), (&improved.0, &improved.1))?;
-    run.examine(
-        &format!("{label}/experience"),
-        (&improved.0, &improved.1),
-        (&sft.0, &sft.1),
+    let sat_improved = run.sit(label, "improved", (&improved.0, &improved.1), false)?;
+    // The spurious-reward control arm exists for the examination alone.
+    let sat_control = if run.examiner.is_some() {
+        let mixed = run.experience(label, "control", &episodes, demonstrations, true)?;
+        let control = train_on(run, label, "control", (&sft.0, &sft.1), &mixed)?;
+        run.sit(label, "control", (&control.0, &control.1), true)?
+    } else {
+        None
+    };
+    run.judge(
+        label,
+        "experience",
+        sat_sft.as_ref(),
+        sat_improved.as_ref(),
+        sat_control.as_ref(),
     )?;
     Ok(())
+}
+
+/// An improvement run named `name` from `base` on the mix `data` made.
+fn train_on(
+    run: &mut Run<'_>,
+    label: &str,
+    name: &str,
+    base: (&Commit, &Checkpoint),
+    data: &Commit,
+) -> anyhow::Result<(Commit, Checkpoint)> {
+    let digest = data
+        .output("records")
+        .context("the mix has no records")?
+        .clone();
+    let rel = format!("data/{label}/{name}.jsonl");
+    run.train(Stage::Improve, label, name, base, (&digest, &rel))
 }

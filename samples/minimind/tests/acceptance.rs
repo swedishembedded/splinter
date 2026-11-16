@@ -95,10 +95,8 @@ const SEED: u64 = 17;
 fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let brain = FakeBrain::new(dir.path());
-    let examiner = FakeExaminer {
-        verdict: "Promote",
-        verified: true,
-    };
+    let jobs = tempfile::tempdir().unwrap();
+    let examiner = FakeExaminer::new("Promote", true, jobs.path());
     let shown = go(dir.path(), smoke(), SEED, &brain, Some(&examiner)).unwrap();
     let all = commits(dir.path());
     assert_eq!(
@@ -108,16 +106,63 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
     );
     assert_eq!(commit(&all, "probe/ouro/init").summary["passed"], 0);
     assert_eq!(commit(&all, "probe/ouro/sft").summary["passed"], 4);
-    assert!(commit(&all, "ouro/experience/examine").summary["promotes"]
+    assert!(commit(&all, "ouro/experience/verdict").summary["promotes"]
         .as_bool()
         .unwrap());
     assert!(shown.contains("probe ouro/sft: 4/4"), "{shown}");
+    // Each checkpoint sits the exam once, the control arm among them; a
+    // sitting is reused by both verdicts it takes part in.
+    let sat = examiner.sittings.lock().unwrap().clone();
+    assert_eq!(sat.len(), 4, "pretrained, sft, improved, control: {sat:?}");
+    assert!(shown.contains("exam ouro/experience: Promote"), "{shown}");
+    assert!(
+        shown.contains("what each checkpoint can do"),
+        "the summary table: {shown}"
+    );
     assert!(dir.path().join("report.md").exists());
+    // The worked trajectories the model is pretrained on show a shell
+    // result exactly as sven's shell tool returned it in the demonstrations.
+    let records = std::fs::read_to_string(dir.path().join("data/demonstrate.jsonl")).unwrap();
+    let mut shell_results = 0;
+    for line in records.lines() {
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
+        for m in record["messages"].as_array().unwrap() {
+            let content = m["content"].as_str().unwrap_or("");
+            if m["role"] == "tool" && content.contains("Exit: ") {
+                let (stdout, status) = content.rsplit_once("Exit: ").unwrap();
+                let exit: i32 = status.split(' ').next().unwrap().parse().unwrap();
+                assert_eq!(
+                    splinter_minimind::world::shell_result(stdout, exit),
+                    content
+                );
+                shell_results += 1;
+            }
+        }
+    }
+    assert!(shell_results > 0, "the demonstrations ran shell commands");
+    // A committed stage leaves its thousands of small files as one pack.
+    for tree in [
+        "episodes/demonstrate",
+        "episodes/ouro/explore",
+        "episodes/probe/ouro/sft",
+        "tasks/harbor",
+    ] {
+        assert!(!dir.path().join(tree).exists(), "{tree} is packed");
+        assert!(
+            dir.path().join(format!("{tree}.jsonl")).is_file(),
+            "{tree}.jsonl"
+        );
+    }
     let trained = brain.trained();
     let started = begins(dir.path());
 
     let again = go(dir.path(), smoke(), SEED, &brain, Some(&examiner)).unwrap();
     assert_eq!(brain.trained(), trained, "a finished run trains nothing");
+    assert_eq!(
+        examiner.sittings.lock().unwrap().len(),
+        4,
+        "and sits no exam"
+    );
     assert_eq!(
         begins(dir.path()),
         started,
@@ -235,11 +280,12 @@ fn no_promotion_without_a_verified_promote() {
     for (verdict, verified) in [("Reject", true), ("Inconclusive", true), ("Promote", false)] {
         let dir = tempfile::tempdir().unwrap();
         let brain = FakeBrain::new(dir.path());
-        let examiner = FakeExaminer { verdict, verified };
+        let jobs = tempfile::tempdir().unwrap();
+        let examiner = FakeExaminer::new(verdict, verified, jobs.path());
         go(dir.path(), smoke(), SEED, &brain, Some(&examiner)).unwrap();
         let all = commits(dir.path());
         assert!(
-            !commit(&all, "ouro/experience/examine").summary["promotes"]
+            !commit(&all, "ouro/experience/verdict").summary["promotes"]
                 .as_bool()
                 .unwrap(),
             "{verdict} {verified}"

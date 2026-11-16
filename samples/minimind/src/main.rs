@@ -37,6 +37,7 @@ usage: splinter-minimind <run|status> [options]
   --brain-endpoint URL   a running `brain serve --training` (http://host:port/v1)
   --brain-artifact-store DIR  that server's artifact store (with --brain-endpoint)
   --brain-bin PATH       or a brain binary to start and own for the run
+  --brain-commit REV     the brain commit the binary was built from, recorded in the manifest
   --device gpuN          the CUDA card that brain trains and serves on (required with
                          --brain-bin; there is no CPU fallback)
   --models-dir DIR       the started brain's model store (default RUN_DIR/brain/models)
@@ -44,14 +45,17 @@ usage: splinter-minimind <run|status> [options]
                          the card
   --brain-key KEY        the key a given endpoint takes (default: none needed)
   --bench DIR            a bench checkout: examine with its sealed workspace tool-use exam
-  --bench-seed-file F    the exam's private seed file (never read by this program)
+  --bench-seed-file F    the exam's private seed file (never read by this program; drawn
+                         into it by bench when missing)
+  --bench-anchor-seed-file F  the anchor's own private seed file (likewise)
   --bench-key F          the verdict signing key
   --sven-bin PATH        the sven binary bench runs the exam's agent with
   --min-gain X           the gain a promotion must show (default 0.05)
 ";
 
-/// Sequences the started brain decodes together.
-const BRAIN_SLOTS: u32 = 4;
+/// Sequences the started brain decodes together: as many as episodes run
+/// at once.
+const BRAIN_SLOTS: u32 = 16;
 
 /// The smallest gain a promotion must show, unless given.
 const DEFAULT_MIN_GAIN: f64 = 0.05;
@@ -88,9 +92,11 @@ fn parse(mut args: Vec<String>) -> anyhow::Result<Args> {
                 | "brain-key"
                 | "brain-artifact-store"
                 | "device"
+                | "brain-commit"
                 | "gpu-lock"
                 | "bench"
                 | "bench-seed-file"
+                | "bench-anchor-seed-file"
                 | "bench-key"
                 | "sven-bin"
                 | "min-gain"
@@ -259,6 +265,11 @@ fn run(
                 seed_file: PathBuf::from(
                     flag("bench-seed-file").context("--bench needs --bench-seed-file")?,
                 ),
+                anchor_seed_file: PathBuf::from(
+                    flag("bench-anchor-seed-file")
+                        .context("--bench needs --bench-anchor-seed-file")?,
+                ),
+                concurrency: config.agent.concurrency,
                 signing_key: PathBuf::from(flag("bench-key").context("--bench needs --bench-key")?),
                 min_gain: flag("min-gain")
                     .map(|g| g.parse())
@@ -277,6 +288,10 @@ fn run(
         .insert("splinter".into(), git_revision(&sample_dir()));
     revisions.0.insert("sven".into(), sven_revision());
     revisions.0.insert("brain".into(), brain_revision);
+    // Provenance only: the binary's digest is what keys depend on.
+    if let Some(commit) = flag("brain-commit") {
+        revisions.0.insert("brain-commit".into(), commit);
+    }
     if let Some(b) = &bench {
         revisions.0.insert("bench".into(), git_revision(&b.dir));
     }

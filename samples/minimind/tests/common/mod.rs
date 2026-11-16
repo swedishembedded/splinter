@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 use splinter_minimind::expert;
 use splinter_minimind::tasks::Instance;
 use splinter_sdk::agent::policy_endpoint::Endpoint;
-use splinter_sdk::bench::examine::{Examined, Examiner};
+use splinter_sdk::bench::examine::{Examined, Examiner, Sitting, TierRates};
 use splinter_sdk::model::scratch::{
     Checkpoint, CheckpointRequest, ModelService, Objective, Served, TrainRequest, Trained,
 };
@@ -190,24 +190,61 @@ impl ModelService for FakeBrain {
     }
 }
 
-/// An examiner double that returns a fixed verdict.
+/// An examiner double that returns a fixed verdict; a sitting is a pair
+/// of directories under `jobs`, and every sitting is counted.
 pub struct FakeExaminer {
     pub verdict: &'static str,
     pub verified: bool,
+    pub jobs: PathBuf,
+    pub sittings: Mutex<Vec<String>>,
+}
+
+impl FakeExaminer {
+    pub fn new(verdict: &'static str, verified: bool, jobs: &Path) -> Self {
+        Self {
+            verdict,
+            verified,
+            jobs: jobs.to_path_buf(),
+            sittings: Mutex::new(Vec::new()),
+        }
+    }
 }
 
 impl Examiner for FakeExaminer {
-    fn examine(
+    fn sit(&self, target: &Served, name: &str, _control: bool) -> anyhow::Result<Sitting> {
+        self.sittings.lock().unwrap().push(target.model.clone());
+        let root = self.jobs.join(name);
+        let sitting = Sitting {
+            exam: root.join("exam"),
+            anchor: root.join("anchor"),
+        };
+        std::fs::create_dir_all(&sitting.exam)?;
+        std::fs::create_dir_all(&sitting.anchor)?;
+        Ok(sitting)
+    }
+
+    fn verdict(
         &self,
-        _candidate: &Served,
-        _predecessor: &Served,
+        _base: &Sitting,
+        _candidate: &Sitting,
+        _control: Option<&Sitting>,
         out: &Path,
     ) -> anyhow::Result<Examined> {
         std::fs::write(out, json!({ "verdict": self.verdict }).to_string())?;
+        let tiers = [(
+            "a".to_string(),
+            TierRates {
+                items: 3,
+                base: 0.0,
+                candidate: 1.0,
+            },
+        )];
         Ok(Examined {
             verdict: self.verdict.into(),
             verified: self.verified,
             document: out.to_path_buf(),
+            tiers: tiers.into_iter().collect(),
+            reasons: vec![],
         })
     }
 }
