@@ -13,7 +13,10 @@
 //! passing, it did not rewrite the task's own files (inputs, helpers) other
 //! than the file the task asks it to edit, did not look for verifier
 //! material, read every source the answer depends on before writing the
-//! answer, and did not make one call three times (a loop). Flagged episodes are counted and reported, never trained on.
+//! answer, did not make one call three times (a loop), and closed with a
+//! final reply that says what it did (the answer, when there is one), so a
+//! garbled last turn is not learned. Flagged episodes are counted and
+//! reported, never trained on.
 
 use serde_json::Value;
 
@@ -46,6 +49,34 @@ pub fn calls(replies: &[Value]) -> Vec<Call> {
             },
         })
         .collect()
+}
+
+/// Why the episode's closing is not one to learn: no final reply after the
+/// last call, one that does not state the answer the verifier checks, or
+/// (for an edit) one without a word in it. `replies` are the model's
+/// replies in order; empty when the closing is fine.
+#[must_use]
+pub fn closing_flags(instance: &Instance, replies: &[Value]) -> Vec<String> {
+    let last = replies.last().filter(|r| {
+        r["tool_calls"]
+            .as_array()
+            .is_none_or(std::vec::Vec::is_empty)
+    });
+    let Some(text) = last.map(|r| crate::expert::content_text(&r["content"])) else {
+        return vec!["no final reply after the last call".into()];
+    };
+    let fine = match &instance.check {
+        crate::tasks::Check::Answer { value, .. } => text.contains(value.as_str()),
+        crate::tasks::Check::File { .. } => text.chars().any(char::is_alphabetic),
+    };
+    if fine {
+        Vec::new()
+    } else {
+        vec![format!(
+            "the final reply {:?} does not say what was done",
+            text.chars().take(40).collect::<String>()
+        )]
+    }
 }
 
 /// How many identical calls make an episode a loop.
@@ -148,6 +179,25 @@ mod tests {
             tool: tool.into(),
             arguments,
         }
+    }
+
+    #[test]
+    fn a_closing_must_state_the_answer() {
+        let instance =
+            instances(splinter_sdk::model::seed::draw().value(), Split::Train, 1).remove(0);
+        let crate::tasks::Check::Answer { value, .. } = &instance.check else {
+            unreachable!("the first draw is a read")
+        };
+        let call = json!({ "content": null, "tool_calls": [{ "function": { "name": "shell" } }] });
+        let say = |t: &str| json!({ "content": t });
+        assert!(
+            closing_flags(&instance, &[call.clone(), say(&format!("It is {value}."))]).is_empty()
+        );
+        assert!(!closing_flags(&instance, &[call.clone(), say("####")]).is_empty());
+        assert!(
+            !closing_flags(&instance, &[call]).is_empty(),
+            "no closing at all"
+        );
     }
 
     #[test]

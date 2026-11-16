@@ -215,6 +215,47 @@ pub fn alone(rng: &mut SplitMix64, w: &Words, step: &str, closing: &str) -> Stri
     format!("{open}{step}. {closing}")
 }
 
+/// `request` with about half of its training-vocabulary words (verbs, nouns
+/// of a value, connectives; never a path, key, file name or glue word)
+/// replaced by made-up words.
+pub fn garble(rng: &mut SplitMix64, request: &str) -> String {
+    let vocabulary = words(&TRAIN);
+    let mut out = String::with_capacity(request.len());
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String, rng: &mut SplitMix64| {
+        let lower = word.to_lowercase();
+        if vocabulary.contains(&lower) && rng.coin() {
+            let made = crate::world::word(rng, 2).to_lowercase();
+            if word.starts_with(|c: char| c.is_uppercase()) {
+                out.push_str(&capital(&made));
+            } else {
+                out.push_str(&made);
+            }
+        } else {
+            out.push_str(word);
+        }
+        word.clear();
+    };
+    for c in request.chars() {
+        if c.is_ascii_alphabetic() {
+            word.push(c);
+        } else {
+            // A word that is part of a path or a name (`notes/x.cfg`,
+            // `./calc`) is never replaced.
+            if matches!(c, '/' | '.' | '_' | '-') && !word.is_empty() {
+                word.push(c);
+                out.push_str(&word);
+                word.clear();
+                continue;
+            }
+            flush(&mut word, &mut out, rng);
+            out.push(c);
+        }
+    }
+    flush(&mut word, &mut out, rng);
+    out
+}
+
 /// Every word of a vocabulary, for checking two are disjoint.
 #[must_use]
 pub fn words(w: &Words) -> Vec<String> {
@@ -240,6 +281,22 @@ mod tests {
 
     /// Words both vocabularies may share: grammar glue and the file name.
     const GLUE: [&str; 6] = ["the", "answer", "txt", "file", "all", "are"];
+
+    #[test]
+    fn garbling_keeps_paths_keys_and_destinations() {
+        let mut rng = SplitMix64::new(splinter_sdk::model::seed::draw().value());
+        let request = "Please read the value of zonmor in notes/brim.cfg and then write it to results/final.txt.";
+        let g = garble(&mut rng, request);
+        for kept in [
+            "zonmor",
+            "notes/brim.cfg",
+            "results/final.txt",
+            " of ",
+            " in ",
+        ] {
+            assert!(g.contains(kept), "{kept} in {g}");
+        }
+    }
 
     #[test]
     fn the_held_out_vocabulary_shares_no_word_with_training() {

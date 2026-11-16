@@ -213,10 +213,13 @@ fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
         .join("\n");
     let path = crate::skills::data_path(rng, format, false, &[]);
     let text = match rng.below(4) {
-        3 => format!(
-            "Read the number in {path}.\nread_file {}\n",
-            to_json(&serde_json::json!({ "path": path }))
-        ),
+        3 => {
+            let (name, _) = &entries[rng.below(entries.len())];
+            format!(
+                "Read the number of {name} in {path}.\nread_file {}\n",
+                to_json(&serde_json::json!({ "path": path }))
+            )
+        }
         0 => {
             let mut text = format!("{listing}\n");
             for _ in 0..3 {

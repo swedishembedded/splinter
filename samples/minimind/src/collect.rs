@@ -254,7 +254,8 @@ fn episode_work(
         .iter()
         .filter_map(|x| x.reply.clone().ok())
         .collect();
-    let flags = crate::admission::flags(instance, &crate::admission::calls(&replies));
+    let mut flags = crate::admission::flags(instance, &crate::admission::calls(&replies));
+    flags.extend(crate::admission::closing_flags(instance, &replies));
     let admitted = verdict.passed && flags.is_empty();
     let outcome = json!({
         "instance": instance.id, "passed": verdict.passed, "admitted": admitted, "flags": flags, "reason": verdict.reason,

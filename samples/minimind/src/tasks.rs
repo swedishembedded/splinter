@@ -65,6 +65,13 @@ impl Split {
         }
     }
 
+    /// Whether the split's instances become training material (the probes'
+    /// do not).
+    #[must_use]
+    pub fn trained(self) -> bool {
+        !matches!(self, Self::Dev | Self::Heldout)
+    }
+
     /// The split's name.
     #[must_use]
     pub fn name(self) -> &'static str {
@@ -110,11 +117,20 @@ pub fn instances(seed: u64, split: Split, count: u32) -> Vec<Instance> {
         .map(|i| {
             let skill = SKILLS[i % SKILLS.len()];
             let d = crate::skills::draw(&mut rng, skill, split == Split::Heldout);
+            // What is trained on sometimes words its request in made-up
+            // words, so the agent finds the files, keys and destination by
+            // where they stand, not by the verbs around them; the probes
+            // keep their wording.
+            let instruction = if split.trained() && rng.below(3) == 0 {
+                crate::phrasing::garble(&mut rng, &d.instruction)
+            } else {
+                d.instruction
+            };
             Instance {
                 id: format!("{}-{i:05}-{}", split.name(), skill.name()),
                 skill,
                 split,
-                instruction: d.instruction,
+                instruction,
                 files: d.files,
                 executables: d.executables,
                 plan: d.plan,

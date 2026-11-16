@@ -194,7 +194,8 @@ pub fn data_path(rng: &mut SplitMix64, format: Format, held_out: bool, taken: &[
         } else {
             TRAINING_EXTENSIONS[rng.below(TRAINING_EXTENSIONS.len())]
         };
-        let p = format!("{dir}{}.{extension}", word(rng, 1).to_lowercase());
+        let syllables = 1 + rng.below(2);
+        let p = format!("{dir}{}.{extension}", word(rng, syllables).to_lowercase());
         if !taken.contains(&p) {
             return p;
         }
