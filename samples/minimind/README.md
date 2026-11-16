@@ -69,8 +69,12 @@ and bench's examination.
   `--bench-anchor-seed-file`; bench draws them when they do not exist), the
   verdict signing key (`--bench-key`, made once with `./bench keygen --out
   KEY`) and the sven binary bench runs the agent with (`--sven-bin`). Keep the
-  seed files and the key outside the run directory. Without `--bench` the run
-  says that it makes no promotion claim.
+  seed files and the key outside the run directory. Bench generates the exam
+  into `--bench-exams-dir` (relative to its checkout, default
+  `.bench-data/exams`) and refuses a directory that resolves outside the
+  checkout, as one behind a symbolic link does; name another directory inside
+  the checkout then (for example `.tmp/splinter-exams`). Without `--bench` the
+  run says that it makes no promotion claim.
 
 ## The one command
 

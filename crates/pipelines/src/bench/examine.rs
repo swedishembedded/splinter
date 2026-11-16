@@ -129,16 +129,28 @@ pub struct Bench {
     pub serving_build: String,
     /// Episodes a sitting runs at once.
     pub concurrency: u32,
+    /// Where bench generates the exam and the anchor, relative to the
+    /// checkout ([`DEFAULT_EXAMS`] unless set). Bench names fixture trees
+    /// relative to its checkout and refuses a directory that resolves
+    /// outside it, as one behind a symbolic link does.
+    pub exams: PathBuf,
 }
 
-/// The exam collection and the anchor, inside bench's own data directory.
-const EXAM: &str = ".bench-data/exams/workspace-tools";
-const ANCHOR: &str = ".bench-data/exams/workspace-tools-anchor";
+/// Bench's own place for generated exams, inside its checkout.
+pub const DEFAULT_EXAMS: &str = ".bench-data/exams";
 
-/// The anchor collection as `bench verdict --anchor` names it.
+/// The exam collection's name.
+const EXAM: &str = "workspace-tools";
+
+/// The anchor collection's name, as `bench verdict --anchor` names it.
 const ANCHOR_NAME: &str = "workspace-tools-anchor";
 
 impl Bench {
+    /// The collection `name` in the exams directory.
+    fn collection(&self, name: &str) -> PathBuf {
+        self.dir.join(&self.exams).join(name)
+    }
+
     fn run(&self, what: &str, key: &str, command: &mut Command) -> anyhow::Result<()> {
         let status = command
             .current_dir(&self.dir)
@@ -184,15 +196,20 @@ impl Bench {
     /// Generates the exam and the anchor from their seed files; bench admits
     /// the same collection for the same seed, so this is safe to repeat.
     fn generate(&self) -> anyhow::Result<()> {
-        for (target, seed) in [
-            ("workspace-tools/exam/generate", &self.seed_file),
-            ("workspace-tools/anchor/generate", &self.anchor_seed_file),
+        for (target, seed, collection) in [
+            ("workspace-tools/exam/generate", &self.seed_file, EXAM),
+            (
+                "workspace-tools/anchor/generate",
+                &self.anchor_seed_file,
+                ANCHOR_NAME,
+            ),
         ] {
             let seed = format!("WT_SEED_FILE={}", seed.display());
+            let into = format!("WT_INTO={}", self.collection(collection).display());
             self.run(
                 "generate the exam",
                 "",
-                Command::new("make").args([target, &seed]),
+                Command::new("make").args([target, &seed, &into]),
             )?;
         }
         Ok(())
@@ -221,8 +238,8 @@ impl Examiner for Bench {
             anchor: root.join("anchor"),
         };
         for (suite, collection, job) in [
-            ("exam", EXAM, &sitting.exam),
-            ("anchor", ANCHOR, &sitting.anchor),
+            ("exam", self.collection(EXAM), &sitting.exam),
+            ("anchor", self.collection(ANCHOR_NAME), &sitting.anchor),
         ] {
             self.run(
                 &format!("run the {suite} for {}", target.model),
