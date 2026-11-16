@@ -35,6 +35,12 @@ Traces sampled from the answer-trained adapter gave no gain over it. Unproven hy
 rewards lucky shortcuts and teaches under-verification. Any compactor (CR1-CR5) must beat answer-only training, not only raw
 traces, and selection by length alone is suspect. Pilot files: `~/project/shared/tmp/lsp` (harness `lsp.py`).
 
+Execution-trace pilot (2026-11-16, learner-side, lane T, brain c37047f52): interpreter line traces as `reasoning_content`
+(splinter 48cb611e3, `exec-trace`, deterministic) LOWERED thinking-on DEV pass@1 vs answer-only (raw 0.691, sentences 0.715,
+answer-only 0.778; tokens per correct 57-60 vs 492; format failures 0.7% vs 3.4%). Line-level state omits library semantics,
+where most errors are; 53-68% of programs are one line. Untested next: interpreter-checked sub-expression values (library
+semantics spelled out). CR4 must beat answer-only, not only raw traces.
+
 ## Questions (each one registered before its run, judged by the separate examiner on a sealed exam)
 
 - CR1: does training on compacted verified traces beat training on raw verified traces (STaR / rejection sampling) at equal

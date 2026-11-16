@@ -21,3 +21,8 @@ of the base model's own reasoning traces whose final answer the interpreter conf
 reasoning~\cite{zelikman2022star} and self-training on verified samples~\cite{singh2023rest}, lowered thinking-enabled accuracy
 to 0.31--0.34 at each of three learning rates, while the trainer's own held-out loss improved. These are pilot numbers on
 in-distribution development tasks, not examined results; they fixed the choice of supervision for the registered run.
+A second learner-side pilot, run after RSI5 with the same budget per arm, supervised the reasoning with the interpreter's own
+execution trace (each executed line with the values it changed and what it printed, deterministic and correct by construction),
+raw or rendered as sentences. Both lowered thinking-enabled accuracy against answer-only training (0.69 and 0.72 against 0.78)
+while cutting the tokens per correct answer about eightfold; the trace records what each line produced, not how a library call
+computes it, and most remaining errors are of that kind (formatting, mathematical functions, patterns).
