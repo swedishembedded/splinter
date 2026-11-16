@@ -81,6 +81,52 @@ pub struct ToolSig {
     pub params: Vec<String>,
 }
 
+/// `value` as the template's `tojson` writes it where the model is trained
+/// and served: Python's `json.dumps` defaults (`", "` between elements,
+/// `": "` after a key, non-ASCII kept), members in their order. The served
+/// chat template renders call arguments this way, so the pretraining text
+/// must too, or the model learns one spelling and is shown another.
+#[must_use]
+pub fn to_json(value: &serde_json::Value) -> String {
+    use serde::Serialize as _;
+    struct Spaced;
+    impl serde_json::ser::Formatter for Spaced {
+        fn begin_array_value<W: ?Sized + std::io::Write>(
+            &mut self,
+            writer: &mut W,
+            first: bool,
+        ) -> std::io::Result<()> {
+            if first {
+                Ok(())
+            } else {
+                writer.write_all(b", ")
+            }
+        }
+        fn begin_object_key<W: ?Sized + std::io::Write>(
+            &mut self,
+            writer: &mut W,
+            first: bool,
+        ) -> std::io::Result<()> {
+            if first {
+                Ok(())
+            } else {
+                writer.write_all(b", ")
+            }
+        }
+        fn begin_object_value<W: ?Sized + std::io::Write>(
+            &mut self,
+            writer: &mut W,
+        ) -> std::io::Result<()> {
+            writer.write_all(b": ")
+        }
+    }
+    let mut out = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut out, Spaced);
+    // Writing a JSON value into memory cannot fail.
+    let _ = value.serialize(&mut ser);
+    String::from_utf8(out).unwrap_or_default()
+}
+
 /// One turn of a conversation.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Turn {
@@ -159,7 +205,10 @@ impl Template {
                         }
                         body.push_str(&format!(
                             "{}{{\"name\": \"{}\", \"arguments\": {}}}{}",
-                            self.call_open, call.name, call.arguments, self.call_close
+                            self.call_open,
+                            call.name,
+                            to_json(&call.arguments),
+                            self.call_close
                         ));
                     }
                     (&self.assistant, body)
@@ -168,6 +217,59 @@ impl Template {
             out.push_str(&format!("{open}{body}{}\n", self.end));
         }
         out
+    }
+
+    /// OpenAI-shaped `messages` offered `tools`, written as the chat template
+    /// writes them (the call arguments given as JSON text or as an object).
+    #[must_use]
+    pub fn render_messages(
+        &self,
+        messages: &[serde_json::Value],
+        tools: &[serde_json::Value],
+    ) -> String {
+        let sigs: Vec<ToolSig> = tools
+            .iter()
+            .map(|t| ToolSig {
+                name: t["function"]["name"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                params: t["function"]["parameters"]["properties"]
+                    .as_object()
+                    .map(|p| p.keys().cloned().collect())
+                    .unwrap_or_default(),
+            })
+            .collect();
+        let text = |m: &serde_json::Value| m["content"].as_str().unwrap_or_default().to_string();
+        let turns: Vec<Turn> = messages
+            .iter()
+            .map(|m| match m["role"].as_str().unwrap_or_default() {
+                "system" => Turn::System(text(m)),
+                "user" => Turn::User(text(m)),
+                "tool" => Turn::Tool(text(m)),
+                _ => Turn::Assistant {
+                    text: text(m),
+                    calls: m["tool_calls"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .map(|c| Call {
+                            name: c["function"]["name"]
+                                .as_str()
+                                .unwrap_or_default()
+                                .to_string(),
+                            arguments: match &c["function"]["arguments"] {
+                                serde_json::Value::String(s) => {
+                                    serde_json::from_str(s).unwrap_or_else(|_| s.clone().into())
+                                }
+                                other => other.clone(),
+                            },
+                        })
+                        .collect(),
+                },
+            })
+            .collect();
+        self.render(&sigs, &turns)
     }
 
     /// The format as a chat template over OpenAI-shaped `messages` and
@@ -231,7 +333,7 @@ mod tests {
                 text: String::new(),
                 calls: vec![Call {
                     name: "shell".into(),
-                    arguments: json!({ "shell_command": "ls" }),
+                    arguments: json!({ "shell_command": "ls", "workdir": "a b" }),
                 }],
             },
             Turn::Tool("a.txt".into()),
@@ -249,7 +351,7 @@ mod tests {
             text,
             "<|system|>Be brief.\nTools: shell(shell_command,workdir) read_file(limit,path)<|end|>\n\
              <|user|>hi<|end|>\n\
-             <|assistant|><tool_call>{\"name\": \"shell\", \"arguments\": {\"shell_command\":\"ls\"}}</tool_call><|end|>\n\
+             <|assistant|><tool_call>{\"name\": \"shell\", \"arguments\": {\"shell_command\": \"ls\", \"workdir\": \"a b\"}}</tool_call><|end|>\n\
              <|tool|>a.txt<|end|>\n<|assistant|>One file.<|end|>\n"
         );
     }
@@ -264,15 +366,20 @@ mod tests {
                 json!({ "type": "function", "function": { "name": s.name, "parameters": { "properties": props } } })
             })
             .collect();
-        let messages = json!([
+        let messages: serde_json::Value = json!([
             { "role": "system", "content": "Be brief." },
             { "role": "user", "content": "hi" },
             { "role": "assistant", "content": null, "tool_calls": [{ "id": "c0", "type": "function",
-              "function": { "name": "shell", "arguments": { "shell_command": "ls" } } }] },
+              "function": { "name": "shell", "arguments": { "shell_command": "ls", "workdir": "a b" } } }] },
             { "role": "tool", "content": "a.txt" },
             { "role": "assistant", "content": "One file." },
         ]);
         let mut env = minijinja::Environment::new();
+        // The served template's `tojson` is Python's `json.dumps`, as the
+        // server that renders it registers it.
+        env.add_filter("tojson", |v: minijinja::Value| -> String {
+            to_json(&serde_json::to_value(&v).unwrap_or_default())
+        });
         let source = t.jinja();
         env.add_template("chat", &source).unwrap();
         let rendered = env
@@ -281,6 +388,15 @@ mod tests {
             .render(minijinja::context! { messages => messages, tools => wire_tools, add_generation_prompt => false })
             .unwrap();
         assert_eq!(rendered, t.render(&tools(), &turns()));
+        assert_eq!(
+            t.render_messages(messages.as_array().unwrap(), &wire_tools),
+            rendered,
+            "a recorded conversation is written as text exactly as the served template writes it"
+        );
+        assert!(
+            rendered.contains(r#""arguments": {"shell_command": "ls", "workdir": "a b"}}"#),
+            "{rendered}"
+        );
         let no_system = env
             .get_template("chat")
             .unwrap()

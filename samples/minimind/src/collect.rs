@@ -414,17 +414,7 @@ impl Run<'_> {
             .map(|i| (format!("{name}/{}", i.id), i))
             .collect();
         let episodes = self.episodes(name, jobs, actor)?;
-        let inputs: Vec<(String, Digest)> = episodes
-            .iter()
-            .map(|c| {
-                (
-                    c.unit.clone(),
-                    c.output("outcome")
-                        .cloned()
-                        .unwrap_or_else(|| Digest::of(b"")),
-                )
-            })
-            .collect();
+        let inputs = episode_inputs(&episodes);
         let refs: Vec<(&str, &Digest)> = inputs.iter().map(|(n, d)| (n.as_str(), d)).collect();
         let key = self.key(&self.agent_slice(), name, &refs, recipe::GATHER, &[]);
         let rel = format!("data/{name}.jsonl");
@@ -543,6 +533,22 @@ impl Run<'_> {
         write!(self.out, "{shown}")?;
         Ok(commit)
     }
+}
+
+/// What a stage reading `episodes` depends on: each one's outcome and its
+/// records (an accepted episode's records can change while its outcome
+/// stays, when the way records are written changes).
+#[must_use]
+pub fn episode_inputs(episodes: &[Commit]) -> Vec<(String, Digest)> {
+    let mut inputs = Vec::new();
+    for c in episodes {
+        for output in ["outcome", "records"] {
+            if let Some(d) = c.output(output) {
+                inputs.push((format!("{}#{output}", c.unit), d.clone()));
+            }
+        }
+    }
+    inputs
 }
 
 /// The files of one stage's episodes, from their tree while it exists and

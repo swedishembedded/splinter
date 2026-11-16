@@ -50,6 +50,26 @@ managed brain with `--serve-adapters` refuses a store with no adapter base; seed
 `--device gpuN` alone leaves no budget for `init_model`'s host work; NVRTC must be on the brain
 process's library path (prepended, or Vulkan enumeration loses the cards).
 
+## Levers (2026-11-16, smoke, seed 7, gpu3, brain 16c2db09e; development probes of 12)
+
+Measured one at a time, each on top of the one before, in one run directory (the ledger recomputes only
+what a change reaches). Pretraining 600 x 64 x 512 unless said.
+
+| Lever | pretrained | sft | improved | own episodes verified | Note |
+|---|---|---|---|---|---|
+| pass-2 settings, brain d84390ff5 (300 x 128 x 256 pretrain, 1500-step chat SFT) | 0 | 1 | - | 0/96 | baseline L0, 13.5 min |
+| new brain, 1500 x 64 x 512 pretrain | 4 | 0 | - | 0/96 | 25 min: over the smoke budget |
+| arguments spelled as the served template does (knowledge 159) | 1 | 0 | 0 | 3/96 | |
+| tokenizer without digits (`tokenizer.split_digits`) | 1 | 0 | - | 0/96 | no change alone |
+| copy drills in the world (`world.recall` 20000) | 3 | 0 | - | 0/96 | |
+| chat SFT at lr 1e-4, 1000 steps | 3 | 0 | - | 0/96 | the chat objective, not its rate (knowledge 160) |
+| SFT as text (`chat_training.as_text`, 400 x 32 x 1024) | 3 | 3 | 0 (chat improve) | 27/96 | |
+| improvement as text too, own verified + 1:1 rehearsal, 40 x 8 x 1024 | 3 | 3 | 4 | 27/96 | 11.8 min end to end |
+
+What it still cannot do: copy a file name or a code it has not seen often (combine and lookup 0 of 4
+throughout). Pretraining throughput is about 50k tok/s at any batch from 8 x 1024 to 128 x 1024 on this
+model (sweep through `brain/train pretrain`, 20 steps each).
+
 ## Open
 
 - sven: before the compact profile, an embedded engine with `agent.system_prompt` set still sent
@@ -65,7 +85,7 @@ process's library path (prepended, or Vulkan enumeration loses the cards).
   installed from-scratch checkpoint with tool calls. Then `ServedBrain` submits them and the model
   stages run for real; a second architecture (a tiny `qwen3`) is a configuration entry once brain
   can make it from scratch.
-- Next: run bench's exam on the improved and fine-tuned checkpoints; more model or data for copying
-  values; the default and 64m profiles on the card.
+- Brain: `full_train` of an Ouro from scratch degrades context use (knowledge 160); the sample trains its
+  chat stages as text until it is fixed. Served pretraining stays near 50k tok/s across batch sizes.
 - Not yet run: the bench examination against a real exam; GRPO as a selectable improvement method
   (needs behaviour log-probabilities from the served model); episodes in parallel.

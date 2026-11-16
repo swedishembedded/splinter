@@ -174,7 +174,7 @@ pub fn status(commits: &[Commit]) -> String {
 /// # Errors
 /// The ledger cannot be read or the report written.
 pub fn write(run: &mut crate::stages::Run<'_>, labels: &[String]) -> anyhow::Result<()> {
-    let commits = run.ledger().commits()?;
+    let commits = run.this_run.clone();
     let text = markdown(&commits, labels);
     let path = run.path("report.md");
     crate::stages::write(&path, &text)?;

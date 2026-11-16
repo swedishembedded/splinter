@@ -50,7 +50,7 @@ impl Recipe {
 /// the tool results as rendered), the held-out split and the tokenizer text.
 pub const WORLD: Recipe = Recipe {
     stage: "world",
-    version: 2,
+    version: 3,
 };
 
 /// The task families, their instance draw and the Harbor export.
@@ -63,7 +63,7 @@ pub const TASKS: Recipe = Recipe {
 /// the verifier and the records an accepted episode writes.
 pub const EPISODE: Recipe = Recipe {
     stage: "episode",
-    version: 2,
+    version: 3,
 };
 
 /// Gathering accepted episodes into a dataset.
@@ -158,7 +158,7 @@ mod tests {
     }
 
     const PINNED: [&str; 3] = [
-        "world (WORLD, EPISODE): blake3:c9260a2e3856b779ae6ee607727e23b6803c4ee48b4c68d906bf2cc0b9db443f",
+        "world (WORLD, EPISODE): blake3:6dceb01037c69ff6eb4edfc1569a260cf96730d843925a2146c6de8f39f97e7d",
         "template (WORLD, CHECKPOINT): blake3:354117630131a85c444d649decf8b227f76e57221451ea66e3cd18ede9066edc",
         "tasks (TASKS): blake3:2ec7cb549832048780dbdd54f9733d13965b8a0ff28d18d882fe1de6e8620f09",
     ];

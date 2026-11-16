@@ -85,6 +85,7 @@ fn smoke() -> Config {
     config.tasks.explore = 8;
     config.tasks.probes = 4;
     config.world.trajectories = 6;
+    config.world.recall = 20;
     config
 }
 

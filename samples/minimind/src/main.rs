@@ -53,10 +53,6 @@ usage: splinter-minimind <run|status> [options]
   --min-gain X           the gain a promotion must show (default 0.05)
 ";
 
-/// Sequences the started brain decodes together: as many as episodes run
-/// at once.
-const BRAIN_SLOTS: u32 = 16;
-
 /// The smallest gain a promotion must show, unless given.
 const DEFAULT_MIN_GAIN: f64 = 0.05;
 
@@ -238,7 +234,8 @@ fn run(
                 // the CPU schedulable beside it.
                 device: Some(format!("{device},cpu")),
                 backend: Some("cuda".into()),
-                max_batch: Some(BRAIN_SLOTS),
+                // As many sequences decoded together as episodes run at once.
+                max_batch: Some(config.agent.concurrency),
                 // A from-scratch run trains whole checkpoints, never adapters.
                 serve_adapters: false,
             };

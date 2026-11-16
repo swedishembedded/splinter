@@ -79,6 +79,9 @@ pub struct Run<'a> {
     pub out: &'a mut dyn Write,
     /// The template the model is made with.
     pub template: Template,
+    /// The units this run committed or reused, in order: what the report
+    /// describes (the ledger also holds units of earlier settings).
+    pub(crate) this_run: Vec<Commit>,
     pub(crate) runtime: tokio::runtime::Runtime,
 }
 
@@ -108,6 +111,7 @@ impl<'a> Run<'a> {
             examiner,
             out,
             template: Template::default(),
+            this_run: Vec::new(),
             runtime: tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()?,
@@ -195,6 +199,7 @@ impl<'a> Run<'a> {
             "[{how:>6}] {unit}{took}: {}",
             one_line(&ran.commit.summary)
         )?;
+        self.this_run.push(ran.commit.clone());
         Ok(ran.commit)
     }
 
@@ -518,9 +523,17 @@ impl<'a> Run<'a> {
             Stage::Sft => (Objective::ChatFull, self.config.sft.clone()),
             Stage::Improve => (Objective::ChatFull, self.config.improve.clone()),
         };
+        // A chat stage trained as text: the conversations rendered in the
+        // template, every token supervised.
+        let as_text = objective == Objective::ChatFull && self.config.chat_training.as_text;
+        let objective = if as_text {
+            Objective::Pretrain
+        } else {
+            objective
+        };
         let spec = self.model(label)?;
         let key = self.key(
-            &json!({ "model": spec, "budget": budget }),
+            &json!({ "model": spec, "budget": budget, "as_text": as_text, "template": self.template }),
             &unit,
             &[("base", &base_digest), ("data", data.0)],
             recipe::TRAIN,
@@ -549,11 +562,20 @@ impl<'a> Run<'a> {
                 }
                 None => None,
             };
+            // Derived from the data and settings in the key: no output.
+            let data_path = if as_text {
+                let text = run.path(&format!("{}.text.jsonl", data.1.trim_end_matches(".jsonl")));
+                let records = std::fs::read_to_string(run.path(data.1))?;
+                write(&text, &crate::sequence::conversations_as_text(&run.template, &records)?)?;
+                text
+            } else {
+                run.path(data.1)
+            };
             let trained = run.brain.train(
                 &TrainRequest {
                     objective,
                     base: &base_checkpoint,
-                    data: &run.path(data.1),
+                    data: &data_path,
                     held_out: held_out.as_deref(),
                     budget: &budget,
                     seed: run.seed,
@@ -691,7 +713,7 @@ pub fn run_all(run: &mut Run<'_>) -> anyhow::Result<()> {
     let labels: Vec<String> = run.config.models.keys().cloned().collect();
     let mut failures = Vec::new();
     for label in &labels {
-        if let Err(e) = model_stages(run, label, &world, &demonstrations) {
+        if let Err(e) = crate::sequence::model_stages(run, label, &world, &demonstrations) {
             writeln!(run.out, "[failed] {label}: {e:#}")?;
             failures.push(format!("{label}: {e:#}"));
         }
@@ -702,96 +724,4 @@ pub fn run_all(run: &mut Run<'_>) -> anyhow::Result<()> {
     } else {
         bail!("{}", failures.join("; "))
     }
-}
-
-/// The model stages of the model labelled `label`.
-fn model_stages(
-    run: &mut Run<'_>,
-    label: &str,
-    world: &Commit,
-    demonstrations: &Commit,
-) -> anyhow::Result<()> {
-    let corpus = world
-        .output("train")
-        .context("the world has no training corpus")?
-        .clone();
-    let init = run.checkpoint(label, world)?;
-    run.probe(&format!("{label}/init"), (&init.0, &init.1))?;
-    let pretrained = run.train(
-        Stage::Pretrain,
-        label,
-        "pretrain",
-        (&init.0, &init.1),
-        (&corpus, "world/train.jsonl"),
-    )?;
-    run.probe(
-        &format!("{label}/pretrained"),
-        (&pretrained.0, &pretrained.1),
-    )?;
-    let sat_pretrained = run.sit(label, "pretrained", (&pretrained.0, &pretrained.1), false)?;
-    let demos = demonstrations
-        .output("records")
-        .context("the demonstrations have no records")?
-        .clone();
-    let sft = run.train(
-        Stage::Sft,
-        label,
-        "sft",
-        (&pretrained.0, &pretrained.1),
-        (&demos, "data/demonstrate.jsonl"),
-    )?;
-    run.probe(&format!("{label}/sft"), (&sft.0, &sft.1))?;
-    let sat_sft = run.sit(label, "sft", (&sft.0, &sft.1), false)?;
-    run.judge(
-        label,
-        "scratch",
-        sat_pretrained.as_ref(),
-        sat_sft.as_ref(),
-        None,
-    )?;
-    let (explored, episodes) = run.explore(label, (&sft.0, &sft.1))?;
-    let accepted = explored.summary["accepted"].as_u64().unwrap_or(0);
-    if accepted == 0 {
-        writeln!(
-            run.out,
-            "[ skip ] {label}/improve: no verified episode of its own to learn from"
-        )?;
-        return Ok(());
-    }
-    let mixed = run.experience(label, "improve", &episodes, demonstrations, false)?;
-    let improved = train_on(run, label, "improve", (&sft.0, &sft.1), &mixed)?;
-    run.probe(&format!("{label}/improved"), (&improved.0, &improved.1))?;
-    let sat_improved = run.sit(label, "improved", (&improved.0, &improved.1), false)?;
-    // The spurious-reward control arm exists for the examination alone.
-    let sat_control = if run.examiner.is_some() {
-        let mixed = run.experience(label, "control", &episodes, demonstrations, true)?;
-        let control = train_on(run, label, "control", (&sft.0, &sft.1), &mixed)?;
-        run.sit(label, "control", (&control.0, &control.1), true)?
-    } else {
-        None
-    };
-    run.judge(
-        label,
-        "experience",
-        sat_sft.as_ref(),
-        sat_improved.as_ref(),
-        sat_control.as_ref(),
-    )?;
-    Ok(())
-}
-
-/// An improvement run named `name` from `base` on the mix `data` made.
-fn train_on(
-    run: &mut Run<'_>,
-    label: &str,
-    name: &str,
-    base: (&Commit, &Checkpoint),
-    data: &Commit,
-) -> anyhow::Result<(Commit, Checkpoint)> {
-    let digest = data
-        .output("records")
-        .context("the mix has no records")?
-        .clone();
-    let rel = format!("data/{label}/{name}.jsonl");
-    run.train(Stage::Improve, label, name, base, (&digest, &rel))
 }

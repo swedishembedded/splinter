@@ -438,10 +438,31 @@ impl ServedBrain {
                 }
             },
         )
-        .map_err(|e| anyhow!("brain/train {action}: {e}"))?;
+        .map_err(|e| anyhow!("brain/train {action}: {e}{}", self.server_output()))?;
         let store = endpoints.artifact_store().map_err(|e| anyhow!("{e}"))?;
         let checkpoint = installed(&report, store, out)?;
         Ok((report, checkpoint))
+    }
+
+    /// The managed server's last lines, for a failure the server explains in
+    /// its own output; empty for a given server.
+    fn server_output(&self) -> String {
+        let Ok(connection) = self.connection.lock() else {
+            return String::new();
+        };
+        match &*connection {
+            Connection::Managed {
+                brain: Some(brain), ..
+            } => {
+                let recent = brain.recent_output();
+                if recent.trim().is_empty() {
+                    String::new()
+                } else {
+                    format!("\nthe brain server's last lines:\n{recent}")
+                }
+            }
+            _ => String::new(),
+        }
     }
 
     fn publish(&self, file: &Path) -> anyhow::Result<String> {

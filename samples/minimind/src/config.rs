@@ -24,10 +24,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Profile {
-    /// About a million parameters on the CPU in minutes: the tests' and CI's
+    /// About two million parameters on one card in about a quarter of an hour:
+    /// the quick check, and (shrunk) the acceptance specs'
     /// profile.
     Smoke,
-    /// About fifteen million parameters, sized for a fast turnaround.
+    /// About five million parameters (vocabulary 4096, four loop passes) and
+    /// longer pretraining: the showcase.
     Default,
     /// About sixty-four million parameters; needs a GPU.
     #[serde(rename = "64m")]
@@ -133,6 +135,17 @@ pub struct AgentLimits {
     pub concurrency: u32,
 }
 
+/// How the chat stages (fine-tune, improvement) train.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChatTraining {
+    /// Train on each conversation rendered as text in the template, every
+    /// token supervised (brain's raw-text objective, `batch` rows of `block`
+    /// tokens a step), instead of brain's chat fine-tune, which supervises
+    /// only the replies.
+    pub as_text: bool,
+}
+
 /// How the vocabulary is learned.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -187,6 +200,8 @@ pub struct Config {
     pub pretrain: TrainBudget,
     /// Supervised fine-tuning on the expert's demonstrations.
     pub sft: TrainBudget,
+    /// How the chat stages train.
+    pub chat_training: ChatTraining,
     /// Training on the model's own verified episodes.
     pub improve: TrainBudget,
     /// The improvement's data mix.
@@ -224,19 +239,19 @@ impl Config {
         let (model, world, tasks, pretrain, sft, improve) = match profile {
             Profile::Smoke => (
                 ouro(256, 4, 2, 4, 1024, 2048),
-                world(200, 4_000, 1_500, 1_000, 6_000, 0),
+                world(200, 4_000, 1_500, 1_000, 6_000, 20_000),
                 tasks(1_600, 96, 12),
-                budget(300, 128, 2e-3, 256),
-                budget(1_500, 4, 7e-4, 1024),
-                budget(300, 4, 3e-4, 1024),
+                budget(600, 64, 2e-3, 512),
+                budget(400, 32, 1e-3, 1024),
+                budget(40, 8, 3e-4, 1024),
             ),
             Profile::Default => (
                 ouro(256, 4, 4, 4, 4096, 2048),
-                world(60, 20_000, 6_000, 3_000, 3_000, 0),
-                tasks(400, 200, 8),
-                budget(3_000, 16, 1e-3, 512),
-                budget(600, 8, 3e-4, 2048),
-                budget(300, 8, 1e-4, 2048),
+                world(400, 20_000, 6_000, 3_000, 12_000, 60_000),
+                tasks(3_000, 384, 12),
+                budget(2_400, 64, 1e-3, 512),
+                budget(800, 32, 5e-4, 1024),
+                budget(80, 8, 2e-4, 1024),
             ),
             Profile::M64 => (
                 ouro(512, 8, 4, 8, 8192, 2048),
@@ -251,19 +266,18 @@ impl Config {
             profile,
             models: [("ouro".to_string(), model)].into_iter().collect(),
             world,
-            tokenizer: TokenizerText {
-                split_digits: false,
-            },
+            tokenizer: TokenizerText { split_digits: true },
             tasks,
             pretrain,
             sft,
+            chat_training: ChatTraining { as_text: true },
             improve,
             experience: Experience { rehearsal: 1.0 },
             agent: AgentLimits {
                 max_tool_calls: 8,
                 deadline_secs: 300,
                 max_output_tokens: 256,
-                concurrency: 16,
+                concurrency: if profile == Profile::Smoke { 32 } else { 64 },
             },
             fetch: Vec::new(),
         }

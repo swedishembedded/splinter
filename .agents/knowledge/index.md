@@ -143,3 +143,6 @@ in the same commit.
 | [155](155-a-frontier-program-longer-than-the-training-row-failed-a-whole-lineage.md) | A frontier program longer than the training row failed a whole lineage |
 | [156](156-a-bare-reply-dropped-the-reasoning-so-a-thinking-lineage-could-not-keep-the-trace-it-verified.md) | A bare reply dropped the reasoning, so a thinking lineage could not keep the trace it verified |
 | [157](157-a-run-directory-released-a-moment-ago-looked-held-because-a-forked-child-still-had-the-lock.md) | A run directory released a moment ago looked held, because a forked child still had the lock |
+| [158](158-a-shell-result-s-measured-duration-changed-the-demonstrations-digest-so-a-rerun-retrained-the-fine-tune.md) | A shell result's measured duration changed the demonstrations' digest, so a rerun retrained the fine-tune |
+| [159](159-the-pretraining-text-spelled-tool-call-arguments-compactly-while-the-served-template-spaced-them.md) | The pretraining text spelled tool-call arguments compactly while the served template spaced them |
+| [160](160-brain-s-chat-fine-tune-of-a-from-scratch-ouro-made-it-ignore-its-context-the-raw-text-objective-on-the-same-conversations-did-not.md) | Brain's chat fine-tune of a from-scratch Ouro made it ignore its context; the raw-text objective on the same conversations did not |

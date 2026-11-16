@@ -196,15 +196,39 @@ fn stable_status_line(line: &str) -> std::borrow::Cow<'_, str> {
     .into()
 }
 
-/// Every `(request, reply)` call of an accepted episode as JSON lines.
+/// True when every tool call in `record` has arguments that are a JSON
+/// object: a chat template renders a call's arguments as an object, so a
+/// call a model wrote with broken arguments (which the runtime answered with
+/// an error) cannot be shown to a trainer.
+fn renderable(record: &Value) -> bool {
+    record["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .all(|m| {
+            m["tool_calls"].as_array().into_iter().flatten().all(|c| {
+                c["function"]["arguments"]
+                    .as_str()
+                    .and_then(|a| serde_json::from_str::<Value>(a).ok())
+                    .is_some_and(|a| a.is_object())
+            })
+        })
+}
+
+/// Every `(request, reply)` call of an episode as JSON lines; a call whose
+/// conversation holds a tool call with arguments that are not a JSON object
+/// is left out (see [`renderable`]).
 ///
 /// # Errors
 /// As [`record`], for any call.
 pub fn episode_lines(calls: &[(Value, Value)], episode: &str) -> Result<String, ViewError> {
     let mut out = String::new();
     for (call, (request, reply)) in calls.iter().enumerate() {
-        out.push_str(&record(request, reply, episode, call)?.to_string());
-        out.push('\n');
+        let record = record(request, reply, episode, call)?;
+        if renderable(&record) {
+            out.push_str(&record.to_string());
+            out.push('\n');
+        }
     }
     Ok(out)
 }
@@ -316,6 +340,17 @@ mod tests {
         assert_eq!(
             stable_tool_result("Exit: 2 | Duration: 12.5s"),
             "Exit: 2 | Duration: 0.0s"
+        );
+        let broken = json!({ "role": "assistant", "content": null, "tool_calls": [
+            { "id": "c", "type": "function", "function": { "name": "read_file", "arguments": "{\"path\" \"a\"}" } }] });
+        let request = json!({ "messages": [{ "role": "user", "content": "u" }], "tools": [] });
+        let after = json!({ "messages": [{ "role": "user", "content": "u" }, broken.clone(),
+            { "role": "tool", "tool_call_id": "c", "content": "error: invalid arguments" }], "tools": [] });
+        let done = json!({ "role": "assistant", "content": "ok" });
+        let lines = episode_lines(&[(request, broken), (after, done)], "e").unwrap();
+        assert_eq!(
+            lines, "",
+            "a call with broken arguments, and every record showing it, is left out"
         );
         for kept in [
             "L1:Duration: 4s",

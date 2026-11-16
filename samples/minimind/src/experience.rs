@@ -53,16 +53,7 @@ impl Run<'_> {
             .output("records")
             .context("the demonstrations have no records")?
             .clone();
-        let digests: Vec<(String, Digest)> = episodes
-            .iter()
-            .map(|c| {
-                let d = c
-                    .output("outcome")
-                    .cloned()
-                    .unwrap_or_else(|| Digest::of(b""));
-                (c.unit.clone(), d)
-            })
-            .collect();
+        let digests = crate::collect::episode_inputs(episodes);
         let mut inputs: Vec<(&str, &Digest)> =
             digests.iter().map(|(n, d)| (n.as_str(), d)).collect();
         inputs.push(("demonstrations", &demos));
