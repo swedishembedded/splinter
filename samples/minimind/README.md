@@ -104,8 +104,8 @@ run's manifest afterwards.
 | 5 | `demonstrate/<task>`, `demonstrate` | the expert drives real sven on every training instance; the verifier judges the workspace; accepted episodes become `data/demonstrate.jsonl`, one record per model call | each episode's answer and verdict, then accepted of total |
 | 6 | `<model>/checkpoint` | brain trains a tokenizer on the corpus and makes a random-init checkpoint of the configured architecture | the installed model |
 | 7 | `probe/<model>/init` | the development tasks through sven, and a raw-text continuation | `probe <model>/init: 0/4 development tasks solved`, the text, two example tasks |
-| 8 | `<model>/pretrain`, probe | raw-text pretraining on the corpus, then the probe | steps, first and last loss; the probe |
-| 9 | `<model>/sft`, probe | a full chat fine-tune on the demonstrations, then the probe | the same |
+| 8 | `<model>/pretrain-<i>`, `<model>/pretrain`, `retrieval/<model>/...`, probe | raw-text pretraining on the corpus in `pretrain_segments` segments, each continuing the last; the retrieval probe after random init and every segment (exact copies of 24 held-out values); then the probe | steps and losses; `retrieval ...: copies a code out of a listing x/12, a file name into a call y/12`; the probe |
+| 9 | `<model>/sft`, probe | the fine-tune on the demonstrations (by default each conversation rendered in the template and trained as text, every token supervised: `chat_training.as_text`), then the probe | the same |
 | 10 | `<model>/sit/<stage>` | with `--bench`: the pretrained, fine-tuned and improved checkpoints (and the control arm) each sit bench's sealed exam and its anchor once | - |
 | 11 | `<model>/scratch/verdict` | bench's signed paired verdict, fine-tuned against pretrained | the verdict and the pass rate of each tier, both sides |
 | 12 | `<model>/explore/<task>`, `<model>/explore` | the model itself as a sven agent on fresh instances, through a recording proxy; verified episodes become records | accepted of total |
@@ -114,34 +114,62 @@ run's manifest afterwards.
 | 14 | `<model>/experience/verdict` | bench: the improved model against the fine-tuned one, the control arm beside it | the verdict and the tiers |
 | 15 | `report.md` | written from the ledger; the terminal gets the table across stages | its path and the table |
 
-Measured on the smoke profile, seed 7, one GH200 (gpu3), brain d84390ff5,
-2026-11-16 (`gpu3` run, 32 minutes end to end without the exam):
+## Measured
+
+Seed 7, one GH200 (gpu3), brain 16c2db09e, 2026-11-16. The smoke profile
+(about 13 minutes to the improved checkpoint, plus about 100 seconds per exam
+sitting):
 
 ```text
-[  done] world: bytes=8501052 documents=13300
+$ samples/minimind/run.sh --run-dir RUN --seed SEED --brain-bin BRAIN --device gpu3 \
+    --bench BENCH --bench-seed-file S/exam.seed --bench-anchor-seed-file S/anchor.seed \
+    --bench-key S/verdict.key --bench-exams-dir .tmp/splinter-exams --sven-bin SVEN
+[  done] world: bytes=13208671 documents=33300
 [  done] tasks: dev=12 explore=96 train=1600
 [  done] demonstrate: accepted=1600 episodes=1600 records=5868
-[  done] ouro/checkpoint: arch="ouro" model="local/minimind-ouro-init-7c69a3e524bf"
-  probe ouro/init: 0/12 development tasks solved
-    text  "Velmora is a town by" -> "oultethtethtethteth ... = = = ="
-[  done] ouro/pretrain: first_loss=6.98 last_loss=0.34 seconds=687 steps=600
-  probe ouro/pretrained: 1/12 development tasks solved
-    text  "Velmora is a town by" -> " a forest. Its mayor is Trom Tromsoth. 568 people live in Vethmon"
-[  done] ouro/sft: first_loss=1.43 last_loss=0.11 seconds=834 steps=4000
-  probe ouro/sft: 3/12 development tasks solved
-[  done] ouro/explore: accepted=13 episodes=96 records=40
-[  done] ouro/improve: steps=1000
-  probe ouro/improved: 4/12 development tasks solved
+  probe ouro/sft: 2/12 development tasks solved (combine 0/4, lookup 0/4, count 2/4)
+    PASS dev-00002-count  How many lines of log.txt contain ERROR? Write the number to answer.txt.
+         shell({"shell_command": "grep -c ERROR log.txt || true"})
+         write_file({"path": "answer.txt", "text": "3\n"})
+         say "The answer is 30. It is written to answer.txt."
+         answer.txt: "3"  (answer matches)
+    fail dev-00000-combine  Run ./calc combine on the values stored in inputs/glais.txt and inputs/vaimgler.txt (first...
+         read_file({"path": "inputs/kaim.txt"})
+         write_file({"path": "answer.txt", "text": "412\n"})
+         answer.txt: "412"  (answer.txt holds "412")
+[  done] ouro/explore: accepted=15 episodes=96 records=45
+[  done] ouro/improve/data: control=false episodes=15 own_records=45 rehearsal_records=45 verified=15
+
+ouro: what each checkpoint can do
+  stage       probe   by family                          exam a / b / c / anchor    training
+  init        0/12    combine 0/4, lookup 0/4, count 0/4 not examined
+  pretrained  0/12    combine 0/4, lookup 0/4, count 0/4 0.00 / 0.00 / 0.00 / -     loss 0.624
+  sft         2/12    combine 0/4, lookup 0/4, count 2/4 0.00 / 0.00 / 0.00 / -     loss 0.193
+  improved    3/12    combine 0/4, lookup 0/4, count 3/4 0.00 / 0.00 / 0.00 / -     loss 0.082
+  retrieval while pretraining (listing+path exact): 0M tok: 0+0/24, 20M tok: 0+0/24
+  verdict scratch: Invalid (signature verified, not promoted)
+  verdict experience: Invalid (signature verified, not promoted)
 ```
 
-The fine-tuned model has the protocol (it reads, runs the helper, writes
-`answer.txt`, answers); what it gets wrong is copying names and numbers out
-of tool results. Pretraining ran at about 50k tokens a second (600 steps of
-128 rows of 256 tokens); a sweep of pretraining batch on the card gave
-27k, 56k, 69k, 75k and 77k tokens a second at batch 8, 32, 128, 512 and 2048,
-so 128 is used. On the CPU the same pretraining ran at about 700 tokens a
-second. The whole sequence is also exercised by the acceptance specs against
-a model-service double (`cargo test --release -p splinter-minimind`).
+<!-- perf-number: the measured result of the smoke run above -->
+Times of that run: world 29 s, tasks 17 s, pretraining 354 s at 55k tok/s,
+<!-- perf-number: the measured result of the smoke run above -->
+fine-tune 239 s, improvement 6 s, each exam sitting about 100 s.
+
+The smoke model learns the protocol (read, run the helper, write
+`answer.txt`, answer) and the task that needs no copying (count); it does not
+copy a file name or a code out of its context, which every other task needs.
+That ability appears abruptly with pretraining tokens: the same model
+pretrained on copy drills alone copied none of 24 held-out values after 16,
+33 and 49M tokens and 10 of 24 after 65M (the retrieval probe,
+`src/retrieval.rs`). Smoke pretrains on 20M; the default profile pretrains
+the same model on about 200M tokens of a world dense in copy drills, past
+that point. The sealed exam scores 0 on every tier for every smoke
+checkpoint, and bench calls both verdicts Invalid (`same_tasks: 4 task(s)
+differ in content or verifier between the runs`, a check of bench's own that
+fails although every sitting runs the one generated collection), so no
+promotion is claimed. Pretraining runs at about 55k tokens a second on this
+model whatever the batch (64 x 512 to 256 x 1024).
 
 ## Abort, resume, re-run
 
@@ -172,7 +200,28 @@ and none of the data before it.
   workspace is discarded and the episode runs again, counted once. A training
   run is resubmitted under the same job identity, so brain continues it from
   its last saved state.
-- **Resume** by running the same command again.
+- **Resume** by running the same command again. Measured (default profile of
+  the time, 2026-11-16, brain 16c2db09e): Ctrl-C at step 100 of a 500-step
+  pretraining segment, then the same command:
+
+  ```text
+           ouro/pretrain-1: step 50/500 loss 2.191
+           ouro/pretrain-1: step 100/500 loss 1.298
+  ^C
+  $ (the same command)
+  [reused] retrieval/ouro/init: listing=0 path=0 per_kind=12
+           ouro/pretrain-1: step 150/500 loss 1.258
+           ...
+           ouro/pretrain-1: brain continued the run from its saved state at step 100
+  [  done] ouro/pretrain-1: ... resume={"resumed_at":100,"state":"continued"} resumed=true steps=500
+  ```
+
+  <!-- perf-number: the measured result of the run above -->
+  (The resumed segment took 566 s for its remaining 400 steps.)
+
+  The managed brain server is a child in the run's process group, so Ctrl-C
+  reaches both; a server whose run is killed alone gets SIGINT from the
+  kernel and saves its job's state the same way.
 - **Re-run** a finished run and every unit is reused after its outputs are
   hashed again; brain is not even started, no training and no episode is
   repeated, and the probes are shown from the ledger.
@@ -188,9 +237,9 @@ and none of the data before it.
 
 | Profile | Model (Ouro, looped) | Data | Where |
 |---|---|---|---|
-| `smoke` | hidden 256, 4 shared layers, 2 passes, vocab 1024, context 2048 | 13300 documents (6000 worked tool-use conversations), 1600/96/12 task instances | one GPU, about half an hour; the tests run it, smaller, against a double |
-| `default` | hidden 256, 4 shared layers, 4 passes, vocab 4096, context 2048 | 60 towns and some 30k documents, 400/200/8 instances | a GPU; not run yet |
-| `64m` | hidden 512, 8 shared layers, 4 passes, vocab 8192, context 2048 | 200 towns, 2000/1000/8 instances | a GPU; not run yet |
+| `smoke` | hidden 256, 4 shared layers, 2 passes, vocabulary 1024 learned without digits, context 2048 (2.1M parameters) | 33300 documents (6000 worked tool-use conversations, 20000 copy drills), 1600/96/12 task instances; pretraining 600 x 64 x 512 (20M tokens), the chat stages as text | one card, about 13 minutes plus the exam; the specs run it, smaller, against a double |
+| `default` | the smoke model | 12000 worked conversations and 150000 copy drills, 3000/384/12 instances; pretraining 6000 x 64 x 512 (197M tokens) in six segments with the retrieval probe after each | one card, about an hour and a half |
+| `64m` | hidden 512, 8 shared layers, 4 passes, vocabulary 8192, context 2048 | 200 towns, 2000/1000/8 instances | not run |
 
 The architecture is configuration: `models.<label>` names an `arch` brain
 knows and that architecture's own `config`, handed to brain unread. A second
@@ -238,16 +287,16 @@ of both sides.
 
 ## Limits
 
-- The bench examination has not been run against a trained checkpoint yet:
-  the measured run above makes no promotion claim.
-- A rerun after a code change recomputes the data stages; their records hold
-  the shell tool's measured duration, so the demonstrations' digest changes and
-  fine-tuning is repeated. A rerun of unchanged code reuses every stage.
+- The smoke model does not copy values out of its context; the default
+  profile is sized to pretrain past the point where that appears, and its
+  measured outcome is in the roadmap ledger.
+- Brain's chat fine-tune (`full_train`) of a from-scratch Ouro made it ignore
+  its context in every setting tried, so the chat stages train on the
+  conversations as text by default; `chat_training.as_text: false` selects
+  the chat fine-tune again.
 - The probes are a handful of development tasks of the training families: they
   show what a checkpoint does, they are not evidence of learning. Learning from
   scratch and learning from experience are reported apart, and a finished run
   is not a learning claim; only a verified Promote is.
-- A tiny model may learn only part of the skill; the report says what was
-  measured and nothing more.
-- The tiny model learns the protocol and only part of the values; the improve
-  stage trains on few verified episodes and fits them almost exactly.
+- A segment of pretraining restarts the learning-rate schedule; the segments
+  exist to measure the curve.
