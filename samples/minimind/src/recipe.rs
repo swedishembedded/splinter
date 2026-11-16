@@ -63,7 +63,7 @@ pub const TASKS: Recipe = Recipe {
 /// the verifier and the records an accepted episode writes.
 pub const EPISODE: Recipe = Recipe {
     stage: "episode",
-    version: 5,
+    version: 6,
 };
 
 /// Gathering accepted episodes into a dataset.

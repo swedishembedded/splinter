@@ -62,7 +62,9 @@ pub fn record(
     unique_call_ids(&mut messages);
     Ok(json!({
         "messages": messages,
-        "tools": request["tools"].clone(),
+        // A request that offered no tools (a runtime's own follow-up call)
+        // offered an empty list: brain reads `tools` as a list.
+        "tools": request.get("tools").filter(|t| !t.is_null()).cloned().unwrap_or_else(|| json!([])),
         "metadata": { "episode": episode, "call": call },
     }))
 }
@@ -300,6 +302,18 @@ mod tests {
             (Some("call_1"), Some("call_1"))
         );
         assert!(record(&json!({}), &reply, "e", 0).is_err());
+        let toolless = record(
+            &json!({ "messages": [{ "role": "user", "content": "u" }] }),
+            &reply,
+            "e",
+            0,
+        )
+        .unwrap();
+        assert_eq!(
+            toolless["tools"],
+            json!([]),
+            "a request without tools records an empty list"
+        );
     }
 
     #[test]
