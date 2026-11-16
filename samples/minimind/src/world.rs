@@ -192,7 +192,8 @@ fn conversation(
 /// a listing of names with codes (as a file read shows it) followed by
 /// questions answered from it; values from files written into a command; or
 /// a short conversation that reads a value and writes it to the answer file
-/// with the tools, in the template.
+/// the request names, with the tools, in the template. Paths and answer
+/// files are drawn as the tasks draw them, so what is copied varies.
 fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
     let entries: Vec<(String, u64)> = (0..rng.between(3, 8))
         .map(|_| (word(rng, 2).to_lowercase(), rng.between(10, 9999)))
@@ -210,14 +211,12 @@ fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
         .map(|(i, l)| format!("L{}:{l}", i + 1))
         .collect::<Vec<_>>()
         .join("\n");
+    let path = crate::skills::data_path(rng, format, false, &[]);
     let text = match rng.below(4) {
-        3 => {
-            let (name, _) = &entries[rng.below(entries.len())];
-            format!(
-                "Read the number in inputs/{name}.txt.\nread_file {}\n",
-                to_json(&serde_json::json!({ "path": format!("inputs/{name}.txt") }))
-            )
-        }
+        3 => format!(
+            "Read the number in {path}.\nread_file {}\n",
+            to_json(&serde_json::json!({ "path": path }))
+        ),
         0 => {
             let mut text = format!("{listing}\n");
             for _ in 0..3 {
@@ -229,21 +228,28 @@ fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
         1 => {
             let (a, b) = (&entries[0], &entries[entries.len() - 1]);
             format!(
-                "inputs/{}.txt holds {}. inputs/{}.txt holds {}.\n./calc combine {} {}\n",
+                "{path} holds {} as {} and {} as {}.\n./calc combine {} {}\n",
                 a.0, a.1, b.0, b.1, a.1, b.1
             )
         }
         _ => {
             let (name, code) = entries[rng.below(entries.len())].clone();
-            let file = format!("{}.txt", word(rng, 1).to_lowercase());
+            let answer = crate::skills::answer_file(rng, std::slice::from_ref(&path));
+            let w = &crate::phrasing::TRAIN;
+            let step = format!(
+                "{} {}",
+                crate::phrasing::pick(rng, w.find),
+                crate::phrasing::of(rng, w, &name, &path)
+            );
+            let request = crate::phrasing::with_answer(rng, w, &step, "it", &answer);
             let value = code.to_string();
             let turns = vec![
-                Turn::User(format!("Write the code of {name} in {file} to answer.txt.")),
+                Turn::User(request),
                 Turn::Assistant {
                     text: String::new(),
                     calls: vec![Call {
                         name: "read_file".into(),
-                        arguments: serde_json::json!({ "path": file }),
+                        arguments: serde_json::json!({ "path": path }),
                     }],
                 },
                 Turn::Tool(listing),
@@ -251,10 +257,10 @@ fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
                     text: String::new(),
                     calls: vec![Call {
                         name: "write_file".into(),
-                        arguments: serde_json::json!({ "path": "answer.txt", "text": value }),
+                        arguments: serde_json::json!({ "path": answer, "text": value }),
                     }],
                 },
-                Turn::Tool(format!("wrote {} bytes to answer.txt", value.len())),
+                Turn::Tool(format!("wrote {} bytes to {answer}", value.len())),
                 Turn::Assistant {
                     text: value,
                     calls: vec![],

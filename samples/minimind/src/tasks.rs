@@ -12,7 +12,8 @@
 //! Every instance's answer is unknowable without the tools: the values sit
 //! in workspace files, and helpers combine them by a rule drawn per
 //! instance, so neither reading the request nor memorising earlier
-//! instances gives it. The verifier reads the workspace: `answer.txt`, or
+//! instances gives it. The verifier reads the workspace: the answer file the
+//! request names, or
 //! the entries of an edited file; what it expects lives outside the
 //! workspace and is never shown to the agent.
 //!
@@ -154,22 +155,22 @@ pub struct Verdict {
 }
 
 /// Judges the workspace `dir` an agent left behind for `instance`: the
-/// trimmed content of `answer.txt` equals the expected value, or the edited
+/// trimmed content of the answer file equals the expected value, or the edited
 /// file, read in its format, holds exactly the expected entries.
 #[must_use]
 pub fn verify(instance: &Instance, dir: &Path) -> Verdict {
     let verdict = |passed: bool, reason: String| Verdict { passed, reason };
     match &instance.check {
-        Check::Answer { value } => match std::fs::read_to_string(dir.join(ANSWER_FILE)) {
+        Check::Answer { file, value } => match std::fs::read_to_string(dir.join(file)) {
             Ok(text) if text.trim() == value => verdict(true, "answer matches".into()),
             Ok(text) => verdict(
                 false,
                 format!(
-                    "answer.txt holds {:?}",
+                    "{file} holds {:?}",
                     text.trim().chars().take(40).collect::<String>()
                 ),
             ),
-            Err(_) => verdict(false, "no answer.txt".into()),
+            Err(_) => verdict(false, format!("no {file}")),
         },
         Check::File {
             file,
@@ -202,7 +203,7 @@ pub fn verify(instance: &Instance, dir: &Path) -> Verdict {
 /// Writes `instance` as a Harbor task folder under `dir`: `instruction.md`,
 /// `task.toml`, the workspace in `environment/`, and the check in `tests/`
 /// (outside the workspace): `expected.txt` and a `test.sh` comparing
-/// `answer.txt` with it, or for an edit the expected file and a `test.sh`
+/// the answer file with it, or for an edit the expected file and a `test.sh`
 /// comparing it byte for byte (the sample's own verifier reads entries, so
 /// it also accepts another spelling of the same entries).
 ///
@@ -226,15 +227,17 @@ pub fn export_harbor(instance: &Instance, dir: &Path) -> anyhow::Result<()> {
         ),
     )?;
     match &instance.check {
-        Check::Answer { value } => {
+        Check::Answer { file, value } => {
             write("tests/expected.txt", &format!("{value}\n"))?;
             write(
                 "tests/test.sh",
-                "#!/bin/sh\n# Passes when the workspace's answer.txt holds the expected answer.\n\
-                 # usage: tests/test.sh WORKSPACE\nhere=$(dirname \"$0\")\n\
-                 want=$(tr -d ' \\n\\r\\t' < \"$here/expected.txt\")\n\
-                 got=$(tr -d ' \\n\\r\\t' < \"$1/answer.txt\" 2>/dev/null) || exit 1\n\
-                 [ \"$got\" = \"$want\" ]\n",
+                &format!(
+                    "#!/bin/sh\n# Passes when the workspace's {file} holds the expected answer.\n\
+                     # usage: tests/test.sh WORKSPACE\nhere=$(dirname \"$0\")\n\
+                     want=$(tr -d ' \\n\\r\\t' < \"$here/expected.txt\")\n\
+                     got=$(tr -d ' \\n\\r\\t' < \"$1/{file}\" 2>/dev/null) || exit 1\n\
+                     [ \"$got\" = \"$want\" ]\n"
+                ),
             )?;
         }
         Check::File {

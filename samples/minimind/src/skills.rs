@@ -23,11 +23,11 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
-use crate::formats::{Format, HELD_OUT, TRAINING};
+use crate::formats::{Format, HELD_OUT, TRAINING, TRAINING_EXTENSIONS};
 use crate::phrasing::{alone, of, pick, with_answer};
 use crate::world::word;
 
-/// The file the agent writes its answer to.
+/// The file a request most often asks the answer to be written to.
 pub const ANSWER_FILE: &str = "answer.txt";
 
 /// A skill.
@@ -125,8 +125,10 @@ pub enum Plan {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Check {
-    /// `answer.txt` holds this value.
+    /// The answer file holds this value.
     Answer {
+        /// The file the request names for the answer.
+        file: String,
         /// The value.
         value: String,
     },
@@ -139,6 +141,16 @@ pub enum Check {
         /// Its entries, by key.
         entries: BTreeMap<String, String>,
     },
+}
+
+impl Check {
+    /// The file the verifier reads: the answer file, or the edited file.
+    #[must_use]
+    pub fn file(&self) -> &str {
+        match self {
+            Self::Answer { file, .. } | Self::File { file, .. } => file,
+        }
+    }
 }
 
 /// One drawn task: its request, workspace, plan and check.
@@ -170,16 +182,48 @@ fn names(rng: &mut SplitMix64, n: usize) -> Vec<String> {
     out
 }
 
-/// A file path for `format` (a directory sometimes).
-fn path(rng: &mut SplitMix64, format: Format, taken: &[String]) -> String {
+/// A data file's path for `format` (in a directory sometimes), not in
+/// `taken`. Held out, it has the format's own extension; in training, half
+/// the time any of [`TRAINING_EXTENSIONS`], so an extension says nothing the
+/// request does not and a name is copied, never completed from habit.
+pub fn data_path(rng: &mut SplitMix64, format: Format, held_out: bool, taken: &[String]) -> String {
     loop {
         let dir = pick(rng, &["", "", "data/", "config/", "inputs/", "notes/"]);
-        let p = format!(
-            "{dir}{}.{}",
-            word(rng, 1).to_lowercase(),
+        let extension = if held_out || rng.coin() {
             format.extension()
-        );
+        } else {
+            TRAINING_EXTENSIONS[rng.below(TRAINING_EXTENSIONS.len())]
+        };
+        let p = format!("{dir}{}.{extension}", word(rng, 1).to_lowercase());
         if !taken.contains(&p) {
+            return p;
+        }
+    }
+}
+
+/// The file a request asks its answer to be written to, not in `taken`:
+/// [`ANSWER_FILE`] two times in five, otherwise another name (a directory
+/// sometimes), so the agent writes where the request says, not where it
+/// always did.
+pub fn answer_file(rng: &mut SplitMix64, taken: &[String]) -> String {
+    if rng.below(5) < 2 {
+        return ANSWER_FILE.into();
+    }
+    loop {
+        let dir = pick(rng, &["", "", "", "results/", "output/"]);
+        let stem = if rng.coin() {
+            pick(
+                rng,
+                &[
+                    "result", "output", "value", "reply", "solution", "final", "number", "found",
+                ],
+            )
+            .to_string()
+        } else {
+            word(rng, 2).to_lowercase()
+        };
+        let p = format!("{dir}{stem}.txt");
+        if !taken.contains(&p) && p != ANSWER_FILE {
             return p;
         }
     }
@@ -201,6 +245,11 @@ fn table(
 ) -> Vec<(String, String)> {
     let keys = names(rng, n);
     keys.into_iter().map(|k| (k, value(rng))).collect()
+}
+
+/// The paths of `files`.
+fn taken_of(files: &BTreeMap<String, String>) -> Vec<String> {
+    files.keys().cloned().collect()
 }
 
 fn number(rng: &mut SplitMix64) -> String {
@@ -226,7 +275,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
         if f == Format::Json {
             entries.sort();
         }
-        let p = path(rng, f, &taken);
+        let p = data_path(rng, f, held_out, &taken);
         taken.push(p.clone());
         files.insert(p.clone(), f.render(&entries));
         (p, f, entries)
@@ -243,14 +292,18 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 pick(rng, w.find),
                 of(rng, w, &slot.key, &slot.file)
             );
-            let instruction = with_answer(rng, w, &step, "it");
+            let answer = answer_file(rng, &taken_of(&files));
+            let instruction = with_answer(rng, w, &step, "it", &answer);
             Drawn {
                 skill,
                 instruction,
                 files,
                 executables: vec![],
                 plan: Plan::Read { slot },
-                check: Check::Answer { value },
+                check: Check::Answer {
+                    file: answer,
+                    value,
+                },
             }
         }
         Skill::Chain => {
@@ -307,14 +360,18 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 pick(rng, w.value)
             );
             let object = format!("the last {}", pick(rng, w.value));
-            let instruction = with_answer(rng, w, &step, &object);
+            let answer = answer_file(rng, &taken_of(&files));
+            let instruction = with_answer(rng, w, &step, &object, &answer);
             Drawn {
                 skill,
                 instruction,
                 files,
                 executables: vec![],
                 plan: Plan::Chain { start, next },
-                check: Check::Answer { value },
+                check: Check::Answer {
+                    file: answer,
+                    value,
+                },
             }
         }
         Skill::Compute => {
@@ -369,7 +426,8 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 b.key
             );
             let object = format!("its {}", pick(rng, w.value));
-            let instruction = with_answer(rng, w, &step, &object);
+            let answer = answer_file(rng, &taken_of(&files));
+            let instruction = with_answer(rng, w, &step, &object, &answer);
             let value = ((va * m + vb * n) % p).to_string();
             Drawn {
                 skill,
@@ -377,7 +435,10 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 files,
                 executables: vec![helper.clone()],
                 plan: Plan::Compute { helper, a, b },
-                check: Check::Answer { value },
+                check: Check::Answer {
+                    file: answer,
+                    value,
+                },
             }
         }
         Skill::Edit => {
@@ -452,7 +513,8 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 pick(rng, w.mention)
             );
             let object = format!("that {}", pick(rng, w.value));
-            let instruction = with_answer(rng, w, &step, &object);
+            let answer = answer_file(rng, &taken_of(&files));
+            let instruction = with_answer(rng, w, &step, &object, &answer);
             Drawn {
                 skill,
                 instruction,
@@ -460,6 +522,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 executables: vec![],
                 plan: Plan::Count { file, word: word_ },
                 check: Check::Answer {
+                    file: answer,
                     value: hits.to_string(),
                 },
             }

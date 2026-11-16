@@ -44,6 +44,15 @@ pub const TRAINING: [Format; 5] = [
 /// The formats only the held-out probe uses.
 pub const HELD_OUT: [Format; 2] = [Format::Arrow, Format::Ini];
 
+/// File extensions training data gives a file of any format, beside the
+/// format's own: a name is copied from the request, never inferred from the
+/// format, so an extension never seen (the held-out probe's `map`, `ini`) is
+/// copied like any other. None of them is a held-out format's extension.
+pub const TRAINING_EXTENSIONS: [&str; 14] = [
+    "txt", "cfg", "csv", "tsv", "json", "dat", "conf", "list", "tbl", "rec", "db", "kv", "env",
+    "data",
+];
+
 impl Format {
     /// A file extension that fits the format.
     #[must_use]

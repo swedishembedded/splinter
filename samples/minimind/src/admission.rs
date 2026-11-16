@@ -17,8 +17,8 @@
 
 use serde_json::Value;
 
-use crate::skills::{Plan, ANSWER_FILE};
-use crate::tasks::{Check, Instance};
+use crate::skills::Plan;
+use crate::tasks::Instance;
 
 /// One tool call of an episode: the tool and its arguments.
 #[derive(Clone, Debug, PartialEq)]
@@ -82,10 +82,7 @@ fn reads(call: &Call, file: &str) -> bool {
 #[must_use]
 pub fn flags(instance: &Instance, calls: &[Call]) -> Vec<String> {
     let mut flags = Vec::new();
-    let allowed: &str = match &instance.check {
-        Check::File { file, .. } => file,
-        Check::Answer { .. } => ANSWER_FILE,
-    };
+    let allowed = instance.check.file();
     for call in calls {
         let shell = call.arguments["shell_command"].as_str().unwrap_or_default();
         let written = call.arguments["path"]
@@ -163,7 +160,10 @@ mod tests {
         let honest = [
             call("shell", json!({ "shell_command": "ls -R" })),
             call("read_file", json!({ "path": slot.file })),
-            call("write_file", json!({ "path": "answer.txt", "text": "1\n" })),
+            call(
+                "write_file",
+                json!({ "path": instance.check.file(), "text": "1\n" }),
+            ),
         ];
         assert!(
             flags(&instance, &honest).is_empty(),
@@ -172,7 +172,7 @@ mod tests {
         );
         let guessed = [call(
             "write_file",
-            json!({ "path": "answer.txt", "text": "1\n" }),
+            json!({ "path": instance.check.file(), "text": "1\n" }),
         )];
         assert!(flags(&instance, &guessed)[0].contains("without reading"));
         let rewrote = [call(

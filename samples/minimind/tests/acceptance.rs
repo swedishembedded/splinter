@@ -108,6 +108,11 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
         8,
         "the expert solves every training instance through sven"
     );
+    assert_eq!(
+        commit(&all, "ouro/explore").summary["episodes"],
+        8 * smoke().explore.samples,
+        "every explored instance is attempted once per sample"
+    );
     assert_eq!(commit(&all, "probe/ouro/init").summary["passed"], 0);
     assert_eq!(commit(&all, "probe/ouro/sft").summary["passed"], 4);
     assert!(commit(&all, "ouro/experience/verdict").summary["promotes"]

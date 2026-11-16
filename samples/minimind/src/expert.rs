@@ -24,7 +24,7 @@ use anyhow::{anyhow, bail, Context as _};
 use serde_json::Value;
 
 use crate::formats::{unnumbered, Format};
-use crate::tasks::{Instance, Plan, ANSWER_FILE};
+use crate::tasks::{Check, Instance, Plan};
 
 /// What the expert says next.
 #[derive(Clone, Debug, PartialEq)]
@@ -160,6 +160,7 @@ type WriteOf = Box<dyn Fn(&[String]) -> anyhow::Result<(String, String)>>;
 /// the final answer.
 fn plan_step(
     plan: &Plan,
+    answer: &str,
     seen: &[String],
     tools: &[Value],
 ) -> anyhow::Result<Result<Action, String>> {
@@ -173,12 +174,12 @@ fn plan_step(
     // read-back of that path.
     let (reads, write_of): (Vec<String>, WriteOf) = match plan {
         Plan::Read { slot } => {
-            let slot = slot.clone();
+            let (slot, answer) = (slot.clone(), answer.to_string());
             (
                 vec![slot.file.clone()],
                 Box::new(move |r| {
                     Ok((
-                        ANSWER_FILE.into(),
+                        answer.clone(),
                         format!("{}\n", value_in(&r[0], slot.format, &slot.key)?),
                     ))
                 }),
@@ -187,7 +188,7 @@ fn plan_step(
         Plan::Chain { start, next } => {
             let mut files = vec![start.file.clone()];
             files.extend(next.iter().map(|(f, _)| f.clone()));
-            let (start, next) = (start.clone(), next.clone());
+            let (start, next, answer) = (start.clone(), next.clone(), answer.to_string());
             (
                 files,
                 Box::new(move |r| {
@@ -195,7 +196,7 @@ fn plan_step(
                     for (i, (_, format)) in next.iter().enumerate() {
                         key = value_in(&r[i + 1], *format, &key)?;
                     }
-                    Ok((ANSWER_FILE.into(), format!("{key}\n")))
+                    Ok((answer.clone(), format!("{key}\n")))
                 }),
             )
         }
@@ -221,7 +222,7 @@ fn plan_step(
                 return shell(tools, &format!("grep -c {word} {file} || true")).map(Ok);
             }
             let count = first_number(&r[0]).with_context(|| format!("grep printed {:?}", r[0]))?;
-            return finish(tools, step - 1, ANSWER_FILE, &format!("{count}\n"), &count);
+            return finish(tools, step - 1, answer, &format!("{count}\n"), &count);
         }
         Plan::Compute { helper, a, b } => {
             let mut files = vec![a.file.clone()];
@@ -244,14 +245,14 @@ fn plan_step(
             }
             let out = first_number(&r[n + 1])
                 .with_context(|| format!("./{helper} printed {:?}", r[n + 1]))?;
-            return finish(tools, step - n - 2, ANSWER_FILE, &format!("{out}\n"), &out);
+            return finish(tools, step - n - 2, answer, &format!("{out}\n"), &out);
         }
     };
     if step < reads.len() {
         return read(tools, &reads[step]).map(Ok);
     }
     let (path, text) = write_of(&r[..reads.len()])?;
-    let said = if path == ANSWER_FILE {
+    let said = if path == answer {
         text.trim().to_string()
     } else {
         format!("{path} is updated")
@@ -283,15 +284,20 @@ fn finish(
 /// what the procedure reads from it.
 pub fn next(instance: &Instance, messages: &[Value], tools: &[Value]) -> anyhow::Result<Action> {
     let seen = tool_results(messages);
-    Ok(match plan_step(&instance.plan, &seen, tools)? {
+    // An edit writes no answer file; its plan never asks for one.
+    let answer = match &instance.check {
+        Check::Answer { file, .. } => file.as_str(),
+        Check::File { .. } => "",
+    };
+    Ok(match plan_step(&instance.plan, answer, &seen, tools)? {
         Ok(action) => action,
-        Err(said) => Action::Finish(closing(&instance.id, &said)),
+        Err(said) => Action::Finish(closing(&instance.id, &said, answer)),
     })
 }
 
 /// The final reply, in one of several phrasings chosen by the instance, so no
 /// stock sentence dominates the demonstrations.
-fn closing(id: &str, said: &str) -> String {
+fn closing(id: &str, said: &str, answer: &str) -> String {
     let pick = id.bytes().fold(0usize, |h, b| {
         h.wrapping_mul(31).wrapping_add(usize::from(b))
     });
@@ -305,13 +311,15 @@ fn closing(id: &str, said: &str) -> String {
         return forms[pick % forms.len()].replace("{s}", said);
     }
     let forms = [
-        "Done: {s} is in answer.txt.",
+        "Done: {s} is in {a}.",
         "{s}",
-        "answer.txt now holds {s}.",
-        "The result is {s}, written to answer.txt.",
-        "Wrote {s} to answer.txt.",
+        "{a} now holds {s}.",
+        "The result is {s}, written to {a}.",
+        "Wrote {s} to {a}.",
     ];
-    forms[pick % forms.len()].replace("{s}", said)
+    forms[pick % forms.len()]
+        .replace("{s}", said)
+        .replace("{a}", answer)
 }
 
 /// Runs one tool call in the workspace `ws` and returns its result as the

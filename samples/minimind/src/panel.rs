@@ -147,7 +147,7 @@ fn transcript(s: &mut String, example: &Value) {
     }
     let _ = writeln!(
         s,
-        "         answer.txt: {}  ({})",
+        "         answer: {}  ({})",
         o["answer"]
             .as_str()
             .map_or("none".to_string(), |a| format!("{a:?}")),
@@ -376,7 +376,7 @@ mod tests {
             "{shown}"
         );
         assert!(
-            shown.contains("answer.txt: \"1407\"  (answer.txt holds \"1407\")"),
+            shown.contains("answer: \"1407\"  (answer.txt holds \"1407\")"),
             "{shown}"
         );
     }

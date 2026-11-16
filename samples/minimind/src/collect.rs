@@ -100,6 +100,28 @@ pub(crate) fn admitted(commit: &Commit) -> bool {
     commit.summary["admitted"].as_bool().unwrap_or(false)
 }
 
+/// How a model acts in an episode: greedily (the probes, the examination's
+/// counterpart), or sampled at a temperature as one of several attempts at
+/// the same instance (exploration), each attempt with its own seed.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub struct Sampling {
+    /// The sampling temperature; 0 is greedy.
+    pub temperature: f32,
+    /// Which attempt at the instance this is, from 0.
+    pub sample: u32,
+}
+
+impl Sampling {
+    /// The model's single best guess.
+    pub const GREEDY: Self = Self {
+        temperature: 0.0,
+        sample: 0,
+    };
+}
+
+/// One episode to run: its unit, the instance and how the model samples.
+type Job = (String, Instance, Sampling);
+
 /// What an episode runs with: the parts of the run its work reads, shared
 /// by the episodes running at once.
 struct EpisodeCtx<'a> {
@@ -122,6 +144,7 @@ fn episode_work(
     ctx: &EpisodeCtx<'_>,
     unit: &str,
     instance: &Instance,
+    sampling: Sampling,
     actor: &Acting,
     attempt: &Attempt,
 ) -> anyhow::Result<StageWork> {
@@ -147,12 +170,12 @@ fn episode_work(
             Acting::Model(target) => {
                 let (upstream, key) = (target.base_url.clone(), target.key.clone());
                 let policy = move |request: &Value| forward(&upstream, &key, request);
-                // The run seed, not the attempt's: an episode run again after
-                // an interruption is the same episode.
+                // The run seed and the sample, not the ledger attempt's: an
+                // episode run again after an interruption is the same episode.
                 (
                     Box::new(policy),
                     target.model.clone(),
-                    Some(ctx.seed),
+                    Some(ctx.seed.wrapping_add(u64::from(sampling.sample))),
                     target.context_tokens,
                 )
             }
@@ -165,8 +188,9 @@ fn episode_work(
         api_key: Some("minimind".into()),
         thinking: false,
         seed,
-        // Greedy: a small model's best guess, the same on every rerun.
-        temperature: Some(0.0),
+        // Greedy, a small model's best guess, unless the episode is one of
+        // several sampled attempts; seeded either way, so a rerun repeats it.
+        temperature: Some(sampling.temperature),
         ..RemoteModel::default()
     }
     .apply_to(&mut settings)
@@ -186,8 +210,9 @@ fn episode_work(
     ));
     let exchanges = endpoint.exchanges();
     let verdict = tasks::verify(instance, &ws);
-    let answer = std::fs::read_to_string(ws.join(tasks::ANSWER_FILE))
-        .ok()
+    let answer = matches!(instance.check, tasks::Check::Answer { .. })
+        .then(|| std::fs::read_to_string(ws.join(instance.check.file())).ok())
+        .flatten()
         .map(|a| a.trim().chars().take(60).collect::<String>());
     // A run that failed outright (the endpoint down, a request
     // refused) says nothing about the policy: the attempt stays open
@@ -312,7 +337,7 @@ impl Run<'_> {
     fn episodes(
         &mut self,
         stage: &str,
-        jobs: Vec<(String, Instance)>,
+        jobs: Vec<Job>,
         actor: &Actor,
     ) -> anyhow::Result<Vec<Commit>> {
         // A model's episodes depend on the engine serving it; the expert's
@@ -322,17 +347,21 @@ impl Run<'_> {
             Actor::Model { digest, .. } => (digest.clone(), &["sven", "brain"]),
         };
         let slice = self.agent_slice();
-        let keyed: Vec<(String, StageKey, Instance)> = jobs
+        let keyed: Vec<(String, StageKey, Instance, Sampling)> = jobs
             .into_iter()
-            .map(|(unit, instance)| {
+            .map(|(unit, instance, sampling)| {
                 let key = self.key(
                     &slice,
                     &unit,
-                    &[("instance", &digest_of(&instance)), ("actor", &who)],
+                    &[
+                        ("instance", &digest_of(&instance)),
+                        ("actor", &who),
+                        ("sampling", &digest_of(&sampling)),
+                    ],
                     recipe::EPISODE,
                     services,
                 );
-                (unit, key, instance)
+                (unit, key, instance, sampling)
             })
             .collect();
         // A packed stage whose episodes are all committed is read from its
@@ -341,10 +370,12 @@ impl Run<'_> {
         if packed.exists() {
             let committed: Option<Vec<Commit>> = keyed
                 .iter()
-                .map(|(unit, key, _)| match self.ledger().standing(unit, key) {
-                    Ok(Standing::Committed(c)) => Some(c),
-                    _ => None,
-                })
+                .map(
+                    |(unit, key, _, _)| match self.ledger().standing(unit, key) {
+                        Ok(Standing::Committed(c)) => Some(c),
+                        _ => None,
+                    },
+                )
                 .collect();
             // The pack holds the files of whichever settings packed it last:
             // reused only when every committed output is in it unchanged.
@@ -369,7 +400,7 @@ impl Run<'_> {
             crate::pack::unpack(&packed, &tree)?;
         }
         // Serve the checkpoint only when an episode of it has to run.
-        let all_done = keyed.iter().all(|(unit, key, _)| {
+        let all_done = keyed.iter().all(|(unit, key, _, _)| {
             matches!(self.ledger().standing(unit, key), Ok(Standing::Committed(c)) if self.ledger().verify(&c).is_ok())
         });
         let acting = match actor {
@@ -399,7 +430,7 @@ impl Run<'_> {
             for _ in 0..width {
                 scope.spawn(|| loop {
                     let i = next.fetch_add(1, Ordering::SeqCst);
-                    let Some((unit, key, instance)) = keyed.get(i) else {
+                    let Some((unit, key, instance, sampling)) = keyed.get(i) else {
                         break;
                     };
                     let ran = ledger
@@ -407,7 +438,7 @@ impl Run<'_> {
                             let actor = acting.as_ref().with_context(|| {
                                 format!("{unit} has to run, but its checkpoint was not served")
                             })?;
-                            episode_work(&ctx, unit, instance, actor, attempt)
+                            episode_work(&ctx, unit, instance, *sampling, actor, attempt)
                         })
                         .map_err(anyhow::Error::from);
                     if let Ok(mut slots) = results.lock() {
@@ -421,7 +452,7 @@ impl Run<'_> {
             .map_err(|_| anyhow::anyhow!("an episode thread panicked"))?;
         let mut commits = Vec::new();
         let mut failed = None;
-        for ((unit, _, _), ran) in keyed.iter().zip(results) {
+        for ((unit, _, _, _), ran) in keyed.iter().zip(results) {
             match ran {
                 Some(Ok(ran)) => {
                     let how = if ran.reused { "reused" } else { "done" };
@@ -444,8 +475,9 @@ impl Run<'_> {
         }
     }
 
-    /// Episodes of every instance of `split` by `actor`, then one unit
-    /// `<stage>` gathering the accepted ones' records into `data/<stage>.jsonl`;
+    /// Episodes of every instance of `split` by `actor` (greedy, or `samples`
+    /// sampled attempts at each at `temperature`), then one unit `<stage>`
+    /// gathering the accepted ones' records into `data/<stage>.jsonl`;
     /// returns that unit and the episodes.
     fn gather(
         &mut self,
@@ -453,12 +485,31 @@ impl Run<'_> {
         split: Split,
         actor: &Actor,
         require: bool,
+        explore: Option<&crate::config::Exploration>,
     ) -> anyhow::Result<(Commit, Vec<Commit>)> {
-        let jobs = self
-            .instances(split)?
-            .into_iter()
-            .map(|i| (format!("{name}/{}", i.id), i))
-            .collect();
+        let jobs: Vec<Job> = match explore {
+            None => self
+                .instances(split)?
+                .into_iter()
+                .map(|i| (format!("{name}/{}", i.id), i, Sampling::GREEDY))
+                .collect(),
+            Some(e) => self
+                .instances(split)?
+                .into_iter()
+                .flat_map(|i| {
+                    (0..e.samples.max(1)).map(move |sample| {
+                        (
+                            format!("{name}/{}~{sample}", i.id),
+                            i.clone(),
+                            Sampling {
+                                temperature: e.temperature,
+                                sample,
+                            },
+                        )
+                    })
+                })
+                .collect(),
+        };
         let episodes = self.episodes(name, jobs, actor)?;
         let inputs = episode_inputs(&episodes);
         let refs: Vec<(&str, &Digest)> = inputs.iter().map(|(n, d)| (n.as_str(), d)).collect();
@@ -504,7 +555,7 @@ impl Run<'_> {
     /// An episode cannot be run, or none is accepted.
     pub fn demonstrate(&mut self) -> anyhow::Result<Commit> {
         Ok(self
-            .gather("demonstrate", Split::Train, &Actor::Expert, true)?
+            .gather("demonstrate", Split::Train, &Actor::Expert, true, None)?
             .0)
     }
 
@@ -516,7 +567,13 @@ impl Run<'_> {
     /// An episode cannot be run, or none is accepted.
     pub fn demonstrate_mid(&mut self) -> anyhow::Result<Commit> {
         Ok(self
-            .gather("demonstrate-mid", Split::Midtrain, &Actor::Expert, true)?
+            .gather(
+                "demonstrate-mid",
+                Split::Midtrain,
+                &Actor::Expert,
+                true,
+                None,
+            )?
             .0)
     }
 
@@ -531,7 +588,14 @@ impl Run<'_> {
         policy: (&Commit, &Checkpoint),
     ) -> anyhow::Result<(Commit, Vec<Commit>)> {
         let actor = self.actor(policy)?;
-        self.gather(&format!("{label}/explore"), Split::Explore, &actor, false)
+        let explore = self.config.explore.clone();
+        self.gather(
+            &format!("{label}/explore"),
+            Split::Explore,
+            &actor,
+            false,
+            Some(&explore),
+        )
     }
 
     fn actor(&self, policy: (&Commit, &Checkpoint)) -> anyhow::Result<Actor> {
@@ -565,7 +629,7 @@ impl Run<'_> {
         instances.extend(self.instances(Split::Heldout)?);
         let jobs = instances
             .iter()
-            .map(|i| (format!("{unit}/{}", i.id), i.clone()))
+            .map(|i| (format!("{unit}/{}", i.id), i.clone(), Sampling::GREEDY))
             .collect();
         let commits = self.episodes(&unit, jobs, &actor)?;
         let episodes: Vec<(Instance, Commit)> = instances.into_iter().zip(commits).collect();

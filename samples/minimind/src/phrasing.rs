@@ -47,9 +47,11 @@ pub struct Words {
     pub follow: &'static [&'static str],
 }
 
-/// The vocabulary of every trained and explored split.
+/// The vocabulary of every trained and explored split. `{a}` in `into` is
+/// the file the answer goes to.
 pub const TRAIN: Words = Words {
     open: &[
+        "",
         "",
         "",
         "Please ",
@@ -57,36 +59,69 @@ pub const TRAIN: Words = Words {
         "In this workspace, ",
         "Next, ",
         "Now ",
+        "I need you to ",
+        "Quick task: ",
+        "Request: ",
+        "Go ahead and ",
+        "The task: ",
+        "Help me: ",
     ],
     find: &[
-        "find", "look up", "get", "read", "fetch", "retrieve", "pull", "take",
+        "find", "look up", "get", "read", "fetch", "retrieve", "pull", "take", "extract", "grab",
+        "check", "query", "collect", "look at", "read off", "pick up",
     ],
-    save: &["write", "save", "put", "store", "record", "copy"],
+    save: &[
+        "write", "save", "put", "store", "record", "copy", "note", "dump", "jot down", "keep",
+    ],
     into: &[
-        "to answer.txt",
-        "in answer.txt",
-        "into answer.txt",
-        "as answer.txt",
+        "to {a}",
+        "in {a}",
+        "into {a}",
+        "as {a}",
+        "in the file {a}",
+        "to the file {a}",
+        "into a file named {a}",
     ],
-    value: &["value", "entry", "setting", "result"],
+    value: &[
+        "value", "entry", "setting", "result", "number", "code", "field", "item",
+    ],
     under: &[
         "of {k} in {f}",
         "stored under {k} in {f}",
         "listed for {k} in {f}",
         "{k} has in {f}",
         "for {k} from {f}",
+        "{k} maps to in {f}",
+        "under the key {k} in {f}",
+        "keyed by {k} in {f}",
+        "next to {k} in {f}",
+        "{f} gives for {k}",
     ],
-    then: &["and", "then", "and then", "after which you"],
-    apply: &["use", "run", "call", "invoke"],
-    set: &["set", "update", "replace"],
+    then: &[
+        "and",
+        "then",
+        "and then",
+        "after which you",
+        "and next",
+        "and finally",
+    ],
+    apply: &["use", "run", "call", "invoke", "try", "launch", "start"],
+    set: &[
+        "set", "update", "replace", "edit", "adjust", "alter", "rewrite",
+    ],
     keep: &[
         "Leave the other entries as they are.",
         "Keep everything else in the file.",
         "Do not touch the other keys.",
+        "Nothing else should be edited.",
+        "Leave the rest alone.",
+        "Touch no other key.",
     ],
-    count: &["count", "tally", "add up"],
-    mention: &["contain", "mention", "include", "have"],
-    follow: &["follow", "trace", "walk"],
+    count: &["count", "tally", "add up", "total", "get the count of"],
+    mention: &[
+        "contain", "mention", "include", "have", "name", "hold", "match",
+    ],
+    follow: &["follow", "trace", "walk", "resolve", "track"],
 };
 
 /// The held-out probe's vocabulary: none of its words is in [`TRAIN`].
@@ -94,7 +129,7 @@ pub const HELD_OUT: Words = Words {
     open: &["Kindly ", "Your job: ", "Here is what to do: "],
     find: &["determine", "work out", "obtain", "locate"],
     save: &["place", "lodge", "enter", "deposit"],
-    into: &["inside the file answer.txt", "within answer.txt"],
+    into: &["inside the file {a}", "within {a}"],
     value: &["figure", "quantity", "amount"],
     under: &["belonging to {k} inside {f}", "assigned to {k} within {f}"],
     then: &["afterwards", "once done,", "subsequently"],
@@ -132,11 +167,17 @@ pub fn of(rng: &mut SplitMix64, w: &Words, key: &str, file: &str) -> String {
 }
 
 /// A request: `step` (the action, starting with its verb, lower case), then
-/// storing `object` in the answer file, in one of three orders.
-pub fn with_answer(rng: &mut SplitMix64, w: &Words, step: &str, object: &str) -> String {
+/// storing `object` in the file `answer`, in one of five orders.
+pub fn with_answer(
+    rng: &mut SplitMix64,
+    w: &Words,
+    step: &str,
+    object: &str,
+    answer: &str,
+) -> String {
     let open = pick(rng, w.open);
     let save = pick(rng, w.save);
-    let into = pick(rng, w.into);
+    let into = pick(rng, w.into).replace("{a}", answer);
     let first = |s: &str| {
         if open.is_empty() {
             capital(s)
@@ -144,17 +185,22 @@ pub fn with_answer(rng: &mut SplitMix64, w: &Words, step: &str, object: &str) ->
             s.to_string()
         }
     };
-    match rng.below(3) {
+    match rng.below(5) {
         0 => format!(
             "{open}{} {} {save} {object} {into}.",
             first(step),
             pick(rng, w.then)
         ),
         1 => format!("{open}{}. {} {object} {into}.", first(step), capital(save)),
-        _ => format!(
+        2 => format!(
             "{open}{} {into}: {step}.",
             first(&format!("{save} {object}"))
         ),
+        3 => format!(
+            "{open}{} {into} after you {step}.",
+            first(&format!("{save} {object}"))
+        ),
+        _ => format!("{answer} should hold {object}. {}.", capital(step)),
     }
 }
 

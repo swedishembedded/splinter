@@ -183,6 +183,17 @@ pub struct Experience {
     pub rehearsal: f64,
 }
 
+/// How the model explores fresh instances for its own training material.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Exploration {
+    /// Attempts at each instance; with more than one, the verified ones
+    /// among them are kept (rejection sampling), each with its own seed.
+    pub samples: u32,
+    /// The sampling temperature of the attempts; 0 is greedy.
+    pub temperature: f32,
+}
+
 /// A corpus fetched at run time when the world cannot provide it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -233,6 +244,8 @@ pub struct Config {
     pub headroom_steps: u32,
     /// How the chat stages train.
     pub chat_training: ChatTraining,
+    /// How the model explores for its own episodes.
+    pub explore: Exploration,
     /// Training on the model's own verified episodes.
     pub improve: TrainBudget,
     /// The improvement's data mix.
@@ -316,6 +329,10 @@ impl Config {
             headroom_steps: if profile == Profile::Smoke { 0 } else { 100 },
             sft,
             chat_training: ChatTraining { as_text: false },
+            explore: Exploration {
+                samples: if profile == Profile::Smoke { 2 } else { 4 },
+                temperature: 0.7,
+            },
             improve,
             experience: Experience { rehearsal: 1.0 },
             data_checks: crate::datacheck::DataChecks::default(),
