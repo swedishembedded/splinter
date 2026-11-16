@@ -158,6 +158,22 @@ experiments, not imitation). Practice environments are generated independently o
 - **Single seeds and bundled changes confound attribution**: replicate seeds and change one thing per registered comparison.
 - **Agents scanning trajectories for hacks** (fetching the reference fix, test tampering) before any trajectory trains.
 
+## From an in-run RL supervision system (AutoRL, arXiv 2611.17790, checked to exist)
+
+A multi-agent supervisor of one running RL job (perceptors flag stagnation, proposers draft and cross-examine fixes, an
+orchestrator applies them online or by checkpoint resume) lifted a Qwen3-4B plateau from 29.7% to 41.6%; 84% of its
+candidate interventions were grading or data fixes, and no learning-rule redesign was adopted. What applies here:
+
+- **The P2 controller has this shape:** a perceptor reads the leading indicators (proposer novelty, frontier yield,
+  per-family dev) every round; a proposer drafts one intervention (diversify the proposer, switch or add a family, raise the
+  pool, stop); it is checked on stored data before any GPU time; applied at a generation boundary (resume from journals) and
+  logged with its outcome and any reversion. Start rule-based; agents only after the rules are measured.
+- **Audit verifier and admission first, on the CPU:** most gains came from fixing graders and data. Open case: the
+  `python3` family refuses about 45% of proposal requests as `checks_failed` (Lua about 30%) for reasons not yet read; the
+  refused texts must be journalled so a refusal audit can replay them, and a refusal rate that rises across generations is
+  itself a stagnation signal.
+- Not adopted: entropy schedules and anti-looping penalties (policy-gradient specific; our learner is supervised).
+
 ## Next registered run: RSI6, continuous acquisition across task families (design, 2026-11-16)
 
 RSI5 (one family, Lua output prediction, answer-only interpreter labels) gained +5.1, +1.6, +1.2, +0.3 points per doubling of
