@@ -233,14 +233,12 @@ impl Examiner for Bench {
         self.generate()?;
         let profile = root.join("profile.toml");
         self.profile(target, control, &profile)?;
-        let sitting = Sitting {
-            exam: root.join("exam"),
-            anchor: root.join("anchor"),
-        };
-        for (suite, collection, job) in [
-            ("exam", self.collection(EXAM), &sitting.exam),
-            ("anchor", self.collection(ANCHOR_NAME), &sitting.anchor),
+        let mut jobs = Vec::new();
+        for (suite, collection) in [
+            ("exam", self.collection(EXAM)),
+            ("anchor", self.collection(ANCHOR_NAME)),
         ] {
+            let parent = root.join(suite);
             self.run(
                 &format!("run the {suite} for {}", target.model),
                 &target.key,
@@ -252,10 +250,13 @@ impl Examiner for Bench {
                     .arg(&target.base_url)
                     .arg(collection)
                     .arg("--jobs-dir")
-                    .arg(job),
+                    .arg(&parent),
             )?;
+            jobs.push(run_directory(&parent)?);
         }
-        Ok(sitting)
+        let anchor = jobs.pop().context("the anchor ran")?;
+        let exam = jobs.pop().context("the exam ran")?;
+        Ok(Sitting { exam, anchor })
     }
 
     fn verdict(
@@ -298,6 +299,28 @@ impl Examiner for Bench {
             .arg(out);
         self.run("issue the verdict", "", &mut verdict)?;
         read_verdict(&self.dir, &self.signing_key, out)
+    }
+}
+
+/// The one run directory `bench run --jobs-dir parent` made (a dated
+/// directory holding `bench-run.json`).
+fn run_directory(parent: &Path) -> anyhow::Result<PathBuf> {
+    let mut runs = Vec::new();
+    for entry in
+        std::fs::read_dir(parent).with_context(|| format!("reading {}", parent.display()))?
+    {
+        let path = entry?.path();
+        if path.join("bench-run.json").is_file() {
+            runs.push(path);
+        }
+    }
+    match runs.as_slice() {
+        [one] => Ok(one.clone()),
+        _ => bail!(
+            "{} holds {} bench runs, not one",
+            parent.display(),
+            runs.len()
+        ),
     }
 }
 
