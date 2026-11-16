@@ -193,8 +193,11 @@ impl Bench {
         Ok(())
     }
 
-    /// Generates the exam and the anchor from their seed files; bench admits
-    /// the same collection for the same seed, so this is safe to repeat.
+    /// Generates the exam and the anchor from their seed files, once: every
+    /// sitting must see the same tasks (bench's verdict refuses runs whose
+    /// task contents differ, and two generations from one seed can), so a
+    /// collection that exists is kept. Remove the exams directory to draw a
+    /// new exam.
     fn generate(&self) -> anyhow::Result<()> {
         for (target, seed, collection) in [
             ("workspace-tools/exam/generate", &self.seed_file, EXAM),
@@ -204,6 +207,9 @@ impl Bench {
                 ANCHOR_NAME,
             ),
         ] {
+            if self.collection(collection).is_dir() {
+                continue;
+            }
             let seed = format!("WT_SEED_FILE={}", seed.display());
             let into = format!("WT_INTO={}", self.collection(collection).display());
             self.run(

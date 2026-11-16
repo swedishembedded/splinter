@@ -94,7 +94,7 @@ pub const PROBE: Recipe = Recipe {
 /// The examination request.
 pub const EXAMINE: Recipe = Recipe {
     stage: "examine",
-    version: 3,
+    version: 4,
 };
 
 #[cfg(test)]
