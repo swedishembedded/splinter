@@ -24,6 +24,12 @@ OUT := $(abspath ../../target/papers)
 BUILD := $(OUT)/.build/$(NAME)
 PDF := $(OUT)/$(NAME).pdf
 
+# The arXiv source archive of a paper that opts in (its Makefile builds $(ARXIV) with its PDF and has an
+# `arxiv/check` target): papers/tools/make_arxiv.py collects what pdflatex read and compiles it in a clean room.
+ARXIV := $(OUT)/$(NAME)-arxiv.tar.gz
+ARXIV_TOOL := $(abspath ../tools/make_arxiv.py)
+ARXIV_TOOL_TEST := $(abspath ../tools/test_make_arxiv.py)
+
 .PHONY: all clean
 all: $(PDF)
 

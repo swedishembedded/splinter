@@ -15,11 +15,10 @@ include ../paper.mk
 GENERATED := $(BUILD)/generated
 
 SOURCES := $(PAPER).tex status.txt references.bib $(wildcard sections/*.tex) $(wildcard data/*.csv) data/measurements.json \
-	scripts/build_data.py scripts/make_arxiv.py
+	scripts/build_data.py $(ARXIV_TOOL)
 
 # The arXiv source archive, built from the same run as the PDF and checked by building it the way
-# arXiv does (scripts/make_arxiv.py): a broken or leaking archive fails the PDF build.
-ARXIV := $(OUT)/$(NAME)-arxiv.tar.gz
+# arXiv does (papers/tools/make_arxiv.py): a broken or leaking archive fails the PDF build.
 
 $(GENERATED)/.stamp: status.txt scripts/build_data.py $(wildcard data/*.csv) data/measurements.json
 	python3 scripts/build_data.py --out $(GENERATED)
@@ -34,8 +33,8 @@ $(PDF): $(SOURCES) $(GENERATED)/.stamp
 all: $(ARXIV)
 
 $(ARXIV): $(PDF)
-	python3 scripts/make_arxiv.py build --paper . --build $(BUILD) --job $(NAME) --out $@
-	python3 scripts/make_arxiv.py check --archive $@ --main-log $(BUILD)/$(NAME).log --work $(BUILD)/arxiv-check
+	python3 $(ARXIV_TOOL) build --paper . --build $(BUILD) --job $(NAME) --out $@
+	python3 $(ARXIV_TOOL) check --archive $@ --main-log $(BUILD)/$(NAME).log --work $(BUILD)/arxiv-check
 
 .PHONY: verify
 # Re-checks every STRUCTURE claim of the ledger against the repositories and
@@ -45,7 +44,7 @@ $(ARXIV): $(PDF)
 # are checked too, when it is absent that check is skipped.
 verify:
 	python3 scripts/test_verify_structure.py
-	python3 scripts/test_make_arxiv.py
+	python3 $(ARXIV_TOOL_TEST)
 	python3 scripts/test_build_data.py
 	python3 reproduce/test_examiner.py
 	python3 scripts/verify_structure.py
@@ -128,8 +127,8 @@ arxiv: $(ARXIV)
 
 # Rebuilds the archive from the last PDF build and checks it in a clean room.
 arxiv/check: $(PDF)
-	python3 scripts/make_arxiv.py build --paper . --build $(BUILD) --job $(NAME) --out $(ARXIV)
-	python3 scripts/make_arxiv.py check --archive $(ARXIV) --main-log $(BUILD)/$(NAME).log --work $(BUILD)/arxiv-check
+	python3 $(ARXIV_TOOL) build --paper . --build $(BUILD) --job $(NAME) --out $(ARXIV)
+	python3 $(ARXIV_TOOL) check --archive $(ARXIV) --main-log $(BUILD)/$(NAME).log --work $(BUILD)/arxiv-check
 
 clean::
 	rm -f $(ARXIV)
