@@ -176,6 +176,9 @@ fn failed(what: &str) -> impl Fn(String) -> CampaignError + '_ {
 pub struct ServedHost {
     settings: HostSettings,
     running: Mutex<Option<Arc<Running>>>,
+    /// Handles whose runtimes look in other directories than the host's,
+    /// by those directories (see [`ServedHost::context_in`]).
+    scoped: Mutex<std::collections::BTreeMap<Vec<PathBuf>, Splinter>>,
 }
 
 impl ServedHost {
@@ -185,10 +188,20 @@ impl ServedHost {
         Self {
             settings,
             running: Mutex::new(None),
+            scoped: Mutex::new(std::collections::BTreeMap::new()),
         }
     }
 
     fn handle(&self, endpoints: &BrainEndpoints, asked: Asked) -> Result<Splinter, CampaignError> {
+        self.handle_in(endpoints, asked, &self.settings.runtime_dirs)
+    }
+
+    fn handle_in(
+        &self,
+        endpoints: &BrainEndpoints,
+        asked: Asked,
+        runtime_dirs: &[PathBuf],
+    ) -> Result<Splinter, CampaignError> {
         let s = &self.settings;
         let absolute = |p: &PathBuf| {
             std::path::absolute(p)
@@ -198,8 +211,7 @@ impl ServedHost {
         config.state_root = StateRoot::new(&s.state);
         config.policy_base = absolute(&s.base)?;
         config.model_store = s.models.clone();
-        config.workspace.runtime_dirs = s
-            .runtime_dirs
+        config.workspace.runtime_dirs = runtime_dirs
             .iter()
             .map(absolute)
             .collect::<Result<_, _>>()?;
@@ -339,8 +351,37 @@ impl ServedHost {
         Ok(running.sampled.context())
     }
 
+    /// The context that samples at temperature one, with `policy` servable,
+    /// whose task runtimes find their interpreters in `runtime_dirs` first
+    /// (instead of the host's own directories): the proposer of a task
+    /// family whose interpreter is not the host's default.
+    ///
+    /// # Errors
+    /// The server does not start or does not list the policy's adapter.
+    pub fn context_in(
+        &self,
+        policy: &PolicyRef,
+        runtime_dirs: &[PathBuf],
+    ) -> Result<Context, CampaignError> {
+        let running = self.running()?;
+        self.adopt(&running, policy)?;
+        let mut scoped = self
+            .scoped
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !scoped.contains_key(runtime_dirs) {
+            let handle = self.handle_in(&running.endpoints, Asked::sampled(1.0), runtime_dirs)?;
+            scoped.insert(runtime_dirs.to_vec(), handle);
+        }
+        Ok(scoped[runtime_dirs].context())
+    }
+
     /// Stops the server; the next use starts a new server session.
     pub fn stop(&self) {
+        self.scoped
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         *self
             .running
             .lock()
