@@ -158,6 +158,28 @@ experiments, not imitation). Practice environments are generated independently o
 - **Single seeds and bundled changes confound attribution**: replicate seeds and change one thing per registered comparison.
 - **Agents scanning trajectories for hacks** (fetching the reference fix, test tampering) before any trajectory trains.
 
+## Next registered run: RSI6, continuous acquisition across task families (design, 2026-11-16)
+
+RSI5 (one family, Lua output prediction, answer-only interpreter labels) gained +5.1, +1.6, +1.2, +0.3 points per doubling of
+its pool on a fresh exam: one skill from one source saturates. STaR traces and interpreter execution traces both did worse
+than answer-only in learner-side pilots. RSI6 tests continuous learning as continual acquisition: each generation adds a new
+task family while keeping the earlier ones, so every generation has something new to learn.
+
+- Families (each with an exact verifier, a manual the proposer reads, a learner-side generator for development items and an
+  examiner-side generator for sealed items): F1 Lua 5.1 output (RSI5); F2 Python 3 output; F3 and F4 counterfactual Lua dialects
+  (generated manual plus a modified reference interpreter: changed indexing base, operator meaning or library rules), whose
+  rules no pretrained model knows.
+- Generation k trains from the base on the union of the frontier pools of families 1..k (pool per family as RSI5's best
+  value, about 2000-4000 records), with proposer-novelty and frontier-yield logged as leading indicators.
+- Exam: one sealed exam per family, drawn before the run; the registered criterion is the mean over all four families'
+  exams (every step, generation k vs k-1, lower bound above zero by the templates x lineages bootstrap), plus retention
+  (no family's score drops by more than a margin after a later generation) and the never-examined-family stratum.
+- Controls: a generation that adds no new family (the same pool doubled) beside the generation that adds one, so the gain is
+  attributed to acquisition rather than volume.
+- Engineering before the run: a family abstraction in campaign-lua (language, interpreter, manual sections, admission checks)
+  with Python 3 and dialect families; matching bench generators (python3 templates, dialect templates and interpreters).
+- Build: brain >= 4a6efd39c (device-side sampling, about 3.5x faster proposing).
+
 ## A LearningCampaign's required resources
 
 Goal and competence criteria; knowledge sources; tool registry; isolated environment; ground-truth mechanism; training-feedback
