@@ -198,6 +198,10 @@ pub struct Config {
     pub tasks: TaskCounts,
     /// Pretraining on raw text.
     pub pretrain: TrainBudget,
+    /// Pretraining runs as this many segments, each continuing the last,
+    /// with the retrieval probe after each: the curve of what it learns
+    /// against tokens.
+    pub pretrain_segments: u32,
     /// Supervised fine-tuning on the expert's demonstrations.
     pub sft: TrainBudget,
     /// How the chat stages train.
@@ -247,9 +251,9 @@ impl Config {
             ),
             Profile::Default => (
                 ouro(256, 4, 4, 4, 4096, 2048),
-                world(400, 20_000, 6_000, 3_000, 12_000, 60_000),
+                world(400, 20_000, 6_000, 3_000, 12_000, 300_000),
                 tasks(3_000, 384, 12),
-                budget(2_400, 64, 1e-3, 512),
+                budget(6_000, 64, 1e-3, 512),
                 budget(800, 32, 5e-4, 1024),
                 budget(80, 8, 2e-4, 1024),
             ),
@@ -269,6 +273,7 @@ impl Config {
             tokenizer: TokenizerText { split_digits: true },
             tasks,
             pretrain,
+            pretrain_segments: if profile == Profile::Smoke { 1 } else { 6 },
             sft,
             chat_training: ChatTraining { as_text: true },
             improve,

@@ -67,13 +67,30 @@ pub(crate) fn model_stages(
         .clone();
     let init = run.checkpoint(label, world)?;
     run.probe(&format!("{label}/init"), (&init.0, &init.1))?;
-    let pretrained = run.train(
-        Stage::Pretrain,
-        label,
-        "pretrain",
-        (&init.0, &init.1),
-        (&corpus, "world/train.jsonl"),
-    )?;
+    run.retrieval(&format!("{label}/init"), (&init.0, &init.1))?;
+    // Pretraining in segments, each continuing the last, with the retrieval
+    // probe after each; the last is the pretrained checkpoint.
+    let segments = run.config.pretrain_segments.max(1);
+    let full = run.config.pretrain.clone();
+    let mut pretrained = init.clone();
+    for i in 1..=segments {
+        run.config.pretrain.steps = full.steps / segments + u32::from(i <= full.steps % segments);
+        let name = if i == segments {
+            "pretrain".to_string()
+        } else {
+            format!("pretrain-{i}")
+        };
+        let trained = run.train(
+            Stage::Pretrain,
+            label,
+            &name,
+            (&pretrained.0, &pretrained.1),
+            (&corpus, "world/train.jsonl"),
+        );
+        run.config.pretrain = full.clone();
+        pretrained = trained?;
+        run.retrieval(&format!("{label}/{name}"), (&pretrained.0, &pretrained.1))?;
+    }
     run.probe(
         &format!("{label}/pretrained"),
         (&pretrained.0, &pretrained.1),

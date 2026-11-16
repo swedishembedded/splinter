@@ -29,6 +29,7 @@ pub mod pack;
 pub mod panel;
 pub mod recipe;
 pub mod report;
+pub mod retrieval;
 pub mod sequence;
 pub mod stages;
 pub mod tasks;

@@ -612,6 +612,7 @@ impl<'a> Run<'a> {
                 "losses": trained.losses, "resumed": trained.resumed, "attempt": attempt.id(),
                 "resume": { "state": resume["state"], "resumed_at": resume["resumed_at"] },
                 "train_seconds": started.elapsed().as_secs(), "tokens_per_second": rate,
+                "tokens": (stage == Stage::Pretrain).then(|| u64::from(budget.steps) * u64::from(budget.batch) * u64::from(budget.block)),
             }))
             .output("checkpoint", &rel))
         })?;

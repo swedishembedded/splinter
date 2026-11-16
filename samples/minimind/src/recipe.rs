@@ -50,7 +50,7 @@ impl Recipe {
 /// the tool results as rendered), the held-out split and the tokenizer text.
 pub const WORLD: Recipe = Recipe {
     stage: "world",
-    version: 3,
+    version: 4,
 };
 
 /// The task families, their instance draw and the Harbor export.
@@ -158,7 +158,7 @@ mod tests {
     }
 
     const PINNED: [&str; 3] = [
-        "world (WORLD, EPISODE): blake3:6dceb01037c69ff6eb4edfc1569a260cf96730d843925a2146c6de8f39f97e7d",
+        "world (WORLD, EPISODE): blake3:292fb4ea9c39266b8accd2a3a83462f596b1a6452d2b2fe9331788fafcd97f28",
         "template (WORLD, CHECKPOINT): blake3:354117630131a85c444d649decf8b227f76e57221451ea66e3cd18ede9066edc",
         "tasks (TASKS): blake3:2ec7cb549832048780dbdd54f9733d13965b8a0ff28d18d882fe1de6e8620f09",
     ];

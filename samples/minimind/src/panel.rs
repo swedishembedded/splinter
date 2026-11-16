@@ -206,6 +206,31 @@ pub fn summary(commits: &[Commit], labels: &[String]) -> String {
                 training(commits, label, stage)
             );
         }
+        // Retrieval against pretraining tokens.
+        let mut tokens = 0u64;
+        let mut curve = Vec::new();
+        for c in commits {
+            let Some(name) = c.unit.strip_prefix(&format!("retrieval/{label}/")) else {
+                continue;
+            };
+            if let Some(t) = find(commits, &format!("{label}/{name}")) {
+                tokens += t.summary["tokens"].as_u64().unwrap_or(0);
+            }
+            curve.push(format!(
+                "{:.0}M tok: {}+{}/{}",
+                tokens as f64 / 1e6,
+                c.summary["listing"],
+                c.summary["path"],
+                2 * c.summary["per_kind"].as_u64().unwrap_or(0)
+            ));
+        }
+        if !curve.is_empty() {
+            let _ = writeln!(
+                s,
+                "  retrieval while pretraining (listing+path exact): {}",
+                curve.join(", ")
+            );
+        }
         for pair in ["scratch", "experience"] {
             if let Some(c) = find(commits, &format!("{label}/{pair}/verdict")) {
                 let _ = writeln!(

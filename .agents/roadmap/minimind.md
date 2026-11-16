@@ -66,6 +66,11 @@ what a change reaches). Pretraining 600 x 64 x 512 unless said.
 | SFT as text (`chat_training.as_text`, 400 x 32 x 1024) | 3 | 3 | 0 (chat improve) | 27/96 | |
 | improvement as text too, own verified + 1:1 rehearsal, 40 x 8 x 1024 | 3 | 3 | 4 | 27/96 | 11.8 min end to end |
 
+Retrieval probe (`src/retrieval.rs`): raw-text continuation of 12 held-out listings (`L1:name: 7145` ...
+then `The code of NAME is`) and 12 request-to-path prompts, exact match of the copied value; run after
+random init and after every pretraining segment (`pretrain_segments`, 6 in the default profile, each
+continuing the last), so the run shows retrieval against pretraining tokens.
+
 What it still cannot do: copy a file name or a code it has not seen often (combine and lookup 0 of 4
 throughout). Pretraining throughput is about 50k tok/s at any batch from 8 x 1024 to 128 x 1024 on this
 model (sweep through `brain/train pretrain`, 20 steps each).

@@ -19,7 +19,7 @@ use serde::Serialize;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::config::WorldSize;
-use crate::template::{Call, Template, ToolSig, Turn};
+use crate::template::{to_json, Call, Template, ToolSig, Turn};
 
 const ONSETS: &[&str] = &[
     "b", "d", "f", "g", "k", "l", "m", "n", "p", "r", "s", "t", "v", "z", "br", "st", "tr", "gl",
@@ -202,7 +202,14 @@ fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
         .map(|(i, (name, code))| format!("L{}:{name}: {code}", i + 1))
         .collect::<Vec<_>>()
         .join("\n");
-    let text = match rng.below(3) {
+    let text = match rng.below(4) {
+        3 => {
+            let (name, _) = &entries[rng.below(entries.len())];
+            format!(
+                "Read the number in inputs/{name}.txt.\nread_file {}\n",
+                to_json(&serde_json::json!({ "path": format!("inputs/{name}.txt") }))
+            )
+        }
         0 => {
             let mut text = format!("{listing}\n");
             for _ in 0..3 {
