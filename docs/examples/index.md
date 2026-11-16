@@ -18,6 +18,7 @@ none of them is a claim that the loop makes a model generally better (see [limit
 | [adams](../../samples/adams/README.md) | Can a small model learn how Samuel Adams worked from his own papers? |
 | [synthetic-author](../../samples/synthetic-author/README.md) | Can Splinter learn beliefs it was never told, against ground truth that cannot have been seen in pretraining? |
 | [tool-syntax](../../samples/tool-syntax/README.md) | Does verified experience teach a small model to look before it acts? |
+| [minimind](../../samples/minimind/README.md) | Can one resumable command take a model from random weights to an agent that solves workspace tool-use tasks? (so far: every stage that needs no model; the model stages wait on brain's from-scratch training) |
 | [repo-replay](../../samples/repo-replay/README.md) | Can a git history be replayed by an agent, commit by commit, into verified supervised data? |
 | [model-check](../../samples/model-check/README.md) | Does acquired knowledge of a model checker make an agent fix concurrency bugs better? (so far: the checking harness) |
 | [agent-loop](../../samples/agent/loop/README.md) | Can a local model complete a repository task unaided, and can a supervisor audit it? |

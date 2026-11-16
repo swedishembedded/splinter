@@ -84,6 +84,9 @@ navigation:
       - source: samples/repo-replay/README.md
         path: examples/repo-replay.md
         title: repo-replay
+      - source: samples/minimind/README.md
+        path: examples/minimind.md
+        title: minimind
       - source: samples/model-check/README.md
         path: examples/model-check.md
         title: model-check

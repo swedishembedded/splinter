@@ -142,3 +142,4 @@ in the same commit.
 | [154](154-the-greedy-dev-gate-accepted-12-of-12-rsi3-steps-and-the-sealed-exam-found-2-were-not-improvements-the-two-smallest-dev-margins.md) | The greedy dev gate accepted 12 of 12 RSI3 steps, and the sealed exam found 2 were not improvements: the two smallest dev margins |
 | [155](155-a-frontier-program-longer-than-the-training-row-failed-a-whole-lineage.md) | A frontier program longer than the training row failed a whole lineage |
 | [156](156-a-bare-reply-dropped-the-reasoning-so-a-thinking-lineage-could-not-keep-the-trace-it-verified.md) | A bare reply dropped the reasoning, so a thinking lineage could not keep the trace it verified |
+| [157](157-a-run-directory-released-a-moment-ago-looked-held-because-a-forked-child-still-had-the-lock.md) | A run directory released a moment ago looked held, because a forked child still had the lock |

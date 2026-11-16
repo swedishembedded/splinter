@@ -36,6 +36,11 @@ captured on the wire, and only verifier-accepted episodes become records.
   profile of an embedded engine should read the host's skills is sven's to decide.
 - `sven_sdk::rollout` does not exist on sven main; episodes are collected by splinter through
   `crates/agent` with durable attempt ids from the stage ledger.
-
-- The rest of the sample and its generic pieces (agent episode under a small-context profile,
-  wire records, brain from-scratch calls, bench examination) land in following commits.
+- Brain (lane B): the from-scratch action (tokenizer + random-init checkpoint of a named architecture
+  with the template's special tokens and chat template, installed as `local/<name>`), raw-text
+  pretraining and a full chat fine-tune over `brain/train`, resumable by job identity, and serving an
+  installed from-scratch checkpoint with tool calls. Then `ServedBrain` submits them and the model
+  stages run for real; a second architecture (a tiny `qwen3`) is a configuration entry once brain
+  can make it from scratch.
+- Not yet run: the bench examination against a real exam; GRPO as a selectable improvement method
+  (needs behaviour log-probabilities from the served model); episodes in parallel.
