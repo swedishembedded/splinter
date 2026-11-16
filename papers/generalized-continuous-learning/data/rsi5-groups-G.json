@@ -1,0 +1,699 @@
+{
+  "bootstrap": {
+    "replicates": 10000,
+    "resamples": "families with replacement and, within each group, candidates with replacement, jointly",
+    "seed": 20261116
+  },
+  "collection": {
+    "exam_sha256": "cd9f1920846b6939ae8622312185e06cf2858cb91fc59fd63b43d5b5cccb6bd8",
+    "items": 2040,
+    "name": "predict-lua51-g"
+  },
+  "comparisons": {
+    "gen4-over-base": {
+      "clustered": {
+        "families": 136,
+        "interval": [
+          0.0506429292573454,
+          0.11308256093873303
+        ],
+        "mean": 0.08186274509803922,
+        "standard_error": 0.01578598258181756
+      },
+      "compared": 2040,
+      "control": "base",
+      "control_share": 0.050490196078431374,
+      "difference": 0.08186274509803922,
+      "excluded": 0,
+      "families": 136,
+      "incomplete_material": false,
+      "interval": [
+        0.05122549019607844,
+        0.11519607843137256
+      ],
+      "items": 2040,
+      "outcome": "treatment_better",
+      "strata": {
+        "baseline_right": {
+          "clustered": {
+            "families": 33,
+            "interval": [
+              -0.5446261962266131,
+              -0.21750972610348399
+            ],
+            "mean": -0.38106796116504854,
+            "standard_error": 0.08029631189783129
+          },
+          "control_share": 1.0,
+          "difference": -0.3810679611650486,
+          "families": 33,
+          "interval": [
+            -0.5592105263157895,
+            -0.24099099099099097
+          ],
+          "items": 103,
+          "outcome": "control_better",
+          "treatment_share": 0.6189320388349514
+        },
+        "baseline_wrong": {
+          "clustered": {
+            "families": 136,
+            "interval": [
+              0.07374548907593828,
+              0.1392126936809022
+            ],
+            "mean": 0.10647909137842024,
+            "standard_error": 0.01655141332107357
+          },
+          "control_share": 0.0,
+          "difference": 0.10647909137842024,
+          "families": 136,
+          "interval": [
+            0.07502556237218815,
+            0.14220303506017792
+          ],
+          "items": 1937,
+          "outcome": "treatment_better",
+          "treatment_share": 0.10647909137842024
+        },
+        "family_set:v1": {
+          "clustered": {
+            "families": 78,
+            "interval": [
+              0.07069629588686896,
+              0.1664831912926182
+            ],
+            "mean": 0.11858974358974358,
+            "standard_error": 0.02405189804667494
+          },
+          "control_share": 0.07777777777777778,
+          "difference": 0.11858974358974358,
+          "families": 78,
+          "interval": [
+            0.0700854700854701,
+            0.17094017094017094
+          ],
+          "items": 1170,
+          "outcome": "treatment_better",
+          "treatment_share": 0.19636752136752136
+        },
+        "family_set:v2": {
+          "clustered": {
+            "families": 58,
+            "interval": [
+              0.0002847490211488682,
+              0.0646577797144833
+            ],
+            "mean": 0.03247126436781609,
+            "standard_error": 0.01607344346307144
+          },
+          "control_share": 0.013793103448275862,
+          "difference": 0.03247126436781609,
+          "families": 58,
+          "interval": [
+            0.006609195402298852,
+            0.07097701149425287
+          ],
+          "items": 870,
+          "outcome": "treatment_better",
+          "treatment_share": 0.04626436781609195
+        }
+      },
+      "treatment": "gen4",
+      "treatment_share": 0.1323529411764706
+    },
+    "step1": {
+      "clustered": {
+        "families": 136,
+        "interval": [
+          0.025925450455031966,
+          0.07554513778026214
+        ],
+        "mean": 0.05073529411764706,
+        "standard_error": 0.012544845296786185
+      },
+      "compared": 2040,
+      "control": "base",
+      "control_share": 0.050490196078431374,
+      "difference": 0.05073529411764706,
+      "excluded": 0,
+      "families": 136,
+      "incomplete_material": false,
+      "interval": [
+        0.02598039215686275,
+        0.07757352941176471
+      ],
+      "items": 2040,
+      "outcome": "treatment_better",
+      "strata": {
+        "baseline_right": {
+          "clustered": {
+            "families": 33,
+            "interval": [
+              -0.521554975945548,
+              -0.21630910172435497
+            ],
+            "mean": -0.36893203883495146,
+            "standard_error": 0.0749278014426033
+          },
+          "control_share": 1.0,
+          "difference": -0.3689320388349514,
+          "families": 33,
+          "interval": [
+            -0.5333333333333333,
+            -0.23026315789473684
+          ],
+          "items": 103,
+          "outcome": "control_better",
+          "treatment_share": 0.6310679611650486
+        },
+        "baseline_wrong": {
+          "clustered": {
+            "families": 136,
+            "interval": [
+              0.04758797312622938,
+              0.09851424680149391
+            ],
+            "mean": 0.07305110996386165,
+            "standard_error": 0.012875176351084042
+          },
+          "control_share": 0.0,
+          "difference": 0.07305110996386165,
+          "families": 136,
+          "interval": [
+            0.04850177755205688,
+            0.10230809128630705
+          ],
+          "items": 1937,
+          "outcome": "treatment_better",
+          "treatment_share": 0.07305110996386165
+        },
+        "family_set:v1": {
+          "clustered": {
+            "families": 78,
+            "interval": [
+              0.030966385470621555,
+              0.10664045213621606
+            ],
+            "mean": 0.06880341880341881,
+            "standard_error": 0.019001606937026967
+          },
+          "control_share": 0.07777777777777778,
+          "difference": 0.06880341880341881,
+          "families": 78,
+          "interval": [
+            0.03141025641025641,
+            0.1091880341880342
+          ],
+          "items": 1170,
+          "outcome": "treatment_better",
+          "treatment_share": 0.1465811965811966
+        },
+        "family_set:v2": {
+          "clustered": {
+            "families": 58,
+            "interval": [
+              -0.001880863155099971,
+              0.054754426373490775
+            ],
+            "mean": 0.026436781609195402,
+            "standard_error": 0.014141389871624381
+          },
+          "control_share": 0.013793103448275862,
+          "difference": 0.026436781609195402,
+          "families": 58,
+          "interval": [
+            0.003160919540229885,
+            0.06005747126436782
+          ],
+          "items": 870,
+          "outcome": "treatment_better",
+          "treatment_share": 0.040229885057471264
+        }
+      },
+      "treatment": "gen1",
+      "treatment_share": 0.10122549019607843
+    },
+    "step2": {
+      "clustered": {
+        "families": 136,
+        "interval": [
+          0.00546910262667614,
+          0.026393642471363075
+        ],
+        "mean": 0.015931372549019607,
+        "standard_error": 0.005290140454483775
+      },
+      "compared": 2040,
+      "control": "gen1",
+      "control_share": 0.10122549019607843,
+      "difference": 0.015931372549019607,
+      "excluded": 0,
+      "families": 136,
+      "incomplete_material": false,
+      "interval": [
+        0.001225490196078427,
+        0.033333333333333326
+      ],
+      "items": 2040,
+      "outcome": "treatment_better",
+      "strata": {
+        "baseline_right": {
+          "clustered": {
+            "families": 33,
+            "interval": [
+              -0.04632111275772083,
+              0.012340530233448985
+            ],
+            "mean": -0.01699029126213592,
+            "standard_error": 0.014399499909879813
+          },
+          "control_share": 0.6310679611650486,
+          "difference": -0.016990291262136026,
+          "families": 33,
+          "interval": [
+            -0.08152173913043481,
+            0.05084745762711873
+          ],
+          "items": 103,
+          "outcome": "inconclusive",
+          "treatment_share": 0.6140776699029126
+        },
+        "baseline_wrong": {
+          "clustered": {
+            "families": 136,
+            "interval": [
+              0.00684170206918434,
+              0.0285222628249819
+            ],
+            "mean": 0.01768198244708312,
+            "standard_error": 0.005481277599481375
+          },
+          "control_share": 0.07305110996386165,
+          "difference": 0.01768198244708312,
+          "families": 136,
+          "interval": [
+            0.0033197139938713066,
+            0.033896103896103896
+          ],
+          "items": 1937,
+          "outcome": "treatment_better",
+          "treatment_share": 0.09073309241094477
+        },
+        "family_set:v1": {
+          "clustered": {
+            "families": 78,
+            "interval": [
+              0.005844717490969981,
+              0.03475357310732062
+            ],
+            "mean": 0.0202991452991453,
+            "standard_error": 0.007258955883111106
+          },
+          "control_share": 0.1465811965811966,
+          "difference": 0.020299145299145283,
+          "families": 78,
+          "interval": [
+            0.00042735042735042583,
+            0.04423076923076924
+          ],
+          "items": 1170,
+          "outcome": "treatment_better",
+          "treatment_share": 0.16688034188034187
+        },
+        "family_set:v2": {
+          "clustered": {
+            "families": 58,
+            "interval": [
+              -0.005276424977694552,
+              0.025391367506430184
+            ],
+            "mean": 0.010057471264367816,
+            "standard_error": 0.007657508483313147
+          },
+          "control_share": 0.040229885057471264,
+          "difference": 0.010057471264367818,
+          "families": 58,
+          "interval": [
+            -0.007471264367816095,
+            0.03275862068965517
+          ],
+          "items": 870,
+          "outcome": "inconclusive",
+          "treatment_share": 0.05028735632183908
+        }
+      },
+      "treatment": "gen2",
+      "treatment_share": 0.11715686274509804
+    },
+    "step3": {
+      "clustered": {
+        "families": 136,
+        "interval": [
+          0.00275100477802356,
+          0.022003897182760752
+        ],
+        "mean": 0.012377450980392156,
+        "standard_error": 0.004867514685250536
+      },
+      "compared": 2040,
+      "control": "gen2",
+      "control_share": 0.11715686274509804,
+      "difference": 0.012377450980392168,
+      "excluded": 0,
+      "families": 136,
+      "incomplete_material": false,
+      "interval": [
+        -0.0035539215686274522,
+        0.029779411764705888
+      ],
+      "items": 2040,
+      "outcome": "inconclusive",
+      "strata": {
+        "baseline_right": {
+          "clustered": {
+            "families": 33,
+            "interval": [
+              -0.010484138971093758,
+              0.07359093508759862
+            ],
+            "mean": 0.03155339805825243,
+            "standard_error": 0.020637659629027333
+          },
+          "control_share": 0.6140776699029126,
+          "difference": 0.031553398058252524,
+          "families": 33,
+          "interval": [
+            -0.03960396039603964,
+            0.12113402061855671
+          ],
+          "items": 103,
+          "outcome": "inconclusive",
+          "treatment_share": 0.6456310679611651
+        },
+        "baseline_wrong": {
+          "clustered": {
+            "families": 136,
+            "interval": [
+              0.001794412095858006,
+              0.02092112739820498
+            ],
+            "mean": 0.011357769747031492,
+            "standard_error": 0.004835614600529986
+          },
+          "control_share": 0.09073309241094477,
+          "difference": 0.011357769747031482,
+          "families": 136,
+          "interval": [
+            -0.0037938252223966573,
+            0.02889644351464435
+          ],
+          "items": 1937,
+          "outcome": "inconclusive",
+          "treatment_share": 0.10209086215797625
+        },
+        "family_set:v1": {
+          "clustered": {
+            "families": 78,
+            "interval": [
+              0.0005457562053179047,
+              0.029796124136562435
+            ],
+            "mean": 0.01517094017094017,
+            "standard_error": 0.007344708943012647
+          },
+          "control_share": 0.16688034188034187,
+          "difference": 0.015170940170940173,
+          "families": 78,
+          "interval": [
+            -0.009401709401709396,
+            0.04166666666666666
+          ],
+          "items": 1170,
+          "outcome": "inconclusive",
+          "treatment_share": 0.18205128205128204
+        },
+        "family_set:v2": {
+          "clustered": {
+            "families": 58,
+            "interval": [
+              -0.0029079050593006014,
+              0.02014928436964543
+            ],
+            "mean": 0.008620689655172414,
+            "standard_error": 0.005757200285769167
+          },
+          "control_share": 0.05028735632183908,
+          "difference": 0.00862068965517241,
+          "families": 58,
+          "interval": [
+            -0.00545977011494253,
+            0.030172413793103446
+          ],
+          "items": 870,
+          "outcome": "inconclusive",
+          "treatment_share": 0.05890804597701149
+        }
+      },
+      "treatment": "gen3",
+      "treatment_share": 0.1295343137254902
+    },
+    "step4": {
+      "clustered": {
+        "families": 136,
+        "interval": [
+          -0.009141047130517818,
+          0.014778302032478603
+        ],
+        "mean": 0.002818627450980392,
+        "standard_error": 0.006047287901732264
+      },
+      "compared": 2040,
+      "control": "gen3",
+      "control_share": 0.1295343137254902,
+      "difference": 0.002818627450980382,
+      "excluded": 0,
+      "families": 136,
+      "incomplete_material": false,
+      "interval": [
+        -0.015441176470588236,
+        0.022426470588235298
+      ],
+      "items": 2040,
+      "outcome": "inconclusive",
+      "strata": {
+        "baseline_right": {
+          "clustered": {
+            "families": 33,
+            "interval": [
+              -0.10061711229011502,
+              0.047219054037687835
+            ],
+            "mean": -0.02669902912621359,
+            "standard_error": 0.0362889062625575
+          },
+          "control_share": 0.6456310679611651,
+          "difference": -0.02669902912621369,
+          "families": 33,
+          "interval": [
+            -0.13333333333333336,
+            0.05421686746987947
+          ],
+          "items": 103,
+          "outcome": "inconclusive",
+          "treatment_share": 0.6189320388349514
+        },
+        "baseline_wrong": {
+          "clustered": {
+            "families": 136,
+            "interval": [
+              -0.007166209734078304,
+              0.015942668174966274
+            ],
+            "mean": 0.0043882292204439855,
+            "standard_error": 0.005842384625504877
+          },
+          "control_share": 0.10209086215797625,
+          "difference": 0.00438822922044399,
+          "families": 136,
+          "interval": [
+            -0.014095335725269095,
+            0.02362409138110072
+          ],
+          "items": 1937,
+          "outcome": "inconclusive",
+          "treatment_share": 0.10647909137842024
+        },
+        "family_set:v1": {
+          "clustered": {
+            "families": 78,
+            "interval": [
+              -0.0023103858665273567,
+              0.03094286449900599
+            ],
+            "mean": 0.014316239316239316,
+            "standard_error": 0.00834982472419039
+          },
+          "control_share": 0.18205128205128204,
+          "difference": 0.014316239316239321,
+          "families": 78,
+          "interval": [
+            -0.016025641025641024,
+            0.046794871794871795
+          ],
+          "items": 1170,
+          "outcome": "inconclusive",
+          "treatment_share": 0.19636752136752136
+        },
+        "family_set:v2": {
+          "clustered": {
+            "families": 58,
+            "interval": [
+              -0.029291682206473046,
+              0.004004325884633966
+            ],
+            "mean": -0.01264367816091954,
+            "standard_error": 0.008313753412479825
+          },
+          "control_share": 0.05890804597701149,
+          "difference": -0.01264367816091954,
+          "families": 58,
+          "interval": [
+            -0.037068965517241384,
+            0.0034482758620689655
+          ],
+          "items": 870,
+          "outcome": "inconclusive",
+          "treatment_share": 0.04626436781609195
+        }
+      },
+      "treatment": "gen4",
+      "treatment_share": 0.1323529411764706
+    }
+  },
+  "examined_at": "2026-11-16T11:59:27+00:00",
+  "groups": {
+    "base": {
+      "candidates": 1,
+      "members": [
+        "base"
+      ],
+      "share": 0.050490196078431374,
+      "shares": [
+        0.050490196078431374
+      ]
+    },
+    "gen1": {
+      "candidates": 4,
+      "members": [
+        "g0/1",
+        "g1/1",
+        "g2/1",
+        "g3/1"
+      ],
+      "share": 0.10122549019607843,
+      "shares": [
+        0.1034313725490196,
+        0.09019607843137255,
+        0.11078431372549019,
+        0.10049019607843138
+      ]
+    },
+    "gen2": {
+      "candidates": 4,
+      "members": [
+        "g0/2",
+        "g1/2",
+        "g2/2",
+        "g3/2"
+      ],
+      "share": 0.11715686274509804,
+      "shares": [
+        0.11519607843137254,
+        0.11470588235294117,
+        0.11127450980392156,
+        0.12745098039215685
+      ]
+    },
+    "gen3": {
+      "candidates": 4,
+      "members": [
+        "g0/3",
+        "g1/3",
+        "g2/3",
+        "g3/3"
+      ],
+      "share": 0.1295343137254902,
+      "shares": [
+        0.13872549019607844,
+        0.12156862745098039,
+        0.12058823529411765,
+        0.13725490196078433
+      ]
+    },
+    "gen4": {
+      "candidates": 4,
+      "members": [
+        "g0/4",
+        "g1/4",
+        "g2/4",
+        "g3/4"
+      ],
+      "share": 0.1323529411764706,
+      "shares": [
+        0.14019607843137255,
+        0.1230392156862745,
+        0.13284313725490196,
+        0.13333333333333333
+      ]
+    }
+  },
+  "invalid_reasons": [],
+  "level": 0.95,
+  "margin": 0.02,
+  "plan": "rsi5-G",
+  "protocol": {
+    "answer": "last fenced block, else the whole reply",
+    "compare": "the collection's own check",
+    "completions_per_item": 1,
+    "max_tokens": 2048,
+    "name": "direct-completion",
+    "system_prompt": "none",
+    "temperature": 0.0,
+    "thinking": "off",
+    "truncated": "graded"
+  },
+  "rule": "difference of the groups' mean share right; 95% interval from 10000 bootstrap replicates resampling families and candidates within each group jointly; treatment_better when its lower bound is above 0, control_better when its upper bound is below 0, equivalent when it lies within +-0.02, else inconclusive; over the items no candidate of either group trained on",
+  "schema": "bench.examination.groups/1",
+  "serving_build": {
+    "brain_sha256": "01e7c73d27ce805c091c96ac25628c2300f3f6719403a64bba7fa2294eaec876"
+  },
+  "signature": {
+    "alg": "hmac-sha256",
+    "key_id": "070d75728dcf",
+    "value": "76d4042dd9f1d088d0541dfa26ad8925f406a6daabc8c4ac7116c287e07042b2"
+  },
+  "similarity": {
+    "at_least": {
+      "0.5": 1089,
+      "0.7": 71,
+      "0.9": 1,
+      "1.0": 0
+    },
+    "items": 2040,
+    "material_files": 16,
+    "max": 0.9,
+    "mean": 0.513050201996472,
+    "measure": "token-set Jaccard of the item's program to its nearest training program (comments removed)",
+    "min": 0.22580645161290322,
+    "quantiles": {
+      "0.1": 0.40384615384615385,
+      "0.25": 0.45161290322580644,
+      "0.5": 0.5,
+      "0.75": 0.5769230769230769,
+      "0.9": 0.64,
+      "0.99": 0.7307692307692307
+    }
+  },
+  "valid": true
+}

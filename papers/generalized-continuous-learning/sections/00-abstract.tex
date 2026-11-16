@@ -2,7 +2,9 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 \begin{abstract}
 This paper asks whether a local model can keep improving, generation after generation, on a task family whose only teacher is
-an executable environment, with every generation judged by a separate examiner on exams the learner never sees. It is a draft:
-its main experiment (RSI5: four generations of four lineages, judged on a fresh sealed exam with 58 never-examined program
-families) is registered and running, and no examined result is reported yet.
+an executable environment, with every generation judged by a separate examiner on exams the learner never sees. In RSI5 (four lineages, four generations, Qwen3-4B, the
+pool of interpreter-labelled programs doubling at each generation), generation 4 answers 13.2\% of a fresh sealed exam of 2040
+items against the base's 5.1\% (+8.2 points, 95\% interval [+5.1, +11.5]), and gains +3.3 points [+0.7, +7.1] on program
+families never used in any exam; but only the first two generations improve on their predecessors, so the registered
+criterion that every generation improves is not met. The paper is a draft.
 \end{abstract}
