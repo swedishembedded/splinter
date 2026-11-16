@@ -268,7 +268,7 @@ impl Config {
         };
         let (model, world, tasks, pretrain, sft, improve) = match profile {
             Profile::Smoke => (
-                ouro(256, 4, 2, 4, 1024, 2048),
+                ouro(256, 4, 2, 4, 1024, 4096),
                 world(200, 4_000, 1_500, 1_000, 6_000, 60_000),
                 tasks(1_600, 96, 12),
                 budget(3_000, 64, 2e-3, 512),
@@ -276,7 +276,7 @@ impl Config {
                 budget(100, 8, 2e-4, 2048),
             ),
             Profile::Default => (
-                ouro(256, 4, 4, 4, 4096, 2048),
+                ouro(256, 4, 4, 4, 4096, 4096),
                 world(400, 20_000, 6_000, 3_000, 30_000, 600_000),
                 tasks(3_000, 384, 12),
                 budget(15_000, 64, 1e-3, 1024),

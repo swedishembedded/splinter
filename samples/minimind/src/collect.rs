@@ -84,6 +84,12 @@ pub fn tool_sigs() -> Vec<ToolSig> {
     ]
 }
 
+/// Whether an agent run failed because the conversation no longer fits the
+/// model's context: the policy's doing, not the service's.
+fn context_exhausted(e: &anyhow::Error) -> bool {
+    format!("{e:#}").contains("leaves no room for a response")
+}
+
 /// The outcome of one episode, as its unit records it.
 fn outcome(commit: &Commit) -> bool {
     commit.summary["passed"].as_bool().unwrap_or(false)
@@ -185,9 +191,25 @@ fn episode_work(
         .map(|a| a.trim().chars().take(60).collect::<String>());
     // A run that failed outright (the endpoint down, a request
     // refused) says nothing about the policy: the attempt stays open
-    // and runs again, never counted as a failed episode.
-    let ran = ran?;
-    let (conclusion, calls, trajectory) = (ran.conclusion, ran.tool_calls, ran.trajectory);
+    // and runs again, never counted as a failed episode. A policy that
+    // filled its context (reading the same files again and again) did end
+    // its episode, unsolved: that is an outcome.
+    let (conclusion, calls, trajectory) = match ran {
+        Ok(ran) => (ran.conclusion, ran.tool_calls, ran.trajectory),
+        Err(e) if context_exhausted(&e) => {
+            let calls = exchanges
+                .iter()
+                .filter_map(|x| x.reply.as_ref().ok())
+                .map(|r| r["tool_calls"].as_array().map_or(0, Vec::len))
+                .sum::<usize>();
+            (
+                "context exhausted".to_string(),
+                u32::try_from(calls).unwrap_or(u32::MAX),
+                Value::Null,
+            )
+        }
+        Err(e) => return Err(e),
+    };
     let last_text = exchanges
         .iter()
         .rev()
