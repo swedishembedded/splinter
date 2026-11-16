@@ -44,3 +44,14 @@ each doubling of the verified pool buys less (5.1, 1.6, 1.2, 0.3 points), and ge
 their predecessors. The learner's own gate advanced every generation, including on development leads that were not
 significant, so it did not detect the plateau. On items the base already answered, every comparison involving generation 1
 loses ($-37$ points on that small stratum), the same regression toward the mean the companion paper observed on exam F.
+
+\paragraph{A leading indicator in the learner's own records (descriptive).} A frontier pre-training effort that decomposed
+self-improvement into smaller loops found that an internal signal rose well before downstream scores plateaued, and that a
+flat headline score can hide growing headroom~\cite{cai2026nosecondrun}. RSI5's learner journals hold two such signals, read
+without any exam data. The frontier yield (the share of measured proposals a champion gets wrong at least once) fell from
+0.73--0.91 in generation~1 to 0.39--0.54 in generation~2 and stayed there, while step~2 still improved. The proposer's novelty
+(new programs admitted per proposal request) held at 0.45--0.94 through generation~3 and collapsed in generation~4 in every
+lineage (0.42, 0.27, 0.56, 0.34 for g0--g3), the generation whose step is flat: the champion increasingly re-proposed programs it
+had already proposed. With four lineages this is a hypothesis for the next registered run, not a finding: a controller that
+watches proposer novelty could stop, or change its source of programs, before spending a generation that does not pay.
+

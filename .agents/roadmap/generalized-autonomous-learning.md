@@ -143,6 +143,21 @@ execution, novel document-rule systems, stateful database workflows, repository 
 synthetic scientific world with hidden parameters (graded on predictions under unseen conditions; tests learning from
 experiments, not imitation). Practice environments are generated independently of Bench's sealed collections.
 
+## Lessons from RSI5 and from a decomposed pre-training self-improvement effort (arXiv 2611.10719, checked to exist)
+
+- **Plateau detection by leading indicators, not by the learner gate.** RSI5's gate advanced every generation on
+  non-significant development leads while exam G showed steps 3-4 flat. In RSI5's journals the proposer's novelty (new programs
+  per proposal request) collapsed in generation 4 of every lineage (0.27-0.56, from 0.45-0.94), the flat step; the frontier
+  yield had already fallen at generation 2 while that step still improved. Register novelty, yield and repeat rate as
+  controller signals; the strategy router (P2) switches source (mixed sources, mutations, procedural generation) or supervision
+  (traces, decomposition) or stops when novelty collapses, and a "verified yield of new items" of zero ends a loop.
+- **Headroom, not only the headline score.** A flat direct score can hide growing post-training headroom; examine candidates
+  also with a cheap adaptation probe or a second protocol (thinking on), registered beside the primary.
+- **Decompose into small loops** (debugging, recipe, metric loops), each with its own trial unit and signal, and log ruled-out
+  causes as negative results.
+- **Single seeds and bundled changes confound attribution**: replicate seeds and change one thing per registered comparison.
+- **Agents scanning trajectories for hacks** (fetching the reference fix, test tampering) before any trajectory trains.
+
 ## A LearningCampaign's required resources
 
 Goal and competence criteria; knowledge sources; tool registry; isolated environment; ground-truth mechanism; training-feedback
