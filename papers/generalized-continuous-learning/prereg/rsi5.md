@@ -95,3 +95,8 @@ RSI5: it has no matched-data control.
   `run-lineage.sh` only in the first generation to run and the proposer-state path). No proposal, prediction, training record or
   gate decision is changed by this: what a resumed round reuses comes from the lineage journals, and its proposer state is
   rebuilt. Resumed generations: g0 3, g1 3, g2 2, g3 2.
+- 2026-11-16 08:46, before any candidate was examined: **g2's fourth generation on gpu0.** Lineages g2 and g3 shared gpu2, one
+  generation at a time; when g0 finished all four generations, gpu0 was free. Lineage g2, which had handed off its third
+  candidate and was waiting for gpu2's lock (no g2 process was running), was started for generation 4 on gpu0 with
+  `run-lineage-shm.sh g2 0 6979610617474167843 4`: the same binary, seed, settings and journals on an identical card (GH200,
+  same build, f32 KV); only the device index differs.
