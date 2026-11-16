@@ -178,6 +178,10 @@ task family while keeping the earlier ones, so every generation has something ne
   attributed to acquisition rather than volume.
 - Engineering before the run: a family abstraction in campaign-lua (language, interpreter, manual sections, admission checks)
   with Python 3 and dialect families; matching bench generators (python3 templates, dialect templates and interpreters).
+- Learner side done (2026-11-16): `lineage --family` acquires Lua 5.1, Python 3 and the `zero-index` and `plus-concat` Lua dialects
+  in one lineage (`samples/campaign-lua/README.md`, "Task families"); the round record logs per-family proposer novelty and
+  frontier yield. Not run yet: no live lineage with families has been served on a GPU; the examiner-side generators and
+  interpreters are bench's.
 - Build: brain >= 4a6efd39c (device-side sampling, about 3.5x faster proposing).
 
 ## A LearningCampaign's required resources
