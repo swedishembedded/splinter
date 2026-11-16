@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The minimind run's configuration. A profile (smoke, default, 64m) is a
+# complete configuration; this file only changes what it names, and a key
+# the program does not know is refused. Changing a value recomputes only
+# the stages that read it and what follows them.
+
+# The profile; when this names none, `--profile` decides (default smoke).
+# profile: smoke
+
+# The models the sequence runs on, by label. The architecture and its own
+# configuration go to brain unread; a second label runs the same stages on
+# the same data, budgets, probes and exam, beside the first.
+# models:
+#   ouro:
+#     config:
+#       hidden_size: 64
+#   qwen3:
+#     arch: qwen3
+#     vocab: 1024
+#     context: 1024
+#     config:
+#       hidden_size: 64
+#       num_layers: 2
+#       num_heads: 4
+#       intermediate_size: 192
+
+# Budgets, for example a longer fine-tune:
+# sft:
+#   steps: 40
+
+# A corpus fetched at run time when the world cannot provide it (none by
+# default): a pinned URL, its SHA-256, its license, and the bytes taken.
+# fetch:
+#   - name: example
+#     url: https://example.org/corpus-v1.txt
+#     sha256: "<64 hex digits>"
+#     license: CC0-1.0
+#     slice_bytes: 1000000

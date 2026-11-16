@@ -12,10 +12,18 @@
 //! What is specific to this sample lives here: the configuration and its
 //! profiles ([`config`]), the synthetic world ([`world`]), the training
 //! task families and their verifier ([`tasks`]), the deterministic expert
-//! ([`expert`]) and the model's chat template ([`template`]).
+//! ([`expert`]), the model's chat template ([`template`]), the stage list
+//! ([`stages`], [`collect`]) and the report ([`report`]). Everything generic
+//! is Splinter's: the stage ledger (`store::stage_ledger`), sven episodes in
+//! a workspace and the policy endpoint (`agent`), training records from
+//! recorded calls (`data::wire`), brain over its API (`model::scratch`) and
+//! bench's examination (`bench::examine`).
 
+pub mod collect;
 pub mod config;
 pub mod expert;
+pub mod report;
+pub mod stages;
 pub mod tasks;
 pub mod template;
 pub mod world;
