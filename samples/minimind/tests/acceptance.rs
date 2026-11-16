@@ -4,8 +4,10 @@
 //! The run's contract, on the smoke profile against a model service double:
 //! a fresh run goes end to end; a second run trains nothing and repeats no
 //! episode; a run killed in a stage resumes it; a corrupt checkpoint is
-//! caught; a changed seed is a new run; a changed setting recomputes only
-//! what reads it; and nothing is promoted without a verified Promote.
+//! caught; a changed seed is a new run; a changed setting or service
+//! revision recomputes only what reads it, and a change to this repository's
+//! own code alone recomputes nothing; the same episodes write the same
+//! records; and nothing is promoted without a verified Promote.
 
 #![allow(clippy::unwrap_used)]
 
@@ -35,9 +37,20 @@ fn go(
     brain: &FakeBrain,
     examiner: Option<&dyn Examiner>,
 ) -> anyhow::Result<String> {
+    go_at(dir, config, seed, brain, examiner, revisions())
+}
+
+fn go_at(
+    dir: &Path,
+    config: Config,
+    seed: u64,
+    brain: &FakeBrain,
+    examiner: Option<&dyn Examiner>,
+    revisions: Revisions,
+) -> anyhow::Result<String> {
     let mut out = Vec::new();
     let result = {
-        let mut run = Run::open(dir, config, seed, revisions(), brain, examiner, &mut out)?;
+        let mut run = Run::open(dir, config, seed, revisions, brain, examiner, &mut out)?;
         run_all(&mut run)
     };
     let shown = String::from_utf8(out).unwrap();
@@ -265,4 +278,125 @@ fn a_fetched_corpus_is_checked_against_its_pin_and_joins_the_world() {
     let all = commits(&run_dir);
     assert_eq!(commit(&all, "world").summary["kinds"]["fetched"], 2);
     assert_eq!(commit(&all, "fetch/local").summary["license"], "CC0-1.0");
+}
+
+/// The units that began in `dir` after the first `skip` begin lines.
+fn begun_after(dir: &Path, skip: usize) -> Vec<String> {
+    std::fs::read_to_string(dir.join("ledger.jsonl"))
+        .unwrap()
+        .lines()
+        .filter(|l| l.contains("\"record\":\"begin\""))
+        .skip(skip)
+        .map(|l| {
+            serde_json::from_str::<serde_json::Value>(l).unwrap()["unit"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect()
+}
+
+fn with(name: &str, rev: &str) -> Revisions {
+    let mut r = revisions();
+    r.0.insert(name.into(), rev.into());
+    r
+}
+
+#[test]
+fn a_change_recomputes_what_consumes_it_and_nothing_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let brain = FakeBrain::new(dir.path());
+    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    let trained = brain.trained();
+
+    // This repository's own code (the report, the terminal output) is in
+    // no stage key: only the manifest is written again.
+    let started = begins(dir.path());
+    go_at(
+        dir.path(),
+        smoke(),
+        SEED,
+        &brain,
+        None,
+        with("splinter", "r2"),
+    )
+    .unwrap();
+    assert_eq!(begun_after(dir.path(), started), ["init"]);
+    assert_eq!(brain.trained(), trained, "nothing is trained");
+
+    // Another sven runs every episode again; the expert's episodes write
+    // the same records, so no training run reads anything new.
+    let started = begins(dir.path());
+    go_at(dir.path(), smoke(), SEED, &brain, None, with("sven", "r2")).unwrap();
+    let again = begun_after(dir.path(), started);
+    assert!(
+        again.iter().any(|u| u.starts_with("demonstrate/train-")),
+        "{again:?}"
+    );
+    assert!(
+        !again.iter().any(|u| u == "world" || u == "tasks"),
+        "{again:?}"
+    );
+    assert_eq!(
+        brain.trained(),
+        trained,
+        "the same records train nothing again: {again:?}"
+    );
+
+    // Another brain recomputes what brain computes or serves, and none of
+    // the data before it.
+    let started = begins(dir.path());
+    go_at(dir.path(), smoke(), SEED, &brain, None, with("brain", "r2")).unwrap();
+    let again = begun_after(dir.path(), started);
+    for unit in [
+        "ouro/checkpoint",
+        "ouro/pretrain",
+        "ouro/sft",
+        "probe/ouro/sft",
+    ] {
+        assert!(
+            again.iter().any(|u| u == unit),
+            "{unit} is recomputed: {again:?}"
+        );
+    }
+    assert!(
+        !again
+            .iter()
+            .any(|u| u == "world" || u == "tasks" || u.starts_with("demonstrate")),
+        "the data stages are reused: {again:?}"
+    );
+}
+
+#[test]
+fn the_same_episodes_write_the_same_bytes_whatever_was_interrupted() {
+    let read = |dir: &Path, rel: &str| std::fs::read(dir.join(rel)).unwrap();
+    let a = tempfile::tempdir().unwrap();
+    let brain = FakeBrain::new(a.path());
+    go(a.path(), smoke(), SEED, &brain, None).unwrap();
+
+    // A second collection of the same seed, its probe episodes interrupted
+    // by a server that went down and run again under new attempts.
+    let b = tempfile::tempdir().unwrap();
+    let other = FakeBrain::new(b.path());
+    other.down.store(true, Ordering::SeqCst);
+    *other.down_for.lock().unwrap() = Some("sft".into());
+    assert!(go(b.path(), smoke(), SEED, &other, None).is_err());
+    other.down.store(false, Ordering::SeqCst);
+    go(b.path(), smoke(), SEED, &other, None).unwrap();
+
+    for rel in [
+        "world/corpus.jsonl",
+        "data/demonstrate.jsonl",
+        "data/ouro/explore.jsonl",
+    ] {
+        assert_eq!(read(a.path(), rel), read(b.path(), rel), "{rel} differs");
+    }
+    let (ca, cb) = (commits(a.path()), commits(b.path()));
+    for unit in ["demonstrate", "probe/ouro/sft", "ouro/sft", "ouro/improve"] {
+        assert_eq!(
+            commit(&ca, unit).key,
+            commit(&cb, unit).key,
+            "{unit}'s key differs"
+        );
+    }
 }

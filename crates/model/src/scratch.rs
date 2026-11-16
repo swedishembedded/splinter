@@ -221,12 +221,14 @@ const COMPLETION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3
 enum Connection {
     /// A running server the caller gave; it cannot be restarted from here.
     Given(BrainEndpoints),
-    /// A server this process started and restarts when a checkpoint it
-    /// installed must be served (brain scans its model store at start).
+    /// A server this process starts when it is first needed, and restarts
+    /// when a checkpoint it installed must be served (brain scans its model
+    /// store at start). Every start is checked to schedule on `device`.
     Managed {
         settings: Box<ServiceSettings>,
         brain: Option<ManagedBrain>,
         cancel: sven_sdk::CancelToken,
+        device: Option<String>,
     },
 }
 
@@ -282,6 +284,31 @@ fn installed(report: &Value, store: &ArtifactStore, out: &Path) -> anyhow::Resul
     })
 }
 
+/// Checks that the server at `endpoints` schedules on device `id` (`gpu3`),
+/// as its `/v1/devices` lists them.
+fn require_device(endpoints: &BrainEndpoints, id: &str) -> anyhow::Result<()> {
+    let url = endpoints
+        .urls()
+        .first()
+        .ok_or_else(|| anyhow!("brain has no endpoint"))?;
+    let devices = crate::endpoint::get_json(
+        &format!("{}/devices", url.trim_end_matches('/')),
+        endpoints.key(),
+    )
+    .map_err(|e| anyhow!("asking brain for its devices: {e}"))?;
+    let listed: Vec<&str> = devices["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|d| d["id"].as_str())
+        .collect();
+    if listed.contains(&id) {
+        Ok(())
+    } else {
+        bail!("brain does not schedule on {id} (it lists {listed:?}): no usable card, so nothing is trained")
+    }
+}
+
 /// The seed as brain takes it: an integer JSON represents exactly, below
 /// 2^53; the run's seed is folded into that range.
 fn job_seed(seed: u64) -> u64 {
@@ -307,66 +334,58 @@ impl ServedBrain {
         }
     }
 
-    /// A server started now from `settings`, owned, and stopped when this is
-    /// dropped.
-    ///
-    /// # Errors
-    /// The server does not start.
-    pub fn managed(settings: ServiceSettings, context_tokens: u32) -> anyhow::Result<Self> {
-        let cancel = sven_sdk::CancelToken::new();
-        let brain =
-            ManagedBrain::start(&settings, &cancel).map_err(|e| anyhow!("starting brain: {e}"))?;
-        Ok(Self {
+    /// A server started from `settings` when a call first needs it (so a
+    /// caller whose work is all done starts none), owned, and stopped when
+    /// this is dropped. With `device` (`gpu3`), every start is checked to
+    /// schedule on that device, as its `/v1/devices` lists it: work that must
+    /// run on a card fails before it begins instead of running elsewhere.
+    #[must_use]
+    pub fn managed(settings: ServiceSettings, context_tokens: u32, device: Option<&str>) -> Self {
+        Self {
             connection: Mutex::new(Connection::Managed {
                 settings: Box::new(settings),
-                brain: Some(brain),
-                cancel,
+                brain: None,
+                cancel: sven_sdk::CancelToken::new(),
+                device: device.map(String::from),
             }),
             context_tokens,
-        })
-    }
-
-    /// Checks that the server schedules on device `id` (`gpu3`), as its
-    /// `/v1/devices` lists them: a run that must train on a card fails here,
-    /// before any work, instead of running elsewhere.
-    ///
-    /// # Errors
-    /// The server cannot be asked, or does not schedule on `id`.
-    pub fn require_device(&self, id: &str) -> anyhow::Result<()> {
-        let endpoints = self.endpoints()?;
-        let url = endpoints
-            .urls()
-            .first()
-            .ok_or_else(|| anyhow!("brain has no endpoint"))?;
-        let devices = crate::endpoint::get_json(
-            &format!("{}/devices", url.trim_end_matches('/')),
-            endpoints.key(),
-        )
-        .map_err(|e| anyhow!("asking brain for its devices: {e}"))?;
-        let listed: Vec<&str> = devices["data"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|d| d["id"].as_str())
-            .collect();
-        if listed.contains(&id) {
-            Ok(())
-        } else {
-            bail!("brain does not schedule on {id} (it lists {listed:?}): no usable card, so nothing is trained")
         }
     }
 
+    /// Starts the managed server and checks its device.
+    fn start(
+        settings: &ServiceSettings,
+        cancel: &sven_sdk::CancelToken,
+        device: Option<&str>,
+    ) -> anyhow::Result<ManagedBrain> {
+        let brain =
+            ManagedBrain::start(settings, cancel).map_err(|e| anyhow!("starting brain: {e}"))?;
+        if let Some(id) = device {
+            require_device(brain.endpoints(), id)?;
+        }
+        Ok(brain)
+    }
     fn endpoints(&self) -> anyhow::Result<BrainEndpoints> {
-        let connection = self
+        let mut connection = self
             .connection
             .lock()
             .map_err(|_| anyhow!("the brain connection is poisoned"))?;
-        match &*connection {
+        match &mut *connection {
             Connection::Given(endpoints) => Ok(endpoints.clone()),
             Connection::Managed {
-                brain: Some(brain), ..
-            } => Ok(brain.endpoints().clone()),
-            Connection::Managed { brain: None, .. } => bail!("the managed brain did not restart"),
+                settings,
+                brain,
+                cancel,
+                device,
+            } => {
+                if brain.is_none() {
+                    *brain = Some(Self::start(settings, cancel, device.as_deref())?);
+                }
+                brain
+                    .as_ref()
+                    .map(|b| b.endpoints().clone())
+                    .ok_or_else(|| anyhow!("the managed brain did not start"))
+            }
         }
     }
 
@@ -386,11 +405,12 @@ impl ServedBrain {
                 settings,
                 brain,
                 cancel,
+                device,
             } => {
                 drop(brain.take());
                 *brain = Some(
-                    ManagedBrain::start(settings, cancel)
-                        .map_err(|e| anyhow!("restarting brain: {e}"))?,
+                    Self::start(settings, cancel, device.as_deref())
+                        .context("restarting brain so it scans its model store")?,
                 );
                 Ok(())
             }

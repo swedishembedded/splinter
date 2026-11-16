@@ -14,6 +14,15 @@
 //! every earlier turn) as context, and the reply that call received as the
 //! one supervised message. Only episodes the verifier accepted are turned
 //! into records, so every supervised action belongs to a correct episode.
+//!
+//! A record is a function of what the policy saw and did, never of when or
+//! how fast: the same episode written twice is the same bytes, so a dataset's
+//! digest, and every key derived from it, is reproducible. Three things on
+//! the wire vary between runs of one episode and are made canonical here: a
+//! shell result's measured duration ([`stable_tool_result`]), the ids a
+//! server gives tool calls (renumbered `call_0`, `call_1`, ... in order), and
+//! the attempt an episode ran as (the caller names the episode, not the
+//! attempt).
 
 use serde_json::{json, Value};
 
@@ -21,7 +30,7 @@ use crate::ViewError;
 
 /// The record of one call: `request`'s messages as context and `reply`, the
 /// assistant message it was answered with, supervised. `episode` names the
-/// attempt it came from.
+/// episode it came from (not its attempt, so a rerun writes the same bytes).
 ///
 /// # Errors
 /// The request holds no messages, or the reply is not an assistant message.
@@ -125,10 +134,66 @@ fn plain_content(message: &mut Value) {
     if let Some(id) = message.get("tool_call_id") {
         clean["tool_call_id"] = id.clone();
     }
+    if message["role"] == "tool" {
+        clean["content"] = json!(stable_tool_result(&content));
+    }
     if let Some(train) = message.get("train") {
         clean["train"] = train.clone();
     }
     *message = clean;
+}
+
+/// The marker of a shell result's status line, as the agent runtime renders
+/// it: `Exit: <code> | Duration: <seconds>s`, optionally followed by more
+/// `| ...` fields.
+const DURATION_FIELD: &str = " | Duration: ";
+
+/// The duration a canonical record states: what a workspace command of a few
+/// milliseconds is shown as, so a record reads like the results the model is
+/// served at inference.
+// perf-number: the canonical value of a masked field, not a measurement.
+const CANONICAL_DURATION: &str = "0.0s";
+
+/// `text`, a tool result, with every wall-clock measurement replaced by
+/// [`CANONICAL_DURATION`]: the duration in a shell result's
+/// `Exit: <code> | Duration: <seconds>s` status line is the only part of a
+/// result that differs between two runs of one command. Everything else is
+/// kept byte for byte.
+#[must_use]
+pub fn stable_tool_result(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for (i, line) in text.split('\n').enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str(&stable_status_line(line));
+    }
+    out
+}
+
+/// One line of a tool result, its duration made canonical when it is a
+/// shell status line.
+fn stable_status_line(line: &str) -> std::borrow::Cow<'_, str> {
+    let Some(at) = line.find(DURATION_FIELD) else {
+        return line.into();
+    };
+    if !line.starts_with("Exit: ") {
+        return line.into();
+    }
+    let value_start = at + DURATION_FIELD.len();
+    let rest = &line[value_start..];
+    let value_len = rest
+        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .unwrap_or(rest.len());
+    if value_len == 0 || !rest[value_len..].starts_with('s') {
+        return line.into();
+    }
+    format!(
+        "{}{CANONICAL_DURATION}{}",
+        &line[..value_start],
+        &rest[value_len + 1..]
+    )
+    .into()
 }
 
 /// Every `(request, reply)` call of an accepted episode as JSON lines.
@@ -211,5 +276,53 @@ mod tests {
             (Some("call_1"), Some("call_1"))
         );
         assert!(record(&json!({}), &reply, "e", 0).is_err());
+    }
+
+    #[test]
+    fn two_runs_of_one_episode_write_the_same_bytes() {
+        // The same episode as two runs saw it: the shell took another time
+        // and the server named its tool calls differently.
+        let run = |duration: &str, id: &str| {
+            let call = json!({ "role": "assistant", "content": null, "tool_calls": [
+                { "id": id, "type": "function", "function": { "name": "shell", "arguments": "{\"shell_command\":\"./calc combine 1 2\"}" } }] });
+            let request = |more: Vec<Value>| {
+                let mut messages = vec![json!({ "role": "user", "content": "combine" })];
+                messages.extend(more);
+                json!({ "messages": messages, "tools": [] })
+            };
+            let result = json!({ "role": "tool", "tool_call_id": id,
+                "content": format!("3\n\nExit: 0 | Duration: {duration} | Buffer: buf_0001") });
+            let done = json!({ "role": "assistant", "content": "3" });
+            episode_lines(
+                &[
+                    (request(vec![]), call.clone()),
+                    (request(vec![call, result]), done),
+                ],
+                "demonstrate/train-00000-combine",
+            )
+            .unwrap()
+        };
+        let a = run("0.0s", "call_9f2a_0");
+        assert_eq!(
+            a,
+            run("1.7s", "call_c7dc_0"),
+            "the same bytes, so the same digest"
+        );
+        assert!(
+            a.contains("Exit: 0 | Duration: 0.0s | Buffer: buf_0001"),
+            "the status line keeps its shape: {a}"
+        );
+        assert!(!a.contains("#"), "no attempt number: {a}");
+        assert_eq!(
+            stable_tool_result("Exit: 2 | Duration: 12.5s"),
+            "Exit: 2 | Duration: 0.0s"
+        );
+        for kept in [
+            "L1:Duration: 4s",
+            "Exit: 0 | Duration: soon",
+            "wrote 4 bytes",
+        ] {
+            assert_eq!(stable_tool_result(kept), kept, "not a status line");
+        }
     }
 }

@@ -10,8 +10,9 @@
 //! The stages, in order, over one run directory's ledger.
 //!
 //! Each stage is a ledger unit whose key is its configuration slice, the run
-//! seed, the digests of the stage outputs it reads and the code revisions it
-//! depends on; [`StageLedger::run`] reuses, resumes or recomputes it. The
+//! seed, the digests of the stage outputs it reads, its recipe version and
+//! the revisions of the services it consumes ([`crate::recipe`]);
+//! [`StageLedger::run`] reuses, resumes or recomputes it. The
 //! order puts everything that needs no model first (the world, the tasks,
 //! the expert's demonstrations), so a run gets as far as the services it has.
 
@@ -32,6 +33,7 @@ use splinter_sdk::model::scratch::{
 };
 
 use crate::config::Config;
+use crate::recipe::{self, Recipe};
 use crate::tasks::{self, Instance, Split};
 use crate::template::Template;
 use crate::world;
@@ -47,7 +49,9 @@ pub enum Stage {
     Improve,
 }
 
-/// The code revisions keys depend on.
+/// The code revisions of the run, by name: `sven`, `brain` and `bench` enter
+/// the keys of the stages that consume them; any other (this repository's
+/// own, `splinter`) is recorded in the manifest only.
 #[derive(Clone, Debug, Default)]
 pub struct Revisions(pub BTreeMap<String, String>);
 
@@ -127,20 +131,24 @@ impl<'a> Run<'a> {
             .unwrap_or_else(|| unreachable!("the ledger is only lent out to a unit's own run"))
     }
 
-    /// The key of `unit` of `stage` over `inputs`, depending on the code
-    /// named in `code`.
+    /// The key of `unit` over `inputs`: its configuration `slice`, the run
+    /// seed, the version of its `recipe` and the revisions of the `services`
+    /// it consumes.
     pub(crate) fn key(
         &self,
         slice: &Value,
         unit: &str,
         inputs: &[(&str, &Digest)],
-        code: &[&str],
+        recipe: Recipe,
+        services: &[&str],
     ) -> StageKey {
-        let mut parts = KeyParts::new(unit).config(&json!({ "slice": slice, "seed": self.seed }));
+        let mut parts = KeyParts::new(unit)
+            .config(&json!({ "slice": slice, "seed": self.seed }))
+            .revision("recipe", &recipe.id());
         for (name, digest) in inputs {
             parts = parts.input(name, digest);
         }
-        for name in code {
+        for name in services {
             let rev = self
                 .revisions
                 .0
@@ -195,9 +203,14 @@ impl<'a> Run<'a> {
     /// # Errors
     /// The manifest cannot be written.
     pub fn init(&mut self) -> anyhow::Result<Commit> {
-        let key = KeyParts::new("init")
-            .config(&json!({ "config": self.config, "seed": self.seed }))
-            .key();
+        // The manifest records every revision, this repository's too, so it
+        // is rewritten when any changes; nothing reads its digest.
+        let mut parts =
+            KeyParts::new("init").config(&json!({ "config": self.config, "seed": self.seed }));
+        for (name, rev) in &self.revisions.0 {
+            parts = parts.revision(name, rev);
+        }
+        let key = parts.key();
         self.unit("init", &key, |run, _| {
             let manifest = json!({
                 "sample": "minimind",
@@ -230,7 +243,15 @@ impl<'a> Run<'a> {
             })
             .collect();
         let inputs: Vec<(&str, &Digest)> = slices.iter().map(|(n, d)| (n.as_str(), d)).collect();
-        let key = self.key(&json!(self.config.world), "world", &inputs, &["splinter"]);
+        // The world renders conversations in the template under the agent's
+        // system prompt and tools, so their text is part of its slice.
+        let slice = json!({
+            "world": self.config.world,
+            "template": self.template,
+            "system": splinter_sdk::agent::sven::config::compact_profile::SYSTEM_PROMPT,
+            "tools": crate::collect::tool_sigs(),
+        });
+        let key = self.key(&slice, "world", &inputs, recipe::WORLD, &[]);
         let names: Vec<String> = self.config.fetch.iter().map(|f| f.name.clone()).collect();
         self.unit("world", &key, |run, _| {
             let tools = crate::collect::tool_sigs();
@@ -283,7 +304,7 @@ impl<'a> Run<'a> {
         let mut commits = Vec::new();
         for corpus in self.config.fetch.clone() {
             let unit = format!("fetch/{}", corpus.name);
-            let key = self.key(&json!(corpus), &unit, &[], &[]);
+            let key = self.key(&json!(corpus), &unit, &[], recipe::WORLD, &[]);
             let cache = self.cache.join(&corpus.name);
             commits.push(self.unit(&unit, &key, |run, _| {
                 let pinned = corpus.sha256.to_ascii_lowercase();
@@ -349,7 +370,7 @@ impl<'a> Run<'a> {
     /// # Errors
     /// They cannot be written.
     pub fn tasks(&mut self) -> anyhow::Result<Commit> {
-        let key = self.key(&json!(self.config.tasks), "tasks", &[], &["splinter"]);
+        let key = self.key(&json!(self.config.tasks), "tasks", &[], recipe::TASKS, &[]);
         self.unit("tasks", &key, |run, _| {
             let counts = &run.config.tasks;
             let mut work = StageWork::new(json!({
@@ -429,6 +450,7 @@ impl<'a> Run<'a> {
             &json!({ "model": spec, "template": self.template }),
             &unit,
             &[("corpus", &corpus)],
+            recipe::CHECKPOINT,
             &["brain"],
         );
         let commit = self.unit(&unit, &key, |run, _| {
@@ -487,6 +509,7 @@ impl<'a> Run<'a> {
             &json!({ "model": spec, "budget": budget }),
             &unit,
             &[("base", &base_digest), ("data", data.0)],
+            recipe::TRAIN,
             &["brain"],
         );
         let base_checkpoint = base.1.clone();
@@ -581,6 +604,7 @@ impl<'a> Run<'a> {
             &self.agent_slice(),
             &unit,
             &[("candidate", &c), ("predecessor", &p)],
+            recipe::EXAMINE,
             &["bench", "sven", "brain"],
         );
         let rel = format!("exam/{name}/verdict.json");

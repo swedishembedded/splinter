@@ -136,17 +136,36 @@ a model-service double (`cargo test --release -p splinter-minimind`).
 ## Abort, resume, re-run
 
 Every stage is a unit of the run directory's ledger (`ledger.jsonl`), keyed by
-the content address of its configuration slice, the run seed, the digests of
-what it reads and the code revisions it depends on.
+what its result depends on and nothing else:
+
+- its configuration slice and the run seed;
+- the digests of the stage outputs it reads (a dataset, a checkpoint);
+- its **recipe version**, a constant in `src/recipe.rs` for the sample code
+  that decides its result (world, tasks, episode, gather, checkpoint, train,
+  probe, examine), bumped in the change that alters that behaviour; a spec
+  pins the generators' output, so a change without a bump fails it;
+- the revisions of the **services it consumes**: sven's for every episode,
+  the brain binary's digest for every stage brain computes or serves,
+  bench's for the examination.
+
+This repository's revision is in no key: a change to the report, the
+terminal output or a comment recomputes nothing (only the manifest, which
+records every revision, is written again). A new sven reruns the episodes,
+and because an episode's records are the same bytes for the same episode
+(a shell result's duration, the server's tool-call ids and the attempt
+number are made canonical), the datasets keep their digests and no training
+run reads anything new. A new brain recomputes what brain computes or serves
+and none of the data before it.
 
 - **Abort** with Ctrl-C at any point. A unit that began and did not commit is
   resumed by the next run under a new attempt number; an interrupted episode's
   workspace is discarded and the episode runs again, counted once. A training
-  run is resubmitted under the same job identity, so brain continues it.
+  run is resubmitted under the same job identity, so brain continues it from
+  its last saved state.
 - **Resume** by running the same command again.
 - **Re-run** a finished run and every unit is reused after its outputs are
-  hashed again; no training and no episode is repeated, and the probes are
-  shown from the ledger.
+  hashed again; brain is not even started, no training and no episode is
+  repeated, and the probes are shown from the ledger.
 - A **changed setting** recomputes the units that read it and what follows them
   (a longer fine-tune retrains the fine-tune and what comes after, nothing
   before); a **changed seed** is a different run. A **corrupt output** (a

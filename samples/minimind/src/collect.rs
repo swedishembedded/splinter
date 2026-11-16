@@ -17,6 +17,13 @@
 //! counted twice. Every model call goes through a recording endpoint, so the
 //! training records of an accepted episode are exactly the requests sven
 //! sent.
+//!
+//! An episode's outputs are what it decided, never when it ran: its
+//! `outcome.json` (verdict, answer, tool calls) and, when accepted, its
+//! `records.jsonl`, both the same bytes for the same episode. sven's
+//! trajectory and audit trail, which carry timestamps, are kept beside them
+//! as evidence and enter no digest. A checkpoint is served only when one of
+//! its episodes has to run.
 
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -26,7 +33,9 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
-use splinter_sdk::store::stage_ledger::{Attempt, Commit, OnCorrupt, Ran, StageKey, StageWork};
+use splinter_sdk::store::stage_ledger::{
+    Attempt, Commit, OnCorrupt, Ran, StageKey, StageWork, Standing,
+};
 use splinter_sdk::vocabulary::digest::{digest_of, Digest};
 
 use splinter_sdk::agent::policy_endpoint::{forward, Endpoint, Policy};
@@ -37,6 +46,7 @@ use splinter_sdk::model::scratch::{Checkpoint, Served};
 use splinter_sdk::model::RemoteModel;
 
 use crate::expert;
+use crate::recipe;
 use crate::stages::{reset, write, Run};
 use crate::tasks::{self, Instance, Split};
 use crate::template::ToolSig;
@@ -49,10 +59,11 @@ pub const EXPERT_MODEL: &str = "minimind-expert";
 pub enum Actor {
     /// The deterministic expert.
     Expert,
-    /// A served checkpoint, identified by its digest.
+    /// A checkpoint, identified by its digest, served when an episode of it
+    /// runs.
     Model {
-        /// Where it is served.
-        target: Served,
+        /// The checkpoint.
+        checkpoint: Checkpoint,
         /// The checkpoint's digest.
         digest: Digest,
     },
@@ -89,21 +100,29 @@ struct EpisodeCtx<'a> {
     runtime: &'a tokio::runtime::Runtime,
 }
 
-/// The work of one episode of `instance` by `actor`, its outputs at `rel`.
+/// Who acts in an episode that runs: the expert, or a served checkpoint.
+enum Acting {
+    Expert,
+    Model(Served),
+}
+
+/// The work of one episode `unit` of `instance` by `actor`, its outputs in
+/// `episodes/<unit>`.
 fn episode_work(
     ctx: &EpisodeCtx<'_>,
-    rel: &str,
+    unit: &str,
     instance: &Instance,
-    actor: &Actor,
+    actor: &Acting,
     attempt: &Attempt,
 ) -> anyhow::Result<StageWork> {
-    let dir = ctx.dir.join(rel);
+    let rel = format!("episodes/{unit}");
+    let dir = ctx.dir.join(&rel);
     reset(&dir)?;
     let ws = dir.join("workspace");
     tasks::materialise(instance, &ws)?;
     let (policy, model, seed, context_tokens): (Box<Policy>, String, Option<u64>, u32) =
         match &actor {
-            Actor::Expert => {
+            Acting::Expert => {
                 let task = instance.clone();
                 let policy = move |request: &Value| -> anyhow::Result<Value> {
                     let messages = request["messages"].as_array().cloned().unwrap_or_default();
@@ -115,13 +134,15 @@ fn episode_work(
                 let context = ctx.expert_context;
                 (Box::new(policy), EXPERT_MODEL.to_string(), None, context)
             }
-            Actor::Model { target, .. } => {
+            Acting::Model(target) => {
                 let (upstream, key) = (target.base_url.clone(), target.key.clone());
                 let policy = move |request: &Value| forward(&upstream, &key, request);
+                // The run seed, not the attempt's: an episode run again after
+                // an interruption is the same episode.
                 (
                     Box::new(policy),
                     target.model.clone(),
-                    Some(ctx.seed ^ u64::from(attempt.number())),
+                    Some(ctx.seed),
                     target.context_tokens,
                 )
             }
@@ -173,11 +194,20 @@ fn episode_work(
                 .and_then(|m| m["content"].as_str().map(String::from))
         })
         .map(|t| t.chars().take(120).collect::<String>());
-    let doc = json!({
-        "attempt": attempt.id(), "instance": instance.id, "passed": verdict.passed, "reason": verdict.reason,
-        "conclusion": conclusion, "tool_calls": calls, "trajectory": trajectory,
-    });
+    // The evidence, with sven's timestamps: kept, never digested.
+    let doc = json!({ "attempt": attempt.id(), "instance": instance.id, "trajectory": trajectory });
     write(&dir.join("episode.json"), &doc.to_string())?;
+    let outcome = json!({
+        "instance": instance.id, "passed": verdict.passed, "reason": verdict.reason,
+        "conclusion": conclusion, "tool_calls": calls, "answer": answer, "last_text": last_text,
+        "actions": actions(&exchanges),
+    });
+    write(&dir.join("outcome.json"), &outcome.to_string())?;
+    let mut work = StageWork::new(json!({
+        "passed": verdict.passed, "reason": verdict.reason, "tool_calls": calls, "conclusion": conclusion,
+        "answer": answer, "last_text": last_text, "attempt": attempt.id(), "actions": outcome["actions"],
+    }))
+    .output("outcome", &format!("{rel}/outcome.json"));
     if verdict.passed {
         let calls = exchanges
             .iter()
@@ -190,15 +220,53 @@ fn episode_work(
             .collect::<anyhow::Result<Vec<_>>>()?;
         write(
             &dir.join("records.jsonl"),
-            &wire::episode_lines(&calls, &attempt.id())?,
+            &wire::episode_lines(&calls, unit)?,
         )?;
+        work = work.output("records", &format!("{rel}/records.jsonl"));
     }
     std::fs::remove_dir_all(&ws).with_context(|| format!("removing {}", ws.display()))?;
-    Ok(StageWork::new(json!({
-        "passed": verdict.passed, "reason": verdict.reason, "tool_calls": calls, "conclusion": conclusion,
-        "answer": answer, "last_text": last_text, "attempt": attempt.id(),
-    }))
-    .output("episode", rel))
+    Ok(work)
+}
+
+/// What the policy did, one short line per model reply: each tool call with
+/// its arguments, or the final text. The terminal shows it as the episode's
+/// transcript.
+fn actions(exchanges: &[splinter_sdk::agent::policy_endpoint::Exchange]) -> Vec<String> {
+    let clip = |t: &str, n: usize| {
+        let t = t.replace('\n', "\\n");
+        if t.chars().count() > n {
+            format!("{}...", t.chars().take(n).collect::<String>())
+        } else {
+            t
+        }
+    };
+    exchanges
+        .iter()
+        .map(|x| match &x.reply {
+            Err(e) => format!("error: {}", clip(e, 60)),
+            Ok(reply) => match reply["tool_calls"].as_array().filter(|c| !c.is_empty()) {
+                Some(calls) => calls
+                    .iter()
+                    .map(|c| {
+                        let args = match &c["function"]["arguments"] {
+                            Value::String(text) => text.clone(),
+                            other => other.to_string(),
+                        };
+                        format!(
+                            "{}({})",
+                            c["function"]["name"].as_str().unwrap_or("?"),
+                            clip(&args, 60)
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; "),
+                None => format!(
+                    "say {:?}",
+                    clip(&expert::content_text(&reply["content"]), 60)
+                ),
+            },
+        })
+        .collect()
 }
 
 impl Run<'_> {
@@ -210,9 +278,11 @@ impl Run<'_> {
         jobs: Vec<(String, Instance)>,
         actor: &Actor,
     ) -> anyhow::Result<Vec<Commit>> {
-        let who = match actor {
-            Actor::Expert => Digest::of(EXPERT_MODEL.as_bytes()),
-            Actor::Model { digest, .. } => digest.clone(),
+        // A model's episodes depend on the engine serving it; the expert's
+        // only on sven.
+        let (who, services): (Digest, &[&str]) = match actor {
+            Actor::Expert => (Digest::of(EXPERT_MODEL.as_bytes()), &["sven"]),
+            Actor::Model { digest, .. } => (digest.clone(), &["sven", "brain"]),
         };
         let slice = self.agent_slice();
         let keyed: Vec<(String, StageKey, Instance)> = jobs
@@ -222,11 +292,21 @@ impl Run<'_> {
                     &slice,
                     &unit,
                     &[("instance", &digest_of(&instance)), ("actor", &who)],
-                    &["splinter", "sven"],
+                    recipe::EPISODE,
+                    services,
                 );
                 (unit, key, instance)
             })
             .collect();
+        // Serve the checkpoint only when an episode of it has to run.
+        let all_done = keyed.iter().all(|(unit, key, _)| {
+            matches!(self.ledger().standing(unit, key), Ok(Standing::Committed(c)) if self.ledger().verify(&c).is_ok())
+        });
+        let acting = match actor {
+            Actor::Expert => Some(Acting::Expert),
+            Actor::Model { .. } if all_done => None,
+            Actor::Model { checkpoint, .. } => Some(Acting::Model(self.brain.serve(checkpoint)?)),
+        };
         let ctx = EpisodeCtx {
             dir: self.dir(),
             seed: self.seed,
@@ -252,10 +332,12 @@ impl Run<'_> {
                     let Some((unit, key, instance)) = keyed.get(i) else {
                         break;
                     };
-                    let rel = format!("episodes/{unit}");
                     let ran = ledger
                         .run(unit, key, OnCorrupt::Recompute, |attempt| {
-                            episode_work(&ctx, &rel, instance, actor, attempt)
+                            let actor = acting.as_ref().with_context(|| {
+                                format!("{unit} has to run, but its checkpoint was not served")
+                            })?;
+                            episode_work(&ctx, unit, instance, actor, attempt)
                         })
                         .map_err(anyhow::Error::from);
                     if let Ok(mut slots) = results.lock() {
@@ -312,14 +394,14 @@ impl Run<'_> {
             .map(|c| {
                 (
                     c.unit.clone(),
-                    c.output("episode")
+                    c.output("outcome")
                         .cloned()
                         .unwrap_or_else(|| Digest::of(b"")),
                 )
             })
             .collect();
         let refs: Vec<(&str, &Digest)> = inputs.iter().map(|(n, d)| (n.as_str(), d)).collect();
-        let key = self.key(&self.agent_slice(), name, &refs, &["splinter"]);
+        let key = self.key(&self.agent_slice(), name, &refs, recipe::GATHER, &[]);
         let rel = format!("data/{name}.jsonl");
         self.unit(name, &key, move |run, _| {
             let mut lines = String::new();
@@ -368,7 +450,7 @@ impl Run<'_> {
             .context("the stage has no checkpoint")?
             .clone();
         Ok(Actor::Model {
-            target: self.brain.serve(policy.1)?,
+            checkpoint: policy.1.clone(),
             digest,
         })
     }
@@ -398,7 +480,7 @@ impl Run<'_> {
             .map(|(_, c)| {
                 (
                     c.unit.clone(),
-                    c.output("episode")
+                    c.output("outcome")
                         .cloned()
                         .unwrap_or_else(|| Digest::of(b"")),
                 )
@@ -406,7 +488,7 @@ impl Run<'_> {
             .collect();
         let mut refs: Vec<(&str, &Digest)> = inputs.iter().map(|(n, d)| (n.as_str(), d)).collect();
         refs.push(("checkpoint", &digest));
-        let key = self.key(&self.agent_slice(), &unit, &refs, &["splinter"]);
+        let key = self.key(&self.agent_slice(), &unit, &refs, recipe::PROBE, &["brain"]);
         let checkpoint = policy.1.clone();
         let commit = self.unit(&unit, &key, move |run, _| {
             let passed = episodes.iter().filter(|(_, c)| outcome(c)).count();

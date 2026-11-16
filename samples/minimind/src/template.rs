@@ -73,7 +73,7 @@ pub struct Call {
 }
 
 /// A tool as the template lists it: its name and parameter names.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ToolSig {
     /// The tool's name.
     pub name: String,

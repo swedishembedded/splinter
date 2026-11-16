@@ -199,8 +199,8 @@ fn run(
         .context("--seed is a whole number")?;
     let seed = seed(run_dir, given_seed)?;
     let context = config.models.values().map(|m| m.context).max().unwrap_or(0);
-    // The brain service: one given, or one this run starts on the CPU and
-    // stops when it ends.
+    // The brain service: one given, or one this run starts on the card when
+    // a stage first needs it and stops when it ends.
     let (brain, brain_revision) = match (flag("brain-endpoint"), flag("brain-bin")) {
         (Some(url), None) => {
             let store = flag("brain-artifact-store").context(
@@ -241,9 +241,9 @@ fn run(
             let file = std::fs::File::open(&bin).with_context(|| format!("reading {bin}"))?;
             let digest = splinter_sdk::vocabulary::digest::Digest::of_reader(file)
                 .with_context(|| format!("reading {bin}"))?;
-            let brain = ServedBrain::managed(settings, context)?;
-            // Training runs on the card or not at all.
-            brain.require_device(&device)?;
+            // Started when a stage first needs it, and only on the card:
+            // training runs there or not at all.
+            let brain = ServedBrain::managed(settings, context, Some(&device));
             (brain, digest.to_string())
         }
         (Some(_), Some(_)) => bail!("give --brain-endpoint or --brain-bin, not both"),
