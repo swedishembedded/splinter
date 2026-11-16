@@ -55,14 +55,18 @@ use splinter_sdk::model::train::FineTune;
 use splinter_sdk::served_host::ServedHost;
 use splinter_sdk::vocabulary::digest::Digest;
 
-use crate::family::{proposal_id, Part, ProposalFamily};
+use crate::family::{proposal_id_in, Part, ProposalFamily};
+use crate::frontier::Frontier;
+use crate::language::LUA51;
 use crate::plan::training_ids;
 pub use crate::plan::{Acceptance, Plan, TrainFrom, TrainOn};
 use crate::proposer::{as_proposals, Budget, Origin, Proposed, Proposer, Steering};
 use crate::reasoning::TraceBook;
-pub use crate::records::{champion_of, trained_up_to, Files, RoundRecord, Trained};
+pub use crate::records::{
+    champion_of, trained_up_to, FamilyDev, FamilyRound, Files, RoundRecord, Trained,
+};
 pub(crate) use crate::records::{fail, policy_key, DevRecord, Prediction};
-use crate::sections::{family_accuracy, Accuracy};
+use crate::sections::{family_accuracy_in, Accuracy};
 use crate::sft::{write_chat, Example, Recipe, TRAIN_PACKED};
 
 /// What the lineage works with.
@@ -75,8 +79,9 @@ pub struct Lineage<'a> {
     pub host: &'a ServedHost,
     /// The dev exam and the policy's answers to proposals.
     pub validator: &'a mut ServedValidator<'a>,
-    /// The policy as a proposer.
-    pub proposer: &'a Proposer,
+    /// The policy as a proposer, one per task family, in the order of the
+    /// family's generators; one for the original family.
+    pub proposers: &'a [Proposer],
     /// The base checkpoint.
     pub base: &'a Path,
     /// The training settings.
@@ -153,19 +158,39 @@ impl Lineage<'_> {
         Ok(result)
     }
 
-    /// The champion's dev accuracy per library function.
-    pub(crate) fn accuracy(&self, dev: &DevResult) -> Accuracy {
+    /// The proposer of task family `family`.
+    pub(crate) fn proposer_of(&self, family: &str) -> Result<&Proposer> {
+        self.proposers
+            .iter()
+            .find(|p| p.language().name == family)
+            .with_context(|| format!("no proposer for family {family}"))
+    }
+
+    /// The champion's dev accuracy per library function over the programs of
+    /// `family`.
+    pub(crate) fn accuracy(&self, dev: &DevResult, family: &str) -> Accuracy {
+        let tongue = self.proposer_of(family).map(|p| p.language().tongue);
+        let Ok(tongue) = tongue else {
+            return Accuracy::new();
+        };
         let programs: Vec<(String, bool)> = dev
             .dev
             .iter()
+            .filter(|(task, _)| self.family.family_of(task).as_deref() == Some(family))
             .filter_map(|(task, &passed)| self.family.program_of(task).map(|p| (p, passed)))
             .collect();
-        family_accuracy(programs.iter().map(|(p, passed)| (p.as_str(), *passed)))
+        family_accuracy_in(
+            tongue,
+            programs.iter().map(|(p, passed)| (p.as_str(), *passed)),
+        )
     }
 
-    pub(crate) fn asked_by_section(&self) -> BTreeMap<String, usize> {
+    pub(crate) fn asked_by_section(&self, family: &str) -> BTreeMap<String, usize> {
         let mut asked = BTreeMap::new();
         for proposal in self.family.proposals() {
+            if proposal.family.as_deref().unwrap_or(LUA51) != family {
+                continue;
+            }
             if let Some(section) = proposal.section {
                 *asked.entry(section).or_default() += 1;
             }
@@ -173,17 +198,28 @@ impl Lineage<'_> {
         asked
     }
 
-    /// The base's own proposals for the dev and retention sets, made once
-    /// before the first round: held out for good, never trained on.
+    /// The base's own proposals for the dev and retention sets of task
+    /// family `family`, made once before the first round: held out for good,
+    /// never trained on.
     ///
     /// # Errors
     /// The base cannot propose enough programs.
-    pub fn open_held_out(&mut self, dev: usize, keep: usize, budget: Budget) -> Result<()> {
-        if self.family.has_round(0, 0) {
+    pub fn open_held_out(
+        &mut self,
+        family: &str,
+        dev: usize,
+        keep: usize,
+        budget: Budget,
+    ) -> Result<()> {
+        if self.family.has_round(family, 0, 0) {
             return Ok(());
         }
-        let ctx = self.host.context(&PolicyRef::default())?;
-        let made = self.proposer.propose(
+        let proposer = self.proposer_of(family)?;
+        let ctx = self.host.context_in(
+            &PolicyRef::default(),
+            &[proposer.runtime_dir().to_path_buf()],
+        )?;
+        let made = proposer.propose(
             &ctx,
             None,
             self.family,
@@ -197,15 +233,19 @@ impl Lineage<'_> {
                 ..budget
             },
         )?;
-        eprintln!("the base proposed: {}", serde_json::to_string(&made)?);
+        eprintln!(
+            "the base proposed ({family}): {}",
+            serde_json::to_string(&made)?
+        );
         anyhow::ensure!(
             made.kept.len() >= dev + keep,
-            "the base proposed {} new programs, fewer than the {} held out for the dev and retention sets",
+            "the base proposed {} new {family} programs, fewer than the {} held out for the dev and retention sets",
             made.kept.len(),
             dev + keep
         );
         self.family
             .add(as_proposals(
+                proposer.language(),
                 made.kept,
                 Origin {
                     generation: 0,
@@ -255,12 +295,30 @@ impl Lineage<'_> {
             frontier: None,
             reasoning: self.plan.reasoning,
             train_on: self.plan.train_on,
+            families: Vec::new(),
+            family_dev: Vec::new(),
         };
-        let (wrong, right) = match self.plan.frontier {
-            Some(settings) => {
-                self.select_frontier(&champion, &champion_dev, &mut record, settings)?
+        let (wrong, right) = if self.plan.families.is_empty() {
+            match self.plan.frontier {
+                Some(settings) => {
+                    let (selected, outcome, _) = self.select_frontier(
+                        &champion,
+                        &champion_dev,
+                        (generation, round),
+                        LUA51,
+                        settings,
+                    )?;
+                    record.proposed = outcome.measured;
+                    record.frontier = Some(outcome);
+                    (selected, Vec::new())
+                }
+                None => self.select_mispredicted(&champion, &champion_dev, &mut record)?,
             }
-            None => self.select_mispredicted(&champion, &champion_dev, &mut record)?,
+        } else {
+            (
+                self.select_families(&champion, &champion_dev, &mut record)?,
+                Vec::new(),
+            )
         };
         record.mispredicted = wrong.len();
         if wrong.is_empty() {
@@ -271,6 +329,85 @@ impl Lineage<'_> {
         record.seconds = started.elapsed().as_secs_f64();
         self.files.rounds().append(&record)?;
         Ok(record)
+    }
+
+    /// Finds the frontier of every family this generation is scheduled to
+    /// find it for, each at its own target, and returns the union of the
+    /// programs to train on; each family's proposing and frontier yield go
+    /// in the round's record.
+    fn select_families(
+        &mut self,
+        champion: &PolicyRef,
+        champion_dev: &DevResult,
+        record: &mut RoundRecord,
+    ) -> Result<Vec<String>> {
+        let settings = self
+            .plan
+            .frontier
+            .context("families need a frontier plan")?;
+        let scheduled: Vec<_> = self
+            .plan
+            .scheduled(record.generation)
+            .into_iter()
+            .cloned()
+            .collect();
+        let mut union = Vec::new();
+        for family in scheduled {
+            let (selected, outcome, (requests, new_programs)) = self.select_frontier(
+                champion,
+                champion_dev,
+                (record.generation, record.round),
+                &family.name,
+                Frontier {
+                    target: family.target.unwrap_or(settings.target),
+                    ..settings
+                },
+            )?;
+            let per = |n: usize, d: usize| if d == 0 { 0.0 } else { n as f64 / d as f64 };
+            record.proposed += outcome.measured;
+            record.families.push(FamilyRound {
+                family: family.name.clone(),
+                requests,
+                new_programs,
+                novelty: per(new_programs, requests),
+                measured: outcome.measured,
+                on_frontier: outcome.on_frontier,
+                frontier_yield: per(outcome.on_frontier, outcome.measured),
+                selected: selected.len(),
+                overlong: outcome.overlong.len(),
+            });
+            union.extend(selected);
+        }
+        Ok(union)
+    }
+
+    /// Each family's dev accuracy under `champion` and `candidate`, for the
+    /// families of the plan.
+    fn family_dev(&self, champion: &DevResult, candidate: &DevResult) -> Vec<FamilyDev> {
+        let rate = |result: &DevResult, items: &[&String]| {
+            let right = items
+                .iter()
+                .filter(|id| result.dev.get(id.as_str()).copied().unwrap_or(false))
+                .count();
+            right as f64 / items.len().max(1) as f64
+        };
+        self.plan
+            .families
+            .iter()
+            .map(|f| {
+                let items: Vec<&String> = champion
+                    .dev
+                    .keys()
+                    .filter(|id| self.family.family_of(id).as_deref() == Some(f.name.as_str()))
+                    .collect();
+                FamilyDev {
+                    family: f.name.clone(),
+                    items: items.len(),
+                    champion: rate(champion, &items),
+                    candidate: rate(candidate, &items),
+                }
+            })
+            .collect()
     }
 
     /// Refuses to continue a lineage under other reasoning settings, records
@@ -306,11 +443,12 @@ impl Lineage<'_> {
         record: &mut RoundRecord,
     ) -> Result<(Vec<String>, Vec<String>)> {
         let (generation, round) = (record.generation, record.round);
-        if !self.family.has_round(generation, round) {
+        if !self.family.has_round(LUA51, generation, round) {
             self.propose_wave(
                 champion,
                 champion_dev,
                 (generation, round, 0),
+                LUA51,
                 Budget {
                     want: self.plan.proposals_per_round,
                     max_calls: self.plan.budget.0,
@@ -318,7 +456,7 @@ impl Lineage<'_> {
                 },
             )?;
         }
-        let proposed = self.round_proposals(generation, round);
+        let proposed = self.round_proposals(generation, round, LUA51);
         let answers = self.predict(champion, generation, round, &proposed)?;
         let (wrong, right): (Vec<&Answered>, Vec<&Answered>) =
             answers.iter().partition(|a| !a.passed);
@@ -335,11 +473,16 @@ impl Lineage<'_> {
     }
 
     /// Ids of the training programs the round's proposing added so far.
-    pub(crate) fn round_proposals(&self, generation: u32, round: u32) -> Vec<String> {
+    pub(crate) fn round_proposals(&self, generation: u32, round: u32, family: &str) -> Vec<String> {
         self.family
             .proposals()
             .into_iter()
-            .filter(|p| p.generation == generation && p.round == round && p.part == Part::Train)
+            .filter(|p| {
+                p.generation == generation
+                    && p.round == round
+                    && p.part == Part::Train
+                    && p.family.as_deref().unwrap_or(LUA51) == family
+            })
             .map(|p| p.id)
             .collect()
     }
@@ -351,16 +494,20 @@ impl Lineage<'_> {
         champion: &PolicyRef,
         champion_dev: &DevResult,
         (generation, round, wave): (u32, u32, usize),
+        family: &str,
         budget: Budget,
     ) -> Result<(Proposed, Vec<String>)> {
-        let ctx = self.host.context(champion)?;
-        let made = self.proposer.propose(
+        let proposer = self.proposer_of(family)?;
+        let ctx = self
+            .host
+            .context_in(champion, &[proposer.runtime_dir().to_path_buf()])?;
+        let made = proposer.propose(
             &ctx,
             champion.adapter.as_deref(),
             self.family,
             Steering {
-                accuracy: &self.accuracy(champion_dev),
-                asked: &self.asked_by_section(),
+                accuracy: &self.accuracy(champion_dev, family),
+                asked: &self.asked_by_section(family),
                 seed: self.seed
                     ^ (u64::from(generation) << 32 | u64::from(round))
                     ^ (wave as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
@@ -374,11 +521,12 @@ impl Lineage<'_> {
         let fresh: Vec<String> = made
             .kept
             .iter()
-            .map(|k| proposal_id(&k.program))
+            .map(|k| proposal_id_in(proposer.language(), &k.program))
             .filter(|id| self.family.proposal(id).is_none())
             .collect();
         self.family
             .add(as_proposals(
+                proposer.language(),
                 made.kept.clone(),
                 Origin { generation, round },
                 0,
@@ -582,6 +730,7 @@ impl Lineage<'_> {
         let decision = match self.plan.acceptance {
             Acceptance::Greedy => {
                 let candidate_dev = self.dev_of(&candidate)?;
+                record.family_dev = self.family_dev(champion_dev, &candidate_dev);
                 let gate_number = (generation - 1) * self.plan.rounds + round;
                 decide(
                     &self.gate,

@@ -39,6 +39,44 @@ pub struct Trained {
     pub held_out_loss_tuned: Option<f32>,
 }
 
+/// What one task family contributed to a round: how new its proposals were
+/// and how much of what was proposed lay on the frontier.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FamilyRound {
+    /// The family.
+    pub family: String,
+    /// Proposal requests made, in all waves.
+    pub requests: usize,
+    /// New programs admitted: not a repeat of one the lineage already held.
+    pub new_programs: usize,
+    /// New programs admitted per request (the proposer's novelty); zero
+    /// when no request was made.
+    pub novelty: f64,
+    /// Proposals the champion predicted.
+    pub measured: usize,
+    /// Of those, the ones on the frontier.
+    pub on_frontier: usize,
+    /// Frontier programs per proposal predicted (the frontier yield).
+    pub frontier_yield: f64,
+    /// Frontier programs the round trains on.
+    pub selected: usize,
+    /// Frontier programs skipped for the length of their records.
+    pub overlong: usize,
+}
+
+/// A task family's dev accuracy before and after a round.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FamilyDev {
+    /// The family.
+    pub family: String,
+    /// Dev programs of the family the gate graded.
+    pub items: usize,
+    /// The champion's share of them right.
+    pub champion: f64,
+    /// The candidate's share of them right.
+    pub candidate: f64,
+}
+
 /// The journal entry of one round.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RoundRecord {
@@ -83,6 +121,13 @@ pub struct RoundRecord {
     /// What the records were made of; absent for answer-only records.
     #[serde(default, skip_serializing_if = "TrainOn::is_default")]
     pub train_on: TrainOn,
+    /// What each task family contributed, when the lineage has families.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub families: Vec<FamilyRound>,
+    /// Each family's dev accuracy under the greedy gate, when the lineage
+    /// has families.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub family_dev: Vec<FamilyDev>,
 }
 
 /// One policy's dev and retention answers as graded, so a restart asks once.
@@ -220,7 +265,14 @@ mod tests {
     fn a_round_with_the_options_off_journals_without_a_trace_of_them() {
         let record = round(1, 1, true, "a");
         let line = serde_json::to_string(&record).unwrap();
-        for key in ["reasoning", "train_on", "admit", "records"] {
+        for key in [
+            "reasoning",
+            "train_on",
+            "admit",
+            "records",
+            "families",
+            "family_dev",
+        ] {
             assert!(!line.contains(&format!("\"{key}\"")), "{key} in {line}");
         }
         let again: RoundRecord = serde_json::from_str(&line).unwrap();
@@ -255,6 +307,8 @@ mod tests {
             frontier: None,
             reasoning: None,
             train_on: TrainOn::Answers,
+            families: Vec::new(),
+            family_dev: Vec::new(),
         }
     }
 
@@ -288,5 +342,28 @@ mod tests {
         };
         assert_eq!(ids(1), vec!["prop-a"]);
         assert_eq!(ids(2), vec!["prop-a", "prop-c"]);
+    }
+
+    #[test]
+    fn a_round_with_families_records_each_familys_novelty_and_yield() {
+        let mut record = round(2, 1, true, "f");
+        record.families = vec![FamilyRound {
+            family: "python3".into(),
+            requests: 4,
+            new_programs: 6,
+            novelty: 1.5,
+            measured: 10,
+            on_frontier: 4,
+            frontier_yield: 0.4,
+            selected: 4,
+            overlong: 0,
+        }];
+        let line = serde_json::to_string(&record).unwrap();
+        assert!(
+            line.contains("\"novelty\":1.5") && line.contains("\"frontier_yield\":0.4"),
+            "{line}"
+        );
+        let again: RoundRecord = serde_json::from_str(&line).unwrap();
+        assert_eq!(again.families, record.families);
     }
 }

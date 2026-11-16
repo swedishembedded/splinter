@@ -21,7 +21,13 @@ const QUESTION: &str = "What does this program print?";
 /// question.
 #[must_use]
 pub fn request(program: &str) -> String {
-    format!("```lua\n{}\n```\n{QUESTION}", program.trim_end())
+    request_in("lua", program)
+}
+
+/// The request for a program written in the language `fence` names.
+#[must_use]
+pub fn request_in(fence: &str, program: &str) -> String {
+    format!("```{fence}\n{}\n```\n{QUESTION}", program.trim_end())
 }
 
 /// The body of the last fenced block of `reply`; `None` when it has none or

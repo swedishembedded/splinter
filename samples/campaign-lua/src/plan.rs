@@ -95,6 +95,20 @@ pub struct EvidencePlan {
     pub batch: usize,
 }
 
+/// When a task family joins the lineage and how large its pool is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FamilyPlan {
+    /// The family's name.
+    pub name: String,
+    /// The generations whose rounds find this family's frontier; the
+    /// records stay in the training union afterwards. A generation that finds
+    /// the frontier of a family again doubles that family's pool.
+    pub at: Vec<u32>,
+    /// Frontier programs a round finds for this family; the plan's frontier
+    /// target when absent.
+    pub target: Option<usize>,
+}
+
 /// What the lineage is asked to do, apart from how it trains.
 #[derive(Clone, Debug)]
 pub struct Plan {
@@ -133,9 +147,22 @@ pub struct Plan {
     pub reasoning: Option<Reasoning>,
     /// What the training records are made of.
     pub train_on: TrainOn,
+    /// The task families and when each one's frontier is found; empty is the
+    /// one original family, every round.
+    pub families: Vec<FamilyPlan>,
 }
 
 impl Plan {
+    /// The families whose frontier `generation` finds, in plan order; none
+    /// for a plan without families (the original family's, every round).
+    #[must_use]
+    pub fn scheduled(&self, generation: u32) -> Vec<&FamilyPlan> {
+        self.families
+            .iter()
+            .filter(|f| f.at.contains(&generation))
+            .collect()
+    }
+
     /// The rounds the evidence gate's budget is planned over: every round
     /// of every generation.
     #[must_use]
@@ -197,6 +224,32 @@ impl Plan {
             self.admit == Admit::default() || self.frontier.is_some(),
             "--frontier-admit needs --frontier-samples"
         );
+        if !self.families.is_empty() {
+            anyhow::ensure!(
+                self.frontier.is_some(),
+                "--family needs --frontier-samples: a family's pool is its frontier"
+            );
+            anyhow::ensure!(
+                self.families.len() == 1 || self.train_from == TrainFrom::BaseCumulative,
+                "several --family need --train-from base-cumulative: a continued adapter would train on the newest family only"
+            );
+            for generation in 1..=self.generations {
+                anyhow::ensure!(
+                    !self.scheduled(generation).is_empty(),
+                    "no --family finds a frontier in generation {generation}: it would train on nothing new"
+                );
+            }
+            for f in &self.families {
+                anyhow::ensure!(
+                    !f.at.is_empty() && f.at.iter().all(|g| (1..=self.generations).contains(g)),
+                    "family {} is found in generations {:?}, outside 1..={}",
+                    f.name,
+                    f.at,
+                    self.generations
+                );
+                anyhow::ensure!(f.target != Some(0), "family {} has target 0", f.name);
+            }
+        }
         if let Acceptance::Evidence(evidence) = self.acceptance {
             evidence
                 .gate
@@ -280,6 +333,7 @@ mod tests {
             admit: Admit::default(),
             reasoning: None,
             train_on: TrainOn::Answers,
+            families: Vec::new(),
         }
     }
 
@@ -396,5 +450,45 @@ mod tests {
         assert_eq!(training_ids(true, &accepted, &wrong), ["a", "b", "c"]);
         assert_eq!(training_ids(false, &accepted, &wrong), ["b", "c"]);
         assert_eq!(training_ids(true, &[], &wrong), ["b", "c"]);
+    }
+
+    #[test]
+    fn families_need_a_frontier_a_union_to_train_on_and_a_new_frontier_each_generation() {
+        let family = |name: &str, at: &[u32]| FamilyPlan {
+            name: name.into(),
+            at: at.to_vec(),
+            target: None,
+        };
+        let recipe = recipe(10, 0.0, 0.0);
+        let mut p = plan(TrainFrom::BaseCumulative, true, None);
+        p.families = vec![
+            family("lua51", &[1]),
+            family("python3", &[2]),
+            family("zero-index", &[3]),
+        ];
+        p.validate(&recipe).unwrap();
+        assert_eq!(p.scheduled(2).len(), 1);
+        let mut doubled = p.clone();
+        doubled.families[0].at = vec![1, 2];
+        assert_eq!(
+            doubled.scheduled(2).len(),
+            2,
+            "the control doubles an earlier pool"
+        );
+        let mut gap = p.clone();
+        gap.families[2].at = vec![1];
+        assert!(
+            gap.validate(&recipe).is_err(),
+            "generation 3 would find nothing"
+        );
+        let mut continued = plan(TrainFrom::Previous, true, None);
+        continued.families = p.families.clone();
+        assert!(continued.validate(&recipe).is_err());
+        let mut greedy = plan(TrainFrom::BaseCumulative, false, None);
+        greedy.families = p.families.clone();
+        assert!(greedy.validate(&recipe).is_err());
+        let mut outside = p;
+        outside.families[0].at = vec![9];
+        assert!(outside.validate(&recipe).is_err());
     }
 }

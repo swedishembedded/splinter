@@ -28,6 +28,7 @@ use splinter_sdk::campaign::brain::{Graded, TaskFamily};
 use splinter_sdk::campaign::CampaignError;
 use splinter_sdk::vocabulary::digest::Digest;
 
+use crate::language::{Language, LUA51};
 use crate::{neutral, LuaPredict};
 
 /// Which part of the campaign a proposal belongs to.
@@ -57,6 +58,10 @@ pub struct Proposal {
     /// The manual section it was proposed from, as `part#position`.
     #[serde(default)]
     pub section: Option<String>,
+    /// The task family it belongs to; absent for the original family, Lua
+    /// 5.1, so lineages of one family journal what they always did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
     /// Where it is used.
     pub part: Part,
     /// What the policy is asked: the question and the fenced program.
@@ -75,6 +80,20 @@ pub fn proposal_id(program: &str) -> String {
     format!("prop-{}", &hex[..16])
 }
 
+/// The id of a program proposed for `language`: the original family's ids
+/// are those of before families existed, any other family's are made from its
+/// name and the program, so one text proposed for two languages is two tasks.
+#[must_use]
+pub fn proposal_id_in(language: &Language, program: &str) -> String {
+    if language.is_original() {
+        return proposal_id(program);
+    }
+    let digest =
+        Digest::of(format!("{}\n{}", language.name, program.trim()).as_bytes()).to_string();
+    let hex = digest.rsplit(':').next().unwrap_or(&digest);
+    format!("prop-{}", &hex[..16])
+}
+
 /// A task of a campaign as handed to the examiner's overlap audit: the
 /// program, its reference and its digest.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -85,6 +104,9 @@ pub struct TaskRecord {
     pub role: &'static str,
     /// `generator` or the generation of the policy that proposed it.
     pub origin: String,
+    /// The task family; absent for the original one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
     /// The program.
     pub program: String,
     /// What the interpreter printed.
@@ -95,18 +117,24 @@ pub struct TaskRecord {
 
 /// The family: see the module documentation.
 pub struct ProposalFamily {
-    generator: LuaPredict,
+    /// The families, each with its own generator of development programs;
+    /// the first is the original one when there is only one.
+    generators: Vec<(Language, LuaPredict)>,
     proposals: Mutex<BTreeMap<String, Proposal>>,
     file: PathBuf,
 }
 
 impl ProposalFamily {
-    /// The family over `generator` and the proposals kept in `file` (created
-    /// when absent).
+    /// The family over `generators` (one per task family, with that family's
+    /// own generator of development programs) and the proposals kept in
+    /// `file` (created when absent).
     ///
     /// # Errors
     /// The file cannot be read or holds a line that is not a proposal.
-    pub fn open(generator: LuaPredict, file: &Path) -> Result<Self, CampaignError> {
+    pub fn open(
+        generators: Vec<(Language, LuaPredict)>,
+        file: &Path,
+    ) -> Result<Self, CampaignError> {
         let config = |what: String| CampaignError::Config(what);
         let mut proposals = BTreeMap::new();
         if file.exists() {
@@ -123,7 +151,7 @@ impl ProposalFamily {
             }
         }
         Ok(Self {
-            generator,
+            generators,
             proposals: Mutex::new(proposals),
             file: file.to_path_buf(),
         })
@@ -135,13 +163,32 @@ impl ProposalFamily {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// Whether any proposal was made by the policy of `generation` in
-    /// `round`.
+    /// Whether any proposal of `family` was made by the policy of
+    /// `generation` in `round`.
     #[must_use]
-    pub fn has_round(&self, generation: u32, round: u32) -> bool {
-        self.lock()
-            .values()
-            .any(|p| p.generation == generation && p.round == round)
+    pub fn has_round(&self, family: &str, generation: u32, round: u32) -> bool {
+        self.lock().values().any(|p| {
+            family_name(p.family.as_deref()) == family
+                && p.generation == generation
+                && p.round == round
+        })
+    }
+
+    /// The families, in the order they were given.
+    pub fn languages(&self) -> impl Iterator<Item = &Language> {
+        self.generators.iter().map(|(language, _)| language)
+    }
+
+    /// The family task `id` belongs to, proposed or generated.
+    #[must_use]
+    pub fn family_of(&self, id: &str) -> Option<String> {
+        if let Some(p) = self.lock().get(id) {
+            return Some(family_name(p.family.as_deref()).to_string());
+        }
+        self.generators
+            .iter()
+            .find(|(_, g)| g.program(id).is_some())
+            .map(|(language, _)| language.name.clone())
     }
 
     /// The proposal of task `id`, if it is one.
@@ -156,15 +203,16 @@ impl ProposalFamily {
         self.lock().values().cloned().collect()
     }
 
-    /// Whether `program` is already a task of the family, proposed or
+    /// Whether `program` is already a task of `language`, proposed or
     /// generated.
     #[must_use]
-    pub fn holds(&self, program: &str) -> bool {
-        self.lock().contains_key(&proposal_id(program))
+    pub fn holds(&self, language: &Language, program: &str) -> bool {
+        self.lock().contains_key(&proposal_id_in(language, program))
             || self
-                .generator
-                .sources()
-                .any(|source| source.trim() == program.trim())
+                .generators
+                .iter()
+                .filter(|(l, _)| l.name == language.name)
+                .any(|(_, g)| g.sources().any(|source| source.trim() == program.trim()))
     }
 
     /// Adds `proposals` to the pool (those not already held) and appends them
@@ -214,29 +262,36 @@ impl ProposalFamily {
     /// trained on).
     #[must_use]
     pub fn records(&self, trained: &std::collections::BTreeSet<String>) -> Vec<TaskRecord> {
-        let record = |id: &str, role, origin: String, program: &str, reference: &str| TaskRecord {
-            id: id.to_string(),
-            role,
-            origin,
-            program: program.to_string(),
-            reference: reference.to_string(),
-            digest: Digest::sha256_of(program.trim().as_bytes()).to_string(),
-        };
+        let record =
+            |id: &str, role, origin: String, family: &str, program: &str, reference: &str| {
+                TaskRecord {
+                    id: id.to_string(),
+                    role,
+                    origin,
+                    family: (family != LUA51).then(|| family.to_string()),
+                    program: program.to_string(),
+                    reference: reference.to_string(),
+                    digest: Digest::sha256_of(program.trim().as_bytes()).to_string(),
+                }
+            };
         let mut records = Vec::new();
-        for (ids, role) in [
-            (self.generator.pool(), "train"),
-            (self.generator.dev(), "dev"),
-            (self.generator.retention(), "retention"),
-        ] {
-            for id in ids {
-                if let Some(p) = self.generator.program(&id) {
-                    records.push(record(
-                        &id,
-                        role,
-                        "generator".into(),
-                        &p.source,
-                        &p.expected,
-                    ));
+        for (language, generator) in &self.generators {
+            for (ids, role) in [
+                (generator.pool(), "train"),
+                (generator.dev(), "dev"),
+                (generator.retention(), "retention"),
+            ] {
+                for id in ids {
+                    if let Some(p) = generator.program(&id) {
+                        records.push(record(
+                            &id,
+                            role,
+                            "generator".into(),
+                            &language.name,
+                            &p.source,
+                            &p.expected,
+                        ));
+                    }
                 }
             }
         }
@@ -253,6 +308,7 @@ impl ProposalFamily {
                 &p.id,
                 role,
                 format!("policy-of-generation-{}", p.generation),
+                family_name(p.family.as_deref()),
                 &p.program,
                 &p.expected,
             ));
@@ -276,19 +332,28 @@ impl TaskFamily for ProposalFamily {
     fn describe(&self) -> Value {
         // The proposals are not part of it: the pool grows between arms and a
         // campaign that is continued is the same campaign.
-        json!({"family": "proposed-lua", "protocol": "neutral", "generator": self.generator.describe()})
+        match self.generators.as_slice() {
+            [(_, only)] => {
+                json!({"family": "proposed-lua", "protocol": "neutral", "generator": only.describe()})
+            }
+            many => json!({
+                "family": "proposed-programs",
+                "protocol": "neutral",
+                "generators": many.iter().map(|(l, g)| json!({"name": l.name, "generator": g.describe()})).collect::<Vec<_>>(),
+            }),
+        }
     }
 
     fn pool(&self) -> Vec<String> {
-        self.ids(Part::Train, self.generator.pool())
+        self.ids(Part::Train, self.generated(LuaPredict::pool))
     }
 
     fn dev(&self) -> Vec<String> {
-        self.ids(Part::Dev, self.generator.dev())
+        self.ids(Part::Dev, self.generated(LuaPredict::dev))
     }
 
     fn retention(&self) -> Vec<String> {
-        self.ids(Part::Keep, self.generator.retention())
+        self.ids(Part::Keep, self.generated(LuaPredict::retention))
     }
 
     fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError> {
@@ -297,7 +362,14 @@ impl TaskFamily for ProposalFamily {
         let proposed = self.lock().get(task).map(|p| p.request.clone());
         let text = match proposed {
             Some(request) => request,
-            None => neutral::request(&self.known(task)?.0),
+            None => {
+                let family = self.family_of(task).unwrap_or_else(|| LUA51.to_string());
+                let program = self.known(task)?.0;
+                match self.generators.iter().find(|(l, _)| l.name == family) {
+                    Some((language, _)) => language.request(&program),
+                    None => neutral::request(&program),
+                }
+            }
         };
         Ok(vec![("user".into(), text)])
     }
@@ -315,14 +387,25 @@ impl TaskFamily for ProposalFamily {
     }
 }
 
+/// The family a proposal's field names: absent is the original.
+fn family_name(field: Option<&str>) -> &str {
+    field.unwrap_or(LUA51)
+}
+
 impl ProposalFamily {
+    /// What each generator's `part` holds, family after family.
+    fn generated(&self, part: fn(&LuaPredict) -> Vec<String>) -> Vec<String> {
+        self.generators.iter().flat_map(|(_, g)| part(g)).collect()
+    }
+
     /// The program and what it prints, of a proposed or a generated task.
     fn known(&self, task: &str) -> Result<(String, String), CampaignError> {
         if let Some(p) = self.lock().get(task) {
             return Ok((p.program.clone(), p.expected.clone()));
         }
-        self.generator
-            .program(task)
+        self.generators
+            .iter()
+            .find_map(|(_, g)| g.program(task))
             .map(|p| (p.source.clone(), p.expected.clone()))
             .ok_or_else(|| CampaignError::Config(format!("{task:?} is not a task of the family")))
     }
@@ -341,7 +424,11 @@ mod tests {
         };
         // seed: the sets only have to be disjoint, whatever the draw.
         let generator = LuaPredict::generate(&default_interpreter(), dir, sizes, 7).unwrap();
-        ProposalFamily::open(generator, &dir.join("proposals.jsonl")).unwrap()
+        ProposalFamily::open(vec![(lua(), generator)], &dir.join("proposals.jsonl")).unwrap()
+    }
+
+    fn lua() -> Language {
+        Language::lua51(&default_interpreter(), &[])
     }
 
     fn proposal(program: &str, generation: u32, part: Part) -> Proposal {
@@ -350,6 +437,7 @@ mod tests {
             generation,
             round: 1,
             section: None,
+            family: None,
             part,
             request: format!("What does this print?\n\n```lua\n{program}\n```"),
             program: program.into(),
@@ -379,8 +467,8 @@ mod tests {
         assert!(family.prompt(&id).unwrap()[0].1.contains("print(1+2)"));
         assert!(family.grade(&id, "so\n```\n3\n```").unwrap().passed);
         assert!(!family.grade(&id, "3").unwrap().passed);
-        assert!(family.holds("print(1+2)  "));
-        let generated = &family.generator.pool()[0];
+        assert!(family.holds(&lua(), "print(1+2)  "));
+        let generated = &family.pool()[0];
         let turns = family.prompt(generated).unwrap();
         assert!(
             turns[0].1.contains("```lua"),
@@ -398,7 +486,11 @@ mod tests {
         let described = first.describe();
         drop(first);
         let again = family(dir.path());
-        assert!(again.has_round(1, 1) && !again.has_round(1, 2) && !again.has_round(2, 1));
+        assert!(
+            again.has_round(LUA51, 1, 1)
+                && !again.has_round(LUA51, 1, 2)
+                && !again.has_round(LUA51, 2, 1)
+        );
         assert_eq!(again.pool().len(), 7);
         assert_eq!(again.describe(), described);
     }
@@ -452,5 +544,84 @@ mod tests {
             .unwrap();
         assert_eq!((proposed.role, proposed.reference.as_str()), ("dev", "3"));
         assert!(proposed.digest.starts_with("sha256:"));
+    }
+
+    fn python() -> Language {
+        let mut language = Language::python3(Path::new("python3"), "sha256:unused", &[]);
+        language.interpreter.sha256 = None;
+        language
+    }
+
+    #[test]
+    fn several_families_keep_their_own_dev_items_ids_and_wording() {
+        let dir = tempfile::tempdir().unwrap();
+        let sizes = Sizes {
+            pool: 0,
+            dev: 6,
+            retention: 2,
+        };
+        let (lua, python) = (lua(), python());
+        let generators = vec![
+            (
+                lua.clone(),
+                LuaPredict::generate_for(&lua, dir.path(), sizes, 7).unwrap(),
+            ),
+            (
+                python.clone(),
+                LuaPredict::generate_for(&python, dir.path(), sizes, 7).unwrap(),
+            ),
+        ];
+        let family = ProposalFamily::open(generators, &dir.path().join("proposals.jsonl")).unwrap();
+        let dev = family.dev();
+        assert_eq!(dev.len(), 12, "every family's dev items are in the union");
+        let ids: std::collections::BTreeSet<&String> = dev.iter().collect();
+        assert_eq!(ids.len(), 12, "ids of two families never meet");
+        let per_family = |name: &str| {
+            dev.iter()
+                .filter(|id| family.family_of(id).as_deref() == Some(name))
+                .count()
+        };
+        assert_eq!((per_family(LUA51), per_family("python3")), (6, 6));
+        let python_dev = dev.iter().find(|id| id.starts_with("python3-dev")).unwrap();
+        assert!(family.prompt(python_dev).unwrap()[0]
+            .1
+            .starts_with("```python\n"));
+        assert!(family.prompt(&dev[0]).unwrap()[0].1.starts_with("```lua\n"));
+        // One text proposed in two languages is two tasks, and a repeat is a
+        // repeat within a language only.
+        assert_ne!(
+            proposal_id_in(&lua, "print(1)"),
+            proposal_id_in(&python, "print(1)")
+        );
+        assert_eq!(proposal_id_in(&lua, "print(1)"), proposal_id("print(1)"));
+        assert!(!family.holds(&python, "print(1+2)"));
+        let mut mine = proposal("print(1+2)", 1, Part::Train);
+        mine.id = proposal_id_in(&python, "print(1+2)");
+        mine.family = Some("python3".into());
+        family.add(vec![mine]).unwrap();
+        assert!(family.holds(&python, "print(1+2)"));
+        assert!(!family.holds(&lua, "print(1+2)"));
+        assert!(family.has_round("python3", 1, 1) && !family.has_round(LUA51, 1, 1));
+    }
+
+    /// A lineage of the original family alone journals the lines it always
+    /// did, so one begun before families continues unchanged.
+    #[test]
+    fn a_proposal_of_the_original_family_journals_as_it_always_did() {
+        let p = proposal("print(1)", 1, Part::Train);
+        let line = serde_json::to_string(&p).unwrap();
+        assert!(!line.contains("family"), "{line}");
+        let again: Proposal = serde_json::from_str(&line).unwrap();
+        assert_eq!(again, p);
+        let task = TaskRecord {
+            id: "t".into(),
+            role: "train",
+            origin: "generator".into(),
+            family: None,
+            program: "print(1)".into(),
+            reference: "1".into(),
+            digest: "d".into(),
+        };
+        assert!(!serde_json::to_string(&task).unwrap().contains("family"));
     }
 }

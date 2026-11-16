@@ -24,6 +24,9 @@ use splinter_sdk::knowledge::tasks::SourceText;
 use splinter_sdk::vocabulary::source::SourceId;
 use splinter_sdk::Context;
 
+use crate::language::{Dialect, Tongue};
+use crate::vocabulary;
+
 /// Standard libraries whose functions are families of programs.
 const LIBRARIES: [&str; 5] = ["string", "table", "math", "os", "io"];
 
@@ -109,7 +112,11 @@ pub fn functions_in(text: &str) -> BTreeSet<String> {
 ///
 /// # Errors
 /// A page cannot be read from the source store.
-pub fn manual_sections(ctx: &Context, sources: &[SourceId]) -> Result<Vec<ManualSection>> {
+pub fn manual_sections(
+    ctx: &Context,
+    sources: &[SourceId],
+    tongue: Tongue,
+) -> Result<Vec<ManualSection>> {
     let mut out = Vec::new();
     for id in sources {
         let source = ctx
@@ -127,7 +134,7 @@ pub fn manual_sections(ctx: &Context, sources: &[SourceId]) -> Result<Vec<Manual
                         part: part.name.clone(),
                         section: position,
                     },
-                    functions: functions_in(body),
+                    functions: vocabulary::functions_in(tongue, body),
                 });
             }
         }
@@ -143,9 +150,18 @@ pub type Accuracy = BTreeMap<String, (usize, usize)>;
 /// function it uses.
 #[must_use]
 pub fn family_accuracy<'a>(outcomes: impl IntoIterator<Item = (&'a str, bool)>) -> Accuracy {
+    family_accuracy_in(Tongue::Lua(Dialect::Stock), outcomes)
+}
+
+/// [`family_accuracy`] for programs written in `tongue`.
+#[must_use]
+pub fn family_accuracy_in<'a>(
+    tongue: Tongue,
+    outcomes: impl IntoIterator<Item = (&'a str, bool)>,
+) -> Accuracy {
     let mut by_family = Accuracy::new();
     for (program, passed) in outcomes {
-        for family in functions_in(program) {
+        for family in vocabulary::functions_in(tongue, program) {
             let entry = by_family.entry(family).or_default();
             entry.0 += usize::from(passed);
             entry.1 += 1;

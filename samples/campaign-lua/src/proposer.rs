@@ -28,35 +28,9 @@ use splinter_sdk::vocabulary::rng::SplitMix64;
 use splinter_sdk::vocabulary::source::SourceId;
 use splinter_sdk::Context;
 
-use crate::family::{proposal_id, Part, Proposal, ProposalFamily};
-use crate::neutral;
+use crate::family::{proposal_id_in, Part, Proposal, ProposalFamily};
+use crate::language::{Language, MAX_OUTPUT_BYTES};
 use crate::sections::{manual_sections, plan_requests, weak_functions, Accuracy, ManualSection};
-
-/// The task kind asked of the policy.
-const KIND: &str = "predict-lua";
-
-/// What the generator is told it is for.
-const GOAL: &str = "Write Lua 5.1 programs that exercise the standard library functions the \
-                    manual describes, each printing a result a reader has to work out.";
-
-/// Angles a request asks its programs to take, so asking again about a
-/// section yields different programs instead of the one the model writes for
-/// it every time (the first lever against saturation: the second request for a
-/// section otherwise repeats the first in about half its programs).
-const ANGLES: [&str; 12] = [
-    "Use empty, single-character and long arguments.",
-    "Use negative numbers, zero and fractional numbers as arguments.",
-    "Print several lines, one result per line, from a loop.",
-    "Combine the function with a second standard library function in one expression.",
-    "Use return values beyond the first: multiple returns, captures, positions.",
-    "Build a table first, then apply the library to it.",
-    "Use patterns, escapes or format specifiers with unusual flags.",
-    "Make a conditional depend on the function's result and print which branch ran.",
-    "Use values near limits: large integers, tiny floats, long strings.",
-    "Call it through pcall and print what comes back.",
-    "Define a short function that uses it and call that function twice.",
-    "Make the output hinge on a subtle rule of the function that a reader may get wrong.",
-];
 
 /// Words a request may be asked to put in its programs.
 const WORDS: [&str; 40] = [
@@ -92,6 +66,10 @@ pub struct Proposed {
     pub repeats: usize,
     /// Of those, dropped for a shape the neutral protocol cannot ask.
     pub unusable: usize,
+    /// Of those, refused by the family's admission checks (an address in
+    /// the output, a rerun that printed something else).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub inadmissible: usize,
     /// Refusals of the task generator, by reason.
     pub refused: BTreeMap<String, usize>,
     /// Programs kept, by manual section.
@@ -99,6 +77,10 @@ pub struct Proposed {
     /// The programs kept, with the interpreter's output.
     #[serde(skip)]
     pub kept: Vec<Kept>,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// What a round of proposing is steered by.
@@ -125,16 +107,26 @@ pub struct Budget {
 
 /// The policy as a proposer of tasks, over the manual.
 pub struct Proposer {
-    manuals: Vec<PathBuf>,
+    language: Language,
     base: PathBuf,
+    /// Where the family's interpreter is found.
+    runtime_dir: PathBuf,
 }
 
 /// The brief of one request: the standing goal, the functions of the section
 /// the policy answers worst on when it has any, and the angle of this visit
 /// to the section.
-fn goal_for(section: &ManualSection, accuracy: &Accuracy, visit: usize, seed: u64) -> String {
+fn goal_for(
+    language: &Language,
+    section: &ManualSection,
+    accuracy: &Accuracy,
+    visit: usize,
+    seed: u64,
+) -> String {
     let weak = weak_functions(section, accuracy);
-    let angle = ANGLES[visit % ANGLES.len()];
+    let angles = language.angles();
+    let angle = angles[visit % angles.len()];
+    let standing = language.goal();
     // The second lever: literals a request must use, drawn from the request's
     // own seed, so two requests about one section cannot write one program.
     let mut rng = SplitMix64::new(seed);
@@ -142,25 +134,42 @@ fn goal_for(section: &ManualSection, accuracy: &Accuracy, visit: usize, seed: u6
     let number = rng.between(2, 999);
     let material = format!("Put the word \"{word}\" and the number {number} in the programs.");
     if weak.is_empty() {
-        format!("{GOAL} {angle} {material}")
+        format!("{standing} {angle} {material}")
     } else {
         let named: Vec<&str> = weak.iter().take(3).map(String::as_str).collect();
         format!(
-            "{GOAL} Make most of the programs use {}. {angle} {material}",
+            "{standing} Make most of the programs use {}. {angle} {material}",
             named.join(", ")
         )
     }
 }
 
 impl Proposer {
-    /// A proposer for the base checkpoint at `base`, over the manual pages in
-    /// `manuals`.
-    #[must_use]
-    pub fn new(base: &Path, manuals: &[PathBuf]) -> Self {
-        Self {
-            manuals: manuals.to_vec(),
+    /// A proposer of `language`'s programs for the base checkpoint at
+    /// `base`; the interpreter's search directory, when it needs one, is
+    /// made under `state`.
+    ///
+    /// # Errors
+    /// The search directory cannot be made.
+    pub fn for_language(base: &Path, language: Language, state: &Path) -> Result<Self> {
+        Ok(Self {
+            runtime_dir: language.runtime_dir(state)?,
+            language,
             base: base.to_path_buf(),
-        }
+        })
+    }
+
+    /// The directory to put first on the task runtimes' search path so the
+    /// family's interpreter is the one that runs its programs.
+    #[must_use]
+    pub fn runtime_dir(&self) -> &Path {
+        &self.runtime_dir
+    }
+
+    /// The family this proposer writes programs of.
+    #[must_use]
+    pub fn language(&self) -> &Language {
+        &self.language
     }
 
     /// The tasks the policy (the base with `adapter`, or the base alone)
@@ -181,6 +190,7 @@ impl Proposer {
         budget: Budget,
     ) -> Result<Proposed> {
         let sources = self
+            .language
             .manuals
             .iter()
             .map(|page| {
@@ -190,7 +200,7 @@ impl Proposer {
                     .with_context(|| format!("capturing {}", page.display()))
             })
             .collect::<Result<Vec<SourceId>>>()?;
-        let sections = manual_sections(ctx, &sources)?;
+        let sections = manual_sections(ctx, &sources, self.language.tongue)?;
         anyhow::ensure!(!sections.is_empty(), "the manual pages hold no section");
         let plan = plan_requests(
             &sections,
@@ -202,14 +212,22 @@ impl Proposer {
         let mut seen = Seen::new(DEFAULT_SHINGLE_WORDS, DEFAULT_MAX_OVERLAP);
         // The instructions held, with the section each came from.
         let mut shown: Vec<(Option<String>, String)> = Vec::new();
-        for held in family.proposals() {
+        for held in family
+            .proposals()
+            .into_iter()
+            .filter(|p| p.family.as_deref().unwrap_or(crate::language::LUA51) == self.language.name)
+        {
             seen.admit(&held.request);
             shown.push((held.section, held.request));
         }
         let mut out = Proposed::default();
         let mut barren = 0;
         let mut next = 0;
-        let kinds = [KIND.to_string()];
+        let kinds = [self.language.kind().to_string()];
+        let runtime = ctx
+            .environments()
+            .runtime(self.language.runtime())
+            .map_err(|e| anyhow::anyhow!("the {} runtime: {e}", self.language.name))?;
         while out.kept.len() < budget.want && next < plan.len() && barren < 2 {
             // One wave: independent requests, asked together so the server
             // decodes them in one batch. Each is shown the tasks written so
@@ -244,7 +262,13 @@ impl Proposer {
                     );
                     (
                         at,
-                        goal_for(&sections[at], steering.accuracy, visit, request_seed),
+                        goal_for(
+                            &self.language,
+                            &sections[at],
+                            steering.accuracy,
+                            visit,
+                            request_seed,
+                        ),
                         written,
                     )
                 })
@@ -294,11 +318,19 @@ impl Proposer {
                 for entry in members {
                     let task = ctx.tasks().get(&entry.task)?;
                     out.admitted += 1;
-                    let Some((program, expected)) = program_and_output(&task) else {
+                    let Some((program, expected)) =
+                        program_and_output(&task, self.language.fence())
+                    else {
                         out.unusable += 1;
                         continue;
                     };
-                    if family.holds(&program)
+                    if !self.language.output_admitted(&expected)
+                        || !self.language.rerun_agrees(&runtime, &program, &expected)?
+                    {
+                        out.inadmissible += 1;
+                        continue;
+                    }
+                    if family.holds(&self.language, &program)
                         || out.kept.iter().any(|k| k.program.trim() == program.trim())
                         || seen.repeats(&task.instruction).is_some()
                     {
@@ -338,8 +370,9 @@ impl Proposer {
 /// The program a task shows (the last fenced `lua` block of its instruction)
 /// and what the interpreter printed for it (the task's reference); `None`
 /// when the task is not of that shape or its output is empty or long.
-fn program_and_output(task: &Task) -> Option<(String, String)> {
-    let at = task.instruction.rfind("```lua\n")? + "```lua\n".len();
+fn program_and_output(task: &Task, fence: &str) -> Option<(String, String)> {
+    let open = format!("```{fence}\n");
+    let at = task.instruction.rfind(&open)? + open.len();
     let rest = &task.instruction[at..];
     let program = rest[..rest.find("```")?].trim().to_string();
     let reference = task
@@ -353,9 +386,6 @@ fn program_and_output(task: &Task) -> Option<(String, String)> {
         .then_some((program, reference))
 }
 
-/// A longer printed output is not a short answer a reply can be graded on.
-const MAX_OUTPUT_BYTES: usize = 400;
-
 /// Which generation and round proposed a batch, and how it is used.
 #[derive(Clone, Copy, Debug)]
 pub struct Origin {
@@ -368,11 +398,18 @@ pub struct Origin {
 /// The proposals as family entries: the first `dev` of them are held out for
 /// the dev gate, the next `keep` for retention, the rest are trained on.
 #[must_use]
-pub fn as_proposals(kept: Vec<Kept>, origin: Origin, dev: usize, keep: usize) -> Vec<Proposal> {
+pub fn as_proposals(
+    language: &Language,
+    kept: Vec<Kept>,
+    origin: Origin,
+    dev: usize,
+    keep: usize,
+) -> Vec<Proposal> {
     kept.into_iter()
         .enumerate()
         .map(|(n, k)| Proposal {
-            id: proposal_id(&k.program),
+            id: proposal_id_in(language, &k.program),
+            family: (!language.is_original()).then(|| language.name.clone()),
             generation: origin.generation,
             round: origin.round,
             section: Some(k.section),
@@ -386,7 +423,7 @@ pub fn as_proposals(kept: Vec<Kept>, origin: Origin, dev: usize, keep: usize) ->
             request: if k.instruction.contains(&k.program) {
                 k.instruction
             } else {
-                neutral::request(&k.program)
+                language.request(&k.program)
             },
             program: k.program,
             expected: k.expected,
@@ -418,12 +455,15 @@ mod tests {
     fn the_program_is_the_last_lua_block_and_its_reference_is_what_the_interpreter_printed() {
         let t = task("What does it print?\n\n```lua\nprint(1+2)\n```", "3\n");
         assert_eq!(
-            program_and_output(&t),
+            program_and_output(&t, "lua"),
             Some(("print(1+2)".into(), "3".into()))
         );
-        assert_eq!(program_and_output(&task("no program here", "3")), None);
         assert_eq!(
-            program_and_output(&task("q\n\n```lua\nprint(1)\n```", &"x".repeat(500))),
+            program_and_output(&task("no program here", "3"), "lua"),
+            None
+        );
+        assert_eq!(
+            program_and_output(&task("q\n\n```lua\nprint(1)\n```", &"x".repeat(500)), "lua"),
             None,
             "an output too long to be graded as a short answer is not a task"
         );
@@ -438,6 +478,7 @@ mod tests {
             section: "page#0".into(),
         };
         let proposals = as_proposals(
+            &Language::lua51(Path::new("lua"), &[]),
             vec![
                 kept("print(1)", "q ```lua\nprint(1)\n```"),
                 kept("print(2)", "no program shown"),
@@ -476,22 +517,104 @@ mod tests {
             functions: ["string.rep".to_string()].into(),
         };
         let none = Accuracy::new();
-        let goals: Vec<String> = (0..ANGLES.len() + 1)
-            .map(|visit| goal_for(&section, &none, visit, 7))
+        let lua = Language::lua51(Path::new("lua"), &[]);
+        let angles = lua.angles();
+        let goals: Vec<String> = (0..angles.len() + 1)
+            .map(|visit| goal_for(&lua, &section, &none, visit, 7))
             .collect();
         let distinct: std::collections::BTreeSet<&String> = goals.iter().collect();
         assert_eq!(
             distinct.len(),
-            ANGLES.len(),
+            angles.len(),
             "the angles come round after all of them"
         );
-        assert_eq!(goals[0], goals[ANGLES.len()]);
+        assert_eq!(goals[0], goals[angles.len()]);
         let weak = family_accuracy((0..4).map(|_| ("print(string.rep('a', 2))", false)));
         let seeded: std::collections::BTreeSet<String> = (0..8)
-            .map(|seed| goal_for(&section, &none, 0, seed))
+            .map(|seed| goal_for(&lua, &section, &none, 0, seed))
             .collect();
         assert!(seeded.len() > 4, "requests draw their own literals");
-        assert!(goal_for(&section, &weak, 0, 7).contains("string.rep"));
-        assert!(!goal_for(&section, &none, 0, 7).contains("string.rep"));
+        assert!(goal_for(&lua, &section, &weak, 0, 7).contains("string.rep"));
+        assert!(!goal_for(&lua, &section, &none, 0, 7).contains("string.rep"));
+    }
+
+    /// The request a Lua lineage puts to its proposer is the one it always
+    /// put: the standing goal, the angle, the literals the request must use.
+    #[test]
+    fn the_original_familys_request_is_the_wording_it_always_had() {
+        let lua = Language::lua51(Path::new("lua"), &[]);
+        let section = ManualSection {
+            at: splinter_sdk::knowledge::concepts::SectionRef {
+                source: splinter_sdk::vocabulary::source::SourceId(
+                    splinter_sdk::vocabulary::digest::Digest::of(b"page"),
+                ),
+                part: "page.html".into(),
+                section: 0,
+            },
+            functions: Default::default(),
+        };
+        let goal = goal_for(&lua, &section, &Accuracy::new(), 0, 7);
+        assert!(
+            goal.starts_with(
+                "Write Lua 5.1 programs that exercise the standard library functions the manual describes, each printing a result a reader has to work out. Use empty, single-character and long arguments. Put the word \""
+            ),
+            "{goal}"
+        );
+        assert_eq!(
+            lua.request("print(1)\n"),
+            "```lua\nprint(1)\n```\nWhat does this program print?"
+        );
+        assert_eq!(lua.kind(), "predict-lua");
+        let kept = Kept {
+            program: "print(1)".into(),
+            expected: "1".into(),
+            instruction: "no program shown".into(),
+            section: "p#0".into(),
+        };
+        let made = as_proposals(
+            &lua,
+            vec![kept],
+            Origin {
+                generation: 1,
+                round: 1,
+            },
+            0,
+            0,
+        );
+        assert_eq!(made[0].family, None);
+        assert_eq!(made[0].id, crate::family::proposal_id("print(1)"));
+    }
+
+    #[test]
+    fn another_familys_requests_name_its_language_and_its_kind() {
+        let mut python = Language::python3(Path::new("python3"), "sha256:00", &[]);
+        python.admission.reruns = 0;
+        assert_eq!(
+            (python.kind(), python.fence()),
+            ("predict-python", "python")
+        );
+        assert!(python.request("print(1)").starts_with("```python\n"));
+        assert!(python.goal().contains("Python 3"));
+        let dialect = Language::dialect("zero-index", Path::new("lua"), "sha256:00", &[]).unwrap();
+        assert_eq!(dialect.kind(), "predict-lua");
+        assert!(dialect.goal().contains("lua51-zero-index"));
+        let kept = Kept {
+            program: "print(1)".into(),
+            expected: "1".into(),
+            instruction: "q".into(),
+            section: "p#0".into(),
+        };
+        let made = as_proposals(
+            &python,
+            vec![kept],
+            Origin {
+                generation: 1,
+                round: 1,
+            },
+            0,
+            0,
+        );
+        assert_eq!(made[0].family.as_deref(), Some("python3"));
+        assert!(made[0].request.starts_with("```python\n"));
     }
 }

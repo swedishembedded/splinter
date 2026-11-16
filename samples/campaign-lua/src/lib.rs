@@ -21,24 +21,29 @@ pub mod frontier;
 pub mod frontier_round;
 pub mod handoff;
 pub mod journal;
+pub mod language;
 pub mod lineage;
 pub mod neutral;
 pub mod plan;
+pub mod programs;
 pub mod proposer;
 pub mod reasoning;
 pub mod recipe;
 pub mod records;
 pub mod sections;
 pub mod sft;
+pub mod spec;
+pub mod vocabulary;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde_json::{json, Value};
 use splinter_sdk::campaign::brain::{Graded, TaskFamily};
 use splinter_sdk::campaign::CampaignError;
 use splinter_sdk::vocabulary::rng::SplitMix64;
+
+use crate::language::{Language, Runner};
 
 /// The system message of every task.
 const SYSTEM: &str =
@@ -92,7 +97,7 @@ fn word(rng: &mut SplitMix64) -> String {
 /// small numbers, 2 a product plus a digit, 3 a short string transformation,
 /// 4 a small accumulating loop with a start and a step, 5 a three-item table sort, 6 a longer
 /// arithmetic expression.
-fn generate(level: usize, rng: &mut SplitMix64) -> String {
+pub(crate) fn generate(level: usize, rng: &mut SplitMix64) -> String {
     let n = |rng: &mut SplitMix64, low: u64, high: u64| rng.between(low, high);
     match level {
         1 => format!("print({} + {})", n(rng, 1, 30), n(rng, 1, 30)),
@@ -133,31 +138,11 @@ fn generate(level: usize, rng: &mut SplitMix64) -> String {
     }
 }
 
-/// Runs one program. Every program goes through the same scratch file: a file
-/// per program would put hundreds of files on a disk with a quota on their
-/// number.
-fn run_lua(lua: &Path, source: &str, scratch: &Path) -> Result<String, CampaignError> {
-    let file = scratch.join("program.lua");
-    std::fs::write(&file, source)
-        .map_err(|e| CampaignError::Config(format!("writing {}: {e}", file.display())))?;
-    let out = Command::new(lua)
-        .arg(&file)
-        .output()
-        .map_err(|e| CampaignError::Config(format!("running {}: {e}", lua.display())))?;
-    if !out.status.success() {
-        return Err(CampaignError::Config(format!(
-            "the interpreter refused a generated program ({source:?}): {}",
-            String::from_utf8_lossy(&out.stderr)
-        )));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
-
 impl LuaPredict {
-    /// Generates the family: every program is run by the interpreter at
-    /// `lua` once, in `scratch`, to record what it prints. The pool, dev and
-    /// retention sets are drawn from `seed` under different salts, and no
-    /// program is in two of them.
+    /// Generates the original family, Lua 5.1: every program is run by the
+    /// interpreter at `lua` once, in `scratch`, to record what it prints. The
+    /// pool, dev and retention sets are drawn from `seed` under different
+    /// salts, and no program is in two of them.
     ///
     /// # Errors
     /// The interpreter cannot run, or refuses a program.
@@ -167,6 +152,25 @@ impl LuaPredict {
         sizes: Sizes,
         seed: u64,
     ) -> Result<Self, CampaignError> {
+        Self::generate_for(&Language::lua51(lua, &[]), scratch, sizes, seed)
+    }
+
+    /// Generates the programs of `language`, each run once by its pinned
+    /// interpreter under the task sandbox. Programs of a family other than
+    /// the original carry the family's name in their ids, so ids of several
+    /// families never meet.
+    ///
+    /// # Errors
+    /// The interpreter is not the pinned one, cannot run, or refuses a
+    /// program.
+    pub fn generate_for(
+        language: &Language,
+        scratch: &Path,
+        sizes: Sizes,
+        seed: u64,
+    ) -> Result<Self, CampaignError> {
+        let config = |e: anyhow::Error| CampaignError::Config(format!("{e:#}"));
+        let runner = Runner::new(language, scratch).map_err(config)?;
         let mut programs: BTreeMap<String, Program> = BTreeMap::new();
         let mut seen: BTreeMap<String, ()> = BTreeMap::new();
         let mut part = |salt: u64,
@@ -185,12 +189,17 @@ impl LuaPredict {
                     )));
                 }
                 let level = levels[ids.len() % levels.len()];
-                let source = generate(level, &mut rng);
+                let source = language.tongue.generate(level, &mut rng);
                 if seen.insert(source.clone(), ()).is_some() {
                     continue;
                 }
-                let id = format!("{prefix}-l{level}-{:04}", ids.len());
-                let expected = run_lua(lua, &source, scratch)?;
+                let tag = if language.is_original() {
+                    prefix.to_string()
+                } else {
+                    format!("{}-{prefix}", language.name)
+                };
+                let id = format!("{tag}-l{level}-{:04}", ids.len());
+                let expected = runner.output(&source).map_err(config)?;
                 programs.insert(
                     id.clone(),
                     Program {
@@ -207,12 +216,16 @@ impl LuaPredict {
         let pool = part(1, sizes.pool, &all, "train")?;
         let dev = part(2, sizes.dev, &all, "dev")?;
         let retention = part(3, sizes.retention, &[1, 2], "keep")?;
+        let mut settings = json!({"family": "lua-predict", "levels": LEVELS, "sizes": [sizes.pool, sizes.dev, sizes.retention], "seed": seed});
+        if !language.is_original() {
+            settings["language"] = json!(language.name);
+        }
         Ok(Self {
             programs,
             pool,
             dev,
             retention,
-            settings: json!({"family": "lua-predict", "levels": LEVELS, "sizes": [sizes.pool, sizes.dev, sizes.retention], "seed": seed}),
+            settings,
         })
     }
 

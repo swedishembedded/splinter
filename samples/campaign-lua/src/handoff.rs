@@ -271,6 +271,7 @@ mod tests {
             id: "t".into(),
             role: "train",
             origin: "generator".into(),
+            family: None,
             program: "print(1)".into(),
             reference: "1".into(),
             digest: "sha256:bb".into(),

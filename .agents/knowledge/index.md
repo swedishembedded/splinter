@@ -148,3 +148,4 @@ in the same commit.
 | [160](160-brain-s-chat-fine-tune-of-a-from-scratch-ouro-made-it-ignore-its-context-the-raw-text-objective-on-the-same-conversations-did-not.md) | Brain's chat fine-tune of a from-scratch Ouro made it ignore its context; the raw-text objective on the same conversations did not |
 | [161](161-a-two-million-parameter-ouro-learned-to-copy-a-value-from-its-context-only-after-50-to-65m-tokens-of-copy-drills.md) | A two-million-parameter Ouro learned to copy a value from its context only after 50 to 65M tokens of copy drills |
 | [162](162-brain-trained-ten-times-slower-without-cublas-on-its-library-path-and-said-nothing.md) | Brain trained ten times slower without cuBLAS on its library path, and said nothing |
+| [163](163-python-isolated-mode-ignores-pythonhashseed-so-a-string-set-prints-in-another-order-every-run.md) | Python's isolated mode ignores `PYTHONHASHSEED`, so a string set prints in another order every run |

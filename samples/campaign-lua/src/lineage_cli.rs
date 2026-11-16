@@ -26,6 +26,7 @@ use splinter_sdk::measure::campaign::gate::DevGate;
 use campaign_lua::family::ProposalFamily;
 use campaign_lua::frontier::FrontierArgs;
 use campaign_lua::handoff::{self, Build, Candidate};
+use campaign_lua::language::LUA51;
 use campaign_lua::lineage::{
     champion_of, trained_up_to, Acceptance, Files, Lineage, Plan, TrainFrom, TrainOn,
 };
@@ -33,6 +34,7 @@ use campaign_lua::plan::EvidencePlan;
 use campaign_lua::proposer::{Budget, Proposer};
 use campaign_lua::reasoning::ReasoningArgs;
 use campaign_lua::sft::Recipe;
+use campaign_lua::spec::FamilySpec;
 use campaign_lua::{LuaPredict, Sizes};
 use splinter_sdk::served_host::{HostSettings, ServedHost};
 
@@ -151,12 +153,24 @@ struct Cli {
     /// `--handoff`).
     #[arg(long)]
     kept_adapters: Option<PathBuf>,
-    /// A page of the Lua 5.1 manual the policy proposes tasks from (repeat).
-    #[arg(long = "manual", required = true)]
+    /// A page of the Lua 5.1 manual the policy proposes tasks from (repeat);
+    /// required for the Lua 5.1 family, which is the lineage when no
+    /// `--family` is given.
+    #[arg(long = "manual")]
     manuals: Vec<PathBuf>,
-    /// The Lua 5.1 interpreter.
+    /// The Lua 5.1 interpreter; required for the Lua 5.1 family.
     #[arg(long)]
-    lua: PathBuf,
+    lua: Option<PathBuf>,
+    /// A task family the lineage acquires, as `name,key=value,...` (repeat;
+    /// names `lua51`, `python3`, `zero-index`, `plus-concat`; keys at,
+    /// target, dir, interpreter, sha256, manual-dir, manual, dev-generator,
+    /// keep-generator, dev-proposals, keep-proposals: see
+    /// `campaign_lua::spec`). Absent, the lineage is the Lua 5.1 family
+    /// alone. Each generation trains on the union of the frontier pools of
+    /// every family found so far (`--train-from base-cumulative`), and the
+    /// dev and retention sets hold every family's items from the start.
+    #[arg(long = "family")]
+    families: Vec<String>,
     /// The seed training seeds are derived from; drawn and printed when
     /// absent.
     #[arg(long)]
@@ -257,6 +271,33 @@ struct Cli {
     brain_commit: Option<String>,
 }
 
+/// The sizes of one family's held-out dev and retention sets.
+struct Held {
+    dev_generator: usize,
+    keep_generator: usize,
+    dev_proposals: usize,
+    keep_proposals: usize,
+}
+
+impl Cli {
+    /// The families asked for: the original one alone when none is named.
+    fn family_specs(&self) -> Result<Vec<FamilySpec>> {
+        if self.families.is_empty() {
+            return Ok(vec![FamilySpec::original()]);
+        }
+        let specs = self
+            .families
+            .iter()
+            .map(|text| FamilySpec::parse(text))
+            .collect::<Result<Vec<_>>>()?;
+        let mut names: Vec<&str> = specs.iter().map(|s| s.name.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
+        anyhow::ensure!(names.len() == specs.len(), "a --family is given twice");
+        Ok(specs)
+    }
+}
+
 fn hand_over(
     cli: &Cli,
     plan: &Plan,
@@ -349,26 +390,51 @@ fn main() -> Result<()> {
     .map_err(|e| anyhow::anyhow!("{e}"))?;
     let scratch = cli.out.join("lua-programs");
     std::fs::create_dir_all(&scratch)?;
-    let generator = LuaPredict::generate(
-        &cli.lua,
-        &scratch,
-        Sizes {
-            pool: 0,
-            dev: cli.dev_generator,
-            retention: cli.keep_generator,
-        },
-        generator_seed,
-    )
-    .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let wanted = cli.family_specs()?;
+    let mut generators = Vec::new();
+    let mut held: Vec<(String, Held)> = Vec::new();
+    let mut family_plans = Vec::new();
+    for (position, spec) in wanted.iter().enumerate() {
+        let language = spec.language(cli.lua.as_deref().unwrap_or(Path::new("")), &cli.manuals)?;
+        anyhow::ensure!(
+            language.name != LUA51 || (cli.lua.is_some() && !cli.manuals.is_empty()),
+            "the lua51 family needs --lua and --manual"
+        );
+        let size = |own: Option<usize>, lineage: usize| own.unwrap_or(lineage);
+        let sizes = spec.sizes;
+        let family_held = Held {
+            dev_generator: size(sizes.dev_generator, cli.dev_generator),
+            keep_generator: size(sizes.keep_generator, cli.keep_generator),
+            dev_proposals: size(sizes.dev_proposals, cli.dev_proposals),
+            keep_proposals: size(sizes.keep_proposals, cli.keep_proposals),
+        };
+        let generator = LuaPredict::generate_for(
+            &language,
+            &scratch,
+            Sizes {
+                pool: 0,
+                dev: family_held.dev_generator,
+                retention: family_held.keep_generator,
+            },
+            generator_seed,
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+        if !cli.families.is_empty() {
+            family_plans.push(spec.plan(&language, position));
+        }
+        held.push((language.name.clone(), family_held));
+        generators.push((language, generator));
+    }
     let frontier = cli.frontier.settings()?;
     let reasoning = cli.reasoning.settings(frontier)?;
     let files = Files::at(&cli.out);
+    let proposers = generators
+        .iter()
+        .map(|(language, _)| Proposer::for_language(&cli.model, language.clone(), &cli.out))
+        .collect::<Result<Vec<_>>>()?;
     let family =
-        ProposalFamily::open(generator, &files.proposals()).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let lua_dir = cli
-        .lua
-        .parent()
-        .map_or_else(|| Path::new(".").to_path_buf(), Path::to_path_buf);
+        ProposalFamily::open(generators, &files.proposals()).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let lua_dir = proposers[0].runtime_dir().to_path_buf();
     let host = ServedHost::new(HostSettings {
         brain: cli.brain.clone(),
         models: cli.models_dir.clone(),
@@ -388,7 +454,6 @@ fn main() -> Result<()> {
         predict_temperature: frontier.map_or(1.0, |f| f.temperature),
         reasoning: reasoning.map(|r| r.host()),
     });
-    let proposer = Proposer::new(&cli.model, &cli.manuals);
     let mut model = ModelSettings::new(&cli.model);
     model.max_tokens = reasoning.map_or(cli.max_tokens, |r| r.max_tokens);
     model.concurrency = cli.slots as usize;
@@ -409,6 +474,7 @@ fn main() -> Result<()> {
         admit: cli.frontier.admit(),
         reasoning,
         train_on: cli.train_on,
+        families: family_plans,
     };
     plan.validate(&cli.recipe)?;
     let base_digest = handoff::base_digest(&cli.model)?;
@@ -417,7 +483,7 @@ fn main() -> Result<()> {
         family: &family,
         host: &host,
         validator: &mut validator,
-        proposer: &proposer,
+        proposers: &proposers,
         base: &cli.model,
         recipe: &cli.recipe,
         plan: &plan,
@@ -427,10 +493,14 @@ fn main() -> Result<()> {
         },
         seed,
     };
-    let (dev_units, retention_units) = (
-        cli.dev_generator + cli.dev_proposals,
-        cli.keep_generator + cli.keep_proposals,
-    );
+    let dev_units: usize = held
+        .iter()
+        .map(|(_, h)| h.dev_generator + h.dev_proposals)
+        .sum();
+    let retention_units: usize = held
+        .iter()
+        .map(|(_, h)| h.keep_generator + h.keep_proposals)
+        .sum();
     let planned = match plan.acceptance {
         Acceptance::Greedy => {
             let (planned, needed) = lineage.check_power(dev_units, retention_units)?;
@@ -441,15 +511,18 @@ fn main() -> Result<()> {
         }
     };
     eprintln!("{planned}");
-    lineage.open_held_out(
-        cli.dev_proposals,
-        cli.keep_proposals,
-        Budget {
-            want: 0,
-            max_calls: cli.held_out_calls,
-            parallel: cli.proposal_parallel,
-        },
-    )?;
+    for (name, family_held) in &held {
+        lineage.open_held_out(
+            name,
+            family_held.dev_proposals,
+            family_held.keep_proposals,
+            Budget {
+                want: 0,
+                max_calls: cli.held_out_calls,
+                parallel: cli.proposal_parallel,
+            },
+        )?;
+    }
     // The base's own answers: the first champion's dev result. The evidence
     // gate grades only what its rounds draw.
     if plan.acceptance == Acceptance::Greedy {

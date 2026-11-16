@@ -164,6 +164,54 @@ continues from them.
 cargo run --release -p splinter-campaign-lua --bin lineage -- --help
 ```
 
+## Task families: acquiring several skills in one lineage
+
+A lineage acquires one family, Lua 5.1 output prediction, unless `--family` is
+given. A family (`campaign_lua::language::Language`) is a language, the
+interpreter that is its verifier (pinned by SHA-256, refused when it is another
+file), the manual the proposer reads, the proposer's wording, the checks a
+proposed program passes (on top of the task generator's: ran to completion,
+bounded output, the same output on a second run, no clock or random draws),
+and the learner's own generator of development programs. Programs run under the
+task sandbox: no network, bounded time, memory and output; Python runs with
+`-I`.
+
+| `--family` name | Language | Interpreter | Manual |
+|---|---|---|---|
+| `lua51` | Lua 5.1 | `--lua` | `--manual` |
+| `python3` | Python 3 (extra admission: four reruns, no addresses in the output) | `interpreter=` pinned by `sha256=` | the Python 3 text documentation, `manual-dir=` |
+| `zero-index` | Lua 5.1 with string positions from 0 and `#s` the last index | `dir=<installation>` | the dialect's generated manual |
+| `plus-concat` | Lua 5.1 with `+` concatenating two strings and no `..` | `dir=<installation>` | the dialect's generated manual |
+
+The dialects are built by `make deps/lua-dialects LUA_DIALECTS_DIR=<dir>` from
+the pinned Lua 5.1.5 tarball and the patches under `scripts/deps/lua51-dialects/`;
+each installation holds `bin/lua`, `manual/*.html` and `DIALECT.md`, the exact
+definition. The dialect tests read `LUA_DIALECTS_DIR`.
+
+```bash
+lineage ... --train-from base-cumulative --frontier-samples 4 --frontier-temperature 1.0 \
+    --frontier-target 2000 --frontier-request-cap 40 \
+    --lua <lua> --manual <lua manual page> \
+    --family lua51,at=1 \
+    --family 'python3,at=2,interpreter=<python3.14>,manual-dir=<docs>,dev-generator=120' \
+    --family zero-index,at=3,dir=<installations>/zero-index \
+    --family plus-concat,at=4,dir=<installations>/plus-concat
+```
+
+`at` lists the generations whose rounds find the family's frontier (`at=1+3`
+finds it again in generation 3: the same family's pool doubled, the control
+that adds no new family); `target` is its frontier size (default
+`--frontier-target`); `dev-generator`, `keep-generator`, `dev-proposals` and
+`keep-proposals` size its development sets (default the lineage's flags). With
+several families every generation trains one fresh adapter on the union of the
+frontier pools found so far (`--train-from base-cumulative` is required), and
+the dev and retention sets hold every family's items from the start, so the
+gate's decision pools them. The round record's `families` lists, per family,
+the proposer's novelty (new programs admitted per request) and the frontier
+yield (frontier programs per proposal predicted), and `family_dev` each family's
+dev accuracy under the champion and the candidate. Without `--family`, every
+request, record and journal line is what it was before families existed.
+
 ## The `exec-trace` tool: the interpreter's own reasoning
 
 `exec-trace` runs every program of a JSONL file (a `program` field per line)

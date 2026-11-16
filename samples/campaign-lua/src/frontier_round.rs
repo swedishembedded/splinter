@@ -24,7 +24,8 @@ use splinter_sdk::measure::campaign::gate::DevResult;
 use splinter_sdk::model::measure::RecordMeter;
 
 use crate::frontier::{self, Admit, Frontier, Measured, Overlong, Stage, Wave};
-use crate::lineage::{fail, policy_key, Lineage, RoundRecord, TrainOn};
+use crate::language::LUA51;
+use crate::lineage::{fail, policy_key, Lineage, TrainOn};
 use crate::proposer::Budget;
 use crate::reasoning::{fold, RecordMix, TraceRecord};
 use crate::sft::{chat_line, TRAIN_PACKED};
@@ -62,6 +63,8 @@ pub struct FrontierOutcome {
 struct WaveRecord {
     generation: u32,
     round: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    family: Option<String>,
     calls: usize,
     added: usize,
 }
@@ -71,6 +74,8 @@ struct WaveRecord {
 struct MeasuredRecord {
     generation: u32,
     round: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    family: Option<String>,
     policy: String,
     temperature: f32,
     #[serde(flatten)]
@@ -82,21 +87,29 @@ impl Lineage<'_> {
     /// several times, sampled, until the programs it does not always predict
     /// right number the frontier's target; those are the round's training
     /// programs and nothing is trained on the others.
+    ///
+    /// `family` is the task family it is found for (the original one's
+    /// records carry no family tag), `settings` its frontier. Returns the
+    /// programs to train on, how it came out, and the proposing it took:
+    /// requests made and new programs admitted.
     pub(crate) fn select_frontier(
         &mut self,
         champion: &PolicyRef,
         champion_dev: &DevResult,
-        record: &mut RoundRecord,
+        (generation, round): (u32, u32),
+        family: &str,
         settings: Frontier,
-    ) -> Result<(Vec<String>, Vec<String>)> {
-        let (generation, round) = (record.generation, record.round);
+    ) -> Result<(Vec<String>, FrontierOutcome, (usize, usize))> {
+        let tag = (family != LUA51).then(|| family.to_string());
         let key = policy_key(champion);
         let waves: Vec<WaveRecord> = self
             .files
             .waves()
             .read()?
             .into_iter()
-            .filter(|w: &WaveRecord| w.generation == generation && w.round == round)
+            .filter(|w: &WaveRecord| {
+                w.generation == generation && w.round == round && w.family == tag
+            })
             .collect();
         let held: Vec<Measured> = self
             .files
@@ -104,14 +117,21 @@ impl Lineage<'_> {
             .read()?
             .into_iter()
             .filter(|m: &MeasuredRecord| {
-                m.generation == generation && m.round == round && m.policy == key
+                m.generation == generation && m.round == round && m.family == tag && m.policy == key
             })
             .map(|m| m.measured)
             .collect();
         let spent: usize = waves.iter().map(|w| w.calls).sum();
         let rule = self.plan.rule();
+        let proposing = (
+            waves.iter().map(|w| w.calls).sum::<usize>(),
+            waves.iter().map(|w| w.added).sum::<usize>(),
+        );
         let mut stage = Round {
             lineage: self,
+            family,
+            tag: tag.clone(),
+            spent_now: (0, 0),
             champion,
             champion_dev,
             generation,
@@ -124,7 +144,7 @@ impl Lineage<'_> {
         let known: BTreeSet<&str> = held.iter().map(|m| m.task.as_str()).collect();
         let unmeasured: Vec<String> = stage
             .lineage
-            .round_proposals(generation, round)
+            .round_proposals(generation, round, family)
             .into_iter()
             .filter(|id| !known.contains(id.as_str()))
             .collect();
@@ -168,8 +188,7 @@ impl Lineage<'_> {
             filled.calls,
             selected.len()
         );
-        record.proposed = filled.measured.len();
-        record.frontier = Some(FrontierOutcome {
+        let outcome = FrontierOutcome {
             settings,
             measured: filled.measured.len(),
             on_frontier: filled.on_frontier(),
@@ -179,14 +198,24 @@ impl Lineage<'_> {
             admit: stage.lineage.plan.admit,
             records: (stage.lineage.plan.train_on != TrainOn::Answers)
                 .then(|| RecordMix::of(&book, &selected)),
-        });
-        Ok((selected, Vec::new()))
+        };
+        // What this run proposed beyond the waves the journal held.
+        let proposing = (
+            proposing.0 + stage.spent_now.0,
+            proposing.1 + stage.spent_now.1,
+        );
+        Ok((selected, outcome, proposing))
     }
 }
 
 /// A frontier round's view of the lineage: what [`frontier::fill`] asks.
 struct Round<'l, 'a> {
     lineage: &'l mut Lineage<'a>,
+    family: &'l str,
+    /// The family tag of the journals' entries: none for the original.
+    tag: Option<String>,
+    /// Requests made and new programs admitted by this run's waves.
+    spent_now: (usize, usize),
     champion: &'l PolicyRef,
     champion_dev: &'l DevResult,
     generation: u32,
@@ -204,6 +233,7 @@ impl Stage for Round<'_, '_> {
             self.champion,
             self.champion_dev,
             (self.generation, self.round, self.wave),
+            self.family,
             Budget {
                 want: plan.proposals_per_round,
                 max_calls: plan.budget.0.min(calls_left),
@@ -211,9 +241,12 @@ impl Stage for Round<'_, '_> {
             },
         )?;
         self.wave += 1;
+        self.spent_now.0 += made.calls;
+        self.spent_now.1 += fresh.len();
         self.lineage.files.waves().append(&WaveRecord {
             generation: self.generation,
             round: self.round,
+            family: self.tag.clone(),
             calls: made.calls,
             added: fresh.len(),
         })?;
@@ -259,6 +292,7 @@ impl Stage for Round<'_, '_> {
             self.lineage.files.frontier().append(&MeasuredRecord {
                 generation: self.generation,
                 round: self.round,
+                family: self.tag.clone(),
                 policy: self.key.clone(),
                 temperature: self.settings.temperature,
                 measured: m.clone(),
