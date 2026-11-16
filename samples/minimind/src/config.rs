@@ -280,7 +280,7 @@ impl Config {
             improve,
             experience: Experience { rehearsal: 1.0 },
             agent: AgentLimits {
-                max_tool_calls: 8,
+                max_tool_calls: 12,
                 deadline_secs: 300,
                 max_output_tokens: 256,
                 concurrency: if profile == Profile::Smoke { 32 } else { 64 },

@@ -96,11 +96,26 @@ pub fn probe(name: &str, summary: &Value) -> String {
     let mut s = String::new();
     let _ = writeln!(
         s,
-        "  probe {name}: {}/{} development tasks solved ({})",
+        "  probe {name}: {}/{} development tasks solved ({}); first reply a tool call in {}/{}",
         summary["passed"],
         summary["total"],
-        by_family(&examples)
+        by_family(&examples),
+        summary["first_tool"],
+        summary["total"]
     );
+    let held = &summary["heldout"];
+    let held_examples: Vec<Value> = held["examples"].as_array().cloned().unwrap_or_default();
+    if !held_examples.is_empty() {
+        let _ = writeln!(
+            s,
+            "  held-out phrasings and formats: {}/{} solved ({}); first reply a tool call in {}/{}",
+            held["passed"],
+            held["total"],
+            by_family(&held_examples),
+            held["first_tool"],
+            held["total"]
+        );
+    }
     if let Some(text) = summary["text"]["continuation"].as_str() {
         let _ = writeln!(
             s,
@@ -115,6 +130,9 @@ pub fn probe(name: &str, summary: &Value) -> String {
     let solved = examples.iter().find(passed);
     let failed = examples.iter().find(|e| !passed(e));
     for example in [solved, failed].into_iter().flatten() {
+        transcript(&mut s, example);
+    }
+    if let Some(example) = held_examples.first() {
         transcript(&mut s, example);
     }
     s
@@ -175,8 +193,8 @@ pub fn summary(commits: &[Commit], labels: &[String]) -> String {
     for label in labels {
         let _ = writeln!(
             s,
-            "\n{label}: what each checkpoint can do\n  {:<11} {:<7} {:<34} {:<26} training",
-            "stage", "probe", "by family", "exam a / b / c / anchor"
+            "\n{label}: what each checkpoint can do\n  {:<11} {:<7} {:<9} {:<9} {:<40} {:<26} training",
+            "stage", "probe", "held-out", "1st tool", "by skill", "exam a / b / c / anchor"
         );
         for stage in STAGES {
             let Some(p) = find(commits, &format!("probe/{label}/{stage}")) else {
@@ -196,11 +214,14 @@ pub fn summary(commits: &[Commit], labels: &[String]) -> String {
                     .collect::<Vec<_>>()
                     .join(" / ")
             };
+            let h = &p.summary["heldout"];
             let _ = writeln!(
                 s,
-                "  {:<11} {:<7} {:<34} {:<26} {}",
+                "  {:<11} {:<7} {:<9} {:<9} {:<40} {:<26} {}",
                 stage,
                 format!("{}/{}", p.summary["passed"], p.summary["total"]),
+                format!("{}/{}", h["passed"], h["total"]),
+                format!("{}/{}", p.summary["first_tool"], p.summary["total"]),
                 by_family(&examples),
                 exam,
                 training(commits, label, stage)

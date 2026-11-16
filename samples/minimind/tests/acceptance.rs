@@ -447,3 +447,38 @@ fn the_same_episodes_write_the_same_bytes_whatever_was_interrupted() {
         );
     }
 }
+
+#[test]
+fn a_pack_that_no_longer_matches_its_episodes_is_unpacked_and_they_run_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let brain = FakeBrain::new(dir.path());
+    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    // Another setting's episodes packed over these: one record changed.
+    let pack = dir.path().join("episodes/demonstrate.jsonl");
+    let text = std::fs::read_to_string(&pack).unwrap();
+    let mut done = false;
+    let changed: String = text
+        .lines()
+        .map(|line| {
+            let mut member: serde_json::Value = serde_json::from_str(line).unwrap();
+            if !done && member["path"].as_str().unwrap().ends_with("records.jsonl") {
+                done = true;
+                member["text"] = format!("{} ", member["text"].as_str().unwrap()).into();
+            }
+            format!("{member}\n")
+        })
+        .collect();
+    assert!(done, "the pack holds records");
+    std::fs::write(&pack, changed).unwrap();
+    let started = begins(dir.path());
+    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    let again = begun_after(dir.path(), started);
+    assert_eq!(
+        again
+            .iter()
+            .filter(|u| u.starts_with("demonstrate/"))
+            .count(),
+        1,
+        "only the changed episode runs again: {again:?}"
+    );
+}

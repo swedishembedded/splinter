@@ -78,6 +78,18 @@ world, 0/1/0/0 of 24 after 16/33/49/66M at 23k tok/s (stopped). The default prof
 model pretrained on 197M tokens of a drill-dense world in six segments; smoke stays short and does not
 reach the jump.
 
+Default run of 2026-11-16 (brain 16c2db09e, 82 min): retrieval 0, 3, 9, 13, 13, 16, 19 of 24 after
+0/33/66/98/131/164/197M tokens; probes pretrained 6, sft 6, improved 7 of 12 (lookup 3/4, count 4/4, combine
+0/4); own episodes 146/384 verified; sealed exam 0.00 on every tier for every checkpoint, both verdicts
+Reject (valid, signed, bench 421bebc2). On the exam the model makes no tool call at all: it answers in its
+first turn. The three fixed-phrasing families taught templates, not the habit of acting with tools.
+Next step (in progress): the skills generator (`src/skills.rs`, `src/formats.rs`): read, chain (2-4 hops),
+compute with a helper whose usage comes from its own `--help` (four argument styles), edit a key, count;
+seven file formats (two only in the held-out probe), a grammar of frames and synonyms with a disjoint
+held-out set; the expert inspects first (`ls -R`), reads, discovers, acts, reads back, answers. Probes report
+development and held-out pass rates and how often the first reply is a tool call. Chat stages trained as
+text supervise every token, tool results included (brain's `pretrain` has no loss mask).
+
 What it still cannot do: copy a file name or a code it has not seen often (combine and lookup 0 of 4
 throughout). Pretraining throughput is about 50k tok/s at any batch from 8 x 1024 to 128 x 1024 on this
 model (sweep through `brain/train pretrain`, 20 steps each).

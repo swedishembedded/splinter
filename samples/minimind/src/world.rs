@@ -196,10 +196,17 @@ fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
     let entries: Vec<(String, u64)> = (0..rng.between(3, 8))
         .map(|_| (word(rng, 2).to_lowercase(), rng.between(10, 9999)))
         .collect();
-    let listing = entries
+    // A listing as a read shows it, in one of the training formats.
+    let format = crate::formats::TRAINING[rng.below(crate::formats::TRAINING.len())];
+    let as_strings: Vec<(String, String)> = entries
         .iter()
+        .map(|(n, c)| (n.clone(), c.to_string()))
+        .collect();
+    let listing = format
+        .render(&as_strings)
+        .lines()
         .enumerate()
-        .map(|(i, (name, code))| format!("L{}:{name}: {code}", i + 1))
+        .map(|(i, l)| format!("L{}:{l}", i + 1))
         .collect::<Vec<_>>()
         .join("\n");
     let text = match rng.below(4) {
@@ -330,7 +337,7 @@ pub fn trajectory(
         Turn::System(system.to_string()),
         Turn::User(instance.instruction.clone()),
     ];
-    for _ in 0..8 {
+    for _ in 0..16 {
         match next(instance, &messages, &wire_tools)? {
             Action::Finish(text) => {
                 turns.push(Turn::Assistant {
@@ -340,30 +347,7 @@ pub fn trajectory(
                 break;
             }
             Action::Call { tool, arguments } => {
-                let arg = |k: &str| arguments[k].as_str().unwrap_or_default().to_string();
-                let result = match tool.as_str() {
-                    "read_file" => std::fs::read_to_string(scratch.join(arg("path")))?
-                        .lines()
-                        .enumerate()
-                        .map(|(i, l)| format!("L{}:{l}", i + 1))
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                    "write_file" => {
-                        std::fs::write(scratch.join(arg("path")), arg("text"))?;
-                        format!("wrote {} bytes to {}", arg("text").len(), arg("path"))
-                    }
-                    _ => {
-                        let out = std::process::Command::new("sh")
-                            .arg("-c")
-                            .arg(arg("shell_command"))
-                            .current_dir(scratch)
-                            .output()?;
-                        shell_result(
-                            &String::from_utf8_lossy(&out.stdout),
-                            out.status.code().unwrap_or(-1),
-                        )
-                    }
-                };
+                let result = crate::expert::execute(scratch, &tool, &arguments)?;
                 turns.push(Turn::Assistant {
                     text: String::new(),
                     calls: vec![Call {

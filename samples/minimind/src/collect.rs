@@ -311,7 +311,16 @@ impl Run<'_> {
                     _ => None,
                 })
                 .collect();
-            if let Some(commits) = committed {
+            // The pack holds the files of whichever settings packed it last:
+            // reused only when every committed output is in it unchanged.
+            let reader = self.episode_reader(stage)?;
+            let intact = |c: &Commit| {
+                ["outcome", "records"]
+                    .iter()
+                    .filter(|o| c.output(o).is_some())
+                    .all(|o| reader.read(c, o).is_ok())
+            };
+            if let Some(commits) = committed.filter(|cs| cs.iter().all(intact)) {
                 writeln!(
                     self.out,
                     "[reused] {stage}: {} episodes, read from {}",
@@ -320,6 +329,8 @@ impl Run<'_> {
                 )?;
                 return Ok(commits);
             }
+            // Run what is missing or changed; the ledger rechecks every
+            // episode's files and reruns those that differ.
             crate::pack::unpack(&packed, &tree)?;
         }
         // Serve the checkpoint only when an episode of it has to run.
@@ -490,7 +501,10 @@ impl Run<'_> {
             .context("the stage has no checkpoint")?
             .clone();
         let unit = format!("probe/{name}");
-        let instances = self.instances(Split::Dev)?;
+        // The development tasks, then the held-out ones (phrasings and
+        // formats no training instance uses).
+        let mut instances = self.instances(Split::Dev)?;
+        instances.extend(self.instances(Split::Heldout)?);
         let jobs = instances
             .iter()
             .map(|i| (format!("{unit}/{}", i.id), i.clone()))
@@ -514,16 +528,26 @@ impl Run<'_> {
         let checkpoint = policy.1.clone();
         let unit_name = unit.clone();
         let commit = self.unit(&unit, &key, move |run, _| {
-            let passed = episodes.iter().filter(|(_, c)| outcome(c)).count();
-            let examples: Vec<Value> = episodes
-                .iter()
-                .map(|(i, c)| json!({ "task": i.id, "instruction": i.instruction, "outcome": c.summary }))
-                .collect();
+            let of = |split: Split| -> Vec<&(Instance, Commit)> { episodes.iter().filter(|(i, _)| i.split == split).collect() };
+            let (dev, held) = (of(Split::Dev), of(Split::Heldout));
+            let passed = dev.iter().filter(|(_, c)| outcome(c)).count();
+            let first_tool = |set: &[&(Instance, Commit)]| set.iter().filter(|(_, c)| starts_with_a_tool(c)).count();
+            let examples = |set: &[&(Instance, Commit)]| -> Vec<Value> {
+                set.iter()
+                    .map(|(i, c)| json!({ "task": i.id, "instruction": i.instruction, "outcome": c.summary }))
+                    .collect()
+            };
+            let heldout = json!({
+                "passed": held.iter().filter(|(_, c)| outcome(c)).count(), "total": held.len(),
+                "first_tool": first_tool(&held), "examples": examples(&held),
+            });
+            let first_tool_dev = first_tool(&dev);
+            let examples = examples(&dev);
             let prompt = "Velmora is a town by";
             let text = run.brain.complete(&checkpoint, prompt, 24).map_err(|e| format!("{e:#}"));
             let packed = run.pack_episodes(&unit_name)?;
             Ok(StageWork::new(json!({
-                "passed": passed, "total": examples.len(), "examples": examples,
+                "passed": passed, "total": examples.len(), "first_tool": first_tool_dev, "examples": examples, "heldout": heldout,
                 "text": { "prompt": prompt, "continuation": text.as_ref().ok(), "unavailable": text.as_ref().err() },
             }))
             .output("episodes", &packed))
@@ -533,6 +557,14 @@ impl Run<'_> {
         write!(self.out, "{shown}")?;
         Ok(commit)
     }
+}
+
+/// True when the episode's first model reply called a tool: the habit every
+/// task needs, acting through the tools before answering.
+fn starts_with_a_tool(episode: &Commit) -> bool {
+    episode.summary["actions"][0]
+        .as_str()
+        .is_some_and(|a| !a.starts_with("say ") && !a.starts_with("error"))
 }
 
 /// What a stage reading `episodes` depends on: each one's outcome and its

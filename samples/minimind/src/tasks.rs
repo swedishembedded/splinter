@@ -6,19 +6,21 @@
 // clients. If your team needs expertise in verifiable agent tasks, you can
 // procure our services by sending an email to info@swedishembedded.com.
 
-//! The training families of workspace tool-use tasks, and their verifier.
+//! Task instances of the workspace skills ([`crate::skills`]), their splits,
+//! their workspaces and their verifier.
 //!
-//! Every instance's answer is unknowable without the tools: the numbers sit
-//! in workspace files, and `./calc` combines them by a rule drawn per
+//! Every instance's answer is unknowable without the tools: the values sit
+//! in workspace files, and helpers combine them by a rule drawn per
 //! instance, so neither reading the request nor memorising earlier
-//! instances gives it. The agent writes its answer to `answer.txt`; the
-//! verifier compares that file with the expected value, which lives outside
-//! the workspace and is never shown to the agent.
+//! instances gives it. The verifier reads the workspace: `answer.txt`, or
+//! the entries of an edited file; what it expects lives outside the
+//! workspace and is never shown to the agent.
 //!
-//! These families are the sample's own and are used for demonstrations,
-//! exploration and the probes. The examination is not built from them: a
-//! sealed exam with held-out families and phrasings is drawn by an
-//! independent implementation the sample never reads.
+//! These tasks are the sample's own and are used for demonstrations,
+//! exploration and the probes, one of which draws only phrasings and
+//! formats training never uses. The examination is not built from them: a
+//! sealed exam is drawn by an independent implementation the sample never
+//! reads.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -27,25 +29,7 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
-use crate::world::word;
-
-/// The file the agent writes its answer to.
-pub const ANSWER_FILE: &str = "answer.txt";
-
-/// A training family.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Family {
-    /// Two numbers in two files, combined by `./calc combine`.
-    Combine,
-    /// The code of one item in a registry file.
-    Lookup,
-    /// How many lines of a log name a word.
-    Count,
-}
-
-/// Every training family, in draw order.
-pub const FAMILIES: [Family; 3] = [Family::Combine, Family::Lookup, Family::Count];
+pub use crate::skills::{Check, Plan, Skill, ANSWER_FILE, SKILLS};
 
 /// Which use an instance is drawn for; each split has its own draw stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,6 +41,9 @@ pub enum Split {
     Explore,
     /// Probed after every model stage; never trained on.
     Dev,
+    /// Probed after every model stage, in phrasings and file formats no
+    /// training instance uses.
+    Heldout,
     /// Worked conversations in the pretraining corpus.
     World,
 }
@@ -70,6 +57,7 @@ impl Split {
             Self::Explore => 0x6578_706c_6f00_0002,
             Self::Dev => 0x6465_7600_0000_0003,
             Self::World => 0x776f_726c_6400_0004,
+            Self::Heldout => 0x6865_6c64_6f00_0005,
         }
     }
 
@@ -80,18 +68,20 @@ impl Split {
             Self::Train => "train",
             Self::Explore => "explore",
             Self::Dev => "dev",
+            Self::Heldout => "heldout",
             Self::World => "world",
         }
     }
 }
 
-/// One task instance: the request, the workspace and the expected answer.
+/// One task instance: the request, the workspace, what to do and what is
+/// checked.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Instance {
-    /// Stable id, `<split>-<index>-<family>`.
+    /// Stable id, `<split>-<index>-<skill>`.
     pub id: String,
-    /// Its family.
-    pub family: Family,
+    /// Its skill.
+    pub skill: Skill,
     /// Its split.
     pub split: Split,
     /// The request the agent is given.
@@ -100,126 +90,33 @@ pub struct Instance {
     pub files: BTreeMap<String, String>,
     /// Files that must be executable.
     pub executables: Vec<String>,
-    /// What `answer.txt` must hold.
-    pub expected: String,
+    /// What to do, without the answer: the expert's procedure follows it.
+    pub plan: Plan,
+    /// What the verifier checks.
+    pub check: Check,
 }
 
-/// The `./calc` helper of an instance whose combining rule is
-/// `(a * m + b * n) mod p`.
-fn calc_script(m: u64, n: u64, p: u64) -> String {
-    format!(
-        "#!/bin/sh\n# calc combine A B: combines two whole numbers by this workspace's rule.\n\
-         case \"$1\" in\n  combine) echo $(( ($2 * {m} + $3 * {n}) % {p} )) ;;\n  \
-         *) echo \"usage: ./calc combine A B\" >&2; exit 2 ;;\nesac\n"
-    )
-}
-
-fn draw(
-    rng: &mut SplitMix64,
-    family: Family,
-) -> (String, BTreeMap<String, String>, Vec<String>, String) {
-    let mut files = BTreeMap::new();
-    match family {
-        Family::Combine => {
-            let (a, b) = (rng.between(10, 999), rng.between(10, 999));
-            let (m, n, p) = (
-                rng.between(3, 17),
-                rng.between(3, 17),
-                rng.between(101, 997),
-            );
-            let (fa, fb) = (
-                format!("{}.txt", word(rng, 1).to_lowercase()),
-                format!("{}.txt", word(rng, 2).to_lowercase()),
-            );
-            let fb = if fb == fa { format!("other-{fb}") } else { fb };
-            files.insert(format!("inputs/{fa}"), format!("{a}\n"));
-            files.insert(format!("inputs/{fb}"), format!("{b}\n"));
-            files.insert("calc".into(), calc_script(m, n, p));
-            let instruction = match rng.below(3) {
-                0 => format!("Combine the number in inputs/{fa} with the number in inputs/{fb} using ./calc combine, in that order. Write the result to {ANSWER_FILE}."),
-                1 => format!("Run ./calc combine on the values stored in inputs/{fa} and inputs/{fb} (first {fa}, then {fb}) and put the output in {ANSWER_FILE}."),
-                _ => format!("What does ./calc combine give for the numbers in inputs/{fa} and inputs/{fb}, taken in that order? Save the answer in {ANSWER_FILE}."),
-            };
-            (
-                instruction,
-                files,
-                vec!["calc".into()],
-                ((a * m + b * n) % p).to_string(),
-            )
-        }
-        Family::Lookup => {
-            // Distinct names, so the item asked for has one code.
-            let mut items: Vec<(String, u64)> = Vec::new();
-            while items.len() < 6 {
-                let name = word(rng, 2).to_lowercase();
-                let code = rng.between(1000, 9999);
-                if items.iter().all(|(n, _)| *n != name) {
-                    items.push((name, code));
-                }
-            }
-            let target = items[rng.below(items.len())].clone();
-            let registry: String = items
-                .iter()
-                .map(|(name, code)| format!("{name}: {code}\n"))
-                .collect();
-            files.insert("registry.txt".into(), registry);
-            let instruction = match rng.below(2) {
-                0 => format!("registry.txt lists items with their codes. Write the code of {} to {ANSWER_FILE}.", target.0),
-                _ => format!("Find the code registered for {} in registry.txt and write just that code to {ANSWER_FILE}.", target.0),
-            };
-            (instruction, files, vec![], target.1.to_string())
-        }
-        Family::Count => {
-            let word_ = ["ERROR", "WARN", "TIMEOUT"][rng.below(3)];
-            let lines = rng.between(6, 20) as usize;
-            let mut log = String::new();
-            let mut hits = 0;
-            for i in 0..lines {
-                if rng.below(3) == 0 {
-                    hits += 1;
-                    log.push_str(&format!("{i:03} {word_} {}\n", word(rng, 1).to_lowercase()));
-                } else {
-                    log.push_str(&format!("{i:03} ok {}\n", word(rng, 1).to_lowercase()));
-                }
-            }
-            files.insert("log.txt".into(), log);
-            let instruction = match rng.below(2) {
-                0 => format!("How many lines of log.txt contain {word_}? Write the number to {ANSWER_FILE}."),
-                _ => format!("Count the lines in log.txt that mention {word_} and write the count to {ANSWER_FILE}."),
-            };
-            (instruction, files, vec![], hits.to_string())
-        }
-    }
-}
-
-/// `count` instances of `split`, drawn from the run's `seed`; the families
+/// `count` instances of `split`, drawn from the run's `seed`; the skills
 /// take turns.
 #[must_use]
 pub fn instances(seed: u64, split: Split, count: u32) -> Vec<Instance> {
     let mut rng = SplitMix64::new(seed ^ split.salt());
     (0..count as usize)
         .map(|i| {
-            let family = FAMILIES[i % FAMILIES.len()];
-            let (instruction, files, executables, expected) = draw(&mut rng, family);
+            let skill = SKILLS[i % SKILLS.len()];
+            let d = crate::skills::draw(&mut rng, skill, split == Split::Heldout);
             Instance {
-                id: format!("{}-{i:05}-{}", split.name(), family_name(family)),
-                family,
+                id: format!("{}-{i:05}-{}", split.name(), skill.name()),
+                skill,
                 split,
-                instruction,
-                files,
-                executables,
-                expected,
+                instruction: d.instruction,
+                files: d.files,
+                executables: d.executables,
+                plan: d.plan,
+                check: d.check,
             }
         })
         .collect()
-}
-
-fn family_name(family: Family) -> &'static str {
-    match family {
-        Family::Combine => "combine",
-        Family::Lookup => "lookup",
-        Family::Count => "count",
-    }
 }
 
 /// Writes `instance`'s workspace into the empty directory `dir`.
@@ -246,39 +143,64 @@ pub fn materialise(instance: &Instance, dir: &Path) -> anyhow::Result<()> {
 /// The verifier's judgement of one workspace.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Verdict {
-    /// The workspace holds the expected answer.
+    /// The workspace holds what the task asks for.
     pub passed: bool,
     /// What was found, in a line.
     pub reason: String,
 }
 
 /// Judges the workspace `dir` an agent left behind for `instance`: the
-/// trimmed content of `answer.txt` must equal the expected value.
+/// trimmed content of `answer.txt` equals the expected value, or the edited
+/// file, read in its format, holds exactly the expected entries.
 #[must_use]
 pub fn verify(instance: &Instance, dir: &Path) -> Verdict {
-    match std::fs::read_to_string(dir.join(ANSWER_FILE)) {
-        Ok(text) if text.trim() == instance.expected => Verdict {
-            passed: true,
-            reason: "answer matches".into(),
-        },
-        Ok(text) => Verdict {
-            passed: false,
-            reason: format!(
-                "answer.txt holds {:?}",
-                text.trim().chars().take(40).collect::<String>()
+    let verdict = |passed: bool, reason: String| Verdict { passed, reason };
+    match &instance.check {
+        Check::Answer { value } => match std::fs::read_to_string(dir.join(ANSWER_FILE)) {
+            Ok(text) if text.trim() == value => verdict(true, "answer matches".into()),
+            Ok(text) => verdict(
+                false,
+                format!(
+                    "answer.txt holds {:?}",
+                    text.trim().chars().take(40).collect::<String>()
+                ),
             ),
+            Err(_) => verdict(false, "no answer.txt".into()),
         },
-        Err(_) => Verdict {
-            passed: false,
-            reason: "no answer.txt".into(),
+        Check::File {
+            file,
+            format,
+            entries,
+        } => match std::fs::read_to_string(dir.join(file)) {
+            Ok(text) => {
+                let got: BTreeMap<String, String> = format.parse(&text).into_iter().collect();
+                if &got == entries {
+                    verdict(true, format!("{file} holds the expected entries"))
+                } else {
+                    let differ = entries
+                        .iter()
+                        .filter(|(k, v)| got.get(*k) != Some(v))
+                        .count();
+                    verdict(
+                        false,
+                        format!(
+                            "{file}: {differ} entries differ, {} entries read",
+                            got.len()
+                        ),
+                    )
+                }
+            }
+            Err(_) => verdict(false, format!("{file} is gone")),
         },
     }
 }
 
 /// Writes `instance` as a Harbor task folder under `dir`: `instruction.md`,
-/// `task.toml`, the workspace in `environment/`, the verifier in `tests/`
-/// (with the expected answer, outside the workspace) and a reference
-/// solution in `solution/`.
+/// `task.toml`, the workspace in `environment/`, and the check in `tests/`
+/// (outside the workspace): `expected.txt` and a `test.sh` comparing
+/// `answer.txt` with it, or for an edit the expected file and a `test.sh`
+/// comparing it byte for byte (the sample's own verifier reads entries, so
+/// it also accepts another spelling of the same entries).
 ///
 /// # Errors
 /// A file cannot be written.
@@ -293,21 +215,45 @@ pub fn export_harbor(instance: &Instance, dir: &Path) -> anyhow::Result<()> {
     write(
         "task.toml",
         &format!(
-            "[task]\nname = \"{}\"\n\n[metadata.minimind]\nfamily = \"{}\"\nsplit = \"{}\"\n",
+            "[task]\nname = \"{}\"\n\n[metadata.minimind]\nskill = \"{}\"\nsplit = \"{}\"\n",
             instance.id,
-            family_name(instance.family),
+            instance.skill.name(),
             instance.split.name()
         ),
     )?;
-    write("tests/expected.txt", &format!("{}\n", instance.expected))?;
-    write(
-        "tests/test.sh",
-        "#!/bin/sh\n# Passes when the workspace's answer.txt holds the expected answer.\n\
-         # usage: tests/test.sh WORKSPACE\nhere=$(dirname \"$0\")\n\
-         want=$(tr -d ' \\n\\r\\t' < \"$here/expected.txt\")\n\
-         got=$(tr -d ' \\n\\r\\t' < \"$1/answer.txt\" 2>/dev/null) || exit 1\n\
-         [ \"$got\" = \"$want\" ]\n",
-    )?;
+    match &instance.check {
+        Check::Answer { value } => {
+            write("tests/expected.txt", &format!("{value}\n"))?;
+            write(
+                "tests/test.sh",
+                "#!/bin/sh\n# Passes when the workspace's answer.txt holds the expected answer.\n\
+                 # usage: tests/test.sh WORKSPACE\nhere=$(dirname \"$0\")\n\
+                 want=$(tr -d ' \\n\\r\\t' < \"$here/expected.txt\")\n\
+                 got=$(tr -d ' \\n\\r\\t' < \"$1/answer.txt\" 2>/dev/null) || exit 1\n\
+                 [ \"$got\" = \"$want\" ]\n",
+            )?;
+        }
+        Check::File {
+            file,
+            format,
+            entries,
+        } => {
+            let mut ordered: Vec<(String, String)> = format.parse(&instance.files[file]);
+            for (k, v) in &mut ordered {
+                if let Some(new) = entries.get(k) {
+                    v.clone_from(new);
+                }
+            }
+            write("tests/expected", &format.render(&ordered))?;
+            write(
+                "tests/test.sh",
+                &format!(
+                    "#!/bin/sh\n# Passes when the edited file holds the expected entries, as written.\n\
+                     # usage: tests/test.sh WORKSPACE\ncmp -s \"$(dirname \"$0\")/expected\" \"$1/{file}\"\n"
+                ),
+            )?;
+        }
+    }
     Ok(())
 }
 
@@ -318,68 +264,35 @@ mod tests {
     #[test]
     fn the_splits_draw_different_instances_and_a_seed_repeats_them() {
         // seed: determinism is the property under test; any seed works.
-        let train = instances(3, Split::Train, 6);
-        assert_eq!(train, instances(3, Split::Train, 6));
-        let dev = instances(3, Split::Dev, 6);
+        let train = instances(3, Split::Train, 10);
+        assert_eq!(train, instances(3, Split::Train, 10));
+        let dev = instances(3, Split::Dev, 10);
         assert!(train.iter().zip(&dev).all(|(t, d)| t.files != d.files));
     }
 
     #[test]
-    fn the_verifier_accepts_the_expected_answer_and_nothing_else() {
-        let dir = tempfile::tempdir().unwrap();
-        // seed: any seed; the verifier must hold for every instance.
-        for instance in instances(9, Split::Dev, 3) {
-            let ws = dir.path().join(&instance.id);
-            materialise(&instance, &ws).unwrap();
-            assert!(
-                !verify(&instance, &ws).passed,
-                "an empty workspace never passes"
-            );
-            std::fs::write(ws.join(ANSWER_FILE), format!("{}\n", instance.expected)).unwrap();
-            assert!(verify(&instance, &ws).passed);
-            std::fs::write(ws.join(ANSWER_FILE), "12345678").unwrap();
-            assert!(!verify(&instance, &ws).passed);
+    fn the_expert_solves_every_skill_and_the_verifier_accepts_only_that() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        // seed: any seed; the expert and the verifier must hold for every
+        // instance, held-out ones included.
+        for split in [Split::Train, Split::Heldout] {
+            for instance in instances(9, split, 20) {
+                let ws = dir.path().join(&instance.id);
+                materialise(&instance, &ws).unwrap_or_else(|e| panic!("{e}"));
+                assert!(
+                    !verify(&instance, &ws).passed,
+                    "an untouched workspace never passes: {}",
+                    instance.id
+                );
+                crate::expert::solve(&instance, &ws)
+                    .unwrap_or_else(|e| panic!("{}: {e}", instance.id));
+                let v = verify(&instance, &ws);
+                assert!(
+                    v.passed,
+                    "{}: {} ({})",
+                    instance.id, v.reason, instance.instruction
+                );
+            }
         }
-    }
-
-    #[test]
-    fn the_calc_helper_computes_the_expected_answer_and_the_harbor_check_agrees() {
-        let dir = tempfile::tempdir().unwrap();
-        // seed: any seed; the helper and the expected value must agree.
-        let instance = instances(21, Split::Train, 1).remove(0);
-        assert_eq!(instance.family, Family::Combine);
-        let task = dir.path().join("task");
-        export_harbor(&instance, &task).unwrap();
-        let ws = task.join("environment");
-        let inputs: Vec<String> = instance
-            .files
-            .iter()
-            .filter(|(k, _)| k.starts_with("inputs/"))
-            .map(|(k, _)| k.clone())
-            .collect();
-        // The instruction names the files in their order.
-        let mut named: Vec<&String> = inputs.iter().collect();
-        named.sort_by_key(|k| instance.instruction.find(k.as_str()).unwrap());
-        let value = |k: &str| instance.files[k].trim().to_string();
-        let out = std::process::Command::new("./calc")
-            .args(["combine", &value(named[0]), &value(named[1])])
-            .current_dir(&ws)
-            .output()
-            .unwrap();
-        assert_eq!(
-            String::from_utf8_lossy(&out.stdout).trim(),
-            instance.expected
-        );
-        let check = |ws: &Path| {
-            std::process::Command::new("sh")
-                .arg(task.join("tests/test.sh"))
-                .arg(ws)
-                .status()
-                .unwrap()
-                .success()
-        };
-        assert!(!check(&ws));
-        std::fs::write(ws.join(ANSWER_FILE), &out.stdout).unwrap();
-        assert!(check(&ws));
     }
 }
