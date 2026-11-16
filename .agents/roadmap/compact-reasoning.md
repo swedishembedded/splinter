@@ -25,6 +25,16 @@ confirms; a separate **compactor** agent rewrites each successful trace into the
 (prompt, compacted trace, answer). The model may reason badly at first and still learn from the parts that worked, and its traces
 should get shorter and more reliable over generations.
 
+## Pilot evidence (2026-11-15, learner-side, not examined)
+
+Shortest-correct-trace self-training (STaR with the interpreter as verifier, base Qwen3-4B, 4096-token budget, 4 samples,
+2186 verified traces) LOWERED thinking-on development accuracy from 0.402 to 0.31-0.34 at lr 3e-5, 1e-4 and 2e-4, while the
+trainer's held-out loss improved (0.236 -> 0.109); replies with no fenced answer rose (493 -> 661 of 1600). Answer-only
+interpreter labels raised thinking-on accuracy to 0.776 (about half of the base's thinking-on misses were format failures).
+Traces sampled from the answer-trained adapter gave no gain over it. Unproven hypothesis: the shortest correct base trace
+rewards lucky shortcuts and teaches under-verification. Any compactor (CR1-CR5) must beat answer-only training, not only raw
+traces, and selection by length alone is suspect. Pilot files: `~/project/shared/tmp/lsp` (harness `lsp.py`).
+
 ## Questions (each one registered before its run, judged by the separate examiner on a sealed exam)
 
 - CR1: does training on compacted verified traces beat training on raw verified traces (STaR / rejection sampling) at equal

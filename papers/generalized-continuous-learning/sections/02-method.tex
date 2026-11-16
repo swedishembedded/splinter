@@ -2,14 +2,22 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 \section{Method}\label{sec:method}
 
-Each generation repeats one cycle. The current champion proposes programs; the interpreter runs them and records their output.
-The champion then answers each program several times with thinking enabled, and the interpreter checks every final answer.
-A program enters the training set only where the champion's answers disagree with each other in correctness: sometimes right,
-sometimes wrong. Problems the model always solves teach little, and problems it never solves give no verified trace to learn
-from; the same rule is what makes a group of sampled answers informative for policy-gradient training (dynamic sampling
-in~\cite{yu2025dapo}). For each admitted program the shortest correct reasoning trace is kept, in the spirit of self-taught
-reasoning~\cite{zelikman2022star} and self-training on verified samples~\cite{singh2023rest}. A fresh adapter is trained from
-the base on all verified traces kept so far, and it replaces the champion only if it passes a gate on the learner's own
-development tasks; the gate may reject, and a rejected candidate is recorded with its evidence. The learner hands each new
-champion, with the list of programs it trained on, to the examiner, and never receives anything back except signed aggregate
-verdicts.
+Each generation repeats one cycle, the environment-supervised cycle of the companion paper~\cite{frontier2026}. The current
+champion proposes Lua~5.1 programs from three sections of the language manual; the pinned interpreter runs them and records
+their output. The champion then predicts each program's output four times at temperature~1.0, and a program enters the
+frontier when at least one prediction is wrong. A fresh low-rank adapter is trained from the base on every frontier program
+kept so far, each record pairing the program with the interpreter's output, so the model is taught the correct answer even on
+programs it never solves. The pool doubles at every generation (1000, 2000, 4000, 8000 records). A candidate replaces the
+champion only if it passes a gate on the learner's own development tasks; the gate may reject, and a rejected candidate is
+recorded with its evidence. The learner hands each new champion, with the list of programs it trained on, to the examiner,
+and never receives anything back except signed aggregate verdicts.
+
+\paragraph{Why answers, not reasoning traces (learner-side pilot).} Before registration, a pilot on learner data only (lineage
+proposals of the companion paper and the lineages' own development items; no exam and no verdict) compared two sources of
+supervision on 400 development programs, with Qwen3-4B, rank-16 adapters and two epochs. Training on 4000 interpreter-labelled
+answers at learning rate $10^{-4}$ raised greedy direct-answer accuracy from 0.535 to 0.695, and a second round on 4000 fresh
+programs to 0.750; thinking-enabled accuracy (mean of four samples) rose from 0.402 to 0.776. Training instead on the shortest
+of the base model's own reasoning traces whose final answer the interpreter confirmed, in the manner of self-taught
+reasoning~\cite{zelikman2022star} and self-training on verified samples~\cite{singh2023rest}, lowered thinking-enabled accuracy
+to 0.31--0.34 at each of three learning rates, while the trainer's own held-out loss improved. These are pilot numbers on
+in-distribution development tasks, not examined results; they fixed the choice of supervision for the registered run.
