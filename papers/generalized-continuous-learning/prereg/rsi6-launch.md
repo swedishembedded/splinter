@@ -25,6 +25,9 @@ Committed on 2026-11-16 before any RSI6 lineage ran and before any candidate was
 - Examiner: bench `fa4571d0`; group plan `rsi6-H` (SHA-256 `47b583f2e4ba4c883187b0cb556fa640fbe8dde18bab486a90c1fb98bc06de3f`):
   groups base, acq1-acq4, vol4; comparisons step1-step4, acquisition-over-volume, retention1-retention3, acq4-over-base;
   `weight = "family_set"` (each language weighted equally), bootstrap 10 000 over templates within languages and lineages.
+  Examination script `examiner-private/rsi6/run-H.sh` (SHA-256 `72b5c6b6...`; base null replicate, every candidate against its
+  predecessor under the secondary sign-test plan `rsi6-H-steps` (SHA-256 `42bec016...`), then `rsi6-H`), written before any
+  candidate existed.
 
 ## Exam H
 
