@@ -203,7 +203,7 @@ pub fn data_path(rng: &mut SplitMix64, format: Format, held_out: bool, taken: &[
         };
         let syllables = 1 + rng.below(2);
         let p = format!("{dir}{}.{extension}", word(rng, syllables).to_lowercase());
-        if !taken.contains(&p) {
+        if !clashes(&p, taken) {
             return p;
         }
     }
@@ -216,6 +216,14 @@ const BINARY_EXTENSIONS: [&str; 38] = [
     "bin", "img", "rom", "fw", "srec", "mot", "pyc", "pyo", "jar", "war", "doc", "docx", "xls",
     "xlsx", "ppt", "pptx", "pdf", "obj", "lib", "png", "jpg", "gif", "iso", "class",
 ];
+
+/// Whether `path` cannot sit beside `taken`: it is one of them, one of them
+/// is a directory of it, or it is a directory of one of them.
+fn clashes(path: &str, taken: &[String]) -> bool {
+    taken.iter().any(|t| {
+        t == path || path.starts_with(&format!("{t}/")) || t.starts_with(&format!("{path}/"))
+    })
+}
 
 /// Two to four random lowercase letters, never a held-out format's
 /// extension nor one that names a binary file.
@@ -254,7 +262,7 @@ pub fn answer_file(rng: &mut SplitMix64, taken: &[String]) -> String {
             word(rng, 2).to_lowercase()
         };
         let p = format!("{dir}{stem}.txt");
-        if !taken.contains(&p) && p != ANSWER_FILE {
+        if !clashes(&p, taken) && p != ANSWER_FILE {
             return p;
         }
     }
@@ -406,7 +414,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             }
         }
         Skill::Compute => {
-            let helper = if rng.coin() {
+            let mut helper = if rng.coin() {
                 pick(rng, &["calc", "mix", "blend", "merge", "fold", "combine"]).to_string()
             } else {
                 word(rng, 1).to_lowercase()
@@ -449,6 +457,10 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             };
             let (va, vb): (u64, u64) =
                 (ea[ia].1.parse().unwrap_or(0), eb[ib].1.parse().unwrap_or(0));
+            // A made-up helper name may be a data file's directory.
+            while clashes(&helper, &taken_of(&files)) {
+                helper = word(rng, 2).to_lowercase();
+            }
             files.insert(helper.clone(), helper_script(&helper, style, m, n, p));
             let tool = format!("./{helper}");
             let step = format!(

@@ -285,6 +285,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn no_file_of_a_workspace_is_the_directory_of_another() {
+        // seed: drawn; a clash is rare, so many instances are checked.
+        let seed = splinter_sdk::model::seed::draw().value();
+        for i in instances(seed, Split::World, 20_000) {
+            let mut names: Vec<&String> = i.files.keys().collect();
+            if let Check::Answer { file, .. } = &i.check {
+                names.push(file);
+            }
+            for n in &names {
+                assert!(
+                    !names.iter().any(|m| m.starts_with(&format!("{n}/"))),
+                    "seed {seed}: {} {names:?}",
+                    i.id
+                );
+            }
+        }
+    }
+
+    #[test]
     fn the_splits_draw_different_instances_and_a_seed_repeats_them() {
         // seed: determinism is the property under test; any seed works.
         let train = instances(3, Split::Train, 10);
