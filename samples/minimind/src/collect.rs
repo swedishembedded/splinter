@@ -465,6 +465,7 @@ impl Run<'_> {
         let key = self.key(&self.agent_slice(), name, &refs, recipe::GATHER, &[]);
         let rel = format!("data/{name}.jsonl");
         let kept = episodes.clone();
+        let expert = matches!(actor, Actor::Expert);
         let gathered = self.unit(name, &key, move |run, _| {
             let reader = run.episode_reader(name)?;
             let mut lines = String::new();
@@ -483,7 +484,13 @@ impl Run<'_> {
             }
             write(&run.path(&rel), &lines)?;
             let packed = run.pack_episodes(name)?;
-            let checks = crate::datacheck::demonstrations(&lines, &run.config.data_checks)?;
+            // Generated data that is degenerate stops the stage; the model's
+            // own episodes are what they are, and their shares are reported.
+            let checks = match crate::datacheck::demonstrations(&lines, &run.config.data_checks) {
+                Ok(stats) => stats,
+                Err(e) if !expert => json!({ "degenerate": format!("{e:#}") }),
+                Err(e) => return Err(e),
+            };
             Ok(StageWork::new(json!({ "episodes": episodes.len(), "accepted": accepted, "flagged": flagged, "records": lines.lines().count(), "data": checks }))
                 .output("records", &rel)
                 .output("episodes", &packed))
@@ -498,6 +505,18 @@ impl Run<'_> {
     pub fn demonstrate(&mut self) -> anyhow::Result<Commit> {
         Ok(self
             .gather("demonstrate", Split::Train, &Actor::Expert, true)?
+            .0)
+    }
+
+    /// The expert's demonstrations of the mid-training split, as
+    /// `data/demonstrate-mid.jsonl`: trajectories mid-training trains on and
+    /// the fine-tune does not.
+    ///
+    /// # Errors
+    /// An episode cannot be run, or none is accepted.
+    pub fn demonstrate_mid(&mut self) -> anyhow::Result<Commit> {
+        Ok(self
+            .gather("demonstrate-mid", Split::Midtrain, &Actor::Expert, true)?
             .0)
     }
 

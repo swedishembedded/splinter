@@ -46,6 +46,8 @@ pub enum Split {
     Heldout,
     /// Worked conversations in the pretraining corpus.
     World,
+    /// Demonstrated by the expert for mid-training only.
+    Midtrain,
 }
 
 impl Split {
@@ -58,6 +60,7 @@ impl Split {
             Self::Dev => 0x6465_7600_0000_0003,
             Self::World => 0x776f_726c_6400_0004,
             Self::Heldout => 0x6865_6c64_6f00_0005,
+            Self::Midtrain => 0x6d69_6474_7200_0006,
         }
     }
 
@@ -70,6 +73,7 @@ impl Split {
             Self::Dev => "dev",
             Self::Heldout => "heldout",
             Self::World => "world",
+            Self::Midtrain => "midtrain",
         }
     }
 }

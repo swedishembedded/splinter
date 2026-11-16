@@ -12,8 +12,8 @@
 //! path no one should learn. An episode is admitted only when, besides
 //! passing, it did not rewrite the task's own files (inputs, helpers) other
 //! than the file the task asks it to edit, did not look for verifier
-//! material, and read every source the answer depends on before writing the
-//! answer. Flagged episodes are counted and reported, never trained on.
+//! material, read every source the answer depends on before writing the
+//! answer, and did not make one call three times (a loop). Flagged episodes are counted and reported, never trained on.
 
 use serde_json::Value;
 
@@ -47,6 +47,9 @@ pub fn calls(replies: &[Value]) -> Vec<Call> {
         })
         .collect()
 }
+
+/// How many identical calls make an episode a loop.
+const REPEATS: usize = 3;
 
 /// The files the answer depends on: what must be read before it is written.
 fn sources(plan: &Plan) -> Vec<String> {
@@ -120,6 +123,17 @@ pub fn flags(instance: &Instance, calls: &[Call]) -> Vec<String> {
             if !calls[..at].iter().any(|c| reads(c, &file)) {
                 flags.push(format!("wrote {allowed} without reading {file}"));
             }
+        }
+    }
+    // Looping: the same call three times is not a procedure to learn.
+    for (i, call) in calls.iter().enumerate() {
+        let again = calls[i..].iter().filter(|c| *c == call).count();
+        if again >= REPEATS {
+            flags.push(format!(
+                "repeated {}({}) {again} times",
+                call.tool, call.arguments
+            ));
+            break;
         }
     }
     flags.dedup();

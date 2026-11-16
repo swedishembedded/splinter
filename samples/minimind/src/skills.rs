@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::formats::{Format, HELD_OUT, TRAINING};
+use crate::phrasing::{alone, of, pick, with_answer};
 use crate::world::word;
 
 /// The file the agent writes its answer to.
@@ -157,10 +158,6 @@ pub struct Drawn {
     pub check: Check,
 }
 
-fn pick<'a>(rng: &mut SplitMix64, items: &[&'a str]) -> &'a str {
-    items[rng.below(items.len())]
-}
-
 /// Distinct lowercase names.
 fn names(rng: &mut SplitMix64, n: usize) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
@@ -196,47 +193,6 @@ fn format(rng: &mut SplitMix64, held_out: bool) -> Format {
     }
 }
 
-/// The request's grammar: frames and synonyms, a training set and a disjoint
-/// held-out set.
-struct Grammar {
-    find: &'static [&'static str],
-    save: &'static [&'static str],
-    into: &'static [&'static str],
-    value: &'static [&'static str],
-}
-
-const TRAIN_GRAMMAR: Grammar = Grammar {
-    find: &["Find", "Look up", "Get", "Read", "Fetch", "Retrieve"],
-    save: &["write", "save", "put", "store", "record"],
-    into: &["to answer.txt", "in answer.txt", "into answer.txt"],
-    value: &["value", "entry", "setting"],
-};
-
-const HELD_OUT_GRAMMAR: Grammar = Grammar {
-    find: &["Determine", "Work out", "Check"],
-    save: &["place", "leave", "enter"],
-    into: &["in the file answer.txt", "inside answer.txt"],
-    value: &["number", "figure"],
-};
-
-fn grammar(held_out: bool) -> &'static Grammar {
-    if held_out {
-        &HELD_OUT_GRAMMAR
-    } else {
-        &TRAIN_GRAMMAR
-    }
-}
-
-/// "the value of KEY in FILE", in one of several orders.
-fn of(rng: &mut SplitMix64, g: &Grammar, slot: &Slot) -> String {
-    let v = pick(rng, g.value);
-    match rng.below(3) {
-        0 => format!("the {v} of {} in {}", slot.key, slot.file),
-        1 => format!("the {v} stored under {} in {}", slot.key, slot.file),
-        _ => format!("{}'s {v} from {}", slot.key, slot.file),
-    }
-}
-
 /// A file of `n` entries with fresh keys, `value` drawing each value.
 fn table(
     rng: &mut SplitMix64,
@@ -255,7 +211,11 @@ fn number(rng: &mut SplitMix64) -> String {
 /// and formats.
 #[must_use]
 pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
-    let g = grammar(held_out);
+    let w = if held_out {
+        &crate::phrasing::HELD_OUT
+    } else {
+        &crate::phrasing::TRAIN
+    };
     let mut files = BTreeMap::new();
     let mut taken: Vec<String> = Vec::new();
     let mut add = |rng: &mut SplitMix64,
@@ -271,8 +231,6 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
         files.insert(p.clone(), f.render(&entries));
         (p, f, entries)
     };
-    let save = pick(rng, g.save);
-    let into = pick(rng, g.into);
     match skill {
         Skill::Read => {
             let n = rng.between(3, 7) as usize;
@@ -280,17 +238,12 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             let (file, format, entries) = add(rng, &t, &mut files);
             let (key, value) = entries[rng.below(entries.len())].clone();
             let slot = Slot { file, format, key };
-            let find = pick(rng, g.find);
-            let instruction = match rng.below(2) {
-                0 => format!("{find} {} and {save} it {into}.", of(rng, g, &slot)),
-                _ => format!(
-                    "In {}, {} the {} for {}; {save} it {into}.",
-                    slot.file,
-                    find.to_lowercase(),
-                    pick(rng, g.value),
-                    slot.key
-                ),
-            };
+            let step = format!(
+                "{} {}",
+                pick(rng, w.find),
+                of(rng, w, &slot.key, &slot.file)
+            );
+            let instruction = with_answer(rng, w, &step, "it");
             Drawn {
                 skill,
                 instruction,
@@ -345,18 +298,16 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             }
             let start = first.unwrap_or_else(|| unreachable!("a chain has a first file"));
             let rest: Vec<&str> = next.iter().map(|(p, _)| p.as_str()).collect();
-            let find = pick(rng, g.find);
-            let instruction = match rng.below(2) {
-                0 => format!(
-                    "{find} {} in {}. That value is a key in {}{}. Follow the chain to the final number and {save} it {into}.",
-                    start.key, start.file, rest[0],
-                    if rest.len() > 1 { format!(", and so on through {}", rest[1..].join(", ")) } else { String::new() }
-                ),
-                _ => format!(
-                    "Starting from {} in {}, look each value up as a key in the next file ({}). {} the number you end with {into}.",
-                    start.key, start.file, rest.join(", then "), capital(save)
-                ),
-            };
+            let step = format!(
+                "{} the keys from {} in {} through {}, each {} being a key in the next file",
+                pick(rng, w.follow),
+                start.key,
+                start.file,
+                rest.join(", "),
+                pick(rng, w.value)
+            );
+            let object = format!("the last {}", pick(rng, w.value));
+            let instruction = with_answer(rng, w, &step, &object);
             Drawn {
                 skill,
                 instruction,
@@ -409,11 +360,16 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 (ea[ia].1.parse().unwrap_or(0), eb[ib].1.parse().unwrap_or(0));
             files.insert(helper.clone(), helper_script(&helper, style, m, n, p));
             let tool = format!("./{helper}");
-            let instruction = match rng.below(2) {
-                0 => format!("Use {tool} to combine {} with {}, in that order, and {save} the result {into}.", of(rng, g, &a), of(rng, g, &b)),
-                _ => format!("Apply {tool} to {} and {} (first {}, then {}). {} its output {into}.", a.key, b.key, a.key, b.key, capital(save))
-                    + &format!(" {} is in {}; {} is in {}.", a.key, a.file, b.key, b.file),
-            };
+            let step = format!(
+                "{} {tool} on {} and {}, first {} then {}",
+                pick(rng, w.apply),
+                of(rng, w, &a.key, &a.file),
+                of(rng, w, &b.key, &b.file),
+                a.key,
+                b.key
+            );
+            let object = format!("its {}", pick(rng, w.value));
+            let instruction = with_answer(rng, w, &step, &object);
             let value = ((va * m + vb * n) % p).to_string();
             Drawn {
                 skill,
@@ -449,28 +405,15 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             };
             let mut entries: BTreeMap<String, String> = et.iter().cloned().collect();
             entries.insert(target.key.clone(), es[is].1.clone());
-            let set = pick(
-                rng,
-                if held_out {
-                    &["Change", "Overwrite"]
-                } else {
-                    &["Set", "Update", "Replace"]
-                },
+            let step = format!(
+                "{} {} in {} to {}",
+                pick(rng, w.set),
+                target.key,
+                target.file,
+                of(rng, w, &source.key, &source.file)
             );
-            let instruction = match rng.below(2) {
-                0 => format!(
-                    "{set} {} in {} to {}. Leave the other entries as they are.",
-                    target.key,
-                    target.file,
-                    of(rng, g, &source)
-                ),
-                _ => format!(
-                    "{} holds {}. {set} it with {} and keep everything else in the file.",
-                    target.file,
-                    target.key,
-                    of(rng, g, &source)
-                ),
-            };
+            let keep = pick(rng, w.keep);
+            let instruction = alone(rng, w, &step, keep);
             Drawn {
                 skill,
                 instruction,
@@ -503,15 +446,13 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 }
             }
             files.insert(file.clone(), log);
-            let instruction = match rng.below(2) {
-                0 => format!(
-                    "How many lines of {file} contain {word_}? {} the count {into}.",
-                    capital(save)
-                ),
-                _ => format!(
-                    "Count the lines in {file} that mention {word_} and {save} that number {into}."
-                ),
-            };
+            let step = format!(
+                "{} the lines of {file} that {} {word_}",
+                pick(rng, w.count),
+                pick(rng, w.mention)
+            );
+            let object = format!("that {}", pick(rng, w.value));
+            let instruction = with_answer(rng, w, &step, &object);
             Drawn {
                 skill,
                 instruction,
@@ -524,12 +465,6 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             }
         }
     }
-}
-
-fn capital(w: &str) -> String {
-    let mut c = w.chars();
-    c.next()
-        .map_or_else(String::new, |f| f.to_uppercase().chain(c).collect())
 }
 
 /// A helper that combines two whole numbers by `(a * m + b * n) mod p`,
@@ -616,9 +551,18 @@ mod tests {
                     );
                 }
                 let t = draw(&mut rng, skill, false);
-                for w in HELD_OUT_GRAMMAR.find.iter().chain(HELD_OUT_GRAMMAR.into) {
+                let train_text = t.instruction.to_lowercase();
+                for w in [
+                    "determine",
+                    "work out",
+                    "obtain",
+                    "locate",
+                    "deposit",
+                    "within answer.txt",
+                    "kindly",
+                ] {
                     assert!(
-                        !t.instruction.contains(w),
+                        !train_text.contains(w),
                         "seed {seed}: {w} in {}",
                         t.instruction
                     );

@@ -118,7 +118,8 @@ pub(crate) fn model_stages(
     // Mid-training: raw text with a share of verified trajectories.
     let mut base = pretrained.clone();
     if run.config.midtrain.budget.steps > 0 {
-        let mix = run.midtrain_data(label, demonstrations, world)?;
+        let trajectories = run.demonstrate_mid()?;
+        let mix = run.midtrain_data(label, &trajectories, world)?;
         let digest = mix.output("mix").context("the mix has no output")?.clone();
         let rel = format!("data/{label}/midtrain.jsonl");
         base = run.train(
@@ -245,7 +246,7 @@ impl Run<'_> {
         );
         let rel = format!("data/{label}/midtrain.jsonl");
         self.unit(&unit, &key, |run, _| {
-            let records = std::fs::read_to_string(run.path("data/demonstrate.jsonl"))?;
+            let records = std::fs::read_to_string(run.path("data/demonstrate-mid.jsonl"))?;
             let agentic = conversations_as_text(&run.template, &records)?;
             let world_text = std::fs::read_to_string(run.path("world/train.jsonl"))?;
             let mut docs: Vec<&str> = world_text.lines().collect();

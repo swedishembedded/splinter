@@ -4,14 +4,16 @@
 # minimind: from random weights to a small agent
 
 One command takes a tiny model from random weights to an agent that solves
-elementary workspace tool-use tasks (read a value from a file, run a helper,
-write the answer), and examines it on a sealed exam it never saw. The command
+elementary workspace tool-use tasks (read a value from a file in one of
+several formats, follow a chain of lookups, run a helper, edit a key, write
+the answer), and examines it on a sealed exam it never saw. The command
 is idempotent and resumable: run it again after an abort and it continues;
 run it again after it finished and it trains nothing.
 
 The sample is thin on purpose. What it holds is what is specific to this
 demonstration: the configuration and profiles, a deterministic synthetic
-world, the training task families with their verifier, a programmatic expert,
+world, the task skills with their verifier, a programmatic expert, the data
+checks and the admission rules,
 the model's chat template, the stage list and the report.
 
 Swedish Embedded AB implements end-to-end learning systems that take a model
@@ -99,20 +101,25 @@ run's manifest afterwards.
 |---|---|---|---|
 | 1 | `init` | writes `manifest.json`: profile, seed, configuration, code revisions, template, licenses of fetched corpora | profile and seed |
 | 2 | `fetch/<name>` | only when configured: a pinned URL, checked against its SHA-256, cached, sliced | bytes and license |
-| 3 | `world` | the synthetic world corpus from the seed: towns, people, expressions, tiny programs, conversations in the chat template | documents and bytes |
-| 4 | `tasks` | training (`train`), exploration (`explore`) and development (`dev`) instances of three families, as an index and as Harbor task folders | counts |
-| 5 | `demonstrate/<task>`, `demonstrate` | the expert drives real sven on every training instance; the verifier judges the workspace; accepted episodes become `data/demonstrate.jsonl`, one record per model call | each episode's answer and verdict, then accepted of total |
-| 6 | `<model>/checkpoint` | brain trains a tokenizer on the corpus and makes a random-init checkpoint of the configured architecture | the installed model |
-| 7 | `probe/<model>/init` | the development tasks through sven, and a raw-text continuation | `probe <model>/init: 0/4 development tasks solved`, the text, two example tasks |
-| 8 | `<model>/pretrain-<i>`, `<model>/pretrain`, `retrieval/<model>/...`, probe | raw-text pretraining on the corpus in `pretrain_segments` segments, each continuing the last; the retrieval probe after random init and every segment (exact copies of 24 held-out values); then the probe | steps and losses; `retrieval ...: copies a code out of a listing x/12, a file name into a call y/12`; the probe |
-| 9 | `<model>/sft`, probe | the fine-tune on the demonstrations (by default each conversation rendered in the template and trained as text, every token supervised: `chat_training.as_text`), then the probe | the same |
-| 10 | `<model>/sit/<stage>` | with `--bench`: the pretrained, fine-tuned and improved checkpoints (and the control arm) each sit bench's sealed exam and its anchor once | - |
-| 11 | `<model>/scratch/verdict` | bench's signed paired verdict, fine-tuned against pretrained | the verdict and the pass rate of each tier, both sides |
-| 12 | `<model>/explore/<task>`, `<model>/explore` | the model itself as a sven agent on fresh instances, through a recording proxy; verified episodes become records | accepted of total |
-| 13 | `<model>/improve/data`, `<model>/improve`, probe | its own verified episodes mixed with `experience.rehearsal` demonstration records per own record, trained on (expert iteration with rehearsal), then the probe | the same |
-| 13b | `<model>/control/data`, `<model>/control` | with `--bench`: the spurious-reward control arm, the same mix with its own episodes drawn without the verifier | - |
-| 14 | `<model>/experience/verdict` | bench: the improved model against the fine-tuned one, the control arm beside it | the verdict and the tiers |
-| 15 | `report.md` | written from the ledger; the terminal gets the table across stages | its path and the table |
+| 3 | `world` | the synthetic world corpus from the seed: towns, people, expressions, tiny programs, conversations in the chat template, copy drills, and worked tool-use trajectories (the expert with the tools run for real); repeated documents over `data_checks.max_duplicate_share` fail the stage | documents, bytes, the duplicate share |
+| 4 | `tasks` | training, exploration, development and held-out instances of five skills (`src/skills.rs`: read a value, follow a chain of two to four lookups, compute with a helper whose usage comes from its own `--help`, edit a key, count lines) over seven file formats, requests drawn from a grammar of frames and synonyms; the held-out split uses two formats and frames no other split does; an index per split and the Harbor task folders | counts |
+| 5 | `demonstrate/<task>`, `demonstrate` | the expert drives real sven on every training instance by one procedure (list the workspace, read, discover the helper, act, read back, answer); the verifier judges the workspace; an episode that passed but rewrote the task's files, looked for verifier material or answered before reading its sources is not admitted (`src/admission.rs`); admitted episodes become `data/demonstrate.jsonl`; one request template or final reply dominating fails the stage (`src/datacheck.rs`) | accepted, flagged, the data shares |
+| 6 | `<model>/checkpoint` | brain learns a byte-level vocabulary on the corpus (digits split) and makes a random-init checkpoint of the configured architecture | the installed model |
+| 7 | `probe/<model>/init`, `retrieval/<model>/init` | the probe: the development and held-out tasks through sven, a raw-text continuation; the retrieval probe: exact copies of 24 held-out values from context | passes by skill, development and held-out, how often the first reply is a tool call, a solved and a failed transcript |
+| 8 | `<model>/pretrain-<i>`, `<model>/pretrain` | raw-text pretraining in `pretrain_segments` segments, each continuing the last; after each, the retrieval probe and, with `headroom_steps`, a fixed small fine-tune and the probe (the checkpoint's post-fine-tune headroom) | steps, losses, rate; the probes |
+| 9 | `<model>/midtrain/data`, `<model>/midtrain` | mid-training: raw text with the demonstrations rendered in the template as `midtrain.agentic_share` of it | the same |
+| 10 | `<model>/sft-<i>`, `<model>/sft` | the fine-tune on the demonstrations (brain's `full_train`, only the replies supervised) in `sft_segments` segments, the probe after each: the points of the learning-aptitude fit | the same; at the end `s(N) = b + k log10(N/N0)`, `k` and `N*` |
+| 11 | `<model>/sit/<stage>` | with `--bench`: the pretrained, fine-tuned and improved checkpoints (and the control arm) each sit bench's sealed exam and its anchor once | - |
+| 12 | `<model>/scratch/verdict` | bench's signed paired verdict, fine-tuned against pretrained | the verdict and the pass rate of each tier, both sides |
+| 13 | `<model>/explore/<task>`, `<model>/explore` | the model itself as a sven agent on fresh instances, through a recording proxy; admitted episodes become records | accepted, flagged |
+| 14 | `<model>/improve/data`, `<model>/improve`, probe | its own admitted episodes mixed with `experience.rehearsal` demonstration records per own record, fine-tuned on (expert iteration with rehearsal), then the probe | the same |
+| 14b | `<model>/control/data`, `<model>/control` | with `--bench`: the spurious-reward control arm, the same mix with its own episodes drawn without the verifier | - |
+| 15 | `<model>/experience/verdict` | bench: the improved model against the fine-tuned one, the control arm beside it | the verdict and the tiers |
+| 16 | `report.md` | written from the ledger; the terminal gets the table across stages, the retrieval curve and the aptitude fit | its path and the table |
+
+`chat_training.as_text: true` trains the fine-tune and the improvement on
+whole conversations as text instead; whole trajectories as text belong in the
+mid-training stage, and the fine-tune proper stays role-masked.
 
 ## Measured
 

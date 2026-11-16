@@ -30,6 +30,7 @@ pub mod expert;
 pub mod formats;
 pub mod pack;
 pub mod panel;
+pub mod phrasing;
 pub mod recipe;
 pub mod report;
 pub mod retrieval;

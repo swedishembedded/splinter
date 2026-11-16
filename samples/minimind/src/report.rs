@@ -145,7 +145,7 @@ pub fn markdown(commits: &[Commit], labels: &[String]) -> String {
 /// True for an episode's unit: its last segment is a task id.
 fn is_episode(unit: &str) -> bool {
     unit.rsplit('/').next().is_some_and(|last| {
-        ["train-", "explore-", "dev-"]
+        ["train-", "explore-", "dev-", "heldout-", "midtrain-"]
             .iter()
             .any(|p| last.starts_with(p))
     })

@@ -396,6 +396,7 @@ impl<'a> Run<'a> {
                 (Split::Explore, counts.explore),
                 (Split::Dev, counts.probes),
                 (Split::Heldout, counts.probes),
+                (Split::Midtrain, counts.midtrain),
             ] {
                 let drawn = tasks::instances(run.seed, split, count);
                 let index: String = drawn
