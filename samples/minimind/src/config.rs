@@ -280,8 +280,8 @@ impl Config {
                 world(400, 20_000, 6_000, 3_000, 30_000, 600_000),
                 tasks(3_000, 384, 12),
                 budget(15_000, 64, 1e-3, 1024),
-                budget(2_000, 8, 3e-4, 2048),
-                budget(200, 8, 1e-4, 2048),
+                budget(6_000, 8, 3e-4, 2048),
+                budget(600, 8, 1e-4, 2048),
             ),
             Profile::M64 => (
                 ouro(512, 8, 4, 8, 8192, 2048),
@@ -308,7 +308,7 @@ impl Config {
                     budget(1_500, 64, 1e-3, 1024)
                 },
             },
-            sft_segments: 4,
+            sft_segments: if profile == Profile::Smoke { 4 } else { 6 },
             headroom_steps: if profile == Profile::Smoke { 0 } else { 100 },
             sft,
             chat_training: ChatTraining { as_text: false },
