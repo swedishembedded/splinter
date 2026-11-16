@@ -57,6 +57,11 @@ pub const LEDGER_FILE: &str = "ledger.jsonl";
 /// The lock file that keeps a second process out of a run directory.
 pub const LOCK_FILE: &str = "ledger.lock";
 
+/// How often a held run directory is asked for before it is refused, and
+/// how long apart: a two-second bound.
+const LOCK_TRIES: u32 = 40;
+const LOCK_RETRY: std::time::Duration = std::time::Duration::from_millis(50);
+
 /// Why a ledger operation failed.
 #[derive(Debug, thiserror::Error)]
 pub enum LedgerError {
@@ -375,11 +380,20 @@ impl StageLedger {
             .write(true)
             .open(&lock_path)
             .map_err(|e| io_error(&lock_path, &e))?;
+        // A process forked by any thread of this one holds a copy of every
+        // descriptor until it execs, so a lock just released can still look
+        // held for a moment; another process holding the run never lets go.
+        // The wait is bounded.
+        let mut tries = 0;
         // SAFETY: `lock` is an open descriptor for the lifetime of the call.
-        if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-            return Err(LedgerError::Busy {
-                path: dir.display().to_string(),
-            });
+        while unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+            tries += 1;
+            if tries >= LOCK_TRIES {
+                return Err(LedgerError::Busy {
+                    path: dir.display().to_string(),
+                });
+            }
+            std::thread::sleep(LOCK_RETRY);
         }
         Ok(Self {
             dir: dir.to_path_buf(),
