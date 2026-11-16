@@ -100,3 +100,11 @@ RSI5: it has no matched-data control.
   candidate and was waiting for gpu2's lock (no g2 process was running), was started for generation 4 on gpu0 with
   `run-lineage-shm.sh g2 0 6979610617474167843 4`: the same binary, seed, settings and journals on an identical card (GH200,
   same build, f32 KV); only the device index differs.
+- 2026-11-16 ~11:30, before any candidate was examined: **the generation-4 proposal request cap.** Lineage g1's fourth
+  generation spent its registered request cap (40 000, ten times its new target) with 3706 of the 4000 frontier programs found
+  (10 886 proposals predicted): an improving champion gets more proposals right, and its proposals repeat more often, so the
+  frontier yield falls. The registration fixes the pool sizes the criteria rest on, not this budget; no rule covered a spent cap.
+  The fourth generation's cap is raised to 80 000 (`run-lineage-shm-cap.sh`, which differs from `run-lineage-shm.sh` only in
+  that number) and g1 resumed from its journals in generation 4 (every program already measured is reused); any other lineage
+  whose fourth generation spends the cap is resumed the same way and listed here. The pool sizes, training and gate are
+  unchanged.
