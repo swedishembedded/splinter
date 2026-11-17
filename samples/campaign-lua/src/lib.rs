@@ -31,6 +31,7 @@ pub mod reasoning;
 pub mod recipe;
 pub mod records;
 pub mod sections;
+pub mod semantic;
 pub mod sft;
 pub mod spec;
 pub mod vocabulary;

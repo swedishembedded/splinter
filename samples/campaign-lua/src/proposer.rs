@@ -29,8 +29,10 @@ use splinter_sdk::vocabulary::source::SourceId;
 use splinter_sdk::Context;
 
 use crate::family::{proposal_id_in, Part, Proposal, ProposalFamily};
+use crate::journal::Journal;
 use crate::language::{Language, MAX_OUTPUT_BYTES};
 use crate::sections::{manual_sections, plan_requests, weak_functions, Accuracy, ManualSection};
+use crate::semantic::{self, OutputRule};
 
 /// Words a request may be asked to put in its programs.
 const WORDS: [&str; 40] = [
@@ -111,6 +113,21 @@ pub struct Proposer {
     base: PathBuf,
     /// Where the family's interpreter is found.
     runtime_dir: PathBuf,
+    /// Which expected outputs are admitted.
+    output_rule: OutputRule,
+    /// Where refused programs are logged with their reasons.
+    refusals: Option<Journal>,
+}
+
+/// A program refused before measurement, as the audit log keeps it.
+#[derive(Serialize)]
+struct Refused<'a> {
+    family: &'a str,
+    section: &'a str,
+    reason: &'a str,
+    class: &'a str,
+    program: &'a str,
+    expected: &'a str,
 }
 
 /// The brief of one request: the standing goal, the functions of the section
@@ -156,7 +173,45 @@ impl Proposer {
             runtime_dir: language.runtime_dir(state)?,
             language,
             base: base.to_path_buf(),
+            output_rule: OutputRule::default(),
+            refusals: None,
         })
+    }
+
+    /// This proposer admitting only the outputs `rule` allows, appending every
+    /// program it refuses, with its reason, to the journal `log`.
+    #[must_use]
+    pub fn with_output_rule(mut self, rule: OutputRule, log: &Path) -> Self {
+        self.output_rule = rule;
+        self.refusals = Some(Journal::at(log));
+        self
+    }
+
+    /// Whether the output rule refuses `program` for its `expected` output:
+    /// counted in `out.refused` under the reason `memorisation` and appended to
+    /// the audit log.
+    fn refuses_output(
+        &self,
+        out: &mut Proposed,
+        section: &str,
+        program: &str,
+        expected: &str,
+    ) -> Result<bool> {
+        let Some(class) = self.output_rule.refusal(expected) else {
+            return Ok(false);
+        };
+        *out.refused.entry(semantic::REASON.to_string()).or_default() += 1;
+        if let Some(log) = &self.refusals {
+            log.append(&Refused {
+                family: &self.language.name,
+                section,
+                reason: semantic::REASON,
+                class,
+                program,
+                expected,
+            })?;
+        }
+        Ok(true)
     }
 
     /// The directory to put first on the task runtimes' search path so the
@@ -324,6 +379,9 @@ impl Proposer {
                         out.unusable += 1;
                         continue;
                     };
+                    if self.refuses_output(&mut out, &key, &program, &expected)? {
+                        continue;
+                    }
                     if !self.language.output_admitted(&expected)
                         || !self.language.rerun_agrees(&runtime, &program, &expected)?
                     {
@@ -616,5 +674,44 @@ mod tests {
         );
         assert_eq!(made[0].family.as_deref(), Some("python3"));
         assert!(made[0].request.starts_with("```python\n"));
+    }
+
+    #[test]
+    fn a_refused_program_is_counted_as_memorisation_and_logged_with_its_text_and_class() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("refused.jsonl");
+        let lua = Language::lua51(Path::new("lua"), &[]);
+        let semantic = Proposer::for_language(Path::new("m"), lua.clone(), dir.path())
+            .unwrap()
+            .with_output_rule(OutputRule::Semantic, &log);
+        let mut out = Proposed::default();
+        assert!(semantic
+            .refuses_output(&mut out, "p#1", "print(1/3)", "0.33333333333333")
+            .unwrap());
+        assert!(!semantic
+            .refuses_output(&mut out, "p#1", "print(7/2)", "3.5")
+            .unwrap());
+        assert_eq!(out.refused.get("memorisation"), Some(&1));
+        let lines = std::fs::read_to_string(&log).unwrap();
+        let entry: serde_json::Value = serde_json::from_str(lines.trim()).unwrap();
+        assert_eq!(
+            (
+                entry["program"].as_str(),
+                entry["class"].as_str(),
+                entry["reason"].as_str()
+            ),
+            (Some("print(1/3)"), Some("long-float"), Some("memorisation"))
+        );
+        assert_eq!(entry["family"], "lua51");
+        // Without the option nothing is refused and nothing is written.
+        let off_log = dir.path().join("off.jsonl");
+        let default = Proposer::for_language(Path::new("m"), lua, dir.path())
+            .unwrap()
+            .with_output_rule(OutputRule::Any, &off_log);
+        let mut quiet = Proposed::default();
+        assert!(!default
+            .refuses_output(&mut quiet, "p#1", "print(1/3)", "0.33333333333333")
+            .unwrap());
+        assert!(quiet.refused.is_empty() && !off_log.exists());
     }
 }

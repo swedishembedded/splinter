@@ -305,6 +305,7 @@ mod tests {
             frontier: None,
             reasoning: None,
             train_on: crate::plan::TrainOn::Answers,
+            admit_output: None,
             families: Vec::new(),
             family_dev: Vec::new(),
         }

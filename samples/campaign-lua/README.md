@@ -212,6 +212,18 @@ yield (frontier programs per proposal predicted), and `family_dev` each family's
 dev accuracy under the champion and the candidate. Without `--family`, every
 request, record and journal line is what it was before families existed.
 
+`--admit-output semantic` (default `any`, which changes nothing) keeps programs
+whose expected output has to be worked out rather than remembered: it refuses,
+under the reason `memorisation`, an output with a number that has a fractional
+part and more than 6 significant digits, an integer of more than 7 digits, an
+object or address representation (`0x` and 6 or more hex digits, `object at`,
+`<function`, `<class`, `<built-in`, `table: `, `function: `), two or more dunder
+names (`__x__`), or an interpreter's version (`Lua 5.1`, `Python 3.`, a `3.14.N`
+version, `sys.version`). The thresholds are constants of `campaign_lua::semantic`
+and are recorded in every round record (`admit_output`); every refused program,
+with its text, class and reason, is appended to `refused.jsonl` of the lineage.
+A lineage refuses to continue under another output rule than it began with.
+
 ## The `exec-trace` tool: the interpreter's own reasoning
 
 `exec-trace` runs every program of a JSONL file (a `program` field per line)

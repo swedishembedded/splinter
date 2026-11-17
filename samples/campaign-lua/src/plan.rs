@@ -19,6 +19,7 @@ use splinter_sdk::measure::campaign::evidence::EvidenceGate;
 
 use crate::frontier::{Admit, Frontier, Rule};
 use crate::reasoning::Reasoning;
+use crate::semantic::OutputRule;
 use crate::sft::Recipe;
 
 /// What a round's candidate is trained from.
@@ -141,6 +142,8 @@ pub struct Plan {
     pub acceptance: Acceptance,
     /// Which programs of the frontier's measurement are admitted.
     pub admit: Admit,
+    /// Which expected outputs the proposals are admitted for.
+    pub admit_output: OutputRule,
     /// Let the champion reason when it predicts and answers the exams, and
     /// train in thinking mode; none keeps every model answering without
     /// reasoning.
@@ -331,6 +334,7 @@ mod tests {
             epochs,
             acceptance: Acceptance::Greedy,
             admit: Admit::default(),
+            admit_output: OutputRule::default(),
             reasoning: None,
             train_on: TrainOn::Answers,
             families: Vec::new(),

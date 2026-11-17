@@ -23,6 +23,7 @@ use crate::frontier_round::FrontierOutcome;
 use crate::journal::Journal;
 use crate::plan::{TrainFrom, TrainOn};
 use crate::reasoning::Reasoning;
+use crate::semantic::{OutputRule, Thresholds};
 
 /// What a round trained: the adapter and what brain reported of the run.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -37,6 +38,26 @@ pub struct Trained {
     pub held_out_loss_base: Option<f32>,
     /// Brain's held-out loss of the candidate on the same programs.
     pub held_out_loss_tuned: Option<f32>,
+}
+
+/// The output rule of a round and the thresholds it applied.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OutputAdmission {
+    /// The rule.
+    pub rule: OutputRule,
+    /// Its thresholds.
+    pub thresholds: Thresholds,
+}
+
+impl OutputAdmission {
+    /// The record of `rule`: none for the default.
+    #[must_use]
+    pub fn of(rule: OutputRule) -> Option<Self> {
+        (!rule.is_default()).then(|| Self {
+            rule,
+            thresholds: Thresholds::current(),
+        })
+    }
 }
 
 /// What one task family contributed to a round: how new its proposals were
@@ -121,6 +142,10 @@ pub struct RoundRecord {
     /// What the records were made of; absent for answer-only records.
     #[serde(default, skip_serializing_if = "TrainOn::is_default")]
     pub train_on: TrainOn,
+    /// The output rule the round's proposals were admitted under and the
+    /// thresholds it applied; absent for the default rule.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admit_output: Option<OutputAdmission>,
     /// What each task family contributed, when the lineage has families.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub families: Vec<FamilyRound>,
@@ -167,6 +192,12 @@ impl Files {
     #[must_use]
     pub fn proposals(&self) -> PathBuf {
         self.root.join("proposals.jsonl")
+    }
+
+    /// The programs refused before measurement, with their reasons.
+    #[must_use]
+    pub fn refused(&self) -> PathBuf {
+        self.root.join("refused.jsonl")
     }
 
     pub(crate) fn rounds(&self) -> Journal {
@@ -307,6 +338,7 @@ mod tests {
             frontier: None,
             reasoning: None,
             train_on: TrainOn::Answers,
+            admit_output: None,
             families: Vec::new(),
             family_dev: Vec::new(),
         }
@@ -365,5 +397,21 @@ mod tests {
         );
         let again: RoundRecord = serde_json::from_str(&line).unwrap();
         assert_eq!(again.families, record.families);
+    }
+
+    #[test]
+    fn a_round_under_the_semantic_rule_records_the_rule_and_its_thresholds() {
+        let mut record = round(1, 1, true, "s");
+        record.admit_output = OutputAdmission::of(OutputRule::Semantic);
+        let line = serde_json::to_string(&record).unwrap();
+        assert!(
+            line.contains(
+                r#""admit_output":{"rule":"semantic","thresholds":{"max_fraction_digits":6"#
+            ),
+            "{line}"
+        );
+        let again: RoundRecord = serde_json::from_str(&line).unwrap();
+        assert_eq!(again.admit_output, record.admit_output);
+        assert_eq!(OutputAdmission::of(OutputRule::Any), None);
     }
 }

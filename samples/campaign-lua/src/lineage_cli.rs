@@ -33,6 +33,7 @@ use campaign_lua::lineage::{
 use campaign_lua::plan::EvidencePlan;
 use campaign_lua::proposer::{Budget, Proposer};
 use campaign_lua::reasoning::ReasoningArgs;
+use campaign_lua::semantic::OutputRule;
 use campaign_lua::sft::Recipe;
 use campaign_lua::spec::FamilySpec;
 use campaign_lua::{LuaPredict, Sizes};
@@ -245,6 +246,14 @@ struct Cli {
     /// `--reasoning on`.
     #[arg(long, value_enum, default_value_t = TrainOn::Answers)]
     train_on: TrainOn,
+    /// Which expected outputs the proposed programs are admitted for: `any`
+    /// (default) or `semantic`, which refuses, as `memorisation`, a program
+    /// whose output is a long float, a very large integer, an object or
+    /// address representation, a listing of dunder names or an interpreter's
+    /// version (thresholds: `campaign_lua::semantic`; refused programs are
+    /// logged to `refused.jsonl`).
+    #[arg(long, value_enum, default_value_t = OutputRule::Any)]
+    admit_output: OutputRule,
     #[command(flatten)]
     frontier: FrontierArgs,
     #[command(flatten)]
@@ -430,7 +439,10 @@ fn main() -> Result<()> {
     let files = Files::at(&cli.out);
     let proposers = generators
         .iter()
-        .map(|(language, _)| Proposer::for_language(&cli.model, language.clone(), &cli.out))
+        .map(|(language, _)| {
+            Proposer::for_language(&cli.model, language.clone(), &cli.out)
+                .map(|p| p.with_output_rule(cli.admit_output, &files.refused()))
+        })
         .collect::<Result<Vec<_>>>()?;
     let family =
         ProposalFamily::open(generators, &files.proposals()).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -472,6 +484,7 @@ fn main() -> Result<()> {
         epochs: cli.cumulative_epochs,
         acceptance: cli.evidence.acceptance(cli.slots)?,
         admit: cli.frontier.admit(),
+        admit_output: cli.admit_output,
         reasoning,
         train_on: cli.train_on,
         families: family_plans,

@@ -63,7 +63,8 @@ pub use crate::plan::{Acceptance, Plan, TrainFrom, TrainOn};
 use crate::proposer::{as_proposals, Budget, Origin, Proposed, Proposer, Steering};
 use crate::reasoning::TraceBook;
 pub use crate::records::{
-    champion_of, trained_up_to, FamilyDev, FamilyRound, Files, RoundRecord, Trained,
+    champion_of, trained_up_to, FamilyDev, FamilyRound, Files, OutputAdmission, RoundRecord,
+    Trained,
 };
 pub(crate) use crate::records::{fail, policy_key, DevRecord, Prediction};
 use crate::sections::{family_accuracy_in, Accuracy};
@@ -295,6 +296,7 @@ impl Lineage<'_> {
             frontier: None,
             reasoning: self.plan.reasoning,
             train_on: self.plan.train_on,
+            admit_output: OutputAdmission::of(self.plan.admit_output),
             families: Vec::new(),
             family_dev: Vec::new(),
         };
@@ -417,7 +419,8 @@ impl Lineage<'_> {
         let admit = |r: &RoundRecord| r.frontier.as_ref().map(|f| f.admit);
         for earlier in rounds {
             anyhow::ensure!(
-                earlier.reasoning == self.plan.reasoning
+                earlier.admit_output == OutputAdmission::of(self.plan.admit_output)
+                    && earlier.reasoning == self.plan.reasoning
                     && earlier.train_on == self.plan.train_on
                     && admit(earlier).is_none_or(|a| a == self.plan.admit),
                 "generation {} round {} ran with reasoning {:?}, train-on {:?} and admission {:?}; this run asks for {:?}, {:?} and {:?}: a lineage continues under the settings it began with",
