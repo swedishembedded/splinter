@@ -9,9 +9,11 @@
 
 //! Training as a request to a brain service.
 //!
-//! With brain endpoints configured, a fine-tune ([`fine_tune_served`]) or a
-//! policy-gradient run ([`train_policy_gradient_served`]) is a job of the
-//! service (`brain serve --training --artifact-store DIR`), not a model loaded
+//! A fine-tune ([`fine_tune_served`]), a policy-gradient run
+//! ([`train_policy_gradient_served`]), a preference run
+//! ([`train_preference_served`]), a full-parameter run
+//! ([`full_fine_tune_served`]) and an adapter merge ([`merge_served`]) are
+//! jobs of the service (`brain serve --training --artifact-store DIR`), not a model loaded
 //! in this process: the service owns the cards, takes them from idle serving
 //! replicas for the run and gives them back.
 //!
@@ -24,16 +26,28 @@
 //! settings are the ones the in-process trainers take, so a run trains the
 //! same either way; what changes is where the work happens.
 //!
-//! The datasets are checked here exactly as the in-process path checks them,
-//! before anything is sent: a record the trainer would refuse is named by its
-//! line without spending a queue slot.
+//! A dataset is read by the service's own trainer before a run is asked for
+//! ([`check_dataset`]): a record it would refuse is named by its line without
+//! claiming a card, and the row a run reserves is sized to its longest
+//! example. A model is scored teacher-forced on records through the action
+//! its server takes for it ([`score_chat`]).
 
 mod artifacts;
+mod check;
+mod checkpoint;
 mod job;
+mod preference;
 mod request;
+mod score;
 
 pub use artifacts::ArtifactStore;
+pub use check::{
+    check_dataset, CheckSpec, DatasetKind, DatasetReport, Distribution, RecordLength, Refusal,
+};
+pub use checkpoint::{full_fine_tune_served, merge_served, Install};
 pub use job::REFUSED_WAIT;
+pub use preference::{train_preference_served, DEFAULT_DPO_BETA};
+pub use score::score_chat;
 
 use std::path::Path;
 

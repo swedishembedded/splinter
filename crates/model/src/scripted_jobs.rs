@@ -9,12 +9,18 @@
 //! The training half of the scripted endpoint: `POST /v1/jobs`,
 //! `GET /v1/jobs/{id}/events`, `GET /v1/jobs/{id}/result` and
 //! `DELETE /v1/jobs/{id}`, answering as brain's `brain/train` does without a
-//! model or a device.
+//! model or a device: the actions `train` (objectives `sft`,
+//! `policy_gradient`, `dpo`), `check_dataset`, `full_train` and `merge`.
 //!
 //! A job reads its datasets from the artifact store by digest and refuses a
 //! digest the store does not hold or whose file does not hash to its name; it
-//! "trains" by publishing an adapter and a training record to the store and
-//! streams the frames a run would. What a script can make it do: refuse the
+//! "trains" by publishing an adapter and a training record to the store (a
+//! checkpoint job publishes two files and their manifest, and installs them
+//! in the model store when the script names one) and streams the frames a
+//! run would. `check_dataset` counts a record's characters as its tokens: the
+//! prompt is its untrained messages, the trained part its supervised ones; a
+//! line that is not a JSON object with `messages` (a chat record), `chosen`
+//! and `rejected` (a pair) or `subject` (a timeline) is refused by line. What a script can make it do: refuse the
 //! first creations for want of room (HTTP 429), break the event stream after
 //! some events so the client has to resume it, fail, or never finish until it
 //! is cancelled. It records what it was asked.
@@ -50,6 +56,9 @@ pub struct JobScript {
     pub hang: bool,
     /// Optimiser steps a job reports.
     pub steps: u32,
+    /// The model store a checkpoint job installs into, as `local/<name>`;
+    /// `None` installs nothing (a server whose store is not this machine's).
+    pub models: Option<PathBuf>,
 }
 
 impl JobScript {
@@ -63,6 +72,7 @@ impl JobScript {
             fail_with: None,
             hang: false,
             steps: 3,
+            models: None,
         }
     }
 }
@@ -72,6 +82,7 @@ impl JobScript {
 pub struct Jobs {
     pub(crate) script: Mutex<Option<JobScript>>,
     created: Mutex<Vec<Value>>,
+    actions: Mutex<Vec<String>>,
     refused: AtomicUsize,
     streams: Mutex<Vec<Option<u64>>>,
     events: Mutex<Option<Vec<(u64, String, Value)>>>,
@@ -84,6 +95,11 @@ impl Jobs {
     /// The parameters of every job created, in order.
     pub fn created(&self) -> Vec<Value> {
         self.created.lock().unwrap().clone()
+    }
+
+    /// The action of every job created, in order.
+    pub fn actions(&self) -> Vec<String> {
+        self.actions.lock().unwrap().clone()
     }
 
     /// The `Last-Event-ID` of every event stream opened, in order.
@@ -175,7 +191,10 @@ fn digests_of(data: &Value) -> Vec<String> {
 
 fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) {
     let call: Value = serde_json::from_slice(body).unwrap_or_default();
-    if call["model"] != "brain/train" || call["action"] != "train" {
+    let action = call["action"].as_str().unwrap_or_default().to_string();
+    if call["model"] != "brain/train"
+        || !["train", "check_dataset", "full_train", "merge"].contains(&action.as_str())
+    {
         error(stream, "404 Not Found", "no such model or action");
         return;
     }
@@ -192,7 +211,10 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
     let data: Value =
         serde_json::from_str(params["data"].as_str().unwrap_or("{}")).unwrap_or_default();
     // brain resolves each digest in its store and verifies the file against it.
-    for hex in digests_of(&data) {
+    let named = ["dataset_digest", "adapter_digest"]
+        .iter()
+        .filter_map(|name| params[*name].as_str().map(str::to_string));
+    for hex in digests_of(&data).into_iter().chain(named) {
         let digest = Digest::from_content_hex(&hex);
         let file = script.store.join(&hex);
         let verified = digest.ok().and_then(|d| {
@@ -209,9 +231,14 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
         }
     }
     jobs.created.lock().unwrap().push(params.clone());
+    jobs.actions.lock().unwrap().push(action.clone());
     *jobs.events.lock().unwrap() = None;
     jobs.cancelled.store(false, Ordering::SeqCst);
-    let (frames, report) = train(script, &params);
+    let (frames, report) = match action.as_str() {
+        "check_dataset" => (Vec::new(), check(script, &params)),
+        "full_train" | "merge" => checkpoint(script, &action, &params),
+        _ => train(script, &params),
+    };
     *jobs.events.lock().unwrap() = Some(frames);
     *jobs.report.lock().unwrap() = report;
     let _ = respond(
@@ -226,6 +253,7 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
 /// frames a run streams and its report.
 fn train(script: &JobScript, params: &Value) -> (Vec<(u64, String, Value)>, Value) {
     let pg = params["objective"] == "policy_gradient";
+    let dpo = params["objective"] == "dpo";
     let publish = |bytes: &[u8]| {
         let digest = Digest::of(bytes);
         std::fs::write(script.store.join(digest.hex()), bytes).unwrap();
@@ -261,7 +289,7 @@ fn train(script: &JobScript, params: &Value) -> (Vec<(u64, String, Value)>, Valu
         frames.push((u64::from(s) + 2, "frame".into(), frame));
     }
     let score = |loss: f64| json!({"loss": loss, "token_accuracy": 0.5, "positions": 10, "records": 2, "skipped": 0});
-    let report = json!({
+    let mut report = json!({
         "status": "completed",
         "adapter_digest": adapter_digest.hex(),
         "record_digest": record_digest.hex(),
@@ -274,6 +302,149 @@ fn train(script: &JobScript, params: &Value) -> (Vec<(u64, String, Value)>, Valu
         "base_score": if pg { Value::Null } else { score(2.0) },
         "tuned_score": if pg { Value::Null } else { score(1.5) },
         "policy_gradient": if pg { json!({"steps_skipped_nonfinite": 0, "steps_taken": script.steps}) } else { Value::Null },
+    });
+    if dpo {
+        let pairs = json!({"accuracy": 0.75, "mean_margin": 0.5, "pairs": 4, "skipped": 0});
+        report["beta"] = params["beta"].clone();
+        report["nll_weight"] = params["nll_weight"].clone();
+        report["trained_from"] = Value::Null;
+        report["train_score"] = pairs.clone();
+        report["held_out_score"] = pairs;
+        report["base_score"] = Value::Null;
+        report["tuned_score"] = Value::Null;
+    }
+    (frames, report)
+}
+
+/// The record lengths `check_dataset` reports for the dataset of `params`.
+fn check(script: &JobScript, params: &Value) -> Value {
+    let hex = params["dataset_digest"].as_str().unwrap_or_default();
+    let text = std::fs::read_to_string(script.store.join(hex)).unwrap_or_default();
+    let kind = params["kind"].as_str().unwrap_or("chat");
+    let max_block = params["max_block"].as_u64().unwrap_or(8192) as usize;
+    let chars = |m: &Value| m["content"].as_str().map_or(0, |c| c.chars().count());
+    let (mut lengths, mut invalid, mut over) = (Vec::new(), Vec::new(), Vec::new());
+    let mut records = 0usize;
+    for (index, line) in text
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| !l.trim().is_empty())
+    {
+        records += 1;
+        let line_no = index + 1;
+        let record: Value = serde_json::from_str(line).unwrap_or_default();
+        let measured = match kind {
+            "chat" => record["messages"].as_array().map(|messages| {
+                let trained: usize = messages
+                    .iter()
+                    .filter(|m| m["train"] == true)
+                    .map(chars)
+                    .sum();
+                let prompt: usize = messages
+                    .iter()
+                    .filter(|m| m["train"] != true)
+                    .map(chars)
+                    .sum();
+                (prompt, trained, 1usize)
+            }),
+            "preference" => (record.get("chosen").is_some() && record.get("rejected").is_some())
+                .then(|| (line.chars().count(), 0, 2)),
+            _ => record.get("subject").map(|_| (0, 0, 1)),
+        };
+        match measured {
+            Some((prompt, trained, examples)) => {
+                if prompt + trained > max_block {
+                    over.push(line_no);
+                }
+                lengths.push((line_no, prompt + trained, prompt, trained, examples));
+            }
+            None => invalid.push(json!({"line": line_no, "error": format!("not a {kind} record"), "rule": null, "field": null})),
+        }
+    }
+    let spread = |values: Vec<usize>| {
+        let mut values = values;
+        values.sort_unstable();
+        let total: usize = values.iter().sum();
+        let at = |q: f64| {
+            values
+                .get(((q * values.len() as f64).ceil() as usize).clamp(1, values.len().max(1)) - 1)
+                .copied()
+                .unwrap_or(0)
+        };
+        json!({"total": total, "min": values.first().copied().unwrap_or(0),
+               "mean": if values.is_empty() { 0.0 } else { total as f64 / values.len() as f64 },
+               "p50": at(0.5), "p90": at(0.9), "p99": at(0.99), "max": values.last().copied().unwrap_or(0)})
+    };
+    let examples: usize = lengths.iter().map(|l| l.4).sum();
+    let mut report = json!({
+        "kind": kind, "records": records, "valid_records": lengths.len(), "examples": examples,
+        "tokens": spread(lengths.iter().map(|l| l.1).collect()),
+        "supervised_tokens": spread(lengths.iter().map(|l| l.3).collect()),
+        "examples_without_supervision": lengths.iter().filter(|l| kind == "chat" && l.3 == 0).count(),
+        "max_block": max_block, "over_max_block": over.len(), "over_max_block_lines": over,
+        "invalid_total": invalid.len(), "invalid": invalid.clone(), "listed_at_most": 20,
+    });
+    if params["per_record"] == true {
+        let offset = params["offset"].as_u64().unwrap_or(0) as usize;
+        let limit = params["limit"].as_u64().unwrap_or(50_000) as usize;
+        let page: Vec<Value> = lengths
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .map(|l| json!([l.0, l.1, l.2, l.3, l.4]))
+            .collect();
+        let next = (offset + limit < lengths.len()).then_some(offset + limit);
+        report["per_record"] = json!(page);
+        report["per_record_refused"] = json!(invalid);
+        report["per_record_next"] = json!(next);
+    }
+    report
+}
+
+/// A checkpoint job: two files and their manifest published to the store,
+/// installed in the model store when the script names one.
+fn checkpoint(
+    script: &JobScript,
+    action: &str,
+    params: &Value,
+) -> (Vec<(u64, String, Value)>, Value) {
+    let publish = |bytes: &[u8]| {
+        let digest = Digest::of(bytes);
+        std::fs::write(script.store.join(digest.hex()), bytes).unwrap();
+        digest
+    };
+    let weights = format!("scripted {action} weights, seed {}", params["seed"]).into_bytes();
+    let config = b"{\"model_type\": \"qwen3\"}".to_vec();
+    let files = [("config.json", &config), ("model.safetensors", &weights)];
+    let listed: Vec<Value> = files
+        .iter()
+        .map(|(name, bytes)| json!({"name": name, "digest": publish(bytes).hex(), "bytes": bytes.len()}))
+        .collect();
+    let manifest = json!({"format": "brain-checkpoint-manifest-v1", "files": listed});
+    let manifest_digest = publish(manifest.to_string().as_bytes());
+    let name = params["install_as"].as_str().unwrap_or_default();
+    if let (Some(models), false) = (&script.models, name.is_empty()) {
+        let dir = models.join("local").join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (file, bytes) in files {
+            std::fs::write(dir.join(file), bytes).unwrap();
+        }
+    }
+    let full = action == "full_train";
+    let steps = if full { script.steps } else { 0 };
+    let frames = (1..=steps)
+        .map(|s| (u64::from(s), "frame".to_string(), json!({"type": "step", "step": s, "steps": steps, "loss": 1.0 / f64::from(s), "seconds": f64::from(s)})))
+        .collect();
+    let report = json!({
+        "status": "completed",
+        "objective": if full { "full_sft" } else { "merge" },
+        "weights_sha256": Digest::sha256_of(&weights).as_str(),
+        "steps_completed": steps,
+        "initial_loss": if full { json!(2.0) } else { Value::Null },
+        "final_loss": if full { json!(1.0) } else { Value::Null },
+        "checkpoint_digest": manifest_digest.hex(),
+        "files": listed,
+        "installed_as": if name.is_empty() { Value::Null } else { json!(format!("local/{name}")) },
     });
     (frames, report)
 }

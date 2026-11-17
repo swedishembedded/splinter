@@ -73,6 +73,8 @@ splinter-sandbox = { path = "crates/sandbox" }
 splinter-expdb = { path = "crates/expdb" }
 
 anyhow = "1"
+# Blobs of brain's `/v1/run` calls travel as base64; the version already in the lock.
+base64 = "0.22"
 # Content hashing for the experience database.
 blake3 = "1"
 async-trait = "0.1"

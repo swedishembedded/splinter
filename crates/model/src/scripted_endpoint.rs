@@ -89,6 +89,7 @@ struct Shared {
     manifest: Mutex<Option<(PathBuf, String)>>,
     adapters_dir: Mutex<Option<PathBuf>>,
     embeddings: Mutex<Vec<serde_json::Value>>,
+    runs: Mutex<Vec<serde_json::Value>>,
     delay: Mutex<Duration>,
     reply: Mutex<Arc<Reply>>,
     jobs: crate::scripted_jobs::Jobs,
@@ -116,6 +117,7 @@ impl ScriptedEndpoint {
             manifest: Mutex::new(None),
             adapters_dir: Mutex::new(None),
             embeddings: Mutex::new(Vec::new()),
+            runs: Mutex::new(Vec::new()),
             delay: Mutex::new(Duration::ZERO),
             reply: Mutex::new(Arc::new(|_: &Seen| "an answer".to_string())),
             jobs: crate::scripted_jobs::Jobs::default(),
@@ -205,6 +207,14 @@ impl ScriptedEndpoint {
     #[must_use]
     pub fn embeddings_asked(&self) -> Vec<serde_json::Value> {
         self.shared.embeddings.lock().unwrap().clone()
+    }
+
+    /// Every `POST /v1/run` call so far, in arrival order: a `score` is
+    /// answered with each supervised answer's characters as its tokens, at a
+    /// log-probability of -0.5 each.
+    #[must_use]
+    pub fn runs_asked(&self) -> Vec<serde_json::Value> {
+        self.shared.runs.lock().unwrap().clone()
     }
 
     /// Every chat request answered or refused so far, in arrival order.
@@ -320,6 +330,36 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
             .collect();
         let list = serde_json::json!({ "object": "list", "data": data }).to_string();
         let _ = respond(&mut stream, "200 OK", "application/json", &list);
+    } else if request_line.starts_with("POST /v1/run ") {
+        let call: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+        shared.runs.lock().unwrap().push(call.clone());
+        let records = call["blobs"]["records"]["data"]
+            .as_str()
+            .and_then(|b| {
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b).ok()
+            })
+            .map(|b| String::from_utf8_lossy(&b).into_owned());
+        let (Some("score"), Some(records)) = (call["action"].as_str(), records) else {
+            let _ = respond(&mut stream, "400 Bad Request", "application/json", "{}");
+            return;
+        };
+        let tokens: usize = records
+            .lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .flat_map(|r| r["messages"].as_array().cloned().unwrap_or_default())
+            .filter(|m| m["train"] == true)
+            .map(|m| m["content"].as_str().map_or(0, |c| c.chars().count()))
+            .sum();
+        let outputs = serde_json::json!({
+            "tokens": tokens, "logprob": -0.5 * tokens as f64,
+            "mean_logprob": if tokens == 0 { 0.0 } else { -0.5 }, "model": call["model"],
+        });
+        let _ = respond(
+            &mut stream,
+            "200 OK",
+            "application/json",
+            &serde_json::json!({"outputs": outputs, "blobs": {}}).to_string(),
+        );
     } else if request_line.starts_with("POST /v1/embeddings") {
         let request: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
         shared.embeddings.lock().unwrap().push(request.clone());

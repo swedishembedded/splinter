@@ -156,6 +156,86 @@ pub fn run(
     })
 }
 
+/// Runs one action synchronously (`POST /run`) on the first of `urls` that
+/// takes it, and returns its result (`outputs` and `blobs`). A refusal for
+/// want of room is asked of the next endpoint, and of all of them again
+/// after `refused_wait`, as a job's creation is.
+pub fn call(
+    urls: &[String],
+    key: &str,
+    refused_wait: Duration,
+    first: usize,
+    body: &Value,
+) -> Result<Value, JobError> {
+    std::thread::scope(|scope| {
+        scope
+            .spawn(move || {
+                let _ = rustls::crypto::ring::default_provider().install_default();
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| JobError::Failed(format!("starting a runtime: {e}")))?;
+                runtime.block_on(async {
+                    let client = reqwest::Client::builder()
+                        .no_proxy()
+                        .connect_timeout(Duration::from_secs(15))
+                        .build()
+                        .map_err(|e| JobError::Failed(e.to_string()))?;
+                    post_run(&client, urls, key, refused_wait, first, body).await
+                })
+            })
+            .join()
+            .unwrap_or_else(|_| Err(JobError::Failed("the run client panicked".into())))
+    })
+}
+
+async fn post_run(
+    client: &reqwest::Client,
+    urls: &[String],
+    key: &str,
+    refused_wait: Duration,
+    first: usize,
+    body: &Value,
+) -> Result<Value, JobError> {
+    loop {
+        let mut unreachable = Vec::new();
+        for offset in 0..urls.len() {
+            let url = &urls[(first + offset) % urls.len()];
+            let response = match client
+                .post(format!("{url}/run"))
+                .bearer_auth(key)
+                .json(body)
+                .send()
+                .await
+            {
+                Ok(response) => response,
+                Err(e) => {
+                    unreachable.push((url.clone(), e.to_string()));
+                    continue;
+                }
+            };
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            if status.is_success() {
+                return serde_json::from_str(&text)
+                    .map_err(|e| JobError::Transport(url.clone(), format!("the result: {e}")));
+            }
+            if status != reqwest::StatusCode::TOO_MANY_REQUESTS {
+                return Err(JobError::Failed(format!(
+                    "{url} refused the call (HTTP {}): {}",
+                    status.as_u16(),
+                    message_of(&text)
+                )));
+            }
+        }
+        if unreachable.len() == urls.len() {
+            let (url, reason) = unreachable.swap_remove(0);
+            return Err(JobError::Transport(url, reason));
+        }
+        tokio::time::sleep(refused_wait).await;
+    }
+}
+
 fn drive(
     urls: &[String],
     key: &str,

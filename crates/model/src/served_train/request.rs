@@ -25,7 +25,7 @@ use crate::train::{candidate_adapter_id, FineTune};
 use crate::train_checks::datasets_of;
 
 /// brain refuses a training row shorter than this.
-const MIN_BLOCK: u32 = 64;
+pub(super) const MIN_BLOCK: u32 = 64;
 
 /// The training row, in tokens, a run over `datasets` needs: the longest
 /// record any of them holds, as the trainer renders it, unless the caller
@@ -49,11 +49,11 @@ fn row_length(
 }
 
 /// A dataset published to the store, as the job's `data` document names it.
-fn source(brain: &BrainEndpoints, file: &Path) -> Result<Value, PolicyError> {
+pub(super) fn source(brain: &BrainEndpoints, file: &Path) -> Result<Value, PolicyError> {
     Ok(json!({ "digest": brain.artifact_store()?.publish(file)?.hex() }))
 }
 
-fn set(params: &mut Map<String, Value>, name: &str, value: impl Into<Value>) {
+pub(super) fn set(params: &mut Map<String, Value>, name: &str, value: impl Into<Value>) {
     params.insert(name.to_string(), value.into());
 }
 

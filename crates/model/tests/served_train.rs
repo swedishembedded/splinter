@@ -13,7 +13,8 @@
 //! record come back by digest and are checked; a run the service has no room
 //! for is asked again, a stream that breaks is resumed without losing or
 //! repeating a step, a failure carries brain's reason, and a cancel stops the
-//! job on the service.
+//! job on the service. A dataset check, a preference run, a full-parameter
+//! run, a merge and a teacher-forced score go through the same service.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -23,13 +24,18 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use splinter_core::digest::Digest;
+use splinter_model::consolidate::FullTune;
 use splinter_model::endpoint::BrainEndpoints;
 use splinter_model::fixture::byte_level_checkpoint;
 use splinter_model::policy_gradient::{PolicyGradientOptions, PolicyGradientTune, Reference};
-use splinter_model::scripted_endpoint::{ScriptedEndpoint, SCRIPTED_KEY};
+use splinter_model::scripted_endpoint::{Card, ScriptedEndpoint, SCRIPTED_KEY};
 use splinter_model::scripted_jobs::JobScript;
-use splinter_model::served_train::{fine_tune_served, train_policy_gradient_served, ArtifactStore};
-use splinter_model::train::{BasePrecision, FineTune, StepHook, StepReport};
+use splinter_model::served_train::{
+    check_dataset, fine_tune_served, full_fine_tune_served, merge_served, score_chat,
+    train_policy_gradient_served, train_preference_served, ArtifactStore, CheckSpec, Install,
+};
+use splinter_model::train::{BasePrecision, FineTune, PreferenceTune, StepHook, StepReport};
+use splinter_model::LocalWeights;
 use splinter_model::PolicyError;
 
 struct Rig {
@@ -418,5 +424,248 @@ fn a_dataset_the_trainer_would_refuse_is_refused_here_before_anything_is_sent() 
         std::fs::read_dir(&rig.store).unwrap().count(),
         0,
         "nothing was published for a run that cannot start"
+    );
+}
+
+fn pairs(path: &Path) {
+    let lines: Vec<String> = ["a", "bb", "ccc"]
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "messages": [{"role": "user", "content": p}],
+                "chosen": {"role": "assistant", "content": format!("{p} yes")},
+                "rejected": {"role": "assistant", "content": "no"}
+            })
+            .to_string()
+        })
+        .collect();
+    std::fs::write(path, lines.join("\n")).unwrap();
+}
+
+#[test]
+fn a_dataset_check_is_the_services_report_with_every_records_length_by_line() {
+    let rig = rig();
+    let path = rig.dir.path().join("mixed.jsonl");
+    records(&path, false);
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str("\nnot a record\n");
+    std::fs::write(&path, text).unwrap();
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
+
+    let report = check_dataset(
+        &endpoints(&service, &rig),
+        &path,
+        &CheckSpec::chat("Qwen/Toy", false, false),
+    )
+    .unwrap();
+
+    let params = &service.jobs().created()[0];
+    assert_eq!(service.jobs().actions(), vec!["check_dataset"]);
+    assert_eq!(
+        (params["base"].as_str(), params["kind"].as_str()),
+        (Some("Qwen/Toy"), Some("chat"))
+    );
+    assert_eq!(
+        params["dataset_digest"],
+        Digest::of(&std::fs::read(&path).unwrap()).hex(),
+        "the dataset travelled by digest"
+    );
+    assert_eq!(
+        (report.records, report.valid_records, report.invalid_total),
+        (4, 3, 1)
+    );
+    // "cab" + "answer 0": every valid record's length, by its line.
+    assert_eq!(report.per_record.len(), 3);
+    assert_eq!(report.tokens_at(1), Some(11));
+    assert_eq!(
+        report.per_record[0].prompt + report.per_record[0].trained,
+        11
+    );
+    let refused = report.refuse_invalid(&path).unwrap_err().to_string();
+    assert!(refused.contains("line 4"), "{refused}");
+}
+
+#[test]
+fn a_preference_run_is_a_dpo_job_sized_to_its_longest_pair() {
+    let rig = rig();
+    let (train, held_out, attempt) = (
+        rig.dir.path().join("pairs.jsonl"),
+        rig.dir.path().join("held_pairs.jsonl"),
+        rig.dir.path().join("attempt-dpo"),
+    );
+    pairs(&train);
+    pairs(&held_out);
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
+    let request = PreferenceTune {
+        model_dir: &rig.model_dir,
+        train: &train,
+        held_out: &held_out,
+        attempt_dir: &attempt,
+        steps: 3,
+        rank: 4,
+        alpha: 8.0,
+        beta: 0.2,
+        nll_weight: 0.0,
+        grad_accum: 1,
+        learning_rate: None,
+        // seed: the job's request carries it.
+        seed: 5,
+        continue_from: None,
+        cancel: None,
+    };
+
+    let trained = train_preference_served(&endpoints(&service, &rig), &request).unwrap();
+
+    let jobs = service.jobs();
+    assert_eq!(
+        jobs.actions(),
+        vec!["check_dataset", "check_dataset", "train"]
+    );
+    assert_eq!(jobs.created()[0]["kind"], "preference");
+    let params = &jobs.created()[2];
+    assert_eq!(params["objective"], "dpo");
+    let longest = std::fs::read_to_string(&train)
+        .unwrap()
+        .lines()
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap() as u64;
+    assert_eq!(params["max_block"].as_u64(), Some(longest.max(64)));
+    assert!((params["beta"].as_f64().unwrap() - 0.2).abs() < 1e-6);
+    assert_eq!(
+        data_of(params)["held_out"]["digest"],
+        Digest::of(&std::fs::read(&held_out).unwrap()).hex()
+    );
+    assert_eq!(trained.records, 6);
+    assert_eq!(trained.held_out_score.map(|s| s.pairs), Some(4));
+    assert!(trained.adapter.is_file() && trained.training_record.is_file());
+}
+
+#[test]
+fn a_full_parameter_run_and_a_merge_are_installed_checkpoints_fetched_by_manifest_when_not_shared()
+{
+    let rig = rig();
+    let (train, attempt) = (
+        rig.dir.path().join("train.jsonl"),
+        rig.dir.path().join("attempt-full"),
+    );
+    records(&train, false);
+    let models = rig.dir.path().join("models");
+    // A server sharing the model store installs the checkpoint where it is read.
+    let shared = ScriptedEndpoint::start(vec![]).with_training(JobScript {
+        models: Some(models.clone()),
+        ..JobScript::over(rig.store.clone())
+    });
+    let full = FullTune {
+        model_dir: &rig.model_dir,
+        train: &train,
+        replay: &[],
+        replay_share: None,
+        weighted_replay: &[],
+        grad_accum: 1,
+        attempt_dir: &attempt,
+        steps: 3,
+        learning_rate: None,
+        weight_decay: 0.0,
+        train_precision: Some("state=int8"),
+        // seed: the job's request carries it.
+        seed: 9,
+        thinking: false,
+        cancel: None,
+        on_step: None,
+    };
+    let install = Install {
+        models_dir: &models,
+        name: "tuned-1",
+    };
+    let checkpoint = full_fine_tune_served(&endpoints(&shared, &rig), &full, &install).unwrap();
+    let params = shared.jobs().created().last().cloned().unwrap();
+    assert_eq!(
+        (
+            params["install_as"].as_str(),
+            params["train_precision"].as_str()
+        ),
+        (Some("tuned-1"), Some("state=int8"))
+    );
+    assert_eq!(checkpoint.dir, models.join("local/tuned-1"));
+    assert_eq!(
+        checkpoint.weights,
+        models.join("local/tuned-1/model.safetensors")
+    );
+    assert_eq!(checkpoint.steps_completed, 3);
+    assert_eq!(
+        checkpoint.weights_digest,
+        Digest::sha256_of(&std::fs::read(&checkpoint.weights).unwrap()).to_string()
+    );
+
+    // A server with a store of its own: the files come through the artifact store.
+    let apart = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
+    let adapter = rig.dir.path().join("adapter.safetensors");
+    std::fs::write(&adapter, b"lora").unwrap();
+    let merged = merge_served(
+        &endpoints(&apart, &rig),
+        &rig.model_dir,
+        &adapter,
+        &Install {
+            models_dir: &models,
+            name: "merged-1",
+        },
+        None,
+    )
+    .unwrap();
+    let params = &apart.jobs().created()[0];
+    assert_eq!(apart.jobs().actions(), vec!["merge"]);
+    assert_eq!(params["adapter_digest"], Digest::of(b"lora").hex());
+    assert_eq!(merged.dir, models.join("local/merged-1"));
+    assert!(merged.dir.join("config.json").is_file() && merged.weights.is_file());
+    assert_eq!((merged.steps_completed, merged.initial_loss), (0, None));
+    assert!(Install {
+        models_dir: &models,
+        name: "../x"
+    }
+    .dir()
+    .starts_with(&models));
+    let refused = merge_served(
+        &endpoints(&apart, &rig),
+        &rig.model_dir,
+        &adapter,
+        &Install {
+            models_dir: &models,
+            name: "../x",
+        },
+        None,
+    );
+    assert!(
+        refused.is_err(),
+        "a name that leaves the store is refused before any job"
+    );
+}
+
+#[test]
+fn a_model_is_scored_on_records_through_the_servers_score_action() {
+    let rig = rig();
+    let path = rig.dir.path().join("held.jsonl");
+    records(&path, false);
+    let service = ScriptedEndpoint::start(vec![Card::base("Qwen/Toy")]);
+    let weights = LocalWeights {
+        base: rig.model_dir.clone(),
+        adapter: None,
+        context_tokens: None,
+    };
+
+    let score = score_chat(&endpoints(&service, &rig), &weights, &path, false).unwrap();
+
+    let runs = service.runs_asked();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(
+        (runs[0]["model"].as_str(), runs[0]["action"].as_str()),
+        (Some("Qwen/Toy"), Some("score"))
+    );
+    // "answer 0" .. "answer 2", eight characters each, at -0.5 a token.
+    assert_eq!((score.positions, score.records), (24, 3));
+    assert_eq!(score.loss, Some(0.5));
+    assert_eq!(
+        score.token_accuracy, None,
+        "the action measures no accuracy"
     );
 }
