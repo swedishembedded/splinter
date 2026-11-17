@@ -41,6 +41,8 @@ usage: splinter-minimind <run|status> [options]
   --device gpuN          the CUDA card that brain trains and serves on (required with
                          --brain-bin; there is no CPU fallback)
   --models-dir DIR       the started brain's model store (default RUN_DIR/brain/models)
+  --teacher DIR          a checkpoint directory brain serves as the teacher whose verified
+                         episodes join the fine-tune (needed when tasks.teach is above 0)
   --scratch-dir DIR      where files that live for one episode or stage are made, in a private
                          directory removed when the run ends (default /dev/shm when present,
                          else RUN_DIR/scratch); the run directory keeps one pack per stage
@@ -96,6 +98,7 @@ fn parse(mut args: Vec<String>) -> anyhow::Result<Args> {
                 | "brain-commit"
                 | "gpu-lock"
                 | "scratch-dir"
+                | "teacher"
                 | "bench"
                 | "bench-seed-file"
                 | "bench-anchor-seed-file"
@@ -210,6 +213,8 @@ fn run(
     let context = config.models.values().map(|m| m.context).max().unwrap_or(0);
     // The brain service: one given, or one this run starts on the card when
     // a stage first needs it and stops when it ends.
+    // The started brain's model store, where a teacher is linked in.
+    let models_dir = flag("models-dir").map_or_else(|| run_dir.join("brain/models"), PathBuf::from);
     let (brain, brain_revision) = match (flag("brain-endpoint"), flag("brain-bin")) {
         (Some(url), None) => {
             let store = flag("brain-artifact-store").context(
@@ -234,7 +239,7 @@ fn run(
             let state = run_dir.join("brain");
             let settings = ServiceSettings {
                 binary: PathBuf::from(&bin),
-                models: flag("models-dir").map_or_else(|| state.join("models"), PathBuf::from),
+                models: models_dir.clone(),
                 state,
                 // Training reserves the card; making a checkpoint from nothing
                 // (the tokenizer, the random weights) is host work and needs
@@ -312,6 +317,14 @@ fn run(
     run.gpu_lock = flag("gpu-lock").map(PathBuf::from);
     if let Some(root) = flag("scratch-dir") {
         run.use_scratch_root(Path::new(&root))?;
+    }
+    if let Some(dir) = flag("teacher") {
+        if flag("brain-endpoint").is_some() {
+            bail!("--teacher links the teacher into the brain this run starts: give --brain-bin, not --brain-endpoint");
+        }
+        let teacher = splinter_minimind::teacher::Teacher::install(Path::new(&dir), &models_dir)?;
+        println!("teacher: {} ({})", teacher.checkpoint.model, teacher.digest);
+        run.teacher = Some(teacher);
     }
     let result = splinter_minimind::stages::run_all(&mut run);
     drop(brain);

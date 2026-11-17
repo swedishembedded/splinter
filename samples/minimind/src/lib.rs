@@ -41,5 +41,6 @@ pub mod sequence;
 pub mod skills;
 pub mod stages;
 pub mod tasks;
+pub mod teacher;
 pub mod template;
 pub mod world;

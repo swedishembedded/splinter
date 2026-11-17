@@ -49,6 +49,8 @@ pub enum Split {
     World,
     /// Demonstrated by the expert for mid-training only.
     Midtrain,
+    /// Worked by a teacher model; its verified episodes join the fine-tune.
+    Teach,
 }
 
 impl Split {
@@ -62,6 +64,7 @@ impl Split {
             Self::World => 0x776f_726c_6400_0004,
             Self::Heldout => 0x6865_6c64_6f00_0005,
             Self::Midtrain => 0x6d69_6474_7200_0006,
+            Self::Teach => 0x7465_6163_6800_0007,
         }
     }
 
@@ -82,6 +85,7 @@ impl Split {
             Self::Heldout => "heldout",
             Self::World => "world",
             Self::Midtrain => "midtrain",
+            Self::Teach => "teach",
         }
     }
 }
@@ -109,14 +113,21 @@ pub struct Instance {
 }
 
 /// `count` instances of `split`, drawn from the run's `seed`; the skills
-/// take turns.
+/// take turns. Names are made up ([`instances_named`] draws some from a
+/// lexicon of natural words too).
 #[must_use]
 pub fn instances(seed: u64, split: Split, count: u32) -> Vec<Instance> {
+    instances_named(seed, split, count, &[])
+}
+
+/// [`instances`] with a third of the names drawn from `lexicon`.
+#[must_use]
+pub fn instances_named(seed: u64, split: Split, count: u32, lexicon: &[String]) -> Vec<Instance> {
     let mut rng = SplitMix64::new(seed ^ split.salt());
     (0..count as usize)
         .map(|i| {
             let skill = SKILLS[i % SKILLS.len()];
-            let d = crate::skills::draw(&mut rng, skill, split == Split::Heldout);
+            let d = crate::skills::draw(&mut rng, skill, split == Split::Heldout, lexicon);
             // What is trained on sometimes words its request in made-up
             // words, so the agent finds the files, keys and destination by
             // where they stand, not by the verbs around them; the probes

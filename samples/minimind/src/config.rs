@@ -74,12 +74,19 @@ pub use splinter_sdk::model::scratch::ArchSpec as ModelSpec;
 pub use splinter_sdk::model::scratch::Budget as TrainBudget;
 
 /// An Ouro looped decoder's configuration.
-fn ouro(hidden: u32, layers: u32, passes: u32, heads: u32, vocab: u32, context: u32) -> ModelSpec {
+fn ouro(
+    hidden: u32,
+    layers: u32,
+    passes: u32,
+    (heads, kv_heads): (u32, u32),
+    vocab: u32,
+    context: u32,
+) -> ModelSpec {
     // The architecture's own `config.json` spelling, handed to brain unread.
     let config = serde_json::json!({
         "architectures": ["OuroForCausalLM"], "model_type": "ouro",
         "hidden_size": hidden, "num_hidden_layers": layers, "num_attention_heads": heads,
-        "num_key_value_heads": heads, "head_dim": hidden / heads,
+        "num_key_value_heads": kv_heads, "head_dim": hidden / heads,
         "intermediate_size": (hidden * 11 / 4).div_ceil(32) * 32,
         "max_position_embeddings": context, "rope_theta": 10000.0, "rms_norm_eps": 1e-6,
         "total_ut_steps": passes, "tie_word_embeddings": false,
@@ -94,6 +101,19 @@ fn ouro(hidden: u32, layers: u32, passes: u32, heads: u32, vocab: u32, context: 
         sampling: [("do_sample".to_string(), serde_json::json!(false))]
             .into_iter()
             .collect(),
+    }
+}
+
+/// Natural English for the default profile's pretraining: short stories in
+/// simple English (arXiv 2305.07759), pinned to one revision and checksum.
+fn english_stories() -> FetchedCorpus {
+    FetchedCorpus {
+        name: "tinystories-v2-valid".into(),
+        url: "https://huggingface.co/datasets/roneneldan/TinyStories/resolve/f54c09fd23315a6f9c86f9dc80f725de7d8f9c64/TinyStoriesV2-GPT4-valid.txt".into(),
+        sha256: "6874bae9a4c1a4e7edcf0e53b86c17817e9cf881fc75ff2368da457b80c0585d".into(),
+        license: "CDLA-Sharing-1.0".into(),
+        slice_bytes: 22_502_601,
+        separator: "<|endoftext|>".into(),
     }
 }
 
@@ -130,6 +150,10 @@ pub struct TaskCounts {
     /// Instances the expert demonstrates for mid-training only, so the
     /// fine-tune sees conversations mid-training did not.
     pub midtrain: u32,
+    /// Training-family instances a teacher model works (`--teacher`), its
+    /// verified episodes joining the fine-tune's data; 0 runs no teacher.
+    #[serde(default)]
+    pub teach: u32,
 }
 
 /// Bounds on one agent episode.
@@ -259,6 +283,9 @@ pub struct Config {
     pub chat_training: ChatTraining,
     /// How the model explores for its own episodes.
     pub explore: Exploration,
+    /// How the teacher works each of its instances: attempts and their
+    /// temperature.
+    pub teach: Exploration,
     /// Training on the model's own verified episodes.
     pub improve: TrainBudget,
     /// The improvement's data mix.
@@ -290,33 +317,39 @@ impl Config {
             trajectories,
             recall,
         };
-        let tasks = |demonstrations, explore, probes, midtrain| TaskCounts {
+        let tasks = |demonstrations, explore, probes, midtrain, teach| TaskCounts {
             demonstrations,
             explore,
             probes,
             midtrain,
+            teach,
         };
         let (model, world, tasks, pretrain, sft, improve) = match profile {
             Profile::Smoke => (
-                ouro(256, 4, 2, 4, 1024, 4096),
+                ouro(256, 4, 2, (4, 4), 1024, 4096),
                 world(200, 4_000, 1_500, 1_000, 6_000, 60_000),
-                tasks(1_600, 96, 12, 1_600),
+                tasks(1_600, 96, 12, 1_600, 0),
                 budget(3_000, 64, 2e-3, 512),
                 budget(600, 8, 5e-4, 4096),
                 budget(100, 8, 2e-4, 4096),
             ),
+            // A small looped decoder (its passes add depth, not
+            // parameters), pretrained on the synthetic world with a slice
+            // of natural English (whose words also name files and keys),
+            // then a short fine-tune: a long one undoes what pretraining
+            // taught (the ledger's minimind measurements).
             Profile::Default => (
-                ouro(256, 4, 4, 4, 4096, 4096),
+                ouro(256, 4, 4, (4, 4), 4096, 4096),
                 world(400, 20_000, 6_000, 3_000, 30_000, 600_000),
-                tasks(3_000, 384, 12, 6_000),
+                tasks(3_000, 384, 12, 6_000, 0),
                 budget(9_000, 64, 1e-3, 1024),
-                budget(6_000, 8, 3e-4, 4096),
+                budget(1_000, 8, 1e-4, 4096),
                 budget(600, 8, 1e-4, 4096),
             ),
             Profile::M64 => (
-                ouro(512, 8, 4, 8, 8192, 2048),
+                ouro(512, 8, 4, (8, 8), 8192, 2048),
                 world(200, 100_000, 30_000, 15_000, 15_000, 0),
-                tasks(2_000, 1_000, 8, 2_000),
+                tasks(2_000, 1_000, 8, 2_000, 0),
                 budget(20_000, 32, 6e-4, 1024),
                 budget(2_000, 16, 2e-4, 2048),
                 budget(1_000, 16, 1e-4, 2048),
@@ -329,7 +362,10 @@ impl Config {
             tokenizer: TokenizerText { split_digits: true },
             tasks,
             pretrain,
-            pretrain_segments: if profile == Profile::Smoke { 1 } else { 6 },
+            pretrain_segments: match profile {
+                Profile::Smoke => 1,
+                Profile::Default | Profile::M64 => 6,
+            },
             midtrain: MidTrain {
                 agentic_share: 0.15,
                 budget: if profile == Profile::Smoke {
@@ -338,10 +374,18 @@ impl Config {
                     budget(1_500, 64, 1e-3, 1024)
                 },
             },
-            sft_segments: if profile == Profile::Smoke { 4 } else { 6 },
-            headroom_steps: if profile == Profile::Smoke { 0 } else { 100 },
+            sft_segments: match profile {
+                Profile::Smoke => 4,
+                Profile::Default => 2,
+                Profile::M64 => 6,
+            },
+            headroom_steps: if profile == Profile::M64 { 100 } else { 0 },
             sft,
             chat_training: ChatTraining { as_text: false },
+            teach: Exploration {
+                samples: 2,
+                temperature: 0.6,
+            },
             explore: Exploration {
                 samples: if profile == Profile::Smoke { 2 } else { 4 },
                 temperature: 0.7,
@@ -358,7 +402,11 @@ impl Config {
                 max_output_tokens: 256,
                 concurrency: if profile == Profile::Smoke { 32 } else { 64 },
             },
-            fetch: Vec::new(),
+            fetch: if profile == Profile::Default {
+                vec![english_stories()]
+            } else {
+                Vec::new()
+            },
         }
     }
 

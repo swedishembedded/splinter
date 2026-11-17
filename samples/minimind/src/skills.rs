@@ -184,8 +184,9 @@ fn table(
     rng: &mut SplitMix64,
     n: usize,
     value: &mut dyn FnMut(&mut SplitMix64) -> String,
+    lexicon: &[String],
 ) -> Vec<(String, String)> {
-    let keys = names(rng, n);
+    let keys = names(rng, n, lexicon);
     keys.into_iter().map(|k| (k, value(rng))).collect()
 }
 
@@ -197,7 +198,7 @@ fn taken_of(files: &BTreeMap<String, String>) -> Vec<String> {
 /// Draws one instance of `skill`; `held_out` selects the held-out grammar
 /// and formats.
 #[must_use]
-pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
+pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool, lexicon: &[String]) -> Drawn {
     let w = if held_out {
         &crate::phrasing::HELD_OUT
     } else {
@@ -213,7 +214,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
         if f == Format::Json {
             entries.sort();
         }
-        let p = data_path(rng, f, held_out, &taken);
+        let p = data_path(rng, f, held_out, &taken, lexicon);
         taken.push(p.clone());
         files.insert(p.clone(), f.render(&entries));
         (p, f, entries)
@@ -221,13 +222,13 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
     match skill {
         Skill::Read => {
             let n = rng.between(3, 7) as usize;
-            let t = table(rng, n, &mut any_value);
+            let t = table(rng, n, &mut |r| any_value(r, lexicon), lexicon);
             let (file, format, entries) = add(rng, &t, &mut files);
             let (key, value) = entries[rng.below(entries.len())].clone();
             let slot = Slot { file, format, key };
             let named = mention(rng, &slot.file, held_out);
             let step = format!("{} {}", pick(rng, w.find), of(rng, w, &slot.key, &named));
-            let answer = answer_file(rng, &taken_of(&files));
+            let answer = answer_file(rng, &taken_of(&files), lexicon);
             let instruction = with_answer(rng, w, &step, "it", &answer);
             Drawn {
                 skill,
@@ -244,7 +245,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
         Skill::Chain => {
             let hops = rng.between(2, 4) as usize;
             // The key names of each step; the last file maps to a number.
-            let mut keys: Vec<Vec<String>> = (0..=hops).map(|_| names(rng, 4)).collect();
+            let mut keys: Vec<Vec<String>> = (0..=hops).map(|_| names(rng, 4, lexicon)).collect();
             let path_keys: Vec<String> = keys.iter_mut().map(|ks| ks[0].clone()).collect();
             let mut first = None;
             let mut next = Vec::new();
@@ -256,7 +257,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                         (
                             k.clone(),
                             if h + 1 == hops {
-                                any_value(rng)
+                                any_value(rng, lexicon)
                             } else {
                                 keys[h + 1][rng.below(4)].clone()
                             },
@@ -265,7 +266,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                     .collect();
                 // The path's own step.
                 entries[0].1 = if h + 1 == hops {
-                    any_value(rng)
+                    any_value(rng, lexicon)
                 } else {
                     path_keys[h + 1].clone()
                 };
@@ -298,7 +299,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 pick(rng, w.value)
             );
             let object = format!("the last {}", pick(rng, w.value));
-            let answer = answer_file(rng, &taken_of(&files));
+            let answer = answer_file(rng, &taken_of(&files), lexicon);
             let instruction = with_answer(rng, w, &step, &object, &answer);
             Drawn {
                 skill,
@@ -316,7 +317,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             let mut helper = if rng.coin() {
                 pick(rng, &["calc", "mix", "blend", "merge", "fold", "combine"]).to_string()
             } else {
-                word(rng, 1).to_lowercase()
+                word(rng, 1, lexicon).to_lowercase()
             };
             let style = rng.below(4);
             let (m, n, p) = (
@@ -327,13 +328,13 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             let two_files = rng.coin();
             let a_entries = {
                 let n = rng.between(2, 5) as usize;
-                table(rng, n, &mut number)
+                table(rng, n, &mut number, lexicon)
             };
             let (fa, fmt_a, ea) = add(rng, &a_entries, &mut files);
             let (fb, fmt_b, eb) = if two_files {
                 let b_entries = {
                     let n = rng.between(2, 5) as usize;
-                    table(rng, n, &mut number)
+                    table(rng, n, &mut number, lexicon)
                 };
                 add(rng, &b_entries, &mut files)
             } else {
@@ -358,7 +359,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 (ea[ia].1.parse().unwrap_or(0), eb[ib].1.parse().unwrap_or(0));
             // A made-up helper name may be a data file's directory.
             while clashes(&helper, &taken_of(&files)) {
-                helper = word(rng, 2).to_lowercase();
+                helper = word(rng, 2, lexicon).to_lowercase();
             }
             files.insert(helper.clone(), helper_script(&helper, style, m, n, p));
             let tool = format!("./{helper}");
@@ -375,7 +376,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 b.key
             );
             let object = format!("its {}", pick(rng, w.value));
-            let answer = answer_file(rng, &taken_of(&files));
+            let answer = answer_file(rng, &taken_of(&files), lexicon);
             let instruction = with_answer(rng, w, &step, &object, &answer);
             let value = ((va * m + vb * n) % p).to_string();
             Drawn {
@@ -393,11 +394,11 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
         Skill::Edit => {
             let target_entries = {
                 let n = rng.between(3, 6) as usize;
-                table(rng, n, &mut any_value)
+                table(rng, n, &mut |r| any_value(r, lexicon), lexicon)
             };
             let source_entries = {
                 let n = rng.between(2, 5) as usize;
-                table(rng, n, &mut any_value)
+                table(rng, n, &mut |r| any_value(r, lexicon), lexicon)
             };
             let (ft, fmt_t, et) = add(rng, &target_entries, &mut files);
             let (fs, fmt_s, es) = add(rng, &source_entries, &mut files);
@@ -446,7 +447,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             let file = format!(
                 "{}{}.log",
                 pick(rng, &["", "logs/"]),
-                word(rng, 1).to_lowercase()
+                word(rng, 1, lexicon).to_lowercase()
             );
             // Counts spread over tens, so no small count is the usual answer.
             let lines = rng.between(6, 60) as usize;
@@ -456,9 +457,15 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             for i in 0..lines {
                 if rng.below(rate) == 0 {
                     hits += 1;
-                    log.push_str(&format!("{i:03} {word_} {}\n", word(rng, 1).to_lowercase()));
+                    log.push_str(&format!(
+                        "{i:03} {word_} {}\n",
+                        word(rng, 1, lexicon).to_lowercase()
+                    ));
                 } else {
-                    log.push_str(&format!("{i:03} ok {}\n", word(rng, 1).to_lowercase()));
+                    log.push_str(&format!(
+                        "{i:03} ok {}\n",
+                        word(rng, 1, lexicon).to_lowercase()
+                    ));
                 }
             }
             files.insert(file.clone(), log);
@@ -468,7 +475,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 pick(rng, w.mention)
             );
             let object = format!("that {}", pick(rng, w.value));
-            let answer = answer_file(rng, &taken_of(&files));
+            let answer = answer_file(rng, &taken_of(&files), lexicon);
             let instruction = with_answer(rng, w, &step, &object, &answer);
             Drawn {
                 skill,
@@ -606,7 +613,7 @@ mod tests {
         let mut rng = SplitMix64::new(seed);
         for _ in 0..40 {
             for skill in SKILLS {
-                let d = draw(&mut rng, skill, true);
+                let d = draw(&mut rng, skill, true, &[]);
                 for file in d.files.keys() {
                     assert!(
                         !TRAINING
@@ -616,7 +623,7 @@ mod tests {
                         "{file}"
                     );
                 }
-                let t = draw(&mut rng, skill, false);
+                let t = draw(&mut rng, skill, false, &[]);
                 let train_text = t.instruction.to_lowercase();
                 for w in [
                     "determine",

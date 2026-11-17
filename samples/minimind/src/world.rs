@@ -148,6 +148,7 @@ fn conversation(
     tools: &[ToolSig],
     system: &str,
     notice: &str,
+    lexicon: &[String],
 ) -> Document {
     let (tools, turns) = if rng.coin() {
         let town = word(rng, 2);
@@ -163,7 +164,7 @@ fn conversation(
         ];
         (&[][..], turns)
     } else {
-        let file = format!("{}.txt", crate::skills::name(rng, 1));
+        let file = format!("{}.txt", crate::skills::name(rng, 1, lexicon));
         let value = rng.between(100, 999);
         let turns = vec![
             Turn::System(system.to_string()),
@@ -198,9 +199,9 @@ fn conversation(
 /// a short conversation that reads a value and writes it to the answer file
 /// the request names, with the tools, in the template. Paths and answer
 /// files are drawn as the tasks draw them, so what is copied varies.
-fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
+fn recall(rng: &mut SplitMix64, template: &Template, lexicon: &[String]) -> Document {
     let entries: Vec<(String, u64)> = (0..rng.between(3, 8))
-        .map(|_| (crate::skills::name(rng, 2), rng.between(10, 9999)))
+        .map(|_| (crate::skills::name(rng, 2, lexicon), rng.between(10, 9999)))
         .collect();
     // A listing as a read shows it, in one of the training formats.
     let format = crate::formats::TRAINING[rng.below(crate::formats::TRAINING.len())];
@@ -215,7 +216,7 @@ fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
         .map(|(i, l)| format!("L{}:{l}", i + 1))
         .collect::<Vec<_>>()
         .join("\n");
-    let path = crate::skills::data_path(rng, format, false, &[]);
+    let path = crate::skills::data_path(rng, format, false, &[], lexicon);
     let text = match rng.below(4) {
         3 => {
             let (name, _) = &entries[rng.below(entries.len())];
@@ -241,7 +242,7 @@ fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
         }
         _ => {
             let (name, code) = entries[rng.below(entries.len())].clone();
-            let answer = crate::skills::answer_file(rng, std::slice::from_ref(&path));
+            let answer = crate::skills::answer_file(rng, std::slice::from_ref(&path), lexicon);
             let w = &crate::phrasing::TRAIN;
             let step = format!(
                 "{} {}",
@@ -344,6 +345,7 @@ pub fn corpus(
     tools: &[ToolSig],
     system: &str,
     notice: &str,
+    lexicon: &[String],
 ) -> Vec<Document> {
     let mut rng = SplitMix64::new(seed);
     let mut docs = Vec::new();
@@ -353,9 +355,10 @@ pub fn corpus(
     docs.extend((0..size.expressions).map(|_| expression(&mut rng)));
     docs.extend((0..size.programs).map(|_| program(&mut rng)));
     docs.extend(
-        (0..size.conversations).map(|_| conversation(&mut rng, template, tools, system, notice)),
+        (0..size.conversations)
+            .map(|_| conversation(&mut rng, template, tools, system, notice, lexicon)),
     );
-    docs.extend((0..size.recall).map(|_| recall(&mut rng, template)));
+    docs.extend((0..size.recall).map(|_| recall(&mut rng, template, lexicon)));
     rng.shuffle(&mut docs);
     docs
 }
@@ -452,9 +455,9 @@ mod tests {
     fn the_same_seed_writes_the_same_world_and_another_seed_another() {
         let t = Template::default();
         // seed: determinism is the property under test; any two seeds work.
-        let a = corpus(11, &size(), &t, &[], "s", "");
-        assert_eq!(a, corpus(11, &size(), &t, &[], "s", ""));
-        assert_ne!(a, corpus(12, &size(), &t, &[], "s", ""));
+        let a = corpus(11, &size(), &t, &[], "s", "", &[]);
+        assert_eq!(a, corpus(11, &size(), &t, &[], "s", "", &[]));
+        assert_ne!(a, corpus(12, &size(), &t, &[], "s", "", &[]));
         assert_eq!(a.len(), 3 * 4 + 10 + 5 + 6);
     }
 
@@ -476,6 +479,7 @@ mod tests {
             &[],
             "s",
             "",
+            &[],
         ) {
             let (lhs, rhs) = doc.text.split_once(" = ").unwrap();
             let value: i64 = rhs.parse().unwrap();

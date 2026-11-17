@@ -510,7 +510,7 @@ impl Run<'_> {
     /// sampled attempts at each at `temperature`), then one unit `<stage>`
     /// gathering the accepted ones' records into `data/<stage>.jsonl`;
     /// returns that unit and the episodes.
-    fn gather(
+    pub(crate) fn gather(
         &mut self,
         name: &str,
         split: Split,

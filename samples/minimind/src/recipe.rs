@@ -50,13 +50,13 @@ impl Recipe {
 /// the tool results as rendered), the held-out split and the tokenizer text.
 pub const WORLD: Recipe = Recipe {
     stage: "world",
-    version: 15,
+    version: 16,
 };
 
 /// The task families, their instance draw and the Harbor export.
 pub const TASKS: Recipe = Recipe {
     stage: "tasks",
-    version: 11,
+    version: 12,
 };
 
 /// One episode: the workspace, the expert's procedure, the agent settings,
@@ -130,6 +130,7 @@ mod tests {
             &tools,
             "system",
             &crate::world::time_notice(780),
+            &[],
         );
         let scratch = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
         let mut text = crate::world::to_jsonl(&docs);
@@ -166,8 +167,8 @@ mod tests {
     }
 
     const PINNED: [&str; 3] = [
-        "world (WORLD, EPISODE): blake3:e60eb0d78adca22e5334ba7da2a875175297c6adc2591da1d7c88cf0920d5bcc",
+        "world (WORLD, EPISODE): blake3:eb7b3ebe989cf806a4336e595c53b7b9cd79eb2e9fc1e336a28f84f077bb0cfa",
         "template (WORLD, CHECKPOINT): blake3:354117630131a85c444d649decf8b227f76e57221451ea66e3cd18ede9066edc",
-        "tasks (TASKS): blake3:8bb99fee1e8d14368bef4085a291c5cf3a1aaf810b27bf8d1de13e4b608705fa",
+        "tasks (TASKS): blake3:938a7d37766efb95650a620b0719cc6ccb7e3dab272867c34b69eac39389af24",
     ];
 }

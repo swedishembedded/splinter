@@ -69,6 +69,7 @@ pub(crate) fn model_stages(
         .output("records")
         .context("the demonstrations have no records")?
         .clone();
+    let demos_rel = crate::teacher::output_path(demonstrations, "records")?;
     let init = run.checkpoint(label, world)?;
     run.probe(&format!("{label}/init"), (&init.0, &init.1))?;
     run.retrieval(&format!("{label}/init"), (&init.0, &init.1))?;
@@ -103,7 +104,7 @@ pub(crate) fn model_stages(
                 label,
                 &format!("headroom-{i}"),
                 (&pretrained.0, &pretrained.1),
-                (&demos, "data/demonstrate.jsonl"),
+                (&demos, demos_rel.as_str()),
             );
             run.config.sft = sft;
             let tiny = tiny?;
@@ -149,7 +150,7 @@ pub(crate) fn model_stages(
             label,
             &name,
             (&sft.0, &sft.1),
-            (&demos, "data/demonstrate.jsonl"),
+            (&demos, demos_rel.as_str()),
         );
         run.config.sft = full.clone();
         sft = trained?;

@@ -49,6 +49,7 @@ impl Run<'_> {
         demonstrations: &Commit,
         control: bool,
     ) -> anyhow::Result<Commit> {
+        let demonstrations_commit = demonstrations.clone();
         let demos = demonstrations
             .output("records")
             .context("the demonstrations have no records")?
@@ -86,7 +87,10 @@ impl Run<'_> {
             for commit in &chosen {
                 own.extend(reader.read(commit, "records")?.lines().map(String::from));
             }
-            let demos_path = run.path("data/demonstrate.jsonl");
+            let demos_path = run.path(&crate::teacher::output_path(
+                &demonstrations_commit,
+                "records",
+            )?);
             let demo_text = std::fs::read_to_string(&demos_path)
                 .with_context(|| format!("reading {}", demos_path.display()))?;
             let mut pool: Vec<&str> = demo_text.lines().collect();

@@ -57,6 +57,11 @@ pub enum Stage {
 #[derive(Clone, Debug, Default)]
 pub struct Revisions(pub BTreeMap<String, String>);
 
+/// The commonest words of a fetched corpus left out of the lexicon (articles,
+/// pronouns, auxiliaries), and how many it holds.
+const LEXICON_SKIP: usize = 100;
+const LEXICON_SIZE: usize = 3000;
+
 /// Everything a run is carried out with.
 pub struct Run<'a> {
     ledger: Option<StageLedger>,
@@ -67,6 +72,11 @@ pub struct Run<'a> {
     /// Where files that live for one episode or one stage are made
     /// ([`crate::scratch`]).
     pub scratch: crate::scratch::Scratch,
+    /// Natural words names are drawn from, from the fetched corpora (empty
+    /// without them).
+    pub lexicon: Vec<String>,
+    /// The teacher model, when one is given (`--teacher`).
+    pub teacher: Option<crate::teacher::Teacher>,
     /// A lock file held exclusively while a training job runs, so the timed
     /// work of others on the same card never overlaps it.
     pub gpu_lock: Option<PathBuf>,
@@ -113,6 +123,8 @@ impl<'a> Run<'a> {
                 dir,
             )?,
             gpu_lock: None,
+            teacher: None,
+            lexicon: Vec::new(),
             config,
             seed,
             revisions,
@@ -294,9 +306,9 @@ impl<'a> Run<'a> {
             // Every agent-shaped document ends its request and tool results
             // as an episode under the agent's deadline does.
             let notice = world::time_notice(run.config.agent.deadline_secs);
-            let mut docs = world::corpus(run.seed, &run.config.world, &run.template, &tools, system, &notice);
+            let mut docs = world::corpus(run.seed, &run.config.world, &run.template, &tools, system, &notice, &run.lexicon);
             let scratch = run.scratch.path("world");
-            for instance in tasks::instances(run.seed, Split::World, run.config.world.trajectories) {
+            for instance in tasks::instances_named(run.seed, Split::World, run.config.world.trajectories, &run.lexicon) {
                 docs.push(world::trajectory(&instance, &run.template, &tools, system, &notice, &scratch)?);
             }
             if scratch.exists() {
@@ -404,13 +416,41 @@ impl<'a> Run<'a> {
         Ok(commits)
     }
 
+    /// The natural words names are drawn from: a lexicon of the fetched
+    /// corpora's words (empty without them).
+    ///
+    /// # Errors
+    /// A fetched slice cannot be read.
+    pub fn lexicon_of_fetched(&self, fetched: &[Commit]) -> anyhow::Result<Vec<String>> {
+        let mut texts = Vec::new();
+        for c in fetched {
+            let path = self.path(&crate::teacher::output_path(c, "slice")?);
+            texts.push(
+                std::fs::read_to_string(&path)
+                    .with_context(|| format!("reading {}", path.display()))?,
+            );
+        }
+        Ok(crate::naming::lexicon_of(
+            &texts,
+            LEXICON_SKIP,
+            LEXICON_SIZE,
+        ))
+    }
+
     /// Stage 3: the task instances, as an index per split and as Harbor
     /// task folders.
     ///
     /// # Errors
     /// They cannot be written.
     pub fn tasks(&mut self) -> anyhow::Result<Commit> {
-        let key = self.key(&json!(self.config.tasks), "tasks", &[], recipe::TASKS, &[]);
+        let lexicon = Digest::of(self.lexicon.join("\n").as_bytes());
+        let key = self.key(
+            &json!(self.config.tasks),
+            "tasks",
+            &[("lexicon", &lexicon)],
+            recipe::TASKS,
+            &[],
+        );
         self.unit("tasks", &key, |run, _| {
             let counts = &run.config.tasks;
             let mut work = StageWork::new(json!({
@@ -422,8 +462,9 @@ impl<'a> Run<'a> {
                 (Split::Dev, counts.probes),
                 (Split::Heldout, counts.probes),
                 (Split::Midtrain, counts.midtrain),
+                (Split::Teach, counts.teach),
             ] {
-                let drawn = tasks::instances(run.seed, split, count);
+                let drawn = tasks::instances_named(run.seed, split, count, &run.lexicon);
                 let index: String = drawn
                     .iter()
                     .map(|i| format!("{}\n", serde_json::to_string(i).unwrap_or_default()))
@@ -728,13 +769,16 @@ pub(crate) fn one_line(summary: &Value) -> String {
 pub fn run_all(run: &mut Run<'_>) -> anyhow::Result<()> {
     run.init()?;
     let fetched = run.fetch()?;
+    run.lexicon = run.lexicon_of_fetched(&fetched)?;
     let world = run.world(&fetched)?;
     run.tasks()?;
     let demonstrations = run.demonstrate()?;
+    let taught = run.teach()?;
+    let sft_data = run.sft_data(&demonstrations, taught.as_ref())?;
     let labels: Vec<String> = run.config.models.keys().cloned().collect();
     let mut failures = Vec::new();
     for label in &labels {
-        if let Err(e) = crate::sequence::model_stages(run, label, &world, &demonstrations) {
+        if let Err(e) = crate::sequence::model_stages(run, label, &world, &sft_data) {
             writeln!(run.out, "[failed] {label}: {e:#}")?;
             failures.push(format!("{label}: {e:#}"));
         }

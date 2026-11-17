@@ -95,11 +95,24 @@ fn go_at(
     examiner: Option<&dyn Examiner>,
     revisions: Revisions,
 ) -> anyhow::Result<String> {
+    go_taught(dir, config, seed, brain, examiner, revisions, None)
+}
+
+fn go_taught(
+    dir: &Path,
+    config: Config,
+    seed: u64,
+    brain: &FakeBrain,
+    examiner: Option<&dyn Examiner>,
+    revisions: Revisions,
+    teacher: Option<splinter_minimind::teacher::Teacher>,
+) -> anyhow::Result<String> {
     let mut out = Vec::new();
     let scratch = temp();
     let result = {
         let mut run = Run::open(dir, config, seed, revisions, brain, examiner, &mut out)?;
         run.use_scratch_root(scratch.path())?;
+        run.teacher = teacher;
         run_all(&mut run)
     };
     assert_eq!(
@@ -267,6 +280,56 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
     assert!(
         again.contains("probe ouro/sft: 4/4"),
         "the probes are shown from the ledger: {again}"
+    );
+}
+
+#[test]
+fn a_teachers_verified_episodes_join_the_fine_tune_and_a_missing_teacher_is_named() {
+    let dir = temp();
+    let brain = FakeBrain::new(dir.path());
+    let mut config = smoke();
+    config.tasks.teach = 4;
+    let refused = go(dir.path(), config.clone(), SEED, &brain, None).unwrap_err();
+    assert!(format!("{refused:#}").contains("--teacher"), "{refused:#}");
+    let models = dir.path().join("teacher-store");
+    let source = dir.path().join("Teacher-1");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("config.json"), "{}").unwrap();
+    let teacher = splinter_minimind::teacher::Teacher::install(&source, &models).unwrap();
+    assert_eq!(teacher.checkpoint.model, "local/teacher-teacher-1");
+    assert!(
+        models.join("local/teacher-teacher-1").exists(),
+        "linked into the store"
+    );
+    go_taught(
+        dir.path(),
+        config,
+        SEED,
+        &brain,
+        None,
+        revisions(),
+        Some(teacher),
+    )
+    .unwrap();
+    let all = commits(dir.path());
+    let taught = commit(&all, "teach");
+    assert_eq!(
+        taught.summary["episodes"],
+        4 * 2,
+        "every instance, every sample"
+    );
+    assert_eq!(taught.summary["accepted"], 4 * 2);
+    let data = commit(&all, "sft-data");
+    assert!(
+        data.summary["teach"]["records"].as_u64().unwrap() > 0,
+        "{}",
+        data.summary
+    );
+    assert!(data.summary["demonstrate"]["records"].as_u64().unwrap() > 0);
+    let sft = std::fs::read_to_string(dir.path().join("data/sft.jsonl")).unwrap();
+    assert!(
+        sft.contains("teach-00000"),
+        "the fine-tune's data holds the teacher's episodes"
     );
 }
 

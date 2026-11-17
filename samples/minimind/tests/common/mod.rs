@@ -80,7 +80,7 @@ impl FakeBrain {
 }
 
 fn instances(run_dir: &Path) -> Vec<Instance> {
-    ["train", "explore", "dev"]
+    ["train", "explore", "dev", "teach"]
         .iter()
         .flat_map(|s| {
             std::fs::read_to_string(run_dir.join(format!("tasks/{s}.jsonl")))
@@ -135,7 +135,10 @@ impl ModelService for FakeBrain {
     fn serve(&self, checkpoint: &Checkpoint) -> anyhow::Result<Served> {
         let mut served = self.served.lock().unwrap();
         if !served.contains_key(&checkpoint.model) {
-            let learned = checkpoint.model.contains("sft") || checkpoint.model.contains("improve");
+            // A teacher knows the families as a fine-tuned checkpoint does.
+            let learned = ["sft", "improve", "teacher"]
+                .iter()
+                .any(|n| checkpoint.model.contains(n));
             let tasks = instances(&self.run_dir);
             let down = Arc::clone(&self.down);
             let affected = self
