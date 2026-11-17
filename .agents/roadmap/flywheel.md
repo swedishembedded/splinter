@@ -130,8 +130,9 @@ inconclusive and more tasks are collected rather than the threshold changed.
 
 ## Benchmark trials (2026-10-28)
 
-- Legacy for new work (2026-11-13): training episodes for a new campaign come from sven's rollout executor
-  (Harbor-format task folders, one `attempt.jsonl` per attempt) or the in-process path through the campaign
+- Legacy for new work (2026-11-13): training episodes for a new campaign come from Splinter's episode executor
+  (`episodes::SvenEpisodes`, Harbor-format practice folders run through sven; corrected 2026-11-17, there is no
+  `sven rollout`) or the in-process path through the campaign
   controller, never from `bench run` on bench collections; bench is asked for verdicts on candidates only. What
   follows is the bench-mediated flow, kept for recorded arms.
 - Done: `experiences ingest-bench` admits the trial artifacts a benchmark exports (digests

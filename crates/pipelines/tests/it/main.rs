@@ -61,6 +61,7 @@ mod plan_learn;
 mod powered;
 mod practice;
 mod practice_curriculum;
+mod practice_episodes;
 mod practice_teacher;
 mod raft;
 mod rehearsal;

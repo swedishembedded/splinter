@@ -9,8 +9,14 @@
 //! `tasks harbor ...`.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::{Subcommand, ValueEnum};
+use splinter_sdk::seed::Seed;
+use splinter_sdk::vocabulary::model_ref::ModelRef;
+
+use super::train::positive_count;
+use super::{budget, model_ref};
 
 /// What to do about a Harbor task's oracle solution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -60,5 +66,48 @@ pub enum HarborCommand {
         /// The base image of each Dockerfile.
         #[arg(long, default_value = "ubuntu:24.04", value_name = "IMAGE")]
         image: String,
+    },
+    /// Run a directory of practice task folders (or one folder) as
+    /// episodes: the policy attempts each task --attempts times, each in a
+    /// fresh copy of its starting files through sven's agent, asked for the
+    /// tokens and log-probabilities it samples; afterwards the task's own
+    /// tests grade what it left, outside its reach. Every attempt is stored
+    /// as an experience with a record of its outcome (passed, failed,
+    /// exposed, verifier error or timeout, infrastructure), reward, usage and
+    /// provenance. Exam material (`[metadata].bench_sealed`, a held-out
+    /// tier, the eval set of the collection's split.toml) is refused before
+    /// anything runs. A rerun skips attempts already recorded and redoes the
+    /// ones the infrastructure stopped.
+    Episodes {
+        /// The directory of task folders, or one task folder.
+        #[arg(value_name = "DIR")]
+        root: PathBuf,
+        /// The policy.
+        #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
+        policy: ModelRef,
+        /// Attempts per task.
+        #[arg(long, default_value = "1", value_parser = positive_count, value_name = "N")]
+        attempts: usize,
+        /// The seed every attempt's draws derive from (drawn and printed
+        /// when not given; a rerun with the same seed finds its attempts).
+        #[arg(long, value_name = "SEED")]
+        seed: Option<Seed>,
+        /// Attempts run at once.
+        #[arg(long, default_value = "1", value_parser = positive_count, value_name = "N")]
+        jobs: usize,
+        /// How long one attempt's agent may run (`90s`, `10m`, ...); the
+        /// solve stage's deadline when not given.
+        #[arg(long, value_parser = budget, value_name = "DUR")]
+        deadline: Option<Duration>,
+        /// Tool calls one attempt may request.
+        #[arg(long, value_name = "N")]
+        max_tool_calls: Option<u32>,
+        /// Output tokens one attempt may generate.
+        #[arg(long, value_name = "N")]
+        max_output_tokens: Option<u64>,
+        /// Also write every attempt's record to this file, one JSON object
+        /// per line.
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
     },
 }

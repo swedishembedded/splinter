@@ -34,6 +34,7 @@ mod curriculum_output;
 mod decision_fixtures_dataset;
 mod doctor_output;
 mod env_output;
+mod episodes_output;
 mod exam_output;
 mod exam_session;
 mod experiment_output;

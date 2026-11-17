@@ -21,6 +21,10 @@
 //! * [`variants`] - the tasks kept for training asked again in other
 //!   words, to be measured and never trained on.
 //! * [`solving`] - a task set becomes an experience set.
+//! * [`episodes`] - practice task folders run as episodes: a policy attempts
+//!   each task again and again in fresh workspaces, a verifier it cannot
+//!   reach grades each attempt, and every attempt is kept as experience with
+//!   its reward, its typed outcome and its policy trace.
 //! * [`verify`] - verdicts appended, by each task kind's verifiers;
 //!   [`judge`] - a judge's calibration.
 //! * [`curriculum`] - budget spent where learning happens: pass@k frontier
@@ -69,6 +73,7 @@ pub mod absorb;
 pub mod abstain;
 pub mod acquire;
 pub mod ask;
+mod attempt_store;
 pub mod author;
 pub mod bench;
 mod block;
@@ -91,6 +96,7 @@ pub mod decision_fixtures;
 pub mod describe;
 pub mod dialogue;
 pub mod doctor;
+pub mod episodes;
 pub mod eval;
 pub mod exam;
 pub mod exam_seal;

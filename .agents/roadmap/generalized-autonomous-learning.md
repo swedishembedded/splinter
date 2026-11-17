@@ -24,9 +24,11 @@ training capability layer, release lineage, Bench's signed verdicts). Bench is n
 - Not demonstrated: that an evolving proposer beats a frozen one at equal cost, transfer to other skills or domains, retention
   under continued learning, cheaper acquisition of new skills.
 - Gaps confirmed in the code and ledgers:
-  - `EpisodeExecutor` (`crates/pipelines/src/campaign/endpoint.rs`) has no Sven adapter; `recursive-improvement.md` says the
-    Sven side landed as `sven_sdk::rollout`, but sven main has no `rollout` module (lost or never merged): the documentation is
-    wrong until a compiling cross-repo test says otherwise.
+  - Corrected 2026-11-17: there is no `sven_sdk::rollout` and there will not be one. Running a policy over practice task
+    folders, grading each attempt and recording the experience is Splinter's job; sven runs the agent through its SDK and
+    records ATIF with the policy trace (`RunOptions::want_logprobs`). Splinter's executor is `episodes::SvenEpisodes`
+    (`crates/pipelines/src/episodes/`, `splinter tasks harbor episodes`), covered by
+    `crates/pipelines/tests/it/practice_episodes.rs` against a scripted policy. Not yet run against a served brain.
   - Campaign policy-gradient steps do not carry `behavior_logprobs` (they train on the start-of-run proxy, exact on-policy only).
   - Agent trials could reach the benchmark's snapshot store (open item in `recursive-improvement.md`).
   - Sven CL-S1..S3 (memory evidence and lifecycle, recorded retrieval and withholding, skills with origin and lifecycle) and
@@ -89,9 +91,12 @@ training capability layer, release lineage, Bench's signed verdicts). Bench is n
 
 ## Packages (strict dependency gates)
 
-- [ ] **P0 Cross-repo training contract (critical path).** Sven: a training-rollout interface (resolve the missing
-  `sven_sdk::rollout`) exporting complete verified attempts with policy traces and failure states. Splinter: the Sven
-  `EpisodeExecutor` adapter and strict record validation. Brain: exact token/probability correspondence, serving identity,
+- [ ] **P0 Cross-repo training contract (critical path).** Sven: an agent run through the SDK whose ATIF steps carry the
+  provider's policy trace (in place: `RunOptions::want_logprobs`). Splinter (done 2026-11-17, scripted policy only): the
+  `EpisodeExecutor` over sven (`episodes::SvenEpisodes`): practice folders imported (sealed exam material refused), fresh
+  workspace per attempt, the verifier outside the agent's reach, typed outcomes (graded, exposed, verifier error or
+  timeout, infrastructure; only graded attempts have a reward), content-keyed resumable records; open: strict record
+  validation against a served brain's traces, and the sampler's `behavior_logprobs` in the training records. Brain: exact token/probability correspondence, serving identity,
   adapter revisions, trainer numerics. Bench: a cross-project smoke examining the resulting candidate. Make the snapshot-store
   isolation an executable security test. Exit: a tiny agent completes sandboxed tasks, Splinter builds a valid dataset, Brain
   trains, Sven serves the candidate, Bench signs a verdict; truncated, mismatched or unprovable traces are refused.

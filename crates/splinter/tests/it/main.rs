@@ -9,6 +9,7 @@
 
 mod absorb_json;
 mod first_run;
+mod harbor_episodes_cli;
 mod jobs_cli;
 mod jobs_distributed_cli;
 mod jobs_slurm_cli;

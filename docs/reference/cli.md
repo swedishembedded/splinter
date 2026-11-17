@@ -117,6 +117,7 @@ Every command takes these.
     - [splinter tasks harbor discover](#splinter-tasks-harbor-discover) - List the Harbor tasks under a directory and whether each can be imported, at the revision of the checkout it is in
     - [splinter tasks harbor import](#splinter-tasks-harbor-import) - Import Harbor tasks (each a task directory) as workspace tasks in one task set
     - [splinter tasks harbor export](#splinter-tasks-harbor-export) - Write the workspace tasks of a task set as Harbor tasks, one directory each under --out, with everything needed to import them back exactly
+    - [splinter tasks harbor episodes](#splinter-tasks-harbor-episodes) - Run a directory of practice task folders (or one folder) as episodes
   - [splinter tasks list](#splinter-tasks-list) - List the stored task sets
   - [splinter tasks show](#splinter-tasks-show) - Show a task set's tasks, or one task
 - [splinter solve](#splinter-solve) - Solve every task of a task set, each in the environment it records
@@ -1194,6 +1195,7 @@ Subcommands:
 - [`discover`](#splinter-tasks-harbor-discover) - List the Harbor tasks under a directory and whether each can be imported, at the revision of the checkout it is in
 - [`import`](#splinter-tasks-harbor-import) - Import Harbor tasks (each a task directory) as workspace tasks in one task set
 - [`export`](#splinter-tasks-harbor-export) - Write the workspace tasks of a task set as Harbor tasks, one directory each under --out, with everything needed to import them back exactly
+- [`episodes`](#splinter-tasks-harbor-episodes) - Run a directory of practice task folders (or one folder) as episodes
 
 ##### splinter tasks harbor discover
 
@@ -1239,6 +1241,29 @@ Options:
 
 - `--out <DIR>` (required): The directory to write into (it must not hold the tasks yet)
 - `--image <IMAGE>`: The base image of each Dockerfile. Default: `ubuntu:24.04`.
+
+##### splinter tasks harbor episodes
+
+Run a directory of practice task folders (or one folder) as episodes: the policy attempts each task --attempts times, each in a fresh copy of its starting files through sven's agent, asked for the tokens and log-probabilities it samples; afterwards the task's own tests grade what it left, outside its reach. Every attempt is stored as an experience with a record of its outcome (passed, failed, exposed, verifier error or timeout, infrastructure), reward, usage and provenance. Exam material (`[metadata].bench_sealed`, a held-out tier, the eval set of the collection's split.toml) is refused before anything runs. A rerun skips attempts already recorded and redoes the ones the infrastructure stopped
+
+```text
+splinter tasks harbor episodes [OPTIONS] <DIR>
+```
+
+Arguments:
+
+- `<DIR>` (required): The directory of task folders, or one task folder.
+
+Options:
+
+- `--policy <REF>`: The policy. Default: `policy:default`.
+- `--attempts <N>`: Attempts per task. Default: `1`.
+- `--seed <SEED>`: The seed every attempt's draws derive from (drawn and printed when not given; a rerun with the same seed finds its attempts)
+- `--jobs <N>`: Attempts run at once. Default: `1`.
+- `--deadline <DUR>`: How long one attempt's agent may run (`90s`, `10m`, ...); the solve stage's deadline when not given.
+- `--max-tool-calls <N>`: Tool calls one attempt may request.
+- `--max-output-tokens <N>`: Output tokens one attempt may generate.
+- `--out <FILE>`: Also write every attempt's record to this file, one JSON object per line.
 
 #### splinter tasks list
 

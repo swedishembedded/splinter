@@ -24,6 +24,7 @@ use splinter_sdk::{Context, Error};
 use crate::cli::{HarborCommand, OracleArg, TasksCommand};
 use crate::output::emit;
 use crate::session::Exit;
+use splinter_sdk::episodes::{self, EpisodeSettings};
 use splinter_sdk::harbor;
 use splinter_sdk::knowledge::tasks::workspace::Oracle;
 
@@ -98,6 +99,57 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                 harbor::import_harbor(ctx, &directories, oracle)
             })?;
             emit(json, &imported);
+        }
+        TasksCommand::Harbor(HarborCommand::Episodes {
+            root,
+            policy,
+            attempts,
+            seed,
+            jobs,
+            deadline,
+            max_tool_calls,
+            max_output_tokens,
+            out,
+        }) => {
+            let arguments = json!({
+                "root": root,
+                "policy": policy,
+                "attempts": attempts,
+                "seed": seed,
+                "jobs": jobs,
+                "deadline_secs": deadline.map(|d| d.as_secs_f64()),
+                "max_tool_calls": max_tool_calls,
+                "max_output_tokens": max_output_tokens,
+                "out": out,
+            });
+            let report = record(ctx, "tasks harbor episodes", &arguments, |run| {
+                let seed = run.seed("seed", seed)?;
+                let attempts = u32::try_from(attempts)
+                    .map_err(|_| Error::Refused(format!("{attempts} attempts are too many")))?;
+                let mut settings = EpisodeSettings::new(attempts, seed.value()).with_jobs(jobs);
+                if let Some(deadline) = deadline {
+                    settings.deadline = deadline;
+                }
+                if max_tool_calls.is_some() {
+                    settings.max_tool_calls = max_tool_calls;
+                }
+                settings.max_output_tokens = max_output_tokens;
+                let tasks = episodes::load_collection(ctx, &root)?;
+                let report = episodes::run_episodes(
+                    ctx,
+                    &episodes::EpisodeRequest {
+                        tasks: &tasks,
+                        policy: &policy,
+                        settings,
+                        cancel: run.cancel_token(),
+                    },
+                )?;
+                if let Some(out) = &out {
+                    episodes::write_records(out, &report)?;
+                }
+                Ok(report)
+            })?;
+            emit(json, &report);
         }
         TasksCommand::Harbor(HarborCommand::Export {
             task_set,

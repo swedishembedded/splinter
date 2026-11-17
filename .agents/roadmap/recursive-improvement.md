@@ -123,18 +123,21 @@ campaign instead of rounds glued together by scripts (`scripts/campaigns/flywhee
   configuration digest, GPU-hours, cost, verdict), power-first arm planning that refuses an arm whose exam cannot
   detect its target effect, alpha spent by gate number as the default (`eval::campaign::plan`), the plateau
   ladder, and a disk preflight that counts files as well as bytes (`pipelines::preflight`).
-- Rule: a campaign collects training episodes through sven's rollout executor (`sven rollout`, Harbor-format task
-  folders, `attempt.jsonl` with reward, ATIF and policy trace) or in process, never by driving `bench run` on bench
-  collections (the sealed measurement authority); bench is asked for verdicts on finished candidates only. The
-  bench-mediated flow (`bench export` then `experiences ingest-bench`) is legacy for new work.
+- Rule: a campaign collects training episodes through Splinter's episode executor (`episodes::SvenEpisodes`,
+  `splinter tasks harbor episodes`: Harbor-format practice folders run through sven's agent, graded outside its reach,
+  each attempt an experience with its reward, typed outcome and policy trace) or in process, never by driving `bench
+  run` on bench collections (the sealed measurement authority); bench is asked for verdicts on finished candidates
+  only. The bench-mediated flow (`bench export` then `experiences ingest-bench`) is legacy for new work. (Corrected
+  2026-11-17: an earlier entry named a `sven rollout` command and `sven_sdk::rollout`; neither exists on sven main, and
+  running episodes for learning is Splinter's, not sven's.)
 - Environments (2026-11-13): `campaign::factory` takes a campaign's tasks from the environment factory store: only
   `Admitted` environments whose recorded base band is inside the learnable range enter (`select` refuses the rest with
   reasons), instances are staged per attempt and removed, every ledger entry carries each environment's verifier
   class and the label the weakest class forces on the verdict, and each gate feeds every environment's training
   reward and dev rate to `DivergenceAlarm` (Diverging: the arm stops, the candidate is not adopted, the environment is
   quarantined in the store and out of the pool). In process the factory path runs the answer-file environments
-  (program output); environments whose solver needs a shell or a database go through the sven rollout executor,
-  which has no adapter yet.
+  (program output); environments whose solver needs a shell or a database go through the episode executor
+  (`episodes::SvenEpisodes`), which the factory path does not call yet.
 - Collectors: the in-process path (`campaign::brain`: a loaded model sampled at temperature 1 against a
   `TaskFamily`, brain's policy-gradient trainer, a greedy dev exam) and the episode path (`campaign::endpoint`:
   an `EpisodeExecutor` that runs Harbor-format tasks in sandboxes and returns, per episode, the reward and the
@@ -147,9 +150,8 @@ campaign instead of rounds glued together by scripts (`scripts/campaigns/flywhee
   are used. Brain's reported KL is 1e2 to 1e7 and a token ratio near 1e-8 appears from step 2 (finding 144): open in
   brain. Entropy is unmeasured in process. Not run: the lr/rank sweep (gap 19), the equal-compute method matrix (gap 20),
   the distillation strategy on real weights.
-- Open: an `EpisodeExecutor` over sven's rollout executor (recorded earlier as landed in sven as `sven_sdk::rollout`, but sven main
-  on 2026-11-15 has no `rollout` module; see `generalized-autonomous-learning.md` P0; the adapter that reads its
-  `attempt.jsonl` into `Episode` is not written); the training
+- Open: the factory path does not hand its shell-solver environments to the episode executor
+  (`episodes::SvenEpisodes`, landed 2026-11-17 and tested against a scripted policy only); the training
   records do not yet carry the sampler's behaviour log-probabilities (`WireMessage` has no field for brain's
   `behavior_logprobs`, so every campaign step trains on the start-of-run proxy, exact for on-policy rollouts only);
   a hot refit of the champion's adapter through a serving endpoint (the in-process collector reloads the model on

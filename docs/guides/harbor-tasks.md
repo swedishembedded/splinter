@@ -14,6 +14,7 @@ splinter tasks harbor discover ~/harbor-tasks        # which tasks can be import
 splinter tasks harbor import ~/harbor-tasks/calc --oracle require
 splinter tasks harbor export TASKSET-ID --out out/   # splinter tasks as Harbor tasks
 splinter experiences ingest-harbor TASKSET-ID trials/*   # Harbor trials as experiences
+splinter tasks harbor episodes ~/practice --attempts 8 --jobs 4   # practice folders run as graded episodes
 ```
 
 *Import* admits a task whose environment is a repository checkout: a Dockerfile with
@@ -53,3 +54,40 @@ not imported back.
 is Harbor's: pass at reward 1, fail at any other reward, none for a trial with an
 exception or no reward. `verify` leaves such experiences alone: they carry no patch.
 
+*Episodes* run a directory of practice task folders (or one folder) through sven's agent,
+for experience to learn from:
+
+```sh
+splinter tasks harbor episodes ~/practice --policy policy:default --attempts 8 --jobs 4 \
+    --deadline 10m --max-tool-calls 40 --out episodes.jsonl
+```
+
+The seed every attempt's draws derive from is drawn and printed unless `--seed` gives it;
+the run records it. Every folder is read, checked for exam material and imported before any attempt starts;
+a sealed or malformed folder refuses the whole collection by name, and a folder imported
+before is found again by the digest of its files. Each attempt is a workspace episode as
+`solve` runs one: a fresh copy of the starting files, the agent's shell confined to it,
+the policy asked to sample at temperature 1 with nothing cut away and a seed of the
+attempt's own (where its sampling can be set here; the record's `seeded` says whether it
+was), and asked for its policy trace, which sven keeps in the trajectory's step metrics:
+the prompt and sampled token ids and each sampled token's log-probability, as the
+provider returned them. Only after the agent has finished is its change graded, in
+another fresh copy with the task's tests laid over it; the exposure audit fails an
+attempt that reached for them.
+
+Each attempt is stored as an experience, and a record of it (`--out` writes them one per
+line, `--json` prints the report) names the task's address and its folder's digest, the
+attempt and its seed, the policy, a digest of the configuration (deadline, caps, episode
+protocol, coding prompt, sampling), the experience, how the agent's run ended
+(`conclusion`: `success`, `timeout`, `budget_exhausted`, ...), its usage (model calls,
+tool calls, tokens, wall time) and its trace (calls, how many carry ids and
+log-probabilities, `provable` when all do). Its `outcome` is one of `passed` (reward 1),
+`failed` (reward 0), `exposed` (reward 0), `verifier_error` or `verifier_timeout` (no
+reward) and `infrastructure` (the episode could not run: no reward and no experience).
+A verifier or infrastructure failure is never a reward of zero.
+
+A rerun with the same seed, policy and settings skips every attempt that has a record
+and redoes the ones the infrastructure stopped; more `--attempts` adds the missing ones.
+A record is written only after its experience and verdicts are stored, so an attempt
+killed before then is run again from the start. A campaign reaches the same episodes
+through `episodes::SvenEpisodes`, its episode executor.

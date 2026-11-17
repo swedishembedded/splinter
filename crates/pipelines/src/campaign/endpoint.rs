@@ -15,19 +15,20 @@
 //! collections, because the benchmark is the sealed measurement authority and
 //! is asked only for verdicts on finished candidates.
 //!
-//! The executor is a trait because the thing that implements it lives in
-//! another project: an agent runtime that loads Harbor-format task folders
+//! The executor is a trait so that a campaign does not depend on how
+//! episodes are run: an executor loads Harbor-format task folders
 //! (instruction, environment, tests that write a reward), runs the policy
-//! through its harness against a brain endpoint, and returns for every episode
+//! through an agent harness against a brain endpoint, and returns for every episode
 //! the reward the task's verifier wrote and, for every model call, the prompt
 //! token ids, the generated token ids and their log-probabilities as the
 //! endpoint returned them. [`EpisodeCollector`] turns those episodes into
 //! rollout groups; an episode whose chain of calls the executor cannot prove is
 //! returned marked unprovable and is dropped from training, never repaired by
-//! re-tokenizing. Sven's rollout executor maps onto it directly: an attempt
-//! that ended `verified` is an [`Episode`] with its reward, one that ended
-//! `unverified` or in an infrastructure error has no reward, and a trace
-//! summary that is not `trainable` is `provable: false`.
+//! re-tokenizing. [`crate::episodes::SvenEpisodes`] implements it over practice
+//! task folders run through sven: an attempt the task's verifier graded is an
+//! [`Episode`] with its reward, one whose verifier or infrastructure failed
+//! has none, and one whose calls do not all carry their token ids and
+//! log-probabilities is `provable: false`.
 
 use serde_json::{json, Value};
 use splinter_core::chat::WireMessage;

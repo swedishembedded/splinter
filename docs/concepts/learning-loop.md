@@ -120,11 +120,13 @@ Every arm:
 
 **Where rollouts come from.** The controller collects its training episodes through one of two paths and no other:
 
-- sven's training executor (`sven rollout`, `sven_sdk::rollout`): sven runs Harbor-format task folders (instruction,
-  workspace, tests that write a reward) as sandboxed episodes, and writes one `attempt.jsonl` per attempt holding the
-  verifier's result and reward, the ATIF trajectory and the policy trace (the prompt and generated token ids and their
-  log-probabilities as the serving endpoint returned them). An attempt with no reward (the provider failed, the
-  verifier wrote none) enters no group, and one whose trace is not provable is never trained on, never re-tokenized.
+- the episode path: practice task folders in the Harbor format (instruction, starting files, tests that write a
+  reward) run as workspace episodes through sven's agent against the served policy (`tasks harbor episodes`, and
+  `episodes::SvenEpisodes` as the campaign's episode executor; see [Harbor tasks and trials](../guides/harbor-tasks.md)).
+  Each attempt is graded by the task's own tests outside the agent's reach and kept as an experience whose trajectory
+  holds the policy trace (the prompt and generated token ids and their log-probabilities as the serving endpoint
+  returned them). An attempt with no reward (the infrastructure or the verifier failed) enters no group, and one whose
+  trace is not provable is never trained on, never re-tokenized.
 - the in-process path, a loaded model sampled at temperature 1 against a verifier the policy cannot reach.
 
 **Where its tasks come from.** A campaign's tasks may be environments from the environment factory ([Environments

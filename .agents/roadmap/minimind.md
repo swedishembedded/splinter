@@ -125,7 +125,8 @@ alone is not measured (off by default).
   (measured 2026-11-15, 25535 bytes); the compact profile replaces it. Whether the default
   profile of an embedded engine should read the host's skills is sven's to decide.
 - `sven_sdk::rollout` does not exist on sven main; episodes are collected by splinter through
-  `crates/agent` with durable attempt ids from the stage ledger.
+  `crates/agent` with durable attempt ids from the stage ledger (practice task folders: `episodes`,
+  `splinter tasks harbor episodes`, since 2026-11-17).
 - Done since: brain lane B landed init_model, pretrain and full_train; the bullet below is history.
 - Brain (lane B): the from-scratch action (tokenizer + random-init checkpoint of a named architecture
   with the template's special tokens and chat template, installed as `local/<name>`), raw-text

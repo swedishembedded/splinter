@@ -39,7 +39,6 @@ use splinter_agent::solve::{
 };
 use splinter_agent::work::WorkProtocol;
 use splinter_agent::{CancelToken, RunConclusion};
-use splinter_core::annotation::{Annotation, AnnotationBody, Producer};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{ExperienceId, Provenance, Task};
 use splinter_core::outcome::AttemptReport;
@@ -51,6 +50,7 @@ use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::{TaskEntry, TaskSetId};
 
+use crate::attempt_store::store_attempt;
 use crate::curriculum::policy_label;
 use crate::dialogue::{teacher_instruction, Student, DIALOGUE_TURNS};
 use crate::learn::PolicyUsed;
@@ -62,11 +62,7 @@ use splinter_orchestrator::concurrency::fan_out_each;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
-/// The producer name of the annotation that keeps an attempt's facts.
-pub const ATTEMPT_PRODUCER: &str = "splinter-pipelines/attempt-report";
-
-/// The version of that producer.
-pub const ATTEMPT_VERSION: &str = "1";
+pub use crate::attempt_store::{ATTEMPT_PRODUCER, ATTEMPT_VERSION};
 
 pub use splinter_orchestrator::config::DEFAULT_SOLVE_DEADLINE;
 
@@ -601,21 +597,13 @@ fn record_attempt(outcome: Attempted, at: &Recording<'_>) -> Recorded {
         teacher: at.teacher,
         ..Provenance::new(at.model.identity.clone(), at.ctx.clock())
     };
-    let stored = solution
-        .into_experience(at.planned.task.clone(), provenance)
-        .map_err(OrchestratorError::from)
-        .and_then(|experience| Ok(at.store.put(&experience)?))
-        .and_then(|id| {
-            at.store.annotate(&Annotation {
-                experience: id.clone(),
-                producer: Producer {
-                    name: ATTEMPT_PRODUCER.into(),
-                    version: ATTEMPT_VERSION.into(),
-                },
-                body: AnnotationBody::AttemptReport(attempt_report),
-            })?;
-            Ok(id)
-        });
+    let stored = store_attempt(
+        at.store,
+        at.planned.task.clone(),
+        solution,
+        provenance,
+        attempt_report,
+    );
     match stored {
         Ok(id) => Recorded::Done {
             id,

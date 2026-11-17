@@ -53,6 +53,7 @@ installed.
 | A repository | Faults seeded by code are kept as tasks only where the project's own tests catch them every time; the catching tests are hidden from the agent |
 | A person's own sessions with an agent | Secrets are removed; what the person taught is proposed by a model and admitted by code only on the person's exact words |
 | A person's writing | A planner chooses what to teach; answers are graded against the writer's own text |
+| Practice task folders (Harbor format) | Each task is attempted many times by the policy through sven in fresh workspaces and graded by its own tests outside the agent's reach; exam material is refused |
 
 ## What it produces
 

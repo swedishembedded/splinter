@@ -79,11 +79,11 @@ pub use splinter_orchestrator::{
 pub use splinter_pipelines::{
     absorb, acquire, ask, bench, brain_server, budget, campaign, canaries, checkpoints,
     claim_quality, claims, compare, conversation_policy_gradient, critique, curriculum, datasets,
-    decision_fixtures, describe, dialogue, doctor, eval, exam, exam_set, experiences, experiment,
-    generations, goal, graded, harbor, harness_opt, history, improve, judge, learn, lineage,
-    objects, plan, powered, practice, preflight, raft, rehearsal, release, rerank, reserve,
-    retrieval, router, sealed, sessions, solving, sources, state, status, tasks, timeline, train,
-    validate, variants, verify,
+    decision_fixtures, describe, dialogue, doctor, episodes, eval, exam, exam_set, experiences,
+    experiment, generations, goal, graded, harbor, harness_opt, history, improve, judge, learn,
+    lineage, objects, plan, powered, practice, preflight, raft, rehearsal, release, rerank,
+    reserve, retrieval, router, sealed, sessions, solving, sources, state, status, tasks, timeline,
+    train, validate, variants, verify,
 };
 
 // The layers, each under one name.
