@@ -182,19 +182,21 @@ fn names(rng: &mut SplitMix64, n: usize) -> Vec<String> {
     out
 }
 
-/// A data file's path for `format` (in a directory sometimes), not in
-/// `taken`. Held out, it has the format's own extension; in training, a
-/// third of the time the format's own, a third any of
-/// [`TRAINING_EXTENSIONS`] and a third a few random letters, and sometimes a
-/// directory of a made-up name: nothing in a path is predictable from habit,
-/// so every part of it is copied from the request, an extension or a
-/// directory training never showed included.
+/// A data file's path for `format`, not in `taken`: at the workspace's
+/// root half the time, else in a directory (in training sometimes one of a
+/// made-up name). Held out, it has the format's own extension; in training,
+/// a third of the time the format's own, a third any of
+/// [`TRAINING_EXTENSIONS`] and a third a few random letters: nothing in a
+/// path is predictable from habit, so every part of it, whether it has a
+/// directory at all included, is copied from the request and the listing.
 pub fn data_path(rng: &mut SplitMix64, format: Format, held_out: bool, taken: &[String]) -> String {
     loop {
-        let dir = if !held_out && rng.below(4) == 0 {
+        let dir = if rng.coin() {
+            String::new()
+        } else if !held_out && rng.coin() {
             format!("{}/", word(rng, 1).to_lowercase())
         } else {
-            pick(rng, &["", "", "data/", "config/", "inputs/", "notes/"]).to_string()
+            pick(rng, &["data/", "config/", "inputs/", "notes/"]).to_string()
         };
         let extension = match (held_out, rng.below(3)) {
             (true, _) | (false, 0) => format.extension().to_string(),
@@ -291,8 +293,45 @@ fn taken_of(files: &BTreeMap<String, String>) -> Vec<String> {
     files.keys().cloned().collect()
 }
 
+/// An operand a helper computes with.
 fn number(rng: &mut SplitMix64) -> String {
     rng.between(10, 9999).to_string()
+}
+
+/// A value a file holds: a whole number of one to six digits, a word, or a
+/// code of letters and digits two to six long, so neither the kind nor the
+/// length of an answer can be learned instead of copied.
+fn any_value(rng: &mut SplitMix64) -> String {
+    match rng.below(3) {
+        0 => {
+            let digits = u32::try_from(1 + rng.below(6)).unwrap_or(1);
+            let low = if digits == 1 {
+                0
+            } else {
+                10u64.pow(digits - 1)
+            };
+            rng.between(low, 10u64.pow(digits) - 1).to_string()
+        }
+        1 => {
+            let syllables = 1 + rng.below(2);
+            word(rng, syllables).to_lowercase()
+        }
+        _ => loop {
+            let n = 2 + rng.below(5);
+            let code: String = (0..n)
+                .map(|_| {
+                    let c = rng.below(36);
+                    let c = u8::try_from(c).unwrap_or(0);
+                    char::from(if c < 26 { b'a' + c } else { b'0' + c - 26 })
+                })
+                .collect();
+            let digit = code.bytes().any(|b| b.is_ascii_digit());
+            let letter = code.bytes().any(|b| b.is_ascii_lowercase());
+            if digit && letter {
+                break code;
+            }
+        },
+    }
 }
 
 /// Draws one instance of `skill`; `held_out` selects the held-out grammar
@@ -322,7 +361,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
     match skill {
         Skill::Read => {
             let n = rng.between(3, 7) as usize;
-            let t = table(rng, n, &mut number);
+            let t = table(rng, n, &mut any_value);
             let (file, format, entries) = add(rng, &t, &mut files);
             let (key, value) = entries[rng.below(entries.len())].clone();
             let slot = Slot { file, format, key };
@@ -360,7 +399,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                         (
                             k.clone(),
                             if h + 1 == hops {
-                                number(rng)
+                                any_value(rng)
                             } else {
                                 keys[h + 1][rng.below(4)].clone()
                             },
@@ -369,7 +408,7 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                     .collect();
                 // The path's own step.
                 entries[0].1 = if h + 1 == hops {
-                    number(rng)
+                    any_value(rng)
                 } else {
                     path_keys[h + 1].clone()
                 };
@@ -490,11 +529,11 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
         Skill::Edit => {
             let target_entries = {
                 let n = rng.between(3, 6) as usize;
-                table(rng, n, &mut number)
+                table(rng, n, &mut any_value)
             };
             let source_entries = {
                 let n = rng.between(2, 5) as usize;
-                table(rng, n, &mut number)
+                table(rng, n, &mut any_value)
             };
             let (ft, fmt_t, et) = add(rng, &target_entries, &mut files);
             let (fs, fmt_s, es) = add(rng, &source_entries, &mut files);
@@ -541,11 +580,13 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 pick(rng, &["", "logs/"]),
                 word(rng, 1).to_lowercase()
             );
-            let lines = rng.between(6, 20) as usize;
+            // Counts spread over tens, so no small count is the usual answer.
+            let lines = rng.between(6, 60) as usize;
+            let rate = 2 + rng.below(4);
             let mut log = String::new();
             let mut hits = 0;
             for i in 0..lines {
-                if rng.below(3) == 0 {
+                if rng.below(rate) == 0 {
                     hits += 1;
                     log.push_str(&format!("{i:03} {word_} {}\n", word(rng, 1).to_lowercase()));
                 } else {
@@ -641,6 +682,48 @@ mod tests {
                 "style {style}: {call}"
             );
         }
+    }
+
+    /// What an agent copies is never what it could guess: no answer value is
+    /// common, values come in every kind, and a data file sits at the root
+    /// about as often as in a directory.
+    #[test]
+    fn answers_and_paths_are_copied_not_guessed() {
+        use crate::tasks::{instances, Check, Split};
+        // seed: any seed; the shares hold for every draw.
+        let drawn = instances(3, Split::Train, 600);
+        let mut answers = std::collections::BTreeMap::<String, usize>::new();
+        let (mut root, mut nested) = (0usize, 0usize);
+        let mut kinds = [0usize; 3];
+        for i in &drawn {
+            if let Check::Answer { value, .. } = &i.check {
+                *answers.entry(value.clone()).or_default() += 1;
+                let digits = value.bytes().all(|b| b.is_ascii_digit());
+                let letters = value.bytes().all(|b| b.is_ascii_lowercase());
+                kinds[usize::from(!digits) + usize::from(!digits && !letters)] += 1;
+            }
+            for path in i.files.keys().filter(|p| !p.ends_with(".log")) {
+                if path.contains('/') {
+                    nested += 1;
+                } else {
+                    root += 1;
+                }
+            }
+        }
+        let total: usize = answers.values().sum();
+        let commonest = answers.values().max().copied().unwrap_or(0);
+        assert!(
+            commonest * 25 < total,
+            "one answer is {commonest} of {total}"
+        );
+        assert!(
+            kinds.iter().all(|k| k * 10 > total),
+            "numbers, words, codes: {kinds:?}"
+        );
+        assert!(
+            root * 10 > (root + nested) * 3 && nested * 10 > (root + nested) * 3,
+            "root {root}, nested {nested}"
+        );
     }
 
     #[test]
