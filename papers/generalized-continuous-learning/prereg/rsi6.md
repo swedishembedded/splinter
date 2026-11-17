@@ -67,3 +67,12 @@ As RSI5: the learner never reads H or any item-level result; signed aggregate ve
 ## What is not claimed
 
 Nothing until the verdicts evaluate H1, H2 and H3.
+
+## Outcome: stopped (2026-11-17 ~01:30, before any candidate was examined)
+
+RSI6 was stopped by decision of the study's owner after 11 of 32 candidates had been handed off (a0 1-2, a1 1-2, a2 1-2, a3 1,
+c0 1, c1 1, c2 1-2, c3 1): an audit of its learner records found that about a quarter of the Lua frontier (12-22% of the other
+families' frontiers) had answers that test memorised digits or interpreter internals, not semantics, and that the frontier rule
+over-selects them. Its design continues as RSI7 (`rsi7.md`) with semantic data on both sides. Lineages a0, a3 and c0 had failed
+earlier when the project disk's file quota (shared with other work) filled. No exam-H verdict exists and none will be reported;
+the partial journals are kept.
