@@ -130,7 +130,6 @@ fn policy_gradient_makes_the_attempts_at_a_task_a_group_and_trains_the_clipped_o
         "every record carries its attempt's advantage"
     );
     assert!(lines.iter().all(|l| l.get("teacher_context").is_none()));
-    splinter_model::train::validate_dataset(&dataset.path).unwrap();
 
     // The scripted agent peeks at the hidden tests in the attempt that would
     // pass at three modules: the audit fails those attempts, they are left
@@ -161,13 +160,11 @@ fn policy_gradient_makes_the_attempts_at_a_task_a_group_and_trains_the_clipped_o
     assert!(groups.graded > 0 && groups.graded < MODULES);
     assert_eq!(groups.distilled, 0, "plain policy gradient distils nothing");
 
-    // The trainer gets the objective's settings, brain's defaults resolved,
-    // and the temperature the attempts were sampled at.
+    // The trainer gets the temperature the attempts were sampled at; the
+    // objective's other settings are brain's defaults.
     let plans = trainer.plans.lock().unwrap();
-    let defaults = PolicyGradientOptions::defaults();
     let used = plans[0].tuning.policy_gradient;
-    assert_eq!(used.clip_eps, Some(defaults.clip_eps));
-    assert_eq!(used.kl_beta, Some(defaults.kl_beta));
+    assert_eq!((used.clip_eps, used.kl_beta), (None, None));
     assert_eq!(used.temperature, Some(DEFAULT_SAMPLING.temperature));
     assert_eq!(plans[0].regime, Regime::PolicyGradient);
 }

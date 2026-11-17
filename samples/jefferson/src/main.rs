@@ -48,7 +48,7 @@ fn main() -> anyhow::Result<()> {
         Some("materials") => materials_command(&args[1..]),
         Some("tasks") => tasks_command(&args[1..]),
         Some("exam") => exam_command(&flags, &args[1..]),
-        Some("train") => train_command(&args[1..]),
+        Some("train") => train_command(&flags, &args[1..]),
         Some("report") => report_command(&args[1..]),
         Some("scenarios") => scenarios_command(&flags, &args[1..]),
         Some("apply") => apply_command(&flags, &args[1..]),
@@ -235,7 +235,7 @@ fn system_flag(args: &[String]) -> Option<String> {
         .or_else(|| flag(args, "--system"))
 }
 
-fn train_command(args: &[String]) -> anyhow::Result<()> {
+fn train_command(flags: &splinter_sdk::device::DeviceFlags, args: &[String]) -> anyhow::Result<()> {
     let need = |name: &str| flag(args, name).ok_or_else(|| anyhow::anyhow!("{name} is required"));
     let (base, dataset, attempt) = (
         PathBuf::from(need("--base")?),
@@ -287,7 +287,8 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };
-    let trained = splinter_sdk::model::train::fine_tune(&request)?;
+    let brain = flags.brain()?;
+    let trained = splinter_sdk::model::served_train::fine_tune_served(brain.endpoints(), &request)?;
     let summary = serde_json::json!({
         "adapter": trained.adapter,
         "adapter_digest": trained.adapter_digest,

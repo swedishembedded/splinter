@@ -28,7 +28,9 @@
 
 use std::path::{Path, PathBuf};
 
-use splinter_sdk::model::train::{fine_tune, BasePrecision, FineTune, StepHook, StepReport};
+use splinter_sdk::model::served_train::fine_tune_served;
+use splinter_sdk::model::train::{BasePrecision, FineTune, StepHook, StepReport};
+use splinter_sdk::model::BrainEndpoints;
 
 /// What to train, on what, and with which recipe.
 #[derive(Clone, Debug)]
@@ -70,40 +72,46 @@ pub struct TrainSummary {
     pub document: serde_json::Value,
 }
 
-/// Fine-tune, narrating each optimizer step to `narrate`.
+/// Fine-tune as a job of the brain service `brain`, narrating each optimizer
+/// step to `narrate`. The base is named by its place in the server's model
+/// store.
 pub fn train(
+    brain: &BrainEndpoints,
     request: &TrainRequest,
     narrate: &dyn Fn(&StepReport),
 ) -> anyhow::Result<TrainSummary> {
     std::fs::create_dir_all(&request.attempt_dir)?;
-    let trained = fine_tune(&FineTune {
-        model_dir: &request.base,
-        train: &request.train,
-        held_out: &request.held_out,
-        held_out_text: None,
-        monitor: Some(&request.held_out),
-        eval_every: request.eval_every,
-        patience: request.patience,
-        attempt_dir: &request.attempt_dir,
-        steps: request.steps,
-        rank: request.rank,
-        alpha: request.alpha,
-        replay: &[],
-        replay_share: None,
-        weighted_replay: &[],
-        grad_accum: request.grad_accum,
-        continue_from: None,
-        cancel: None,
-        base: BasePrecision::Fp32,
-        learning_rate: request.learning_rate,
-        weight_decay: 0.0,
-        seed: request.seed,
-        max_block: None,
-        thinking: false,
-        pack_answers: false,
-        on_step: Some(StepHook(narrate)),
-        keep_evaluations: None,
-    })?;
+    let trained = fine_tune_served(
+        brain,
+        &FineTune {
+            model_dir: &request.base,
+            train: &request.train,
+            held_out: &request.held_out,
+            held_out_text: None,
+            monitor: Some(&request.held_out),
+            eval_every: request.eval_every,
+            patience: request.patience,
+            attempt_dir: &request.attempt_dir,
+            steps: request.steps,
+            rank: request.rank,
+            alpha: request.alpha,
+            replay: &[],
+            replay_share: None,
+            weighted_replay: &[],
+            grad_accum: request.grad_accum,
+            continue_from: None,
+            cancel: None,
+            base: BasePrecision::Fp32,
+            learning_rate: request.learning_rate,
+            weight_decay: 0.0,
+            seed: request.seed,
+            max_block: None,
+            thinking: false,
+            pack_answers: false,
+            on_step: Some(StepHook(narrate)),
+            keep_evaluations: None,
+        },
+    )?;
 
     let score = |s: &splinter_sdk::vocabulary::training::HeldOutScore| {
         serde_json::json!({

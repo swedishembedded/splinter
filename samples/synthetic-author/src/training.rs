@@ -179,11 +179,15 @@ pub struct Job<'a> {
     pub settings: &'a Settings,
 }
 
-/// Trains an adapter as `job` says and writes `summary.json` beside it.
+/// Trains an adapter as `job` says, as a job of the brain service `brain`,
+/// and writes `summary.json` beside it.
 ///
 /// # Errors
 /// The records cannot be read or split, or the training fails.
-pub fn fine_tune(job: &Job<'_>) -> anyhow::Result<Trained> {
+pub fn fine_tune(
+    brain: &splinter_sdk::model::BrainEndpoints,
+    job: &Job<'_>,
+) -> anyhow::Result<Trained> {
     let settings = job.settings;
     std::fs::create_dir_all(job.attempt)?;
     let started = std::time::Instant::now();
@@ -226,7 +230,7 @@ pub fn fine_tune(job: &Job<'_>) -> anyhow::Result<Trained> {
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };
-    let trained = splinter_sdk::model::train::fine_tune(&request)?;
+    let trained = splinter_sdk::model::served_train::fine_tune_served(brain, &request)?;
     let trained = Trained {
         adapter: trained.adapter,
         records: trained.records,
@@ -248,7 +252,8 @@ pub fn fine_tune(job: &Job<'_>) -> anyhow::Result<Trained> {
 ///
 /// # Errors
 /// The records cannot be read or split, or the training fails.
-pub fn run(args: &TrainArgs) -> anyhow::Result<()> {
+pub fn run(args: &TrainArgs, device: &splinter_sdk::device::DeviceFlags) -> anyhow::Result<()> {
+    let brain = device.brain()?;
     let seed = splinter_sdk::seed::resolve("train-seed", args.train_seed);
     let cache = Cache::open(args.cache.clone())?;
     let dataset = crate::dataset::path(&cache, args.briefings);
@@ -256,12 +261,15 @@ pub fn run(args: &TrainArgs) -> anyhow::Result<()> {
     let attempt = cache
         .dir()
         .join(format!("train{}", args.briefings.suffix()));
-    let trained = fine_tune(&Job {
-        base: &args.base,
-        dataset: &dataset,
-        attempt: &attempt,
-        settings: &settings,
-    })?;
+    let trained = fine_tune(
+        brain.endpoints(),
+        &Job {
+            base: &args.base,
+            dataset: &dataset,
+            attempt: &attempt,
+            settings: &settings,
+        },
+    )?;
     println!(
         "{}",
         serde_json::to_string_pretty(&Summary {

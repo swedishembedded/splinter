@@ -418,11 +418,21 @@ fn main() -> Result<()> {
             adapter,
             records,
         } => {
-            let score =
-                splinter_sdk::model::train::score_chat(&base, adapter.as_deref(), &records)?;
+            let brain = cli.device.brain()?;
+            let weights = splinter_sdk::model::LocalWeights {
+                base,
+                adapter,
+                context_tokens: None,
+            };
+            let score = splinter_sdk::model::served_train::score_chat(
+                brain.endpoints(),
+                &weights,
+                &records,
+                false,
+            )?;
             println!(
                 "{}",
-                serde_json::json!({"loss": score.loss, "token_accuracy": score.token_accuracy, "positions": score.positions, "records": score.records, "skipped": score.skipped})
+                serde_json::json!({"loss": score.loss, "positions": score.positions, "records": score.records})
             );
             Ok(())
         }

@@ -27,11 +27,12 @@ use serde_json::{Map, Value};
 use splinter_core::digest::Digest;
 
 use super::check::{check_dataset, CheckSpec};
-use super::request::{set, source, MIN_BLOCK};
+use super::request::{set, source};
 use crate::consolidate::{Checkpoint, FullTune};
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 use crate::selection::local_model_name;
+use crate::train_checks::MIN_BLOCK;
 
 /// Where a job installs the checkpoint it makes.
 #[derive(Clone, Debug)]

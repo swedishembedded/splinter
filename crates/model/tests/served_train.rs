@@ -26,7 +26,6 @@ use std::time::Duration;
 use splinter_core::digest::Digest;
 use splinter_model::consolidate::FullTune;
 use splinter_model::endpoint::BrainEndpoints;
-use splinter_model::fixture::byte_level_checkpoint;
 use splinter_model::policy_gradient::{PolicyGradientOptions, PolicyGradientTune, Reference};
 use splinter_model::scripted_endpoint::{Card, ScriptedEndpoint, SCRIPTED_KEY};
 use splinter_model::scripted_jobs::JobScript;
@@ -50,7 +49,6 @@ fn rig() -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let model_dir = dir.path().join("models/Qwen/Toy");
     std::fs::create_dir_all(&model_dir).unwrap();
-    byte_level_checkpoint(&model_dir);
     let store = dir.path().join("artifacts");
     std::fs::create_dir_all(&store).unwrap();
     Rig {
@@ -403,7 +401,7 @@ fn training_on_an_endpoint_needs_the_artifact_store_and_says_which_flag() {
 }
 
 #[test]
-fn a_dataset_the_trainer_would_refuse_is_refused_here_before_anything_is_sent() {
+fn a_dataset_the_trainer_refuses_is_named_by_line_before_a_run_is_asked_for() {
     let rig = rig();
     let (train, held_out, attempt) = (
         rig.dir.path().join("t.jsonl"),
@@ -419,12 +417,9 @@ fn a_dataset_the_trainer_would_refuse_is_refused_here_before_anything_is_sent() 
     )
     .unwrap_err();
     assert!(matches!(error, PolicyError::Dataset { .. }), "{error}");
-    assert!(service.jobs().created().is_empty());
-    assert_eq!(
-        std::fs::read_dir(&rig.store).unwrap().count(),
-        0,
-        "nothing was published for a run that cannot start"
-    );
+    assert!(error.to_string().contains("line 1"), "{error}");
+    assert!(service.jobs().created().is_empty(), "no run was asked for");
+    assert_eq!(service.jobs().actions(), vec!["check_dataset"]);
 }
 
 fn pairs(path: &Path) {
@@ -459,7 +454,7 @@ fn a_dataset_check_is_the_services_report_with_every_records_length_by_line() {
     )
     .unwrap();
 
-    let params = &service.jobs().created()[0];
+    let params = &service.jobs().checks()[0];
     assert_eq!(service.jobs().actions(), vec!["check_dataset"]);
     assert_eq!(
         (params["base"].as_str(), params["kind"].as_str()),
@@ -521,8 +516,8 @@ fn a_preference_run_is_a_dpo_job_sized_to_its_longest_pair() {
         jobs.actions(),
         vec!["check_dataset", "check_dataset", "train"]
     );
-    assert_eq!(jobs.created()[0]["kind"], "preference");
-    let params = &jobs.created()[2];
+    assert_eq!(jobs.checks()[0]["kind"], "preference");
+    let params = &jobs.created()[0];
     assert_eq!(params["objective"], "dpo");
     let longest = std::fs::read_to_string(&train)
         .unwrap()

@@ -14,7 +14,6 @@ use std::path::Path;
 
 use serde_json::{json, Map, Value};
 
-use crate::capabilities::overlong_records;
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 use crate::policy_gradient::{
@@ -22,31 +21,7 @@ use crate::policy_gradient::{
 };
 use crate::selection::local_model_name;
 use crate::train::{candidate_adapter_id, FineTune};
-use crate::train_checks::datasets_of;
-
-/// brain refuses a training row shorter than this.
-pub(super) const MIN_BLOCK: u32 = 64;
-
-/// The training row, in tokens, a run over `datasets` needs: the longest
-/// record any of them holds, as the trainer renders it, unless the caller
-/// bounded it. brain sizes the memory it reserves for the run to this.
-fn row_length(
-    datasets: &[&Path],
-    model_dir: &Path,
-    thinking: bool,
-    pack_answers: bool,
-    bound: Option<u32>,
-) -> Result<u32, PolicyError> {
-    if let Some(bound) = bound {
-        return Ok(bound.max(MIN_BLOCK));
-    }
-    let mut longest = 0usize;
-    for dataset in datasets {
-        let records = overlong_records(dataset, model_dir, thinking, pack_answers, 0)?;
-        longest = records.iter().map(|r| r.tokens).fold(longest, usize::max);
-    }
-    Ok(u32::try_from(longest).unwrap_or(u32::MAX).max(MIN_BLOCK))
-}
+use crate::train_checks::check_chat_datasets;
 
 /// A dataset published to the store, as the job's `data` document names it.
 pub(super) fn source(brain: &BrainEndpoints, file: &Path) -> Result<Value, PolicyError> {
@@ -61,15 +36,9 @@ pub(super) fn set(params: &mut Map<String, Value>, name: &str, value: impl Into<
 pub(super) fn fine_tune_params(
     brain: &BrainEndpoints,
     request: &FineTune<'_>,
+    block: u32,
 ) -> Result<Value, PolicyError> {
     let model = local_model_name(request.model_dir);
-    let block = row_length(
-        &datasets_of(request),
-        request.model_dir,
-        request.thinking,
-        request.pack_answers,
-        request.max_block,
-    )?;
     let mut data = Map::new();
     set(&mut data, "train", source(brain, request.train)?);
     set(&mut data, "held_out", source(brain, request.held_out)?);
@@ -139,36 +108,15 @@ pub(super) fn policy_gradient_params(
     brain: &BrainEndpoints,
     request: &PolicyGradientTune<'_>,
 ) -> Result<(Value, usize), PolicyError> {
-    let records = crate::pictures::validate_dataset_on(request.train, request.model_dir)?.records;
-    let block = row_length(
-        &[request.train],
+    let checked = check_chat_datasets(
+        brain,
         request.model_dir,
-        request.thinking,
-        false,
+        &[request.train],
+        1,
+        (request.thinking, false),
         request.max_block,
     )?;
-    if let Some(bound) = request.max_block {
-        let long = overlong_records(
-            request.train,
-            request.model_dir,
-            request.thinking,
-            false,
-            bound,
-        )?;
-        if !long.is_empty() {
-            return Err(PolicyError::Train {
-                dir: request.attempt_dir.to_path_buf(),
-                reason: format!(
-                    "{} record(s) longer than max_block {bound}; shorten or drop them: {}",
-                    long.len(),
-                    long.iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join("; ")
-                ),
-            });
-        }
-    }
+    let (records, block) = (checked.records, checked.block);
     let model = local_model_name(request.model_dir);
     let mut data = Map::new();
     set(&mut data, "train", source(brain, request.train)?);
@@ -296,19 +244,6 @@ mod tests {
                 .as_f64()
                 .map(|v| (v * 100.0).round()),
             Some(28.0)
-        );
-    }
-
-    #[test]
-    fn a_row_a_caller_bounded_is_that_row_and_never_shorter_than_brain_allows() {
-        let none: [&Path; 0] = [];
-        assert_eq!(
-            row_length(&none, Path::new("."), true, false, Some(4096)).unwrap(),
-            4096
-        );
-        assert_eq!(
-            row_length(&none, Path::new("."), true, false, Some(8)).unwrap(),
-            MIN_BLOCK
         );
     }
 }

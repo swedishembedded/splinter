@@ -37,12 +37,13 @@ pub trait Trainer {
     fn train(&self, job: &Job<'_>) -> anyhow::Result<Trained>;
 }
 
-/// Trains with brain, as the `train` command does.
-pub struct Brain;
+/// Trains as a job of the brain service it holds, as the `train` command
+/// does.
+pub struct Brain(pub splinter_sdk::model::BrainEndpoints);
 
 impl Trainer for Brain {
     fn train(&self, job: &Job<'_>) -> anyhow::Result<Trained> {
-        fine_tune(job)
+        fine_tune(&self.0, job)
     }
 }
 

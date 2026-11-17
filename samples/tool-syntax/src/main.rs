@@ -79,15 +79,14 @@ receives a trained adapter.
 
 fn main() -> anyhow::Result<()> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    splinter_sdk::device::DeviceFlags::take(&mut args)
-        .map_err(anyhow::Error::msg)?
-        .apply()?;
+    let flags = splinter_sdk::device::DeviceFlags::take(&mut args).map_err(anyhow::Error::msg)?;
+    flags.apply()?;
     match args.first().map(String::as_str) {
         Some("audit") => audit(),
         Some("baseline") => measure(&args[1..], Some("baseline")),
         Some("measure") => measure(&args[1..], None),
-        Some("train") => train_command(&args[1..]),
-        Some("demonstrate") => demonstrate(&args[1..]),
+        Some("train") => train_command(&args[1..], &flags),
+        Some("demonstrate") => demonstrate(&args[1..], &flags),
         Some("--help") | Some("-h") | None => {
             print!("{USAGE}");
             Ok(())
@@ -555,7 +554,7 @@ fn demonstration(family: &Family, active: &str, variant: usize) -> anyhow::Resul
     Ok(actions)
 }
 
-fn demonstrate(args: &[String]) -> anyhow::Result<()> {
+fn demonstrate(args: &[String], flags: &splinter_sdk::device::DeviceFlags) -> anyhow::Result<()> {
     let options = parse_baseline(args)?;
     let family = Family::load(&family_root()).map_err(|e| anyhow::anyhow!("{e}"))?;
 
@@ -642,31 +641,33 @@ fn demonstrate(args: &[String]) -> anyhow::Result<()> {
     for (name, records) in [("train.jsonl", &train), ("heldout.jsonl", &held_out)] {
         let out = options.run_dir.join(name);
         std::fs::write(&out, to_jsonl(records)?)?;
-        // Checked by the parser AND, given --weights, the encoder that will
-        // train on it, before anything claims a GPU. Parsing alone is not
-        // enough: a record can satisfy the wire schema completely and still
-        // have no honest loss-mask boundary under the checkpoint's own chat
-        // template.
-        let checked = match &options.weights {
-            Some(weights) => splinter_sdk::model::train::validate_dataset_for(&out, weights),
-            None => {
-                println!(
-                    "note: no --weights, so {name} is only parsed, not encoded; a shape the \
-                     template cannot mask would not be caught until training starts"
-                );
-                splinter_sdk::model::train::validate_dataset(&out)
-            }
+        // Given --weights, read by the brain service's trainer for that base
+        // before anything claims a GPU: a record can satisfy the wire schema
+        // and still have no loss-mask boundary under the base's template.
+        let Some(weights) = &options.weights else {
+            println!(
+                "note: no --weights, so {name} is not read by the trainer; a shape it refuses \
+                 would not be caught until training starts"
+            );
+            continue;
         };
-        match checked {
-            Ok(summary) => println!(
-                "dataset: {} ({} record(s), {} message(s), {} supervised)",
-                out.display(),
-                summary.records,
-                summary.messages,
-                summary.trained_messages
-            ),
-            Err(e) => anyhow::bail!("the trainer would reject {name}: {e}"),
+        let brain = flags.brain()?;
+        let base = splinter_sdk::model::selection::local_model_name(weights);
+        let report = splinter_sdk::model::served_train::check_dataset(
+            brain.endpoints(),
+            &out,
+            &splinter_sdk::model::served_train::CheckSpec::chat(&base, false, false),
+        )?;
+        if let Err(e) = report.refuse_invalid(&out) {
+            anyhow::bail!("the trainer would reject {name}: {e}");
         }
+        println!(
+            "dataset: {} ({} record(s), {} example(s), {} supervised token(s))",
+            out.display(),
+            report.valid_records,
+            report.examples,
+            report.supervised_tokens.total
+        );
     }
     Ok(())
 }
@@ -746,7 +747,7 @@ fn one_demonstration(
 // train - one monitored LoRA fine-tune on the verified demonstrations
 // ---------------------------------------------------------------------------
 
-fn train_command(args: &[String]) -> anyhow::Result<()> {
+fn train_command(args: &[String], flags: &splinter_sdk::device::DeviceFlags) -> anyhow::Result<()> {
     let value = |name: &str| {
         args.iter()
             .position(|a| a == name)
@@ -788,7 +789,8 @@ fn train_command(args: &[String]) -> anyhow::Result<()> {
             started.elapsed().as_secs_f64()
         );
     };
-    let summary = train(&request, &narrate)?;
+    let brain = flags.brain()?;
+    let summary = train(brain.endpoints(), &request, &narrate)?;
     let out = serde_json::to_string_pretty(&summary.document)? + "\n";
     std::fs::write(summary_path(&request.attempt_dir), &out)?;
     println!("{out}");

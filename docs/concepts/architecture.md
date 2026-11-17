@@ -36,14 +36,15 @@ records: closed-book with no tools, a runtime with a single code tool, or a chan
 repository made in a fresh copy of its snapshot with sven's file, search and shell tools.
 The same typed-call mechanism asks a model for task proposals, claims and judgments. The
 `splinter-agent` crate is the only code in Splinter that runs sven; `splinter-model` implements
-sven's model-provider interface so that sven's agents can run the in-process model.
+sven's model-provider interface so that sven's agents can run a model brain serves.
 
 ## What it consumes from brain
 
-Inference, LoRA and full fine-tuning, DPO, adapter merging, held-out scoring, and `brain serve`
-all belong to brain. The `splinter-model` crate is the only one that touches it: it supplies the
-in-process model provider sven's agents use, residency of the base, training runs, and the release
-manifest that `brain serve --adapter-manifest` follows.
+Inference, LoRA and full fine-tuning, DPO, adapter merging, dataset checks, held-out scoring, and
+`brain serve` all belong to brain. The `splinter-model` crate is the only one that reaches it, and only
+through brain's API: it supplies the provider sven's agents use for a model brain serves, the training
+jobs, the dataset checks and scores, and the release manifest that `brain serve --adapter-manifest`
+follows.
 
 ## Layers
 

@@ -127,7 +127,7 @@ Every arm:
   holds the policy trace (the prompt and generated token ids and their log-probabilities as the serving endpoint
   returned them). An attempt with no reward (the infrastructure or the verifier failed) enters no group, and one whose
   trace is not provable is never trained on, never re-tokenized.
-- the in-process path, a loaded model sampled at temperature 1 against a verifier the policy cannot reach.
+- the served path, a model brain serves sampled at temperature 1 against a verifier the policy cannot reach.
 
 **Where its tasks come from.** A campaign's tasks may be environments from the environment factory ([Environments
 from an objective](../guides/environment-factory.md)). Only an `Admitted` environment whose recorded base pass rate

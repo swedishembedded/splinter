@@ -19,14 +19,14 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_data::{write_dataset, Corpus, Projection, SftFinal, View};
 use splinter_model::answer::{Answerer, Decoding};
-use splinter_model::capabilities::BrainDatasetCheck;
 use splinter_model::fixture::toy_chat_checkpoint;
 use splinter_model::policy_gradient::{
-    train_policy_gradient, Behaviour, PolicyGradientOptions, PolicyGradientTune, Reference,
+    Behaviour, PolicyGradientOptions, PolicyGradientTune, Reference,
 };
-use splinter_model::train::{
-    fine_tune, train_preference, BasePrecision, FineTune, PreferenceTune, DEFAULT_DPO_BETA,
+use splinter_model::served_train::{
+    fine_tune_served, train_policy_gradient_served, train_preference_served,
 };
+use splinter_model::train::{BasePrecision, FineTune, PreferenceTune, DEFAULT_DPO_BETA};
 use splinter_model::{LocalWeights, ManagedBrain, ServiceSettings};
 
 use crate::world::{cipher, is_correct, letters_right};
@@ -55,10 +55,10 @@ impl Lab {
         let dir = tempfile::tempdir().unwrap();
         let models = dir.path().join("models");
         let base = models.join("toy").join("chat");
-        toy_chat_checkpoint(&base, 5).unwrap();
         let binary = splinter_orchestrator::Config::from_env()
             .brain_binary
             .expect("the method smokes need a `brain` binary on PATH");
+        toy_chat_checkpoint(&binary, &base, 5).unwrap();
         let brain = ManagedBrain::start(
             &ServiceSettings {
                 binary,
@@ -153,35 +153,38 @@ impl Lab {
         from: Option<&Path>,
     ) -> PathBuf {
         let attempt = self.attempt(name);
-        let trained = fine_tune(&FineTune {
-            model_dir: &self.base,
-            train,
-            held_out,
-            held_out_text: None,
-            monitor: None,
-            eval_every: 0,
-            patience: 0,
-            attempt_dir: &attempt,
-            steps,
-            rank: 16,
-            alpha: 64.0,
-            replay: &[],
-            replay_share: None,
-            weighted_replay: &[],
-            grad_accum: 4,
-            continue_from: from,
-            cancel: None,
-            base: BasePrecision::Fp32,
-            learning_rate: Some(learning_rate),
-            weight_decay: 0.0,
-            // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
-            seed: 1,
-            max_block: None,
-            thinking: false,
-            pack_answers: false,
-            on_step: None,
-            keep_evaluations: None,
-        })
+        let trained = fine_tune_served(
+            self.brain.endpoints(),
+            &FineTune {
+                model_dir: &self.base,
+                train,
+                held_out,
+                held_out_text: None,
+                monitor: None,
+                eval_every: 0,
+                patience: 0,
+                attempt_dir: &attempt,
+                steps,
+                rank: 16,
+                alpha: 64.0,
+                replay: &[],
+                replay_share: None,
+                weighted_replay: &[],
+                grad_accum: 4,
+                continue_from: from,
+                cancel: None,
+                base: BasePrecision::Fp32,
+                learning_rate: Some(learning_rate),
+                weight_decay: 0.0,
+                // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
+                seed: 1,
+                max_block: None,
+                thinking: false,
+                pack_answers: false,
+                on_step: None,
+                keep_evaluations: None,
+            },
+        )
         .unwrap();
         trained.adapter
     }
@@ -196,23 +199,26 @@ impl Lab {
         from: Option<&Path>,
     ) -> PathBuf {
         let attempt = self.attempt(name);
-        train_preference(&PreferenceTune {
-            model_dir: &self.base,
-            train,
-            held_out,
-            attempt_dir: &attempt,
-            steps: run.steps,
-            rank: 16,
-            alpha: 64.0,
-            beta: DEFAULT_DPO_BETA,
-            nll_weight: run.nll_weight,
-            grad_accum: 4,
-            learning_rate: Some(run.learning_rate),
-            // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
-            seed: 1,
-            continue_from: from,
-            cancel: None,
-        })
+        train_preference_served(
+            self.brain.endpoints(),
+            &PreferenceTune {
+                model_dir: &self.base,
+                train,
+                held_out,
+                attempt_dir: &attempt,
+                steps: run.steps,
+                rank: 16,
+                alpha: 64.0,
+                beta: DEFAULT_DPO_BETA,
+                nll_weight: run.nll_weight,
+                grad_accum: 4,
+                learning_rate: Some(run.learning_rate),
+                // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
+                seed: 1,
+                continue_from: from,
+                cancel: None,
+            },
+        )
         .unwrap()
         .adapter
     }
@@ -259,25 +265,28 @@ impl Lab {
         options: PolicyGradientOptions,
     ) -> splinter_model::policy_gradient::TrainedPolicyGradient {
         let attempt = self.attempt(name);
-        train_policy_gradient(&PolicyGradientTune {
-            model_dir: &self.base,
-            train,
-            attempt_dir: &attempt,
-            steps: run.steps,
-            rank: 16,
-            alpha: 64.0,
-            weight_decay: 0.0,
-            grad_accum: run.grad_accum,
-            continue_from: from,
-            cancel: None,
-            base: BasePrecision::Fp32,
-            learning_rate: Some(run.learning_rate),
-            // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
-            seed: 1,
-            max_block: None,
-            thinking: false,
-            options,
-        })
+        train_policy_gradient_served(
+            self.brain.endpoints(),
+            &PolicyGradientTune {
+                model_dir: &self.base,
+                train,
+                attempt_dir: &attempt,
+                steps: run.steps,
+                rank: 16,
+                alpha: 64.0,
+                weight_decay: 0.0,
+                grad_accum: run.grad_accum,
+                continue_from: from,
+                cancel: None,
+                base: BasePrecision::Fp32,
+                learning_rate: Some(run.learning_rate),
+                // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.
+                seed: 1,
+                max_block: None,
+                thinking: false,
+                options,
+            },
+        )
         .unwrap()
     }
 }
@@ -560,7 +569,7 @@ pub fn corpus(attempts: Vec<(Experience, Annotation)>) -> Corpus {
 /// Writes what `view` projects from `corpus` as a training dataset at `path`, checked by brain's own parser.
 pub fn dataset(view: &dyn View, corpus: &Corpus, path: &Path) -> Projection {
     let projection = view.project(corpus).unwrap();
-    write_dataset(path, &projection, &BrainDatasetCheck).unwrap();
+    write_dataset(path, &projection, &splinter_data::Unchecked).unwrap();
     projection
 }
 

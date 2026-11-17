@@ -29,7 +29,7 @@ use atif::{
     AgentProfile, ObservationEntry, StepObservation, StepOrigin, ToolInvocation, TraceStep,
     Trajectory,
 };
-use common::{scratch_context, Scripted};
+use common::{config, scratch_context, Scratch, Scripted};
 use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
@@ -38,9 +38,11 @@ use splinter_core::kinds::WORKSPACE_CHANGE;
 use splinter_core::model_ref::ModelRef;
 use splinter_data::{chars_as_tokens, dataset_line, BlockMeasure, Exclusion, Projection, Record};
 use splinter_model::capabilities::overlong_records;
-use splinter_model::fixture::{byte_level_checkpoint, markup_heavy_checkpoint};
 use splinter_model::measure::RecordMeter;
-use splinter_model::TokenCounter;
+use splinter_model::scripted_endpoint::{ScriptedEndpoint, SCRIPTED_KEY};
+use splinter_model::scripted_jobs::JobScript;
+use splinter_model::served_train::ArtifactStore;
+use splinter_model::BrainEndpoints;
 use splinter_orchestrator::Context;
 use splinter_pipelines::datasets::{project_with, BuildRequest, ViewName, VoiceBuild};
 use splinter_store::experiences::{ExperienceSet, SetId};
@@ -137,15 +139,29 @@ fn request(set: SetId, max_block: Option<usize>, split_over_block: bool) -> Buil
     }
 }
 
-/// The bound the build measures a record by, as the build itself does.
-fn measure(ctx: &Context) -> impl Fn(&Record) -> usize {
-    let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
-    move |record: &Record| {
-        let text = serde_json::to_string(&record.body).unwrap_or_default();
-        counter
-            .as_ref()
-            .map_or_else(|| chars_as_tokens(&text), |c| c.count(&text))
+/// The bound the build measures a record by when no service can count it:
+/// characters at the fallback ratio, plus the rows of its pictures.
+fn measure(_ctx: &Context) -> impl Fn(&Record) -> usize {
+    |record: &Record| {
+        let (text, image_rows) = record.body.text_and_image_rows();
+        chars_as_tokens(&text) + image_rows
     }
+}
+
+/// A context whose brain is a scripted service: it counts a record's
+/// characters as its tokens, as the stand-in for the trainer's own count.
+fn served_context(test: &str) -> (Scratch, Context, ScriptedEndpoint, BrainEndpoints) {
+    let scratch = Scratch::new(test);
+    let store = scratch.0.join("artifacts");
+    std::fs::create_dir_all(&store).unwrap();
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(store.clone()));
+    let brain = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY)
+        .unwrap()
+        .with_artifact_store(ArtifactStore::open(&store).unwrap());
+    let mut config = config(&scratch);
+    config.brain = Some(brain.clone());
+    let ctx = Context::new(config, false).unwrap();
+    (scratch, ctx, service, brain)
 }
 
 #[test]
@@ -186,27 +202,21 @@ fn written(scratch: &std::path::Path, projection: &Projection) -> std::path::Pat
 
 #[test]
 fn a_build_bounds_records_by_the_count_the_trainer_checks_them_by() {
-    let (scratch, ctx) = scratch_context("dataset-exact", Scripted::new(|_| String::new()), false);
+    let (scratch, ctx, _service, brain) = served_context("dataset-exact");
     let base = ctx.config().policy_base.clone();
-    std::fs::create_dir_all(&base).unwrap();
-    markup_heavy_checkpoint(&base);
     let experience = attempt(&ctx);
     let set = set_of(&ctx, &experience);
 
     let (unbounded, _) = project_with(&ctx, &request(set.clone(), None, false), None).unwrap();
     assert_eq!(unbounded.block_measure, None, "no bound, no measure");
     let record = &unbounded.records[0];
-    let meter = RecordMeter::for_model(&base, false, unbounded.packed).unwrap();
+    let meter = RecordMeter::for_model(&brain, &base, false, unbounded.packed);
     let rendered = meter
         .tokens(&dataset_line(unbounded.objective, record).unwrap())
         .unwrap();
-    let floor = measure(&ctx)(record);
-    assert!(
-        floor < rendered,
-        "the case under test: the JSON text ({floor}) fits a bound its rendered request ({rendered}) does not"
-    );
+    let floor = rendered - 1;
 
-    // Left out, not kept as the floor would: it fits the floor, not the trainer.
+    // Left out at one token under the trainer's count, measured by the trainer.
     let (left_out, _) =
         project_with(&ctx, &request(set.clone(), Some(floor), false), None).unwrap();
     assert!(left_out.records.is_empty());
@@ -228,19 +238,20 @@ fn a_build_bounds_records_by_the_count_the_trainer_checks_them_by() {
     let (split, _) = project_with(&ctx, &request(set, Some(floor), true), None).unwrap();
     assert!(split.records.len() > 1, "asked, the record is split");
     let path = written(&scratch.0, &split);
-    let overlong = overlong_records(&path, &base, false, split.packed, floor as u32).unwrap();
+    let overlong =
+        overlong_records(&brain, &path, &base, false, split.packed, floor as u32).unwrap();
     assert!(overlong.is_empty(), "trainer refuses: {overlong:?}");
 }
 
 #[test]
-fn a_build_without_a_chat_tokenizer_says_it_measured_by_the_floor() {
+fn a_build_without_a_brain_service_says_it_measured_by_the_floor() {
     let (scratch, ctx) = scratch_context("dataset-floor", Scripted::new(|_| String::new()), false);
     std::mem::forget(scratch);
     let experience = attempt(&ctx);
     let set = set_of(&ctx, &experience);
     let (bounded, _) = project_with(&ctx, &request(set, Some(1_000_000), false), None).unwrap();
     let Some(BlockMeasure::Floor { reason }) = bounded.block_measure else {
-        panic!("the base has no tokenizer: {:?}", bounded.block_measure);
+        panic!("no service counts: {:?}", bounded.block_measure);
     };
     assert!(!reason.is_empty());
 }
@@ -252,57 +263,31 @@ fn a_build_without_a_chat_tokenizer_says_it_measured_by_the_floor() {
 /// reads).
 #[test]
 fn a_build_counts_records_for_the_base_the_training_starts_from() {
-    let (scratch, ctx) = scratch_context("dataset-base", Scripted::new(|_| String::new()), false);
-    let policy = ctx.config().policy_base.clone();
-    std::fs::create_dir_all(&policy).unwrap();
-    markup_heavy_checkpoint(&policy);
-    let trained = scratch.0.join("trained-base");
-    std::fs::create_dir_all(&trained).unwrap();
-    byte_level_checkpoint(&trained);
+    let (scratch, ctx, service, _brain) = served_context("dataset-base");
+    let trained = scratch.0.join("models/Org/Trained");
     let experience = attempt(&ctx);
     let set = set_of(&ctx, &experience);
-
-    let (unbounded, _) = project_with(&ctx, &request(set.clone(), None, false), None).unwrap();
-    let line = dataset_line(unbounded.objective, &unbounded.records[0]).unwrap();
-    let by_policy = RecordMeter::for_model(&policy, false, unbounded.packed)
-        .unwrap()
-        .tokens(&line)
-        .unwrap();
-    let by_trained = RecordMeter::for_model(&trained, false, unbounded.packed)
-        .unwrap()
-        .tokens(&line)
-        .unwrap();
-    assert!(
-        by_trained < by_policy,
-        "the case under test: the bases count differently"
-    );
-
-    let bound = by_trained;
     let for_trained = BuildRequest {
         base: Some(ModelRef::Local {
             checkpoint: trained.display().to_string(),
             adapter: None,
             context_tokens: None,
         }),
-        ..request(set.clone(), Some(bound), false)
+        ..request(set, Some(1_000_000), false)
     };
     let (kept, _) = project_with(&ctx, &for_trained, None).unwrap();
-    assert_eq!(kept.records.len(), 1, "it fits the base it is trained on");
+    assert_eq!(kept.records.len(), 1);
     assert_eq!(
         kept.block_measure,
         Some(BlockMeasure::Trainer {
-            base: trained.clone(),
+            base: trained,
             first_refusal: None
         })
     );
-    let path = written(&scratch.0, &kept);
-    assert!(
-        overlong_records(&path, &trained, false, kept.packed, bound as u32)
-            .unwrap()
-            .is_empty()
+    let checked = service.jobs().checks();
+    assert_eq!(
+        checked.last().unwrap()["base"],
+        "Org/Trained",
+        "the trained base reads the records"
     );
-
-    // Unnamed, the policy counts: the same bound leaves the record out.
-    let (left_out, _) = project_with(&ctx, &request(set, Some(bound), false), None).unwrap();
-    assert!(left_out.records.is_empty());
 }

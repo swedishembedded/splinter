@@ -140,13 +140,15 @@ splinter --brain-endpoint http://gpu-node:8805/v1 --brain-key-file KEY \
 datasets (and the adapter a run continues) are published there as files named by their BLAKE3 digest, the
 job names them by digest, and the trained adapter and its training record come back the same way, so no
 dataset travels through the API and the directory may be on a filesystem several nodes share. The base is
-requested by the id brain's store gives it, as for inference. The datasets are checked here, as for an
-in-process run, before anything is published. A run the service has no room for (every card that could
+requested by the id brain's store gives it, as for inference. Every dataset is read first by the service's
+own trainer (`check_dataset`), which names a record it refuses by line and sizes the training row to the
+longest example, before a run is asked for. A run the service has no room for (every card that could
 hold it is serving a request) is asked again, of every endpoint, until it is placed or the run is
-cancelled; a request the service refuses outright is reported with its reason. Preference (DPO),
-full-parameter runs and adapter merges have no job on the service yet: with endpoints they are refused
-by name, because they would load the model in the process on cards the service is using. Without
-endpoints, training runs in the process as before.
+cancelled; a request the service refuses outright is reported with its reason. Supervised, policy-gradient
+and preference (DPO) runs, full-parameter runs and adapter merges are all jobs of the service; a checkpoint
+a full-parameter run or a merge makes is installed in the server's model store as `local/<name>`. Without
+endpoints, Splinter starts a server of its own (`--brain-bin`) and trains through it the same way: nothing
+trains in Splinter's process.
 
 ## Roles
 

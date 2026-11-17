@@ -13,9 +13,7 @@
 
 use splinter_agent::CancelToken;
 use splinter_core::training::Regime;
-use splinter_model::policy_gradient::{
-    train_policy_gradient, PolicyGradientOptions, PolicyGradientTune, TrainedPolicyGradient,
-};
+use splinter_model::policy_gradient::{PolicyGradientTune, TrainedPolicyGradient};
 use splinter_model::served_train::train_policy_gradient_served;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -54,11 +52,7 @@ pub(super) fn train(
         thinking: carries_reasoning(&train)?,
         options: plan.tuning.policy_gradient,
     };
-    match &ctx.config().brain {
-        Some(brain) => train_policy_gradient_served(brain, &request),
-        None => train_policy_gradient(&request),
-    }
-    .map_err(trainer_error)
+    train_policy_gradient_served(&ctx.brain()?, &request).map_err(trainer_error)
 }
 
 /// Refuses settings a run of `regime` cannot honour, so none is dropped
@@ -95,28 +89,5 @@ pub(crate) fn check_settings(regime: Regime, tuning: &Tuning) -> Result<(), Orch
             "monitor a run, but a policy-gradient run holds nothing out and has no monitoring \
              loss; its exam is the judge",
         )
-    }
-}
-
-/// The policy-gradient settings a plan records: every default resolved for a
-/// run that trains the objective, none for any other.
-pub(super) fn resolved(regime: Regime, named: PolicyGradientOptions) -> PolicyGradientOptions {
-    if regime != Regime::PolicyGradient {
-        return named;
-    }
-    let resolved = named.resolved();
-    PolicyGradientOptions {
-        clip_eps: Some(resolved.clip_eps),
-        clip_eps_high: resolved.clip_eps_high,
-        max_step_kl: resolved.max_step_kl,
-        max_step_grad_norm: resolved.max_step_grad_norm,
-        kl_beta: Some(resolved.kl_beta),
-        reference: Some(resolved.reference),
-        behaviour: Some(resolved.behaviour),
-        loss_agg: Some(resolved.loss_agg),
-        temperature: Some(resolved.temperature),
-        teacher: Some(resolved.teacher),
-        advantage_bound: resolved.advantage_bound,
-        sequence_advantage_cap: resolved.sequence_advantage_cap,
     }
 }

@@ -42,17 +42,6 @@ pub fn vram_budget_gib() -> Option<f64> {
     gpu_core::capacity::vram_budget().map(|bytes| bytes as f64 / (1u64 << 30) as f64)
 }
 
-/// Runs `f`, returning the text of a panic it unwinds with instead of
-/// letting it end the process. brain reports a device failure (an allocation
-/// the card cannot hold) by unwinding with a payload that bypasses the panic
-/// hook, so an uncontained one leaves a caller that reports its failures
-/// (`--json`) with nothing to report; contained, it is an error the caller
-/// returns with the cause in it.
-pub(crate) fn contain_device_panic<T>(f: impl FnOnce() -> T) -> Result<T, String> {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
-        .map_err(|panic| format!("device panic: {}", panic_message(&*panic)))
-}
-
 /// One GPU's memory right now, as the driver reports it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct GpuCard {
@@ -177,46 +166,5 @@ fn same_selection(chosen: &'static Devices, text: &str) -> Result<&'static Devic
             text: text.to_string(),
             reason: format!("the process already schedules on {}", chosen.source()),
         })
-    }
-}
-
-/// A panic payload as text, however it was constructed.
-fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
-    if let Some(oom) = panic.downcast_ref::<gpu_core::DeviceOutOfMemory>() {
-        return oom.to_string();
-    }
-    panic
-        .downcast_ref::<String>()
-        .cloned()
-        .or_else(|| panic.downcast_ref::<&str>().map(|s| (*s).to_string()))
-        .unwrap_or_else(|| "no message".into())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_full_card_unwind_is_returned_with_what_the_allocation_was() {
-        let oom = gpu_core::DeviceOutOfMemory {
-            bytes: 134_111_232,
-            what: "storage".into(),
-            detail: "cuMemAlloc failed: out of memory".into(),
-        };
-        let caught: Result<(), String> =
-            contain_device_panic(|| std::panic::resume_unwind(Box::new(oom)));
-        let message = caught.expect_err("the unwind is contained, not propagated");
-        assert!(
-            message.contains("device out of memory allocating 134111232 bytes for storage"),
-            "{message}"
-        );
-        assert!(message.contains("cuMemAlloc failed"), "{message}");
-    }
-
-    #[test]
-    fn a_text_panic_is_returned_with_its_text_and_a_value_passes_through() {
-        let caught: Result<(), String> = contain_device_panic(|| panic!("kernel launch failed"));
-        assert!(caught.unwrap_err().contains("kernel launch failed"));
-        assert_eq!(contain_device_panic(|| 7), Ok(7));
     }
 }

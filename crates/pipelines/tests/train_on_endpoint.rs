@@ -7,11 +7,10 @@
 // cluster, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! Spec: with brain endpoints, a training regime that has no job on the
-//! service (preference optimisation, a full-parameter fine-tune, merging an
-//! adapter) is refused by name instead of loading the model in this process
-//! on cards the service is using. Without endpoints they are not refused for
-//! that reason: the in-process path stays.
+//! Spec: every training regime is a job of the brain service, merging an
+//! adapter included; its checkpoint is installed in the run's model store and
+//! read from there. With no service to ask (no endpoint, no `brain` binary)
+//! a run is refused by name: nothing trains in this process.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -24,8 +23,10 @@ use common::{config, Scratch};
 use splinter_agent::CancelToken;
 use splinter_core::training::Regime;
 use splinter_model::scripted_endpoint::{ScriptedEndpoint, SCRIPTED_KEY};
+use splinter_model::scripted_jobs::JobScript;
+use splinter_model::served_train::ArtifactStore;
 use splinter_model::BrainEndpoints;
-use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_orchestrator::Context;
 use splinter_pipelines::train::{BrainTrainer, TrainPlan, Trainer, Tuning};
 
 fn plan(dir: &Path, regime: Regime) -> TrainPlan {
@@ -52,55 +53,60 @@ fn plan(dir: &Path, regime: Regime) -> TrainPlan {
     }
 }
 
-fn refusal(error: OrchestratorError) -> String {
-    match error {
-        OrchestratorError::Refused(why) => why,
-        other => panic!("expected a refusal, got {other}"),
-    }
+#[test]
+fn a_merge_is_a_job_whose_checkpoint_is_installed_in_the_model_store() {
+    let scratch = Scratch::new("train-on-endpoint");
+    let store = scratch.0.join("artifacts");
+    std::fs::create_dir_all(&store).unwrap();
+    let mut settings = config(&scratch);
+    let server = ScriptedEndpoint::start(vec![]).with_training(JobScript {
+        models: Some(settings.model_store.clone()),
+        ..JobScript::over(store.clone())
+    });
+    settings.brain = Some(
+        BrainEndpoints::new(vec![server.url()], SCRIPTED_KEY)
+            .unwrap()
+            .with_artifact_store(ArtifactStore::open(&store).unwrap()),
+    );
+    let models = settings.model_store.clone();
+    let ctx = Context::new(settings, false).unwrap();
+    let adapter = scratch.0.join("adapter.safetensors");
+    std::fs::write(&adapter, b"lora").unwrap();
+    let work = scratch.0.join("merge-1");
+
+    let checkpoint = BrainTrainer
+        .merge(
+            &ctx,
+            &plan(&scratch.0, Regime::Sft).base,
+            &adapter,
+            &work.join("checkpoint"),
+            &CancelToken::new(),
+        )
+        .unwrap();
+
+    assert_eq!(server.jobs().actions(), vec!["merge"]);
+    assert_eq!(checkpoint.dir, models.join("local/splinter-merge-1"));
+    assert!(checkpoint.weights.is_file());
 }
 
 #[test]
-fn a_regime_without_a_job_is_refused_by_name_when_the_run_has_endpoints() {
-    let scratch = Scratch::new("train-on-endpoint");
-    let server = ScriptedEndpoint::start(vec![]);
+fn with_no_service_to_ask_a_run_is_refused_by_name() {
+    let scratch = Scratch::new("train-without-endpoint");
     let mut settings = config(&scratch);
-    settings.brain = Some(BrainEndpoints::new(vec![server.url()], SCRIPTED_KEY).unwrap());
+    settings.brain_binary = None;
     let ctx = Context::new(settings, false).unwrap();
-    let cancel = CancelToken::new();
-
-    let dpo = BrainTrainer
-        .train_preference(&ctx, &plan(&scratch.0, Regime::Dpo), &cancel)
-        .map(|_| ())
-        .unwrap_err();
-    assert!(refusal(dpo).contains("a preference (DPO) run has no job on the brain service"));
-    let full = BrainTrainer
-        .train_full(&ctx, &plan(&scratch.0, Regime::Sft), &cancel)
-        .map(|_| ())
-        .unwrap_err();
-    assert!(refusal(full).contains("a full-parameter run has no job"));
-    let merge = BrainTrainer
+    let error = BrainTrainer
         .merge(
             &ctx,
             &scratch.0,
             &scratch.0,
-            &scratch.0.join("merged"),
-            &cancel,
+            &scratch.0.join("merge-1/checkpoint"),
+            &CancelToken::new(),
         )
         .map(|_| ())
         .unwrap_err();
-    assert!(refusal(merge).contains("merging an adapter into a base has no job"));
-}
-
-#[test]
-fn without_endpoints_those_regimes_are_not_refused_for_that_reason() {
-    let scratch = Scratch::new("train-without-endpoint");
-    let ctx = Context::new(config(&scratch), false).unwrap();
-    let error = BrainTrainer
-        .train_preference(&ctx, &plan(&scratch.0, Regime::Dpo), &CancelToken::new())
-        .map(|_| ())
-        .unwrap_err();
     assert!(
-        !error.to_string().contains("brain service"),
-        "the in-process path ran and failed on its own terms: {error}"
+        error.to_string().contains("--brain-endpoint"),
+        "the run names how to reach a server: {error}"
     );
 }

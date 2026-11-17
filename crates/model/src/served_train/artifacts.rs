@@ -68,20 +68,29 @@ impl ArtifactStore {
     /// Publishes the contents of `file` and returns the digest that names
     /// them. Publishing what the store already holds changes nothing.
     pub fn publish(&self, file: &Path) -> Result<Digest, PolicyError> {
+        let mut source = std::fs::File::open(file).map_err(Self::io(file))?;
+        self.publish_from(&mut source)
+    }
+
+    /// Publishes `bytes`, as [`Self::publish`] publishes a file's.
+    pub fn publish_bytes(&self, bytes: &[u8]) -> Result<Digest, PolicyError> {
+        self.publish_from(&mut std::io::Cursor::new(bytes))
+    }
+
+    fn publish_from(&self, source: &mut dyn std::io::Read) -> Result<Digest, PolicyError> {
         let temp = self.root.join(format!(
             ".publishing-{}-{}",
             std::process::id(),
             PUBLISHED.fetch_add(1, Ordering::Relaxed)
         ));
         let published = (|| {
-            let mut source = std::fs::File::open(file).map_err(Self::io(file))?;
             let mut out = OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .mode(0o640)
                 .open(&temp)
                 .map_err(Self::io(&temp))?;
-            std::io::copy(&mut source, &mut out).map_err(Self::io(&temp))?;
+            std::io::copy(source, &mut out).map_err(Self::io(&temp))?;
             out.sync_all().map_err(Self::io(&temp))?;
             drop(out);
             let digest = Digest::of_reader(std::fs::File::open(&temp).map_err(Self::io(&temp))?)

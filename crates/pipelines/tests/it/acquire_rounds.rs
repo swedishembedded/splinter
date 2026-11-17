@@ -211,11 +211,6 @@ fn a_full_fine_tune_that_the_release_gate_cannot_take_is_refused_up_front() {
         ..full_request(&manual)
     };
     assert!(refused(released).contains("release gate"));
-    let precision = AcquireRequest {
-        train_precision: Some("state=nonsense".into()),
-        ..full_request(&manual)
-    };
-    assert!(refused(precision).contains("training precision"));
     let adapter_only = AcquireRequest {
         train_precision: Some("state=int8".into()),
         ..request(&manual)

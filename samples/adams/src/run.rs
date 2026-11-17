@@ -103,7 +103,7 @@ pub struct Train {
 
 /// Fine-tune a LoRA adapter on the training set through Splinter's trainer,
 /// scoring it on the records the trainer holds out, and record the summary.
-pub fn train_command(t: &Train) -> anyhow::Result<()> {
+pub fn train_command(brain: &splinter_sdk::model::BrainEndpoints, t: &Train) -> anyhow::Result<()> {
     std::fs::create_dir_all(&t.attempt)?;
     let started = std::time::Instant::now();
     let report = |r: &splinter_sdk::model::train::StepReport| {
@@ -148,7 +148,7 @@ pub fn train_command(t: &Train) -> anyhow::Result<()> {
         thinking: false,
         on_step: Some(splinter_sdk::model::train::StepHook(&report)),
     };
-    let trained = splinter_sdk::model::train::fine_tune(&request)?;
+    let trained = splinter_sdk::model::served_train::fine_tune_served(brain, &request)?;
     let summary = serde_json::json!({
         "adapter": trained.adapter,
         "adapter_digest": trained.adapter_digest,
@@ -369,20 +369,15 @@ pub fn build_onpolicy_command(
         |rows: &[serde_json::Value]| -> String { rows.iter().map(|r| format!("{r}\n")).collect() };
     std::fs::write(dir.join("sft-rft.jsonl"), lines(&sft))?;
     std::fs::write(dir.join("preference-onpolicy.jsonl"), lines(&pairs))?;
-    let chat = splinter_sdk::model::train::validate_dataset(&dir.join("sft-rft.jsonl"))?;
-    let read = splinter_sdk::model::train::validate_preference_dataset(
-        &dir.join("preference-onpolicy.jsonl"),
-    )?;
     println!(
         "prompts sampled: {}  every sample passed: {all_pass}  none passed: {none_pass}",
         sampled.len()
     );
+    // The trainer reads them when a run is asked for (brain's check_dataset).
     println!(
-        "supervised records: {} (the trainer reads {})  preference pairs: {} (the trainer reads {})",
+        "supervised records: {}  preference pairs: {}",
         sft.len(),
-        chat.records,
-        pairs.len(),
-        read.pairs
+        pairs.len()
     );
     Ok(())
 }
@@ -427,25 +422,14 @@ pub fn build_data_command(
     let built = crate::datasets::build(&results, &principles, documents);
     let dir = resources.join("datasets");
     crate::datasets::write_all(&built, &dir, benchmark_file, extra_file)?;
-    let chat = splinter_sdk::model::train::validate_dataset(&dir.join("sft-transfer.jsonl"))?;
-    let pairs = splinter_sdk::model::train::validate_preference_dataset(
-        &dir.join("preference-transfer.jsonl"),
-    )?;
     println!(
         "results: {}  excluded: {}",
         results.len(),
         built.excluded.len()
     );
-    println!(
-        "supervised records: {} (the trainer reads {})",
-        built.sft.len(),
-        chat.records
-    );
-    println!(
-        "preference pairs: {} (the trainer reads {})",
-        built.preference.len(),
-        pairs.pairs
-    );
+    // The trainer reads them when a run is asked for (brain's check_dataset).
+    println!("supervised records: {}", built.sft.len());
+    println!("preference pairs: {}", built.preference.len());
     let mut by_break: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     for pair in &built.preference {
         *by_break
@@ -476,12 +460,7 @@ pub fn build_data_command(
             &path,
             records.iter().map(|r| format!("{r}\n")).collect::<String>(),
         )?;
-        let read = splinter_sdk::model::train::validate_dataset(&path)?;
-        println!(
-            "reconstruction records: {} (the trainer reads {})",
-            records.len(),
-            read.records
-        );
+        println!("reconstruction records: {}", records.len());
     }
     Ok(())
 }
@@ -508,7 +487,7 @@ pub struct Dpo {
 }
 
 /// Direct preference optimisation on the pairs, through Splinter's trainer.
-pub fn dpo_command(d: &Dpo) -> anyhow::Result<()> {
+pub fn dpo_command(brain: &splinter_sdk::model::BrainEndpoints, d: &Dpo) -> anyhow::Result<()> {
     std::fs::create_dir_all(&d.attempt)?;
     let started = std::time::Instant::now();
     let split = splinter_sdk::data::holdout::split_dataset_file(&d.pairs, &d.attempt)?;
@@ -528,7 +507,7 @@ pub fn dpo_command(d: &Dpo) -> anyhow::Result<()> {
         continue_from: d.continue_from.as_deref(),
         cancel: None,
     };
-    let trained = splinter_sdk::model::train::train_preference(&request)?;
+    let trained = splinter_sdk::model::served_train::train_preference_served(brain, &request)?;
     let summary = serde_json::json!({
         "adapter": trained.adapter,
         "adapter_digest": trained.adapter_digest,

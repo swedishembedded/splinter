@@ -18,7 +18,6 @@ use std::path::{Path, PathBuf};
 
 use splinter_data::process::{outcome_only, project, Step, StepChecker};
 use splinter_data::{write_dataset, Projection};
-use splinter_model::capabilities::BrainDatasetCheck;
 
 use crate::lab::Lab;
 use crate::report::Outcome;
@@ -98,7 +97,7 @@ fn reference(prompts: &[String]) -> Vec<(String, Vec<Step>)> {
 
 fn write(lab: &Lab, name: &str, projection: &Projection) -> PathBuf {
     let path = lab.dir.path().join(format!("{name}.jsonl"));
-    write_dataset(&path, projection, &BrainDatasetCheck).unwrap();
+    write_dataset(&path, projection, &splinter_data::Unchecked).unwrap();
     path
 }
 

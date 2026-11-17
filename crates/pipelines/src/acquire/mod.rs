@@ -315,11 +315,6 @@ impl AcquireRequest {
         if self.rank.is_some() {
             return refuse("a rank is the size of an adapter; a full fine-tune has none");
         }
-        if let Some(spec) = &self.train_precision {
-            splinter_model::consolidate::check_train_precision(spec).map_err(|e| {
-                OrchestratorError::Refused(format!("training precision '{spec}': {e}"))
-            })?;
-        }
         Ok(())
     }
 

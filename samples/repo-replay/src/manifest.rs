@@ -22,7 +22,8 @@ use anyhow::{Context as _, Result};
 use serde_json::{json, Value};
 use splinter_sdk::data::split::Part;
 use splinter_sdk::datasets::examples_in;
-use splinter_sdk::model::TokenCounter;
+use splinter_sdk::model::selection::local_model_name;
+use splinter_sdk::model::served_train::{check_dataset, CheckSpec};
 use splinter_sdk::train::trainable;
 use splinter_sdk::vocabulary::build::BuildInfo;
 use splinter_sdk::Context;
@@ -166,19 +167,23 @@ fn split_section(ctx: &Context, s: &Sources<'_>, part: Part, name: &str) -> Resu
     Ok(section)
 }
 
-/// Token lengths of the records of `file`: counted by the policy's tokenizer
-/// when its directory holds one, else by the characters-per-token ratio the
-/// builder falls back to; the counter used is named.
+/// Token lengths of the records of `file`: as the brain service's trainer
+/// reads them for the policy base (template included), else by the
+/// characters-per-token ratio the builder falls back to when no service can
+/// be asked; the counter used is named.
 fn token_lengths(ctx: &Context, file: &Path, max_block: Option<usize>) -> Result<Value> {
-    let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
-    let mut lengths: Vec<usize> = std::fs::read_to_string(file)?
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|line| match &counter {
-            Some(c) => c.count(line),
-            None => splinter_sdk::data::chars_as_tokens(line),
-        })
-        .collect();
+    let served = ctx.brain().ok().and_then(|brain| {
+        let base = local_model_name(&ctx.config().policy_base);
+        check_dataset(&brain, file, &CheckSpec::chat(&base, false, false)).ok()
+    });
+    let mut lengths: Vec<usize> = match &served {
+        Some(report) => report.per_record.iter().map(|r| r.tokens).collect(),
+        None => std::fs::read_to_string(file)?
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(splinter_sdk::data::chars_as_tokens)
+            .collect(),
+    };
     lengths.sort_unstable();
     let nearest_rank = |p: usize| {
         lengths
@@ -187,7 +192,7 @@ fn token_lengths(ctx: &Context, file: &Path, max_block: Option<usize>) -> Result
             .map(|last| lengths[(last * p).div_ceil(100)])
     };
     Ok(json!({
-        "counter": if counter.is_some() { "tokenizer of the policy base" } else { "characters (no tokenizer at the policy base)" },
+        "counter": if served.is_some() { "the brain service's trainer, for the policy base" } else { "characters (no brain service to count with)" },
         "policy_base": ctx.config().policy_base.file_name().map(|n| n.to_string_lossy().into_owned()),
         "records": lengths.len(),
         "min": lengths.first(),

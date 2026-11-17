@@ -20,8 +20,8 @@ use splinter_core::terms::UsagePolicy;
 use splinter_data::timeline_dataset::{
     project, write_timeline_dataset, PredictionPoint, ProjectionSpec,
 };
+use splinter_data::Unchecked;
 use splinter_model::timeline::read_jsonl;
-use splinter_model::BrainDatasetCheck;
 use splinter_store::longitudinal::{ImportSpec, LongitudinalStore};
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
@@ -75,7 +75,7 @@ fn projected_records_are_read_whole_by_brains_parser() {
         };
         let projection = project(&store, &spec).unwrap();
         let out = root.path().join(format!("{name}.jsonl"));
-        write_timeline_dataset(&out, &projection, &BrainDatasetCheck).unwrap();
+        write_timeline_dataset(&out, &projection, &Unchecked).unwrap();
         let subjects = read_jsonl(&out).unwrap();
         assert_eq!(subjects.len(), projection.records.len(), "{name}");
         assert!(

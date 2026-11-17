@@ -26,8 +26,8 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 use splinter_data::{Corpus, RecordBody, View, Voice};
 use splinter_knowledge::sections::sections;
-use splinter_model::train::score_chat;
-use splinter_model::TokenCounter;
+use splinter_model::served_train::score_chat;
+use splinter_model::LocalWeights;
 
 use crate::exam_set::ExamSet;
 use splinter_orchestrator::context::Context;
@@ -74,12 +74,9 @@ fn write_records(
     system: Option<&str>,
     file: &Path,
 ) -> Result<usize, OrchestratorError> {
-    let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
-    let tokens = |text: &str| {
-        counter
-            .as_ref()
-            .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
-    };
+    // Chunked in characters at the ratio that holds for text that tokenizes
+    // badly; the scoring server counts the tokens it scores.
+    let tokens = splinter_data::chars_as_tokens;
     let sectioner = |text: &str, media_type: &str| {
         sections(text, media_type)
             .into_iter()
@@ -169,8 +166,15 @@ fn score_arm(
             "no text of the exam is left to score the voice on".into(),
         ));
     }
-    let scored = score_chat(&ctx.config().policy_base, arm.adapter, &file)
-        .map_err(|e| OrchestratorError::Refused(e.to_string()));
+    let weights = LocalWeights {
+        base: ctx.config().policy_base.clone(),
+        adapter: arm.adapter.map(Path::to_path_buf),
+        context_tokens: ctx.config().policy_context_tokens,
+    };
+    let scored = ctx.brain().and_then(|brain| {
+        score_chat(&brain, &weights, &file, false)
+            .map_err(|e| OrchestratorError::Refused(e.to_string()))
+    });
     std::fs::remove_file(&file).map_err(io(&file))?;
     let scored = scored?;
     Ok(VoiceScore {

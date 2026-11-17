@@ -266,11 +266,10 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     let plan = trainer.plans.lock().unwrap()[0].clone();
     assert_eq!(plan.regime, Regime::PolicyGradient);
     assert_eq!((plan.eval_every, plan.patience), (0, 0));
-    let defaults = PolicyGradientOptions::defaults();
-    assert_eq!(plan.tuning.policy_gradient.resolved(), defaults);
-    assert!(
-        plan.tuning.policy_gradient.named().len() == 7,
-        "recorded in the plan"
+    assert_eq!(
+        plan.tuning.policy_gradient,
+        PolicyGradientOptions::default(),
+        "nothing named: brain's defaults apply, and its training record states them"
     );
 
     let named = TrainRequest {
@@ -296,20 +295,20 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     let trainer = FakeTrainer::knowing(&[]);
     train(&ctx, &named, &trainer, &CancelToken::new()).unwrap();
     let plan = trainer.plans.lock().unwrap()[0].clone();
-    let resolved = plan.tuning.policy_gradient.resolved();
+    let used = plan.tuning.policy_gradient;
     assert_eq!(
-        (resolved.clip_eps, resolved.kl_beta, resolved.temperature),
-        (0.1, 0.0, 0.7)
+        (used.clip_eps, used.kl_beta, used.temperature),
+        (Some(0.1), Some(0.0), Some(0.7))
     );
     assert_eq!(
-        (resolved.reference, resolved.loss_agg),
-        (Reference::StartOfRun, LossAggregation::TokenSum)
+        (used.reference, used.loss_agg),
+        (Some(Reference::StartOfRun), Some(LossAggregation::TokenSum))
     );
     assert_eq!(
         (
-            resolved.clip_eps_high,
-            resolved.max_step_kl,
-            resolved.max_step_grad_norm
+            used.clip_eps_high,
+            used.max_step_kl,
+            used.max_step_grad_norm
         ),
         (Some(0.2), Some(0.5), Some(8.0)),
         "clip-higher and the step guard reach the plan as named"
@@ -317,11 +316,11 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     // The self-distillation guards reach the plan as named.
     assert_eq!(
         (
-            resolved.teacher,
-            resolved.advantage_bound,
-            resolved.sequence_advantage_cap
+            used.teacher,
+            used.advantage_bound,
+            used.sequence_advantage_cap
         ),
-        (Reference::StartOfRun, Some(5.0), Some(40.0))
+        (Some(Reference::StartOfRun), Some(5.0), Some(40.0))
     );
 }
 

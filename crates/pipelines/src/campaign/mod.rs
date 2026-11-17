@@ -40,9 +40,10 @@
 //!    plateau ([`splinter_eval::campaign::plateau`]); a plateau moves the
 //!    campaign to the next strategy of its ladder.
 //!
-//! Where rollouts come from is a trait. [`brain`] holds the in-process path
-//! (a loaded model sampled at temperature 1 against a verifier) and the
-//! trainer that calls brain; [`endpoint`] holds the path over an agent
+//! Where rollouts come from is a trait. [`served`] holds the path over a
+//! brain server (a served model sampled at temperature 1 against a verifier,
+//! and brain's training job), with the family and settings of [`brain`];
+//! [`endpoint`] holds the path over an agent
 //! executor that runs tasks in sandboxes and returns, per model call, the
 //! token ids and log-probabilities the policy sampled with.
 //!

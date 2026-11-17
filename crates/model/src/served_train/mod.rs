@@ -42,7 +42,8 @@ mod score;
 
 pub use artifacts::ArtifactStore;
 pub use check::{
-    check_dataset, CheckSpec, DatasetKind, DatasetReport, Distribution, RecordLength, Refusal,
+    check_dataset, check_published, CheckSpec, DatasetKind, DatasetReport, Distribution,
+    RecordLength, Refusal,
 };
 pub use checkpoint::{full_fine_tune_served, merge_served, Install};
 pub use job::REFUSED_WAIT;
@@ -76,8 +77,9 @@ pub fn fine_tune_served(
     brain: &BrainEndpoints,
     request: &FineTune<'_>,
 ) -> Result<Trained, PolicyError> {
-    let records = check_request(request)?;
-    let params = request::fine_tune_params(brain, request)?;
+    let checked = check_request(brain, request)?;
+    let records = checked.records;
+    let params = request::fine_tune_params(brain, request, checked.block)?;
     let clock = StepClock::start();
     let report = run(
         brain,

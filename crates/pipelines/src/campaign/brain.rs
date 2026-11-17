@@ -7,9 +7,10 @@
 // policy-gradient training you can procure our services by sending an email
 // to info@swedishembedded.com.
 
-//! The in-process brain path: a loaded model sampled at temperature 1
-//! against a verifier, brain's policy-gradient trainer, and a greedy dev
-//! exam.
+//! What a campaign over brain is made of, whichever way it reaches brain: the
+//! task family, the settings of the model sampled and of the trainer, and the
+//! files a training call writes and reads. The collector, validator and
+//! trainer that use them over brain's API are in [`super::served`].
 //!
 //! A [`TaskFamily`] is what the path needs to know about the tasks: how a
 //! task is put to the policy and how a completion is graded. It is the
@@ -18,24 +19,14 @@
 
 use std::path::{Path, PathBuf};
 
-use futures::StreamExt;
 use serde::Serialize;
-use serde_json::{json, Value};
-use splinter_core::chat::WireMessage;
+use serde_json::Value;
 use splinter_core::digest::Digest;
 use splinter_data::{write_dataset, Objective, Projection};
-use splinter_eval::campaign::gate::{DevResult, Outcomes};
-use splinter_model::answer::{Answerer, Decoding};
-use splinter_model::policy_gradient::{
-    train_policy_gradient, PolicyGradientOptions, PolicyGradientTune,
-};
+use splinter_model::policy_gradient::{PolicyGradientOptions, PolicyGradientTune};
 use splinter_model::precision::BasePrecision;
-use splinter_model::{BrainDatasetCheck, BrainEndpoints, LocalWeights};
 
-use super::types::{
-    CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup, TrainReport,
-    TrainRequest, Trained, Trainer, Validator,
-};
+use super::types::{CampaignError, TrainReport, TrainRequest, Trained};
 
 /// How a completion was graded.
 #[derive(Clone, Debug, PartialEq)]
@@ -103,248 +94,6 @@ impl ModelSettings {
     }
 }
 
-fn first_turns(turns: &[(String, String)]) -> Vec<(&str, &str)> {
-    turns
-        .iter()
-        .map(|(r, t)| (r.as_str(), t.as_str()))
-        .collect()
-}
-
-fn prompt_messages(turns: &[(String, String)]) -> Vec<WireMessage> {
-    turns
-        .iter()
-        .map(|(role, text)| WireMessage {
-            role: role.clone(),
-            content: text.clone(),
-            images: Vec::new(),
-            tool_calls: Vec::new(),
-            tool_call_id: None,
-            reasoning_content: None,
-            train: false,
-        })
-        .collect()
-}
-
-fn answerer(
-    endpoints: &BrainEndpoints,
-    settings: &ModelSettings,
-    policy: &PolicyRef,
-    decoding: Decoding,
-) -> Result<Answerer, CampaignError> {
-    let weights = LocalWeights {
-        base: settings.base.clone(),
-        adapter: policy.adapter.clone(),
-        context_tokens: settings.context_tokens,
-    };
-    Answerer::request(endpoints, &weights, decoding).map_err(|e| {
-        CampaignError::Collector(format!("requesting {}: {e}", settings.base.display()))
-    })
-}
-
-/// The collector of a served policy: the policy sampled at temperature 1, one draw per
-/// attempt under a seed derived from the request's.
-pub struct ChatCollector<'f> {
-    endpoints: BrainEndpoints,
-    family: &'f dyn TaskFamily,
-    settings: ModelSettings,
-    policy: PolicyRef,
-    model: Option<Answerer>,
-    runtime: tokio::runtime::Runtime,
-}
-
-impl<'f> ChatCollector<'f> {
-    /// A collector over `family`.
-    ///
-    /// # Errors
-    /// The async runtime could not start.
-    pub fn new(
-        endpoints: BrainEndpoints,
-        family: &'f dyn TaskFamily,
-        settings: ModelSettings,
-    ) -> Result<Self, CampaignError> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| CampaignError::Collector(format!("starting the runtime: {e}")))?;
-        Ok(Self {
-            endpoints,
-            family,
-            settings,
-            policy: PolicyRef::default(),
-            model: None,
-            runtime,
-        })
-    }
-}
-
-impl RolloutCollector for ChatCollector<'_> {
-    fn describe(&self) -> Value {
-        json!({"path": "served", "model": self.settings, "family": self.family.describe()})
-    }
-
-    fn tasks(&self) -> Vec<String> {
-        self.family.pool()
-    }
-
-    fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), CampaignError> {
-        self.model = Some(answerer(
-            &self.endpoints,
-            &self.settings,
-            policy,
-            Decoding::Greedy,
-        )?);
-        self.policy = policy.clone();
-        Ok(())
-    }
-
-    fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, CampaignError> {
-        if self.model.is_none() || self.policy != request.policy {
-            self.set_policy(&request.policy)?;
-        }
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| CampaignError::Collector("no model is loaded".into()))?;
-        let family = self.family;
-        let settings = &self.settings;
-        let mut jobs = Vec::new();
-        for (t, task) in request.tasks.iter().enumerate() {
-            let turns = family.prompt(task)?;
-            for attempt in 0..request.attempts {
-                let seed = request
-                    .seed
-                    .wrapping_add((t as u64) << 20)
-                    .wrapping_add(attempt as u64);
-                jobs.push((t, turns.clone(), seed));
-            }
-        }
-        let replies = self.runtime.block_on(async {
-            futures::stream::iter(jobs.into_iter().map(|(t, turns, seed)| async move {
-                let decoding = Decoding::Sampled {
-                    temperature: settings.temperature,
-                    seed: Some(seed),
-                };
-                let reply = model
-                    .ask_turns(decoding, &first_turns(&turns), settings.max_tokens)
-                    .await
-                    .map_err(|e| CampaignError::Collector(e.to_string()))?;
-                Ok::<_, CampaignError>((t, turns, reply))
-            }))
-            .buffered(settings.concurrency.max(1))
-            .collect::<Vec<_>>()
-            .await
-        });
-        let mut groups: Vec<RolloutGroup> = request
-            .tasks
-            .iter()
-            .map(|task| RolloutGroup {
-                task: task.clone(),
-                rollouts: Vec::new(),
-            })
-            .collect();
-        for reply in replies {
-            let (t, turns, reply) = reply?;
-            let completion = reply.text.trim().to_string();
-            let graded = family.grade(&request.tasks[t], &completion)?;
-            groups[t].rollouts.push(Rollout {
-                reward: graded.reward,
-                passed: graded.passed,
-                prompt: prompt_messages(&turns),
-                completion,
-                feedback: graded.feedback,
-                privileged: graded.privileged,
-                policy_version: request.policy.version,
-                trace: None,
-            });
-        }
-        Ok(groups)
-    }
-}
-
-/// The dev exam: the policy answers every dev and retention task once,
-/// greedily, so a task has one answer for given weights and the champion and
-/// the candidate differ only by the weights.
-pub struct ChatValidator<'f> {
-    endpoints: BrainEndpoints,
-    family: &'f dyn TaskFamily,
-    settings: ModelSettings,
-    runtime: tokio::runtime::Runtime,
-}
-
-impl<'f> ChatValidator<'f> {
-    /// A validator over `family`.
-    ///
-    /// # Errors
-    /// The async runtime could not start.
-    pub fn new(
-        endpoints: BrainEndpoints,
-        family: &'f dyn TaskFamily,
-        settings: ModelSettings,
-    ) -> Result<Self, CampaignError> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| CampaignError::Validator(format!("starting the runtime: {e}")))?;
-        Ok(Self {
-            endpoints,
-            family,
-            settings,
-            runtime,
-        })
-    }
-
-    fn pass_each(&self, model: &Answerer, tasks: &[String]) -> Result<Outcomes, CampaignError> {
-        let family = self.family;
-        let max_tokens = self.settings.max_tokens;
-        let answers = self.runtime.block_on(async {
-            futures::stream::iter(tasks.iter().map(|task| async move {
-                let turns = family.prompt(task)?;
-                let reply = model
-                    .ask_turns(Decoding::Greedy, &first_turns(&turns), max_tokens)
-                    .await
-                    .map_err(|e| CampaignError::Validator(e.to_string()))?;
-                let graded = family.grade(task, reply.text.trim())?;
-                Ok::<_, CampaignError>((task.clone(), graded.passed))
-            }))
-            .buffered(self.settings.concurrency.max(1))
-            .collect::<Vec<_>>()
-            .await
-        });
-        answers.into_iter().collect()
-    }
-}
-
-impl Validator for ChatValidator<'_> {
-    fn describe(&self) -> Value {
-        json!({"path": "served greedy", "model": self.settings, "family": self.family.describe()})
-    }
-
-    fn units(&self) -> usize {
-        self.family.dev().len()
-    }
-
-    fn retention_units(&self) -> usize {
-        self.family.retention().len()
-    }
-
-    fn dev_tasks(&self) -> Vec<String> {
-        self.family.dev()
-    }
-
-    fn validate_on(
-        &mut self,
-        policy: &PolicyRef,
-        dev: &[String],
-    ) -> Result<DevResult, CampaignError> {
-        let model = answerer(&self.endpoints, &self.settings, policy, Decoding::Greedy)
-            .map_err(|e| CampaignError::Validator(e.to_string()))?;
-        Ok(DevResult {
-            dev: self.pass_each(&model, dev)?,
-            retention: self.pass_each(&model, &self.family.retention())?,
-        })
-    }
-}
-
 /// How brain trains a candidate.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct TrainerSettings {
@@ -368,20 +117,6 @@ pub struct TrainerSettings {
     pub base_precision: BasePrecision,
 }
 
-/// The call into brain: a clipped policy-gradient run, continuing the
-/// champion's adapter.
-pub struct BrainTrainer {
-    settings: TrainerSettings,
-}
-
-impl BrainTrainer {
-    /// A trainer with `settings`.
-    #[must_use]
-    pub fn new(settings: TrainerSettings) -> Self {
-        Self { settings }
-    }
-}
-
 fn directory_bytes(dir: &Path) -> u64 {
     std::fs::read_dir(dir)
         .into_iter()
@@ -393,21 +128,6 @@ fn directory_bytes(dir: &Path) -> u64 {
             Err(_) => 0,
         })
         .sum()
-}
-
-impl Trainer for BrainTrainer {
-    fn describe(&self) -> Value {
-        json!({"path": "brain policy-gradient", "settings": self.settings})
-    }
-
-    fn train(&mut self, request: &TrainRequest) -> Result<Trained, CampaignError> {
-        let records = write_records(request)?;
-        let attempt = attempt_dir(request)?;
-        let tune = tune(&self.settings, request, &records, &attempt);
-        let trained =
-            train_policy_gradient(&tune).map_err(|e| CampaignError::Trainer(e.to_string()))?;
-        trained_from(request, &trained)
-    }
 }
 
 /// The directory a training call writes its candidate into, named after the
@@ -440,7 +160,7 @@ pub(super) fn write_records(request: &TrainRequest) -> Result<PathBuf, CampaignE
     let mut projection = Projection::new("campaign", Objective::PolicyGradient, None, None);
     projection.records.clone_from(&request.records);
     let records_path = request.out_dir.join("records.jsonl");
-    write_dataset(&records_path, &projection, &BrainDatasetCheck)
+    write_dataset(&records_path, &projection, &splinter_data::Unchecked)
         .map_err(|e| fail(format!("writing the training records: {e}")))?;
     Ok(records_path)
 }

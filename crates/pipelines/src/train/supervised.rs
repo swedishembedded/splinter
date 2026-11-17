@@ -15,7 +15,7 @@
 use splinter_agent::CancelToken;
 use splinter_data::holdout::split_dataset_file;
 use splinter_model::served_train::fine_tune_served;
-use splinter_model::train::{fine_tune, BasePrecision, FineTune, Trained};
+use splinter_model::train::{BasePrecision, FineTune, Trained};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use std::path::PathBuf;
@@ -85,13 +85,10 @@ pub(super) fn train(
         on_step: None,
         keep_evaluations: kept.as_deref(),
     };
-    match &ctx.config().brain {
-        Some(brain) => fine_tune_served(brain, &request),
-        None => fine_tune(&request),
-    }
-    .map_err(trainer_error)
-    .map(|mut trained| {
-        trained.curve.monitoring_skipped = watch.skipped;
-        trained
-    })
+    fine_tune_served(&ctx.brain()?, &request)
+        .map_err(trainer_error)
+        .map(|mut trained| {
+            trained.curve.monitoring_skipped = watch.skipped;
+            trained
+        })
 }

@@ -288,7 +288,6 @@ fn learn_teaches_a_fact_the_policy_never_answers_closed_book() {
             "a record's system turn is the one every solve ran under"
         );
     }
-    splinter_model::train::validate_dataset(&dataset.path).unwrap();
 
     // Mastery is the student's closed-book record: a teacher's solve says
     // nothing about what the student knows.

@@ -145,7 +145,6 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
         !text.contains("Feedback on an earlier attempt"),
         "the critique is teacher-only: {text}"
     );
-    splinter_model::train::validate_dataset(&dataset.path).unwrap();
 
     assert_eq!(
         *trainer.handed.lock().unwrap(),

@@ -56,7 +56,7 @@ mod full;
 mod keep;
 mod monitoring;
 mod policy_gradient;
-mod served;
+
 mod supervised;
 pub(crate) use policy_gradient::check_settings as check_policy_gradient_settings;
 mod records;
@@ -93,7 +93,8 @@ use splinter_core::training::{Regime, ReplaySample, ReplaySource};
 use splinter_data::holdout::split_dataset_file;
 use splinter_data::{select_replay, Format, Fraction, Objective, ReplayPolicy, StoredDataset};
 use splinter_model::policy_gradient::TrainedPolicyGradient;
-use splinter_model::train::{train_preference, PreferenceTune, Trained, TrainedPreference};
+use splinter_model::served_train::train_preference_served;
+use splinter_model::train::{PreferenceTune, Trained, TrainedPreference};
 use splinter_model::{LocalWeights, ModelSelection, PolicyError};
 
 use crate::datasets::{examples_in, record_dataset_lineage, resolve_dataset};
@@ -352,27 +353,29 @@ impl Trainer for BrainTrainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<TrainedPreference, OrchestratorError> {
-        served::refuse_unserved(ctx, "a preference (DPO) run")?;
         let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
-        train_preference(&PreferenceTune {
-            model_dir: &plan.base,
-            train: &split.train,
-            held_out: &split.held_out,
-            attempt_dir: &plan.dir,
-            steps: plan.steps,
-            rank: plan.rank,
-            alpha: plan
-                .tuning
-                .alpha
-                .unwrap_or_else(|| default_alpha(plan.rank)),
-            beta: plan.beta,
-            nll_weight: 0.0,
-            grad_accum: 1,
-            learning_rate: plan.tuning.learning_rate,
-            seed: plan.seed,
-            continue_from: plan.continue_from.as_deref(),
-            cancel: Some(cancel),
-        })
+        train_preference_served(
+            &ctx.brain()?,
+            &PreferenceTune {
+                model_dir: &plan.base,
+                train: &split.train,
+                held_out: &split.held_out,
+                attempt_dir: &plan.dir,
+                steps: plan.steps,
+                rank: plan.rank,
+                alpha: plan
+                    .tuning
+                    .alpha
+                    .unwrap_or_else(|| default_alpha(plan.rank)),
+                beta: plan.beta,
+                nll_weight: 0.0,
+                grad_accum: 1,
+                learning_rate: plan.tuning.learning_rate,
+                seed: plan.seed,
+                continue_from: plan.continue_from.as_deref(),
+                cancel: Some(cancel),
+            },
+        )
         .map_err(trainer_error)
     }
 
@@ -391,8 +394,7 @@ impl Trainer for BrainTrainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<ModelCheckpoint, OrchestratorError> {
-        served::refuse_unserved(ctx, "a full-parameter run")?;
-        full::train_full(plan, cancel)
+        full::train_full(ctx, plan, cancel)
     }
 
     fn merge(
@@ -403,8 +405,7 @@ impl Trainer for BrainTrainer {
         out_dir: &Path,
         cancel: &CancelToken,
     ) -> Result<ModelCheckpoint, OrchestratorError> {
-        served::refuse_unserved(ctx, "merging an adapter into a base")?;
-        full::merge_into(base, adapter, out_dir, cancel)
+        full::merge_into(ctx, base, adapter, out_dir, cancel)
     }
 }
 
@@ -617,7 +618,7 @@ pub(crate) fn plan_training(
             eval_every: Some(eval_every),
             patience: Some(patience),
             monitor_share: Some(monitor_share),
-            policy_gradient: policy_gradient::resolved(regime, request.tuning.policy_gradient),
+            policy_gradient: request.tuning.policy_gradient,
             seed: Some(seed),
             ..request.tuning
         },

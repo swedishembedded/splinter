@@ -82,7 +82,11 @@ impl JobScript {
 pub struct Jobs {
     pub(crate) script: Mutex<Option<JobScript>>,
     created: Mutex<Vec<Value>>,
+    checks: Mutex<Vec<Value>>,
     actions: Mutex<Vec<String>>,
+    /// The job being followed is a dataset check, which the script's
+    /// refusals, breaks, failures and hangs leave alone.
+    checking: AtomicBool,
     refused: AtomicUsize,
     streams: Mutex<Vec<Option<u64>>>,
     events: Mutex<Option<Vec<(u64, String, Value)>>>,
@@ -92,9 +96,15 @@ pub struct Jobs {
 }
 
 impl Jobs {
-    /// The parameters of every job created, in order.
+    /// The parameters of every run created (every job but a dataset check),
+    /// in order.
     pub fn created(&self) -> Vec<Value> {
         self.created.lock().unwrap().clone()
+    }
+
+    /// The parameters of every `check_dataset` job, in order.
+    pub fn checks(&self) -> Vec<Value> {
+        self.checks.lock().unwrap().clone()
     }
 
     /// The action of every job created, in order.
@@ -102,7 +112,8 @@ impl Jobs {
         self.actions.lock().unwrap().clone()
     }
 
-    /// The `Last-Event-ID` of every event stream opened, in order.
+    /// The `Last-Event-ID` of every event stream a run was followed on, in
+    /// order.
     pub fn streams(&self) -> Vec<Option<u64>> {
         self.streams.lock().unwrap().clone()
     }
@@ -198,7 +209,8 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
         error(stream, "404 Not Found", "no such model or action");
         return;
     }
-    if jobs.refused.load(Ordering::SeqCst) < script.refuse_first {
+    let checking = action == "check_dataset";
+    if !checking && jobs.refused.load(Ordering::SeqCst) < script.refuse_first {
         jobs.refused.fetch_add(1, Ordering::SeqCst);
         error(
             stream,
@@ -230,7 +242,12 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
             return;
         }
     }
-    jobs.created.lock().unwrap().push(params.clone());
+    if checking {
+        jobs.checks.lock().unwrap().push(params.clone());
+    } else {
+        jobs.created.lock().unwrap().push(params.clone());
+    }
+    jobs.checking.store(checking, Ordering::SeqCst);
     jobs.actions.lock().unwrap().push(action.clone());
     *jobs.events.lock().unwrap() = None;
     jobs.cancelled.store(false, Ordering::SeqCst);
@@ -395,7 +412,12 @@ fn check(script: &JobScript, params: &Value) -> Value {
             .collect();
         let next = (offset + limit < lengths.len()).then_some(offset + limit);
         report["per_record"] = json!(page);
-        report["per_record_refused"] = json!(invalid);
+        // The refusals are listed once, on the first page.
+        report["per_record_refused"] = if offset == 0 {
+            json!(invalid)
+        } else {
+            json!([])
+        };
         report["per_record_next"] = json!(next);
     }
     report
@@ -450,6 +472,19 @@ fn checkpoint(
 }
 
 fn events(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, last_event_id: Option<u64>) {
+    if jobs.checking.load(Ordering::SeqCst) {
+        // A check answers at once, whatever the script makes a run do.
+        let frames = jobs.events.lock().unwrap().clone().unwrap_or_default();
+        let last = frames.last().map_or(0, |(id, _, _)| *id) + 1;
+        let done = json!({"status": "succeeded"});
+        let _ = respond(
+            stream,
+            "200 OK",
+            "text/event-stream",
+            &format!("id: {last}\nevent: done\ndata: {done}\n\n"),
+        );
+        return;
+    }
     let first_stream = {
         let mut streams = jobs.streams.lock().unwrap();
         streams.push(last_event_id);

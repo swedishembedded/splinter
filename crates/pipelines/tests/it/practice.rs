@@ -172,7 +172,6 @@ fn a_repository_is_practised_as_one_recorded_run_that_never_trains_on_its_exam()
     let dataset = report.dataset.as_ref().unwrap();
     assert!(dataset.records > 0, "{dataset:#?}");
     // The trainer's own parser accepts every record, tools and all.
-    splinter_model::train::validate_dataset(&dataset.path).unwrap();
     let groups = groups_of(&dataset.path);
     let peeking: BTreeSet<String> = PEEKING.iter().map(|n| format!("shop/tier{n}.py")).collect();
     assert!(

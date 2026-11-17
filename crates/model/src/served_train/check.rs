@@ -26,6 +26,8 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
+use splinter_core::digest::Digest;
+
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 
@@ -174,6 +176,9 @@ pub struct DatasetReport {
     /// With [`CheckSpec::per_record`]: every valid record's length, in file
     /// order.
     pub per_record: Vec<RecordLength>,
+    /// With [`CheckSpec::per_record`]: every refused record, in file order
+    /// (`invalid` lists the first of them only).
+    pub refused: Vec<Refusal>,
 }
 
 impl DatasetReport {
@@ -225,6 +230,8 @@ struct Page {
     #[serde(default)]
     per_record: Vec<(usize, usize, usize, usize, usize)>,
     #[serde(default)]
+    per_record_refused: Vec<Refusal>,
+    #[serde(default)]
     per_record_next: Option<usize>,
 }
 
@@ -240,6 +247,18 @@ pub fn check_dataset(
     spec: &CheckSpec<'_>,
 ) -> Result<DatasetReport, PolicyError> {
     let digest = brain.artifact_store()?.publish(dataset)?;
+    check_published(brain, &digest, dataset, spec)
+}
+
+/// [`check_dataset`] of a dataset already in the artifact store, named by
+/// `digest`; `label` names it in an error.
+pub fn check_published(
+    brain: &BrainEndpoints,
+    digest: &Digest,
+    label: &Path,
+    spec: &CheckSpec<'_>,
+) -> Result<DatasetReport, PolicyError> {
+    let dataset = label;
     let mut params = Map::new();
     if let Some(base) = spec.base {
         params.insert("base".into(), json!(base));
@@ -286,7 +305,10 @@ pub fn check_dataset(
             });
         let next = page.per_record_next;
         match report.as_mut() {
-            Some(kept) => kept.per_record.extend(lengths),
+            Some(kept) => {
+                kept.per_record.extend(lengths);
+                kept.refused.extend(page.per_record_refused);
+            }
             None => {
                 report = Some(DatasetReport {
                     records: page.records,
@@ -300,6 +322,7 @@ pub fn check_dataset(
                     invalid_total: page.invalid_total,
                     invalid: page.invalid,
                     per_record: lengths.collect(),
+                    refused: page.per_record_refused,
                 });
             }
         }
@@ -355,6 +378,7 @@ mod tests {
                     examples: 1,
                 },
             ],
+            refused: vec![],
         };
         assert_eq!(report.tokens_at(3), Some(9));
         assert_eq!(report.tokens_at(2), None);

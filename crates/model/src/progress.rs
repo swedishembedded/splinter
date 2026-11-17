@@ -6,16 +6,13 @@
 // throughput on GPUs then you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! What a fine-tune does at each optimizer step: report it to the caller,
-//! forward the caller's cancel to brain, and time the steps apart from the
-//! model load and the scoring around them.
+//! The time a fine-tune's optimizer steps take, apart from the model load and
+//! the scoring around them.
 
 use std::cell::Cell;
 use std::time::Instant;
 
 use splinter_core::training::TrainingSpeed;
-
-use crate::train::{StepHook, StepReport};
 
 /// When a fine-tune started and when its steps were reported, to time the
 /// steps apart from the model load and scoring around them.
@@ -73,30 +70,6 @@ impl StepClock {
     }
 }
 
-/// The progress callback that cancels brain's token (it stops training at a
-/// step boundary) once the caller's `cancel` fires, polled once per step, and
-/// times the steps on `clock`.
-pub(crate) fn poll<'a>(
-    cancel: Option<&'a sven_sdk::CancelToken>,
-    brain_cancel: &'a brain::CancelToken,
-    on_step: Option<StepHook<'a>>,
-    clock: Option<&'a StepClock>,
-) -> impl FnMut(&brain::FineTuneProgress) + 'a {
-    move |progress| {
-        clock.inspect(|clock| clock.tick(progress.step));
-        if let Some(StepHook(report)) = on_step {
-            report(&StepReport {
-                step: progress.step,
-                steps: progress.steps,
-                loss: progress.loss,
-            });
-        }
-        if cancel.is_some_and(sven_sdk::CancelToken::is_cancelled) {
-            brain_cancel.cancel();
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,34 +105,5 @@ mod tests {
         assert!(
             (speed.lead_seconds - 30.0).abs() < 1e-9 && (speed.tail_seconds - 7.0).abs() < 1e-9
         );
-    }
-
-    /// Every optimizer step is reported to the caller, and a cancelled
-    /// caller cancels brain's token at the next step.
-    #[test]
-    fn a_step_is_reported_and_a_cancel_is_forwarded() {
-        let seen = std::cell::RefCell::new(Vec::new());
-        let report = |r: &StepReport| seen.borrow_mut().push((r.step, r.steps, r.loss));
-        let brain_cancel = brain::CancelToken::armed();
-        let caller = sven_sdk::CancelToken::new();
-        let mut step = poll(Some(&caller), &brain_cancel, Some(StepHook(&report)), None);
-        let progress = |n| brain::FineTuneProgress {
-            step: n,
-            steps: 3,
-            loss: 1.5,
-            lr: 1e-4,
-            grad_norm: None,
-            eval_loss: None,
-            metrics: Vec::new(),
-        };
-        step(&progress(1));
-        assert!(!brain_cancel.is_cancelled());
-        caller.cancel();
-        step(&progress(2));
-        assert!(
-            brain_cancel.is_cancelled(),
-            "the caller's cancel reaches brain"
-        );
-        assert_eq!(*seen.borrow(), vec![(1, 3, 1.5), (2, 3, 1.5)]);
     }
 }

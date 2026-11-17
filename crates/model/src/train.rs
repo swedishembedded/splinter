@@ -6,44 +6,31 @@
 // in evaluation-gated fine-tuning, you can procure our services by sending
 // an email to info@swedishembedded.com.
 
-//! One LoRA fine-tune of the local model, scored on held-out records -
-//! brain's own trainers and evaluators, called through its SDK, not a
-//! second implementation of any of them. Two regimes:
+//! What one LoRA fine-tune of the local model is told and what it produced,
+//! in two regimes, each trained as a job of the brain service
+//! ([`crate::served_train`]):
 //!
-//! * [`fine_tune`]: supervised fine-tuning on a `generic-messages-v2` chat
-//!   dataset through [`brain::ChatFineTune`], which validates both halves
-//!   of the split against the base's tokenizer and chat template, trains
-//!   the adapter on one (with any replayed datasets mixed in, each weighted
-//!   file at its own share of the draws), and scores base and tuned on the
-//!   other at one precision.
-//! * [`train_preference`]: direct preference optimisation on a
-//!   `generic-preference-v1` pair dataset through
-//!   [`brain::PreferenceFineTune`], against a frozen reference - the model
-//!   the run starts from - and scored as brain's preference score: on the
-//!   held-out pairs, how much more the tuned adapter prefers each chosen
-//!   answer over its rejected one than the reference does.
+//! * [`FineTune`]: supervised fine-tuning on a `generic-messages-v2` chat
+//!   dataset, scored on held-out records before and after.
+//! * [`PreferenceTune`]: direct preference optimisation on a
+//!   `generic-preference-v1` pair dataset against a frozen reference (the
+//!   model the run starts from), scored on held-out pairs by how much more
+//!   the tuned adapter prefers each chosen answer than the reference does.
 //!
 //! In both, the caller hands over the dataset already split into the records
-//! to train on and the ones held out, a named adapter is
-//! continued instead of a fresh one started, and brain writes the adapter
-//! and its training record into the attempt directory. What to do with the
-//! scores is the caller's decision.
+//! to train on and the ones held out, and a named adapter is continued
+//! instead of a fresh one started. What to do with the scores is the
+//! caller's decision.
 
 use std::path::{Path, PathBuf};
 
-use splinter_core::training::{
-    CurvePoint, HeldOutScore, PreferenceScore, Selection, TrainingCurve,
-};
+use splinter_core::training::{HeldOutScore, PreferenceScore, TrainingCurve};
 
-use crate::device::contain_device_panic;
 use crate::error::PolicyError;
-use crate::local::{closed_think_pairs, opens_think_block};
-use crate::progress::{poll, StepClock};
-use crate::train_checks::check_request;
 
 /// The DPO temperature `beta` a preference fine-tune uses when its caller
-/// names none: brain's default.
-pub const DEFAULT_DPO_BETA: f32 = brain::DEFAULT_DPO_BETA;
+/// names none.
+pub use crate::served_train::DEFAULT_DPO_BETA;
 
 pub use crate::precision::BasePrecision;
 
@@ -121,7 +108,7 @@ pub struct FineTune<'a> {
     /// Whether the model is trained to reason before it answers. Off, it is
     /// trained for no-think mode - what Splinter asks of it by default - so a
     /// reasoning model trains on the state a no-think prompt leaves it in
-    /// (see [`brain::ChatFineTune::thinking`]); a base that never reasons is
+    /// (brain's `thinking` setting); a base that never reasons is
     /// unaffected.
     pub thinking: bool,
     /// Train a record that supervises several turns as one sequence, not
@@ -157,52 +144,6 @@ pub struct StepReport {
     pub loss: f32,
 }
 
-/// brain's held-out score as Splinter records it.
-fn held_out_score(s: brain::HeldOutScore) -> HeldOutScore {
-    HeldOutScore {
-        loss: s.loss,
-        token_accuracy: s.token_accuracy,
-        positions: s.positions,
-        records: s.records,
-        skipped: s.skipped,
-    }
-}
-
-/// brain's preference score as Splinter records it.
-fn preference_score(s: brain::PreferenceScore) -> PreferenceScore {
-    PreferenceScore {
-        accuracy: s.accuracy,
-        mean_margin: s.mean_margin,
-        pairs: s.pairs,
-        skipped: s.skipped,
-    }
-}
-
-/// `base` (a checkpoint directory), with `adapter` folded in when given, scored
-/// on the chat records of `dataset`: the mean per-token loss over the
-/// supervised answers. brain's own scoring path, the one a fine-tune reports
-/// its held-out score by; nothing is trained and nothing is written.
-pub fn score_chat(
-    base: &Path,
-    adapter: Option<&Path>,
-    dataset: &Path,
-) -> Result<HeldOutScore, PolicyError> {
-    let failed = |reason: String| PolicyError::Train {
-        dir: dataset.to_path_buf(),
-        reason,
-    };
-    let base = base
-        .to_str()
-        .ok_or_else(|| failed("the base checkpoint's path is not UTF-8".into()))?;
-    // brain reports a device failure (an allocation the card cannot hold) as
-    // a panic; scoring is a measurement a caller may do without, so the
-    // failure is returned and the caller decides.
-    contain_device_panic(|| brain::score_chat(base, adapter, dataset))
-        .map_err(|e| failed(format!("scoring {}: {e}", dataset.display())))?
-        .map(held_out_score)
-        .map_err(|e| failed(format!("scoring {}: {e}", dataset.display())))
-}
-
 /// What one fine-tune produced.
 #[derive(Clone, Debug)]
 pub struct Trained {
@@ -229,241 +170,6 @@ pub struct Trained {
     /// The adapter of every evaluation, by the steps trained, when the run
     /// was asked to keep them.
     pub evaluations: Vec<(u32, PathBuf)>,
-}
-
-/// What a chat dataset holds, as the trainer's own parser counts it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct DatasetSummary {
-    /// Conversations, one per JSONL line.
-    pub records: usize,
-    /// Messages across every conversation.
-    pub messages: usize,
-    /// Messages marked for supervision (`"train": true`).
-    pub trained_messages: usize,
-}
-
-impl From<brain::ChatDatasetSummary> for DatasetSummary {
-    fn from(s: brain::ChatDatasetSummary) -> Self {
-        Self {
-            records: s.records,
-            messages: s.messages,
-            trained_messages: s.trained_messages,
-        }
-    }
-}
-
-/// Parses `dataset` with the trainer's own parser: the wire schema, and the
-/// supervision boundaries it declares. The error names the offending record.
-pub fn validate_dataset(dataset: &Path) -> Result<DatasetSummary, PolicyError> {
-    brain::validate_chat_dataset(dataset)
-        .map(DatasetSummary::from)
-        .map_err(|e| PolicyError::Dataset {
-            path: dataset.to_path_buf(),
-            reason: e.to_string(),
-        })
-}
-
-/// [`validate_dataset`], and encodes every record with the checkpoint in
-/// `model_dir` (its tokenizer and chat template): a record can satisfy the
-/// wire schema and still have no honest loss-mask boundary under the
-/// template it will train with. Needs no device.
-pub fn validate_dataset_for(
-    dataset: &Path,
-    model_dir: &Path,
-) -> Result<DatasetSummary, PolicyError> {
-    brain::validate_chat_dataset_for(dataset, model_dir)
-        .map(DatasetSummary::from)
-        .map_err(|e| PolicyError::Dataset {
-            path: dataset.to_path_buf(),
-            reason: e.to_string(),
-        })
-}
-
-/// What a preference dataset holds, as the trainer's own parser counts it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PreferenceDatasetSummary {
-    /// Preference pairs, one per JSONL line.
-    pub pairs: usize,
-    /// Prompt messages across every pair.
-    pub prompt_messages: usize,
-    /// Pairs carrying a tool schema.
-    pub pairs_with_tools: usize,
-}
-
-impl From<brain::PreferenceDatasetSummary> for PreferenceDatasetSummary {
-    fn from(s: brain::PreferenceDatasetSummary) -> Self {
-        Self {
-            pairs: s.pairs,
-            prompt_messages: s.prompt_messages,
-            pairs_with_tools: s.pairs_with_tools,
-        }
-    }
-}
-
-/// Parses `dataset` as `generic-preference-v1` with the trainer's own
-/// parser: the wire schema, every candidate an assistant turn, and no pair
-/// whose two candidates are the same turn. The error names the offending
-/// record and field.
-pub fn validate_preference_dataset(
-    dataset: &Path,
-) -> Result<PreferenceDatasetSummary, PolicyError> {
-    brain::validate_preference_dataset(dataset)
-        .map(PreferenceDatasetSummary::from)
-        .map_err(|reason| PolicyError::Dataset {
-            path: dataset.to_path_buf(),
-            reason,
-        })
-}
-
-/// Fine-tunes a LoRA on `request.train` and scores base and tuned on the
-/// held-out records.
-pub fn fine_tune(request: &FineTune<'_>) -> Result<Trained, PolicyError> {
-    let failed = |reason: String| PolicyError::Train {
-        dir: request.attempt_dir.to_path_buf(),
-        reason,
-    };
-    let records = check_request(request)?;
-    let (weights, base_id) = base_weights(request.model_dir)?;
-    let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
-        .device(crate::device::selected().spec())
-        .dataset(request.train)
-        .held_out(request.held_out)
-        .thinking(request.thinking)
-        .pack_answers(request.pack_answers)
-        .out_dir(request.attempt_dir)
-        .adapter_id(candidate_adapter_id(&base_id, request.attempt_dir)?)
-        .steps(request.steps)
-        .rank(request.rank)
-        .alpha(request.alpha)
-        .seed(request.seed)
-        .weight_decay(request.weight_decay)
-        .grad_accum(request.grad_accum)
-        .eval_every(request.eval_every)
-        .patience(request.patience)
-        // A monitored run exports its best evaluation whether or not its
-        // patience ever runs out.
-        .keep_best(request.eval_every > 0);
-    if let Some(format) = request.base.brain_format() {
-        fine_tune = fine_tune.base_format(format);
-    }
-    if let Some(monitor) = request.monitor {
-        fine_tune = fine_tune.monitor(monitor);
-    }
-    if let Some(text) = request.held_out_text {
-        fine_tune = fine_tune.held_out_text(text);
-    }
-    if let Some(dir) = request.keep_evaluations {
-        fine_tune = fine_tune.keep_evaluations(dir);
-    }
-    if let Some(share) = request.replay_share {
-        fine_tune = fine_tune.replay_share(share);
-    }
-    if let Some(lr) = request.learning_rate {
-        fine_tune = fine_tune.lr(lr);
-    }
-    if let Some(max_block) = request.max_block {
-        fine_tune = fine_tune.max_block(max_block);
-    }
-    for replayed in request.replay {
-        fine_tune = fine_tune.replay(replayed);
-    }
-    for (weighted, share) in request.weighted_replay {
-        fine_tune = fine_tune.replay_at(weighted, *share);
-    }
-    if let Some(adapter) = request.continue_from {
-        fine_tune = fine_tune.continue_from(adapter);
-    }
-    let brain_cancel = brain::CancelToken::armed();
-    let clock = StepClock::start();
-    let outcome = contain_device_panic(|| {
-        fine_tune.run_with(
-            &brain_cancel,
-            poll(request.cancel, &brain_cancel, request.on_step, Some(&clock)),
-        )
-    })
-    .and_then(|run| run.map_err(|e| e.to_string()))
-    .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
-    if brain_cancel.is_cancelled() {
-        return Err(PolicyError::Cancelled {
-            dir: request.attempt_dir.to_path_buf(),
-        });
-    }
-    let incomplete = |what: &str| failed(format!("it reported no {what}"));
-    // Not cancelled, so it completed or failed; a completed run with a
-    // held-out set carries both scores, the adapter and its record.
-    if outcome.status != brain::FineTuneStatus::Completed {
-        return Err(failed("it did not complete".into()));
-    }
-    let mut curve = curve_of(&outcome);
-    curve.speed = clock.finish(request.grad_accum, outcome.block);
-    let evaluations = request
-        .keep_evaluations
-        .map(|dir| {
-            curve
-                .points
-                .iter()
-                .map(|p| (p.step, dir.join(format!("step-{}.safetensors", p.step))))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    if let Some((step, missing)) = evaluations.iter().find(|(_, path)| !path.is_file()) {
-        return Err(failed(format!(
-            "the adapter of step {step} was not kept: {} is missing",
-            missing.display()
-        )));
-    }
-    Ok(Trained {
-        adapter: outcome.adapter.ok_or_else(|| incomplete("adapter"))?,
-        adapter_digest: outcome
-            .adapter_digest
-            .ok_or_else(|| incomplete("adapter digest"))?,
-        base_digest: outcome
-            .base_digest
-            .ok_or_else(|| incomplete("base digest"))?,
-        training_record: outcome
-            .record
-            .ok_or_else(|| incomplete("training record"))?,
-        records,
-        block: outcome.block,
-        base: outcome
-            .base_score
-            .map(held_out_score)
-            .ok_or_else(|| incomplete("base score"))?,
-        tuned: outcome
-            .tuned_score
-            .map(held_out_score)
-            .ok_or_else(|| incomplete("tuned score"))?,
-        curve,
-        evaluations,
-    })
-}
-
-/// brain's monitoring curve and selection as Splinter records them.
-fn curve_of(outcome: &brain::ChatFineTuneOutcome) -> TrainingCurve {
-    TrainingCurve {
-        steps: outcome.steps,
-        steps_completed: outcome.steps_completed,
-        eval_every: outcome.eval_every,
-        patience: outcome.patience,
-        monitor_records: outcome.monitor_records,
-        points: outcome
-            .curve
-            .iter()
-            .map(|p| CurvePoint {
-                step: p.step,
-                train_loss: p.train_loss,
-                monitor_loss: p.monitor_loss,
-            })
-            .collect(),
-        selected_step: outcome.selected_step,
-        selection: match outcome.selection {
-            brain::Selection::LastStep => Selection::LastStep,
-            brain::Selection::BestMonitorLoss => Selection::BestMonitorLoss,
-        },
-        stopped_early: outcome.stopped_early,
-        monitoring_skipped: None,
-        speed: None,
-    }
 }
 
 /// One preference fine-tune: what to train, on which pairs, and where its
@@ -536,122 +242,6 @@ pub struct TrainedPreference {
     pub held_out_score: Option<PreferenceScore>,
 }
 
-/// Fine-tunes a LoRA by DPO on `request.train`'s pairs and scores it
-/// against its reference on the held-out pairs.
-pub fn train_preference(request: &PreferenceTune<'_>) -> Result<TrainedPreference, PolicyError> {
-    let failed = |reason: String| PolicyError::Train {
-        dir: request.attempt_dir.to_path_buf(),
-        reason,
-    };
-    let trained_on = validate_preference_dataset(request.train)?;
-    let held_out_summary = validate_preference_dataset(request.held_out)?;
-    let (weights, base_id) = base_weights(request.model_dir)?;
-    // As in [`fine_tune`]: a model asked from an open think block trains on
-    // candidates that follow an empty closed one, rendered with it kept.
-    let reasoning = opens_think_block(request.model_dir);
-    let prepared = |path: &Path, name: &str| -> Result<std::path::PathBuf, PolicyError> {
-        if !reasoning {
-            return Ok(path.to_path_buf());
-        }
-        let io = |source| PolicyError::Io {
-            path: path.to_path_buf(),
-            source,
-        };
-        let text = std::fs::read_to_string(path).map_err(io)?;
-        let rewritten = closed_think_pairs(&text).map_err(|e| PolicyError::Dataset {
-            path: path.to_path_buf(),
-            reason: e.to_string(),
-        })?;
-        let dest = request.attempt_dir.join(name);
-        std::fs::create_dir_all(request.attempt_dir).map_err(io)?;
-        std::fs::write(&dest, rewritten).map_err(io)?;
-        Ok(dest)
-    };
-    let train = prepared(request.train, "pairs.think.jsonl")?;
-    let held_out = prepared(request.held_out, "held_out_pairs.think.jsonl")?;
-    let mut fine_tune = brain::PreferenceFineTune::from_pretrained(weights.as_str())
-        .device(crate::device::selected().spec())
-        .dataset(&train)
-        .held_out(&held_out)
-        .keep_reasoning(reasoning)
-        .nll_weight(request.nll_weight)
-        .grad_accum(request.grad_accum)
-        .out_dir(request.attempt_dir)
-        .adapter_id(candidate_adapter_id(&base_id, request.attempt_dir)?)
-        .steps(request.steps)
-        .rank(request.rank)
-        .alpha(request.alpha)
-        .beta(request.beta)
-        .seed(request.seed);
-    if let Some(lr) = request.learning_rate {
-        fine_tune = fine_tune.lr(lr);
-    }
-    if let Some(adapter) = request.continue_from {
-        fine_tune = fine_tune.continue_from(adapter);
-    }
-    let brain_cancel = brain::CancelToken::armed();
-    let outcome = contain_device_panic(|| {
-        fine_tune.run_with(
-            &brain_cancel,
-            poll(request.cancel, &brain_cancel, None, None),
-        )
-    })
-    .and_then(|run| run.map_err(|e| e.to_string()))
-    .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
-    if brain_cancel.is_cancelled() {
-        return Err(PolicyError::Cancelled {
-            dir: request.attempt_dir.to_path_buf(),
-        });
-    }
-    if outcome.status != brain::FineTuneStatus::Completed {
-        return Err(failed("it did not complete".into()));
-    }
-    let incomplete = |what: &str| failed(format!("it reported no {what}"));
-    Ok(TrainedPreference {
-        adapter: outcome.adapter.ok_or_else(|| incomplete("adapter"))?,
-        adapter_digest: outcome
-            .adapter_digest
-            .ok_or_else(|| incomplete("adapter digest"))?,
-        base_digest: outcome
-            .base_digest
-            .ok_or_else(|| incomplete("base digest"))?,
-        training_record: outcome
-            .record
-            .ok_or_else(|| incomplete("training record"))?,
-        records: trained_on.pairs + held_out_summary.pairs,
-        block: outcome.block,
-        beta: outcome.beta,
-        reference_adapter: outcome.trained_from,
-        train_score: outcome.train_score.map(preference_score),
-        held_out_score: outcome.held_out_score.map(preference_score),
-    })
-}
-
-/// What brain trains from under `model_dir`, as the UTF-8 path it takes
-/// (the directory of a Hugging Face checkpoint, else the checkpoint file),
-/// and the base id an adapter's card names. brain resolves a directory only
-/// in its model store's layout, so the source is resolved here; its
-/// directory supplies the tokenizer and chat template. The card names what
-/// produced the adapter and what it sits on, so an adapter is traceable to
-/// its own training evidence.
-pub(crate) fn base_weights(model_dir: &Path) -> Result<(String, String), PolicyError> {
-    let weights = crate::local::load_source(&crate::local::resolve_base(model_dir)?);
-    let weights = weights
-        .to_str()
-        .ok_or_else(|| PolicyError::NotUtf8 {
-            path: weights.clone(),
-        })?
-        .to_string();
-    let base_id = format!(
-        "local/{}",
-        model_dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("base")
-    );
-    Ok((weights, base_id))
-}
-
 /// The card id a trained candidate's adapter is recorded under: brain's
 /// model-reference grammar for an adapter, `<base>:<owner>:<name>:<tag>`,
 /// with the attempt directory's name (the candidate's own id) as the tag.
@@ -676,33 +266,6 @@ pub(crate) fn candidate_adapter_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A Hugging Face checkpoint trains from its directory, where its
-    /// `config.json` is; a brain-format file trains as itself.
-    #[test]
-    fn a_hugging_face_base_is_trained_from_its_directory() {
-        let root = std::env::temp_dir().join(format!("policy-base-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let hf = root.join("DeepSeek-R1-Distill-Qwen-1.5B");
-        let native = root.join("Qwen3-0.6B");
-        std::fs::create_dir_all(&hf).unwrap();
-        std::fs::create_dir_all(&native).unwrap();
-        std::fs::write(hf.join("model.safetensors"), b"x").unwrap();
-        std::fs::write(hf.join("config.json"), b"{}").unwrap();
-        std::fs::write(native.join("model.brain.safetensors"), b"x").unwrap();
-        std::fs::write(native.join("config.json"), b"{}").unwrap();
-
-        let (weights, base_id) = base_weights(&hf).unwrap();
-        assert_eq!(weights, hf.to_str().unwrap());
-        assert_eq!(base_id, "local/DeepSeek-R1-Distill-Qwen-1.5B");
-        let (weights, _) = base_weights(&native).unwrap();
-        assert_eq!(
-            weights,
-            native.join("model.brain.safetensors").to_str().unwrap()
-        );
-
-        std::fs::remove_dir_all(&root).unwrap();
-    }
 
     /// `brain serve --adapter` refuses an adapter whose card id is not
     /// `<base>:<owner>:<name>:<tag>`, each segment non-empty, so a candidate

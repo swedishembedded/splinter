@@ -23,12 +23,13 @@ use serde_json::{Map, Value};
 use splinter_core::training::PreferenceScore;
 
 use super::check::{check_dataset, CheckSpec, DatasetKind, MAX_BLOCK};
-use super::request::{set, source, MIN_BLOCK};
+use super::request::{set, source};
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 use crate::local::{closed_think_pairs, opens_think_block};
 use crate::selection::local_model_name;
 use crate::train::{candidate_adapter_id, PreferenceTune, TrainedPreference};
+use crate::train_checks::MIN_BLOCK;
 
 /// The DPO temperature `beta` a preference fine-tune uses when its caller
 /// names none: brain's default for the objective.

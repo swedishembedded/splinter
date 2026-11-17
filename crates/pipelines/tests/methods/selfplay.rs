@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use splinter_data::{write_dataset, AdvantageKind};
 use splinter_model::answer::Decoding;
-use splinter_model::capabilities::BrainDatasetCheck;
 use splinter_pipelines::conversation_policy_gradient::{build, Graded};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 use sven_sdk::seat::{converse, SeatSpec, SimulatedSeat};
@@ -163,7 +162,7 @@ fn a_learner_trained_on_its_own_admitted_conversations_with_a_seat_answers_held_
         );
         assert_eq!(report.admitted, graded.len() - leaky);
         let records = lab.dir.path().join(format!("selfplay-{round}.jsonl"));
-        write_dataset(&records, &projection, &BrainDatasetCheck).unwrap();
+        write_dataset(&records, &projection, &splinter_data::Unchecked).unwrap();
         adapter = lab.policy_gradient(
             &format!("selfplay-{round}"),
             &records,

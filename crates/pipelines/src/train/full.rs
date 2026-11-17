@@ -16,7 +16,8 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::training::Regime;
 use splinter_data::holdout::{holdout_split_records, split_dataset_file};
 use splinter_data::{select_replay, Fraction, ReplayPolicy};
-use splinter_model::consolidate::{full_fine_tune, merge, Checkpoint, FullTune};
+use splinter_model::consolidate::{Checkpoint, FullTune};
+use splinter_model::served_train::{full_fine_tune_served, merge_served, Install};
 use splinter_model::ModelSelection;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
@@ -233,6 +234,7 @@ fn replay_of(
 /// side of its datasets, with the rehearsal at its share. The stopping
 /// paraphrases the datasets hold out are never trained on.
 pub(super) fn train_full(
+    ctx: &Context,
     plan: &TrainPlan,
     cancel: &CancelToken,
 ) -> Result<Checkpoint, OrchestratorError> {
@@ -243,26 +245,56 @@ pub(super) fn train_full(
         .iter()
         .map(|r| (r.fit.clone(), r.share))
         .collect();
-    full_fine_tune(&FullTune {
-        model_dir: &plan.base,
-        train: &train,
-        replay: &replayed,
-        replay_share: plan.replay_share,
-        weighted_replay: &rehearsed,
-        grad_accum: plan.tuning.records_per_step.unwrap_or(1),
-        attempt_dir: &plan.dir,
-        steps: plan.steps,
-        learning_rate: plan.tuning.learning_rate,
-        weight_decay: plan.tuning.weight_decay.unwrap_or(0.0),
-        train_precision: plan.train_precision.as_deref(),
-        seed: plan.seed,
-        // The records hold answers and no reasoning: trained for no-think
-        // mode, as the adapter trainer does.
-        thinking: false,
-        cancel: Some(cancel),
-        on_step: None,
-    })
+    let name = install_name(&plan.dir);
+    let install = Install {
+        models_dir: &ctx.config().model_store,
+        name: &name,
+    };
+    full_fine_tune_served(
+        &ctx.brain()?,
+        &FullTune {
+            model_dir: &plan.base,
+            train: &train,
+            replay: &replayed,
+            replay_share: plan.replay_share,
+            weighted_replay: &rehearsed,
+            grad_accum: plan.tuning.records_per_step.unwrap_or(1),
+            attempt_dir: &plan.dir,
+            steps: plan.steps,
+            learning_rate: plan.tuning.learning_rate,
+            weight_decay: plan.tuning.weight_decay.unwrap_or(0.0),
+            train_precision: plan.train_precision.as_deref(),
+            seed: plan.seed,
+            // The records hold answers and no reasoning: trained for no-think
+            // mode, as the adapter trainer does.
+            thinking: false,
+            cancel: Some(cancel),
+            on_step: None,
+        },
+        &install,
+    )
     .map_err(trainer_error)
+}
+
+/// The name a checkpoint made in `dir` is installed under in the model
+/// store (`local/<name>`): the run's own directory name, which is unique to
+/// it, in the letters the store takes.
+fn install_name(dir: &Path) -> String {
+    let own = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let clean: String = own
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    format!("splinter-{}", clean.trim_start_matches('.'))
 }
 
 /// The records a full fine-tune trains on: the trained side of the held-out
@@ -278,14 +310,22 @@ fn trained_records(combined: &Path, dir: &Path) -> Result<PathBuf, OrchestratorE
     }
 }
 
-/// Folds `adapter` into `base` and writes the checkpoint to `out_dir`.
+/// Folds `adapter` into `base` as a job of the brain service; the checkpoint
+/// is installed in the model store under the name of `out_dir`'s parent, the
+/// merge's own working directory, and read from there.
 pub(super) fn merge_into(
+    ctx: &Context,
     base: &Path,
     adapter: &Path,
     out_dir: &Path,
     cancel: &CancelToken,
 ) -> Result<Checkpoint, OrchestratorError> {
-    merge(base, adapter, out_dir, Some(cancel)).map_err(trainer_error)
+    let name = install_name(out_dir.parent().unwrap_or(out_dir));
+    let install = Install {
+        models_dir: &ctx.config().model_store,
+        name: &name,
+    };
+    merge_served(&ctx.brain()?, base, adapter, &install, Some(cancel)).map_err(trainer_error)
 }
 
 #[cfg(test)]

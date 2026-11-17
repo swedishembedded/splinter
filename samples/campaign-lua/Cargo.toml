@@ -14,10 +14,6 @@ name = "campaign_lua"
 path = "src/lib.rs"
 
 [[bin]]
-name = "campaign-lua"
-path = "src/main.rs"
-
-[[bin]]
 name = "lineage"
 path = "src/lineage_cli.rs"
 

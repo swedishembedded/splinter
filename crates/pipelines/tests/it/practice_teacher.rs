@@ -165,7 +165,6 @@ fn a_reference_demonstration_the_verifier_passed_teaches_a_task_nobody_solved() 
     }
     let dataset = report.dataset.as_ref().unwrap();
     assert!(dataset.records > 0, "{dataset:#?}");
-    splinter_model::train::validate_dataset(&dataset.path).unwrap();
     let candidate = report.candidate.as_ref().unwrap();
     // What the demonstrations and the training cost is on record, for a
     // choice between this and another way of improving.

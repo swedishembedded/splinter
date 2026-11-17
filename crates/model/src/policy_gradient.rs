@@ -7,8 +7,8 @@
 // our services by sending an email to info@swedishembedded.com.
 
 //! One LoRA fine-tune by a clipped policy gradient on rollouts collected
-//! outside brain: brain's own trainer ([`brain::ChatFineTune::policy_gradient`])
-//! called through its SDK.
+//! outside brain: the `policy_gradient` objective of brain's training job
+//! ([`crate::served_train::train_policy_gradient_served`]).
 //!
 //! Each record of the dataset is one model call of an agent whose supervised
 //! assistant turn is the action, carrying the `"advantage"` of the rollout it
@@ -23,15 +23,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use splinter_core::training::{PolicyGradientStep, PolicyGradientSummary};
+use splinter_core::training::PolicyGradientSummary;
 
-use crate::capabilities::overlong_records;
-use crate::device::contain_device_panic;
-use crate::error::PolicyError;
-use crate::pictures::validate_dataset_on;
 use crate::precision::BasePrecision;
-use crate::progress::poll;
-use crate::train::{base_weights, candidate_adapter_id};
 
 /// The policy the KL term of the objective keeps the adapter close to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -109,7 +103,7 @@ impl std::str::FromStr for LossAggregation {
 }
 
 /// The settings of the policy-gradient objective a caller names; whatever it
-/// leaves out is brain's default ([`PolicyGradientOptions::resolved`]).
+/// leaves out is brain's default, which the run's training record states.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 pub struct PolicyGradientOptions {
     /// Half-width of the clip band `[1 - eps, 1 + eps]` of the importance
@@ -148,35 +142,6 @@ pub struct PolicyGradientOptions {
     pub sequence_advantage_cap: Option<f32>,
 }
 
-/// The settings with every default made explicit.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ResolvedPolicyGradient {
-    /// See [`PolicyGradientOptions::clip_eps`].
-    pub clip_eps: f32,
-    /// See [`PolicyGradientOptions::clip_eps_high`]; `None` is symmetric.
-    pub clip_eps_high: Option<f32>,
-    /// See [`PolicyGradientOptions::max_step_kl`]; `None` is no bound.
-    pub max_step_kl: Option<f32>,
-    /// See [`PolicyGradientOptions::max_step_grad_norm`]; `None` is no bound.
-    pub max_step_grad_norm: Option<f32>,
-    /// See [`PolicyGradientOptions::kl_beta`].
-    pub kl_beta: f32,
-    /// See [`PolicyGradientOptions::reference`].
-    pub reference: Reference,
-    /// See [`PolicyGradientOptions::behaviour`].
-    pub behaviour: Behaviour,
-    /// See [`PolicyGradientOptions::loss_agg`].
-    pub loss_agg: LossAggregation,
-    /// See [`PolicyGradientOptions::temperature`].
-    pub temperature: f32,
-    /// See [`PolicyGradientOptions::teacher`].
-    pub teacher: Reference,
-    /// See [`PolicyGradientOptions::advantage_bound`]; `None` is no bound.
-    pub advantage_bound: Option<f32>,
-    /// See [`PolicyGradientOptions::sequence_advantage_cap`]; `None` is no cap.
-    pub sequence_advantage_cap: Option<f32>,
-}
-
 impl PolicyGradientOptions {
     /// The flags among them that were named, for a command to report when the
     /// run they were given to cannot use them.
@@ -202,91 +167,6 @@ impl PolicyGradientOptions {
         .into_iter()
         .filter_map(|(set, flag)| set.then_some(flag))
         .collect()
-    }
-
-    /// The settings with brain's defaults where none was named.
-    #[must_use]
-    pub fn resolved(&self) -> ResolvedPolicyGradient {
-        let defaults = Self::defaults();
-        ResolvedPolicyGradient {
-            clip_eps: self.clip_eps.unwrap_or(defaults.clip_eps),
-            clip_eps_high: self.clip_eps_high.or(defaults.clip_eps_high),
-            max_step_kl: self.max_step_kl.or(defaults.max_step_kl),
-            max_step_grad_norm: self.max_step_grad_norm.or(defaults.max_step_grad_norm),
-            kl_beta: self.kl_beta.unwrap_or(defaults.kl_beta),
-            reference: self.reference.unwrap_or(defaults.reference),
-            behaviour: self.behaviour.unwrap_or(defaults.behaviour),
-            loss_agg: self.loss_agg.unwrap_or(defaults.loss_agg),
-            temperature: self.temperature.unwrap_or(defaults.temperature),
-            teacher: self.teacher.unwrap_or(defaults.teacher),
-            advantage_bound: self.advantage_bound.or(defaults.advantage_bound),
-            sequence_advantage_cap: self
-                .sequence_advantage_cap
-                .or(defaults.sequence_advantage_cap),
-        }
-    }
-
-    /// brain's defaults.
-    #[must_use]
-    pub fn defaults() -> ResolvedPolicyGradient {
-        let config = brain::PolicyGradientConfig::default();
-        ResolvedPolicyGradient {
-            clip_eps: config.clip_eps,
-            clip_eps_high: config.clip_eps_high,
-            max_step_kl: config.max_step_kl,
-            max_step_grad_norm: config.max_step_grad_norm,
-            kl_beta: config.kl_beta,
-            reference: match config.reference {
-                brain::ReferencePolicy::Base => Reference::Base,
-                brain::ReferencePolicy::StartOfRun => Reference::StartOfRun,
-            },
-            behaviour: match config.behaviour {
-                brain::BehaviourSource::Recorded => Behaviour::Recorded,
-                brain::BehaviourSource::StartOfRunProxy => Behaviour::StartOfRun,
-            },
-            loss_agg: match config.loss_agg {
-                brain::LossAgg::SeqMean => LossAggregation::SeqMean,
-                brain::LossAgg::TokenSum => LossAggregation::TokenSum,
-            },
-            temperature: config.temperature,
-            teacher: match config.teacher {
-                brain::ReferencePolicy::Base => Reference::Base,
-                brain::ReferencePolicy::StartOfRun => Reference::StartOfRun,
-            },
-            advantage_bound: config.advantage_bound,
-            sequence_advantage_cap: config.sequence_advantage_cap,
-        }
-    }
-
-    fn config(&self) -> brain::PolicyGradientConfig {
-        let resolved = self.resolved();
-        brain::PolicyGradientConfig {
-            clip_eps: resolved.clip_eps,
-            clip_eps_high: resolved.clip_eps_high,
-            max_step_kl: resolved.max_step_kl,
-            max_step_grad_norm: resolved.max_step_grad_norm,
-            kl_beta: resolved.kl_beta,
-            reference: match resolved.reference {
-                Reference::Base => brain::ReferencePolicy::Base,
-                Reference::StartOfRun => brain::ReferencePolicy::StartOfRun,
-            },
-            behaviour: match resolved.behaviour {
-                Behaviour::Recorded => brain::BehaviourSource::Recorded,
-                Behaviour::StartOfRun => brain::BehaviourSource::StartOfRunProxy,
-            },
-            loss_agg: match resolved.loss_agg {
-                LossAggregation::SeqMean => brain::LossAgg::SeqMean,
-                LossAggregation::TokenSum => brain::LossAgg::TokenSum,
-            },
-            temperature: resolved.temperature,
-            teacher: match resolved.teacher {
-                Reference::Base => brain::ReferencePolicy::Base,
-                Reference::StartOfRun => brain::ReferencePolicy::StartOfRun,
-            },
-            advantage_bound: resolved.advantage_bound,
-            sequence_advantage_cap: resolved.sequence_advantage_cap,
-            ..brain::PolicyGradientConfig::default()
-        }
     }
 }
 
@@ -353,232 +233,9 @@ pub struct TrainedPolicyGradient {
     pub statistics: PolicyGradientSummary,
 }
 
-/// brain's statistics of a run as Splinter's report records them.
-fn summarised(stats: &brain::PolicyGradientStats) -> PolicyGradientSummary {
-    let steps = stats
-        .steps
-        .iter()
-        .map(|s| PolicyGradientStep {
-            step: s.step,
-            loss: s.loss,
-            clip_fraction: s.clip_fraction,
-            kl: s.kl,
-            ratio_mean: s.ratio_mean,
-            ratio_min: s.ratio_min,
-            ratio_max: s.ratio_max,
-            mean_advantage: s.mean_advantage,
-            token_advantage_mean: s.token_advantage_mean,
-            token_advantage_max: s.token_advantage_max,
-            token_advantage_clip_fraction: s.token_advantage_clip_fraction,
-            entropy_estimate: s.entropy_estimate,
-            grad_norm: s.grad_norm,
-            skipped: s.skipped.clone(),
-        })
-        .collect();
-    PolicyGradientSummary {
-        steps_skipped_guard: stats.steps_skipped_guard,
-        ..PolicyGradientSummary::from_steps(steps, stats.steps_skipped_nonfinite)
-    }
-}
-
-/// Fine-tunes a LoRA on the rollout records of `request.train` by a clipped
-/// policy gradient.
-pub fn train_policy_gradient(
-    request: &PolicyGradientTune<'_>,
-) -> Result<TrainedPolicyGradient, PolicyError> {
-    let failed = |reason: String| PolicyError::Train {
-        dir: request.attempt_dir.to_path_buf(),
-        reason,
-    };
-    let trained_on = validate_dataset_on(request.train, request.model_dir)?;
-    let (weights, base_id) = base_weights(request.model_dir)?;
-    if let Some(max_block) = request.max_block {
-        let long = overlong_records(
-            request.train,
-            request.model_dir,
-            request.thinking,
-            false,
-            max_block,
-        )?;
-        if !long.is_empty() {
-            return Err(failed(format!(
-                "{} record(s) longer than max_block {max_block}; shorten or drop them: {}",
-                long.len(),
-                long.iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            )));
-        }
-    }
-    let mut fine_tune = brain::ChatFineTune::from_pretrained(weights.as_str())
-        .device(crate::device::selected().spec())
-        .dataset(request.train)
-        .thinking(request.thinking)
-        .out_dir(request.attempt_dir)
-        .adapter_id(candidate_adapter_id(&base_id, request.attempt_dir)?)
-        .steps(request.steps)
-        .rank(request.rank)
-        .alpha(request.alpha)
-        .seed(request.seed)
-        .weight_decay(request.weight_decay)
-        .grad_accum(request.grad_accum)
-        .policy_gradient(request.options.config());
-    if let Some(format) = request.base.brain_format() {
-        fine_tune = fine_tune.base_format(format);
-    }
-    if let Some(lr) = request.learning_rate {
-        fine_tune = fine_tune.lr(lr);
-    }
-    if let Some(max_block) = request.max_block {
-        fine_tune = fine_tune.max_block(max_block);
-    }
-    if let Some(adapter) = request.continue_from {
-        fine_tune = fine_tune.continue_from(adapter);
-    }
-    let brain_cancel = brain::CancelToken::armed();
-    let outcome = contain_device_panic(|| {
-        fine_tune.run_with(
-            &brain_cancel,
-            poll(request.cancel, &brain_cancel, None, None),
-        )
-    })
-    .and_then(|run| run.map_err(|e| e.to_string()))
-    .map_err(|e| {
-        failed(format!(
-            "policy-gradient training on {}: {e}",
-            request.train.display()
-        ))
-    })?;
-    if brain_cancel.is_cancelled() {
-        return Err(PolicyError::Cancelled {
-            dir: request.attempt_dir.to_path_buf(),
-        });
-    }
-    if outcome.status != brain::FineTuneStatus::Completed {
-        return Err(failed("it did not complete".into()));
-    }
-    let Some(run) = &outcome.policy_gradient else {
-        return Err(failed(
-            "brain trained the records by imitation and reported no policy-gradient run".into(),
-        ));
-    };
-    let statistics = summarised(&run.stats);
-    let incomplete = |what: &str| failed(format!("it reported no {what}"));
-    Ok(TrainedPolicyGradient {
-        adapter: outcome.adapter.ok_or_else(|| incomplete("adapter"))?,
-        adapter_digest: outcome
-            .adapter_digest
-            .ok_or_else(|| incomplete("adapter digest"))?,
-        base_digest: outcome
-            .base_digest
-            .ok_or_else(|| incomplete("base digest"))?,
-        training_record: outcome
-            .record
-            .ok_or_else(|| incomplete("training record"))?,
-        records: trained_on.records,
-        block: outcome.block,
-        statistics,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Settings left out are brain's defaults, so a run says plainly what it
-    /// ran with; settings named are the ones brain is handed.
-    #[test]
-    fn what_is_not_named_is_brains_default_and_what_is_named_is_kept() {
-        let none = PolicyGradientOptions::default();
-        assert!(none.named().is_empty());
-        assert_eq!(none.resolved(), PolicyGradientOptions::defaults());
-        let config = none.config();
-        let brain_default = brain::PolicyGradientConfig::default();
-        assert_eq!(
-            (config.clip_eps, config.kl_beta, config.temperature),
-            (
-                brain_default.clip_eps,
-                brain_default.kl_beta,
-                brain_default.temperature
-            )
-        );
-
-        let named = PolicyGradientOptions {
-            clip_eps: Some(0.3),
-            clip_eps_high: Some(0.28),
-            max_step_kl: Some(0.5),
-            max_step_grad_norm: Some(10.0),
-            kl_beta: Some(0.0),
-            reference: Some(Reference::StartOfRun),
-            behaviour: Some(Behaviour::StartOfRun),
-            loss_agg: Some(LossAggregation::TokenSum),
-            temperature: Some(0.6),
-            teacher: Some(Reference::StartOfRun),
-            advantage_bound: Some(4.0),
-            sequence_advantage_cap: Some(30.0),
-        };
-        assert_eq!(named.named().len(), 12);
-        let config = named.config();
-        assert_eq!(
-            (config.clip_eps, config.kl_beta, config.temperature),
-            (0.3, 0.0, 0.6)
-        );
-        assert_eq!(
-            (
-                config.clip_eps_high,
-                config.max_step_kl,
-                config.max_step_grad_norm
-            ),
-            (Some(0.28), Some(0.5), Some(10.0)),
-            "the clip-higher edge and the step guard reach brain as named"
-        );
-        assert_eq!(config.reference, brain::ReferencePolicy::StartOfRun);
-        assert_eq!(config.loss_agg, brain::LossAgg::TokenSum);
-        assert_eq!(config.behaviour, brain::BehaviourSource::StartOfRunProxy);
-        assert_eq!(
-            PolicyGradientOptions::default().config().behaviour,
-            brain::BehaviourSource::Recorded,
-            "an unnamed behaviour source is brain's: the sampler's own, recorded"
-        );
-        // The teacher's guards are handed to brain as named.
-        assert_eq!(config.teacher, brain::ReferencePolicy::StartOfRun);
-        assert_eq!(
-            (config.advantage_bound, config.sequence_advantage_cap),
-            (Some(4.0), Some(30.0))
-        );
-    }
-
-    #[test]
-    fn brains_step_statistics_become_the_reports_series() {
-        let stats = brain::PolicyGradientStats {
-            steps: vec![
-                brain::PolicyGradientStep {
-                    step: 1,
-                    kl: Some(0.0),
-                    clip_fraction: 0.0,
-                    ratio_mean: 1.0,
-                    ..Default::default()
-                },
-                brain::PolicyGradientStep {
-                    step: 2,
-                    kl: Some(0.1),
-                    clip_fraction: 0.5,
-                    ratio_mean: 1.2,
-                    ..Default::default()
-                },
-            ],
-            steps_skipped_nonfinite: 1,
-            steps_skipped_guard: 1,
-            ..Default::default()
-        };
-        let summary = summarised(&stats);
-        assert_eq!(summary.steps_skipped_guard, 1);
-        assert_eq!(summary.steps.len(), 2);
-        assert_eq!((summary.first_kl, summary.last_kl), (Some(0.0), Some(0.1)));
-        assert_eq!(summary.mean_clip_fraction, Some(0.25));
-        assert_eq!(summary.steps_skipped_nonfinite, 1);
-    }
 
     #[test]
     fn the_reference_and_the_loss_aggregation_are_named_as_brain_names_them() {

@@ -13,66 +13,69 @@ use std::path::Path;
 
 use splinter_data::{BlockMeasure, Projection};
 use splinter_model::measure::RecordMeter;
-use splinter_model::TokenCounter;
+use splinter_orchestrator::context::Context;
 
 /// `projection` without the records longer than `max_block` tokens; with
 /// `split`, a longer chat record is split into windows that fit
 /// ([`Projection::split_over_block`]) instead of left out.
 ///
 /// A record is measured as the trainer will measure it: written as the
-/// dataset line it will be, read and encoded for the policy base by brain's
-/// chat reader ([`RecordMeter`], the count `train`'s length check refuses by)
-/// for `base`, the checkpoint the training starts from (pictures count the
-/// rows its own vision configuration gives them),
-/// so every record kept passes that check at the same bound. Only where the
-/// trainer's count is unavailable - the policy base has no readable chat
-/// tokenizer, or the objective's records are not chat lines - is a record
-/// measured by its JSON text through a tokenizer (else a character ratio) plus
-/// image rows, a floor that leaves out the chat template's markup. Which
-/// measure was used, and why, is recorded on the projection
-/// ([`BlockMeasure`]) for the build report.
+/// dataset line it will be and read for the policy base `base` by the brain
+/// service's own trainer ([`RecordMeter`], one check of every record, the
+/// count a run's length check refuses by; pictures count the rows its vision
+/// configuration gives them), so every record kept passes that check at the
+/// same bound. Only where the trainer's count is unavailable - the objective's
+/// records are not chat lines, or no brain service can be asked - is a record
+/// measured by characters at the fallback ratio plus image rows, a floor that
+/// leaves out the chat template's markup. Which measure was used, and why, is
+/// recorded on the projection ([`BlockMeasure`]) for the build report.
 pub(crate) fn within_policy_block(
+    ctx: &Context,
     base: &Path,
     projection: Projection,
     max_block: usize,
     split: bool,
 ) -> Projection {
-    let (mut projection, measure) = match trainer_measure(base, &projection) {
-        Ok(meter) => {
-            let refusal = std::cell::RefCell::new(None::<String>);
-            let objective = projection.objective;
-            let size = |record: &splinter_data::Record| {
-                splinter_data::dataset_line(objective, record)
-                    .map_err(|e| e.to_string())
-                    .and_then(|line| meter.tokens(&line))
-                    // A record the trainer's reader refuses is refused by the
-                    // trainer too: it counts as longer than any bound.
-                    .unwrap_or_else(|reason| {
-                        refusal.borrow_mut().get_or_insert(reason);
-                        usize::MAX
-                    })
-            };
-            let bounded = bounded(projection, max_block, split, &size);
-            let first_refusal = refusal.into_inner();
-            (
-                bounded,
-                BlockMeasure::Trainer {
-                    base: base.to_path_buf(),
-                    first_refusal,
-                },
-            )
-        }
+    let brain = ctx.brain().map_err(|e| e.to_string());
+    let measured = brain.and_then(|brain| {
+        let meter = trainer_measure(&brain, base, &projection)?;
+        let objective = projection.objective;
+        let lines: Vec<String> = projection
+            .records
+            .iter()
+            .filter_map(|record| splinter_data::dataset_line(objective, record).ok())
+            .collect();
+        meter
+            .measure(&lines.iter().map(String::as_str).collect::<Vec<_>>())
+            .map_err(|e| e.to_string())?;
+        let refusal = std::cell::RefCell::new(None::<String>);
+        let size = |record: &splinter_data::Record| {
+            splinter_data::dataset_line(objective, record)
+                .map_err(|e| e.to_string())
+                .and_then(|line| meter.tokens(&line))
+                // A record the trainer's reader refuses is refused by the
+                // trainer too: it counts as longer than any bound.
+                .unwrap_or_else(|reason| {
+                    refusal.borrow_mut().get_or_insert(reason);
+                    usize::MAX
+                })
+        };
+        let bounded = bounded(projection.clone(), max_block, split, &size);
+        Ok((bounded, refusal.into_inner()))
+    });
+    let (mut projection, measure) = match measured {
+        Ok((bounded, first_refusal)) => (
+            bounded,
+            BlockMeasure::Trainer {
+                base: base.to_path_buf(),
+                first_refusal,
+            },
+        ),
         Err(reason) => {
-            let counter = TokenCounter::for_model(base).ok();
-            let tokens = |text: &str| {
-                counter
-                    .as_ref()
-                    .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
-            };
             // A picture is the rows it adds to the sequence, not its base64.
             let size = |record: &splinter_data::Record| {
                 let (text, image_rows) = record.body.text_and_image_rows();
-                tokens(&text) + image_rows
+                splinter_data::chars_as_tokens(&text) + image_rows
             };
             (
                 bounded(projection, max_block, split, &size),
@@ -99,7 +102,11 @@ fn bounded(
 
 /// The trainer's count of a record of `projection` for the base `base`, in the
 /// mode its fine-tune would run in; the reason it cannot be had otherwise.
-fn trainer_measure(base: &Path, projection: &Projection) -> Result<RecordMeter, String> {
+fn trainer_measure<'b>(
+    brain: &'b splinter_model::BrainEndpoints,
+    base: &Path,
+    projection: &Projection,
+) -> Result<RecordMeter<'b>, String> {
     use splinter_data::Format;
     let format = projection.objective.line_format();
     if format != Format::GenericMessagesV2 {
@@ -113,5 +120,10 @@ fn trainer_measure(base: &Path, projection: &Projection) -> Result<RecordMeter, 
         splinter_data::dataset_line(projection.objective, record)
             .is_ok_and(|line| splinter_model::measure::carries_reasoning(&line))
     });
-    RecordMeter::for_model(base, thinking, projection.packed).map_err(|e| e.to_string())
+    Ok(RecordMeter::for_model(
+        brain,
+        base,
+        thinking,
+        projection.packed,
+    ))
 }

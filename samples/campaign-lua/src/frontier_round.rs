@@ -160,12 +160,13 @@ impl Lineage<'_> {
             spent,
             measured,
         )?;
+        let endpoints = stage.lineage.host.endpoints()?;
         let meter = RecordMeter::for_model(
+            &endpoints,
             stage.lineage.base,
             stage.lineage.plan.train_thinking(),
             TRAIN_PACKED,
-        )
-        .map_err(fail)?;
+        );
         let book = stage.lineage.trace_book()?;
         let max_block = stage.lineage.recipe.max_block as usize;
         let selection = filled.selected(settings.target, max_block, |task| {

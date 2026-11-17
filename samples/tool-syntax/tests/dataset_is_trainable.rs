@@ -67,18 +67,25 @@ fn the_trainer_accepts_what_this_harness_derives() {
     let path = dir.join("train.jsonl");
     std::fs::write(&path, &jsonl).expect("write");
 
-    // The real parser, from the crate that trains on it.
-    let summary = splinter_sdk::model::train::validate_dataset(&path)
-        .unwrap_or_else(|e| panic!("the trainer rejected a derived dataset: {e}\n{jsonl}"));
-
-    assert_eq!(summary.records, 1);
+    // Read back as the trainer reads a line: one record, every turn kept, the
+    // decisions supervised. The trainer's own check runs when a run is asked
+    // for (brain's check_dataset).
+    let lines: Vec<serde_json::Value> = std::fs::read_to_string(&path)
+        .expect("read")
+        .lines()
+        .map(|l| serde_json::from_str(l).expect("a JSON record"))
+        .collect();
+    assert_eq!(lines.len(), 1);
+    let messages = lines[0]["messages"].as_array().expect("messages");
     // system, user, assistant(tool call), tool result, closing answer.
     assert_eq!(
-        summary.messages, 5,
+        messages.len(),
+        5,
         "every turn the model saw must survive into the record: {jsonl}"
     );
     assert_eq!(
-        summary.trained_messages, 2,
+        messages.iter().filter(|m| m["train"] == true).count(),
+        2,
         "exactly the decisions (the call and the closing answer) are supervised: {jsonl}"
     );
 

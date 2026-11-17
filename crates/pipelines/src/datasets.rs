@@ -29,7 +29,7 @@ use splinter_data::{
 pub use splinter_data::{AdvantageKind, BlockMeasure, GroupKind, GroupReport, RewardShape};
 pub use splinter_data::{Control, Strip};
 use splinter_knowledge::sections::sections;
-use splinter_model::{BrainDatasetCheck, TokenCounter, TrainingCapabilities};
+use splinter_model::TrainingCapabilities;
 use splinter_store::error::StoreError;
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
@@ -414,15 +414,11 @@ fn project_without(
         ViewName::Rehearsal => Rehearsal::new().project(&corpus),
         ViewName::Cpt => Cpt::new(&source_store).project(&corpus),
         ViewName::Voice => {
-            // The stretches are measured in the policy's own tokens, the
-            // unit its training row is sized in; without its tokenizer, in
-            // characters at a ratio that holds for text that tokenizes badly.
-            let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
-            let tokens = |text: &str| {
-                counter
-                    .as_ref()
-                    .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
-            };
+            // The stretches are measured in characters at a ratio that holds
+            // for text that tokenizes badly: no tokenizer runs here, and the
+            // row a run trains is sized by the trainer's own count when the
+            // dataset is checked before training.
+            let tokens = splinter_data::chars_as_tokens;
             let sectioner = |text: &str, media_type: &str| {
                 sections(text, media_type)
                     .into_iter()
@@ -524,6 +520,7 @@ fn project_without(
             request.base.as_ref().unwrap_or(&ModelRef::policy_default()),
         )?;
         projection = crate::block::within_policy_block(
+            ctx,
             &base,
             projection,
             max_block,
@@ -584,7 +581,7 @@ pub fn store_dataset(
             .require(projection.objective)
             .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
     }
-    let stored = ctx.datasets().put(projection, &BrainDatasetCheck)?;
+    let stored = ctx.datasets().put(projection, &splinter_data::Unchecked)?;
     record_dataset_lineage(ctx, &stored)?;
     Ok(stored)
 }
@@ -698,19 +695,24 @@ pub fn examples_in(path: &Path) -> std::io::Result<usize> {
     Ok(examples)
 }
 
-/// The tokens, as the policy's own tokenizer counts them, of the supervised
-/// answers of the chat dataset at `path`; characters at the fallback ratio
-/// when the policy's tokenizer is not at hand.
+/// The tokens of the supervised answers of the chat dataset at `path`, as the
+/// brain service's trainer counts them for the policy base (each answer with
+/// the end of its turn); characters at the fallback ratio when no service can
+/// be asked.
 ///
 /// # Errors
-/// The file cannot be read or holds a line that is not JSON.
+/// The file cannot be read, or the service refused the dataset.
 pub fn supervised_tokens_in(ctx: &Context, path: &Path) -> std::io::Result<usize> {
-    let counter = TokenCounter::for_model(&ctx.config().policy_base).ok();
-    let tokens = |text: &str| {
-        counter
-            .as_ref()
-            .map_or_else(|| splinter_data::chars_as_tokens(text), |c| c.count(text))
-    };
+    let failed = |e: splinter_model::PolicyError| std::io::Error::other(e.to_string());
+    if let Ok(brain) = ctx.brain() {
+        let base = splinter_model::selection::local_model_name(&ctx.config().policy_base);
+        let mut spec = splinter_model::served_train::CheckSpec::chat(&base, false, false);
+        spec.per_record = false;
+        let report =
+            splinter_model::served_train::check_dataset(&brain, path, &spec).map_err(failed)?;
+        report.refuse_invalid(path).map_err(failed)?;
+        return Ok(usize::try_from(report.supervised_tokens.total).unwrap_or(usize::MAX));
+    }
     let text = std::fs::read_to_string(path)?;
     let mut total = 0;
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
@@ -723,7 +725,7 @@ pub fn supervised_tokens_in(ctx: &Context, path: &Path) -> std::io::Result<usize
             .flatten()
             .filter(|m| m.get("train") == Some(&serde_json::Value::Bool(true)))
             .filter_map(|m| m.get("content").and_then(serde_json::Value::as_str));
-        total += answers.map(&tokens).sum::<usize>();
+        total += answers.map(splinter_data::chars_as_tokens).sum::<usize>();
     }
     Ok(total)
 }

@@ -78,13 +78,13 @@ fn main() -> anyhow::Result<()> {
         Some("freeze") => freeze_command(&args[1..]),
         Some("materials") => materials_command(&args[1..]),
         Some("tasks") => tasks_command(&args[1..]),
-        Some("train") => train_command(&args[1..]),
+        Some("train") => train_command(&flags, &args[1..]),
         Some("exam") => exam_command(&flags, &args[1..]),
         Some("report") => report_command(&args[1..]),
         Some("principles") => principles_command(&args[1..]),
         Some("transfer") => transfer_command(&args[1..]),
         Some("build-data") => build_data_command(&args[1..]),
-        Some("train-dpo") => train_dpo_command(&args[1..]),
+        Some("train-dpo") => train_dpo_command(&flags, &args[1..]),
         Some("transfer-exam") => transfer_exam_command(&flags, &args[1..]),
         Some("constant-baseline") => constant_baseline_command(&args[1..]),
         Some("build-onpolicy") => build_onpolicy_command(&args[1..]),
@@ -362,27 +362,34 @@ const DEFAULT_DPO_LEARNING_RATE: f32 = 1e-5;
 /// Anchor on the chosen answer's likelihood; not tuned here.
 const DEFAULT_NLL_WEIGHT: f32 = 0.2;
 
-fn train_command(args: &[String]) -> anyhow::Result<()> {
+fn train_command(
+    device: &splinter_sdk::device::DeviceFlags,
+    args: &[String],
+) -> anyhow::Result<()> {
+    let brain = device.brain()?;
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
-    run::train_command(&run::Train {
-        base: need(args, "--base")?.into(),
-        dataset: flag(args, "--dataset")
-            .map_or_else(|| resources.join("tasks").join("sft.jsonl"), Into::into),
-        replay: flags(args, "--replay")
-            .into_iter()
-            .map(Into::into)
-            .collect(),
-        continue_from: flag(args, "--continue-from").map(Into::into),
-        attempt: need(args, "--attempt")?.into(),
-        steps: number(args, "--steps", 500)?,
-        rank: number(args, "--rank", 16)?,
-        alpha: number(args, "--alpha", 32.0)?,
-        learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
-        bf16: args.iter().any(|a| a == "--bf16"),
-        replay_share: flag(args, "--replay-share").map_or(Ok(None), |v| v.parse().map(Some))?,
-        grad_accum: number(args, "--grad-accum", DEFAULT_GRAD_ACCUM)?,
-        seed: train_seed(args)?,
-    })
+    run::train_command(
+        brain.endpoints(),
+        &run::Train {
+            base: need(args, "--base")?.into(),
+            dataset: flag(args, "--dataset")
+                .map_or_else(|| resources.join("tasks").join("sft.jsonl"), Into::into),
+            replay: flags(args, "--replay")
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            continue_from: flag(args, "--continue-from").map(Into::into),
+            attempt: need(args, "--attempt")?.into(),
+            steps: number(args, "--steps", 500)?,
+            rank: number(args, "--rank", 16)?,
+            alpha: number(args, "--alpha", 32.0)?,
+            learning_rate: flag(args, "--lr").map(|v| v.parse()).transpose()?,
+            bf16: args.iter().any(|a| a == "--bf16"),
+            replay_share: flag(args, "--replay-share").map_or(Ok(None), |v| v.parse().map(Some))?,
+            grad_accum: number(args, "--grad-accum", DEFAULT_GRAD_ACCUM)?,
+            seed: train_seed(args)?,
+        },
+    )
 }
 
 /// The seed of a random draw named `name`: `--<name>`, else a fresh one, printed.
@@ -512,25 +519,32 @@ fn build_onpolicy_command(args: &[String]) -> anyhow::Result<()> {
     )
 }
 
-fn train_dpo_command(args: &[String]) -> anyhow::Result<()> {
+fn train_dpo_command(
+    device: &splinter_sdk::device::DeviceFlags,
+    args: &[String],
+) -> anyhow::Result<()> {
+    let brain = device.brain()?;
     let resources = std::path::PathBuf::from(need(args, "--resources")?);
-    run::dpo_command(&run::Dpo {
-        base: need(args, "--base")?.into(),
-        pairs: flag(args, "--pairs").map_or_else(
-            || resources.join("datasets").join("preference-transfer.jsonl"),
-            Into::into,
-        ),
-        attempt: need(args, "--attempt")?.into(),
-        continue_from: flag(args, "--continue-from").map(Into::into),
-        steps: number(args, "--steps", 200)?,
-        rank: number(args, "--rank", 16)?,
-        alpha: number(args, "--alpha", 32.0)?,
-        beta: number(args, "--beta", 0.1)?,
-        nll_weight: number(args, "--nll-weight", DEFAULT_NLL_WEIGHT)?,
-        grad_accum: number(args, "--grad-accum", DEFAULT_GRAD_ACCUM)?,
-        learning_rate: Some(number(args, "--lr", DEFAULT_DPO_LEARNING_RATE)?),
-        seed: train_seed(args)?,
-    })
+    run::dpo_command(
+        brain.endpoints(),
+        &run::Dpo {
+            base: need(args, "--base")?.into(),
+            pairs: flag(args, "--pairs").map_or_else(
+                || resources.join("datasets").join("preference-transfer.jsonl"),
+                Into::into,
+            ),
+            attempt: need(args, "--attempt")?.into(),
+            continue_from: flag(args, "--continue-from").map(Into::into),
+            steps: number(args, "--steps", 200)?,
+            rank: number(args, "--rank", 16)?,
+            alpha: number(args, "--alpha", 32.0)?,
+            beta: number(args, "--beta", 0.1)?,
+            nll_weight: number(args, "--nll-weight", DEFAULT_NLL_WEIGHT)?,
+            grad_accum: number(args, "--grad-accum", DEFAULT_GRAD_ACCUM)?,
+            learning_rate: Some(number(args, "--lr", DEFAULT_DPO_LEARNING_RATE)?),
+            seed: train_seed(args)?,
+        },
+    )
 }
 
 fn constant_baseline_command(args: &[String]) -> anyhow::Result<()> {

@@ -13,5 +13,5 @@ mod timeline_dataset_is_trainable;
 mod timeline_scoring;
 mod timeline_serving;
 mod timeline_units;
-mod training_records;
-mod views_datasets_are_trainable;
+
+mod trainable_objectives;

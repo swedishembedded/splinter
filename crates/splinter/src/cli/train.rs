@@ -156,18 +156,14 @@ fn clip_eps(text: &str) -> Result<f32, String> {
 pub struct PolicyGradientArgs {
     /// Half-width of the clip band `[1 - eps, 1 + eps]` of the importance
     /// ratio.
-    #[arg(long, value_name = "EPS", value_parser = clip_eps, help = format!(
+    #[arg(long, value_name = "EPS", value_parser = clip_eps, help =
         "For a dataset of rollouts (the policy-gradient view): the half-width of the clip band \
-         of the importance ratio, in (0, 1) [default: {}]",
-        PolicyGradientOptions::defaults().clip_eps
-    ))]
+         of the importance ratio, in (0, 1) [default: brain's, stated in the training record]")]
     pub clip_eps: Option<f32>,
     /// Coefficient of the KL penalty to the reference policy.
-    #[arg(long, value_name = "BETA", value_parser = non_negative_rate, help = format!(
+    #[arg(long, value_name = "BETA", value_parser = non_negative_rate, help =
         "For a dataset of rollouts: the coefficient of the KL penalty to the reference policy; \
-         0 puts none in the loss [default: {}]",
-        PolicyGradientOptions::defaults().kl_beta
-    ))]
+         0 puts none in the loss [default: brain's, stated in the training record]")]
     pub kl_beta: Option<f32>,
     /// The policy the KL penalty is taken against.
     #[arg(long, value_name = "base|start", value_parser = clap::value_parser!(Reference), help =
@@ -275,10 +271,9 @@ pub struct TrainArgs {
     #[command(flatten)]
     pub policy_gradient: PolicyGradientArgs,
     /// The temperature the rollouts of a dataset were sampled at.
-    #[arg(long, value_name = "T", value_parser = positive_rate, help = format!(
-        "For a dataset of rollouts: the temperature they were sampled at [default: {}]",
-        PolicyGradientOptions::defaults().temperature
-    ))]
+    #[arg(long, value_name = "T", value_parser = positive_rate, help =
+        "For a dataset of rollouts: the temperature they were sampled at [default: brain's, \
+         stated in the training record]")]
     pub temperature: Option<f32>,
     /// Records averaged into one optimizer step (default: one when the steps
     /// are named, else from the size of the dataset).

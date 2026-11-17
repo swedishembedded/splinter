@@ -35,7 +35,7 @@ use splinter_data::split::{leave_one_source_out, temporal_split, DataSplit, Part
 use splinter_data::timeline_dataset::{
     members_of, project_split, write_timeline_splits, ProjectionSpec,
 };
-use splinter_model::BrainDatasetCheck;
+use splinter_data::Unchecked;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::longitudinal::{ImportReport, ImportSpec, LongitudinalStore};
@@ -194,7 +194,7 @@ pub fn split_timeline(
         .map_err(|e| refuse("the split leaks", e))?;
     let parts = project_split(&episodes, &split, &request.projection)?;
     let scratch = Scratch::new(ctx, "split")?;
-    let written = write_timeline_splits(&scratch.0, &split, &parts, &BrainDatasetCheck)?;
+    let written = write_timeline_splits(&scratch.0, &split, &parts, &Unchecked)?;
     let store = ctx.timeline_datasets();
     let address = store.put_split(&split)?;
     let mut stored = BTreeMap::new();

@@ -6,18 +6,17 @@
 // learning that keeps accumulating capabilities without forgetting, you can
 // procure our services by sending an email to info@swedishembedded.com.
 
-//! Taking what a generation learned into the weights themselves, through
-//! brain's own trainers and exporters: [`full_fine_tune`] trains every weight
-//! of a base on a chat dataset ([`brain::ChatFullFineTune`]); [`merge`] folds
-//! an adapter into the weights it targets ([`brain::merge_adapter`]). Each
-//! produces a [`Checkpoint`]: a directory that is a base like any other, for
+//! Taking what a generation learned into the weights themselves, as jobs of
+//! the brain service: a full-parameter run ([`FullTune`],
+//! [`crate::served_train::full_fine_tune_served`]) trains every weight of a
+//! base on a chat dataset; a merge
+//! ([`crate::served_train::merge_served`]) folds an adapter into the weights
+//! it targets. Each produces a [`Checkpoint`]: a directory that is a base like any other, for
 //! the next adapter to be trained on and for plain `brain serve`.
 
 use std::path::{Path, PathBuf};
 
-use crate::device::contain_device_panic;
-use crate::error::PolicyError;
-use crate::train::{base_weights, validate_dataset, StepHook, StepReport};
+use crate::train::StepHook;
 
 /// One full-parameter fine-tune: what to train, on what, and where its files
 /// go.
@@ -78,125 +77,4 @@ pub struct Checkpoint {
     pub initial_loss: Option<f32>,
     /// The last step's training loss; `None` for a merge.
     pub final_loss: Option<f32>,
-}
-
-/// Whether brain runs `spec` as a full fine-tune's training precision: the
-/// refusal it would give, before anything is loaded.
-pub fn check_train_precision(spec: &str) -> Result<(), String> {
-    brain::TrainPrecision::parse(spec).map(|_| ())
-}
-
-/// Trains every weight of `request.model_dir` on `request.train`.
-pub fn full_fine_tune(request: &FullTune<'_>) -> Result<Checkpoint, PolicyError> {
-    let failed = |reason: String| PolicyError::Train {
-        dir: request.attempt_dir.to_path_buf(),
-        reason,
-    };
-    validate_dataset(request.train)?;
-    let (weights, _) = base_weights(request.model_dir)?;
-    for replayed in request.replay {
-        validate_dataset(replayed)?;
-    }
-    for (weighted, _) in request.weighted_replay {
-        validate_dataset(weighted)?;
-    }
-    let mut tune = brain::ChatFullFineTune::from_pretrained(weights.as_str())
-        .device(crate::device::selected().spec())
-        .dataset(request.train)
-        .out_dir(request.attempt_dir)
-        .steps(request.steps)
-        .grad_accum(request.grad_accum)
-        .weight_decay(request.weight_decay)
-        .seed(request.seed)
-        .thinking(request.thinking);
-    if let Some(spec) = request.train_precision {
-        let precision = brain::TrainPrecision::parse(spec)
-            .map_err(|e| failed(format!("train precision '{spec}': {e}")))?;
-        tune = tune.train_precision(precision);
-    }
-    if let Some(share) = request.replay_share {
-        tune = tune.replay_share(share);
-    }
-    if let Some(lr) = request.learning_rate {
-        tune = tune.lr(lr);
-    }
-    for replayed in request.replay {
-        tune = tune.replay(replayed);
-    }
-    for (weighted, share) in request.weighted_replay {
-        tune = tune.replay_at(weighted, *share);
-    }
-    let brain_cancel = brain::CancelToken::armed();
-    let on_step = request.on_step;
-    let cancel = request.cancel;
-    let outcome = contain_device_panic(|| {
-        tune.run_with(&brain_cancel, |progress| {
-            if let Some(StepHook(report)) = on_step {
-                report(&StepReport {
-                    step: progress.step,
-                    steps: progress.steps,
-                    loss: progress.loss,
-                });
-            }
-            if cancel.is_some_and(sven_sdk::CancelToken::is_cancelled) {
-                brain_cancel.cancel();
-            }
-        })
-    })
-    .and_then(|run| run.map_err(|e| e.to_string()))
-    .map_err(|e| failed(format!("training on {}: {e}", request.train.display())))?;
-    if brain_cancel.is_cancelled() || outcome.status != brain::FineTuneStatus::Completed {
-        return Err(PolicyError::Cancelled {
-            dir: request.attempt_dir.to_path_buf(),
-        });
-    }
-    let incomplete = |what: &str| failed(format!("it reported no {what}"));
-    Ok(Checkpoint {
-        dir: outcome
-            .checkpoint
-            .ok_or_else(|| incomplete("checkpoint directory"))?,
-        weights: outcome.weights.ok_or_else(|| incomplete("weights file"))?,
-        weights_digest: outcome
-            .weights_digest
-            .ok_or_else(|| incomplete("weights digest"))?,
-        steps_completed: outcome.steps_completed,
-        initial_loss: outcome.initial_loss,
-        final_loss: outcome.final_loss,
-    })
-}
-
-/// Folds `adapter` into the weights of `base` it targets and writes the
-/// result to `out_dir`. Once `cancel` is cancelled the merge stops at its next
-/// unit of work and leaves nothing of its own in `out_dir`.
-pub fn merge(
-    base: &Path,
-    adapter: &Path,
-    out_dir: &Path,
-    cancel: Option<&sven_sdk::CancelToken>,
-) -> Result<Checkpoint, PolicyError> {
-    let failed = |reason: String| PolicyError::Train {
-        dir: out_dir.to_path_buf(),
-        reason,
-    };
-    let (weights, _) = base_weights(base)?;
-    let merged = contain_device_panic(|| {
-        let mut keep_going = || !cancel.is_some_and(sven_sdk::CancelToken::is_cancelled);
-        brain::merge_adapter(weights.as_str(), adapter, out_dir, &mut keep_going)
-    })
-    .and_then(|run| run.map_err(|e| e.to_string()))
-    .map_err(|e| {
-        failed(format!(
-            "merging {} into {}: {e}",
-            adapter.display(),
-            base.display()
-        ))
-    })?;
-    Ok(Checkpoint {
-        dir: merged.dir,
-        weights: merged.weights,
-        weights_digest: merged.weights_digest,
-        steps_completed: 0,
-        initial_loss: None,
-        final_loss: None,
-    })
 }

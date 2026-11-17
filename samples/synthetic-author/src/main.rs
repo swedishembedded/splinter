@@ -375,7 +375,7 @@ fn main() -> anyhow::Result<()> {
             println!("{}", serde_json::to_string_pretty(&summary)?);
             Ok(())
         }
-        Command::Train(args) => synthetic_author::training::run(&args),
+        Command::Train(args) => synthetic_author::training::run(&args, &cli.device),
         Command::Exam(args) => synthetic_author::exam_cmd::exam(&cli.device, &args),
         Command::Show {
             seed,
@@ -464,6 +464,6 @@ fn main() -> anyhow::Result<()> {
         Command::Cross(args) => synthetic_author::exam_cmd::cross(&args),
         Command::Report(args) => synthetic_author::exam_cmd::report(&args),
         Command::Corpus(args) => synthetic_author::corpus_cmd::run(args),
-        Command::Study(args) => synthetic_author::study::cli::run(&args),
+        Command::Study(args) => synthetic_author::study::cli::run(&args, &cli.device),
     }
 }

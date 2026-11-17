@@ -271,12 +271,12 @@ impl FreezeArgs {
 ///
 /// # Errors
 /// The stage's own: see each stage.
-pub fn run(args: &StudyArgs) -> anyhow::Result<()> {
+pub fn run(args: &StudyArgs, device: &splinter_sdk::device::DeviceFlags) -> anyhow::Result<()> {
     match &args.stage {
         Stage::Freeze(freeze_args) => freeze_stage(freeze_args),
         Stage::Corpus(corpus_args) => corpus_stage(corpus_args),
         Stage::Amend(amend_args) => amend_stage(amend_args),
-        Stage::Train(train_args) => train_stage(train_args),
+        Stage::Train(train_args) => train_stage(train_args, device),
         Stage::Exam(exam_args) => exam_stage(exam_args),
         Stage::Report(report_args) => report_stage(report_args),
     }
@@ -461,12 +461,21 @@ fn amend_stage(args: &AmendArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn train_stage(args: &TrainStageArgs) -> anyhow::Result<()> {
+fn train_stage(
+    args: &TrainStageArgs,
+    device: &splinter_sdk::device::DeviceFlags,
+) -> anyhow::Result<()> {
+    let brain = device.brain()?;
     let study = Study::open(&args.study)?;
     let authors = chosen_authors(&study, &args.only)?;
     let base = open_base(&args.base)?;
     for_each_author(&authors, |seed| {
-        let done = train::run(&study, seed, &base, &train::Brain)?;
+        let done = train::run(
+            &study,
+            seed,
+            &base,
+            &train::Brain(brain.endpoints().clone()),
+        )?;
         println!(
             "author {seed}: {} adapters trained, {} already trained",
             done.trained, done.already
