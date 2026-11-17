@@ -116,12 +116,14 @@ pub fn data_path(
     }
 }
 
-/// Extensions that name binary files by convention; the agent runtime
-/// shows such a file as a hex dump, whatever it holds.
-const BINARY_EXTENSIONS: [&str; 38] = [
+/// Extensions that name binary files or images by convention; the agent
+/// runtime shows such a file as a hex dump or reads it as an image, whatever
+/// it holds.
+const BINARY_EXTENSIONS: [&str; 43] = [
     "o", "a", "so", "elf", "exe", "dll", "wasm", "pdb", "zip", "gz", "tar", "bz", "xz", "zst",
     "bin", "img", "rom", "fw", "srec", "mot", "pyc", "pyo", "jar", "war", "doc", "docx", "xls",
-    "xlsx", "ppt", "pptx", "pdf", "obj", "lib", "png", "jpg", "gif", "iso", "class",
+    "xlsx", "ppt", "pptx", "pdf", "obj", "lib", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif",
+    "tiff", "iso", "class",
 ];
 
 /// Whether `path` cannot sit beside `taken`: it is one of them, one of them
@@ -235,6 +237,20 @@ pub(crate) fn any_value(rng: &mut SplitMix64, lexicon: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The agent runtime reads a file of an image's extension as an image;
+    /// a made-up extension is never one (nor a binary file's).
+    #[test]
+    fn a_made_up_extension_names_no_image_nor_binary_file() {
+        let mut rng = SplitMix64::new(splinter_sdk::model::seed::draw().value());
+        for _ in 0..200_000 {
+            let e = letters(&mut rng);
+            assert!(
+                !["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif"].contains(&e.as_str()),
+                "{e}"
+            );
+        }
+    }
 
     #[test]
     fn the_lexicon_holds_a_corpus_s_lowercase_words_past_the_commonest() {

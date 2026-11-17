@@ -50,13 +50,13 @@ impl Recipe {
 /// the tool results as rendered), the held-out split and the tokenizer text.
 pub const WORLD: Recipe = Recipe {
     stage: "world",
-    version: 16,
+    version: 17,
 };
 
 /// The task families, their instance draw and the Harbor export.
 pub const TASKS: Recipe = Recipe {
     stage: "tasks",
-    version: 12,
+    version: 13,
 };
 
 /// One episode: the workspace, the expert's procedure, the agent settings,
