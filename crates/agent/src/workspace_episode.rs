@@ -20,6 +20,8 @@
 //! (`agent.extra.sven.profile`).
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context as _};
@@ -31,6 +33,10 @@ pub const TOOLS: [&str; 3] = compact_profile::TOOLS;
 
 /// The profile's id, as the trajectory records it.
 pub const PROFILE: &str = compact_profile::ID;
+
+/// How long past its deadline an agent run may take to return before the
+/// episode is stopped from here.
+const RETURN_GRACE: Duration = Duration::from_secs(60);
 
 /// Bounds on one episode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -100,37 +106,49 @@ pub async fn run(
     let stop = CancelToken::new();
     let budget = stop.clone();
     let cap = limits.max_tool_calls;
+    // The calls are counted as they start; the count is read when the run
+    // returns, never by waiting for the stream to report the turn's end (a
+    // turn the budget cancelled, or an event lost to a lagging stream, would
+    // leave that wait without end).
+    let calls = Arc::new(AtomicU32::new(0));
+    let counted = Arc::clone(&calls);
     let counter = tokio::spawn(async move {
-        let mut calls = 0u32;
         while let Some(event) = events.recv().await {
-            match event.event {
-                SessionEvent::ToolCallStarted(_) => {
-                    calls += 1;
-                    if calls > cap {
-                        budget.cancel_with("tool-call budget spent");
-                    }
+            if let SessionEvent::ToolCallStarted(_) = event.event {
+                if counted.fetch_add(1, Ordering::SeqCst) + 1 > cap {
+                    budget.cancel_with("tool-call budget spent");
                 }
-                SessionEvent::TurnComplete | SessionEvent::Aborted { .. } => break,
-                _ => {}
             }
         }
-        calls
     });
-    let sent = agent
-        .send_with(
+    let deadline = Duration::from_secs(limits.deadline_secs);
+    let sent = tokio::time::timeout(
+        deadline + RETURN_GRACE,
+        agent.send_with(
             instruction,
             RunOptions::new()
                 .cancel(stop)
-                .deadline(Duration::from_secs(limits.deadline_secs))
+                .deadline(deadline)
                 .announce_deadline(limits.announce_deadline),
-        )
-        .await;
-    let tool_calls = counter.await.unwrap_or(0);
-    let outcome = sent.map_err(|e| anyhow!("the agent run failed: {e}"))?;
+        ),
+    )
+    .await;
+    counter.abort();
+    let tool_calls = calls.load(Ordering::SeqCst);
+    let conclusion = match sent {
+        Ok(sent) => format!(
+            "{:?}",
+            sent.map_err(|e| anyhow!("the agent run failed: {e}"))?
+                .conclusion
+        ),
+        // A run that outlived its own deadline by the grace is stopped
+        // here: an episode that did not finish, never a wait without end.
+        Err(_) => "did not return within its deadline".to_string(),
+    };
     let trajectory =
         serde_json::to_value(agent.trajectory()).context("serialising the trajectory")?;
     Ok(Ran {
-        conclusion: format!("{:?}", outcome.conclusion),
+        conclusion,
         tool_calls,
         trajectory,
     })
@@ -244,6 +262,52 @@ mod tests {
             result["content"].as_str().unwrap().ends_with(notice),
             "{result}"
         );
+    }
+
+    /// A policy that never stops calling tools.
+    fn reader(_: &Value) -> anyhow::Result<Value> {
+        Ok(
+            json!({ "role": "assistant", "content": null, "tool_calls": [{ "id": "c0", "type": "function",
+            "function": { "name": "read_file", "arguments": "{\"path\":\"missing.txt\"}" } }] }),
+        )
+    }
+
+    /// The tool-call budget ends the episode: the run returns, it does not
+    /// wait for a turn that the budget cancelled to report its end.
+    #[test]
+    fn an_episode_that_spends_its_tool_calls_returns() {
+        let dir = tempfile::tempdir().unwrap();
+        let endpoint = Endpoint::start("reader", Box::new(reader)).unwrap();
+        let mut settings = Config::default();
+        settings.model.provider = "openai".into();
+        settings.model.name = "reader".into();
+        settings.model.base_url = Some(endpoint.url().to_string());
+        settings.model.api_key = Some("test".into());
+        let limits = Limits {
+            max_tool_calls: 3,
+            deadline_secs: 60,
+            announce_deadline: false,
+            context_tokens: 32768,
+            max_output_tokens: 64,
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let ran = runtime
+            .block_on(async {
+                tokio::time::timeout(
+                    Duration::from_secs(30),
+                    run(
+                        dir.path(),
+                        "read missing.txt",
+                        settings,
+                        &limits,
+                        dir.path().join("audit.jsonl"),
+                    ),
+                )
+                .await
+            })
+            .expect("the episode returns once its tool calls are spent")
+            .unwrap();
+        assert!(ran.tool_calls > 3, "{}", ran.tool_calls);
     }
 
     /// The profile's point: the whole request fits a small model's context.
