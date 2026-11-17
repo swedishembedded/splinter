@@ -389,3 +389,47 @@ async fn a_repeated_call_whose_answer_changes_is_not_a_repetition() {
     assert!(!report.stopped_by_repetition);
     assert_eq!(report.solution.conclusion, RunConclusion::Success);
 }
+
+#[tokio::test]
+async fn a_worker_asked_for_the_policy_trace_keeps_the_sampled_tokens_in_its_trajectory() {
+    fn traced(req: &CompletionRequest) -> Vec<ResponseEvent> {
+        let mut events = if req.want_logprobs {
+            vec![
+                ResponseEvent::PromptTokens { ids: vec![1, 2, 3] },
+                ResponseEvent::Tokens {
+                    ids: vec![7, 8],
+                    logprobs: vec![-0.5, -0.25],
+                },
+            ]
+        } else {
+            Vec::new()
+        };
+        events.extend(text("done"));
+        events
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let plain = Scripted::new(traced);
+    let mut worker = Worker::start(dir.path(), plain.clone(), options()).unwrap();
+    worker.send("say done").await.unwrap();
+    assert!(
+        !plain.seen.lock().unwrap()[0].want_logprobs,
+        "the trace is asked for only when wanted"
+    );
+
+    let model = Scripted::new(traced);
+    let mut wanting = options();
+    wanting.solve.want_logprobs = true;
+    let mut worker = Worker::start(dir.path(), model.clone(), wanting).unwrap();
+    worker.send("say done").await.unwrap();
+    assert!(model.seen.lock().unwrap()[0].want_logprobs);
+    let trajectory = serde_json::to_value(worker.trajectory()).unwrap();
+    let metrics = trajectory["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|step| step.get("metrics").filter(|m| m["logprobs"].is_array()))
+        .unwrap_or_else(|| panic!("no step carries the sampled tokens: {trajectory}"));
+    assert_eq!(metrics["completion_token_ids"], serde_json::json!([7, 8]));
+    assert_eq!(metrics["logprobs"], serde_json::json!([-0.5, -0.25]));
+    assert_eq!(metrics["prompt_token_ids"], serde_json::json!([1, 2, 3]));
+}

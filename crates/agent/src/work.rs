@@ -344,6 +344,7 @@ impl Worker {
         let stop = CancelToken::new();
         let mut run = RunOptions::new()
             .deadline(self.options.solve.deadline)
+            .want_logprobs(self.options.solve.want_logprobs)
             .cancel(stop.clone());
         if let Some(tokens) = self.options.solve.max_output_tokens {
             run = run.max_output_tokens(tokens);

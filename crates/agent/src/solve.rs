@@ -109,6 +109,12 @@ pub struct SolveOptions {
     /// sven's default, one file per working directory in the user's state
     /// directory, shared by every session ever run from there.
     pub audit_log: Option<PathBuf>,
+    /// Whether every model request asks the provider for the token ids it
+    /// read and sampled and the log-probability of each sampled token (a
+    /// served brain's policy trace), which sven keeps in the trajectory's
+    /// step metrics. Off by default: an episode recorded as training material
+    /// for a policy-gradient step needs it, any other run pays for nothing.
+    pub want_logprobs: bool,
 }
 
 impl SolveOptions {
@@ -127,6 +133,7 @@ impl SolveOptions {
             compaction: true,
             transient_retries: None,
             audit_log: None,
+            want_logprobs: false,
         }
     }
 
@@ -147,7 +154,9 @@ impl SolveOptions {
     /// The run bounds sven enforces for one run.
     #[must_use]
     pub fn run_options(&self) -> RunOptions {
-        let mut options = RunOptions::new().deadline(self.deadline);
+        let mut options = RunOptions::new()
+            .deadline(self.deadline)
+            .want_logprobs(self.want_logprobs);
         if let Some(tokens) = self.max_output_tokens {
             options = options.max_output_tokens(tokens);
         }
