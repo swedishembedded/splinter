@@ -136,7 +136,8 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
     for line in records.lines() {
         let record: serde_json::Value = serde_json::from_str(line).unwrap();
         for m in record["messages"].as_array().unwrap() {
-            let content = m["content"].as_str().unwrap_or("");
+            let content =
+                splinter_minimind::world::without_time_notice(m["content"].as_str().unwrap_or(""));
             if m["role"] == "tool" && content.contains("Exit: ") {
                 let (stdout, status) = content.rsplit_once("Exit: ").unwrap();
                 let exit: i32 = status.split(' ').next().unwrap().parse().unwrap();
@@ -149,6 +150,37 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
         }
     }
     assert!(shell_results > 0, "the demonstrations ran shell commands");
+    // The demonstrations are the requests the examination's headless agent
+    // sends: the task file's text and every tool result end with the time
+    // notice, and the pretraining documents list the tools in their order.
+    let notice = splinter_minimind::world::time_notice(smoke().agent.deadline_secs);
+    let first: serde_json::Value = serde_json::from_str(records.lines().next().unwrap()).unwrap();
+    let messages = first["messages"].as_array().unwrap();
+    let user = messages.iter().find(|m| m["role"] == "user").unwrap();
+    assert!(
+        user["content"]
+            .as_str()
+            .unwrap()
+            .ends_with(&format!("\n\n\n{notice}")),
+        "{user}"
+    );
+    for m in messages.iter().filter(|m| m["role"] == "tool") {
+        assert!(m["content"].as_str().unwrap().ends_with(&notice), "{m}");
+    }
+    let offered: Vec<&str> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap())
+        .collect();
+    let listed: Vec<String> = splinter_minimind::collect::tool_sigs()
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+    assert_eq!(
+        offered, listed,
+        "the tools in the order the agent offers them"
+    );
     // A committed stage leaves its thousands of small files as one pack.
     for tree in [
         "episodes/demonstrate",

@@ -39,7 +39,7 @@ use splinter_sdk::vocabulary::digest::{digest_of, Digest};
 
 use splinter_sdk::agent::policy_endpoint::{forward, Endpoint, Policy};
 use splinter_sdk::agent::sven::config::Config as AgentConfig;
-use splinter_sdk::agent::workspace_episode::{self, Limits, TOOLS};
+use splinter_sdk::agent::workspace_episode::{self, Limits};
 use splinter_sdk::data::wire;
 use splinter_sdk::model::scratch::{Checkpoint, Served};
 use splinter_sdk::model::RemoteModel;
@@ -69,18 +69,17 @@ pub enum Actor {
 }
 
 /// The tools as the pretraining conversations list them: sven's names, with
-/// the arguments the episodes use.
+/// the arguments the episodes use, in the order its requests offer them.
 #[must_use]
 pub fn tool_sigs() -> Vec<ToolSig> {
     let sig = |name: &str, params: &[&str]| ToolSig {
         name: name.into(),
         params: params.iter().map(|p| (*p).to_string()).collect(),
     };
-    debug_assert_eq!(TOOLS, ["read_file", "write_file", "shell"]);
     vec![
         sig("read_file", &["path"]),
-        sig("write_file", &["path", "text"]),
         sig("shell", &["shell_command"]),
+        sig("write_file", &["path", "text"]),
     ]
 }
 
@@ -100,21 +99,23 @@ pub(crate) fn admitted(commit: &Commit) -> bool {
     commit.summary["admitted"].as_bool().unwrap_or(false)
 }
 
-/// How a model acts in an episode: greedily (the probes, the examination's
-/// counterpart), or sampled at a temperature as one of several attempts at
-/// the same instance (exploration), each attempt with its own seed.
+/// How a model acts in an episode: with the sampling its checkpoint declares
+/// (the probes, sampled as the examination samples it: its requests name
+/// none), or at a temperature as one of several attempts at the same
+/// instance (exploration), each attempt with its own seed.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
 pub struct Sampling {
-    /// The sampling temperature; 0 is greedy.
-    pub temperature: f32,
+    /// The sampling temperature; `None` sends none, so the model's own
+    /// default decides.
+    pub temperature: Option<f32>,
     /// Which attempt at the instance this is, from 0.
     pub sample: u32,
 }
 
 impl Sampling {
-    /// The model's single best guess.
-    pub const GREEDY: Self = Self {
-        temperature: 0.0,
+    /// The model as served: no sampling in the request.
+    pub const AS_SERVED: Self = Self {
+        temperature: None,
         sample: 0,
     };
 }
@@ -188,9 +189,9 @@ fn episode_work(
         api_key: Some("minimind".into()),
         thinking: false,
         seed,
-        // Greedy, a small model's best guess, unless the episode is one of
-        // several sampled attempts; seeded either way, so a rerun repeats it.
-        temperature: Some(sampling.temperature),
+        // The model's own sampling unless the episode is one of several
+        // sampled attempts; seeded either way, so a rerun repeats it.
+        temperature: sampling.temperature,
         ..RemoteModel::default()
     }
     .apply_to(&mut settings)
@@ -198,12 +199,15 @@ fn episode_work(
     let limits = Limits {
         max_tool_calls: ctx.agent.max_tool_calls,
         deadline_secs: ctx.agent.deadline_secs,
+        // The examination runs sven headless with its task limit, which
+        // tells the model its time; every episode here does the same.
+        announce_deadline: true,
         context_tokens,
         max_output_tokens: ctx.agent.max_output_tokens,
     };
     let ran = ctx.runtime.block_on(workspace_episode::run(
         &ws,
-        &instance.instruction,
+        &tasks::instruction_text(instance),
         settings,
         &limits,
         dir.join("audit.jsonl"),
@@ -492,7 +496,7 @@ impl Run<'_> {
             None => self
                 .instances(split)?
                 .into_iter()
-                .map(|i| (format!("{name}/{}", i.id), i, Sampling::GREEDY))
+                .map(|i| (format!("{name}/{}", i.id), i, Sampling::AS_SERVED))
                 .collect(),
             Some(e) => self
                 .instances(split)?
@@ -503,7 +507,7 @@ impl Run<'_> {
                             format!("{name}/{}~{sample}", i.id),
                             i.clone(),
                             Sampling {
-                                temperature: e.temperature,
+                                temperature: Some(e.temperature),
                                 sample,
                             },
                         )
@@ -630,7 +634,7 @@ impl Run<'_> {
         instances.extend(self.instances(Split::Heldout)?);
         let jobs = instances
             .iter()
-            .map(|i| (format!("{unit}/{}", i.id), i.clone(), Sampling::GREEDY))
+            .map(|i| (format!("{unit}/{}", i.id), i.clone(), Sampling::AS_SERVED))
             .collect();
         let commits = self.episodes(&unit, jobs, &actor)?;
         let episodes: Vec<(Instance, Commit)> = instances.into_iter().zip(commits).collect();

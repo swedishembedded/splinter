@@ -216,6 +216,14 @@ pub fn verify(instance: &Instance, dir: &Path) -> Verdict {
     }
 }
 
+/// The request of `instance` as its task file holds it, final newline and
+/// all: what a headless agent run of the exported task is given, so every
+/// episode here is given the same.
+#[must_use]
+pub fn instruction_text(instance: &Instance) -> String {
+    format!("{}\n", instance.instruction)
+}
+
 /// Writes `instance` as a Harbor task folder under `dir`: `instruction.md`,
 /// `task.toml`, the workspace in `environment/`, and the check in `tests/`
 /// (outside the workspace): `expected.txt` and a `test.sh` comparing
@@ -232,7 +240,7 @@ pub fn export_harbor(instance: &Instance, dir: &Path) -> anyhow::Result<()> {
         std::fs::create_dir_all(path.parent().unwrap_or(dir))?;
         std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
     };
-    write("instruction.md", &format!("{}\n", instance.instruction))?;
+    write("instruction.md", &instruction_text(instance))?;
     write(
         "task.toml",
         &format!(

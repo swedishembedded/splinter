@@ -89,6 +89,11 @@ fn ouro(hidden: u32, layers: u32, passes: u32, heads: u32, vocab: u32, context: 
         vocab,
         context,
         config,
+        // Served greedily when a request names no sampling, as the bench
+        // exam's requests do: the model is trained to act on its best guess.
+        sampling: [("do_sample".to_string(), serde_json::json!(false))]
+            .into_iter()
+            .collect(),
     }
 }
 
@@ -338,7 +343,10 @@ impl Config {
             data_checks: crate::datacheck::DataChecks::default(),
             agent: AgentLimits {
                 max_tool_calls: 12,
-                deadline_secs: 300,
+                // The examination's per-task limit, so every episode's
+                // requests carry the time notice the exam's do (sven ends
+                // each request with `Time: 0 of 13 min used, ...`).
+                deadline_secs: 780,
                 max_output_tokens: 256,
                 concurrency: if profile == Profile::Smoke { 32 } else { 64 },
             },

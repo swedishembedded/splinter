@@ -45,6 +45,15 @@ and bench's examination.
   and the probes. The requests sven sends are what the training records hold.
 - bench runs sven itself for the exam, against the same brain, and returns one
   signed document of aggregates.
+- Every episode here is the exam's conditions: sven's compact profile, the
+  task file's text (final newline included), the exam's per-task time limit
+  (`agent.deadline_secs`), announced as a headless run announces it (a `Time:`
+  line ending the request and every tool result), no sampling in the probes'
+  requests, so the model's declared sampling decides (greedy: the checkpoint
+  is made with `do_sample: false`). The pretraining documents shaped as agent
+  runs carry the same notice and list the tools in sven's order. Give
+  `--sven-bin` a build of the sven revision this program is built with (its
+  `Cargo.lock`), so the exam's agent is the one the training records came from.
 
 ## Prerequisites
 
@@ -103,7 +112,7 @@ run's manifest afterwards.
 | 2 | `fetch/<name>` | only when configured: a pinned URL, checked against its SHA-256, cached, sliced | bytes and license |
 | 3 | `world` | the synthetic world corpus from the seed: towns, people, expressions, tiny programs, conversations in the chat template, copy drills, and worked tool-use trajectories (the expert with the tools run for real); repeated documents over `data_checks.max_duplicate_share` fail the stage | documents, bytes, the duplicate share |
 | 4 | `tasks` | training, exploration, development and held-out instances of five skills (`src/skills.rs`: read a value, follow a chain of two to four lookups, compute with a helper whose usage comes from its own `--help`, edit a key, count lines) over seven file formats, requests drawn from a grammar of frames and synonyms; the held-out split uses two formats and frames no other split does; an index per split and the Harbor task folders | counts |
-| 5 | `demonstrate/<task>`, `demonstrate` | the expert drives real sven on every training instance by one procedure (list the workspace, read, discover the helper, act, read back, answer); the verifier judges the workspace; an episode that passed but rewrote the task's files, looked for verifier material or answered before reading its sources is not admitted (`src/admission.rs`); admitted episodes become `data/demonstrate.jsonl`; one request template or final reply dominating fails the stage (`src/datacheck.rs`) | accepted, flagged, the data shares |
+| 5 | `demonstrate/<task>`, `demonstrate` | the expert drives real sven on every training instance by one procedure (list the workspace, read, discover the helper, act, read an edited file back, answer); the verifier judges the workspace; an episode that passed but rewrote the task's files, looked for verifier material or answered before reading its sources is not admitted (`src/admission.rs`); admitted episodes become `data/demonstrate.jsonl`; one request template or final reply dominating fails the stage (`src/datacheck.rs`) | accepted, flagged, the data shares |
 | 6 | `<model>/checkpoint` | brain learns a byte-level vocabulary on the corpus (digits split) and makes a random-init checkpoint of the configured architecture | the installed model |
 | 7 | `probe/<model>/init`, `retrieval/<model>/init` | the probe: the development and held-out tasks through sven, a raw-text continuation; the retrieval probe: exact copies of 24 held-out values from context | passes by skill, development and held-out, how often the first reply is a tool call, a solved and a failed transcript |
 | 8 | `<model>/pretrain-<i>`, `<model>/pretrain` | raw-text pretraining in `pretrain_segments` segments, each continuing the last; after each, the retrieval probe and, with `headroom_steps`, a fixed small fine-tune and the probe (the checkpoint's post-fine-tune headroom) | steps, losses, rate; the probes |

@@ -147,6 +147,7 @@ fn conversation(
     template: &Template,
     tools: &[ToolSig],
     system: &str,
+    notice: &str,
 ) -> Document {
     let (tools, turns) = if rng.coin() {
         let town = word(rng, 2);
@@ -166,7 +167,10 @@ fn conversation(
         let value = rng.between(100, 999);
         let turns = vec![
             Turn::System(system.to_string()),
-            Turn::User(format!("What number is in {file}? Read it.")),
+            Turn::User(with_time_notice(
+                &format!("What number is in {file}? Read it.\n"),
+                notice,
+            )),
             Turn::Assistant {
                 text: String::new(),
                 calls: vec![Call {
@@ -174,7 +178,7 @@ fn conversation(
                     arguments: serde_json::json!({ "path": file }),
                 }],
             },
-            Turn::Tool(format!("L1:{value}")),
+            Turn::Tool(with_time_notice(&format!("L1:{value}"), notice)),
             Turn::Assistant {
                 text: format!("{file} holds {value}."),
                 calls: vec![],
@@ -291,8 +295,47 @@ pub fn shell_result(stdout: &str, exit: i32) -> String {
     }
 }
 
+/// The line the agent runtime ends the task and every tool result with when
+/// a run has `deadline_secs` (sven's wording, at the start of the run: a
+/// small model's episode ends within its first minute), or nothing for a
+/// run without a deadline.
+#[must_use]
+pub fn time_notice(deadline_secs: u64) -> String {
+    if deadline_secs == 0 {
+        return String::new();
+    }
+    let total = deadline_secs.div_ceil(60);
+    format!("{TIME_PREFIX}0 of {total} min used, {total} min left{TIME_SUFFIX}")
+}
+
+const TIME_PREFIX: &str = "Time: ";
+const TIME_SUFFIX: &str = "; leave time to verify and finish.";
+const TIME_SEPARATOR: &str = "\n\n";
+
+/// `text` with `notice` appended as the runtime appends it; `text` itself
+/// for no notice.
+#[must_use]
+pub fn with_time_notice(text: &str, notice: &str) -> String {
+    if notice.is_empty() {
+        text.to_string()
+    } else {
+        format!("{text}{TIME_SEPARATOR}{notice}")
+    }
+}
+
+/// `text` without the time notice the runtime appended, as the tool or the
+/// person wrote it; `text` itself when it ends with none.
+#[must_use]
+pub fn without_time_notice(text: &str) -> &str {
+    match text.rsplit_once(TIME_SEPARATOR) {
+        Some((head, line)) if line.starts_with(TIME_PREFIX) && line.ends_with(TIME_SUFFIX) => head,
+        _ => text,
+    }
+}
+
 /// The whole corpus of a world of `size`, drawn from `seed`; its tool-use
-/// conversations offer `tools` under the agent's `system` prompt.
+/// conversations offer `tools` under the agent's `system` prompt, their
+/// request and tool results ending with `notice` as an agent run's do.
 #[must_use]
 pub fn corpus(
     seed: u64,
@@ -300,6 +343,7 @@ pub fn corpus(
     template: &Template,
     tools: &[ToolSig],
     system: &str,
+    notice: &str,
 ) -> Vec<Document> {
     let mut rng = SplitMix64::new(seed);
     let mut docs = Vec::new();
@@ -308,7 +352,9 @@ pub fn corpus(
     }
     docs.extend((0..size.expressions).map(|_| expression(&mut rng)));
     docs.extend((0..size.programs).map(|_| program(&mut rng)));
-    docs.extend((0..size.conversations).map(|_| conversation(&mut rng, template, tools, system)));
+    docs.extend(
+        (0..size.conversations).map(|_| conversation(&mut rng, template, tools, system, notice)),
+    );
     docs.extend((0..size.recall).map(|_| recall(&mut rng, template)));
     rng.shuffle(&mut docs);
     docs
@@ -327,6 +373,7 @@ pub fn trajectory(
     template: &Template,
     tools: &[ToolSig],
     system: &str,
+    notice: &str,
     scratch: &std::path::Path,
 ) -> anyhow::Result<Document> {
     use crate::expert::{next, Action};
@@ -342,11 +389,9 @@ pub fn trajectory(
             json!({ "type": "function", "function": { "name": t.name, "parameters": { "properties": props } } })
         })
         .collect();
-    let mut messages = vec![json!({ "role": "user", "content": instance.instruction })];
-    let mut turns = vec![
-        Turn::System(system.to_string()),
-        Turn::User(instance.instruction.clone()),
-    ];
+    let request = with_time_notice(&crate::tasks::instruction_text(instance), notice);
+    let mut messages = vec![json!({ "role": "user", "content": request })];
+    let mut turns = vec![Turn::System(system.to_string()), Turn::User(request)];
     for _ in 0..16 {
         match next(instance, &messages, &wire_tools)? {
             Action::Finish(text) => {
@@ -365,6 +410,7 @@ pub fn trajectory(
                         arguments,
                     }],
                 });
+                let result = with_time_notice(&result, notice);
                 turns.push(Turn::Tool(result.clone()));
                 messages.push(json!({ "role": "tool", "content": result }));
             }
@@ -406,9 +452,9 @@ mod tests {
     fn the_same_seed_writes_the_same_world_and_another_seed_another() {
         let t = Template::default();
         // seed: determinism is the property under test; any two seeds work.
-        let a = corpus(11, &size(), &t, &[], "s");
-        assert_eq!(a, corpus(11, &size(), &t, &[], "s"));
-        assert_ne!(a, corpus(12, &size(), &t, &[], "s"));
+        let a = corpus(11, &size(), &t, &[], "s", "");
+        assert_eq!(a, corpus(11, &size(), &t, &[], "s", ""));
+        assert_ne!(a, corpus(12, &size(), &t, &[], "s", ""));
         assert_eq!(a.len(), 3 * 4 + 10 + 5 + 6);
     }
 
@@ -429,6 +475,7 @@ mod tests {
             &t,
             &[],
             "s",
+            "",
         ) {
             let (lhs, rhs) = doc.text.split_once(" = ").unwrap();
             let value: i64 = rhs.parse().unwrap();

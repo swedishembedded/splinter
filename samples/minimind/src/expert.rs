@@ -12,8 +12,8 @@
 //!
 //! Every demonstration follows one general procedure: inspect the workspace
 //! first (list its files), read what the request names, discover how a
-//! helper is called from its own `--help` before calling it, act, read the
-//! result back to verify it, then answer. The expert knows the plan of an
+//! helper is called from its own `--help` before calling it, act, read an
+//! edited file back to verify it, then answer. The expert knows the plan of an
 //! instance, never its answer: every value it writes is read out of a tool
 //! result, in the file's format, so a demonstration is a correct use of the
 //! tools and a tool that misbehaves makes the episode fail verification
@@ -62,7 +62,7 @@ fn tool_results(messages: &[Value]) -> Vec<String> {
     messages
         .iter()
         .filter(|m| m["role"] == "tool")
-        .map(|m| content_text(&m["content"]))
+        .map(|m| crate::world::without_time_notice(&content_text(&m["content"])).to_string())
         .collect()
 }
 
@@ -155,9 +155,8 @@ fn first_number(result: &str) -> Option<String> {
 type WriteOf = Box<dyn Fn(&[String]) -> anyhow::Result<(String, String)>>;
 
 /// The calls of a plan, given the tool results seen so far: a call needs
-/// only the results before it. `Ok(None)` when every call is made; the last
-/// call reads back what was written, and the value written is returned with
-/// the final answer.
+/// only the results before it. `Err(said)` when every call is made: what the
+/// final answer says (the value written, or the file edited).
 fn plan_step(
     plan: &Plan,
     answer: &str,
@@ -222,7 +221,14 @@ fn plan_step(
                 return shell(tools, &format!("grep -c {word} {file} || true")).map(Ok);
             }
             let count = first_number(&r[0]).with_context(|| format!("grep printed {:?}", r[0]))?;
-            return finish(tools, step - 1, answer, &format!("{count}\n"), &count);
+            return finish(
+                tools,
+                step - 1,
+                answer,
+                &format!("{count}\n"),
+                &count,
+                answer,
+            );
         }
         Plan::Compute { helper, a, b } => {
             let mut files = vec![a.file.clone()];
@@ -245,7 +251,14 @@ fn plan_step(
             }
             let out = first_number(&r[n + 1])
                 .with_context(|| format!("./{helper} printed {:?}", r[n + 1]))?;
-            return finish(tools, step - n - 2, answer, &format!("{out}\n"), &out);
+            return finish(
+                tools,
+                step - n - 2,
+                answer,
+                &format!("{out}\n"),
+                &out,
+                answer,
+            );
         }
     };
     if step < reads.len() {
@@ -257,21 +270,25 @@ fn plan_step(
     } else {
         format!("{path} is updated")
     };
-    finish(tools, step - reads.len(), &path, &text, &said)
+    finish(tools, step - reads.len(), &path, &text, &said, answer)
 }
 
-/// The tail every plan ends with: write, read back, answer. `step` counts
-/// from the write.
+/// The tail every plan ends with: write, read an edited file back, answer.
+/// The answer file is not read back: it holds what was just written, and a
+/// read of it would be the commonest call in the data, one an agent then
+/// makes before anything else. `step` counts from the write; `answer` is the
+/// answer file.
 fn finish(
     tools: &[Value],
     step: usize,
     path: &str,
     text: &str,
     said: &str,
+    answer: &str,
 ) -> anyhow::Result<Result<Action, String>> {
     match step {
         0 => write(tools, path, text).map(Ok),
-        1 => read(tools, path).map(Ok),
+        1 if path != answer => read(tools, path).map(Ok),
         _ => Ok(Err(said.to_string())),
     }
 }

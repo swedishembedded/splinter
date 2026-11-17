@@ -50,7 +50,7 @@ impl Recipe {
 /// the tool results as rendered), the held-out split and the tokenizer text.
 pub const WORLD: Recipe = Recipe {
     stage: "world",
-    version: 11,
+    version: 12,
 };
 
 /// The task families, their instance draw and the Harbor export.
@@ -63,7 +63,7 @@ pub const TASKS: Recipe = Recipe {
 /// the verifier and the records an accepted episode writes.
 pub const EPISODE: Recipe = Recipe {
     stage: "episode",
-    version: 9,
+    version: 10,
 };
 
 /// Gathering accepted episodes into a dataset.
@@ -75,7 +75,7 @@ pub const GATHER: Recipe = Recipe {
 /// The tokenizer and random-init request.
 pub const CHECKPOINT: Recipe = Recipe {
     stage: "checkpoint",
-    version: 2,
+    version: 3,
 };
 
 /// A training request (pretraining, fine-tuning, improvement) and the data
@@ -123,7 +123,14 @@ mod tests {
         };
         let template = Template::default();
         let tools = crate::collect::tool_sigs();
-        let docs = crate::world::corpus(seed, &size, &template, &tools, "system");
+        let docs = crate::world::corpus(
+            seed,
+            &size,
+            &template,
+            &tools,
+            "system",
+            &crate::world::time_notice(780),
+        );
         let scratch = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
         let mut text = crate::world::to_jsonl(&docs);
         for instance in instances(seed, Split::World, 3) {
@@ -132,6 +139,7 @@ mod tests {
                 &template,
                 &tools,
                 "system",
+                &crate::world::time_notice(780),
                 &scratch.path().join("w"),
             )
             .unwrap_or_else(|e| panic!("{e}"));
@@ -158,7 +166,7 @@ mod tests {
     }
 
     const PINNED: [&str; 3] = [
-        "world (WORLD, EPISODE): blake3:43c52c8fa1ed3fc953a7dcb83de800df0953a95a0e650b645d0d261fcf754f9a",
+        "world (WORLD, EPISODE): blake3:aead2e17cc63fc15ba20a6e187cc31eea3bbe802b4dca5d34a86a6604852bd02",
         "template (WORLD, CHECKPOINT): blake3:354117630131a85c444d649decf8b227f76e57221451ea66e3cd18ede9066edc",
         "tasks (TASKS): blake3:f2849c9e91a86f12aa175328bba4a69dc0e1993a4f54062e932ad42318779fac",
     ];

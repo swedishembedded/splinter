@@ -39,6 +39,10 @@ pub struct Limits {
     pub max_tool_calls: u32,
     /// Wall-clock limit, in seconds.
     pub deadline_secs: u64,
+    /// Tell the model its time as a headless sven run with this limit does
+    /// (`Time: U of T min used, ...` ending every request), so episodes
+    /// collected here are the requests a headless run of the same task sends.
+    pub announce_deadline: bool,
     /// The model's context window, in tokens.
     pub context_tokens: u32,
     /// Longest reply, in tokens.
@@ -117,7 +121,8 @@ pub async fn run(
             instruction,
             RunOptions::new()
                 .cancel(stop)
-                .deadline(Duration::from_secs(limits.deadline_secs)),
+                .deadline(Duration::from_secs(limits.deadline_secs))
+                .announce_deadline(limits.announce_deadline),
         )
         .await;
     let tool_calls = counter.await.unwrap_or(0);
@@ -172,6 +177,7 @@ mod tests {
         let limits = Limits {
             max_tool_calls: 4,
             deadline_secs: 60,
+            announce_deadline: false,
             context_tokens: 32768,
             max_output_tokens: 64,
         };
@@ -196,6 +202,50 @@ mod tests {
         assert_eq!(ran.trajectory["agent"]["extra"]["sven"]["profile"], PROFILE);
     }
 
+    /// With the deadline announced, the request is the one a headless sven
+    /// run with that timeout sends (bench examines that way): the task and
+    /// every tool result end with the time notice.
+    #[test]
+    fn an_announced_deadline_ends_every_request_as_a_headless_run_does() {
+        let dir = tempfile::tempdir().unwrap();
+        let endpoint = Endpoint::start("writer", Box::new(writer)).unwrap();
+        let mut settings = Config::default();
+        settings.model.provider = "openai".into();
+        settings.model.name = "writer".into();
+        settings.model.base_url = Some(endpoint.url().to_string());
+        settings.model.api_key = Some("test".into());
+        let limits = Limits {
+            max_tool_calls: 4,
+            deadline_secs: 780,
+            announce_deadline: true,
+            context_tokens: 32768,
+            max_output_tokens: 64,
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime
+            .block_on(run(
+                dir.path(),
+                // As a task file holds it, with its final newline.
+                "write done to out.txt\n",
+                settings,
+                &limits,
+                dir.path().join("audit.jsonl"),
+            ))
+            .unwrap();
+        let notice = "\n\nTime: 0 of 13 min used, 13 min left; leave time to verify and finish.";
+        let exchanges = endpoint.exchanges();
+        assert_eq!(
+            exchanges[0].request["messages"][1]["content"],
+            format!("write done to out.txt\n{notice}")
+        );
+        let last = exchanges[1].request["messages"].as_array().unwrap();
+        let result = last.iter().find(|m| m["role"] == "tool").unwrap();
+        assert!(
+            result["content"].as_str().unwrap().ends_with(notice),
+            "{result}"
+        );
+    }
+
     /// The profile's point: the whole request fits a small model's context.
     #[test]
     fn the_request_fits_a_small_context() {
@@ -209,6 +259,7 @@ mod tests {
         let limits = Limits {
             max_tool_calls: 4,
             deadline_secs: 60,
+            announce_deadline: false,
             context_tokens: 2048,
             max_output_tokens: 64,
         };

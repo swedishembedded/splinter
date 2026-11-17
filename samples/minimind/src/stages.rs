@@ -263,16 +263,20 @@ impl<'a> Run<'a> {
             "template": self.template,
             "system": splinter_sdk::agent::sven::config::compact_profile::SYSTEM_PROMPT,
             "tools": crate::collect::tool_sigs(),
+            "deadline_secs": self.config.agent.deadline_secs,
         });
         let key = self.key(&slice, "world", &inputs, recipe::WORLD, &[]);
         let names: Vec<String> = self.config.fetch.iter().map(|f| f.name.clone()).collect();
         self.unit("world", &key, |run, _| {
             let tools = crate::collect::tool_sigs();
             let system = splinter_sdk::agent::sven::config::compact_profile::SYSTEM_PROMPT;
-            let mut docs = world::corpus(run.seed, &run.config.world, &run.template, &tools, system);
+            // Every agent-shaped document ends its request and tool results
+            // as an episode under the agent's deadline does.
+            let notice = world::time_notice(run.config.agent.deadline_secs);
+            let mut docs = world::corpus(run.seed, &run.config.world, &run.template, &tools, system, &notice);
             let scratch = run.path("world/scratch");
             for instance in tasks::instances(run.seed, Split::World, run.config.world.trajectories) {
-                docs.push(world::trajectory(&instance, &run.template, &tools, system, &scratch)?);
+                docs.push(world::trajectory(&instance, &run.template, &tools, system, &notice, &scratch)?);
             }
             if scratch.exists() {
                 std::fs::remove_dir_all(&scratch)?;
