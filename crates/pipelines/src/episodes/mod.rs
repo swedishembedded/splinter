@@ -305,10 +305,11 @@ pub struct EpisodeRecord {
     pub attempt: u32,
     /// The seed of the attempt's draws.
     pub seed: u64,
-    /// Whether the seed and the exact sampling ([`exact_sampling`]) reached
-    /// the policy; `false` when it samples as its provider does (a model
-    /// reached over an API, or one handed in), so its log-probabilities are
-    /// of whatever distribution that is.
+    /// Whether the seed and the exact sampling ([`exact_sampling`]) were sent
+    /// with every request of the attempt, whatever serves the policy. Every
+    /// attempt run now is; a record written before requests carried their
+    /// sampling says `false`: its policy sampled as its provider did, so its
+    /// log-probabilities are of whatever distribution that was.
     pub seeded: bool,
     /// The policy.
     pub policy: PolicyIdentity,

@@ -51,8 +51,8 @@ use sven_sdk::config::Config;
 use sven_sdk::model::ModelProvider;
 use sven_sdk::tool::Tool;
 use sven_sdk::{
-    Agent, AgentState, ApprovalPolicy, CallError, CancelToken, Engine, RunConclusion, RunOptions,
-    SessionEvent, Toolset, Usage,
+    Agent, AgentState, ApprovalPolicy, CallError, CancelToken, Engine, RunConclusion, SessionEvent,
+    Toolset, Usage,
 };
 use tokio::sync::oneshot;
 
@@ -342,13 +342,9 @@ impl Worker {
     /// error.
     pub async fn send(&mut self, prompt: &str) -> Result<WorkReport, SolveError> {
         let stop = CancelToken::new();
-        let mut run = RunOptions::new()
-            .deadline(self.options.solve.deadline)
-            .want_logprobs(self.options.solve.want_logprobs)
-            .cancel(stop.clone());
-        if let Some(tokens) = self.options.solve.max_output_tokens {
-            run = run.max_output_tokens(tokens);
-        }
+        // The solve's own bounds, cancelled through `stop`: the watch below
+        // forwards the caller's cancel to it.
+        let run = self.options.solve.run_options().cancel(stop.clone());
 
         let watch = Watch {
             events: self.agent.events(),

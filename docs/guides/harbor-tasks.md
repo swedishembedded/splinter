@@ -67,9 +67,9 @@ the run records it. Every folder is read, checked for exam material and imported
 a sealed or malformed folder refuses the whole collection by name, and a folder imported
 before is found again by the digest of its files. Each attempt is a workspace episode as
 `solve` runs one: a fresh copy of the starting files, the agent's shell confined to it,
-the policy asked to sample at temperature 1 with nothing cut away and a seed of the
-attempt's own (where its sampling can be set here; the record's `seeded` says whether it
-was), and asked for its policy trace, which sven keeps in the trajectory's step metrics:
+the policy asked, with every request, to sample at temperature 1 with nothing cut away
+and a seed of the attempt's own, whatever serves it (the record's `seeded`), and asked for
+its policy trace, which sven keeps in the trajectory's step metrics:
 the prompt and sampled token ids and each sampled token's log-probability, as the
 provider returned them. Only after the agent has finished is its change graded, in
 another fresh copy with the task's tests laid over it; the exposure audit fails an

@@ -115,6 +115,11 @@ pub struct SolveOptions {
     /// step metrics. Off by default: an episode recorded as training material
     /// for a policy-gradient step needs it, any other run pays for nothing.
     pub want_logprobs: bool,
+    /// The sampling every model request of the run is sent with (temperature,
+    /// top-p, top-k, seed), children's included, whatever provider serves the
+    /// model; one that cannot honour a control refuses the request. `None`
+    /// leaves the provider's own sampling.
+    pub request_sampling: Option<sven_sdk::model::SamplingParams>,
 }
 
 impl SolveOptions {
@@ -134,6 +139,7 @@ impl SolveOptions {
             transient_retries: None,
             audit_log: None,
             want_logprobs: false,
+            request_sampling: None,
         }
     }
 
@@ -162,6 +168,9 @@ impl SolveOptions {
         }
         if let Some(cancel) = &self.cancel {
             options = options.cancel(cancel.clone());
+        }
+        if let Some(sampling) = self.request_sampling {
+            options = options.sampling(sampling);
         }
         options
     }

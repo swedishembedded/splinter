@@ -44,7 +44,9 @@ use splinter_pipelines::episodes::{
     load_collection, run_episodes, EpisodeError, EpisodeOutcome, EpisodeReport, EpisodeRequest,
     EpisodeSettings, PracticeTask, SvenEpisodes,
 };
-use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
+use sven_sdk::model::{
+    CompletionRequest, ModelProvider, ResponseEvent, ResponseStream, SamplingParams,
+};
 
 /// A line every task's verifier carries and no agent may ever see.
 const MARKER: &str = "hidden-verifier-marker-5c1e";
@@ -69,6 +71,8 @@ struct Policy {
     tasks: PathBuf,
     failures: AtomicUsize,
     asked: AtomicUsize,
+    /// The sampling every request was sent with, in arrival order.
+    sampled: std::sync::Mutex<Vec<SamplingParams>>,
 }
 
 impl Policy {
@@ -78,6 +82,7 @@ impl Policy {
             tasks: tasks.to_path_buf(),
             failures: AtomicUsize::new(0),
             asked: AtomicUsize::new(0),
+            sampled: std::sync::Mutex::new(Vec::new()),
         })
     }
 }
@@ -92,6 +97,7 @@ impl ModelProvider for Policy {
     }
     async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
         self.asked.fetch_add(1, Ordering::SeqCst);
+        self.sampled.lock().unwrap().push(req.sampling);
         if self
             .failures
             .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
@@ -262,6 +268,20 @@ fn practice_attempts_are_graded_outside_the_agent_and_kept_with_their_policy_tra
     assert_eq!(greet_record.source, Some(greeted.source.clone()));
     let seeds: std::collections::BTreeSet<u64> = report.records.iter().map(|r| r.seed).collect();
     assert_eq!(seeds.len(), 4, "every attempt draws from a seed of its own");
+    // A policy handed in (as one reached over an API) is seeded too: every
+    // request carries the attempt's seed and the exact sampling.
+    assert!(report.records.iter().all(|r| r.seeded), "{report:#?}");
+    let sampled = policy.sampled.lock().unwrap().clone();
+    assert!(!sampled.is_empty());
+    for sampling in &sampled {
+        assert_eq!(
+            (sampling.temperature, sampling.top_p, sampling.top_k),
+            (Some(1.0), Some(1.0), Some(0)),
+            "temperature one with nothing cut away"
+        );
+    }
+    let sent: std::collections::BTreeSet<u64> = sampled.iter().filter_map(|s| s.seed).collect();
+    assert_eq!(sent, seeds, "each request carries its attempt's seed");
     assert!(
         greet_dir.join("tests/test.sh").is_file(),
         "the folder is read, never changed"

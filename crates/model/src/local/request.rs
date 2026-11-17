@@ -30,3 +30,21 @@ pub struct Sampling {
     #[serde(default)]
     pub seed: Option<u64>,
 }
+
+impl Sampling {
+    /// The per-request sampling controls this stands for, as sven sends them
+    /// with every model request of a run (`RunOptions::sampling`), whatever
+    /// provider serves the model: the temperature, the nucleus mass, the
+    /// top-k cut (`0` is no cut) and the seed. The generation cap and
+    /// whether the model reasons are the provider's configuration, not a
+    /// request's sampling.
+    #[must_use]
+    pub fn request_params(&self) -> sven_sdk::model::SamplingParams {
+        sven_sdk::model::SamplingParams {
+            temperature: Some(f64::from(self.temperature)),
+            top_p: self.top_p.map(f64::from),
+            top_k: Some(self.top_k),
+            seed: self.seed,
+        }
+    }
+}

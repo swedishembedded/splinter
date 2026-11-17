@@ -264,11 +264,6 @@ Open:
   count, since that needs a scripted agent that floods events.
 - The brain `rl` crate warns about three unused imports; the warning is in
   brain, not in this repository.
-- sven SDK gap: `RunOptions::sampling` takes `sven_model::SamplingParams`,
-  which `sven-sdk` does not re-export, so a run cannot set its own
-  temperature, top-p, top-k and seed per request from here. The episode
-  executor seeds a policy only where `Context::resampled` can (a local
-  reference served by brain); elsewhere its records say `seeded: false`.
 
 ## Agent runtimes behind one contract
 

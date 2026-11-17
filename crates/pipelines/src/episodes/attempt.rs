@@ -167,10 +167,13 @@ impl Run<'_> {
     fn run(&self, planned: &Planned<'_>) -> Result<Option<EpisodeRecord>, EpisodeError> {
         let ctx = self.ctx;
         let seed = attempt_seed(self.settings.seed, &planned.task.task, planned.attempt);
-        let (model, seeded) = match ctx.resampled(self.reference, exact_sampling(seed))? {
-            Some(model) => (model, true),
-            None => (self.model.clone(), false),
-        };
+        let sampling = exact_sampling(seed);
+        // A model brain serves is asked from the endpoint the seed pins the
+        // attempt to; every model, whoever serves it, is sent the sampling
+        // with each request.
+        let model = ctx
+            .resampled(self.reference, sampling)?
+            .unwrap_or_else(|| self.model.clone());
         let mut record = EpisodeRecord {
             format: RECORD_FORMAT.into(),
             key: planned.key.clone(),
@@ -179,7 +182,7 @@ impl Run<'_> {
             source: Some(planned.task.source.clone()),
             attempt: planned.attempt,
             seed,
-            seeded,
+            seeded: true,
             policy: self.policy.clone(),
             config: self.config.clone(),
             experience: None,
@@ -218,6 +221,7 @@ impl Run<'_> {
         options.max_output_tokens = self.settings.max_output_tokens;
         options.cancel = Some(self.cancel.clone());
         options.want_logprobs = true;
+        options.request_sampling = Some(sampling.request_params());
         let options = model.solving(options);
         let protocol = WorkProtocol {
             max_tool_calls: self.settings.max_tool_calls,
