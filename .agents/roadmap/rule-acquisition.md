@@ -60,6 +60,25 @@ manual and examples); compute accounting (marginal and total with break-even); p
 - Power: ~12 held-out dialects, 200 discriminating items each, 2 fit seeds, 2 meta seeds for B0/V/P/M_16; fix from pilot 3.
 - Cost: ~140 GPU-h (3-4 days on 3 GH200s) plus 1-2 days of pilots; batched examination of ~1400 adapters needed.
 
+## Co-primary: does improved competence produce better learning experiences? (goal of 2026-11-17)
+
+The session goal asks whether a system's improved competence causes it to generate substantially better learning experiences,
+leading to increasingly efficient acquisition. The learner x proposer factorial is therefore co-primary, built to isolate
+experience quality from the learner's own head start:
+
+- **Experience-quality test (fixed learner):** for each held-out dialect, the SAME fresh learner (the base, and separately the
+  volume control V) receives K verified experiences proposed by (i) the base proposer with the passive filter, (ii) the base
+  proposer with the interpreter-grounded QD explorer, (iii) the meta-trained system (M_16) with the QD explorer. Same K, same
+  steps, same examiner. Criterion: (iii) reaches the threshold with fewer experiences than (i) and (ii) (efficiency ratio lower
+  bound > 1 by the hierarchical bootstrap over held-out dialects), on closed-book discriminating items.
+- **Recursion across rounds:** the learner trained on (iii)'s experiences proposes the next round for itself; the acquisition
+  curve per round (experiences to threshold on the NEXT held-out dialect) must fall across rounds faster than for a system whose
+  proposer stays at the base (matched experiences and compute).
+- Why the improved system could propose better: it knows which rule interactions it already masters (learning-progress cell
+  choice reads its own per-cell accuracy) and writes programs that exercise changed rules (higher discriminating yield), where
+  the base proposer mostly writes programs whose output does not depend on the dialect. Measured directly: discriminating
+  yield, archive cells covered, and downstream learning-curve area per experience.
+
 ## Pilots (in order, each with a kill rule)
 
 - [ ] 1 Discrimination rate (CPU): parametric generator + interpreter; per axis share of pool programs whose output changes and
