@@ -220,11 +220,27 @@ const BINARY_EXTENSIONS: [&str; 38] = [
 ];
 
 /// Whether `path` cannot sit beside `taken`: it is one of them, one of them
-/// is a directory of it, or it is a directory of one of them.
+/// is a directory of it, it is a directory of one of them, or it has the
+/// file name of one of them (a request may name a file by that alone).
 fn clashes(path: &str, taken: &[String]) -> bool {
+    let name = |p: &str| p.rsplit('/').next().unwrap_or(p).to_string();
     taken.iter().any(|t| {
-        t == path || path.starts_with(&format!("{t}/")) || t.starts_with(&format!("{path}/"))
+        t == path
+            || path.starts_with(&format!("{t}/"))
+            || t.starts_with(&format!("{path}/"))
+            || name(t) == name(path)
     })
+}
+
+/// How a training request names the file at `path`: by its path, or, for a
+/// file in a directory, a third of the time by its file name alone, so the
+/// agent takes the place of a file from the workspace's listing, not from
+/// the request. Held out, always by its path.
+fn mention(rng: &mut SplitMix64, path: &str, held_out: bool) -> String {
+    match path.rsplit_once('/') {
+        Some((_, name)) if !held_out && rng.below(3) == 0 => name.to_string(),
+        _ => path.to_string(),
+    }
 }
 
 /// Two to four random lowercase letters, never a held-out format's
@@ -365,11 +381,8 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             let (file, format, entries) = add(rng, &t, &mut files);
             let (key, value) = entries[rng.below(entries.len())].clone();
             let slot = Slot { file, format, key };
-            let step = format!(
-                "{} {}",
-                pick(rng, w.find),
-                of(rng, w, &slot.key, &slot.file)
-            );
+            let named = mention(rng, &slot.file, held_out);
+            let step = format!("{} {}", pick(rng, w.find), of(rng, w, &slot.key, &named));
             let answer = answer_file(rng, &taken_of(&files));
             let instruction = with_answer(rng, w, &step, "it", &answer);
             Drawn {
@@ -433,8 +446,11 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
                 "{} the keys from {} in {} through {}, each {} being a key in the next file",
                 pick(rng, w.follow),
                 start.key,
-                start.file,
-                rest.join(", "),
+                mention(rng, &start.file, held_out),
+                rest.iter()
+                    .map(|p| mention(rng, p, held_out))
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 pick(rng, w.value)
             );
             let object = format!("the last {}", pick(rng, w.value));
@@ -502,11 +518,15 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             }
             files.insert(helper.clone(), helper_script(&helper, style, m, n, p));
             let tool = format!("./{helper}");
+            let (named_a, named_b) = (
+                mention(rng, &a.file, held_out),
+                mention(rng, &b.file, held_out),
+            );
             let step = format!(
                 "{} {tool} on {} and {}, first {} then {}",
                 pick(rng, w.apply),
-                of(rng, w, &a.key, &a.file),
-                of(rng, w, &b.key, &b.file),
+                of(rng, w, &a.key, &named_a),
+                of(rng, w, &b.key, &named_b),
                 a.key,
                 b.key
             );
@@ -551,12 +571,16 @@ pub fn draw(rng: &mut SplitMix64, skill: Skill, held_out: bool) -> Drawn {
             };
             let mut entries: BTreeMap<String, String> = et.iter().cloned().collect();
             entries.insert(target.key.clone(), es[is].1.clone());
+            let (named_target, named_source) = (
+                mention(rng, &target.file, held_out),
+                mention(rng, &source.file, held_out),
+            );
             let step = format!(
                 "{} {} in {} to {}",
                 pick(rng, w.set),
                 target.key,
-                target.file,
-                of(rng, w, &source.key, &source.file)
+                named_target,
+                of(rng, w, &source.key, &named_source)
             );
             let keep = pick(rng, w.keep);
             let instruction = alone(rng, w, &step, keep);
@@ -685,15 +709,16 @@ mod tests {
     }
 
     /// What an agent copies is never what it could guess: no answer value is
-    /// common, values come in every kind, and a data file sits at the root
-    /// about as often as in a directory.
+    /// common, values come in every kind, a data file sits at the root about
+    /// as often as in a directory, and a request often names a file in a
+    /// directory by its name alone, so its place comes from the listing.
     #[test]
     fn answers_and_paths_are_copied_not_guessed() {
         use crate::tasks::{instances, Check, Split};
         // seed: any seed; the shares hold for every draw.
         let drawn = instances(3, Split::Train, 600);
         let mut answers = std::collections::BTreeMap::<String, usize>::new();
-        let (mut root, mut nested) = (0usize, 0usize);
+        let (mut root, mut nested, mut by_name) = (0usize, 0usize, 0usize);
         let mut kinds = [0usize; 3];
         for i in &drawn {
             if let Check::Answer { value, .. } = &i.check {
@@ -705,6 +730,10 @@ mod tests {
             for path in i.files.keys().filter(|p| !p.ends_with(".log")) {
                 if path.contains('/') {
                     nested += 1;
+                    let name = path.rsplit('/').next().unwrap_or(path);
+                    if !i.instruction.contains(path.as_str()) && i.instruction.contains(name) {
+                        by_name += 1;
+                    }
                 } else {
                     root += 1;
                 }
@@ -720,6 +749,7 @@ mod tests {
             kinds.iter().all(|k| k * 10 > total),
             "numbers, words, codes: {kinds:?}"
         );
+        assert!(by_name * 5 > nested, "by name {by_name} of {nested}");
         assert!(
             root * 10 > (root + nested) * 3 && nested * 10 > (root + nested) * 3,
             "root {root}, nested {nested}"
