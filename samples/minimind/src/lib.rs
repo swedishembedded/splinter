@@ -29,6 +29,7 @@ pub mod exam;
 pub mod experience;
 pub mod expert;
 pub mod formats;
+pub mod naming;
 pub mod pack;
 pub mod panel;
 pub mod phrasing;

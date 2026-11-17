@@ -163,7 +163,7 @@ fn conversation(
         ];
         (&[][..], turns)
     } else {
-        let file = format!("{}.txt", word(rng, 1).to_lowercase());
+        let file = format!("{}.txt", crate::skills::name(rng, 1));
         let value = rng.between(100, 999);
         let turns = vec![
             Turn::System(system.to_string()),
@@ -200,7 +200,7 @@ fn conversation(
 /// files are drawn as the tasks draw them, so what is copied varies.
 fn recall(rng: &mut SplitMix64, template: &Template) -> Document {
     let entries: Vec<(String, u64)> = (0..rng.between(3, 8))
-        .map(|_| (word(rng, 2).to_lowercase(), rng.between(10, 9999)))
+        .map(|_| (crate::skills::name(rng, 2), rng.between(10, 9999)))
         .collect();
     // A listing as a read shows it, in one of the training formats.
     let format = crate::formats::TRAINING[rng.below(crate::formats::TRAINING.len())];
