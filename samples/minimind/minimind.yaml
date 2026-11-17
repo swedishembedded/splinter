@@ -38,3 +38,4 @@
 #     sha256: "<64 hex digits>"
 #     license: CC0-1.0
 #     slice_bytes: 1000000
+#     separator: "<|endoftext|>"   # what separates its documents (default a blank line)

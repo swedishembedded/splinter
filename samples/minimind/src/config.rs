@@ -213,6 +213,14 @@ pub struct FetchedCorpus {
     pub license: String,
     /// The most bytes of it the pretraining corpus takes.
     pub slice_bytes: u64,
+    /// What separates its documents (a blank line unless the corpus marks
+    /// them otherwise); the marker itself is never trained on.
+    #[serde(default = "blank_line")]
+    pub separator: String,
+}
+
+fn blank_line() -> String {
+    "\n\n".into()
 }
 
 /// The whole configuration of one run.

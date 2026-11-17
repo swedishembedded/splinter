@@ -266,7 +266,12 @@ impl<'a> Run<'a> {
             "deadline_secs": self.config.agent.deadline_secs,
         });
         let key = self.key(&slice, "world", &inputs, recipe::WORLD, &[]);
-        let names: Vec<String> = self.config.fetch.iter().map(|f| f.name.clone()).collect();
+        let fetched: Vec<(String, String)> = self
+            .config
+            .fetch
+            .iter()
+            .map(|f| (f.name.clone(), f.separator.clone()))
+            .collect();
         self.unit("world", &key, |run, _| {
             let tools = crate::collect::tool_sigs();
             let system = splinter_sdk::agent::sven::config::compact_profile::SYSTEM_PROMPT;
@@ -281,11 +286,11 @@ impl<'a> Run<'a> {
             if scratch.exists() {
                 std::fs::remove_dir_all(&scratch)?;
             }
-            for name in &names {
+            for (name, separator) in &fetched {
                 let path = run.path(&format!("fetch/{name}.txt"));
                 let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
                 docs.extend(
-                    text.split("\n\n")
+                    text.split(separator.as_str())
                         .map(str::trim)
                         .filter(|p| !p.is_empty())
                         .map(|p| world::Document { kind: "fetched", text: p.to_string() }),

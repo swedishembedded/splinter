@@ -350,6 +350,7 @@ fn a_fetched_corpus_is_checked_against_its_pin_and_joins_the_world() {
         sha256: sha256.into(),
         license: "CC0-1.0".into(),
         slice_bytes: 1000,
+        separator: "\n\n".into(),
     };
     let run_dir = dir.path().join("run");
     let brain = FakeBrain::new(&run_dir);
@@ -365,6 +366,28 @@ fn a_fetched_corpus_is_checked_against_its_pin_and_joins_the_world() {
     let all = commits(&run_dir);
     assert_eq!(commit(&all, "world").summary["kinds"]["fetched"], 2);
     assert_eq!(commit(&all, "fetch/local").summary["license"], "CC0-1.0");
+    // A corpus that marks its documents splits on the marker, which is not
+    // trained on.
+    std::fs::write(
+        &source,
+        "One story.\n~~ story ends ~~\nAnother story.\n~~ story ends ~~\nA third.\n",
+    )
+    .unwrap();
+    let sha = splinter_sdk::vocabulary::digest::Digest::sha256_of(&std::fs::read(&source).unwrap())
+        .hex()
+        .to_string();
+    let run_dir = dir.path().join("run-marked");
+    let brain = FakeBrain::new(&run_dir);
+    let mut config = smoke();
+    config.fetch = vec![splinter_minimind::config::FetchedCorpus {
+        separator: "~~ story ends ~~".into(),
+        ..corpus(&sha)
+    }];
+    go(&run_dir, config, SEED, &brain, None).unwrap();
+    let all = commits(&run_dir);
+    assert_eq!(commit(&all, "world").summary["kinds"]["fetched"], 3);
+    let world = std::fs::read_to_string(run_dir.join("world/corpus.jsonl")).unwrap();
+    assert!(world.contains("Another story.") && !world.contains("~~ story ends ~~"));
 }
 
 /// The units that began in `dir` after the first `skip` begin lines.
