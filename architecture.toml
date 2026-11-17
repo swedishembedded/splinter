@@ -88,16 +88,6 @@ package = "splinter-model"
 crate = "brain-data"
 why = "the dataset parsers behind BrainDatasetCheck; the check_dataset job replaces them"
 
-[[brain.exception]]
-package = "splinter-model"
-crate = "brain-catalog"
-why = "dev: toy checkpoints for the in-process specs; `brain qwen3 toy` replaces them"
-
-[[brain.exception]]
-package = "splinter-model"
-crate = "brain-testutil"
-why = "dev: adapter fixtures for the manifest spec"
-
 [sven]
 # Only the agent runs sven and only the model adapter serves it a provider.
 # A caller that drives sven's engine itself does so through the agent module

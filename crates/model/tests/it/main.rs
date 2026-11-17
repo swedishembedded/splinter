@@ -7,7 +7,7 @@
 //! process-wide state (the current directory, environment variables): the
 //! others run beside it.
 
-mod adapter_manifest_is_followed;
+mod adapter_manifest_is_brains;
 mod device_selection;
 mod timeline_dataset_is_trainable;
 mod timeline_scoring;

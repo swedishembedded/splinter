@@ -283,8 +283,9 @@ pub(super) fn merge_into(
     base: &Path,
     adapter: &Path,
     out_dir: &Path,
+    cancel: &CancelToken,
 ) -> Result<Checkpoint, OrchestratorError> {
-    merge(base, adapter, out_dir).map_err(trainer_error)
+    merge(base, adapter, out_dir, Some(cancel)).map_err(trainer_error)
 }
 
 #[cfg(test)]

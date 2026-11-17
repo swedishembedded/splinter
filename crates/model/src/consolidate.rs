@@ -166,22 +166,31 @@ pub fn full_fine_tune(request: &FullTune<'_>) -> Result<Checkpoint, PolicyError>
 }
 
 /// Folds `adapter` into the weights of `base` it targets and writes the
-/// result to `out_dir`.
-pub fn merge(base: &Path, adapter: &Path, out_dir: &Path) -> Result<Checkpoint, PolicyError> {
+/// result to `out_dir`. Once `cancel` is cancelled the merge stops at its next
+/// unit of work and leaves nothing of its own in `out_dir`.
+pub fn merge(
+    base: &Path,
+    adapter: &Path,
+    out_dir: &Path,
+    cancel: Option<&sven_sdk::CancelToken>,
+) -> Result<Checkpoint, PolicyError> {
     let failed = |reason: String| PolicyError::Train {
         dir: out_dir.to_path_buf(),
         reason,
     };
     let (weights, _) = base_weights(base)?;
-    let merged = contain_device_panic(|| brain::merge_adapter(weights.as_str(), adapter, out_dir))
-        .and_then(|run| run.map_err(|e| e.to_string()))
-        .map_err(|e| {
-            failed(format!(
-                "merging {} into {}: {e}",
-                adapter.display(),
-                base.display()
-            ))
-        })?;
+    let merged = contain_device_panic(|| {
+        let mut keep_going = || !cancel.is_some_and(sven_sdk::CancelToken::is_cancelled);
+        brain::merge_adapter(weights.as_str(), adapter, out_dir, &mut keep_going)
+    })
+    .and_then(|run| run.map_err(|e| e.to_string()))
+    .map_err(|e| {
+        failed(format!(
+            "merging {} into {}: {e}",
+            adapter.display(),
+            base.display()
+        ))
+    })?;
     Ok(Checkpoint {
         dir: merged.dir,
         weights: merged.weights,

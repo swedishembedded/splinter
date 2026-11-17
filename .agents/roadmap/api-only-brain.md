@@ -6,7 +6,7 @@ Decision (user, 2026-11-13): brain's main job is serving many processes at once;
 
 ## Inventory (2026-11-13, origin/main 5bf1ec810)
 
-Everything that touches brain lives in `splinter-model`, which links `brain` (features `text`, `study`, `timeline`, `audio`), `brain-gpu-core`, `brain-data` and, in tests, `brain-catalog` and `brain-testutil`. `splinter-model` is the only crate allowed to by `architecture.toml` `[brain].allowed`.
+Everything that touches brain lives in `splinter-model`, which links `brain` (features `text`, `study`, `timeline`, `audio`), `brain-gpu-core`, `brain-data` (in tests it linked `brain-catalog` and `brain-testutil` until 2026-11-17). `splinter-model` is the only crate allowed to by `architecture.toml` `[brain].allowed`.
 
 | Area | Where | In-process use | API replacement |
 |---|---|---|---|
@@ -39,6 +39,7 @@ Everything that touches brain lives in `splinter-model`, which links `brain` (fe
 - 2026-11-13: inventory and plan written.
 - 2026-11-13: generation is API-only (commit "generation"). Removed: `LocalQwen` (whose `complete` cancelled the previous generation when a second request arrived: the concurrency defect the RSI2 lane hit, gone with it), `Residency`, `Answerer`'s in-process loader, the in-process exam path, in-process embeddings, `release_bases`, the drawn-seed recorder (the store still reads old records), the in-process `BrainLoader` of the synthetic-author study. Added: `ManagedBrain` (a `brain serve` over the model store with `--serve-adapters`, `--training` and an artifact store, started on first use and stopped on drop), `AdapterOffer::Directory`, `Embeddings` over `/v1/embeddings`, `DeviceFlags` carrying `--brain-endpoint/--brain-key-file/--brain-bin` for every sample. The method smokes (`make test/methods`) now generate through a `brain` on `PATH` serving the toy checkpoint on the CPU backend.
 - Still in-process after this commit: training (`train`, `policy_gradient`, `consolidate`, `timeline`), dataset parsers and the tokenizer (`capabilities`, `measure`, `tokens`), speech, the timeline model, `device` inventory, statistics.
+- 2026-11-17: `splinter-model` no longer links `brain-catalog` or `brain-testutil`. brain moved the manifest follower into its serving internals; the manifest spec now holds a written manifest to `brain::AdapterManifest`, the public type the server parses it with, and leaves the digest and base checks to brain's own tests.
 
 ## Open (what remains before `splinter-model` drops its brain crates)
 

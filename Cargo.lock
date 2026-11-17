@@ -2408,17 +2408,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "brain-testutil"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
-dependencies = [
- "brain-checkpoint",
- "brain-modelref",
- "brain-modelstore",
- "serde_json",
-]
-
-[[package]]
 name = "brain-timesfm3"
 version = "5.1.0"
 source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
@@ -7186,10 +7175,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "brain",
- "brain-catalog",
  "brain-data",
  "brain-gpu-core",
- "brain-testutil",
  "futures",
  "libc",
  "reqwest",

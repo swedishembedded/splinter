@@ -149,6 +149,7 @@ mod tests {
             loss: 1.5,
             lr: 1e-4,
             grad_norm: None,
+            eval_loss: None,
             metrics: Vec::new(),
         };
         step(&progress(1));

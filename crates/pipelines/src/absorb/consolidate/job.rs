@@ -362,7 +362,13 @@ fn merge(
         .join("consolidate")
         .join(splinter_store::new_id_with_prefix("merge"));
     std::fs::create_dir_all(&work).map_err(io(&work))?;
-    let checkpoint = match trainer.merge(ctx, &job.from.base, adapter, &work.join("checkpoint")) {
+    let checkpoint = match trainer.merge(
+        ctx,
+        &job.from.base,
+        adapter,
+        &work.join("checkpoint"),
+        &job.cancel,
+    ) {
         Ok(checkpoint) => checkpoint,
         Err(e) => {
             let _ = std::fs::remove_dir_all(&work);

@@ -295,13 +295,15 @@ pub trait Trainer {
     }
 
     /// Folds `adapter` into the weights of `base` it targets and writes the
-    /// checkpoint directory to `out_dir`.
+    /// checkpoint directory to `out_dir`; a cancelled merge stops at its next
+    /// unit of work and leaves nothing of its own in `out_dir`.
     fn merge(
         &self,
         _ctx: &Context,
         _base: &Path,
         _adapter: &Path,
         _out_dir: &Path,
+        _cancel: &CancelToken,
     ) -> Result<ModelCheckpoint, OrchestratorError> {
         Err(OrchestratorError::Refused(
             "this trainer trains adapters only: it cannot merge one into a base".into(),
@@ -399,9 +401,10 @@ impl Trainer for BrainTrainer {
         base: &Path,
         adapter: &Path,
         out_dir: &Path,
+        cancel: &CancelToken,
     ) -> Result<ModelCheckpoint, OrchestratorError> {
         served::refuse_unserved(ctx, "merging an adapter into a base")?;
-        full::merge_into(base, adapter, out_dir)
+        full::merge_into(base, adapter, out_dir, cancel)
     }
 }
 

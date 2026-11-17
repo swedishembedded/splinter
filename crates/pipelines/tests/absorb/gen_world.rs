@@ -202,6 +202,7 @@ impl Trainer for Smith {
         base: &Path,
         adapter: &Path,
         out_dir: &Path,
+        _cancel: &CancelToken,
     ) -> Result<ModelCheckpoint, OrchestratorError> {
         self.merges
             .lock()

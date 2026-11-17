@@ -79,7 +79,13 @@ fn a_regime_without_a_job_is_refused_by_name_when_the_run_has_endpoints() {
         .unwrap_err();
     assert!(refusal(full).contains("a full-parameter run has no job"));
     let merge = BrainTrainer
-        .merge(&ctx, &scratch.0, &scratch.0, &scratch.0.join("merged"))
+        .merge(
+            &ctx,
+            &scratch.0,
+            &scratch.0,
+            &scratch.0.join("merged"),
+            &cancel,
+        )
         .map(|_| ())
         .unwrap_err();
     assert!(refusal(merge).contains("merging an adapter into a base has no job"));
