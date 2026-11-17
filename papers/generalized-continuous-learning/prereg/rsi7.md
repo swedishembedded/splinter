@@ -72,3 +72,13 @@ As RSI5: the learner never reads I or any item-level result; signed aggregate ve
 ## What is not claimed
 
 Nothing until the verdicts evaluate I1, I2 and I3.
+
+## Deviations (dated; all before any candidate was examined)
+
+- 2026-11-17 15:10: **the generation-4 proposal request cap.** Lineage a2's fourth generation (`plus-concat`) spent its
+  request cap (40 000) with 1163 of its 1500 frontier programs found (3596 new proposals in 40 000 requests: the dialect's
+  short manual exhausts the proposer's novelty). As RSI5's deviation 4: the registration fixes the pool sizes the criteria rest
+  on, not this budget, and no rule covered a spent cap. The fourth generation's cap is raised to 80 000
+  (`run-lineage-cap.sh`, SHA-256 `0d802e62...`, which differs from `run-lineage.sh` only in that number for generation 4) and a2
+  resumed from its journals in generation 4, every program already measured reused. Any other lineage whose fourth generation
+  spends the cap is resumed the same way and listed in `rsi7/resumes.log`.
