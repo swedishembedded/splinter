@@ -52,11 +52,21 @@ impl Scratch {
     pub fn create(root: &Path, run_dir: &Path) -> anyhow::Result<Self> {
         let run = std::fs::canonicalize(run_dir).unwrap_or_else(|_| run_dir.to_path_buf());
         let id = splinter_sdk::vocabulary::digest::Digest::of(run.as_os_str().as_encoded_bytes());
-        let dir = root.join(format!(
-            "minimind-{}-{}",
-            &id.hex()[..12],
-            std::process::id()
-        ));
+        let prefix = format!("minimind-{}-", &id.hex()[..12]);
+        // What a run of this directory that was killed outright left.
+        if let Ok(entries) = std::fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let dead = name
+                    .strip_prefix(&prefix)
+                    .and_then(|pid| pid.parse::<u32>().ok())
+                    .is_some_and(|pid| !Path::new(&format!("/proc/{pid}")).exists());
+                if dead {
+                    let _ = std::fs::remove_dir_all(entry.path());
+                }
+            }
+        }
+        let dir = root.join(format!("{prefix}{}", std::process::id()));
         if dir.exists() {
             std::fs::remove_dir_all(&dir).with_context(|| format!("clearing {}", dir.display()))?;
         }
@@ -104,5 +114,20 @@ mod tests {
         assert_eq!(mode & 0o777, 0o700);
         drop(scratch);
         assert!(!dir.exists());
+        // A killed run's scratch (no process has its id) goes with the next.
+        let left = dir.with_file_name(format!(
+            "{}{}",
+            dir.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .rsplit_once('-')
+                .unwrap()
+                .0,
+            "-4294967295"
+        ));
+        std::fs::create_dir_all(&left).unwrap_or_else(|e| panic!("{e}"));
+        let again = Scratch::create(root.path(), root.path()).unwrap_or_else(|e| panic!("{e}"));
+        assert!(!left.exists(), "{}", left.display());
+        drop(again);
     }
 }
