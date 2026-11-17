@@ -94,6 +94,30 @@ What it still cannot do: copy a file name or a code it has not seen often (combi
 throughout). Pretraining throughput is about 50k tok/s at any batch from 8 x 1024 to 128 x 1024 on this
 model (sweep through `brain/train pretrain`, 20 steps each).
 
+## Toward the sealed exam (2026-11-17, default profile, seed 7, gpu3, brain 2784b15ab, sven 0d7d6643)
+
+Each row a run from random init (v17 reuses v16 up to the fine-tune); probes of 12; exam = bench's sealed
+workspace-tools exam (tiers a/b/c of 15/24/20 items, 3 attempts), pretrained / fine-tuned / improved;
+every verdict valid and signed.
+
+| Run | Change | probe pre/sft/imp | held-out pre/sft/imp | exam a/b/c pre | sft | improved | verdicts |
+|---|---|---|---|---|---|---|---|
+| v11 | episodes under the exam's conditions (knowledge 165) | 5/0/4 | 2/4/3 | 0/0/0 | 0/0/0 | - (control failed: block) | Reject |
+| v13 | answer values numbers/words/codes, root files, files named by name | 2/2/3 | 3/1/1 | 0/0/0 | 0/0/0 | 0/0/0 | Reject x2 |
+| v14 | half of all names random letters, 22 MB English | 4/1/2 | 1/3/1 | 0/.03/0 | .02/.01/0 | 0/.03/0 | Inconclusive, Reject |
+| v15 | hidden 256 x 4 passes, 400 MB English, copy drills 600k->150k, teacher, SFT 5e-5 | 0/0/0 | 0/0/0 | 0/0/0 | 0/0/0 | 0/0/0 | Reject x2 |
+| v16 | v14 + names from the English corpus's words + teacher in SFT (6000 x 3e-4) | 6/1/4 | 5/3/3 | .13/.01/0 | 0/0/0 | .02/0/0 | Reject x2 |
+| v17 | v16, fine-tune 1000 x 1e-4 | 6/6/5 | 5/3/4 | .13/.01/0 | .04/.03/0 | 0/.04/0 | Inconclusive, Reject |
+| final | the default profile of e27eebdd8 (v17 without the teacher), from init, 81 min | 6/5/4 | 5/5/5 | .16/.01/0 | 0/.10/0 | 0/.08/0 | Inconclusive, Reject |
+
+Findings: under the exam the model read a file the listing did not show in every one of its reads until
+names stopped being only made-up words (v13: 0 of 1041 reads); a long fine-tune undoes pretraining
+(v16 dev pass 0.50 at 1000 steps to 0.08 at 6000); low-rate (5e-5) fine-tuning under-fits at this size and
+diluting the copy drills loses retrieval (v15: 5+12 of 24 against 12+12). Hidden 384 (v12) did not lower
+the pretraining loss (0.850 against 0.855) at the same tokens. The teacher (Qwen3-4B served by brain,
+no thinking, temperature 0.6) was admitted on 1269 of 10000 attempts, mostly count and read; its effect
+alone is not measured (off by default).
+
 ## Open
 
 - sven: before the compact profile, an embedded engine with `agent.system_prompt` set still sent
@@ -111,5 +135,6 @@ model (sweep through `brain/train pretrain`, 20 steps each).
   can make it from scratch.
 - Brain: `full_train` of an Ouro from scratch degrades context use (knowledge 160); the sample trains its
   chat stages as text until it is fixed. Served pretraining stays near 50k tok/s across batch sizes.
-- Not yet run: the bench examination against a real exam; GRPO as a selectable improvement method
-  (needs behaviour log-probabilities from the served model); episodes in parallel.
+- Not yet run: GRPO as a selectable improvement method (brain's ouro score/policy_trace); the teacher's
+  effect alone; a capacity step once the regime holds. No verdict has promoted: the fine-tune and the
+  improvement do not yet beat the pretrained checkpoint on the exam.

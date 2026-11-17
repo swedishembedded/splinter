@@ -151,3 +151,4 @@ in the same commit.
 | [163](163-python-isolated-mode-ignores-pythonhashseed-so-a-string-set-prints-in-another-order-every-run.md) | Python's isolated mode ignores `PYTHONHASHSEED`, so a string set prints in another order every run |
 | [164](164-a-small-model-fenced-the-material-of-its-python-tasks-and-the-fence-was-run-as-code-so-most-were-refused.md) | A small model fenced the material of its Python tasks, the fence was run as code, and most tasks were refused |
 | [165](165-episodes-collected-through-the-sven-library-were-not-the-requests-the-headless-exam-run-sent.md) | Episodes collected through the sven library were not the requests the headless exam run sent |
+| [166](166-a-small-model-trained-only-on-made-up-names-could-not-copy-a-real-word-name-from-its-context.md) | A small model trained only on made-up names could not copy a real-word name from its context |
