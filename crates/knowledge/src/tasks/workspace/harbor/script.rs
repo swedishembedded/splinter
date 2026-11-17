@@ -17,6 +17,14 @@
 //! whole paths, to the tree, a private tests copy and a private logs
 //! directory, then reads the reward the way Harbor's verifier does. A task
 //! passes only when its `reward` is exactly 1: partial credit is not a pass.
+//! The script is also given the three places as `WORKSPACE_DIR`, `TESTS_DIR`
+//! and `LOGS_DIR`, for a task written to read them from its environment. A
+//! script that leaves no reward it can be read from (none at all, or one
+//! that is not a number) ends the runner with [`NO_REWARD_EXIT`]: the
+//! verifier failed, which says nothing of the change it was to grade.
+
+/// The runner's exit status when the verifier left no readable reward.
+pub const NO_REWARD_EXIT: i32 = 3;
 
 /// The tree-relative directory the imported check lives in; hidden from the
 /// solver and protected from its change.
@@ -85,16 +93,27 @@ find "$H_TESTS" -type f | while IFS= read -r file; do
 done
 chmod +x "$H_TESTS/test.sh" 2>/dev/null
 cd "$TREE" || exit 2
-"$H_TESTS/test.sh" > "$LOGS/stdout.txt" 2>&1
+WORKSPACE_DIR="$H_TREE" TESTS_DIR="$H_TESTS" LOGS_DIR="$H_LOGS" "$H_TESTS/test.sh" > "$LOGS/stdout.txt" 2>&1
+number='-?[0-9]+(\.[0-9]*)?([eE][-+]?[0-9]+)?'
 if [ -f "$LOGS/reward.json" ]; then
-  grep -Eq '"reward"[[:space:]]*:[[:space:]]*1(\.0*)?[[:space:]]*[,}}]' "$LOGS/reward.json"
-  verdict=$?
+  if grep -Eq "\"reward\"[[:space:]]*:[[:space:]]*$number[[:space:]]*[,}}]" "$LOGS/reward.json"; then
+    grep -Eq '"reward"[[:space:]]*:[[:space:]]*1(\.0*)?[[:space:]]*[,}}]' "$LOGS/reward.json"
+    verdict=$?
+  else
+    echo "the verifier's reward.json holds no numeric reward" >&2
+    verdict={no_reward}
+  fi
 elif [ -f "$LOGS/reward.txt" ]; then
-  awk 'NR == 1 {{ exit !($1 + 0 == 1) }}' "$LOGS/reward.txt"
-  verdict=$?
+  if head -n 1 "$LOGS/reward.txt" | tr -d '[:space:]' | grep -Eqx -e "$number"; then
+    awk 'NR == 1 {{ exit !($1 + 0 == 1) }}' "$LOGS/reward.txt"
+    verdict=$?
+  else
+    echo "the verifier's reward.txt is not a number" >&2
+    verdict={no_reward}
+  fi
 else
   echo "the verifier wrote no reward" >&2
-  verdict=1
+  verdict={no_reward}
 fi
 if [ "$verdict" -ne 0 ]; then tail -n 40 "$LOGS/stdout.txt" >&2; fi
 rm -rf "$LOGS"
@@ -103,6 +122,7 @@ exit "$verdict"
         logs = LOGS,
         tests = TESTS,
         workdir = WORKDIR,
+        no_reward = NO_REWARD_EXIT,
     )
 }
 

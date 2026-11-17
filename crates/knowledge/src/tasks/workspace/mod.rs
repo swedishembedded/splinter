@@ -97,7 +97,10 @@ pub use drills::{
     DRILL_SCHEMA,
 };
 pub use fixtures::Fixture;
-pub use harbor::{discover, Discovered, HarborTask, Oracle, SplinterMeta, SPLINTER_SCHEMA};
+pub use harbor::{
+    discover, is_harbor_runner, Discovered, HarborTask, Oracle, SplinterMeta, NO_REWARD_EXIT,
+    SHIPPED_WORKDIR, SPLINTER_SCHEMA,
+};
 pub use harness::{Harness, SuiteReport};
 pub use held::Held;
 pub use history::{

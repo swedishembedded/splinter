@@ -9,8 +9,10 @@
 //! Harbor tasks as workspace tasks, and back.
 //!
 //! A Harbor task is a directory: `instruction.md`, `task.toml`,
-//! `environment/` (a Dockerfile and the files it copies), `tests/` with a
-//! `test.sh` that writes a reward, and optionally `solution/solve.sh`. A
+//! `environment/` (a Dockerfile and the files it copies) or `workspace/`
+//! (the starting files themselves, for a task that needs no image built),
+//! `tests/` with a `test.sh` that writes a reward, and optionally
+//! `solution/solve.sh`. A
 //! workspace task is the same thing in splinter's terms: a request, a tree,
 //! hidden files and commands that must fail before and pass after, and,
 //! sometimes, the change that solves it.
@@ -24,7 +26,15 @@
 //! splinter itself exported carries its check in `[metadata.splinter]` and
 //! is rebuilt exactly; any other task is graded by its own `test.sh`, run
 //! through a runner that maps `/tests`, `/logs/verifier` and the working
-//! directory to host paths and passes only on a reward of exactly 1.
+//! directory to host paths and passes only on a reward of exactly 1. The
+//! runner exits [`NO_REWARD_EXIT`] when the script left no reward it could
+//! read: that is the verifier failing, not the change, and a caller that
+//! records outcomes keeps the two apart.
+//!
+//! **Sealing.** A task folder may say it is exam material, which is never
+//! practised on: [`HarborTask::sealed`] reads `[metadata].bench_sealed`, a
+//! held-out tier (`[metadata].bench_tier` `b` or `c`), and the `eval` set of
+//! the `split.toml` its collection (the folder's parent) declares.
 //!
 //! **Export** writes a task Harbor can run in a container, with the check's
 //! commands in a generated `test.sh`. Harbor's verifier does not enforce the
@@ -47,11 +57,24 @@ use splinter_eval::verifiers::hidden_strength::HiddenStrength;
 use splinter_eval::verifiers::test_report::TestExpectation;
 use splinter_sandbox::CommandCall;
 
-use super::files::{copy_dir, copy_file, files_under, io, read_files, refuse};
+use super::files::{copy_dir, copy_file, files_under, io, read_files, refuse, skip_nothing};
 use super::{Fixture, Held, WorkspaceError, WorkspaceGeneration, WorkspaceGenerator};
 
 /// The schema name `[metadata.splinter]` carries.
 pub const SPLINTER_SCHEMA: &str = "splinter.harbor.v1";
+
+pub use script::NO_REWARD_EXIT;
+
+/// The working directory a task that ships `workspace/` is taken to run in
+/// when its `[environment]` names none: what its scripts' absolute paths
+/// are rewritten from.
+pub const SHIPPED_WORKDIR: &str = "/workspace";
+
+/// The holdout tiers whose tasks are exam material.
+const HELD_OUT_TIERS: &[&str] = &["b", "c"];
+
+/// The file in which a collection of task folders declares its split.
+const SPLIT_FILE: &str = "split.toml";
 
 /// The files of an environment directory that describe the build, not the
 /// repository it copies.
@@ -98,7 +121,16 @@ pub struct HarborTask {
     /// The working directory its environment copies the repository into.
     pub workdir: String,
     config: toml::Table,
-    plan: dockerfile::Plan,
+    layout: Layout,
+}
+
+/// Where a task's starting files come from.
+#[derive(Clone, Debug)]
+enum Layout {
+    /// What its Dockerfile copies.
+    Built(dockerfile::Plan),
+    /// Its `workspace/` directory, as it is.
+    Shipped,
 }
 
 impl HarborTask {
@@ -146,23 +178,37 @@ impl HarborTask {
             );
         }
         let dockerfile = dir.join("environment/Dockerfile");
-        if !dockerfile.is_file() {
-            return refuse(dir, "environment/Dockerfile is missing");
-        }
-        let plan = dockerfile::parse(
-            &std::fs::read_to_string(&dockerfile).map_err(io(&dockerfile))?,
-            setting("workdir").and_then(toml::Value::as_str),
-        )
-        .or_else(|why| refuse(dir, why))?;
-        let Some(workdir) = plan.workdir.clone().filter(|w| w != "/") else {
+        let (layout, workdir) = if dockerfile.is_file() {
+            let plan = dockerfile::parse(
+                &std::fs::read_to_string(&dockerfile).map_err(io(&dockerfile))?,
+                setting("workdir").and_then(toml::Value::as_str),
+            )
+            .or_else(|why| refuse(dir, why))?;
+            let Some(workdir) = plan.workdir.clone().filter(|w| w != "/") else {
+                return refuse(
+                    dir,
+                    "the environment sets no WORKDIR to copy the repository into",
+                );
+            };
+            if plan.copies.is_empty() {
+                return refuse(dir, "the environment copies no files");
+            }
+            (Layout::Built(plan), workdir)
+        } else if dir.join("workspace").is_dir() {
+            let workdir = setting("workdir")
+                .and_then(toml::Value::as_str)
+                .unwrap_or(SHIPPED_WORKDIR)
+                .to_string();
+            if !workdir.starts_with('/') || workdir == "/" {
+                return refuse(dir, "[environment] workdir must be an absolute directory");
+            }
+            (Layout::Shipped, workdir)
+        } else {
             return refuse(
                 dir,
-                "the environment sets no WORKDIR to copy the repository into",
+                "neither environment/Dockerfile nor workspace/ gives the starting files",
             );
         };
-        if plan.copies.is_empty() {
-            return refuse(dir, "the environment copies no files");
-        }
         let name = table("task")
             .and_then(|t| t.get("name"))
             .and_then(toml::Value::as_str)
@@ -175,7 +221,7 @@ impl HarborTask {
             instruction,
             workdir,
             config,
-            plan,
+            layout,
         })
     }
 
@@ -214,19 +260,91 @@ impl HarborTask {
         Ok(Some(meta))
     }
 
-    /// A string of the task's `[metadata]`.
-    fn metadata_text(&self, key: &str) -> Option<&str> {
+    /// A value of the task's `[metadata]`.
+    fn metadata(&self, key: &str) -> Option<&toml::Value> {
         self.config
             .get("metadata")
             .and_then(toml::Value::as_table)
             .and_then(|m| m.get(key))
-            .and_then(toml::Value::as_str)
+    }
+
+    /// A string of the task's `[metadata]`.
+    fn metadata_text(&self, key: &str) -> Option<&str> {
+        self.metadata(key).and_then(toml::Value::as_str)
+    }
+
+    /// Why the task is exam material, which is never practised on: it says
+    /// it is sealed (`[metadata].bench_sealed = true`), it is in a held-out
+    /// tier (`[metadata].bench_tier` `b` or `c`), or its family
+    /// (`[metadata].bench_family`) is in the `eval` set of the `split.toml`
+    /// beside the folder. `None` for practice material.
+    ///
+    /// # Errors
+    ///
+    /// [`WorkspaceError::Fixture`] when a marker is not of its type, or the
+    /// collection's split cannot be read: an unreadable seal is not taken to
+    /// clear the task.
+    pub fn sealed(&self) -> Result<Option<String>, WorkspaceError> {
+        let task_toml = self.dir.join("task.toml");
+        let malformed = |path: &Path, reason: String| WorkspaceError::Fixture {
+            path: path.to_path_buf(),
+            reason,
+        };
+        match self.metadata("bench_sealed") {
+            None | Some(toml::Value::Boolean(false)) => {}
+            Some(toml::Value::Boolean(true)) => {
+                return Ok(Some("it is marked [metadata].bench_sealed".into()))
+            }
+            Some(other) => {
+                return Err(malformed(
+                    &task_toml,
+                    format!("[metadata].bench_sealed must be true or false, not {other}"),
+                ))
+            }
+        }
+        if let Some(tier) = self.metadata("bench_tier") {
+            let tier = tier.as_str().ok_or_else(|| {
+                malformed(&task_toml, "[metadata].bench_tier must be a string".into())
+            })?;
+            if HELD_OUT_TIERS.contains(&tier) {
+                return Ok(Some(format!("it is in the held-out tier {tier}")));
+            }
+        }
+        let Some(split) = self.dir.parent().map(|p| p.join(SPLIT_FILE)) else {
+            return Ok(None);
+        };
+        if !split.is_file() {
+            return Ok(None);
+        }
+        let text = std::fs::read_to_string(&split).map_err(io(&split))?;
+        let declared: toml::Table = text
+            .parse()
+            .map_err(|e: toml::de::Error| malformed(&split, e.to_string()))?;
+        let Some(family) = self.metadata_text("bench_family") else {
+            return Ok(None);
+        };
+        let in_eval = declared
+            .get("sets")
+            .and_then(toml::Value::as_table)
+            .and_then(|sets| sets.get("eval"))
+            .and_then(toml::Value::as_array)
+            .is_some_and(|families| families.iter().any(|f| f.as_str() == Some(family)));
+        Ok(in_eval.then(|| {
+            format!(
+                "its family {family} is in the eval set of {}",
+                split.display()
+            )
+        }))
     }
 
     /// The repository the environment copies, laid out in `into`.
     fn lay_tree(&self, into: &Path) -> Result<(), WorkspaceError> {
+        let plan = match &self.layout {
+            Layout::Shipped => return copy_dir(&self.dir.join("workspace"), into, skip_nothing),
+            Layout::Built(plan) => plan,
+        };
         let environment = self.dir.join("environment");
-        for copy in &self.plan.copies {
+        for copy in &plan.copies {
             let target = dockerfile::under(&self.workdir, &copy.destination)
                 .or_else(|why| refuse(&self.dir, why))?;
             for source in &copy.sources {
@@ -252,6 +370,19 @@ impl HarborTask {
         }
         Ok(())
     }
+}
+
+/// The tree-relative path of the runner that grades a foreign task.
+fn runner_path() -> String {
+    format!("{}/run.sh", script::HIDDEN_DIR)
+}
+
+/// Whether `call` is the runner that grades a foreign Harbor task by its own
+/// `tests/test.sh`: the command whose exit status [`NO_REWARD_EXIT`] means
+/// the verifier left no reward.
+#[must_use]
+pub fn is_harbor_runner(call: &CommandCall) -> bool {
+    call.argv == ["sh".to_string(), runner_path()]
 }
 
 fn argv(words: &[String]) -> CommandCall {
@@ -300,7 +431,7 @@ impl Fixture {
             };
             hidden.insert(format!("{}/tests/{file}", script::HIDDEN_DIR), bytes);
         }
-        let runner = format!("{}/run.sh", script::HIDDEN_DIR);
+        let runner = runner_path();
         hidden.insert(runner.clone(), script::runner().into_bytes());
         if tree.join(script::HIDDEN_DIR).exists() {
             return refuse(

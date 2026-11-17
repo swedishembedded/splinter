@@ -17,6 +17,9 @@
 //! content address does not depend on where it was read. The external task
 //! repository is a versioned source read at a revision, not a database.
 //!
+//! A task folder that is exam material ([`HarborTask::sealed`]) is refused,
+//! whatever else it is: it is never practised on.
+//!
 //! **Export** writes a task set as Harbor tasks.
 //!
 //! **Trial ingestion** reads the directories Harbor leaves for each trial
@@ -216,6 +219,9 @@ pub fn import_harbor(
     let mut refused = Vec::new();
     for directory in directories {
         let outcome = HarborTask::read(directory).and_then(|task| {
+            if let Some(why) = task.sealed()? {
+                return Err(sealed_refusal(directory, &why));
+            }
             generator
                 .import_harbor(&task, oracle, &held, ctx.clock())
                 .map(|generation| (task, generation))
@@ -260,6 +266,48 @@ pub fn import_harbor(
         imported: origins,
         refused,
     })
+}
+
+/// The refusal of a task folder that is exam material.
+fn sealed_refusal(
+    directory: &Path,
+    why: &str,
+) -> splinter_knowledge::tasks::workspace::WorkspaceError {
+    splinter_knowledge::tasks::workspace::WorkspaceError::Fixture {
+        path: directory.to_path_buf(),
+        reason: format!("{SEALED_REFUSAL}: {why}"),
+    }
+}
+
+/// How the refusal of a sealed task folder begins.
+pub const SEALED_REFUSAL: &str = "sealed exam material, never practised on";
+
+/// Every Harbor task imported so far, by the digest of its folder's files
+/// when it was imported: a folder whose files have that digest now is that
+/// import.
+///
+/// # Errors
+///
+/// [`OrchestratorError`] when the store cannot be read.
+pub fn imports(ctx: &Context) -> Result<BTreeMap<Digest, Origin>, OrchestratorError> {
+    let documents = ctx.workspace();
+    let mut found = BTreeMap::new();
+    for id in documents.document_ids(ORIGIN)? {
+        if let Some(origin) = documents.get_document::<Origin>(ORIGIN, &id)? {
+            found.insert(origin.source.digest.clone(), origin);
+        }
+    }
+    Ok(found)
+}
+
+/// The digest of the files of the task folder `directory`, as an import
+/// records it.
+///
+/// # Errors
+///
+/// [`OrchestratorError`] when the folder cannot be read.
+pub fn folder_digest(directory: &Path) -> Result<Digest, OrchestratorError> {
+    directory_digest(directory)
 }
 
 /// What an export wrote.

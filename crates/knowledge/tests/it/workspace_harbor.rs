@@ -33,14 +33,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use common::{git, write, Repo};
+use common::{git, write, Repo, Scratch};
 use splinter_core::annotation::Outcome;
 use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Experience, Provenance};
 use splinter_eval::verifiers::workspace::WorkspaceVerifier;
 use splinter_eval::verifiers::Verifier;
 use splinter_knowledge::tasks::workspace::{
-    discover, Fixture, HarborTask, Held, Oracle, WorkspaceGenerator, WorkspaceTask,
+    discover, Fixture, HarborTask, Held, Oracle, WorkspaceGenerator, WorkspaceTask, NO_REWARD_EXIT,
 };
 use splinter_sandbox::{CommandCall, Limits, ProcessSandbox};
 
@@ -345,4 +345,123 @@ fn walk(root: &Path) -> Vec<PathBuf> {
     }
     out.sort();
     out
+}
+
+/// A task in the layout that ships its starting files in `workspace/`
+/// instead of building an environment: no Dockerfile, the verifier reading
+/// the tree, its tests and its logs directory from `WORKSPACE_DIR`,
+/// `TESTS_DIR` and `LOGS_DIR`.
+fn shipped(root: &Path, name: &str, test_sh: &str, metadata: &str) -> PathBuf {
+    let dir = root.join(name);
+    write(&dir.join("workspace/calc.sh"), "echo 1\n");
+    write(
+        &dir.join("instruction.md"),
+        "Make calc.sh print the sum of one and two.\n",
+    );
+    write(
+        &dir.join("task.toml"),
+        &format!("schema_version = \"1.4\"\n[task]\nname = \"org/{name}\"\n[metadata]\n{metadata}"),
+    );
+    write(&dir.join("tests/test.sh"), test_sh);
+    write(
+        &dir.join("solution/solve.sh"),
+        "#!/bin/bash\ncd \"$WORKSPACE_DIR\"\necho 'echo 3' > calc.sh\n",
+    );
+    dir
+}
+
+const SHIPPED_REWARD: &str = "#!/bin/bash\ncd \"$WORKSPACE_DIR\"\ntest -f \"$TESTS_DIR/test.sh\" || exit 9\nif [ \"$(sh calc.sh)\" = 3 ]; then echo 1 > \"$LOGS_DIR/reward.txt\"; else echo 0 > \"$LOGS_DIR/reward.txt\"; fi\n";
+
+/// The exit status of the one command a foreign task's check runs, as the
+/// workspace verifier's evidence records it.
+fn check_exit(rig: &Rig, admitted: &WorkspaceTask, patch: &str) -> Option<i64> {
+    let env = rig.generator.environment(&admitted.snapshot);
+    let verifier = WorkspaceVerifier::new(
+        vec![env],
+        Arc::new(rig.repo.store.clone()),
+        rig.repo.scratch.0.join("verify"),
+    );
+    let provenance = Provenance::new("test/candidate", &FixedClock::new(AT));
+    let experience =
+        Experience::answered_without_a_run(admitted.task.clone(), patch, provenance).unwrap();
+    let finding = verifier.verify(&admitted.task, &experience).unwrap();
+    finding.evidence["commands"][0]["exit_code"].as_i64()
+}
+
+#[test]
+fn a_task_that_ships_its_workspace_is_imported_without_a_dockerfile_and_graded_by_its_tests() {
+    let rig = rig("harbor-shipped");
+    let dir = shipped(&rig.repo.scratch.0, "calc", SHIPPED_REWARD, "");
+    let admitted = import(&rig, &dir, Oracle::Require).unwrap();
+    let root = &rig.repo.scratch.0;
+    let right = calc_diff(root, "echo 1\n", "echo 3\n");
+    let wrong = calc_diff(root, "echo 1\n", "echo 2\n");
+    assert_eq!(verdict(&rig, &admitted, &right), Outcome::Pass);
+    assert_eq!(verdict(&rig, &admitted, &wrong), Outcome::Fail);
+
+    // Neither a Dockerfile nor shipped files: nothing to lay out.
+    let bare = shipped(&rig.repo.scratch.0, "bare", SHIPPED_REWARD, "");
+    fs::remove_dir_all(bare.join("workspace")).unwrap();
+    let why = HarborTask::read(&bare).unwrap_err().to_string();
+    assert!(why.contains("workspace/"), "{why}");
+}
+
+#[test]
+fn a_verifier_that_leaves_no_reward_is_told_apart_from_one_that_says_no() {
+    let rig = rig("harbor-crash");
+    let root = &rig.repo.scratch.0;
+    let crashing = shipped(root, "crash", "#!/bin/bash\nexit 7\n", "");
+    let admitted = import(&rig, &crashing, Oracle::Skip).unwrap();
+    let right = calc_diff(root, "echo 1\n", "echo 3\n");
+    assert_eq!(verdict(&rig, &admitted, &right), Outcome::Fail);
+    assert_eq!(
+        check_exit(&rig, &admitted, &right),
+        Some(i64::from(NO_REWARD_EXIT)),
+        "no reward is the verifier's failure, not the change's"
+    );
+    let garbled = shipped(
+        root,
+        "garbled",
+        "#!/bin/bash\necho 'not a number' > \"$LOGS_DIR/reward.txt\"\n",
+        "",
+    );
+    let admitted = import(&rig, &garbled, Oracle::Skip).unwrap();
+    assert_eq!(
+        check_exit(&rig, &admitted, &right),
+        Some(i64::from(NO_REWARD_EXIT))
+    );
+
+    let saying_no = shipped(root, "no", SHIPPED_REWARD, "");
+    let admitted = import(&rig, &saying_no, Oracle::Skip).unwrap();
+    let wrong = calc_diff(root, "echo 1\n", "echo 2\n");
+    assert_eq!(check_exit(&rig, &admitted, &wrong), Some(1));
+}
+
+#[test]
+fn exam_material_is_named_sealed_and_practice_material_is_not() {
+    let scratch = Scratch::new("harbor-sealed");
+    let root = scratch.0.join("collection");
+    let practice = shipped(
+        &root,
+        "practice",
+        SHIPPED_REWARD,
+        "bench_family = \"acme\"\n",
+    );
+    let sealed = shipped(&root, "sealed", SHIPPED_REWARD, "bench_sealed = true\n");
+    let held_out = shipped(&root, "held-out", SHIPPED_REWARD, "bench_tier = \"b\"\n");
+    let eval = shipped(&root, "eval", SHIPPED_REWARD, "bench_family = \"globex\"\n");
+    write(
+        &root.join("split.toml"),
+        "[sets]\ntrain = [\"acme\"]\neval = [\"globex\"]\n",
+    );
+    let read = |dir: &Path| HarborTask::read(dir).unwrap().sealed().unwrap();
+    assert_eq!(read(&practice), None);
+    assert!(read(&sealed).unwrap().contains("bench_sealed"));
+    assert!(read(&held_out).unwrap().contains("tier"));
+    assert!(read(&eval).unwrap().contains("eval"));
+
+    // A split the task's collection declares but cannot be read is not
+    // taken to clear the task.
+    write(&root.join("split.toml"), "[sets\n");
+    assert!(HarborTask::read(&practice).unwrap().sealed().is_err());
 }
