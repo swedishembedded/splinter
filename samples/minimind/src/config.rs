@@ -294,16 +294,16 @@ impl Config {
                 world(200, 4_000, 1_500, 1_000, 6_000, 60_000),
                 tasks(1_600, 96, 12, 1_600),
                 budget(3_000, 64, 2e-3, 512),
-                budget(600, 8, 5e-4, 2048),
-                budget(100, 8, 2e-4, 2048),
+                budget(600, 8, 5e-4, 4096),
+                budget(100, 8, 2e-4, 4096),
             ),
             Profile::Default => (
                 ouro(256, 4, 4, 4, 4096, 4096),
                 world(400, 20_000, 6_000, 3_000, 30_000, 600_000),
                 tasks(3_000, 384, 12, 6_000),
                 budget(9_000, 64, 1e-3, 1024),
-                budget(6_000, 8, 3e-4, 2048),
-                budget(600, 8, 1e-4, 2048),
+                budget(6_000, 8, 3e-4, 4096),
+                budget(600, 8, 1e-4, 4096),
             ),
             Profile::M64 => (
                 ouro(512, 8, 4, 8, 8192, 2048),
@@ -389,7 +389,27 @@ impl Config {
             unreachable!("a configuration serialises to a mapping")
         };
         merge(base, file, "")?;
-        Ok(serde_json::from_value(merged)?)
+        let config: Self = serde_json::from_value(merged)?;
+        config.check_chat_blocks()?;
+        Ok(config)
+    }
+
+    /// An episode runs to its model's context, so every record of one fits
+    /// a chat stage's block only when the block is at least that context;
+    /// brain refuses a longer record, a stage later.
+    fn check_chat_blocks(&self) -> anyhow::Result<()> {
+        for (label, model) in &self.models {
+            for (stage, budget) in [("sft", &self.sft), ("improve", &self.improve)] {
+                if budget.block < model.context {
+                    bail!(
+                        "{stage}.block {} is shorter than model {label}'s context {}: an episode's record can be as long as the context",
+                        budget.block,
+                        model.context
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -452,6 +472,15 @@ mod tests {
             two.models["ouro"].config["num_hidden_layers"],
             Config::of(Profile::Smoke).models["ouro"].config["num_hidden_layers"]
         );
+    }
+
+    #[test]
+    fn every_profile_trains_on_whole_episodes_and_a_shorter_block_is_refused() {
+        for profile in [Profile::Smoke, Profile::Default, Profile::M64] {
+            Config::parse("", profile).unwrap();
+        }
+        let err = Config::parse("sft:\n  block: 512\n", Profile::Smoke).unwrap_err();
+        assert!(format!("{err:#}").contains("sft.block 512"), "{err:#}");
     }
 
     #[test]
