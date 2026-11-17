@@ -50,6 +50,12 @@ pub struct ArchSpec {
     /// The architecture's own configuration (widths, layers, loop passes),
     /// handed to brain as it is.
     pub config: serde_json::Value,
+    /// The sampling the model is served with when a request names none
+    /// (`generation_config.json` spelling, for example `{"do_sample":
+    /// false}`), declared in the checkpoint it is made as; empty leaves
+    /// brain's chat default.
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub sampling: serde_json::Map<String, serde_json::Value>,
 }
 
 /// The chat format a from-scratch checkpoint carries.
@@ -491,7 +497,7 @@ impl ModelService for ServedBrain {
         if request.split_digits {
             tokenizer["split_digits"] = json!(true);
         }
-        let params = json!({
+        let mut params = json!({
             "arch": request.model.arch,
             "config": request.model.config.to_string(),
             "tokenizer": tokenizer.to_string(),
@@ -501,6 +507,9 @@ impl ModelService for ServedBrain {
             "install_as": request.install_as,
             "resume_key": request.identity,
         });
+        if !request.model.sampling.is_empty() {
+            params["sampling"] = json!(Value::Object(request.model.sampling.clone()).to_string());
+        }
         Ok(self
             .job("init_model", &params, request.out, &mut |_, _| {})?
             .1)
