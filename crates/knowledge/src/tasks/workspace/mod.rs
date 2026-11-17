@@ -213,6 +213,10 @@ pub enum Reason {
     /// The fixture's check does not fail on its tree, or fails on a command
     /// that should pass.
     NotFailingAsDescribed,
+    /// The fixture's check reaches no verdict on its starting tree (a
+    /// verifier that leaves no reward, a library it sources missing): it
+    /// cannot grade a change at all.
+    NoVerdict,
 }
 
 /// Why workspace tasks could not be generated.

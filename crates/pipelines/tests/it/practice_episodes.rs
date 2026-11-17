@@ -319,7 +319,13 @@ fn a_verifier_that_crashes_is_a_verifier_error_without_a_reward() {
     let tasks_dir = Scratch::new("episodes-crash-tasks");
     let root = tasks_dir.0.join("practice");
     let dir = greet(&root);
-    write(&dir.join("tests/test.sh"), "#!/bin/bash\nexit 7\n");
+    // It judges the starting files (reward 0) and crashes on a greeting.
+    write(
+        &dir.join("tests/test.sh"),
+        &format!(
+            "#!/bin/bash\n# {MARKER}\ncd \"$WORKSPACE_DIR\"\ngrep -q 'hello world' greeting.txt && exit 7\necho 0 > \"$LOGS_DIR/reward.txt\"\n"
+        ),
+    );
     let (_scratch, ctx) = context("episodes-crash", Policy::new(Habit::Greets, &root));
 
     let tasks = load_collection(&ctx, &root).unwrap();
@@ -336,6 +342,23 @@ fn a_verifier_that_crashes_is_a_verifier_error_without_a_reward() {
         "a crashed verifier is no reward of zero"
     );
     assert!(record.experience.is_some(), "the episode itself is kept");
+
+    // A verifier that reaches no verdict even on the starting files (a
+    // library it sources is not in the folder) can grade nothing: the
+    // collection is refused before any attempt, naming the folder.
+    let broken_root = tasks_dir.0.join("broken");
+    let broken = greet(&broken_root);
+    write(
+        &broken.join("tests/test.sh"),
+        &format!(
+            "#!/bin/bash\n# {MARKER}\nsource \"$(dirname \"$0\")/lib/verify.sh\"\ngrade_task\n"
+        ),
+    );
+    let (_scratch, fresh) = context("episodes-broken", Policy::new(Habit::Greets, &broken_root));
+    let why = load_collection(&fresh, &broken_root)
+        .unwrap_err()
+        .to_string();
+    assert!(why.contains("greet") && why.contains("NoVerdict"), "{why}");
 }
 
 #[test]

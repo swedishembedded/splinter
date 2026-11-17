@@ -421,6 +421,7 @@ impl Fixture {
                 pinned: meta.pinned,
                 hidden_strength: meta.hidden_strength,
                 process: None,
+                no_verdict_exit: None,
             });
         }
         let mut hidden = BTreeMap::new();
@@ -454,6 +455,7 @@ impl Fixture {
             pinned: Vec::new(),
             hidden_strength: None,
             process: None,
+            no_verdict_exit: Some(NO_REWARD_EXIT),
         })
     }
 }

@@ -164,6 +164,7 @@ impl Fixture {
             pinned: Vec::new(),
             hidden_strength: None,
             process: task.process.clone(),
+            no_verdict_exit: None,
         })
     }
 }

@@ -34,7 +34,10 @@ pass the check. The task is graded by its own `test.sh`, run with `/tests`,
 `WORKSPACE_DIR`, `TESTS_DIR` and `LOGS_DIR`); it passes only when `reward` is exactly 1,
 read the way Harbor's verifier reads `reward.json` or `reward.txt`, so partial credit is
 not a pass. A verifier that leaves no reward, or one that is not a number, fails the check
-with exit status 3, which tells a verifier that broke from a change it judged wrong. A task
+with exit status 3, which tells a verifier that broke from a change it judged wrong; a task
+whose verifier leaves no reward on its own starting files cannot grade anything (a library
+its `test.sh` sources that the folder does not ship, say) and is refused at import
+(`no_verdict`). A task
 splinter exported carries its check in `[metadata.splinter]` and is rebuilt exactly:
 export then import gives the same task, with the same content address. Harbor's
 verifier does not enforce the check's protected and pinned paths; splinter's does.

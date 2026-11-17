@@ -93,6 +93,12 @@ pub struct Fixture {
     /// to it. It travels with the task as a privileged item; the solver
     /// never sees it as part of the request.
     pub process: Option<String>,
+    /// The exit status with which a failing command says it reached no
+    /// verdict (a verifier that left no reward), as opposed to judging the
+    /// tree wrong. A fixture whose check ends so on its own starting tree
+    /// cannot grade anything and is refused ([`Reason::NoVerdict`]). `None`
+    /// when every failure is a verdict.
+    pub no_verdict_exit: Option<i32>,
 }
 
 impl Fixture {
@@ -128,6 +134,7 @@ impl Fixture {
             pinned: Vec::new(),
             hidden_strength: None,
             process: None,
+            no_verdict_exit: None,
         })
     }
 
@@ -211,6 +218,7 @@ impl Fixture {
             pinned: Vec::new(),
             hidden_strength: None,
             process: None,
+            no_verdict_exit: None,
         })
     }
 
@@ -330,7 +338,7 @@ impl WorkspaceGenerator {
             return Err(Stop::Refuse(Reason::NearDuplicate));
         }
         let env = self.environment(&staged.snapshot);
-        self.behaves_as_described(&env, &staged, &check)?;
+        self.behaves_as_described(&env, &staged, &check, fixture.no_verdict_exit)?;
         let hidden_text = Privileged {
             kind: PrivilegedKind::Other(HIDDEN_FILES.into()),
             content: fixture
@@ -375,6 +383,7 @@ impl WorkspaceGenerator {
         env: &splinter_sandbox::WorkspaceEnvironment,
         staged: &super::staging::Staged,
         check: &WorkspaceCheck,
+        no_verdict_exit: Option<i32>,
     ) -> Result<(), Stop> {
         // Each command with whether it is meant to pass, and what it did on
         // each run.
@@ -398,6 +407,9 @@ impl WorkspaceGenerator {
                 let (result, took) = run_quiet(env, tree.path(), call, None)?;
                 if result.timed_out || took > self.plan.min_time_budget {
                     return Err(Stop::Refuse(Reason::OverTimeBudget));
+                }
+                if no_verdict_exit.is_some() && result.exit_code == no_verdict_exit {
+                    return Err(Stop::Refuse(Reason::NoVerdict));
                 }
                 outcomes.push(result.exit_code == Some(0) && result.signal.is_none());
             }

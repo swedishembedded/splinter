@@ -107,6 +107,7 @@ fn authored(rig: &Rig) -> WorkspaceTask {
         pinned: Vec::new(),
         hidden_strength: None,
         process: None,
+        no_verdict_exit: None,
     };
     let mut admitted = rig
         .generator
@@ -268,17 +269,15 @@ fn partial_credit_and_a_missing_reward_are_not_a_pass() {
         "a reward of 0.5 is partial credit, never success"
     );
 
-    // A verifier that writes no reward cannot pass anything; a task whose
-    // check passes on the unmodified tree is refused at import.
+    // A verifier that writes no reward cannot grade anything: it is refused
+    // at import, oracle or not, rather than admitted to give every attempt a
+    // verifier error. A task whose check passes on the unmodified tree is
+    // refused too.
     let silent = foreign(&rig.repo.scratch.0, "silent", "#!/bin/bash\ntrue\n");
-    // Without an oracle that is all the bar can see; with one, the solution
-    // is shown not to pass and the task is refused.
-    assert!(import(&rig, &silent, Oracle::Skip).is_ok());
-    let why = import(&rig, &silent, Oracle::Require).unwrap_err();
-    assert!(
-        why.contains("NotRestorable"),
-        "no reward means the oracle never passes: {why}"
-    );
+    for oracle in [Oracle::Skip, Oracle::Require] {
+        let why = import(&rig, &silent, oracle).unwrap_err();
+        assert!(why.contains("NoVerdict"), "{why}");
+    }
     let vacuous = foreign(
         &rig.repo.scratch.0,
         "vacuous",
@@ -410,21 +409,28 @@ fn a_task_that_ships_its_workspace_is_imported_without_a_dockerfile_and_graded_b
 fn a_verifier_that_leaves_no_reward_is_told_apart_from_one_that_says_no() {
     let rig = rig("harbor-crash");
     let root = &rig.repo.scratch.0;
-    let crashing = shipped(root, "crash", "#!/bin/bash\nexit 7\n", "");
-    let admitted = import(&rig, &crashing, Oracle::Skip).unwrap();
+    // Verifiers that judge the starting files (reward 0) but leave no reward,
+    // or one that is not a number, on a tree whose calc.sh prints 3.
+    let judging_then = |name: &str, otherwise: &str| {
+        shipped(
+            root,
+            name,
+            &format!(
+                "#!/bin/bash\ncd \"$WORKSPACE_DIR\"\nif [ \"$(sh calc.sh)\" = 3 ]; then {otherwise}; else echo 0 > \"$LOGS_DIR/reward.txt\"; fi\n"
+            ),
+            "",
+        )
+    };
     let right = calc_diff(root, "echo 1\n", "echo 3\n");
+    let crashing = judging_then("crash", "exit 7");
+    let admitted = import(&rig, &crashing, Oracle::Skip).unwrap();
     assert_eq!(verdict(&rig, &admitted, &right), Outcome::Fail);
     assert_eq!(
         check_exit(&rig, &admitted, &right),
         Some(i64::from(NO_REWARD_EXIT)),
         "no reward is the verifier's failure, not the change's"
     );
-    let garbled = shipped(
-        root,
-        "garbled",
-        "#!/bin/bash\necho 'not a number' > \"$LOGS_DIR/reward.txt\"\n",
-        "",
-    );
+    let garbled = judging_then("garbled", "echo 'not a number' > \"$LOGS_DIR/reward.txt\"");
     let admitted = import(&rig, &garbled, Oracle::Skip).unwrap();
     assert_eq!(
         check_exit(&rig, &admitted, &right),
@@ -435,6 +441,17 @@ fn a_verifier_that_leaves_no_reward_is_told_apart_from_one_that_says_no() {
     let admitted = import(&rig, &saying_no, Oracle::Skip).unwrap();
     let wrong = calc_diff(root, "echo 1\n", "echo 2\n");
     assert_eq!(check_exit(&rig, &admitted, &wrong), Some(1));
+
+    // A verifier that leaves no reward on the starting files cannot grade at
+    // all (a library it sources is missing): refused at import, by name.
+    let broken = shipped(
+        root,
+        "broken",
+        "#!/bin/bash\nsource \"$(dirname \"$0\")/lib/verify.sh\"\ngrade_task\n",
+        "",
+    );
+    let why = import(&rig, &broken, Oracle::Skip).unwrap_err();
+    assert!(why.contains("NoVerdict"), "{why}");
 }
 
 #[test]
