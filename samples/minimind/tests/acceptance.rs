@@ -22,6 +22,53 @@ use splinter_minimind::stages::{run_all, Revisions, Run};
 use splinter_sdk::bench::examine::Examiner;
 use splinter_sdk::store::stage_ledger::{Commit, StageLedger};
 
+/// A directory for one spec, in memory when the machine has a memory-backed
+/// file system, removed when the spec ends, a failing one included.
+fn temp() -> tempfile::TempDir {
+    let memory = Path::new("/dev/shm");
+    let root = if memory.is_dir() {
+        memory.to_path_buf()
+    } else {
+        std::env::temp_dir()
+    };
+    tempfile::Builder::new()
+        .prefix("minimind-spec-")
+        .tempdir_in(root)
+        .unwrap()
+}
+
+/// The regular files below `dir`, symbolic links not followed.
+fn files(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(at) = stack.pop() {
+        for entry in std::fs::read_dir(&at).unwrap() {
+            let entry = entry.unwrap();
+            let kind = entry.file_type().unwrap();
+            if kind.is_dir() {
+                stack.push(entry.path());
+            } else if kind.is_file() {
+                out.push(entry.path());
+            }
+        }
+    }
+    out
+}
+
+/// No episode, task folder or workspace left as loose files in the run
+/// directory: only the stages' packs.
+fn only_packs(dir: &Path) {
+    for f in files(dir) {
+        let rel = f.strip_prefix(dir).unwrap().to_string_lossy().into_owned();
+        assert!(
+            !(rel.starts_with("episodes/") || rel.starts_with("tasks/harbor"))
+                || rel.ends_with(".jsonl"),
+            "{rel} is a loose file"
+        );
+        assert!(!rel.contains("/workspace/"), "{rel} is a workspace file");
+    }
+}
+
 fn revisions() -> Revisions {
     let mut r = Revisions::default();
     for name in ["splinter", "sven", "brain", "bench"] {
@@ -49,10 +96,17 @@ fn go_at(
     revisions: Revisions,
 ) -> anyhow::Result<String> {
     let mut out = Vec::new();
+    let scratch = temp();
     let result = {
         let mut run = Run::open(dir, config, seed, revisions, brain, examiner, &mut out)?;
+        run.use_scratch_root(scratch.path())?;
         run_all(&mut run)
     };
+    assert_eq!(
+        std::fs::read_dir(scratch.path()).unwrap().count(),
+        0,
+        "the run removes its scratch, whatever its outcome"
+    );
     let shown = String::from_utf8(out).unwrap();
     result.map(|()| shown)
 }
@@ -97,9 +151,9 @@ const SEED: u64 = 17;
 
 #[test]
 fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = temp();
     let brain = FakeBrain::new(dir.path());
-    let jobs = tempfile::tempdir().unwrap();
+    let jobs = temp();
     let examiner = FakeExaminer::new("Promote", true, jobs.path());
     let shown = go(dir.path(), smoke(), SEED, &brain, Some(&examiner)).unwrap();
     let all = commits(dir.path());
@@ -194,6 +248,7 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
             "{tree}.jsonl"
         );
     }
+    only_packs(dir.path());
     let trained = brain.trained();
     let started = begins(dir.path());
 
@@ -217,7 +272,7 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
 
 #[test]
 fn a_run_killed_in_fine_tuning_resumes_it_and_reuses_what_came_before() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = temp();
     let brain = FakeBrain::new(dir.path());
     *brain.fail_once.lock().unwrap() = Some("ouro-sft".into());
     let err = go(dir.path(), smoke(), SEED, &brain, None).unwrap_err();
@@ -240,13 +295,22 @@ fn a_run_killed_in_fine_tuning_resumes_it_and_reuses_what_came_before() {
 
 #[test]
 fn an_episode_interrupted_by_a_failing_server_runs_again_under_a_new_attempt_and_counts_once() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = temp();
     let brain = FakeBrain::new(dir.path());
     brain.down.store(true, Ordering::SeqCst);
     *brain.down_for.lock().unwrap() = Some("sft".into());
     assert!(
         go(dir.path(), smoke(), SEED, &brain, None).is_err(),
         "a model server that is down stops the run"
+    );
+    // Stopped mid-stage: what finished is in the packs, nothing is loose.
+    only_packs(dir.path());
+    let demonstrations =
+        std::fs::read_to_string(dir.path().join("episodes/demonstrate.jsonl")).unwrap();
+    assert_eq!(
+        demonstrations.matches("/outcome.json\"").count(),
+        8,
+        "every finished demonstration is in its stage's pack"
     );
     brain.down.store(false, Ordering::SeqCst);
     go(dir.path(), smoke(), SEED, &brain, None).unwrap();
@@ -270,7 +334,7 @@ fn an_episode_interrupted_by_a_failing_server_runs_again_under_a_new_attempt_and
 
 #[test]
 fn a_corrupt_checkpoint_is_caught_and_only_it_is_recomputed() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = temp();
     let brain = FakeBrain::new(dir.path());
     go(dir.path(), smoke(), SEED, &brain, None).unwrap();
     let trained = brain.trained();
@@ -290,7 +354,7 @@ fn a_corrupt_checkpoint_is_caught_and_only_it_is_recomputed() {
 
 #[test]
 fn a_changed_seed_is_a_new_run_and_a_changed_setting_recomputes_only_what_reads_it() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = temp();
     let brain = FakeBrain::new(dir.path());
     go(dir.path(), smoke(), SEED, &brain, None).unwrap();
     let trained = brain.trained();
@@ -308,7 +372,7 @@ fn a_changed_seed_is_a_new_run_and_a_changed_setting_recomputes_only_what_reads_
     let demonstrations = all.iter().filter(|c| c.unit == "demonstrate").count();
     assert_eq!(demonstrations, 1, "the demonstrations are reused");
 
-    let other = tempfile::tempdir().unwrap();
+    let other = temp();
     let fresh = FakeBrain::new(other.path());
     go(other.path(), smoke(), SEED + 1, &fresh, None).unwrap();
     let a = commit(&commits(dir.path()), "world").key.clone();
@@ -319,9 +383,9 @@ fn a_changed_seed_is_a_new_run_and_a_changed_setting_recomputes_only_what_reads_
 #[test]
 fn no_promotion_without_a_verified_promote() {
     for (verdict, verified) in [("Reject", true), ("Inconclusive", true), ("Promote", false)] {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = temp();
         let brain = FakeBrain::new(dir.path());
-        let jobs = tempfile::tempdir().unwrap();
+        let jobs = temp();
         let examiner = FakeExaminer::new(verdict, verified, jobs.path());
         go(dir.path(), smoke(), SEED, &brain, Some(&examiner)).unwrap();
         let all = commits(dir.path());
@@ -338,7 +402,7 @@ fn no_promotion_without_a_verified_promote() {
 
 #[test]
 fn a_fetched_corpus_is_checked_against_its_pin_and_joins_the_world() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = temp();
     let source = dir.path().join("corpus.txt");
     std::fs::write(&source, "The river runs north.\n\nThe road runs south.\n").unwrap();
     let sha = splinter_sdk::vocabulary::digest::Digest::sha256_of(&std::fs::read(&source).unwrap())
@@ -414,7 +478,7 @@ fn with(name: &str, rev: &str) -> Revisions {
 
 #[test]
 fn a_change_recomputes_what_consumes_it_and_nothing_else() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = temp();
     let brain = FakeBrain::new(dir.path());
     go(dir.path(), smoke(), SEED, &brain, None).unwrap();
     let trained = brain.trained();
@@ -480,13 +544,13 @@ fn a_change_recomputes_what_consumes_it_and_nothing_else() {
 #[test]
 fn the_same_episodes_write_the_same_bytes_whatever_was_interrupted() {
     let read = |dir: &Path, rel: &str| std::fs::read(dir.join(rel)).unwrap();
-    let a = tempfile::tempdir().unwrap();
+    let a = temp();
     let brain = FakeBrain::new(a.path());
     go(a.path(), smoke(), SEED, &brain, None).unwrap();
 
     // A second collection of the same seed, its probe episodes interrupted
     // by a server that went down and run again under new attempts.
-    let b = tempfile::tempdir().unwrap();
+    let b = temp();
     let other = FakeBrain::new(b.path());
     other.down.store(true, Ordering::SeqCst);
     *other.down_for.lock().unwrap() = Some("sft".into());
@@ -513,7 +577,7 @@ fn the_same_episodes_write_the_same_bytes_whatever_was_interrupted() {
 
 #[test]
 fn a_pack_that_no_longer_matches_its_episodes_is_unpacked_and_they_run_again() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = temp();
     let brain = FakeBrain::new(dir.path());
     go(dir.path(), smoke(), SEED, &brain, None).unwrap();
     // Another setting's episodes packed over these: one record changed.

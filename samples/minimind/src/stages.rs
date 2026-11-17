@@ -64,6 +64,9 @@ pub struct Run<'a> {
     /// Where fetched corpora are cached across runs (`<run>/cache` unless
     /// set).
     pub cache: PathBuf,
+    /// Where files that live for one episode or one stage are made
+    /// ([`crate::scratch`]).
+    pub scratch: crate::scratch::Scratch,
     /// A lock file held exclusively while a training job runs, so the timed
     /// work of others on the same card never overlaps it.
     pub gpu_lock: Option<PathBuf>,
@@ -105,6 +108,10 @@ impl<'a> Run<'a> {
             ledger: Some(StageLedger::open(dir)?),
             dir: dir.to_path_buf(),
             cache: dir.join("cache"),
+            scratch: crate::scratch::Scratch::create(
+                &crate::scratch::Scratch::default_root(dir),
+                dir,
+            )?,
             gpu_lock: None,
             config,
             seed,
@@ -118,6 +125,15 @@ impl<'a> Run<'a> {
                 .enable_all()
                 .build()?,
         })
+    }
+
+    /// Makes the run's scratch under `root` instead of the default.
+    ///
+    /// # Errors
+    /// The directory cannot be made.
+    pub fn use_scratch_root(&mut self, root: &Path) -> anyhow::Result<()> {
+        self.scratch = crate::scratch::Scratch::create(root, &self.dir)?;
+        Ok(())
     }
 
     /// The run directory.
@@ -279,7 +295,7 @@ impl<'a> Run<'a> {
             // as an episode under the agent's deadline does.
             let notice = world::time_notice(run.config.agent.deadline_secs);
             let mut docs = world::corpus(run.seed, &run.config.world, &run.template, &tools, system, &notice);
-            let scratch = run.path("world/scratch");
+            let scratch = run.scratch.path("world");
             for instance in tasks::instances(run.seed, Split::World, run.config.world.trajectories) {
                 docs.push(world::trajectory(&instance, &run.template, &tools, system, &notice, &scratch)?);
             }
@@ -414,7 +430,7 @@ impl<'a> Run<'a> {
                     .collect();
                 let rel = format!("tasks/{}.jsonl", split.name());
                 write(&run.path(&rel), &index)?;
-                let harbor = run.path(&format!("tasks/harbor/{}", split.name()));
+                let harbor = run.scratch.path(&format!("tasks/harbor/{}", split.name()));
                 if harbor.exists() {
                     std::fs::remove_dir_all(&harbor)?;
                 }
@@ -424,7 +440,10 @@ impl<'a> Run<'a> {
                 work = work.output(split.name(), &rel);
             }
             // Thousands of small folders, kept as one file.
-            crate::pack::pack_tree(&run.path("tasks/harbor"), &run.path("tasks/harbor.jsonl"))?;
+            crate::pack::pack_tree(
+                &run.scratch.path("tasks/harbor"),
+                &run.path("tasks/harbor.jsonl"),
+            )?;
             Ok(work.output("harbor", "tasks/harbor.jsonl"))
         })
     }

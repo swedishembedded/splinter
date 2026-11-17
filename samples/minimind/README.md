@@ -273,13 +273,18 @@ trajectory and audit trail), `data/*.jsonl` (training records),
 `checkpoints/<model>/<stage>/`, `exam/<model>/<stage>/sitting.json`,
 `exam/<model>/<pair>/verdict.json` and `report.md`.
 
-A stage's episodes and task folders are thousands of small files while it
-runs; once it commits they are packed into one JSON-lines file per stage
-(`{"path", "mode", "text"}` per file, in path order), the tree is removed, and
-a reused stage reads its pack, each file checked against the digest its
-episode committed. A stage that must run more episodes unpacks first. Shared
-file systems bound the number of files, so a run directory stays at a few
-hundred.
+A stage's episodes and task folders are thousands of small files, so they
+are never made in the run directory: agent workspaces, episode files and task
+folders are made in the run's scratch (`--scratch-dir`, default `/dev/shm`:
+a private directory, mode 700, removed when the run ends; the run directory
+holds a link to a running stage's tree). Each episode's kept files (outcome,
+records, sven trajectory, audit trail) are appended to the stage's one
+JSON-lines pack (`{"path", "mode", "text"}` per file) as soon as it finishes,
+so a kill mid-stage leaves every finished episode there; once the stage
+commits the pack is rewritten in path order. A reused stage reads its pack,
+each file checked against the digest its episode committed; a stage that
+must run more episodes unpacks it into scratch first. Shared file systems
+bound the number of files, so a run directory stays at a few hundred.
 
 ## The examination
 

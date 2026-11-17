@@ -41,6 +41,9 @@ usage: splinter-minimind <run|status> [options]
   --device gpuN          the CUDA card that brain trains and serves on (required with
                          --brain-bin; there is no CPU fallback)
   --models-dir DIR       the started brain's model store (default RUN_DIR/brain/models)
+  --scratch-dir DIR      where files that live for one episode or stage are made, in a private
+                         directory removed when the run ends (default /dev/shm when present,
+                         else RUN_DIR/scratch); the run directory keeps one pack per stage
   --gpu-lock FILE        held exclusively while a training job runs, shared with other users of
                          the card
   --brain-key KEY        the key a given endpoint takes (default: none needed)
@@ -92,6 +95,7 @@ fn parse(mut args: Vec<String>) -> anyhow::Result<Args> {
                 | "device"
                 | "brain-commit"
                 | "gpu-lock"
+                | "scratch-dir"
                 | "bench"
                 | "bench-seed-file"
                 | "bench-anchor-seed-file"
@@ -306,6 +310,9 @@ fn run(
         run.cache = PathBuf::from(cache);
     }
     run.gpu_lock = flag("gpu-lock").map(PathBuf::from);
+    if let Some(root) = flag("scratch-dir") {
+        run.use_scratch_root(Path::new(&root))?;
+    }
     let result = splinter_minimind::stages::run_all(&mut run);
     drop(brain);
     result

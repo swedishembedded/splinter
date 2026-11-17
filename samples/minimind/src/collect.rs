@@ -127,6 +127,12 @@ type Job = (String, Instance, Sampling);
 /// by the episodes running at once.
 struct EpisodeCtx<'a> {
     dir: &'a std::path::Path,
+    /// The stage, its tree (in scratch) and its pack, which each finished
+    /// episode's files are appended to at once.
+    stage: &'a str,
+    tree: &'a std::path::Path,
+    archive: &'a std::path::Path,
+    appending: &'a Mutex<()>,
     seed: u64,
     agent: &'a crate::config::AgentLimits,
     expert_context: u32,
@@ -291,6 +297,18 @@ fn episode_work(
         _ => {}
     }
     std::fs::remove_dir_all(&ws).with_context(|| format!("removing {}", ws.display()))?;
+    // Kept at once in the stage's one pack, so a kill leaves every finished
+    // episode there and no loose files on the run's storage.
+    let task = unit
+        .strip_prefix(&format!("{}/", ctx.stage))
+        .with_context(|| format!("{unit} is not an episode of {}", ctx.stage))?;
+    {
+        let _one_writer = ctx
+            .appending
+            .lock()
+            .map_err(|_| anyhow::anyhow!("an episode thread panicked"))?;
+        crate::pack::append(ctx.archive, ctx.tree, task)?;
+    }
     Ok(work)
 }
 
@@ -402,7 +420,10 @@ impl Run<'_> {
             }
             // Run what is missing or changed; the ledger rechecks every
             // episode's files and reruns those that differ.
+            self.link_episode_tree(stage)?;
             crate::pack::unpack(&packed, &tree)?;
+        } else {
+            self.link_episode_tree(stage)?;
         }
         // Serve the checkpoint only when an episode of it has to run.
         let all_done = keyed.iter().all(|(unit, key, _, _)| {
@@ -413,8 +434,13 @@ impl Run<'_> {
             Actor::Model { .. } if all_done => None,
             Actor::Model { checkpoint, .. } => Some(Acting::Model(self.brain.serve(checkpoint)?)),
         };
+        let appending = Mutex::new(());
         let ctx = EpisodeCtx {
             dir: self.dir(),
+            stage,
+            tree: &tree,
+            archive: &packed,
+            appending: &appending,
             seed: self.seed,
             agent: &self.config.agent,
             expert_context: self
@@ -708,91 +734,4 @@ pub fn episode_inputs(episodes: &[Commit]) -> Vec<(String, Digest)> {
         }
     }
     inputs
-}
-
-/// The files of one stage's episodes, from their tree while it exists and
-/// from the stage's pack after it, each checked against the digest its
-/// episode committed.
-pub struct EpisodeReader {
-    stage: String,
-    tree: std::path::PathBuf,
-    pack: Option<crate::pack::Pack>,
-}
-
-impl EpisodeReader {
-    /// Output `name` (`records`, `outcome`) of the committed `episode`.
-    ///
-    /// # Errors
-    /// It is in neither the tree nor the pack, or no longer has its digest.
-    pub fn read(&self, episode: &Commit, name: &str) -> anyhow::Result<String> {
-        let file = match name {
-            "records" => "records.jsonl",
-            "outcome" => "outcome.json",
-            other => bail!("an episode has no output {other:?}"),
-        };
-        let task = episode
-            .unit
-            .strip_prefix(&format!("{}/", self.stage))
-            .with_context(|| format!("{} is not an episode of {}", episode.unit, self.stage))?;
-        let path = self.tree.join(task).join(file);
-        let text = if path.exists() {
-            std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?
-        } else {
-            self.pack
-                .as_ref()
-                .and_then(|p| p.read(&format!("{task}/{file}")))
-                .with_context(|| {
-                    format!("{} has no {file}, in its tree or its pack", episode.unit)
-                })?
-                .to_string()
-        };
-        let want = episode
-            .output(name)
-            .with_context(|| format!("{} committed no {name}", episode.unit))?;
-        if &Digest::of(text.as_bytes()) != want {
-            bail!(
-                "{}'s {file} no longer has the digest it committed",
-                episode.unit
-            );
-        }
-        Ok(text)
-    }
-}
-
-impl Run<'_> {
-    /// The tree of `stage`'s episodes and the pack it becomes.
-    fn episode_tree(&self, stage: &str) -> (std::path::PathBuf, std::path::PathBuf) {
-        (
-            self.path(&format!("episodes/{stage}")),
-            self.path(&format!("episodes/{stage}.jsonl")),
-        )
-    }
-
-    /// A reader of `stage`'s episode files.
-    ///
-    /// # Errors
-    /// The stage's pack cannot be read.
-    pub fn episode_reader(&self, stage: &str) -> anyhow::Result<EpisodeReader> {
-        let (tree, packed) = self.episode_tree(stage);
-        let pack = if packed.exists() {
-            Some(crate::pack::Pack::open(&packed)?)
-        } else {
-            None
-        };
-        Ok(EpisodeReader {
-            stage: stage.to_string(),
-            tree,
-            pack,
-        })
-    }
-
-    /// Packs `stage`'s episode tree into one file, once every episode of it
-    /// committed; returns the pack's path in the run directory.
-    fn pack_episodes(&self, stage: &str) -> anyhow::Result<String> {
-        let (tree, packed) = self.episode_tree(stage);
-        if tree.exists() {
-            crate::pack::pack_tree(&tree, &packed)?;
-        }
-        Ok(format!("episodes/{stage}.jsonl"))
-    }
 }
