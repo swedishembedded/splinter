@@ -170,10 +170,10 @@ check/clippy:
 env:
 	@bash scripts/make-help.sh env
 
-## env/measure - a served model's pass rate on environments' dev instances, recorded with `env band` (SPLINTER_BIN, STORE, ENDPOINT, MODEL, ENVS, WORK; SVEN_BIN and SVEN_CONFIG for shell-solver environments; ATTEMPTS, JOBS; serve the model first, under the card's lock)
+## env/measure - a served model's pass rate on environments' closed-book dev instances, recorded with `env band` (SPLINTER_BIN, STORE, ENDPOINT, MODEL, ENVS, WORK; ATTEMPTS, JOBS; serve the model first, under the card's lock)
 env/measure:
 	python3 scripts/env/measure.py --splinter $(SPLINTER_BIN) --store $(STORE) --endpoint $(ENDPOINT) --model $(MODEL) --work $(WORK) \
-		$(if $(SVEN_BIN),--sven $(SVEN_BIN)) $(if $(SVEN_CONFIG),--sven-config $(SVEN_CONFIG)) --attempts $(or $(ATTEMPTS),8) --jobs $(or $(JOBS),8) $(ENVS)
+		--attempts $(or $(ATTEMPTS),8) --jobs $(or $(JOBS),8) $(ENVS)
 
 ##@ Papers and samples
 ## Paper PDFs, and the sample applications' own actions.

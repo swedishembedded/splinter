@@ -127,8 +127,9 @@ make env/measure SPLINTER_BIN=splinter STORE=envs ENDPOINT=http://127.0.0.1:8798
 Each environment's dev instances are exported as task folders (`splinter env export`), attempted eight
 times each (`ATTEMPTS`), and removed afterwards. An environment whose solver has files only (program output,
 document questions) is attempted closed-book through the endpoint, the task's own verifier grading the reply.
-One whose solver has a shell (database workflows, repositories, firmware) is attempted by
-`sven rollout run` (`SVEN_BIN`). The pass rate is recorded with `env band` and judged against the band.
+One whose solver has a shell (database workflows, repositories, firmware) is reported and not attempted
+by this target; run its exported folders with `splinter tasks harbor episodes`. The pass rate is recorded
+with `env band` and judged against the band.
 
 ## The verifier red team
 

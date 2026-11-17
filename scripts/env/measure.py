@@ -20,8 +20,8 @@ attempted `--attempts` times each:
   contents of one fenced block when the reply has one) is written to
   `answer.txt`, and the task's own verifier grades it;
 * an environment whose solver has a shell (database workflows, repositories,
-  firmware) is attempted by `sven rollout run` on the exported folders, and its
-  recorded rewards are read back.
+  firmware) is not attempted here: it is reported, and its exported folders are
+  run with `splinter tasks harbor episodes` instead.
 
 A reward of exactly 1 is a pass. The exported folders are removed at the end.
 Nothing here starts a model server or takes a GPU: serve the model first, under
@@ -120,27 +120,6 @@ def closed_book(args, folders):
     return len(graded), sum(1 for r in graded if r)
 
 
-def rollouts(args, folders, out):
-    tasks = os.path.dirname(folders[0])
-    subprocess.run(
-        [args.sven, *(["-c", args.sven_config] if args.sven_config else []), "rollout", "run", tasks, "--out", out, "--attempts", str(args.attempts), "--jobs", str(args.jobs), "--no-confine"],
-        check=False,
-    )
-    attempts = passes = 0
-    for root, _, files in os.walk(out):
-        for name in files:
-            if name == "attempt.jsonl":
-                for line in open(os.path.join(root, name)):
-                    record = json.loads(line)
-                    reward = record.get("reward")
-                    if isinstance(reward, dict):
-                        reward = reward.get("reward")
-                    if reward is not None:
-                        attempts += 1
-                        passes += 1 if reward >= 1.0 else 0
-    return attempts, passes
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--splinter", required=True)
@@ -148,9 +127,7 @@ def main():
     parser.add_argument("--endpoint", required=True, help="the model's OpenAI-compatible base URL")
     parser.add_argument("--model", required=True)
     parser.add_argument("--api-key", default="none")
-    parser.add_argument("--sven", help="the sven binary, for the environments whose solver has a shell")
-    parser.add_argument("--sven-config", help="the sven configuration naming the served model (its base_url and name)")
-    parser.add_argument("--work", required=True, help="a new directory the task folders and rollouts are written under")
+    parser.add_argument("--work", required=True, help="a new directory the task folders are written under")
     parser.add_argument("--attempts", type=int, default=8)
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--temperature", type=float, default=1.0)
@@ -164,13 +141,11 @@ def main():
         for env in args.environments:
             out = os.path.join(args.work, env)
             folders = splinter(args, "env", "export", env, "--split", "dev", "--out", out, "--store", args.store)["directories"]
-            if solver_tools(folders[0]) == "files":
-                attempts, passes = closed_book(args, folders)
-            elif args.sven:
-                attempts, passes = rollouts(args, folders, os.path.join(args.work, "rollouts-" + env))
-            else:
-                print("%s needs a shell solver: pass --sven" % env, file=sys.stderr)
+            if solver_tools(folders[0]) != "files":
+                print("%s needs a shell solver, which this script does not attempt: run "
+                      "`splinter tasks harbor episodes` on its exported task folders" % env, file=sys.stderr)
                 continue
+            attempts, passes = closed_book(args, folders)
             summary[env] = {"attempts": attempts, "passes": passes}
             if attempts:
                 splinter(args, "env", "band", env, "--model", args.model, "--attempts", str(attempts), "--passes", str(passes), "--store", args.store)
