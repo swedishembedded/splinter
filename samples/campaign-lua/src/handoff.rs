@@ -28,7 +28,9 @@ use crate::reasoning::{GateDecoding, Reasoning};
 /// states them.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Build {
-    /// Splinter's commit.
+    /// Splinter's commit, written as `proposer_commit`: the examiner names the
+    /// proposing system generically and refuses a candidate without it.
+    #[serde(rename = "proposer_commit")]
     pub splinter_commit: String,
     /// Sven's commit.
     pub sven_commit: String,
@@ -262,6 +264,26 @@ mod tests {
             arm_verdict: None,
             build: Build::default(),
         }
+    }
+
+    #[test]
+    fn a_candidate_names_its_builds_as_the_examiner_reads_them() {
+        let mut c = candidate(1);
+        c.build = Build {
+            splinter_commit: "s1".into(),
+            sven_commit: "v1".into(),
+            brain_commit: "b1".into(),
+            binary_digest: None,
+        };
+        let written = serde_json::to_value(&c).unwrap();
+        assert_eq!(
+            (&written["proposer_commit"], &written["brain_commit"]),
+            (&json!("s1"), &json!("b1"))
+        );
+        assert!(
+            written.get("splinter_commit").is_none(),
+            "the examiner reads proposer_commit only"
+        );
     }
 
     #[test]
