@@ -98,7 +98,15 @@ pub struct ForkAt<'a> {
 /// a user turn or an agent step that observed its calls.
 pub fn kept_prefix(student: &Trajectory, keep_through: u64) -> Result<Trajectory, CorrectionError> {
     let mut prefix = student.clone();
-    prefix.steps.retain(|step| step.step_id <= keep_through);
+    // An agent step with no text and no call (the model only reasoned) is no
+    // message of the conversation: the replay would not have it, so neither
+    // does the transcript it is held to.
+    prefix.steps.retain(|step| {
+        step.step_id <= keep_through
+            && !(step.source == StepOrigin::Agent
+                && step.message.as_text().is_some_and(str::is_empty)
+                && step.tool_calls.as_ref().is_none_or(Vec::is_empty))
+    });
     let Some(last) = prefix.steps.last() else {
         return Err(CorrectionError::Trajectory(format!(
             "no step of the attempt is at or before step {keep_through}"
@@ -267,5 +275,37 @@ mod tests {
             "the final reply called no tool: nothing follows it"
         );
         assert!(kept_prefix(&student(), 0).is_err());
+    }
+
+    #[test]
+    fn a_step_that_only_reasoned_is_no_message_of_the_fork() {
+        let mut t = student();
+        let mut reasoning = TraceStep::new(3, StepOrigin::Agent, "");
+        reasoning.reasoning_content = Some("think".into());
+        t.steps.insert(2, reasoning);
+        for (i, step) in t.steps.iter_mut().enumerate() {
+            step.step_id = i as u64 + 1;
+        }
+        let prefix = kept_prefix(&t, 4).unwrap();
+        assert_eq!(
+            prefix.steps.iter().map(|s| s.step_id).collect::<Vec<_>>(),
+            [1, 2, 4]
+        );
+    }
+
+    #[test]
+    fn a_call_with_garbled_arguments_is_replayed_with_what_the_model_sent() {
+        let mut t = student();
+        let call = &mut t.steps[1].tool_calls.as_mut().unwrap()[0];
+        call.arguments = json!({});
+        call.extra =
+            Some(json!({"raw_arguments": "{\"path\": \"a.cs", "unparsed_arguments": true}));
+        let turns =
+            crate::correction::trajectory_transcript(&kept_prefix(&t, 2).unwrap(), "SYS").unwrap();
+        let sent = turns.iter().find_map(|turn| match turn {
+            Turn::Assistant { tool_calls, .. } => tool_calls.first().map(|c| c.arguments.clone()),
+            _ => None,
+        });
+        assert_eq!(sent.as_deref(), Some("{\"path\": \"a.cs"));
     }
 }

@@ -59,17 +59,21 @@ pub(super) fn onto_stored(
     composed: Trajectory,
     keep_through: u64,
 ) -> Result<(Trajectory, usize), String> {
-    let lead = usize::from(stored.steps.first().map(|s| s.source) == Some(StepOrigin::System));
+    let lead = u64::from(stored.steps.first().map(|s| s.source) == Some(StepOrigin::System));
+    // The fork's copy of the student's steps leaves out the ones that are no
+    // message (a step that only reasoned); the stored prefix keeps every step
+    // through the kept one.
     let kept_raw = composed
         .steps
         .iter()
         .take_while(|s| s.is_copied_context == Some(true))
         .count();
-    let prefix_steps = lead + kept_raw;
-    let offset = u64::try_from(lead).unwrap_or_default();
-    if stored.steps.len() < prefix_steps
-        || stored.steps[prefix_steps - 1].step_id != keep_through + offset
-    {
+    let prefix_steps = stored
+        .steps
+        .iter()
+        .take_while(|s| s.step_id <= keep_through + lead)
+        .count();
+    if prefix_steps == 0 || stored.steps[prefix_steps - 1].step_id != keep_through + lead {
         return Err(format!(
             "the student's stored trajectory does not hold its exported steps through step \
              {keep_through}"

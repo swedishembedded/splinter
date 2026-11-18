@@ -104,7 +104,7 @@ impl Intervention for ForkCorrection<'_> {
             .state_root
             .path()
             .join("repairs")
-            .join(&case.trial.trial);
+            .join(&case.key[..16.min(case.key.len())]);
         if work.exists() {
             std::fs::remove_dir_all(&work).map_err(|e| format!("{}: {e}", work.display()))?;
         }

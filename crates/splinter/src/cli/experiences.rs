@@ -61,6 +61,10 @@ pub struct RepairArgs {
     /// printed when not given).
     #[arg(long, value_name = "N")]
     pub seed: Option<Seed>,
+    /// Teacher continuations of each selected failure, each a repair of its
+    /// own (default 1).
+    #[arg(long, value_name = "K", value_parser = super::positive_count)]
+    pub samples: Option<usize>,
     /// Only failures of this class (repeatable; `wrong_content`, `tool`, ...).
     #[arg(long = "class", value_parser = failure_class, value_name = "CLASS")]
     pub classes: Vec<FailureClass>,

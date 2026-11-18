@@ -299,7 +299,11 @@ pub fn trajectory_transcript(
                     .map(|call| ToolCallRecord {
                         id: call.tool_call_id.clone(),
                         name: call.function_name.clone(),
-                        arguments: call.arguments.to_string(),
+                        // A call whose arguments were not JSON is recorded
+                        // with `{}` and the text the model sent beside it;
+                        // the model's text is what the runtime answered.
+                        arguments: raw_arguments(call)
+                            .unwrap_or_else(|| call.arguments.to_string()),
                     })
                     .collect();
                 turns.push(Turn::Assistant {
@@ -332,6 +336,24 @@ pub fn trajectory_transcript(
         }
     }
     Ok(turns)
+}
+
+/// The arguments a call's model sent, when the recording kept them apart
+/// because they were not valid JSON (`extra.raw_arguments`, flagged
+/// `extra.unparsed_arguments`).
+fn raw_arguments(call: &sven_sdk::atif::ToolInvocation) -> Option<String> {
+    let extra = call.extra.as_ref()?;
+    if extra
+        .get("unparsed_arguments")
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        return None;
+    }
+    extra
+        .get("raw_arguments")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
 }
 
 /// The student's steps followed by the teacher's, as one trajectory.

@@ -156,7 +156,8 @@ recorded, never stored. A repair is keyed by the student's attempt, the teacher 
 the record and does nothing. `--jobs` repairs run at once (the teacher's decode slots), `--max` bounds a run and
 `--class` picks the classes. `--per-task N` spreads a run across task families: the tasks are taken in turn, in an
 order `--seed` fixes (drawn and printed when not given), at most N repairs of a task, the ones an earlier run
-already graded counted.
+already graded counted. `--samples K` has the teacher continue each selected failure K times, each a repair of
+its own (keyed by its sample index), since one sample of a hard task is often wrong.
 
 ## Harness trials: one experience per conversation
 
