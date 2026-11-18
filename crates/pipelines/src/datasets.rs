@@ -252,7 +252,7 @@ fn project_without(
     if !request.rl.is_default() && !rewards_attempts {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no rewards or advantages, so --reward-metric, --fail-ceiling, \
-             --advantage and --cliff-distill do not apply",
+             --advantage, --cliff-distill and --overlong-max-tokens do not apply",
             view.as_str()
         )));
     }

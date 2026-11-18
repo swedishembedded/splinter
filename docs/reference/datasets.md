@@ -57,6 +57,12 @@ attempt did against the others at the same task:
   summing to one); with no `--reward-metric` a failure earns nothing. A failed attempt that
   recorded no such metric, or one outside [0, 1], stops the build naming the trial and the
   metric; it is never read as zero. Splinter's core knows no metric: the names are yours.
+- `--overlong-max-tokens L` adds DAPO's soft over-length penalty to every reward, from the
+  completion tokens the attempt recorded (the trial's `tokens.completion` on its verdict, else
+  its score's usage, else sven's trajectory total, else the sum over its agent steps): nothing
+  up to `L - B` tokens, `(L - B - n) / B` from there to `L`, and `-1` past `L`, with the buffer
+  `B` from `--overlong-buffer` (default `L / 4`). An attempt that recorded no count stops the
+  build naming it. The manifest records both thresholds as `overlong: {max_tokens, buffer}`.
 - A group is the attempts at one task version made by one policy (the model recorded on the
   verdict); each trial counts once however many conversations it had. The records carry
   rewards, and brain computes each attempt's advantage from its group's rewards (brain's

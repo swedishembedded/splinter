@@ -25,8 +25,9 @@ use serde_json::{json, Value};
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::experience::{Environment, Task};
 use splinter_data::{
-    write_dataset, AdvantageKind, AdvantageNorm, Corpus, Exclusion, Objective, PolicyGradient,
-    Projection, RecordBody, RewardShape, RolloutOutcome, Unchecked, View, ViewError,
+    write_dataset, AdvantageKind, AdvantageNorm, Corpus, Exclusion, Objective, Overlong,
+    PolicyGradient, Projection, RecordBody, RewardShape, RolloutOutcome, Unchecked, View,
+    ViewError,
 };
 
 const PERFECT: &[(&str, f64)] = &[("iou", 1.0), ("feature_match", 1.0)];
@@ -672,4 +673,91 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
             "the manifest names brain's advantage_norm by its own spelling"
         );
     }
+}
+
+/// L1 of DAPO's soft over-length penalty, against the formula by hand: with a
+/// budget L = 100 and a buffer B = 20, nothing up to L - B = 80 tokens, then
+/// (80 - n) / 20 down to -1 at 100, and -1 past it.
+#[test]
+fn the_over_length_penalty_is_dapos_soft_ramp() {
+    let overlong = Overlong::new(100, 20).unwrap();
+    for (tokens, penalty) in [
+        (0, 0.0),
+        (80, 0.0),
+        (81, -0.05),
+        (90, -0.5),
+        (99, -0.95),
+        (100, -1.0),
+        (101, -1.0),
+        (u64::MAX, -1.0),
+    ] {
+        assert!(
+            close(overlong.penalty(tokens), penalty),
+            "{tokens}: {} not {penalty}",
+            overlong.penalty(tokens)
+        );
+    }
+    // A buffer of the whole budget ramps from the first token.
+    assert!(close(Overlong::new(10, 10).unwrap().penalty(5), -0.5));
+    for (max_tokens, buffer) in [(100, 0), (100, 101), (0, 0)] {
+        assert!(
+            Overlong::new(max_tokens, buffer).is_err(),
+            "{max_tokens}/{buffer}"
+        );
+    }
+}
+
+/// The penalty is added to the reward each trial earns, from the completion
+/// tokens its verdict records; a trial that recorded none is an error, not a
+/// short trial; the projection records the thresholds for the manifest.
+#[test]
+fn a_trial_over_the_budget_earns_less_by_the_completion_tokens_it_recorded() {
+    let shape = RewardShape::unshaped().with_overlong(Overlong::new(100, 20).unwrap());
+    let evidence = |trial: &Trial, tokens: Option<u64>| {
+        let mut evidence = json!({
+            "trial": trial.name,
+            "task": {"id": "cad/bracket", "version": trial.version},
+            "model": trial.model,
+            "metrics": {},
+        });
+        if let Some(tokens) = tokens {
+            evidence["tokens"] = json!({"prompt": 7, "completion": tokens});
+        }
+        evidence
+    };
+    let mut corpus = Corpus::new();
+    for (trial, tokens) in [
+        (Trial::pass("short"), 50),
+        (Trial::pass("long"), 90),
+        (Trial::fail("cut", &[]), 120),
+    ] {
+        let evidence = evidence(&trial, Some(tokens));
+        add(&mut corpus, &trial, Some(evidence));
+    }
+    let projection = view().rewards(shape.clone()).project(&corpus).unwrap();
+    let mut by_trial: Vec<(String, f64)> = projection.groups[0]
+        .trials
+        .iter()
+        .map(|t| (t.trial.clone(), t.reward))
+        .collect();
+    by_trial.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(by_trial.len(), 3);
+    for ((name, reward), (expected_name, expected)) in
+        by_trial
+            .iter()
+            .zip([("cut", -1.0), ("long", 0.5), ("short", 1.0)])
+    {
+        assert_eq!(name, expected_name);
+        assert!(close(*reward, expected), "{name}: {reward}");
+    }
+    assert_eq!(projection.overlong, Some(Overlong::new(100, 20).unwrap()));
+    assert!(rewards(&projection).iter().all(|r| r.is_finite()));
+
+    let mut unmeasured = Corpus::new();
+    for trial in [Trial::pass("t1"), Trial::fail("t2", &[])] {
+        let evidence = evidence(&trial, None);
+        add(&mut unmeasured, &trial, Some(evidence));
+    }
+    let error = view().rewards(shape).project(&unmeasured).unwrap_err();
+    assert!(error.to_string().contains("completion token"), "{error}");
 }

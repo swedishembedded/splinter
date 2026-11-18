@@ -1,0 +1,137 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+//! Why a view left a candidate out.
+
+use serde::{Deserialize, Serialize};
+
+/// Why a view left a candidate out. A view counts each candidate it
+/// considers - an experience, a step, a relation, a pair, a source part,
+/// as its documentation says - under the first reason that applies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Exclusion {
+    /// No pass/fail decision: no verdict, or the strongest ones conflict.
+    Undecided,
+    /// Decided below the view's minimum strength.
+    TooWeak,
+    /// Decided fail where the view needs a pass.
+    Failed,
+    /// No final output where the view needs one.
+    NoFinalOutput,
+    /// The instruction refers to privileged context the view would drop.
+    NotSelfContained,
+    /// A step labelled bad.
+    BadStep,
+    /// An action that repeats a call of the same trajectory whose result was
+    /// the same: the agent learned nothing from it, so it is context and not
+    /// an action to learn (the tail of a loop).
+    RepeatedAction,
+    /// Left out on request because it would carry an exam family's attempt or
+    /// file into the training data (`dataset build --drop-leaking`).
+    ExamLeak,
+    /// The trajectory holds something a chat record cannot represent (an
+    /// image, a second user turn, an observation answering no call).
+    Unrepresentable,
+    /// No action to supervise or reward.
+    NoAction,
+    /// An action whose tool calls are not the ones a view was asked to keep
+    /// (`SftStep::only_actions`): the exploration around the decisive actions,
+    /// left out on request rather than because it could not be trained.
+    ActionNotWanted,
+    /// A harness conversation answered by a model role the view was not asked
+    /// for (`SftStep::only_roles`), or whose role is unknown: a role is
+    /// trained on its own conversations, and a conversation of no known role
+    /// is never guessed into one.
+    RoleNotWanted,
+    /// A harness conversation shown images, built where the base is not known
+    /// to read them (`SftStep::images`).
+    ShownImages,
+    /// A harness conversation shown images, built where images are wanted,
+    /// that recorded no requests (ingested before they were kept): the
+    /// pictures are not in the experience. Ingest the trial again.
+    RequestsNotRecorded,
+    /// An action whose context holds more images than a record may
+    /// ([`crate::images::MAX_IMAGES_PER_RECORD`]).
+    TooManyImages,
+    /// No reward could be derived.
+    NoReward,
+    /// An attempt in a group with nothing to compare it with: the only one of
+    /// its task, or all of the group earned the same reward (or, keeping only
+    /// the attempts above the group's mean, fewer than two that differ), so
+    /// no attempt did better or worse than another.
+    NoGroupSignal,
+    /// The verdict does not record which attempt (trial) of which task it
+    /// grades, so the experience belongs to no group.
+    NoRollout,
+    /// A self-distillation view found nothing the verifier knows to show the
+    /// teacher: no reference change, no hidden check and no record of what
+    /// failed.
+    NoPrivilegedContext,
+    /// A critique whose own decision is not a pass at the minimum strength.
+    UnverifiedCritique,
+    /// The experience a relation names is not in the corpus.
+    RelatedMissing,
+    /// A relation between experiences of different tasks.
+    DifferentTask,
+    /// Both sides of a pair gave the same output.
+    IdenticalOutputs,
+    /// A retry or revision chain without a pass on one side and a fail at
+    /// the minimum strength on the other.
+    NoPreferredPath,
+    /// The two attempts part at no action both took a different one at.
+    NoDivergence,
+    /// No evidence span.
+    NoEvidence,
+    /// A source, part or content the store does not hold.
+    SourceMissing,
+    /// Content that is not UTF-8 text.
+    NotText,
+    /// Empty text.
+    Empty,
+    /// Content, a task or a pair already projected.
+    Duplicate,
+    /// A task with no single reference answer.
+    NoReference,
+    /// A record past the limit a projection was thinned to.
+    OverLimit,
+    /// Text too short to be a record: a heading, a signature, a stub.
+    TooShort,
+    /// An assistant turn holds reasoning markup (`<think>`), which a chat
+    /// record does not carry: training on it would teach the template's
+    /// reasoning block as answer text.
+    ReasoningInText,
+    /// The capture marks the run incomplete (a journal never closed): a
+    /// prefix of a run, never a success.
+    Incomplete,
+    /// The agent's context was compacted during the run, so the turns
+    /// before the compaction are not what it saw when it acted after it.
+    Compacted,
+    /// A tool call whose arguments the model sent as text that is not
+    /// JSON; the trajectory keeps `{}`, which is not what the model said.
+    UnparsedArguments,
+    /// Two tool calls of one trajectory share an id, so results cannot be
+    /// paired to their calls: every call would receive every result, with
+    /// duplicated, reordered and future results in its context.
+    DuplicateCallId,
+    /// The projection did not keep every call and result of its source: a
+    /// defect of the projection, never a property of the data.
+    NotConserved,
+    /// A record longer than the training block it was projected for.
+    OverBlock,
+    /// A window of a record split to fit the training block that holds no
+    /// supervised turn (the exploration around the decisive actions of an
+    /// `SftStep::only_actions` view): training on it would learn nothing.
+    NothingSupervised,
+    /// An episode in a workspace, which the policy never answers
+    /// closed-book: its final answer is not a record of the view that
+    /// trains final answers.
+    WorkspaceEpisode,
+    /// An action whose tool call reads the repository's history or git's
+    /// raw storage ([`crate::curation`]): a student imitating it learns to dig for
+    /// what the checked-out tree does not show.
+    RepositoryHistory,
+    /// An action after one that read the repository's history, in a
+    /// demonstration the curation truncates there ([`crate::curation`]).
+    AfterRepositoryHistory,
+}

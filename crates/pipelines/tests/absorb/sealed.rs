@@ -75,6 +75,7 @@ fn projection(records: Vec<Record>) -> Projection {
         block_measure: None,
         terms: None,
         curation: None,
+        overlong: None,
     }
 }
 

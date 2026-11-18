@@ -41,7 +41,7 @@ fn shaped() -> RlBuild {
         reward_metrics: vec![("iou".into(), 0.75), ("feature_match".into(), 0.25)],
         fail_ceiling: Some(0.5),
         advantage: AdvantageKind::Standardised,
-        cliff_distill: false,
+        ..RlBuild::default()
     }
 }
 

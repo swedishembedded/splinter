@@ -22,7 +22,9 @@
 //!   the minimum strength, as [`Exclusion::Undecided`] or
 //!   [`Exclusion::TooWeak`].
 //! * The attempt's reward is [`RewardShape::reward`]: a pass earns `1.0`, a
-//!   failure what the configured metrics earn below the ceiling.
+//!   failure what the configured metrics earn below the ceiling, either less
+//!   DAPO's over-length penalty when one is set ([`crate::Overlong`]), from the
+//!   completion tokens the attempt recorded.
 //! * A group is the trials of one task version made by one policy (the model
 //!   recorded on the verdict). Each trial counts once, however many
 //!   conversations (roles) it had. A group of one trial, or whose trials all
@@ -272,9 +274,12 @@ impl PolicyGradient {
         let policy = text(evidence, "/model")
             .or_else(|| provenance.policy.clone())
             .unwrap_or_else(|| provenance.solver.clone());
-        let reward = self
-            .reward
-            .reward(decision.passed, evidence.get("metrics"), &trial)?;
+        let reward = self.reward.reward(
+            decision.passed,
+            evidence.get("metrics"),
+            completion_tokens(evidence, &entry.experience.trajectory),
+            &trial,
+        )?;
         Ok(Ok(Rollout {
             group: GroupKey {
                 task,
@@ -287,6 +292,34 @@ impl PolicyGradient {
             evidence: evidence.clone(),
         }))
     }
+}
+
+/// The completion tokens the attempt an experience is part of wrote, as
+/// recorded: the trial's count on its verdict (a benchmark's `tokens`, or its
+/// score's usage), else the trajectory's own total (sven's final metrics),
+/// else the sum over its agent steps when every one recorded its count.
+fn completion_tokens(evidence: &Value, trajectory: &atif::Trajectory) -> Option<u64> {
+    evidence
+        .pointer("/tokens/completion")
+        .or_else(|| evidence.pointer("/score/usage/completion_tokens"))
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            trajectory
+                .final_metrics
+                .as_ref()
+                .and_then(|m| m.total_completion_tokens)
+        })
+        .or_else(|| {
+            let mut agent_steps = trajectory
+                .steps
+                .iter()
+                .filter(|step| step.source == atif::StepOrigin::Agent)
+                .peekable();
+            agent_steps.peek()?;
+            agent_steps
+                .map(|step| step.metrics.as_ref().and_then(|m| m.completion_tokens))
+                .sum()
+        })
 }
 
 impl View for PolicyGradient {
@@ -351,6 +384,7 @@ impl View for PolicyGradient {
             placed.push((entry, harness, rollout));
         }
         projection.advantage = Some(self.advantage);
+        projection.overlong = self.reward.overlong();
         let mut treatment_of: BTreeMap<(&GroupKey, &str), Treatment> = BTreeMap::new();
         for (key, trials) in &groups {
             let rewards: Vec<f64> = trials.values().map(|t| t.reward).collect();

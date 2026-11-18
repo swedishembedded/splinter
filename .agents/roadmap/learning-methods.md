@@ -29,6 +29,13 @@ See the table `make test/methods` prints; the figures of the last full run are i
 
 ## Findings that changed the code
 
+- 2026-11-18, DAPO soft over-length penalty (plan training-regimes step 6, splinter half; lane 3, item 3):
+  `RewardShape::with_overlong(Overlong { max_tokens, buffer })` adds `0`, `(L - B - n) / B` or `-1` to each attempt's
+  reward from the completion tokens its verdict (else its trajectory) records; `dataset build
+  --overlong-max-tokens L [--overlong-buffer B]` (default `B = L / 4`), recorded in the manifest. L1:
+  `policy_gradient::the_over_length_penalty_is_dapos_soft_ramp` against the formula by hand. brain's half (truncated
+  keep|mask) is 27c3c3c9b.
+
 - 2026-11-18, Ctrl-C cancels brain jobs (lane 3, item 5; pilot A2 defect 2, knowledge 171): SIGINT/SIGTERM fire the
   cancel token of every recorded run in progress (`splinter_orchestrator::interrupt`), so the served job client sends
   `DELETE /v1/jobs/{id}` and reports whether brain confirmed it (`cancelled: brain job ... was cancelled`); a second

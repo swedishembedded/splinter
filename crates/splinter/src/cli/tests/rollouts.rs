@@ -159,3 +159,45 @@ fn self_distillation_is_built_from_the_cliff_groups_and_trained_with_named_guard
         assert!(parse(&argv).is_err(), "{refused:?}");
     }
 }
+
+#[test]
+fn a_policy_gradient_dataset_takes_dapos_over_length_penalty() {
+    let Command::Dataset(DatasetCommand::Build(args)) = command(&[
+        "dataset",
+        "build",
+        "ab12",
+        "--view",
+        "policy-gradient",
+        "--overlong-max-tokens",
+        "16384",
+        "--overlong-buffer",
+        "4096",
+    ]) else {
+        panic!("dataset build");
+    };
+    assert_eq!(
+        (args.overlong_max_tokens, args.overlong_buffer),
+        (Some(16384), Some(4096))
+    );
+    // A buffer is a stretch before a budget; it needs one, and neither is zero.
+    assert!(parse(&[
+        "dataset",
+        "build",
+        "ab12",
+        "--view",
+        "policy-gradient",
+        "--overlong-buffer",
+        "8"
+    ])
+    .is_err());
+    assert!(parse(&[
+        "dataset",
+        "build",
+        "ab12",
+        "--view",
+        "policy-gradient",
+        "--overlong-max-tokens",
+        "0"
+    ])
+    .is_err());
+}

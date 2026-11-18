@@ -267,6 +267,7 @@ fn dataset_made(
         block_measure: None,
         terms,
         curation: None,
+        overlong: None,
     };
     let projection = match prompt {
         Some(prompt) => projection.with_system_prompt(prompt),
@@ -322,6 +323,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         block_measure: None,
         terms: None,
         curation: None,
+        overlong: None,
     };
     store_dataset(ctx, &projection, false).unwrap().id
 }

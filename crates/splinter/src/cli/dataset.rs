@@ -105,6 +105,19 @@ pub struct BuildArgs {
     /// by kind. The `self-distill` view distils every attempt instead.
     #[arg(long)]
     pub cliff_distill: bool,
+    /// For the policy-gradient view: DAPO's soft over-length penalty, the
+    /// completion tokens (as the attempt recorded them) at and past which an
+    /// attempt loses a whole reward. From `N - buffer` tokens on the penalty
+    /// grows linearly from 0 to -1 at N; it is added to the reward a pass or
+    /// failure earns, and the manifest records both thresholds. An attempt that
+    /// recorded no completion tokens is an error. Without it, no length is
+    /// penalised.
+    #[arg(long, value_name = "N", value_parser = positive_count)]
+    pub overlong_max_tokens: Option<usize>,
+    /// The tokens before `--overlong-max-tokens` over which the penalty grows
+    /// (default a quarter of it, DAPO's 4096 of 16384).
+    #[arg(long, value_name = "N", requires = "overlong_max_tokens", value_parser = positive_count)]
+    pub overlong_buffer: Option<usize>,
     /// For the sft-step view: one record per trajectory with every
     /// admitted action supervised, not one record per action.
     #[arg(long)]

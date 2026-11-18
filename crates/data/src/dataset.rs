@@ -190,6 +190,10 @@ pub struct Manifest {
     /// for a dataset no policy curated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub curation: Option<crate::curation::Curation>,
+    /// DAPO's over-length penalty the records' rewards carry, with its
+    /// thresholds ([`crate::Overlong`]); `None` for rewards without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overlong: Option<crate::Overlong>,
 }
 
 /// How many records a projection yielded and how many candidates it left
@@ -536,6 +540,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         terms: projection.terms.clone(),
         split: projection.split_policy(),
         curation: projection.curation.clone(),
+        overlong: projection.overlong,
     }
 }
 

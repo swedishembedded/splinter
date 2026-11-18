@@ -38,11 +38,62 @@ fn parameter(name: &'static str, reason: String) -> ViewError {
 /// A pass earns `1.0`. A failure earns `fail_ceiling * sum(w_i * m_i)` over
 /// the configured metrics, each in `[0, 1]`, the weights summing to one; as
 /// the ceiling is below one, a failure never earns as much as a pass. With no
-/// metrics configured a failure earns nothing.
+/// metrics configured a failure earns nothing. An [`Overlong`] penalty, when
+/// set, is added to either.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RewardShape {
     fail_ceiling: f64,
     weights: Vec<(String, f64)>,
+    overlong: Option<Overlong>,
+}
+
+/// DAPO's soft over-length penalty: an attempt that wrote more completion
+/// tokens than `max_tokens - buffer` loses reward linearly, down to `-1` at
+/// `max_tokens`, and `-1` beyond it, so the policy learns to finish within its
+/// budget instead of being cut off by it.
+///
+/// With `L = max_tokens`, `B = buffer` and `n` the attempt's completion
+/// tokens, the penalty is `0` for `n <= L - B`, `(L - B - n) / B` for
+/// `L - B < n <= L`, and `-1` for `n > L`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Overlong {
+    /// `L`: the completion tokens at and past which the full penalty applies.
+    pub max_tokens: u64,
+    /// `B`: the tokens before `max_tokens` over which the penalty grows.
+    pub buffer: u64,
+}
+
+impl Overlong {
+    /// The penalty, refused unless `0 < buffer <= max_tokens`.
+    ///
+    /// # Errors
+    /// The buffer is zero or longer than the budget.
+    pub fn new(max_tokens: u64, buffer: u64) -> Result<Self, ViewError> {
+        if buffer == 0 || buffer > max_tokens {
+            return Err(parameter(
+                "over-length penalty",
+                format!(
+                    "the buffer {buffer} is not in (0, {max_tokens}]: the penalty grows over \
+                     the buffer's tokens before the budget of {max_tokens}"
+                ),
+            ));
+        }
+        Ok(Self { max_tokens, buffer })
+    }
+
+    /// The penalty, in `[-1, 0]`, of an attempt that wrote `tokens`
+    /// completion tokens.
+    #[must_use]
+    pub fn penalty(&self, tokens: u64) -> f64 {
+        let soft = self.max_tokens - self.buffer;
+        if tokens <= soft {
+            0.0
+        } else if tokens <= self.max_tokens {
+            (soft as f64 - tokens as f64) / self.buffer as f64
+        } else {
+            -1.0
+        }
+    }
 }
 
 impl RewardShape {
@@ -100,18 +151,56 @@ impl RewardShape {
         Ok(Self {
             fail_ceiling,
             weights,
+            overlong: None,
         })
+    }
+
+    /// The same shape with `overlong`'s penalty added to every reward.
+    #[must_use]
+    pub fn with_overlong(self, overlong: Overlong) -> Self {
+        Self {
+            overlong: Some(overlong),
+            ..self
+        }
+    }
+
+    /// The over-length penalty the shape adds, if any.
+    #[must_use]
+    pub fn overlong(&self) -> Option<Overlong> {
+        self.overlong
     }
 
     /// The reward of the attempt `trial`: `1.0` if it `passed`, else the
     /// shaped share of the ceiling its `metrics` (the verifier's object of
-    /// named measurements) earn.
+    /// named measurements) earn; plus the over-length penalty of its
+    /// `completion_tokens` when the shape has one.
     ///
     /// # Errors
     /// A failed attempt lacks a configured metric, or one is not a number in
-    /// `[0, 1]`. Neither is read as zero: an unmeasured attempt is not a bad
-    /// one.
+    /// `[0, 1]`; the shape penalises length and the attempt recorded no
+    /// completion tokens. None is read as zero: an unmeasured attempt is not a
+    /// bad one, nor a short one.
     pub(crate) fn reward(
+        &self,
+        passed: bool,
+        metrics: Option<&Value>,
+        completion_tokens: Option<u64>,
+        trial: &str,
+    ) -> Result<f64, ViewError> {
+        let penalty = match self.overlong {
+            None => 0.0,
+            Some(overlong) => overlong.penalty(completion_tokens.ok_or_else(|| {
+                parameter(
+                    "over-length penalty",
+                    format!("trial {trial} records no completion token count to penalise"),
+                )
+            })?),
+        };
+        Ok(self.verdict_reward(passed, metrics, trial)? + penalty)
+    }
+
+    /// [`RewardShape::reward`] before the over-length penalty.
+    fn verdict_reward(
         &self,
         passed: bool,
         metrics: Option<&Value>,
