@@ -71,6 +71,8 @@ struct Attempt {
     tokenizer: Option<&'static str>,
     /// Steps copied from another trajectory (a repair's prefix).
     copied: usize,
+    /// A user turn the harness inserts after the n-th action (a time-left notice), and its text.
+    notice: Option<(usize, &'static str)>,
 }
 
 impl Attempt {
@@ -85,6 +87,7 @@ impl Attempt {
             last: "Booked.",
             tokenizer: Some(TOKENIZER),
             copied: 0,
+            notice: None,
         }
     }
 
@@ -131,6 +134,13 @@ impl Attempt {
     fn copied(self, copied: usize) -> Self {
         Self { copied, ..self }
     }
+
+    fn notice(self, after: usize, text: &'static str) -> Self {
+        Self {
+            notice: Some((after, text)),
+            ..self
+        }
+    }
 }
 
 /// The agent step of a shell call, its result and its policy trace's
@@ -160,11 +170,16 @@ fn add(corpus: &mut Corpus, attempt: &Attempt) -> Experience {
         TraceStep::new(1, StepOrigin::System, "You keep the books."),
         user(2, "Book the accrual."),
     ];
+    let mut id = 3;
     for (n, command) in attempt.commands.iter().enumerate() {
-        let id = 3 + n as u64;
         steps.push(shell(id, &format!("c{n}"), command, attempt.tokenizer));
+        id += 1;
+        if let Some((_, text)) = attempt.notice.filter(|(after, _)| *after == n) {
+            steps.push(user(id, text));
+            id += 1;
+        }
     }
-    let mut last = say(3 + attempt.commands.len() as u64, attempt.last);
+    let mut last = say(id, attempt.last);
     traced(&mut last, attempt.tokenizer);
     steps.push(last);
     // The copied prefix: the first agent steps, marked as ATIF marks a
@@ -294,6 +309,35 @@ fn a_pair_is_a_verified_pass_and_a_verified_fail_of_one_group_from_one_prompt() 
     assert_eq!(projection.count(Exclusion::NoCounterpart), 1);
     let pairing = projection.pairing.as_ref().unwrap();
     assert_eq!((pairing.attempts, pairing.repairs), (1, 0));
+}
+
+/// Two runs that part at a turn the harness inserted (a time-left notice saying something different after the
+/// same first action) part from that action: a candidate opens with the model's own turn, never with a user or tool
+/// turn, which brain refuses as a candidate.
+#[test]
+fn runs_that_part_at_an_inserted_user_turn_are_paired_from_the_action_before_it() {
+    let corpus = corpus(&[
+        Attempt::pass("t1")
+            .commands(vec!["cat ledger.csv", "book accrual"], "Booked.")
+            .notice(0, "Time left: 9 minutes."),
+        Attempt::fail("t2")
+            .commands(vec!["cat ledger.csv", "book wrong"], "Done.")
+            .notice(0, "Time left: 8 minutes."),
+    ]);
+    let projection = view().project(&corpus).unwrap();
+    let got = pairs(&projection);
+    assert_eq!(got.len(), 1, "excluded: {:?}", projection.excluded);
+    let pair = &got[0];
+    assert_eq!(
+        texts(&pair.prompt),
+        ["system:You keep the books.", "user:Book the accrual."]
+    );
+    for side in [&pair.chosen, &pair.rejected] {
+        assert_eq!(side.first().unwrap().role, "assistant", "{:?}", texts(side));
+        assert!(side.iter().all(|m| m.train == (m.role == "assistant")));
+    }
+    assert!(texts(&pair.chosen).contains(&"user:Time left: 9 minutes.".to_string()));
+    assert!(texts(&pair.rejected).contains(&"user:Time left: 8 minutes.".to_string()));
 }
 
 #[test]

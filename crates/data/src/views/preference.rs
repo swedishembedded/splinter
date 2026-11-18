@@ -292,9 +292,21 @@ impl Preference {
         if parted < chosen.own_start {
             return Err(prompt_mismatch);
         }
+        // A candidate opens with the model's own turn. Runs that part at a turn
+        // they were shown (a result, or a notice the harness inserted) part
+        // from the action before it, which both took.
+        let mut start = parted;
+        if won.messages[start].role != "assistant" {
+            match won.messages[..start]
+                .iter()
+                .rposition(|m| m.role == "assistant")
+            {
+                Some(action) => start = action,
+                None => return Err(prompt_mismatch),
+            }
+        }
         // A prompt never ends in an assistant turn: an action both took is
         // part of both candidates.
-        let mut start = parted;
         while start > 0 && won.messages[start - 1].role == "assistant" {
             start -= 1;
         }
