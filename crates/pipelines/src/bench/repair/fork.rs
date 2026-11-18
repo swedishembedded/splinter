@@ -112,7 +112,15 @@ impl Intervention for ForkCorrection<'_> {
         let scratch = work.join("scratch");
         std::fs::create_dir_all(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
         let result = (|| {
-            commands::workspace(self.checkout, &practice, folder, &tree)?;
+            // The task's own trial sandbox: the student's commands are
+            // replayed, and the teacher's run, where a trial's agent runs them.
+            let mut session = commands::Session::open(
+                self.checkout,
+                &practice,
+                folder,
+                &tree,
+                &ctx.config().state_root.path().join("s"),
+            )?;
             without_inherited_setgid(&work)?;
             let fork = ForkAt {
                 tree: &tree,
@@ -125,6 +133,7 @@ impl Intervention for ForkCorrection<'_> {
                 profile: Profile::Compact,
                 shown: Some(&shown),
                 read_exec: toolchain_dirs(ctx.config().command_env.get("PATH")),
+                launcher: Some(session.launcher(self.checkout)),
             };
             let mut options = SolveOptions::new(self.deadline);
             options.cancel = Some(self.cancel.clone());
@@ -141,7 +150,8 @@ impl Intervention for ForkCorrection<'_> {
             let file = work.join("trajectory.json");
             let text = serde_json::to_vec(&trajectory).map_err(|e| e.to_string())?;
             std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
-            let grade = commands::grade(self.checkout, &practice, folder, &tree, &file)?;
+            let grade = session.grade(&file)?;
+            drop(session);
             let lineage = compose::Lineage {
                 student: case.student_id,
                 trial: &case.trial.trial,

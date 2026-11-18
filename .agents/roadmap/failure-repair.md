@@ -48,6 +48,10 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
   40 refused (no grade for service-backed tasks); resource, history probing and gateway not routed. The preference
   view over the repairs and the train trials made 129 records, 9 from repairs (9 of the 10 accepted). A run took its
   cases in trial order, so a bounded run piled onto the hard apply-* tasks: `--per-task` and `--seed` spread it.
+- 2026-11-18 The fork replays in the examiner's own trial sandbox: `bench task session` (bench ee42be36) holds the
+  task's userns sandbox open with the workspace at /workspace/repo, the trial's account and image and the task's
+  service; sven's shell launcher (sven b70e5db3) runs every replayed and every teacher command through
+  `bench task session-exec`, and the session grades the state they left. Support tasks are repairable.
 
 ## Open
 
@@ -60,9 +64,5 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
   repair reads the request log instead, a fix belongs in sven's runner.
 - A tool's error text differs between sven builds (the student's a0235c71 against the fork's main): such a fork is
   refused; replaying with the student's own sven build (or the examiner's sandbox) would remove that.
-- A fork replays on the host, in the examiner's workspace laid out at a path of its own, so a student call whose
-  observation names the sandbox's absolute workspace path (`pwd`, `cd /workspace/repo`) does not replay and the fork
-  is refused; a namespace that mounts the tree at the recorded path would remove that.
-- Tasks with a host-side service (support) are refused by `bench task grade`; their repairs are refused.
 - Retry and decomposition interventions for practice tasks do not exist; only the fork correction is behind the
   `Intervention` interface.

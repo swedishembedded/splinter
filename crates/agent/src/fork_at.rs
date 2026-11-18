@@ -23,9 +23,11 @@
 //! [`crate::correction::compose`] makes: the student's kept steps as copied
 //! context, never supervised, then the teacher's.
 //!
-//! The model's commands run confined to the tree and a scratch directory of
-//! the caller's (sven's Landlock confinement of the `shell` tool, no
-//! network); the file tools are held to the tree.
+//! The model's commands run through the caller's launcher when it gives one
+//! (the recording's own sandbox, sven's `tools.launcher`), so a replayed
+//! command sees what the student's saw; otherwise they run confined to the
+//! tree and a scratch directory of the caller's (sven's Landlock confinement
+//! of the `shell` tool, no network). The file tools are held to the tree.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -80,6 +82,11 @@ pub struct ForkAt<'a> {
     /// Directories the confined commands may read and run from besides the
     /// system's: the toolchains of their `PATH`.
     pub read_exec: Vec<std::path::PathBuf>,
+    /// The program and arguments every `shell` command is run through,
+    /// when the recording's own sandbox runs them (sven's `tools.launcher`):
+    /// the commands then see what the student's saw, and are not confined
+    /// here, the sandbox confines them.
+    pub launcher: Option<Vec<String>>,
 }
 
 /// The student's steps through `keep_through`, as their own trajectory.
@@ -195,12 +202,16 @@ fn fork_engine(
     std::fs::create_dir_all(&tmp).map_err(|e| {
         CorrectionError::Trajectory(format!("the scratch directory {}: {e}", tmp.display()))
     })?;
-    config.tools.confine = Some(CommandConfinement {
-        writable: vec![request.tree.to_path_buf(), request.scratch.to_path_buf()],
-        read_exec: request.read_exec.clone(),
-        tmpdir: Some(tmp),
-        connect_ports: Vec::new(),
-    });
+    if let Some(launcher) = &request.launcher {
+        config.tools.launcher = Some(launcher.clone());
+    } else {
+        config.tools.confine = Some(CommandConfinement {
+            writable: vec![request.tree.to_path_buf(), request.scratch.to_path_buf()],
+            read_exec: request.read_exec.clone(),
+            tmpdir: Some(tmp),
+            connect_ports: Vec::new(),
+        });
+    }
     let provider = Arc::clone(&model.provider);
     let engine = Engine::builder()
         .config(config)

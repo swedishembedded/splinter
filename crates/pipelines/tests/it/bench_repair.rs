@@ -15,8 +15,9 @@
 //!   admitted through the intake, so the student is an experience.
 //! * The diagnosis places the decisive error at the answer's write; the fork
 //!   keeps the steps before it, and the teacher is shown exactly those.
-//! * The examiner is a scripted stand-in: `task workspace` lays out the input,
-//!   `task grade` passes an answer of 42 and fails any other.
+//! * The examiner is a scripted stand-in: `task session` lays out the input
+//!   and grades on request (an answer of 42 passes, any other fails), and
+//!   `task session-exec` runs the command it is given.
 //! * An accepted repair carries its lineage and its relations; a rejected one
 //!   is counted and never becomes experience; a second run changes nothing.
 
@@ -130,6 +131,7 @@ async fn student_trajectory(tree: &Path) -> atif::Trajectory {
     let student = steps(
         "student",
         vec![
+            Step::Call("shell", json!({"shell_command": "wc -l input.csv"})),
             Step::Call("read_file", json!({"path": "input.csv"})),
             Step::Call("write_file", json!({"path": "answer.json", "text": "7"})),
         ],
@@ -227,10 +229,17 @@ fn examiner(root: &Path) -> BenchCheckout {
 set -eu
 echo "$@" >> "{log}"
 case "$2" in
-workspace) mkdir -p "$7"; printf '{input}' > "$7/input.csv"; echo '{{"schema":"bench.workspace/1"}}' ;;
-grade)
-  if [ "$(cat "$7/answer.json" 2>/dev/null)" = "42" ]; then v=pass; r=1.0; else v=fail; r=0.0; fi
-  echo "{{\"schema\":\"bench.grade/1\",\"task\":\"practice/sums-1\",\"digest\":\"d1\",\"verdict\":\"$v\",\"reward\":$r,\"metrics\":{{}},\"reason\":\"sum\"}}" ;;
+session)
+  ws="$7"; mkdir -p "$ws"; printf '{input}' > "$ws/input.csv"
+  echo '{{"schema":"bench.session/1","socket":"/nowhere/session.sock","workspace":"'"$ws"'","service":false}}'
+  while read -r line; do
+    case "$line" in
+    *grade*)
+      if [ "$(cat "$ws/answer.json" 2>/dev/null)" = "42" ]; then v=pass; r=1.0; else v=fail; r=0.0; fi
+      echo "{{\"schema\":\"bench.grade/1\",\"task\":\"practice/sums-1\",\"digest\":\"d1\",\"verdict\":\"$v\",\"reward\":$r,\"metrics\":{{}},\"reason\":\"sum\"}}" ;;
+    esac
+  done ;;
+session-exec) shift 4; echo "session-exec $*" >> "{log}"; exec "$@" ;;
 esac
 "#,
         log = root.join("bench.log").display(),
@@ -365,8 +374,14 @@ fn a_verified_repair_forks_at_the_last_good_step_and_records_its_lineage() {
     assert_eq!(relations, [RelationKind::RevisionOf]);
     assert!(report.repair_set.is_some());
 
-    // The same attempt and teacher again: nothing is run or stored.
+    // The student's command was replayed in the examiner's sandbox session.
     let log = fs::read_to_string(scratch.0.join("bench.log")).unwrap();
+    assert!(
+        log.contains("session-exec bash -c wc -l input.csv"),
+        "{log}"
+    );
+
+    // The same attempt and teacher again: nothing is run or stored.
     let again = repair(&ctx, &request(&runs, &checkout, &teacher_ref)).unwrap();
     assert_eq!(again.by_class["wrong_content"].held, 1);
     assert!(again.repair_set.is_none());

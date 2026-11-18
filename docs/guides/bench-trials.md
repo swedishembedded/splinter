@@ -141,12 +141,13 @@ splinter experiences repair STATE/practice/splinter-0d53... --teacher local:Qwen
 
 Every failed trial of the practice runs is diagnosed (above) and routed by its class: a model failure whose decisive
 step the diagnosis placed is forked after its last good step; an infrastructure or task failure, a history probe
-and a failure with no decisive step are not repaired, and the report says why. The fork lays out the task's pristine
-workspace through the examiner (`bench task workspace`), keeps the student's steps through the last good one, has
+and a failure with no decisive step are not repaired, and the report says why. The fork opens the examiner's sandbox
+session for the task (`bench task session`: the pristine workspace bound where a trial's agent works, the trial's
+account and image, the task's service when it has one), keeps the student's steps through the last good one, has
 sven's fork replay them (every replayed observation held to the recorded one; a fork whose replay differs is refused
-and counted) and the teacher continue the same tool loop under the profile the student ran, its commands confined to
-the tree. The examiner then grades the workspace and the composed trajectory with the task's own verifier, outside
-any agent (`bench task grade`). Only a pass is kept: as an experience of the student's task whose first steps are
+and counted) and the teacher continue the same tool loop under the profile the student ran; every shell command runs
+in the session (`bench task session-exec`, sven's shell launcher), so it sees what the student's saw. The session
+then grades the state the commands left with the task's own verifier, outside any agent. Only a pass is kept: as an experience of the student's task whose first steps are
 the student's stored steps (marked as copied context, never supervised), with the verifier's pass and a
 `revision_of` relation to the student's attempt, and its lineage in `extra.correction` (the
 student, the diagnosis, the kept step, the shared prefix, the teacher, the grade). The accepted repairs form one

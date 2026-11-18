@@ -18,13 +18,15 @@
 //! why. Every intervention is an [`Intervention`]; fork correction is the one
 //! there is for an examiner's tasks.
 //!
-//! A fork correction lays out the task's pristine workspace through the
-//! examiner (`bench task workspace`), keeps the student's steps through the
-//! last good one, has sven's fork replay them into that tree (each replayed
-//! observation held to the recorded one) and the teacher continue the same
-//! tool loop under the profile the student ran. The resulting workspace and
-//! the composed trajectory go back to the examiner, whose task verifier grades
-//! them outside any agent (`bench task grade`). Only a pass is accepted; a
+//! A fork correction opens the examiner's sandbox session for the task
+//! (`bench task session`: the pristine workspace bound where a trial's agent
+//! works, its account and image, the task's service), keeps the student's
+//! steps through the last good one, has sven's fork replay them (each
+//! replayed observation held to the recorded one) with every shell command run
+//! in the session, and the teacher continue the same tool loop under the
+//! profile the student ran. The session then grades the state the commands
+//! left, with the composed trajectory, by the task's own verifier outside any
+//! agent. Only a pass is accepted; a
 //! fail, or a fork the replay refused, is counted and kept as a record, and
 //! never becomes experience.
 //!
