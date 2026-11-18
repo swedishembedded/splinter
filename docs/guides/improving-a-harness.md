@@ -27,7 +27,8 @@ candidate solved, which guides and never decides. Each candidate is run on the
 whole task set, its attempts verified by the tasks' own verifiers, and compared
 with the baseline's attempts, a family counted once. A candidate is promoted
 only by the one promotion rule (the paired gain's two-sided 95% interval,
-resampling families, above 0; the frozen task set is also the retention suite)
+resampling families, above 0 over at least six families; the frozen task set is
+also the retention suite)
 and only if no family got worse and at least `--min-paired` tasks have a verdict
 in both arms. No examiner draws a sealed slice for a harness, so every decision
 is recorded as not exam-verified, with why. One that regressed a family, or lost

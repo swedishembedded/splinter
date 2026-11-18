@@ -57,9 +57,10 @@ use splinter_store::tasks::{TaskEntry, TaskSet};
 
 /// Modules of the project, each a family of tasks.
 const MODULES: usize = 9;
-/// Families the exam reserves: five discordant families are the fewest at
-/// which a unanimous sign test is significant at the default level.
-const EXAM_FAMILIES: usize = 5;
+/// Families the exam reserves: the fewest the promotion rule counts a gain
+/// over, six (a unanimous sign test over them is significant at the dev
+/// interval's 2.5% tail).
+const EXAM_FAMILIES: usize = 6;
 
 /// The build the specs run as: three distinct commits the manifest and the
 /// run must each name.
@@ -175,7 +176,7 @@ fn a_candidate_that_mends_the_exam_the_champion_fails_is_released_and_a_server_f
     assert_eq!(improvement.comparison.candidate_wins, reserve.exam_tasks);
     assert_eq!(improvement.comparison.baseline_wins, 0);
     assert_eq!(improvement.sign_test.discordant, EXAM_FAMILIES);
-    assert!((improvement.sign_test.p_value - 1.0 / 32.0).abs() < 1e-12);
+    assert!((improvement.sign_test.p_value - 1.0 / 64.0).abs() < 1e-12);
     // The report states what the exam's hidden suites are worth beside the
     // pass rates; it does not weigh them.
     let strength = improvement.hidden_strength.unwrap();

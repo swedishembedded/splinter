@@ -484,6 +484,7 @@ mod tests {
         use splinter_sdk::measure::promotion::{decide_unexamined, Measured, Measurement, Pair};
         let measurement = |low: f64| Measurement {
             items: 8,
+            families: 8,
             gain: Some(low + 0.1),
             interval: Some((low, low + 0.2)),
             one_sided_lower: Some(low),

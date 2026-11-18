@@ -16,7 +16,23 @@ on three held-out records, all won: the sign test reports `p = 0.125` (not signi
 promotion's dev measurement is 3 items with the interval (1.0, 1.0), so the release is promoted.
 Under the sign test the same candidate was refused until nine variants were added.
 
-What would hold the rule to its stated level on small exams: a least number of families for an
-interval (the examiner's verdict carries `families`), or an interval valid at small n (an exact
-or Wilson bound on the family win share). Until then a gate report on a handful of families is to
-be read by its family count, which the sign test beside it shows.
+**Fix (2026-11-18, lane G):** the rule counts a dev gain only over at least
+`MIN_GAIN_FAMILIES = 6` families (`splinter_eval::promotion`), derived from `ALPHA`: the least `n`
+with `2^-n <= ALPHA / 2`, the fewest unanimous families the exact sign test finds significant at
+the two-sided interval's tail (1/64 <= 0.025 < 1/32). Below it no outcome of the exam could be a
+gain shown at the stated level, so none counts; the decision records `too_few_families` with the
+count and the minimum. A verdict whose section reports no `families` is refused the same way.
+
+Why a minimum and not a sign test beside the interval: the examiner's verdicts carry aggregates
+and a family count, never the family signs, and the gate must not recompute or override the
+examiner's interval. A minimum reads the same on both paths (`decide` on bench's verdicts,
+`decide_unexamined` on `pipelines::promotion::measurement`, which now carries `families`); a sign
+test on the unexamined path alone would hold Splinter's own measurement to a stricter rule than
+bench's. The spec `release_variants::variants_of_the_trained_facts_join_the_exam_and_are_reported_apart`
+refuses the three-record candidate again; with the nine variants it promotes.
+
+Still open: above the minimum a percentile bootstrap (and bench's cluster-t interval) over 6 to
+about 15 families is approximate and can be narrower than its level (a mixed 6-family exam may pass
+where the sign test would not); retention's non-inferiority bound has no family minimum, so a few
+tied families give a bound of no width at 0. Read a gate report on a handful of families with the
+sign test beside it.

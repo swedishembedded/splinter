@@ -28,6 +28,7 @@ use common::gate::{
     anchor_file, candidate_on, dataset, decide, gate_context, question, Brain, ANCHOR,
 };
 use common::Scratch;
+use splinter_eval::promotion::{Reason, MIN_GAIN_FAMILIES};
 use splinter_orchestrator::Context;
 use splinter_pipelines::release::anchor;
 
@@ -41,9 +42,9 @@ fn variants_of_the_trained_facts_join_the_exam_and_are_reported_apart() {
     freeze_anchor(&scratch, &ctx);
     // Twelve facts: three held out (a quarter is the most), so the sign test
     // over the records alone can never reach significance (three wins is
-    // p = 0.125). The promotion rule's family-resampled interval of three
-    // unanimous families is [1, 1]: it decides on them alone. The sign test is
-    // reported beside it.
+    // p = 0.125). The family-resampled interval of three unanimous families
+    // is [1, 1], with no width, so the promotion rule asks for the families
+    // the exact sign test needs first: three are too few.
     let (alone_scratch, alone_ctx) = gate_context("release-variants-alone", Brain::Honest);
     freeze_anchor(&alone_scratch, &alone_ctx);
     let (records_only, _) = candidate_on(
@@ -56,10 +57,18 @@ fn variants_of_the_trained_facts_join_the_exam_and_are_reported_apart() {
     assert_eq!(measured.suite.tasks, 3);
     assert_eq!(measured.variants, None, "no variant was written");
     assert!(measured.sign_test.p_value > measured.alpha, "{measured:#?}");
-    let dev = alone.promotion.as_ref().unwrap().dev.clone().unwrap();
+    let promotion = alone.promotion.as_ref().unwrap();
+    let dev = promotion.dev.clone().unwrap();
     assert_eq!((dev.items, dev.interval), (3, Some((1.0, 1.0))));
-    assert!(alone.gate.improvement.passed, "{:#?}", alone.gate);
-    assert!(alone.release.is_some());
+    assert_eq!(
+        promotion.reasons,
+        [Reason::TooFewFamilies {
+            families: Some(3),
+            required: MIN_GAIN_FAMILIES
+        }]
+    );
+    assert!(!alone.gate.improvement.passed, "{:#?}", alone.gate);
+    assert_eq!(alone.release, None);
 
     let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 12), &[ANCHOR, "alpha"]);
     // Nine variants of three trained facts; a variant of a held-out fact

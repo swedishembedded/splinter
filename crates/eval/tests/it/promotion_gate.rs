@@ -21,6 +21,11 @@
 //!   failure is a typed reason. A slice another pair spent, a burn of
 //!   another exam, an exam without a burn and public material are no sealed
 //!   evidence.
+//! * A dev gain counts only over at least [`MIN_GAIN_FAMILIES`] families, the
+//!   fewest whose unanimous agreement the exact sign test finds significant
+//!   at the dev interval's level: a resampled interval of a few unanimous
+//!   families has no width and says nothing about how few they are. The
+//!   examiner's interval is never recomputed; its family count is read.
 //! * Where no sealed slice applies, the explicit unexamined rule decides on
 //!   dev gain and retention alone and says so in the decision record.
 
@@ -32,7 +37,7 @@ use serde_json::{json, Value};
 use splinter_eval::promotion::canonical::canonical_bytes;
 use splinter_eval::promotion::{
     decide, decide_unexamined, verify, Measured, Measurement, Pair, PublicKey, Reason, Rejection,
-    Role, Rule, Submitted, ALPHA,
+    Role, Rule, Submitted, ALPHA, MIN_GAIN_FAMILIES,
 };
 
 /// The examiner's test signing key: the seed bytes 0 to 31. The fixtures were
@@ -363,12 +368,14 @@ fn where_no_sealed_slice_applies_dev_gain_and_retention_decide_and_the_record_sa
     let measured = |low: f64, lower: f64| Measured {
         dev: Measurement {
             items: 40,
+            families: 10,
             gain: Some(0.1),
             interval: Some((low, 0.2)),
             one_sided_lower: Some(low),
         },
         retention: Measurement {
             items: 30,
+            families: 10,
             gain: Some(0.0),
             interval: Some((lower - 0.01, 0.02)),
             one_sided_lower: Some(lower),
@@ -385,4 +392,67 @@ fn where_no_sealed_slice_applies_dev_gain_and_retention_decide_and_the_record_sa
     assert!(!flat.promoted && matches!(flat.reasons[..], [Reason::NoDevGain { .. }]));
     let inferior = decide_unexamined(&pair(), &measured(0.01, -0.06), why);
     assert!(!inferior.promoted && matches!(inferior.reasons[..], [Reason::Inferior { .. }]));
+}
+
+#[test]
+fn a_dev_gain_over_fewer_families_than_the_exact_sign_test_needs_is_refused_on_either_path() {
+    // The minimum is the sign test's: unanimous agreement of n families has
+    // one-sided p = 2^-n, significant at the dev interval's tail ALPHA / 2
+    // from six families on (1/64), not at five (1/32).
+    assert_eq!(MIN_GAIN_FAMILIES, 6);
+    assert!(0.5_f64.powi(6) <= ALPHA / 2.0 && 0.5_f64.powi(5) > ALPHA / 2.0);
+    let refused = |families: Option<u64>| Reason::TooFewFamilies {
+        families,
+        required: MIN_GAIN_FAMILIES,
+    };
+
+    // The unexamined path: unanimous families resample to the interval [1, 1].
+    let unanimous = |families: u64| Measured {
+        dev: Measurement {
+            items: families,
+            families,
+            gain: Some(1.0),
+            interval: Some((1.0, 1.0)),
+            one_sided_lower: Some(1.0),
+        },
+        retention: Measurement {
+            items: 30,
+            families: 10,
+            gain: Some(0.0),
+            interval: Some((-0.03, 0.03)),
+            one_sided_lower: Some(-0.02),
+        },
+    };
+    let why = "a learn release";
+    for families in [2, 5] {
+        let decision = decide_unexamined(&pair(), &unanimous(families), why);
+        assert!(!decision.promoted);
+        assert_eq!(decision.reasons, [refused(Some(families))]);
+        assert_eq!(decision.dev.unwrap().families, Some(families));
+    }
+    assert!(decide_unexamined(&pair(), &unanimous(6), why).promoted);
+    // Mixed families above the minimum: the interval decides.
+    let mut mixed = unanimous(12);
+    mixed.dev.interval = Some((-0.01, 0.3));
+    let flat = decide_unexamined(&pair(), &mixed, why);
+    assert!(matches!(flat.reasons[..], [Reason::NoDevGain { .. }]));
+
+    // The examiner's verdicts: its interval stands, its family count is read
+    // from the section the gate decides on, and an unreported count refuses.
+    let (sealed, kept) = (examination(), public([-0.03, 0.02], -0.02));
+    let with_families = |families: Value| {
+        edited(public([0.02, 0.2], 0.04), |d| {
+            d["paired_gain"]["families"] = families;
+        })
+    };
+    let five = decided(&with_families(json!(5)), &kept, &sealed);
+    assert_eq!(five.reasons, [refused(Some(5))]);
+    let unreported = decided(&with_families(Value::Null), &kept, &sealed);
+    assert_eq!(unreported.reasons, [refused(None)]);
+    assert!(decided(&with_families(json!(6)), &kept, &sealed).promoted);
+    let agent_five = edited(public_agentic([0.02, 0.2], 0.0), |d| {
+        d["overall"]["families"] = json!(5);
+    });
+    let agent = decided(&agent_five, &public_agentic([0.02, 0.2], 0.0), &agentic());
+    assert_eq!(agent.reasons, [refused(Some(5))]);
 }

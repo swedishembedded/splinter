@@ -59,11 +59,11 @@ use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseS
 
 /// Modules of the first project; each is a family of tasks.
 const MODULES: usize = 9;
-/// Families the first exam reserves: five discordant families are the
-/// fewest at which a unanimous sign test is significant at the default level.
-const EXAM_FAMILIES: usize = 5;
-/// Modules of the second project: the first's, and ten more of which the
-/// exam takes five.
+/// Families the exam reserves: the fewest the promotion rule counts a gain
+/// over, six (a unanimous sign test over them is significant at the dev
+/// interval's 2.5% tail).
+const EXAM_FAMILIES: usize = 6;
+/// Modules of the second project: the first's, and ten more.
 const SECOND_MODULES: usize = MODULES + 10;
 
 /// An agent that restores the modules below `limit` and leaves the rest.
@@ -427,8 +427,8 @@ fn the_full_matrix_measures_every_generation_on_every_protected_task() {
     assert!(value(&metrics.bwt).abs() < 1e-9);
     assert!(value(&metrics.forgetting).abs() < 1e-9);
     // Generation 1 already solved the second exam's old families and none
-    // of its new ones, from a base that solves nothing: of the fifteen
-    // families (five of the first exam, ten of the second) five were solved
+    // of its new ones, from a base that solves nothing: of the eighteen
+    // families (six of the first exam, twelve of the second) six were solved
     // before they were learned.
     assert!(
         (value(&metrics.forward_transfer) - 1.0 / 3.0).abs() < 1e-9,

@@ -142,7 +142,7 @@ when all three rules hold:
 
 | Rule | Verdict | Holds when |
 |---|---|---|
-| Dev gain | `dev` | the two-sided 95% family-clustered interval of the paired gain is above 0 |
+| Dev gain | `dev` | the two-sided 95% family-clustered interval of the paired gain is above 0, and the section's `families` is at least 6 (`too_few_families` otherwise, also when the count is missing; bench's interval itself is never recomputed) |
 | Retention | `retention` | the lower bound of the one-sided 95% interval of the paired change is above -0.05 |
 | Sealed slice | the generation's slice | it verifies, it is over sealed exams, and each of them has a burn record that names this candidate and this champion |
 

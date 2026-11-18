@@ -1416,7 +1416,7 @@ Subcommands:
 
 #### splinter harness optimise
 
-Search a space of variants of a baseline harness for one that verifiably beats it: each candidate is run on the task set through sven, its attempts verified by the tasks' own verifiers and compared with the baseline's (a family counted once). A candidate is promoted only when the promotion rule finds a gain (its two-sided interval resampling families above zero, recorded as not exam-verified), no family got worse and, with `--gate evidence`, the evidence gate's e-process crosses its level too; the promotion moves the `harness/champion` pointer
+Search a space of variants of a baseline harness for one that verifiably beats it: each candidate is run on the task set through sven, its attempts verified by the tasks' own verifiers and compared with the baseline's (a family counted once). A candidate is promoted only when the promotion rule finds a gain (its two-sided interval resampling families above zero, over at least six families, recorded as not exam-verified), no family got worse and, with `--gate evidence`, the evidence gate's e-process crosses its level too; the promotion moves the `harness/champion` pointer
 
 ```text
 splinter harness optimise [OPTIONS] --baseline <FILE> --evaluations <N> --search-seed <N> <TASKSET-ID>

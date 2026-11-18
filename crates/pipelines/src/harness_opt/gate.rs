@@ -363,6 +363,7 @@ mod tests {
             p_value: 1.0,
             measurement: Measurement {
                 items: paired as u64,
+                families: paired as u64,
                 gain: interval.map(|(low, high)| (low + high) / 2.0),
                 interval,
                 one_sided_lower: interval.map(|(low, _)| low),

@@ -11,7 +11,9 @@
 //! ([`splinter_eval::promotion`]): the paired gain in the share of tasks
 //! right, its two-sided 95% interval and the lower bound of its one-sided 95%
 //! interval, both resampling whole families, so that a gain resting on a few
-//! families shows as a wide interval.
+//! families shows as a wide interval, and the number of families, since a
+//! few unanimous families resample to an interval of no width (the rule's
+//! [`MIN_GAIN_FAMILIES`](splinter_eval::promotion::MIN_GAIN_FAMILIES)).
 //!
 //! A caller without the examiner's signed verdicts decides with
 //! [`splinter_eval::promotion::decide_unexamined`] on these measurements; the
@@ -40,6 +42,7 @@ pub(crate) fn measurement(families: &[(f64, usize)], seed: Seed) -> Measurement 
     let resampled = Resampled::of(families, RESAMPLES, seed);
     Measurement {
         items: u64::try_from(items).unwrap_or(u64::MAX),
+        families: u64::try_from(families.len()).unwrap_or(u64::MAX),
         gain,
         interval: resampled
             .as_ref()
@@ -95,18 +98,20 @@ mod tests {
     }
 
     /// Unanimous families resample to one mean: two of them already give an
-    /// interval of no width, above zero. The count of families is not in the
-    /// interval; the sign test reported beside it shows it.
+    /// interval of no width, above zero. The interval cannot show how few
+    /// they are, so the measurement carries the family count the promotion
+    /// rule's minimum is read against.
     #[test]
-    fn two_unanimous_families_give_an_interval_of_no_width() {
+    fn two_unanimous_families_give_an_interval_of_no_width_and_are_counted() {
         let outcomes = [
             outcome("a", "f1", true, false),
             outcome("b", "f2", true, false),
+            outcome("c", "f2", true, false),
         ];
         let m = measurement_of(&outcomes, SEED);
         assert_eq!(
-            (m.interval, m.one_sided_lower),
-            (Some((1.0, 1.0)), Some(1.0))
+            (m.items, m.families, m.interval, m.one_sided_lower),
+            (3, 2, Some((1.0, 1.0)), Some(1.0))
         );
     }
 

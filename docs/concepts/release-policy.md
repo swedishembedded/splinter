@@ -28,9 +28,14 @@ A check that could not be measured fails. A number that was not measured is abse
 
 Improvement and retention are decided by the one promotion rule every promotion in Splinter goes
 through (the same rule `splinter campaign` decides on): the paired gain on the improvement suite
-must have its two-sided 95% interval above zero, and on the retention suites (every earlier
-release's suite and the anchor suite together) the lower bound of the one-sided 95% interval of
-the paired change must be above -0.05, both intervals resampling whole families. The other
+must have its two-sided 95% interval above zero over at least six families, and on the retention
+suites (every earlier release's suite and the anchor suite together) the lower bound of the
+one-sided 95% interval of the paired change must be above -0.05, both intervals resampling whole
+families. The family minimum is there because a resampled interval says nothing about how many
+families agree: two families, both won, resample to the interval [1, 1]. Six is the fewest whose
+unanimous agreement the exact sign test finds significant at the interval's tail (2.5%: 1/64, where
+five give 1/32), so below it no exam outcome could show a gain at the stated level; a gain over
+fewer families is refused as `too_few_families`. The other
 checks (every assigned task counted for each arm, the anchor floor, the served candidate, the
 canaries) refuse beside the rule, never in its place.
 

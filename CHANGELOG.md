@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (promotion rule at small samples)
+- The promotion rule counts a dev gain only over at least six families (`splinter_eval::promotion::MIN_GAIN_FAMILIES`, the fewest whose unanimous agreement the exact sign test finds significant at the dev interval's 2.5% tail). A family-resampled interval of a few unanimous families has no width, so two won families passed as a shown gain. A gain over fewer families, or a verdict whose section reports no `families`, is refused as `too_few_families`; `Measurement` carries `families`. Bench's intervals are read as issued.
+
 ### Changed (release and harness decisions on the promotion gate)
 - `release` (and every run that ends in one: `learn`, `practice`, `acquire`, `generation run`) decides improvement and retention by the one promotion rule (`splinter_eval::promotion`): the dev gain's two-sided 95% interval, resampling families, above 0, and the one-sided 95% bound of the change over every earlier release's suite and the anchor suite above -0.05. With the examiner's signed verdicts (`ReleaseRequest::examined`) the decision is exam-verified; without, it is recorded as not exam-verified, with why. The decision is kept as `promotion` in the release output, the JSON report and the release manifest's gate. The sign test and each earlier release's drop are reported and decide nothing; the assigned-task count, the anchor floor, the serve check and the canaries still refuse beside the rule.
 - `--alpha-spending` is removed from `release`, `learn` and `practice`, and a request that asks to spend the level is refused: the promotion rule decides at its fixed level.

@@ -99,7 +99,9 @@ fn reasons_about(promotion: &Promotion, dev: bool) -> Vec<String> {
         .iter()
         .filter(|reason| {
             let about_dev = match reason {
-                Reason::NoDevGain { .. } | Reason::DevUnmeasured => true,
+                Reason::NoDevGain { .. }
+                | Reason::TooFewFamilies { .. }
+                | Reason::DevUnmeasured => true,
                 Reason::Inferior { .. } | Reason::RetentionUnmeasured => false,
                 Reason::Verdict { role, .. } => *role != Role::Retention,
             };
@@ -182,12 +184,14 @@ mod tests {
         Measured {
             dev: Measurement {
                 items: 10,
+                families: 10,
                 gain: Some((dev.0 + dev.1) / 2.0),
                 interval: Some(dev),
                 one_sided_lower: Some(dev.0),
             },
             retention: Measurement {
                 items: 10,
+                families: 10,
                 gain: Some(0.0),
                 interval: Some((retention_lower - 0.01, 0.01)),
                 one_sided_lower: Some(retention_lower),
