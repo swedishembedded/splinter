@@ -10,6 +10,7 @@
 //! The campaign: the generation controller over its stage ledger, and the
 //! in-memory rollout machinery over a served policy.
 
+mod agentic;
 mod generations;
 mod served;
 mod world;

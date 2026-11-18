@@ -1,0 +1,403 @@
+{
+  "burns": [
+    {
+      "burned_at": "2026-11-18T18:21:23+00:00",
+      "candidate": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "collection": "exam-s1",
+      "exam_sha256": "316a6d250b4a358a4197999d21a0ad8a2760b320f4e54b0fbf6dcd67d23e396b",
+      "predecessor": null
+    }
+  ],
+  "canary": {
+    "invalid_reason": null,
+    "jobs": 0,
+    "outcomes": [],
+    "promoted": false
+  },
+  "candidate": {
+    "adapter_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "base": "Qwen/Qwen3-4B",
+    "base_digest": "sha256:base",
+    "brain_commit": "b",
+    "proposer_commit": "p",
+    "series": "camp",
+    "step": 1
+  },
+  "cost": {
+    "base": {
+      "cached_tokens": 0,
+      "completion_tokens": 9600,
+      "prompt_tokens": 48000,
+      "solves": 368,
+      "tokens": 57600,
+      "tokens_per_solve": 156.52173913043478,
+      "trials": 480,
+      "weighted_tokens_per_solve": 260.8695652173913
+    },
+    "candidate": {
+      "cached_tokens": 0,
+      "completion_tokens": 9600,
+      "prompt_tokens": 48000,
+      "solves": 430,
+      "tokens": 57600,
+      "tokens_per_solve": 133.95348837209303,
+      "trials": 480,
+      "weighted_tokens_per_solve": 223.25581395348837
+    }
+  },
+  "inputs": {
+    "base": [
+      {
+        "finished_at": "2026-11-13T11:00:00+00:00",
+        "job": "base",
+        "manifest_sha256": "cfda562b02ee94259b8e3d31626df5ba729e3770e8b19eaa7fcd05edda92a6df",
+        "profile_sha256": null,
+        "roles": {
+          "main": {
+            "base_url": "http://127.0.0.1:1/v1",
+            "model": "brain/m"
+          }
+        },
+        "serving_build": "brain-1",
+        "session": "s1",
+        "started_at": "2026-11-13T10:00:00+00:00",
+        "sven_build": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "candidate": [
+      {
+        "finished_at": "2026-11-13T11:00:00+00:00",
+        "job": "cand",
+        "manifest_sha256": "cfda562b02ee94259b8e3d31626df5ba729e3770e8b19eaa7fcd05edda92a6df",
+        "profile_sha256": null,
+        "roles": {
+          "main": {
+            "base_url": "http://127.0.0.1:1/v1",
+            "model": "brain/m"
+          }
+        },
+        "serving_build": "brain-1",
+        "session": "s1",
+        "started_at": "2026-11-13T10:00:00+00:00",
+        "sven_build": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "controls": []
+  },
+  "integrity": {
+    "checks": [
+      {
+        "detail": "base: 0 of 480 trials ended in environment_error/model_error/agent_error/verifier_error/invalid_task (0.0%; limit 5.0%)",
+        "name": "infra_failures",
+        "ok": true
+      },
+      {
+        "detail": "candidate: 0 of 480 trials ended in environment_error/model_error/agent_error/verifier_error/invalid_task (0.0%; limit 5.0%)",
+        "name": "infra_failures",
+        "ok": true
+      },
+      {
+        "detail": "sessions ['s1'] (base) and ['s1'] (candidate)",
+        "name": "same_session",
+        "ok": true
+      },
+      {
+        "detail": "builds ['brain-1'] (base) and ['brain-1'] (candidate)",
+        "name": "same_serving_build",
+        "ok": true
+      },
+      {
+        "detail": "profiles ['None'] (base) and ['None'] (candidate)",
+        "name": "same_agent_profile",
+        "ok": true
+      },
+      {
+        "detail": "task digests agree",
+        "name": "same_tasks",
+        "ok": true
+      },
+      {
+        "detail": "120 declared tasks, every trial present on both sides",
+        "name": "complete",
+        "ok": true
+      },
+      {
+        "detail": "passing trials that went looking for hidden answers: 0 base, 0 candidate",
+        "name": "leaks",
+        "ok": true
+      },
+      {
+        "detail": "every tier b or c task is sealed exam material",
+        "name": "sealed_held_out",
+        "ok": true
+      },
+      {
+        "detail": "every answered request of both sides reported its side's declared model",
+        "name": "served_model",
+        "ok": true
+      }
+    ],
+    "ok": true
+  },
+  "overall": {
+    "alpha": 0.05,
+    "attempts": {
+      "base": [
+        4,
+        4
+      ],
+      "candidate": [
+        4,
+        4
+      ]
+    },
+    "attempts_needed": null,
+    "base_pass_rate": 0.7666666666666667,
+    "candidate_pass_rate": 0.8958333333333334,
+    "delta": 0.12916666666666668,
+    "families": 40,
+    "interval": [
+      0.05526160009142295,
+      0.2030717332419104
+    ],
+    "items": 120,
+    "mde": 0.10465621727364831,
+    "one_sided_lower": 0.06760471134885755,
+    "pass_at_k": {
+      "1": {
+        "base": 0.7666666666666667,
+        "candidate": 0.8958333333333334
+      },
+      "2": {
+        "base": 0.8291666666666667,
+        "candidate": 0.9652777777777778
+      },
+      "3": {
+        "base": 0.8625,
+        "candidate": 0.9854166666666667
+      },
+      "4": {
+        "base": 0.8916666666666667,
+        "candidate": 0.9916666666666667
+      }
+    },
+    "pass_hat_k": {
+      "1": {
+        "base": 0.7666666666666667,
+        "candidate": 0.8958333333333334
+      },
+      "2": {
+        "base": 0.7041666666666667,
+        "candidate": 0.826388888888889
+      },
+      "3": {
+        "base": 0.675,
+        "candidate": 0.7770833333333333
+      },
+      "4": {
+        "base": 0.65,
+        "candidate": 0.7416666666666667
+      }
+    },
+    "powered": true,
+    "standard_error": 0.03653799294946192
+  },
+  "policy": {
+    "alpha": 0.05,
+    "anchor_collections": [
+      "anchor"
+    ],
+    "anchor_margin": 0.05,
+    "infra_statuses": [
+      "environment_error",
+      "model_error",
+      "agent_error",
+      "verifier_error",
+      "invalid_task"
+    ],
+    "max_gap_hours": 6.0,
+    "max_infra_rate": 0.05,
+    "max_leak_flags": 0,
+    "min_gain": 0.2,
+    "power": 0.8,
+    "require_canary": false
+  },
+  "predecessor": {
+    "adapter_digest": null,
+    "kind": "baseline"
+  },
+  "reasons": [
+    "gain on tier b +0.483 (interval [+0.346, +0.620])",
+    "retention shown: anchor change +0.011, interval [-0.008, +0.031] above -0.05"
+  ],
+  "retention": {
+    "alpha": 0.05,
+    "attempts": {
+      "base": [
+        4,
+        4
+      ],
+      "candidate": [
+        4,
+        4
+      ]
+    },
+    "attempts_needed": null,
+    "base_pass_rate": 0.9666666666666667,
+    "candidate_pass_rate": 0.9777777777777777,
+    "collections": [
+      "anchor"
+    ],
+    "delta": 0.011111111111111112,
+    "families": 30,
+    "interval": [
+      -0.008455688622864608,
+      0.03067791084508683
+    ],
+    "items": 90,
+    "margin": 0.05,
+    "mde": 0.02761862618413937,
+    "non_inferior": true,
+    "one_sided_lower": -0.00514451005038259,
+    "pass_at_k": {
+      "1": {
+        "base": 0.9666666666666667,
+        "candidate": 0.9777777777777777
+      },
+      "2": {
+        "base": 1.0,
+        "candidate": 0.9981481481481481
+      },
+      "3": {
+        "base": 1.0,
+        "candidate": 1.0
+      },
+      "4": {
+        "base": 1.0,
+        "candidate": 1.0
+      }
+    },
+    "pass_hat_k": {
+      "1": {
+        "base": 0.9666666666666667,
+        "candidate": 0.9777777777777777
+      },
+      "2": {
+        "base": 0.9333333333333333,
+        "candidate": 0.9574074074074075
+      },
+      "3": {
+        "base": 0.9,
+        "candidate": 0.9388888888888889
+      },
+      "4": {
+        "base": 0.8666666666666667,
+        "candidate": 0.9222222222222223
+      }
+    },
+    "powered": true,
+    "standard_error": 0.009567042903589099,
+    "task_set_sha256": "ffa43c5cc4eb14758573707d977676aec0066cef52eb218bf5e42b2a58123c0d"
+  },
+  "role": "candidate",
+  "schema": "bench.verdict/3",
+  "sealed_exams": [
+    {
+      "collection": "exam-s1",
+      "exam_sha256": "316a6d250b4a358a4197999d21a0ad8a2760b320f4e54b0fbf6dcd67d23e396b",
+      "tasks": 30
+    }
+  ],
+  "signature": {
+    "alg": "ed25519",
+    "key_id": "56475aa75463474c",
+    "value": "441664feb7c26828b8f3045b72afa1826c3c2cd63f6f181d3a73375a75f14fe745198e39ee5a255fd9e79a7f7235c9579ffd15dde0cb4abcc35231a6375a3601"
+  },
+  "statuses": {
+    "base": {
+      "graded": 480
+    },
+    "candidate": {
+      "graded": 480
+    }
+  },
+  "tiers": {
+    "a": {
+      "families": 0,
+      "items": 0
+    },
+    "b": {
+      "alpha": 0.05,
+      "attempts": {
+        "base": [
+          4,
+          4
+        ],
+        "candidate": [
+          4,
+          4
+        ]
+      },
+      "attempts_needed": null,
+      "base_pass_rate": 0.16666666666666666,
+      "candidate_pass_rate": 0.65,
+      "delta": 0.48333333333333334,
+      "families": 10,
+      "interval": [
+        0.3462376597387405,
+        0.6204290069279261
+      ],
+      "items": 30,
+      "mde": 0.18810124996465677,
+      "one_sided_lower": 0.37223943746687516,
+      "pass_at_k": {
+        "1": {
+          "base": 0.16666666666666666,
+          "candidate": 0.65
+        },
+        "2": {
+          "base": 0.31666666666666665,
+          "candidate": 0.8666666666666667
+        },
+        "3": {
+          "base": 0.45,
+          "candidate": 0.9416666666666667
+        },
+        "4": {
+          "base": 0.5666666666666667,
+          "candidate": 0.9666666666666667
+        }
+      },
+      "pass_hat_k": {
+        "1": {
+          "base": 0.16666666666666666,
+          "candidate": 0.65
+        },
+        "2": {
+          "base": 0.016666666666666666,
+          "candidate": 0.43333333333333335
+        },
+        "3": {
+          "base": 0.0,
+          "candidate": 0.2916666666666667
+        },
+        "4": {
+          "base": 0.0,
+          "candidate": 0.2
+        }
+      },
+      "powered": true,
+      "standard_error": 0.06060395619242064
+    },
+    "c": {
+      "families": 0,
+      "items": 0
+    }
+  },
+  "unpaired": {
+    "base_only": 0,
+    "candidate_only": 0
+  },
+  "verdict": "Promote",
+  "verdict_sha256": "2c02a721cb66035bd00418f6ca084245831bf75f007c397a120ef9f871dd7f34"
+}

@@ -6,137 +6,47 @@
 // team needs expertise in tamper-evident evaluation evidence you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! An examiner's signed verdict (`bench.examination/1`), verified in this
-//! process: the signature, the schema, that the examiner found the
-//! measurement valid and unflagged, and that it is about the candidate and
-//! the predecessor the caller expects. What comes out is the verdict's
-//! aggregates only ([`Aggregate`]); a document that fails any check is a
-//! typed [`Rejection`] and yields nothing.
+//! An examiner's signed verdict, verified in this process: the signature,
+//! the schema, that the examiner found the measurement valid and unflagged,
+//! and that it is about the candidate and the predecessor the caller expects.
+//! What comes out is the verdict's aggregates only ([`Aggregate`]); a
+//! document that fails any check is a typed [`Rejection`] and yields nothing.
 //!
-//! The signature is the examiner's: HMAC-SHA256 under its 32-byte key over
-//! the document's canonical bytes without its `signature` field
-//! ([`super::canonical`]), carried as `{"alg": "hmac-sha256", "key_id",
-//! "value"}` with the MAC in lower-case hex.
-
-use std::path::Path;
+//! Two schemas, one per protocol: `bench.examination/2` (direct completion,
+//! `bench examine`: one paired comparison over one exam, its burn record as
+//! `burn`) and `bench.verdict/3` (the agent protocol, `bench run` judged by
+//! `bench verdict`: the comparison sections `overall` and `retention`, the
+//! sealed exams it compares as `sealed_exams` and one burn record per exam
+//! as `burns`). For a verdict/3 the gate reads the `retention` section for
+//! the retention role and `overall` otherwise.
+//!
+//! The signature is the examiner's: Ed25519 under its private key over the
+//! document's canonical bytes without its `signature` field
+//! ([`super::canonical`]), carried as `{"alg": "ed25519", "key_id",
+//! "value"}` with the 64-byte signature in hex, and verified with the
+//! examiner's public key ([`PublicKey`]). A document under the examiner's
+//! retired shared-key MAC (`hmac-sha256`) is unsigned here.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::canonical::canonical_bytes;
-use super::mac::{hmac_sha256, same};
+use super::key::PublicKey;
+use super::Role;
 
-/// The schema of the verdicts the gate reads.
-pub const EXAMINATION_SCHEMA: &str = "bench.examination/1";
+/// The schema of the direct-completion verdicts the gate reads.
+pub const EXAMINATION_SCHEMA: &str = "bench.examination/2";
+
+/// The schema of the agent-protocol verdicts the gate reads.
+pub const AGENT_SCHEMA: &str = "bench.verdict/3";
 
 /// The signature algorithm the examiner signs with.
-pub const SIGNATURE_ALGORITHM: &str = "hmac-sha256";
-
-/// The bytes of a signing key.
-pub const KEY_BYTES: usize = 32;
+pub const SIGNATURE_ALGORITHM: &str = "ed25519";
 
 /// The integrity flag the examiner raises when it was given no training
 /// material to audit for overlap: it says what was not checked and refuses
 /// nothing.
 pub const NO_MATERIAL_FLAG: &str = "no_training_material_to_audit";
-
-/// The examiner's verdict signing key.
-#[derive(Clone)]
-pub struct VerdictKey([u8; KEY_BYTES]);
-
-impl std::fmt::Debug for VerdictKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("VerdictKey(..)")
-    }
-}
-
-/// Why a key cannot be used.
-#[derive(Debug, thiserror::Error)]
-pub enum KeyError {
-    /// The file cannot be read.
-    #[error("{path}: cannot read the verdict signing key ({reason})")]
-    Read {
-        /// The file.
-        path: String,
-        /// Why.
-        reason: String,
-    },
-    /// Others than its owner may read it.
-    #[error("{path} has permissions {mode:o}: a verdict signing key must be readable by its owner alone (chmod 600)")]
-    Exposed {
-        /// The file.
-        path: String,
-        /// Its permission bits.
-        mode: u32,
-    },
-    /// It is not a key.
-    #[error("{path}: a verdict signing key is {KEY_BYTES} bytes, this file holds {found}")]
-    Length {
-        /// The file.
-        path: String,
-        /// The bytes it holds.
-        found: usize,
-    },
-}
-
-impl VerdictKey {
-    /// A key from its bytes.
-    #[must_use]
-    pub fn from_bytes(bytes: [u8; KEY_BYTES]) -> Self {
-        Self(bytes)
-    }
-
-    /// The key in the file at `path`, which only its owner may read.
-    ///
-    /// # Errors
-    /// The file cannot be read, others may read it, or it is not 32 bytes.
-    pub fn read(path: &Path) -> Result<Self, KeyError> {
-        use std::os::unix::fs::PermissionsExt;
-        let shown = path.display().to_string();
-        let read = |e: std::io::Error| KeyError::Read {
-            path: shown.clone(),
-            reason: e.to_string(),
-        };
-        let mode = std::fs::metadata(path).map_err(read)?.permissions().mode() & 0o777;
-        if mode & 0o077 != 0 {
-            return Err(KeyError::Exposed { path: shown, mode });
-        }
-        let bytes = std::fs::read(path).map_err(read)?;
-        let found = bytes.len();
-        let key: [u8; KEY_BYTES] = bytes
-            .try_into()
-            .map_err(|_| KeyError::Length { path: shown, found })?;
-        Ok(Self(key))
-    }
-
-    /// The MAC of `document` without its `signature` field, in lower-case
-    /// hex; `None` for a document the examiner could not have written.
-    fn mac(&self, document: &Value) -> Option<String> {
-        let mut body = document.as_object()?.clone();
-        body.remove("signature");
-        let bytes = canonical_bytes(&Value::Object(body))?;
-        Some(
-            hmac_sha256(&self.0, &bytes)
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect(),
-        )
-    }
-
-    /// `document` signed as the examiner signs it, for a test that plays the
-    /// examiner; the gate never signs.
-    #[must_use]
-    pub fn sign(&self, document: &Value) -> Value {
-        let mut signed = document.clone();
-        if let (Some(mac), Some(object)) = (self.mac(document), signed.as_object_mut()) {
-            object.insert(
-                "signature".into(),
-                serde_json::json!({"alg": SIGNATURE_ALGORITHM, "key_id": "test", "value": mac}),
-            );
-        }
-        signed
-    }
-}
 
 /// Why a verdict was not accepted as evidence.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, thiserror::Error)]
@@ -151,8 +61,8 @@ pub enum Rejection {
         "the verdict's signature does not verify: it is not the examiner's, or it was altered"
     )]
     BadSignature,
-    /// It is not an examination verdict.
-    #[error("the verdict's schema is {found:?}, not {EXAMINATION_SCHEMA}")]
+    /// It is not a verdict of a schema the gate reads.
+    #[error("the verdict's schema is {found:?}, not {EXAMINATION_SCHEMA} or {AGENT_SCHEMA}")]
     Schema {
         /// The schema it names.
         found: Option<String>,
@@ -202,13 +112,13 @@ pub enum Rejection {
     /// Its material is not sealed, where a sealed slice is required.
     #[error("the verdict is over public material; a sealed exam is required")]
     NotSealed,
-    /// It carries no burn record.
-    #[error("the verdict over a sealed exam carries no burn record")]
+    /// A sealed exam it is over has no burn record in it.
+    #[error("the verdict over a sealed exam carries no burn record of it")]
     NoBurn,
-    /// Its burn record is of another exam.
+    /// A burn record it carries is of an exam it is not over.
     #[error("the verdict's burn record is of exam {found}, not of {exam}")]
     BurnOfAnotherExam {
-        /// The exam the verdict is over.
+        /// The exams the verdict is over.
         exam: String,
         /// The exam the burn record names.
         found: String,
@@ -234,16 +144,38 @@ pub struct Pair {
     pub predecessor: Option<String>,
 }
 
+/// One exam a verdict is over.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Exam {
+    /// Its collection's name.
+    pub collection: String,
+    /// Its digest.
+    pub digest: String,
+}
+
+/// The burn record of a sealed exam: the pair whose verdict spent it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Burn {
+    /// The exam's digest.
+    pub exam: String,
+    /// The pair.
+    pub by: Pair,
+}
+
 /// The aggregates of a verified verdict: what the gate decides on.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Aggregate {
-    /// The collection's name.
+    /// The schema it was read from.
+    pub schema: String,
+    /// The comparison it is of: the collection of a direct-completion
+    /// verdict, the section (`overall`, `retention`) of an agent-protocol one.
     pub collection: String,
-    /// The exam's digest.
-    pub exam: String,
-    /// Whether the material is a sealed exam.
+    /// The exams it is over: the one exam of a direct-completion verdict, the
+    /// sealed exams of an agent-protocol one.
+    pub exams: Vec<Exam>,
+    /// Whether the material is sealed exam material.
     pub sealed: bool,
-    /// Items in the exam.
+    /// Items compared.
     pub items: u64,
     /// The examiner's one-sided level; its intervals are at `1 - alpha`.
     pub alpha: f64,
@@ -257,8 +189,8 @@ pub struct Aggregate {
     pub one_sided_lower: Option<f64>,
     /// Families the interval clusters by.
     pub families: Option<u64>,
-    /// The burn record of a sealed exam: the pair whose verdict spent it.
-    pub burned_by: Option<Pair>,
+    /// The burn records it carries, one per sealed exam.
+    pub burns: Vec<Burn>,
 }
 
 /// A verdict that verified: its pair and its aggregates. Only
@@ -282,25 +214,27 @@ impl Verified {
         &self.aggregate
     }
 
-    /// Accepted only when it is over a sealed exam this pair spent: its burn
-    /// record names this exam and this pair.
+    /// Accepted only when it is over sealed exams this pair spent: a burn
+    /// record of every exam, each naming this pair.
     ///
     /// # Errors
-    /// Public material, no burn record, a burn record of another exam, or an
-    /// exam another pair spent first.
+    /// Public material, an exam without a burn record, or an exam another
+    /// pair spent first.
     pub fn fresh_slice(&self) -> Result<(), Rejection> {
         let aggregate = &self.aggregate;
-        if !aggregate.sealed {
+        if !aggregate.sealed || aggregate.exams.is_empty() {
             return Err(Rejection::NotSealed);
         }
-        let Some(burned) = &aggregate.burned_by else {
-            return Err(Rejection::NoBurn);
-        };
-        if burned != &self.pair {
-            return Err(Rejection::Spent {
-                candidate: burned.candidate.clone(),
-                predecessor: burned.predecessor.clone(),
-            });
+        for exam in &aggregate.exams {
+            let Some(burn) = aggregate.burns.iter().find(|b| b.exam == exam.digest) else {
+                return Err(Rejection::NoBurn);
+            };
+            if burn.by != self.pair {
+                return Err(Rejection::Spent {
+                    candidate: burn.by.candidate.clone(),
+                    predecessor: burn.by.predecessor.clone(),
+                });
+            }
         }
         Ok(())
     }
@@ -327,18 +261,47 @@ fn number(doc: &Value, pointer: &str) -> Result<Option<f64>, Rejection> {
     }
 }
 
-/// `document` checked as the examiner's verdict on `expected`, at the
-/// examiner's level `alpha`: the signature under `key`, the schema, the
-/// examiner's own validity and integrity flags, the pair, the level.
+fn strings(doc: &Value, pointer: &str) -> Vec<String> {
+    doc.pointer(pointer)
+        .and_then(Value::as_array)
+        .map(|r| {
+            r.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn interval(doc: &Value, pointer: &str) -> Result<Option<(f64, f64)>, Rejection> {
+    match doc.pointer(pointer) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Array(ends)) if ends.len() == 2 => Ok(Some((
+            ends[0].as_f64().ok_or_else(|| malformed(pointer))?,
+            ends[1].as_f64().ok_or_else(|| malformed(pointer))?,
+        ))),
+        Some(_) => Err(malformed(pointer)),
+    }
+}
+
+fn burn_of(doc: &Value, pointer: &str) -> Result<Burn, Rejection> {
+    Ok(Burn {
+        exam: text(doc, &format!("{pointer}/exam_sha256"))?
+            .ok_or_else(|| malformed(&format!("{pointer}/exam_sha256")))?,
+        by: Pair {
+            candidate: text(doc, &format!("{pointer}/candidate"))?,
+            predecessor: text(doc, &format!("{pointer}/predecessor"))?,
+        },
+    })
+}
+
+/// The signature check alone: an Ed25519 signature under `key` over the
+/// canonical bytes of `document` without its `signature`. [`verify`] runs it
+/// first; a caller that decides on the examiner's own outcome (a verified
+/// Promote) and not on the gate's rules runs only this.
 ///
 /// # Errors
-/// The first check that fails, typed.
-pub fn verify(
-    document: &Value,
-    key: &VerdictKey,
-    expected: &Pair,
-    alpha: f64,
-) -> Result<Verified, Rejection> {
+/// No signature of the examiner's algorithm, or one that does not verify.
+pub fn verify_signature(document: &Value, key: &PublicKey) -> Result<(), Rejection> {
     let signature = document.get("signature");
     let (Some(alg), Some(value)) = (
         signature.and_then(|s| s.get("alg")).and_then(Value::as_str),
@@ -351,41 +314,36 @@ pub fn verify(
     if alg != SIGNATURE_ALGORITHM {
         return Err(Rejection::Unsigned);
     }
-    let computed = key.mac(document).ok_or(Rejection::BadSignature)?;
-    if !same(computed.as_bytes(), value.as_bytes()) {
-        return Err(Rejection::BadSignature);
+    let mut body = document.as_object().ok_or(Rejection::BadSignature)?.clone();
+    body.remove("signature");
+    let bytes = canonical_bytes(&Value::Object(body)).ok_or(Rejection::BadSignature)?;
+    if key.verifies(&bytes, value) {
+        Ok(())
+    } else {
+        Err(Rejection::BadSignature)
     }
+}
+
+/// `document` checked as the examiner's verdict on `expected`, at the
+/// examiner's level `alpha`, read for `role`: the signature under `key`, the
+/// schema, the examiner's own validity and integrity flags, the pair, the
+/// level.
+///
+/// # Errors
+/// The first check that fails, typed.
+pub fn verify(
+    document: &Value,
+    key: &PublicKey,
+    expected: &Pair,
+    alpha: f64,
+    role: Role,
+) -> Result<Verified, Rejection> {
+    verify_signature(document, key)?;
     let schema = text(document, "/schema")?;
-    if schema.as_deref() != Some(EXAMINATION_SCHEMA) {
-        return Err(Rejection::Schema { found: schema });
-    }
-    if document.get("valid").and_then(Value::as_bool) != Some(true) {
-        let reasons = document
-            .get("invalid_reasons")
-            .and_then(Value::as_array)
-            .map(|r| {
-                r.iter()
-                    .filter_map(|x| x.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-        return Err(Rejection::Invalid { reasons });
-    }
-    let flags: Vec<String> = document
-        .get("integrity_flags")
-        .and_then(Value::as_array)
-        .ok_or_else(|| malformed("/integrity_flags"))?
-        .iter()
-        .filter_map(Value::as_str)
-        .filter(|flag| *flag != NO_MATERIAL_FLAG)
-        .map(String::from)
-        .collect();
-    if !flags.is_empty() {
-        return Err(Rejection::Flagged { flags });
-    }
-    let found = Pair {
-        candidate: text(document, "/candidate/adapter_digest")?,
-        predecessor: text(document, "/predecessor/adapter_digest")?,
+    let (found, aggregate) = match schema.as_deref() {
+        Some(EXAMINATION_SCHEMA) => examination(document)?,
+        Some(AGENT_SCHEMA) => agentic(document, role)?,
+        _ => return Err(Rejection::Schema { found: schema }),
     };
     if found.candidate != expected.candidate {
         return Err(Rejection::Candidate {
@@ -399,47 +357,62 @@ pub fn verify(
             found: found.predecessor,
         });
     }
-    let level = number(document, "/alpha")?.ok_or_else(|| malformed("/alpha"))?;
-    if (level - alpha).abs() > 1e-12 {
+    if (aggregate.alpha - alpha).abs() > 1e-12 {
         return Err(Rejection::Level {
             expected: alpha,
-            found: level,
+            found: aggregate.alpha,
         });
     }
+    let listed: Vec<&str> = aggregate.exams.iter().map(|e| e.digest.as_str()).collect();
+    if let Some(stray) = aggregate
+        .burns
+        .iter()
+        .find(|b| !listed.contains(&b.exam.as_str()))
+    {
+        return Err(Rejection::BurnOfAnotherExam {
+            exam: listed.join(", "),
+            found: stray.exam.clone(),
+        });
+    }
+    Ok(Verified {
+        pair: found,
+        aggregate,
+    })
+}
+
+/// The pair and aggregates of a direct-completion verdict.
+fn examination(document: &Value) -> Result<(Pair, Aggregate), Rejection> {
+    schema_checks(document, "/valid", "/invalid_reasons")?;
+    let flags: Vec<String> = document
+        .get("integrity_flags")
+        .and_then(Value::as_array)
+        .ok_or_else(|| malformed("/integrity_flags"))?
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|flag| *flag != NO_MATERIAL_FLAG)
+        .map(String::from)
+        .collect();
+    if !flags.is_empty() {
+        return Err(Rejection::Flagged { flags });
+    }
+    let pair = Pair {
+        candidate: text(document, "/candidate/adapter_digest")?,
+        predecessor: text(document, "/predecessor/adapter_digest")?,
+    };
     let exam = text(document, "/collection/exam_sha256")?
         .ok_or_else(|| malformed("/collection/exam_sha256"))?;
-    let burned_by = match document.get("burn") {
-        None | Some(Value::Null) => None,
-        Some(_) => {
-            let burned = text(document, "/burn/exam_sha256")?
-                .ok_or_else(|| malformed("/burn/exam_sha256"))?;
-            if burned != exam {
-                return Err(Rejection::BurnOfAnotherExam {
-                    exam,
-                    found: burned,
-                });
-            }
-            Some(Pair {
-                candidate: text(document, "/burn/candidate")?,
-                predecessor: text(document, "/burn/predecessor")?,
-            })
-        }
-    };
-    let interval = match document.pointer("/paired_gain/interval") {
-        None | Some(Value::Null) => None,
-        Some(Value::Array(ends)) if ends.len() == 2 => Some((
-            ends[0]
-                .as_f64()
-                .ok_or_else(|| malformed("/paired_gain/interval"))?,
-            ends[1]
-                .as_f64()
-                .ok_or_else(|| malformed("/paired_gain/interval"))?,
-        )),
-        Some(_) => return Err(malformed("/paired_gain/interval")),
+    let collection = text(document, "/collection/name")?.unwrap_or_default();
+    let burns = match document.get("burn") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(_) => vec![burn_of(document, "/burn")?],
     };
     let aggregate = Aggregate {
-        collection: text(document, "/collection/name")?.unwrap_or_default(),
-        exam,
+        schema: EXAMINATION_SCHEMA.into(),
+        exams: vec![Exam {
+            collection: collection.clone(),
+            digest: exam,
+        }],
+        collection,
         sealed: document
             .pointer("/collection/sealed")
             .and_then(Value::as_bool)
@@ -448,17 +421,94 @@ pub fn verify(
             .pointer("/collection/items")
             .and_then(Value::as_u64)
             .ok_or_else(|| malformed("/collection/items"))?,
-        alpha: level,
+        alpha: number(document, "/alpha")?.ok_or_else(|| malformed("/alpha"))?,
         gain: number(document, "/paired_gain/mean")?,
-        interval,
+        interval: interval(document, "/paired_gain/interval")?,
         one_sided_lower: number(document, "/paired_gain/one_sided_lower")?,
         families: document
             .pointer("/paired_gain/families")
             .and_then(Value::as_u64),
-        burned_by,
+        burns,
     };
-    Ok(Verified {
-        pair: found,
-        aggregate,
-    })
+    Ok((pair, aggregate))
+}
+
+/// The examiner's own verdict on the measurement: `valid` true, else its
+/// reasons.
+fn schema_checks(document: &Value, valid: &str, reasons: &str) -> Result<(), Rejection> {
+    if document.pointer(valid).and_then(Value::as_bool) != Some(true) {
+        return Err(Rejection::Invalid {
+            reasons: strings(document, reasons),
+        });
+    }
+    Ok(())
+}
+
+/// The pair and aggregates of an agent-protocol verdict, read for `role`.
+fn agentic(document: &Value, role: Role) -> Result<(Pair, Aggregate), Rejection> {
+    let outcome = text(document, "/verdict")?.ok_or_else(|| malformed("/verdict"))?;
+    if outcome == "Invalid" {
+        return Err(Rejection::Invalid {
+            reasons: strings(document, "/reasons"),
+        });
+    }
+    schema_checks(document, "/integrity/ok", "/reasons")?;
+    if text(document, "/role")?.as_deref() != Some("candidate") {
+        return Err(Rejection::Invalid {
+            reasons: vec!["the verdict is of a control arm, which is never promoted".into()],
+        });
+    }
+    if !document.get("candidate").is_some_and(Value::is_object) {
+        return Err(malformed("/candidate"));
+    }
+    let pair = Pair {
+        candidate: text(document, "/candidate/adapter_digest")?,
+        predecessor: text(document, "/predecessor/adapter_digest")?,
+    };
+    let exams = document
+        .get("sealed_exams")
+        .and_then(Value::as_array)
+        .ok_or_else(|| malformed("/sealed_exams"))?
+        .iter()
+        .enumerate()
+        .map(|(i, _)| {
+            let at = format!("/sealed_exams/{i}");
+            Ok(Exam {
+                collection: text(document, &format!("{at}/collection"))?.unwrap_or_default(),
+                digest: text(document, &format!("{at}/exam_sha256"))?
+                    .ok_or_else(|| malformed(&format!("{at}/exam_sha256")))?,
+            })
+        })
+        .collect::<Result<Vec<_>, Rejection>>()?;
+    let burns = match document.get("burns") {
+        Some(Value::Array(records)) => (0..records.len())
+            .map(|i| burn_of(document, &format!("/burns/{i}")))
+            .collect::<Result<Vec<_>, Rejection>>()?,
+        // Issued without the examiner's burn store: it spent nothing.
+        None | Some(Value::Null) => Vec::new(),
+        Some(_) => return Err(malformed("/burns")),
+    };
+    let section = if role == Role::Retention {
+        "retention"
+    } else {
+        "overall"
+    };
+    let at = |field: &str| format!("/{section}/{field}");
+    let aggregate = Aggregate {
+        schema: AGENT_SCHEMA.into(),
+        collection: section.into(),
+        sealed: !exams.is_empty(),
+        exams,
+        items: document
+            .pointer(&at("items"))
+            .and_then(Value::as_u64)
+            .ok_or_else(|| malformed(&at("items")))?,
+        alpha: number(document, "/policy/alpha")?.ok_or_else(|| malformed("/policy/alpha"))?,
+        gain: number(document, &at("delta"))?,
+        interval: interval(document, &at("interval"))?,
+        one_sided_lower: number(document, &at("one_sided_lower"))?,
+        families: document.pointer(&at("families")).and_then(Value::as_u64),
+        burns,
+    };
+    Ok((pair, aggregate))
 }

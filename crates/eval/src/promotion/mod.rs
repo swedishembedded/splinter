@@ -10,13 +10,15 @@
 //! The promotion gate: whether a candidate replaces its predecessor as the
 //! champion, decided on the examiner's signed aggregates and nothing else.
 //!
-//! The gate reads three verdicts of the examiner (`bench.examination/1`),
+//! The gate reads three verdicts of the examiner (`bench.examination/2` on
+//! the direct-completion protocol, `bench.verdict/3` on the agent protocol),
 //! each comparing the candidate with its predecessor, each verified in this
-//! process ([`verdict::verify`]): the signature under the examiner's key, the
-//! schema, the examiner's own validity and integrity flags, and that the
-//! verdict names this candidate and this predecessor. It never reads an item:
-//! a verdict carries aggregates only. A candidate is promoted only when all
-//! three rules hold:
+//! process ([`verdict::verify`]): the Ed25519 signature under the examiner's
+//! public key (the gate holds no signing key, so it cannot make a verdict
+//! it accepts), the schema, the examiner's own validity and integrity
+//! flags, and that the verdict names this candidate and this predecessor. It
+//! never reads an item: a verdict carries aggregates only. A candidate is
+//! promoted only when all three rules hold:
 //!
 //! 1. **Dev gain.** On the development split, the two-sided 95%
 //!    family-clustered interval of the paired gain lies above zero.
@@ -34,15 +36,24 @@
 //! one-sided level `alpha`; the gate requires the verdicts it reads to be at
 //! [`ALPHA`] (two-sided 95% intervals, one-sided 95% bounds) and refuses any
 //! other level rather than reinterpret it.
+//!
+//! **Where no sealed slice applies.** A decision whose candidate the
+//! examiner has no exam for (a release from `learn`, whose exam the learner
+//! generated itself) is made by one reviewed, explicit rule,
+//! [`decide_unexamined`]: rules 1 and 2 on the caller's own measurements,
+//! no sealed slice, and the decision record says so ([`Rule::NotExamVerified`],
+//! `exam_verified: false`, with why). It is never a silent bypass: a caller
+//! that has examiner verdicts uses [`decide`].
 
 pub mod canonical;
-mod mac;
+mod key;
 pub mod verdict;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use verdict::{verify, Aggregate, Pair, Rejection, VerdictKey, Verified};
+pub use key::{KeyError, PublicKey};
+pub use verdict::{verify, verify_signature, Aggregate, Burn, Exam, Pair, Rejection, Verified};
 
 /// The examiner's one-sided level the gate decides at: its `interval` is
 /// then the two-sided 95% interval and its `one_sided_lower` the one-sided
@@ -53,7 +64,8 @@ pub const ALPHA: f64 = 0.05;
 /// shown not to exceed: the non-inferiority margin.
 pub const RETENTION_MARGIN: f64 = 0.05;
 
-/// Which of the three verdicts a reason is about.
+/// Which of the three verdicts a reason is about, and which comparison of an
+/// agent-protocol verdict the gate reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
@@ -114,11 +126,54 @@ pub struct Submitted<'a> {
     pub sealed: &'a Value,
 }
 
+/// Which rule decided.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "rule", rename_all = "snake_case")]
+pub enum Rule {
+    /// The three rules on the examiner's signed verdicts ([`decide`]).
+    Examined,
+    /// Dev gain and retention on the caller's own measurements, no sealed
+    /// slice ([`decide_unexamined`]): not exam-verified.
+    NotExamVerified {
+        /// Why no sealed slice applies.
+        why: String,
+    },
+}
+
+/// One paired comparison the caller measured itself, in the examiner's
+/// terms at the gate's level [`ALPHA`]: the change in the share of items
+/// right, its two-sided family-clustered interval and the lower bound of its
+/// one-sided interval.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Measurement {
+    /// Items compared.
+    pub items: u64,
+    /// The paired change, candidate less predecessor.
+    pub gain: Option<f64>,
+    /// Its two-sided interval at the gate's level; `None` when it has none.
+    pub interval: Option<(f64, f64)>,
+    /// The lower bound of its one-sided interval at the gate's level.
+    pub one_sided_lower: Option<f64>,
+}
+
+/// What the unexamined rule decides on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Measured {
+    /// The development comparison.
+    pub dev: Measurement,
+    /// The retention comparison.
+    pub retention: Measurement,
+}
+
 /// What the gate decided, with the aggregates it decided on.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Promotion {
     /// Whether the candidate becomes the champion.
     pub promoted: bool,
+    /// The rule that decided.
+    pub rule: Rule,
+    /// Whether a sealed exam the examiner signed was part of the decision.
+    pub exam_verified: bool,
     /// Why not; empty exactly when promoted.
     pub reasons: Vec<Reason>,
     /// The candidate and predecessor decided on.
@@ -131,12 +186,72 @@ pub struct Promotion {
     pub sealed: Option<Aggregate>,
 }
 
-/// Decides whether `pair.candidate` replaces `pair.predecessor`, on the
-/// examiner's `verdicts` verified under `key`.
+/// Rule 1 on a comparison: the reason it fails, if it does.
+fn dev_reason(gain: Option<f64>, interval: Option<(f64, f64)>) -> Option<Reason> {
+    match interval {
+        Some((low, _)) if low > 0.0 => None,
+        Some((low, high)) => Some(Reason::NoDevGain { gain, low, high }),
+        None => Some(Reason::DevUnmeasured),
+    }
+}
+
+/// Rule 2 on a comparison's one-sided bound: the reason it fails, if it does.
+fn retention_reason(lower: Option<f64>) -> Option<Reason> {
+    match lower {
+        Some(lower) if lower > -RETENTION_MARGIN => None,
+        Some(lower) => Some(Reason::Inferior {
+            lower,
+            margin: RETENTION_MARGIN,
+        }),
+        None => Some(Reason::RetentionUnmeasured),
+    }
+}
+
+/// Decides, where no sealed slice applies, whether `pair.candidate` replaces
+/// `pair.predecessor` on the caller's own `measured` dev gain and retention:
+/// rules 1 and 2 as [`decide`] applies them, no sealed slice. The record is
+/// labelled not exam-verified, with `why`.
 #[must_use]
-pub fn decide(key: &VerdictKey, pair: &Pair, verdicts: Submitted<'_>) -> Promotion {
+pub fn decide_unexamined(pair: &Pair, measured: &Measured, why: &str) -> Promotion {
+    let reasons: Vec<Reason> = [
+        dev_reason(measured.dev.gain, measured.dev.interval),
+        retention_reason(measured.retention.one_sided_lower),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let aggregate = |m: &Measurement| Aggregate {
+        schema: "splinter.measurement".into(),
+        collection: String::new(),
+        exams: Vec::new(),
+        sealed: false,
+        items: m.items,
+        alpha: ALPHA,
+        gain: m.gain,
+        interval: m.interval,
+        one_sided_lower: m.one_sided_lower,
+        families: None,
+        burns: Vec::new(),
+    };
+    Promotion {
+        promoted: reasons.is_empty(),
+        rule: Rule::NotExamVerified { why: why.into() },
+        exam_verified: false,
+        reasons,
+        pair: pair.clone(),
+        dev: Some(aggregate(&measured.dev)),
+        retention: Some(aggregate(&measured.retention)),
+        sealed: None,
+    }
+}
+
+/// Decides whether `pair.candidate` replaces `pair.predecessor`, on the
+/// examiner's `verdicts` verified under its public `key`.
+#[must_use]
+pub fn decide(key: &PublicKey, pair: &Pair, verdicts: Submitted<'_>) -> Promotion {
     let mut reasons = Vec::new();
-    let mut checked = |role: Role, document: &Value| match verify(document, key, pair, ALPHA) {
+    let mut checked = |role: Role, document: &Value| match verify(document, key, pair, ALPHA, role)
+    {
         Ok(verified) => Some(verified),
         Err(rejection) => {
             reasons.push(Reason::Verdict { role, rejection });
@@ -147,26 +262,10 @@ pub fn decide(key: &VerdictKey, pair: &Pair, verdicts: Submitted<'_>) -> Promoti
     let retention = checked(Role::Retention, verdicts.retention);
     let sealed = checked(Role::Sealed, verdicts.sealed);
     if let Some(dev) = &dev {
-        let a = dev.aggregate();
-        match a.interval {
-            Some((low, _)) if low > 0.0 => {}
-            Some((low, high)) => reasons.push(Reason::NoDevGain {
-                gain: a.gain,
-                low,
-                high,
-            }),
-            None => reasons.push(Reason::DevUnmeasured),
-        }
+        reasons.extend(dev_reason(dev.aggregate().gain, dev.aggregate().interval));
     }
     if let Some(retention) = &retention {
-        match retention.aggregate().one_sided_lower {
-            Some(lower) if lower > -RETENTION_MARGIN => {}
-            Some(lower) => reasons.push(Reason::Inferior {
-                lower,
-                margin: RETENTION_MARGIN,
-            }),
-            None => reasons.push(Reason::RetentionUnmeasured),
-        }
+        reasons.extend(retention_reason(retention.aggregate().one_sided_lower));
     }
     if let Some(sealed) = &sealed {
         if let Err(rejection) = sealed.fresh_slice() {
@@ -178,6 +277,8 @@ pub fn decide(key: &VerdictKey, pair: &Pair, verdicts: Submitted<'_>) -> Promoti
     }
     Promotion {
         promoted: reasons.is_empty(),
+        rule: Rule::Examined,
+        exam_verified: true,
         reasons,
         pair: pair.clone(),
         dev: dev.map(|v| v.aggregate().clone()),

@@ -176,10 +176,13 @@ impl Rollouts for PracticeRollouts {
                 passed: t.reward.map(|r| r >= 1.0),
             })
             .collect();
+        // The budget's tokens: every trial's usage as its score record counts
+        // it; unmeasured when no trial's record counts any.
+        let counted: Vec<u64> = report.trials.iter().filter_map(|t| t.tokens).collect();
         Ok(Rolled {
             export,
             trials,
-            tokens: None,
+            tokens: (!counted.is_empty()).then(|| counted.iter().sum()),
         })
     }
 }

@@ -16,9 +16,13 @@
 //! hold item-level records) in its own data directory, and issues one signed
 //! document of aggregates per pair. What crosses back is that document: the
 //! verdict, and per holdout tier the items and the pass rates of both sides.
-//! The candidate is promoted only when the document verifies under the
-//! signing key and its verdict is Promote; an unsigned, altered or
-//! unverifiable document is invalid evidence and promotes nothing.
+//! The candidate is promoted only when the document's signature verifies
+//! under the examiner's public key, in this process, and its verdict is
+//! Promote; an unsigned, altered or unverifiable document is invalid
+//! evidence and promotes nothing. Splinter holds no signing key: bench signs
+//! with its own. The exam is sealed, so every verdict over it names the pair
+//! it compares (a candidate file per sitting) and carries the exam's burn
+//! record.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -27,6 +31,7 @@ use std::process::Command;
 use anyhow::{bail, Context as _};
 use serde::{Deserialize, Serialize};
 
+use splinter_eval::promotion::{verify_signature, PublicKey};
 use splinter_model::scratch::Served as Target;
 
 /// One tier's aggregates, as the verdict document states them.
@@ -73,6 +78,12 @@ pub struct Sitting {
     pub exam: PathBuf,
     /// The anchor job.
     pub anchor: PathBuf,
+    /// The sitting's name, as [`Examiner::sit`] was given it.
+    #[serde(default)]
+    pub name: String,
+    /// The model id the sitting's checkpoint was served as.
+    #[serde(default)]
+    pub model: String,
 }
 
 impl Sitting {
@@ -121,8 +132,12 @@ pub struct Bench {
     pub seed_file: PathBuf,
     /// The anchor's own private seed file.
     pub anchor_seed_file: PathBuf,
-    /// The verdict signing key.
-    pub signing_key: PathBuf,
+    /// The examiner's public key (bench's `verdict.key.pub`): what its
+    /// verdicts are verified with.
+    pub public_key: PathBuf,
+    /// The commit of the program whose checkpoints sit the exam, recorded in
+    /// each sitting's candidate file.
+    pub proposer_commit: String,
     /// The smallest gain a promotion must show.
     pub min_gain: f64,
     /// The serving build every arm declares.
@@ -222,6 +237,21 @@ impl Bench {
     }
 }
 
+impl Bench {
+    /// The candidate file bench reads for `sitting`: a checkpoint served as
+    /// it is (no adapter), named by its sitting, built by this program and
+    /// served on the declared brain build.
+    fn candidate_file(&self, sitting: &Sitting) -> serde_json::Value {
+        serde_json::json!({
+            "base": sitting.model,
+            "series": sitting.name,
+            "step": 1,
+            "proposer_commit": self.proposer_commit,
+            "brain_commit": self.serving_build,
+        })
+    }
+}
+
 impl Examiner for Bench {
     fn sit(&self, target: &Target, name: &str, control: bool) -> anyhow::Result<Sitting> {
         // The jobs hold item-level records, which stay with bench: they are
@@ -262,7 +292,12 @@ impl Examiner for Bench {
         }
         let anchor = jobs.pop().context("the anchor ran")?;
         let exam = jobs.pop().context("the exam ran")?;
-        Ok(Sitting { exam, anchor })
+        Ok(Sitting {
+            exam,
+            anchor,
+            name: name.into(),
+            model: target.model.clone(),
+        })
     }
 
     fn verdict(
@@ -292,19 +327,28 @@ impl Examiner for Bench {
         if let Some(control) = control {
             verdict.arg("--control").arg(&control.exam);
         }
+        let dir = out.parent().unwrap_or_else(|| Path::new("."));
+        for (flag, sitting) in [
+            ("--predecessor-file", base),
+            ("--candidate-file", candidate),
+        ] {
+            let file = dir.join(format!("{}.candidate.json", sitting.name));
+            std::fs::write(&file, self.candidate_file(sitting).to_string())
+                .with_context(|| format!("writing {}", file.display()))?;
+            verdict.arg(flag).arg(file);
+        }
         verdict
             .args([
                 "--anchor",
                 ANCHOR_NAME,
                 "--min-gain",
                 &self.min_gain.to_string(),
-                "--signing-key",
             ])
-            .arg(&self.signing_key)
             .arg("--out")
             .arg(out);
         self.run("issue the verdict", "", &mut verdict)?;
-        read_verdict(&self.dir, &self.signing_key, out)
+        let key = PublicKey::read(&self.public_key)?;
+        read_verdict(&key, out)
     }
 }
 
@@ -339,23 +383,17 @@ fn rates(section: &serde_json::Value) -> Option<TierRates> {
     })
 }
 
-/// The verdict in `document`, verified by bench under `signing_key`.
+/// The verdict in `document`, its signature verified in this process under
+/// the examiner's public `key`.
 ///
 /// # Errors
 /// The document cannot be read or names no verdict.
-pub fn read_verdict(bench: &Path, signing_key: &Path, document: &Path) -> anyhow::Result<Examined> {
-    let verified = Command::new("./bench")
-        .current_dir(bench)
-        .arg("verify-verdict")
-        .arg(document)
-        .arg("--signing-key")
-        .arg(signing_key)
-        .status()
-        .is_ok_and(|s| s.success());
+pub fn read_verdict(key: &PublicKey, document: &Path) -> anyhow::Result<Examined> {
     let text = std::fs::read_to_string(document)
         .with_context(|| format!("reading {}", document.display()))?;
     let doc: serde_json::Value =
         serde_json::from_str(&text).with_context(|| format!("parsing {}", document.display()))?;
+    let verified = verify_signature(&doc, key).is_ok();
     let verdict = doc["verdict"]
         .as_str()
         .context("the verdict document names no verdict")?
@@ -407,31 +445,51 @@ mod tests {
         assert!(!e("Reject", true).promotes());
     }
 
-    /// A bench checkout whose `verify-verdict` accepts only documents
-    /// containing `"signature":"good"`.
-    fn fake_bench(dir: &Path) {
-        use std::os::unix::fs::PermissionsExt;
-        let script =
-            "#!/bin/sh\n[ \"$1\" = verify-verdict ] && grep -q '\"signature\":\"good\"' \"$2\"\n";
-        std::fs::write(dir.join("bench"), script).unwrap();
-        std::fs::set_permissions(dir.join("bench"), std::fs::Permissions::from_mode(0o755))
-            .unwrap();
+    /// The examiner's test key pair: the signing half stays in the test.
+    fn examiner() -> (ed25519_dalek::SigningKey, PublicKey) {
+        let signer = ed25519_dalek::SigningKey::from_bytes(&[3; 32]);
+        let public = PublicKey::from_bytes(signer.verifying_key().to_bytes()).unwrap();
+        (signer, public)
+    }
+
+    /// `doc` signed as the examiner signs a verdict.
+    fn signed(signer: &ed25519_dalek::SigningKey, mut doc: serde_json::Value) -> String {
+        use ed25519_dalek::Signer as _;
+        let bytes = splinter_eval::promotion::canonical::canonical_bytes(&doc).unwrap();
+        let value: String = signer
+            .sign(&bytes)
+            .to_bytes()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        doc["signature"] = serde_json::json!({"alg": "ed25519", "key_id": "t", "value": value});
+        doc.to_string()
     }
 
     #[test]
     fn a_forged_or_unsigned_verdict_does_not_verify() {
         let dir = tempfile::tempdir().unwrap();
-        fake_bench(dir.path());
-        let key = dir.path().join("key");
+        let (signer, key) = examiner();
         let doc = dir.path().join("verdict.json");
-        std::fs::write(&doc, r#"{"verdict":"Promote","signature":"good"}"#).unwrap();
-        assert!(read_verdict(dir.path(), &key, &doc).unwrap().promotes());
-        std::fs::write(&doc, r#"{"verdict":"Promote","signature":"forged"}"#).unwrap();
-        let forged = read_verdict(dir.path(), &key, &doc).unwrap();
+        std::fs::write(
+            &doc,
+            signed(&signer, serde_json::json!({"verdict": "Promote"})),
+        )
+        .unwrap();
+        assert!(read_verdict(&key, &doc).unwrap().promotes());
+        let forger = ed25519_dalek::SigningKey::from_bytes(&[4; 32]);
+        std::fs::write(
+            &doc,
+            signed(&forger, serde_json::json!({"verdict": "Promote"})),
+        )
+        .unwrap();
+        let forged = read_verdict(&key, &doc).unwrap();
         assert!(!forged.verified && !forged.promotes());
-        std::fs::write(&doc, r#"{"signature":"good"}"#).unwrap();
+        std::fs::write(&doc, r#"{"verdict":"Promote"}"#).unwrap();
+        assert!(!read_verdict(&key, &doc).unwrap().promotes(), "unsigned");
+        std::fs::write(&doc, signed(&signer, serde_json::json!({}))).unwrap();
         assert!(
-            read_verdict(dir.path(), &key, &doc).is_err(),
+            read_verdict(&key, &doc).is_err(),
             "a document without a verdict is refused"
         );
     }
@@ -439,16 +497,17 @@ mod tests {
     #[test]
     fn the_tier_aggregates_and_the_anchor_are_read_from_the_document() {
         let dir = tempfile::tempdir().unwrap();
-        fake_bench(dir.path());
+        let (signer, key) = examiner();
         let doc = dir.path().join("verdict.json");
-        std::fs::write(
-            &doc,
-            r#"{"verdict":"Inconclusive","signature":"good","reasons":["MDE exceeds min_gain"],
+        let document: serde_json::Value = serde_json::from_str(
+            r#"{"verdict":"Inconclusive","reasons":["MDE exceeds min_gain"],
                 "tiers":{"a":{"items":15,"base_pass_rate":0.2,"candidate_pass_rate":0.4},"b":{"items":0,"families":0}},
                 "retention":{"items":20,"base_pass_rate":0.1,"candidate_pass_rate":0.15}}"#,
         )
         .unwrap();
-        let e = read_verdict(dir.path(), &dir.path().join("key"), &doc).unwrap();
+        std::fs::write(&doc, signed(&signer, document)).unwrap();
+        let e = read_verdict(&key, &doc).unwrap();
+        assert!(e.verified);
         assert_eq!(
             e.tiers["a"],
             TierRates {

@@ -78,9 +78,11 @@ and bench's examination.
 - For the examination (optional): a bench checkout (`--bench DIR`), the
   private seed files of its exam and its anchor (`--bench-seed-file`,
   `--bench-anchor-seed-file`; bench draws them when they do not exist), the
-  verdict signing key (`--bench-key`, made once with `./bench keygen --out
-  KEY`) and the sven binary bench runs the agent with (`--sven-bin`). Keep the
-  seed files and the key outside the run directory. Bench generates the exam
+  public key of bench's verdict signing key (`--bench-public-key`, the
+  `verdict.key.pub` that `./bench keygen` writes beside the private key it
+  keeps) and the sven binary bench runs the agent with (`--sven-bin`). The run
+  holds no signing key: bench signs, and the run verifies each verdict with
+  the public key. Keep the seed files outside the run directory. Bench generates the exam
   into `--bench-exams-dir` (relative to its checkout, default
   `.bench-data/exams`) and refuses a directory that resolves outside the
   checkout, as one behind a symbolic link does; name another directory inside
@@ -140,7 +142,7 @@ sitting):
 ```text
 $ samples/minimind/run.sh --run-dir RUN --seed SEED --brain-bin BRAIN --device gpu3 \
     --bench BENCH --bench-seed-file S/exam.seed --bench-anchor-seed-file S/anchor.seed \
-    --bench-key S/verdict.key --bench-exams-dir .tmp/splinter-exams --sven-bin SVEN
+    --bench-public-key S/verdict.key.pub --bench-exams-dir .tmp/splinter-exams --sven-bin SVEN
 [  done] world: bytes=13208671 documents=33300
 [  done] tasks: dev=12 explore=96 train=1600
 [  done] demonstrate: accepted=1600 episodes=1600 records=5868

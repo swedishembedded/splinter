@@ -40,6 +40,8 @@ sven-sdk = { workspace = true }
 # The scripted base loader: the residency specs run without weights.
 splinter-model = { workspace = true, features = ["scripted"] }
 regex = { workspace = true }
+# The specs play the examiner: they sign its verdicts with a test key.
+ed25519-dalek = { workspace = true }
 
 [lints]
 workspace = true

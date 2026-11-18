@@ -11,8 +11,8 @@
 //! scripted HTTP service (training is a real served job under a
 //! `resume_key`), practice that writes the examiner's export of
 //! deterministic trials (admitted by the real intake, curated by the real
-//! dataset build), and an examiner that signs `bench.examination/1`
-//! verdicts with a test key and keeps burn records on disk as bench does.
+//! dataset build), and an examiner that signs `bench.examination/2`
+//! verdicts with a test Ed25519 key and keeps burn records on disk as bench does.
 //! Each stand-in can be told to die at a chosen point, as a killed process
 //! would: a panic in the middle of its work.
 
@@ -23,10 +23,12 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use ed25519_dalek::{Signer as _, SigningKey};
 use serde_json::{json, Value};
 use splinter_agent::CancelToken;
 use splinter_core::clock::FixedClock;
-use splinter_eval::promotion::VerdictKey;
+use splinter_eval::promotion::canonical::canonical_bytes;
+use splinter_eval::promotion::PublicKey;
 use splinter_model::scripted_endpoint::{ScriptedEndpoint, SCRIPTED_KEY};
 use splinter_model::scripted_jobs::JobScript;
 use splinter_model::served_train::ArtifactStore;
@@ -45,9 +47,34 @@ use crate::common::{config, Scratch};
 /// The practice tasks.
 pub const TASKS: [&str; 4] = ["alpha", "beta", "gamma", "delta"];
 
-/// The test key the examiner stand-in signs with.
-pub fn key() -> VerdictKey {
-    VerdictKey::from_bytes([42; 32])
+/// The test key the examiner stand-in signs with; the campaign holds only
+/// its public half ([`key`]).
+fn signer() -> SigningKey {
+    SigningKey::from_bytes(&[42; 32])
+}
+
+/// The raw bytes of the examiner's public key, as its `.pub` file spells
+/// them in hex.
+pub fn key_bytes() -> [u8; 32] {
+    signer().verifying_key().to_bytes()
+}
+
+/// The examiner's public key, as the campaign holds it.
+pub fn key() -> PublicKey {
+    PublicKey::from_bytes(signer().verifying_key().to_bytes()).unwrap()
+}
+
+/// `doc` signed under `signer` as the examiner signs a verdict.
+pub fn sign(signer: &SigningKey, mut doc: Value) -> Value {
+    let bytes = canonical_bytes(&doc).unwrap();
+    let value: String = signer
+        .sign(&bytes)
+        .to_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    doc["signature"] = json!({"alg": "ed25519", "key_id": "test", "value": value});
+    doc
 }
 
 /// A scratch state root whose brain is a scripted training service.
@@ -203,7 +230,7 @@ pub struct Exam {
     pub says: BTreeMap<u32, Says>,
     pub spoil: Option<(u32, Spoil)>,
     pub ran: Cell<usize>,
-    key: VerdictKey,
+    key: PublicKey,
 }
 
 impl Exam {
@@ -248,7 +275,7 @@ impl Exam {
         let pair = json!({"candidate": candidate, "predecessor": request.predecessor.adapter});
         let exam = format!("{collection}-exam");
         let doc = json!({
-            "schema": "bench.examination/1", "role": "candidate", "valid": true, "invalid_reasons": [],
+            "schema": "bench.examination/2", "role": "candidate", "valid": true, "invalid_reasons": [],
             "integrity_flags": [], "alpha": 0.05,
             "candidate": {"adapter_digest": candidate}, "predecessor": {"adapter_digest": request.predecessor.adapter},
             "collection": {"name": collection, "exam_sha256": exam, "items": 120, "sealed": sealed},
@@ -258,9 +285,9 @@ impl Exam {
         });
         if self.spoil == Some((request.generation, Spoil::Forged)) && !sealed && collection == "dev"
         {
-            VerdictKey::from_bytes([1; 32]).sign(&doc)
+            sign(&SigningKey::from_bytes(&[1; 32]), doc)
         } else {
-            self.key.sign(&doc)
+            sign(&signer(), doc)
         }
     }
 }
@@ -274,7 +301,7 @@ impl Examiner for Exam {
         (1..=4).map(|g| format!("slice-{g}")).collect()
     }
 
-    fn key(&self) -> &VerdictKey {
+    fn key(&self) -> &PublicKey {
         &self.key
     }
 

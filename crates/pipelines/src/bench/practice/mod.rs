@@ -73,7 +73,8 @@ pub use material::{Practice, PRACTICE_FILE, PRACTICE_SCHEMA};
 use super::score::{ScoreRecord, Status};
 use super::{ingest_bench_trials, split, BenchIngested, IngestOptions};
 use crate::episodes::{EpisodeError, EpisodeOutcome, PolicyIdentity};
-use commands::{HarborRun, Skipped, KEY_VARIABLE};
+pub(crate) use commands::KEY_VARIABLE;
+use commands::{HarborRun, Skipped};
 
 /// The format tag of a [`PracticeReport`] and of the keys it is found by.
 pub const PRACTICE_FORMAT: &str = "splinter.bench-practice.v1";
@@ -129,6 +130,10 @@ pub struct PracticeTrial {
     pub reward: Option<f64>,
     /// The experiences it became (one, or one per conversation).
     pub experiences: Vec<ExperienceId>,
+    /// The tokens its model requests processed (prompt and completion), by
+    /// its score record's usage; `None` when the record states none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens: Option<u64>,
 }
 
 /// Where a run's material came from, recorded with what it produced.
@@ -244,7 +249,7 @@ fn base_profile(request: &PracticeRequest<'_>) -> Result<(PathBuf, String), Epis
 
 /// The policy's profile: `base` with its main role's upstream forwarded to
 /// the endpoint and id the policy is served under, and the run's session.
-fn policy_profile(
+pub(crate) fn policy_profile(
     base: &Path,
     endpoint: &splinter_orchestrator::context::ServedEndpoint,
     session: &str,
@@ -597,6 +602,9 @@ fn trials_of(
         let manifest = std::fs::read(export.join(&trial).join("manifest.json"))
             .ok()
             .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+        let tokens = manifest
+            .as_ref()
+            .and_then(|m| tokens_of(m.pointer("/score/usage")?));
         let (status, outcome) = if let Some(refused) = refused {
             (
                 None,
@@ -640,9 +648,20 @@ fn trials_of(
             task,
             status,
             outcome,
+            tokens,
         });
     }
     Ok(trials)
+}
+
+/// The tokens a score record's `usage` counts: its prompt and completion
+/// tokens; `None` when it counts neither.
+fn tokens_of(usage: &Value) -> Option<u64> {
+    let count = |field: &str| usage.get(field).and_then(Value::as_u64);
+    match (count("prompt_tokens"), count("completion_tokens")) {
+        (None, None) => None,
+        (prompt, completion) => Some(prompt.unwrap_or(0) + completion.unwrap_or(0)),
+    }
 }
 
 #[cfg(test)]

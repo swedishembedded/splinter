@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
-use splinter_eval::promotion::{Pair, VerdictKey};
+use splinter_eval::promotion::{Pair, PublicKey};
 use splinter_orchestrator::context::Context;
 
 use super::types::CampaignError;
@@ -99,7 +99,8 @@ pub struct Rolled {
     pub export: PathBuf,
     /// Every trial.
     pub trials: Vec<Trial>,
-    /// Tokens the policy generated, when counted.
+    /// Tokens the policy's requests processed (prompt and completion), summed
+    /// over the trials whose usage was counted; `None` when none was.
     pub tokens: Option<u64>,
 }
 
@@ -171,8 +172,9 @@ pub trait Examiner {
     /// examiner's names, in the order they are spent.
     fn slices(&self) -> Vec<String>;
 
-    /// The key the examiner's verdicts verify under.
-    fn key(&self) -> &VerdictKey;
+    /// The examiner's public key, its verdicts' signatures are verified
+    /// with.
+    fn key(&self) -> &PublicKey;
 
     /// Runs `request`; stops when `cancel` fires.
     ///

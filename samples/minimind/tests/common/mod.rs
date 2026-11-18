@@ -220,6 +220,8 @@ impl Examiner for FakeExaminer {
         let sitting = Sitting {
             exam: root.join("exam"),
             anchor: root.join("anchor"),
+            name: name.into(),
+            model: target.model.clone(),
         };
         std::fs::create_dir_all(&sitting.exam)?;
         std::fs::create_dir_all(&sitting.anchor)?;

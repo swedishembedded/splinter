@@ -76,6 +76,10 @@ anyhow = "1"
 base64 = "0.22"
 # Content hashing for the experience database.
 blake3 = "1"
+# The examiner's verdict signatures are Ed25519: the promotion gate verifies them with the examiner's public key and holds
+# no signing key. BSD-3-Clause, pinned exactly (its checksum in Cargo.lock); the precomputed tables and zeroize are
+# signing-side speed and hygiene a verifier does not need.
+ed25519-dalek = { version = "=3.0.0", default-features = false }
 async-trait = "0.1"
 # One GET of an endpoint's model list. The feature sets are sven's own for these two crates
 # (TLS through rustls with the ring provider), so the build links one crypto library.

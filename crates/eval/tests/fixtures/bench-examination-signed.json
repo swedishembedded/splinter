@@ -3,6 +3,7 @@
   "burn": {
     "burned_at": "2026-11-18T15:29:56+00:00",
     "candidate": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "collection": "slice-g1",
     "exam_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "predecessor": null
   },
@@ -80,7 +81,7 @@
     "truncated": "graded"
   },
   "role": "candidate",
-  "schema": "bench.examination/1",
+  "schema": "bench.examination/2",
   "series": "fixture",
   "serving": {
     "base_digest": "sha256:base",
@@ -91,9 +92,9 @@
     "brain_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
   "signature": {
-    "alg": "hmac-sha256",
-    "key_id": "630dcd2966c4",
-    "value": "a3cb3caeb66f3b67e3819a9a6de5b29e4157545f7d1871872d6f8304387d4e1b"
+    "alg": "ed25519",
+    "key_id": "56475aa75463474c",
+    "value": "808ddf31ffec1823541590b1ee2046155163fa9cb87553ef54c226584d03eb1a35bcacdf48927cc92ba7ba1e624f003d61da345ec780adb2b79eaf32224bca05"
   },
   "step": 1,
   "step_holds": true,

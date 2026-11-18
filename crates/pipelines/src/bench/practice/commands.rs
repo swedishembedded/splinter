@@ -25,7 +25,7 @@ const SERVING: &str = "bench gateway: serving";
 
 /// The environment variable the policy profile names its upstream key by,
 /// set for the gateway's process only.
-pub(super) const KEY_VARIABLE: &str = "BRAIN_KEY";
+pub(crate) const KEY_VARIABLE: &str = "BRAIN_KEY";
 
 /// The examiner's checkout and the Harbor that runs its jobs.
 #[derive(Clone, Debug, PartialEq, Eq)]

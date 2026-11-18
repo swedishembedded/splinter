@@ -55,7 +55,7 @@ usage: splinter-minimind <run|status> [options]
   --bench-anchor-seed-file F  the anchor's own private seed file (likewise)
   --bench-exams-dir DIR  where bench generates the exam, relative to its checkout (default
                          .bench-data/exams; bench refuses one that resolves outside the checkout)
-  --bench-key F          the verdict signing key
+  --bench-public-key F   bench's verdict public key (verdict.key.pub of `./bench keygen`)
   --sven-bin PATH        the sven binary bench runs the exam's agent with
   --min-gain X           the gain a promotion must show (default 0.05)
 ";
@@ -103,7 +103,7 @@ fn parse(mut args: Vec<String>) -> anyhow::Result<Args> {
                 | "bench-seed-file"
                 | "bench-anchor-seed-file"
                 | "bench-exams-dir"
-                | "bench-key"
+                | "bench-public-key"
                 | "sven-bin"
                 | "min-gain"
         ) {
@@ -284,7 +284,10 @@ fn run(
                     flag("bench-exams-dir")
                         .unwrap_or_else(|| splinter_sdk::bench::examine::DEFAULT_EXAMS.into()),
                 ),
-                signing_key: PathBuf::from(flag("bench-key").context("--bench needs --bench-key")?),
+                public_key: PathBuf::from(
+                    flag("bench-public-key").context("--bench needs --bench-public-key")?,
+                ),
+                proposer_commit: git_revision(&sample_dir()),
                 min_gain: flag("min-gain")
                     .map(|g| g.parse())
                     .transpose()
