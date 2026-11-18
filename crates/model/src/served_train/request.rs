@@ -28,6 +28,20 @@ pub(super) fn source(brain: &BrainEndpoints, file: &Path) -> Result<Value, Polic
     Ok(json!({ "digest": brain.artifact_store()?.publish(file)?.hex() }))
 }
 
+/// The rank and alpha of a fresh adapter. A continued adapter keeps its own:
+/// brain refuses a continuation asked for at another rank, so nothing is sent.
+pub(super) fn adapter_shape(
+    params: &mut Map<String, Value>,
+    continue_from: Option<&Path>,
+    rank: u32,
+    alpha: f32,
+) {
+    if continue_from.is_none() {
+        set(params, "rank", rank);
+        set(params, "alpha", alpha);
+    }
+}
+
 pub(super) fn set(params: &mut Map<String, Value>, name: &str, value: impl Into<Value>) {
     params.insert(name.to_string(), value.into());
 }
@@ -71,12 +85,12 @@ pub(super) fn fine_tune_params(
     set(&mut params, "data", Value::Object(data).to_string());
     set(&mut params, "objective", "sft");
     set(&mut params, "steps", request.steps);
-    // A continued adapter keeps its own rank and alpha; brain refuses a
-    // continuation asked for at another rank.
-    if request.continue_from.is_none() {
-        set(&mut params, "rank", request.rank);
-        set(&mut params, "alpha", request.alpha);
-    }
+    adapter_shape(
+        &mut params,
+        request.continue_from,
+        request.rank,
+        request.alpha,
+    );
     set(&mut params, "weight_decay", request.weight_decay);
     set(&mut params, "grad_accum", request.grad_accum);
     set(&mut params, "seed", request.seed);
@@ -135,12 +149,12 @@ pub(super) fn policy_gradient_params(
     set(&mut params, "data", Value::Object(data).to_string());
     set(&mut params, "objective", "policy_gradient");
     set(&mut params, "steps", request.steps);
-    // A continued adapter keeps its own rank and alpha; brain refuses a
-    // continuation asked for at another rank.
-    if request.continue_from.is_none() {
-        set(&mut params, "rank", request.rank);
-        set(&mut params, "alpha", request.alpha);
-    }
+    adapter_shape(
+        &mut params,
+        request.continue_from,
+        request.rank,
+        request.alpha,
+    );
     set(&mut params, "weight_decay", request.weight_decay);
     set(&mut params, "grad_accum", request.grad_accum);
     set(&mut params, "seed", request.seed);

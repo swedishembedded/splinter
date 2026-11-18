@@ -496,6 +496,9 @@ fn a_preference_run_is_a_job_of_its_pair_loss_sized_to_its_longest_pair() {
     );
     pairs(&train);
     pairs(&held_out);
+    // It continues an adapter, so the adapter's own rank and alpha apply.
+    let start = rig.dir.path().join("start-dpo.safetensors");
+    std::fs::write(&start, b"adapter").unwrap();
     let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
     let request = PreferenceTune {
         model_dir: &rig.model_dir,
@@ -513,13 +516,17 @@ fn a_preference_run_is_a_job_of_its_pair_loss_sized_to_its_longest_pair() {
         learning_rate: None,
         // seed: the job's request carries it.
         seed: 5,
-        continue_from: None,
+        continue_from: Some(&start),
         cancel: None,
     };
 
     let trained = train_preference_served(&endpoints(&service, &rig), &request).unwrap();
 
     let jobs = service.jobs();
+    assert!(
+        jobs.created()[0].get("rank").is_none() && jobs.created()[0].get("alpha").is_none(),
+        "a continued adapter keeps its own rank and alpha"
+    );
     assert_eq!(
         jobs.actions(),
         vec!["check_dataset", "check_dataset", "train"]
@@ -572,6 +579,8 @@ fn a_feedback_run_is_a_kto_job_with_its_class_weights_and_no_held_out_set() {
         })
         .collect();
     std::fs::write(&train, lines.join("\n")).unwrap();
+    let start = rig.dir.path().join("start-kto.safetensors");
+    std::fs::write(&start, b"adapter").unwrap();
     let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
     let request = FeedbackTune {
         model_dir: &rig.model_dir,
@@ -587,7 +596,7 @@ fn a_feedback_run_is_a_kto_job_with_its_class_weights_and_no_held_out_set() {
         learning_rate: None,
         // seed: the job's request carries it.
         seed: 5,
-        continue_from: None,
+        continue_from: Some(&start),
         cancel: None,
     };
     let trained = train_feedback_served(&endpoints(&service, &rig), &request).unwrap();
@@ -596,6 +605,10 @@ fn a_feedback_run_is_a_kto_job_with_its_class_weights_and_no_held_out_set() {
     assert_eq!(jobs.checks()[0]["kind"], "feedback");
     let params = &jobs.created()[0];
     assert_eq!(params["objective"], "feedback");
+    assert!(
+        params.get("rank").is_none() && params.get("alpha").is_none(),
+        "a continued adapter keeps its own rank and alpha"
+    );
     assert!((params["undesirable_weight"].as_f64().unwrap() - 2.0).abs() < 1e-6);
     assert!((params["desirable_weight"].as_f64().unwrap() - 1.0).abs() < 1e-6);
     assert!(params.get("beta").is_none(), "brain's default when unnamed");

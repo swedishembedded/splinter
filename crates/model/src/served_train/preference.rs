@@ -24,7 +24,7 @@ use serde_json::{Map, Value};
 use splinter_core::training::PreferenceScore;
 
 use super::check::{check_dataset, CheckSpec, DatasetKind, MAX_BLOCK};
-use super::request::{set, source};
+use super::request::{adapter_shape, set, source};
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 use crate::local::{closed_think_pairs, opens_think_block};
@@ -91,8 +91,12 @@ pub fn train_preference_served(
         set(&mut params, "gamma", gamma);
     }
     set(&mut params, "steps", request.steps);
-    set(&mut params, "rank", request.rank);
-    set(&mut params, "alpha", request.alpha);
+    adapter_shape(
+        &mut params,
+        request.continue_from,
+        request.rank,
+        request.alpha,
+    );
     set(&mut params, "beta", request.beta);
     set(&mut params, "nll_weight", request.nll_weight);
     set(&mut params, "keep_reasoning", reasoning);

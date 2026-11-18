@@ -21,7 +21,7 @@ use splinter_core::training::FeedbackSummary;
 
 use super::check::{check_dataset, CheckSpec, DatasetKind, MAX_BLOCK};
 use super::preference::prepared;
-use super::request::{set, source};
+use super::request::{adapter_shape, set, source};
 use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 use crate::local::opens_think_block;
@@ -67,8 +67,12 @@ pub fn train_feedback_served(
     set(&mut params, "data", Value::Object(data).to_string());
     set(&mut params, "objective", "feedback");
     set(&mut params, "steps", request.steps);
-    set(&mut params, "rank", request.rank);
-    set(&mut params, "alpha", request.alpha);
+    adapter_shape(
+        &mut params,
+        request.continue_from,
+        request.rank,
+        request.alpha,
+    );
     if let Some(beta) = request.beta {
         set(&mut params, "beta", beta);
     }
