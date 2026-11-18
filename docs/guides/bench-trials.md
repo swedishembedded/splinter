@@ -88,7 +88,8 @@ the run's directory.
 A run is keyed by the material, the policy, the profile, the attempts, the tasks and the seed. Running it again
 after it finished runs nothing, exports again (the export is idempotent) and admits nothing twice. A run that did
 not finish is staged and run again whole: the examiner's gateway forgets the jobs registered with it when it stops,
-and only a staging registers one. The seed names the run; the examiner's agent sends no sampling seed, so the
+and only a staging registers one. The seed names the run. How the policy samples is the profile's: its `[sven.sampling]` (the report records it as
+`sampling`, each trial seeded with its own seed derived from the profile's run seed by the examiner), or, without one, the
 policy samples as its server does. Material staged for docker sandboxes is refused: the gateway is served on the
 loopback address, which userns sandboxes reach.
 

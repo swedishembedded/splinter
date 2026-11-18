@@ -153,11 +153,18 @@ impl Report for PracticeReport {
                 refused.reason
             );
         }
-        let _ = writeln!(
-            out,
-            "  the seed names the run; the examiner's agent sends no sampling seed, so the policy \
-             sampled as its server does"
-        );
+        let _ = match &self.sampling {
+            Some(sampling) => writeln!(
+                out,
+                "  the seed names the run; every trial sampled as the profile's [sven.sampling] \
+                 sets ({sampling}), seeded with its own seed derived from the profile's"
+            ),
+            None => writeln!(
+                out,
+                "  the seed names the run; the profile sets no [sven.sampling], so the policy \
+                 sampled as its server does"
+            ),
+        };
         let _ = writeln!(out, "  run directory {}", self.dir.display());
         out
     }

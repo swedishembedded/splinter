@@ -46,8 +46,10 @@
 //! staged and run again whole, because the examiner's gateway forgets the
 //! jobs registered with it when it stops and only a staging registers one.
 //!
-//! The seed names the job and is recorded; the examiner's agent adapter
-//! sends no sampling seed, so the policy samples as its server does.
+//! The seed names the job and is recorded. How the policy samples is the
+//! profile's: its `[sven.sampling]` (temperature, top-p, top-k, the run seed
+//! each trial's own seed is derived from) when it has one, which the report
+//! records as `sampling`; without one, as the policy's server does.
 
 mod commands;
 mod executor;
@@ -163,6 +165,10 @@ pub struct PracticeReport {
     pub served_as: String,
     /// The run's seed.
     pub seed: u64,
+    /// The profile's `[sven.sampling]`, as the examiner samples every trial
+    /// with it; `None`: the profile sets none, and the policy sampled as its
+    /// server does.
+    pub sampling: Option<Value>,
     /// Attempts of each task.
     pub attempts: u32,
     /// The material.
@@ -277,6 +283,14 @@ fn policy_profile(
     toml::to_string(&profile).map_err(|e| refuse(e.to_string()))
 }
 
+/// The `[sven.sampling]` table of a profile the run derived (valid TOML, as
+/// [`policy_profile`] wrote it), as JSON.
+fn profile_sampling(profile: &str) -> Option<Value> {
+    let table: toml::Table = toml::from_str(profile).ok()?;
+    let sampling = table.get("sven")?.get("sampling")?;
+    serde_json::to_value(sampling).ok()
+}
+
 /// A port free on the loopback address now, for the run's gateway.
 fn free_port() -> Result<u16, EpisodeError> {
     std::net::TcpListener::bind("127.0.0.1:0")
@@ -374,7 +388,9 @@ pub fn run_practice(
     };
     std::fs::create_dir_all(&dir).map_err(io(&dir))?;
     let profile = dir.join(format!("{name}.toml"));
-    std::fs::write(&profile, policy_profile(&base, &endpoint, &name)?).map_err(io(&profile))?;
+    let profile_text = policy_profile(&base, &endpoint, &name)?;
+    let sampling = profile_sampling(&profile_text);
+    std::fs::write(&profile, profile_text).map_err(io(&profile))?;
 
     let staged = dir.join("staged");
     let job_dir = staged.join(practice.staged_name());
@@ -444,6 +460,7 @@ pub fn run_practice(
         policy,
         served_as: endpoint.model,
         seed: settings.seed,
+        sampling,
         attempts: settings.attempts,
         provenance: PracticeProvenance {
             dir: practice.dir.clone(),
@@ -683,6 +700,17 @@ mod tests {
             outcome_of(&score("verifier_error", false, None)),
             EpisodeOutcome::VerifierError { .. }
         ));
+    }
+
+    #[test]
+    fn the_report_records_the_sampling_the_profile_sets_and_none_when_it_sets_none() {
+        let sampled =
+            "[sven.sampling]\ntemperature = 1.0\ntop_k = 20\nseed = 7\n[run]\nattempts = 8\n";
+        let sampling = profile_sampling(sampled).expect("the profile sets its sampling");
+        assert_eq!(sampling["temperature"], 1.0);
+        assert_eq!(sampling["top_k"], 20);
+        assert_eq!(sampling["seed"], 7);
+        assert_eq!(profile_sampling("[sven]\nbuild = \"x\"\n"), None);
     }
 
     #[test]
