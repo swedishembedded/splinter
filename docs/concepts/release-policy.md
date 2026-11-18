@@ -49,13 +49,15 @@ output) says **not exam-verified**, with why. It is never a silent bypass.
 
 Records about one family of source text (two prints of a letter, several questions about one
 document) are one piece of evidence: a model that knows the letter gets all its questions right.
-The promotion rule's intervals therefore resample whole families, and a gain resting on one or two
-families shows as a wide interval (with a single family there is no interval, and no promotion).
+The promotion rule's intervals therefore resample whole families, and a gain resting on a few
+families that disagree shows as a wide interval (with a single family there is no interval, and no
+promotion); a gain over fewer than six families is never counted, since unanimous families
+resample to an interval of no width.
 The report adds the sign test that counts a family once and the exact sign test over tasks; they
 are read beside the decision and do not make it. A gain not shown on an exam too small to see the
 lead you asked for (`--target-effect`) is reported inconclusive and not as a failure; either way
-nothing is released. The rule decides at its fixed level: a run asked to spend the level across a
-lineage is refused.
+nothing is released. The rule decides at its fixed level; no setting spends the level across a
+lineage.
 
 ## What stops a release from lying
 

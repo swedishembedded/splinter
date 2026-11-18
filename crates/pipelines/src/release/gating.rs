@@ -399,11 +399,9 @@ pub(super) fn run_gate(
     let (config, canaries, interval_seed) = (run.config, run.canaries, run.interval_seed);
     let suites = Suites::build(ctx, candidate, champion, config)?;
     // The sign test is reported at the plain level: the promotion rule
-    // decides, and `release` refuses a request to spend the level.
-    let generation = None;
+    // decides.
     let rule = power::Rule {
         alpha: config.alpha,
-        generation,
         target_effect: config.target_effect,
     };
     let all = suites.all();

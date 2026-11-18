@@ -512,7 +512,6 @@ mod tests {
         PowerAssessment {
             units,
             nominal_alpha: 0.05,
-            generation: None,
             target_effect: None,
             verdict: Verdict::Significant,
             win_share: share,

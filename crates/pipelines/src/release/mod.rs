@@ -217,21 +217,6 @@ pub fn release_recorded(
     release(ctx, &seeded, &run.cancel_token())
 }
 
-/// Refuses a gate asked to spend its level across the lineage: the promotion
-/// rule decides at its fixed level (the two-sided interval of the dev
-/// gain above 0), and the sign test the level was spent on is reported, not
-/// decided on. A run that ends in a release asks this before it trains.
-pub(crate) fn decided_at_fixed_level(alpha_spending: bool) -> Result<(), OrchestratorError> {
-    if alpha_spending {
-        return Err(OrchestratorError::Refused(
-            "the release gate cannot spend its level across the lineage: the promotion rule \
-             decides at its fixed level, a two-sided 95% interval of the dev gain above 0"
-                .into(),
-        ));
-    }
-    Ok(())
-}
-
 /// Runs the gate on `request.candidate` and releases it if it passes.
 pub fn release(
     ctx: &Context,
@@ -265,7 +250,6 @@ pub fn release(
             request.alias
         )));
     }
-    decided_at_fixed_level(request.gate.alpha_spending)?;
     let config = ctx.config();
     if candidate.base != config.policy_base {
         return Err(OrchestratorError::Refused(format!(

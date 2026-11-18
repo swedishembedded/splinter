@@ -180,53 +180,8 @@ fn judged(outcomes: &[PairedOutcome], rule: Rule) -> Check<Improvement> {
 
 const PLAIN: Rule = Rule {
     alpha: 0.05,
-    generation: None,
     target_effect: None,
 };
-
-#[test]
-fn five_unanimous_families_pass_at_the_plain_level_and_not_at_a_later_generation() {
-    // p = 1/32 = 0.031: below 0.05, above the 0.025 the first generation
-    // of the sequence may spend.
-    let five = outcomes(5, 0, 0);
-    assert!(judged(&five, PLAIN).passed);
-    let first = judged(
-        &five,
-        Rule {
-            generation: Some(1),
-            ..PLAIN
-        },
-    );
-    assert!(!first.passed && !first.inconclusive, "{first:?}");
-    let recorded = first.measured.unwrap();
-    assert!(
-        (recorded.alpha - 0.025).abs() < 1e-15,
-        "the level held to is recorded"
-    );
-    // Six unanimous families (1/64 = 0.0156) pass the first generation and
-    // fail the third (0.05 / 12 = 0.0042).
-    let six = outcomes(6, 0, 0);
-    assert!(
-        judged(
-            &six,
-            Rule {
-                generation: Some(1),
-                ..PLAIN
-            }
-        )
-        .passed
-    );
-    assert!(
-        !judged(
-            &six,
-            Rule {
-                generation: Some(3),
-                ..PLAIN
-            }
-        )
-        .passed
-    );
-}
 
 #[test]
 fn a_miss_on_a_small_exam_is_inconclusive_and_releases_nothing() {

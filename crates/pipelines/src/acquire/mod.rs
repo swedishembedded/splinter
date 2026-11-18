@@ -459,7 +459,6 @@ pub fn acquire(
     request: &AcquireRequest,
     trainer: &dyn Trainer,
 ) -> Result<Recorded<AcquireReport>, OrchestratorError> {
-    crate::release::decided_at_fixed_level(request.gate.alpha_spending)?;
     request.validate()?;
     let kinds = if request.kinds.is_empty() {
         DEFAULT_LEARN_KINDS

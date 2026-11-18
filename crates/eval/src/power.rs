@@ -240,11 +240,8 @@ impl Verdict {
 /// How the improvement check is held to a level and to a power.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rule {
-    /// The level of the whole sequence of releases.
+    /// The sign test's level.
     pub alpha: f64,
-    /// The 1-based place of this decision in the lineage's sequence, when
-    /// the level is spent across it.
-    pub generation: Option<u32>,
     /// The lead the exam is asked to be able to see.
     pub target_effect: Option<f64>,
 }
@@ -254,10 +251,8 @@ pub struct Rule {
 pub struct PowerAssessment {
     /// Independent units (families) the test rests on, ties included.
     pub units: usize,
-    /// The level of the whole sequence.
+    /// The sign test's level.
     pub nominal_alpha: f64,
-    /// The generation whose share was spent, when it was spent.
-    pub generation: Option<u32>,
     /// The lead asked for.
     pub target_effect: Option<f64>,
     /// What the test concluded.
@@ -283,8 +278,8 @@ fn gate_training_runs() -> usize {
     GATE_TRAINING_RUNS
 }
 
-/// [`gate::improvement`] held to `rule`: at the level this generation may
-/// spend, and, when a target lead is named, with a miss on an exam too small
+/// [`gate::improvement`] held to `rule`: at its level, and, when a target
+/// lead is named, with a miss on an exam too small
 /// to see it called inconclusive and not a failure. A rejection is a pass
 /// whatever the power: the p-value is valid at its level however few units
 /// there are.
@@ -296,9 +291,7 @@ pub fn judged_improvement(
     rule: Rule,
     significance: &dyn Significance,
 ) -> Check<Improvement> {
-    let level = rule
-        .generation
-        .map_or(rule.alpha, |g| spent_alpha(rule.alpha, g));
+    let level = rule.alpha;
     let mut check = gate::improvement(suite, variants, outcomes, level, significance);
     let Some(measured) = check.measured.as_mut() else {
         return check;
@@ -329,7 +322,6 @@ pub fn judged_improvement(
     measured.power = Some(PowerAssessment {
         units,
         nominal_alpha: rule.alpha,
-        generation: rule.generation,
         target_effect: rule.target_effect,
         verdict,
         win_share: Share::wilson(

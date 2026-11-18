@@ -36,7 +36,6 @@ impl GateArgs {
     #[must_use]
     pub fn plan(self) -> GatePlan {
         GatePlan {
-            alpha_spending: false,
             target_effect: self.target_effect,
             anchor_max_net_lost: self.anchor_max_net_lost,
         }

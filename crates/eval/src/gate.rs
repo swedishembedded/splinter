@@ -12,24 +12,28 @@
 //! 1. **Improvement** on the new data's held-out tasks - the records
 //!    training held out, and the variants of the tasks it trained on (the
 //!    same fact in other words, which is what shows a fact was learned) -
-//!    decided over both together, and reported for each alone: the held-out
+//!    measured over both together, and reported for each alone: the held-out
 //!    records measure generalisation to text the candidate was not trained
 //!    on, the variants measure recall of trained facts under paraphrase, and
-//!    a report never lets one pass for the other. The decision is a one-sided paired sign test ([`Significance`]) over the tasks both
-//!    models were graded on,
-//!    candidate right and champion wrong against the reverse, significant
-//!    at `alpha` ([`DEFAULT_ALPHA`]). Ties and unpaired tasks carry no
-//!    evidence; they are excluded and counted. Beside the test, every task
+//!    a report never lets one pass for the other. The gain is decided by the
+//!    one promotion rule ([`crate::promotion`]): the paired gain's two-sided
+//!    interval at the rule's level, resampling whole families, above zero over at least
+//!    [`crate::promotion::MIN_GAIN_FAMILIES`] families. The release applies
+//!    the rule over this check's outcomes (`splinter_pipelines::release`);
+//!    this module measures them. The one-sided paired sign test over
+//!    families ([`Significance`], at `alpha`, [`DEFAULT_ALPHA`]) is recorded
+//!    beside the rule and decides nothing. Ties and unpaired tasks carry no
+//!    evidence; they are excluded and counted. Beside the rule, every task
 //!    the suite assigned is counted for each arm ([`Verified`]): the
 //!    candidate must have solved at least as many as the champion, and a
 //!    task it was not graded on counts as unsolved, so an attempt set aside
-//!    as exposed or as an environment failure cannot remove a loss from the
-//!    paired test's denominator.
-//! 2. **Retention** on every earlier release's held-out tasks: per suite,
-//!    the candidate's accuracy may fall at most `retention_bound`
-//!    ([`DEFAULT_RETENTION_BOUND`]) below the champion's. With no earlier
-//!    release there is nothing to retain, and the check passes over zero
-//!    suites.
+//!    as exposed or as an environment failure cannot remove a loss.
+//! 2. **Retention** on every earlier release's held-out tasks and the anchor
+//!    suite together, decided by the promotion rule's retention bound: the
+//!    one-sided lower bound of the paired change above
+//!    `-`[`crate::promotion::RETENTION_MARGIN`]. Each earlier suite's drop
+//!    against `retention_bound` ([`DEFAULT_RETENTION_BOUND`]) is reported, and
+//!    names what a suite lost; it decides nothing.
 //! 3. **Anchor**: on the frozen anchor suite of general tasks, a bound on
 //!    the drop in accuracy, `anchor_bound` ([`DEFAULT_ANCHOR_BOUND`]), or,
 //!    when `anchor_net_lost` is set, on the answers lost net of the answers
@@ -96,12 +100,12 @@ pub struct SuiteSummary {
     pub excluded: BTreeMap<String, usize>,
 }
 
-/// The sign test's significance level: the chance of releasing a candidate
-/// no better than the champion that the gate accepts. Brain's own promote
-/// gate uses the same level.
+/// The level of the sign test the improvement check reports beside the
+/// promotion rule, which decides at its own fixed level.
 pub const DEFAULT_ALPHA: f64 = 0.05;
-/// How far, as a fraction of the suite, the candidate's accuracy on an
-/// earlier release's held-out tasks may fall below the champion's.
+/// The drop, as a fraction of the suite, in the candidate's accuracy on an
+/// earlier release's held-out tasks that the report marks; the promotion
+/// rule's retention bound decides.
 pub const DEFAULT_RETENTION_BOUND: f64 = 0.05;
 /// How far, as a fraction of the suite, the candidate's accuracy on the
 /// anchor suite may fall below the champion's.
@@ -121,7 +125,7 @@ pub const DEFAULT_SERVE_STARTUP_SECS: u64 = 600;
 pub struct GateConfig {
     /// The sign test's significance level.
     pub alpha: f64,
-    /// The largest accuracy drop allowed on an earlier release's suite.
+    /// The accuracy drop on an earlier release's suite the report marks.
     pub retention_bound: f64,
     /// The largest accuracy drop allowed on the anchor suite.
     pub anchor_bound: f64,
@@ -139,13 +143,6 @@ pub struct GateConfig {
     /// reads the defaults.
     #[serde(default)]
     pub agentic: AgenticConfig,
-    /// Whether the improvement check spends `alpha` across the releases of a
-    /// lineage by the fixed schedule of [`crate::power::spent_alpha`], so that
-    /// a long sequence of candidates no better than their champions
-    /// releases one with probability below `alpha` and not near
-    /// `1 - (1 - alpha)^n`. A report written before it existed reads `false`.
-    #[serde(default)]
-    pub alpha_spending: bool,
     /// The lead, in the share of independent units won, the improvement check
     /// is asked to be able to see. With it, a miss on an exam too small to
     /// see that lead is reported inconclusive and not as a failure. `None`
@@ -164,7 +161,6 @@ impl Default for GateConfig {
             serve_startup_secs: DEFAULT_SERVE_STARTUP_SECS,
             anchor_net_lost: None,
             agentic: AgenticConfig::default(),
-            alpha_spending: false,
             target_effect: None,
         }
     }

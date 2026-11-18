@@ -26,7 +26,8 @@ missing: test strength, canaries, coverage, power.
     in `splinter-eval::power`; `exam-set power` prints the sign-test power and the smallest lead
     seen; the gate takes `alpha_spending` (opt-in) and `target_effect` and reports a miss on an
     underpowered exam as inconclusive (finding 047). Done: `--alpha-spending` and `--target-effect` on `release`, `learn` and
-    `practice` (one `GatePlan` carried by every request). PILOT label (fewer than 100 families or three training runs: the gate
+    `practice` (one `GatePlan` carried by every request); the release gate's `alpha_spending` was removed on 2026-11-18
+    (the promotion rule decides at its fixed level; `spent_alpha` stays for `splinter campaign`). PILOT label (fewer than 100 families or three training runs: the gate
     always carries one seed, `exam-set power --training-runs N`) and the candidate's win share among
     discordant families with a Wilson interval (`splinter-eval::pilot`; brain has no Wilson function, so
     it is local). Left: making spending the
