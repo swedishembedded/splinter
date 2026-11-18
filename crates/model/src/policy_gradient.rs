@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use splinter_core::training::PolicyGradientSummary;
-use splinter_data::AdvantageNorm;
+use splinter_data::{AdvantageFloor, AdvantageNorm};
 
 use crate::precision::BasePrecision;
 
@@ -148,6 +148,10 @@ pub struct PolicyGradientOptions {
     /// normalisation the dataset was built for (its manifest names it), never
     /// a train flag. Unset: brain's default.
     pub advantage_norm: Option<AdvantageNorm>,
+    /// Whether brain clamps each advantage at zero after its group's baseline
+    /// is taken: the floor the dataset was built for (a positive-only one
+    /// floors at zero), never a train flag. Unset: brain's default (none).
+    pub advantage_floor: Option<AdvantageFloor>,
 }
 
 impl PolicyGradientOptions {

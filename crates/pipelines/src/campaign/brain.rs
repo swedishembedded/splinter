@@ -192,6 +192,7 @@ pub(super) fn tune<'a>(
         thinking: false,
         options: PolicyGradientOptions {
             advantage_norm: request.advantage.map(AdvantageKind::norm),
+            advantage_floor: request.advantage.map(AdvantageKind::floor),
             ..s.options
         },
     }

@@ -16,8 +16,9 @@
 //! verifier's feedback into the fix a later attempt found, the per-token
 //! distillation target of an attempt in a group that all failed, and the
 //! passing completions kept for replay. A rollout whose policy trace is
-//! marked unprovable is never a record; one with no trace (an in-process
-//! sampler) is trained on the start-of-run behaviour proxy.
+//! marked unprovable is never trained on (it only sets its group's baseline);
+//! one with no trace (an in-process sampler) is trained on the start-of-run
+//! behaviour proxy.
 
 use serde::Serialize;
 use splinter_core::chat::WireMessage;
@@ -44,8 +45,11 @@ pub struct RecordCounts {
     pub taught: usize,
     /// Replay records of earlier arms.
     pub replay: usize,
-    /// Attempts left out because their policy trace is unprovable.
+    /// Attempts not trained on because their policy trace is unprovable.
     pub dropped_unprovable: usize,
+    /// Baseline-only records: unprovable attempts of an informative group,
+    /// written so their rewards count in the group's baseline.
+    pub baseline: usize,
     /// Attempts of all-failed groups left out of distillation because the
     /// verifier showed nothing privileged.
     pub no_privileged_context: usize,
@@ -125,33 +129,42 @@ fn conversation(rollout: &Rollout) -> Vec<WireMessage> {
 impl BatchRecords {
     /// Every provable attempt of every informative group, carrying its reward,
     /// its group (the task) and its place in the group, for the trainer to
-    /// compute the group-relative advantages; under
-    /// [`AdvantageMode::PositiveOnly`] only the attempts above their group's
-    /// mean reward. A group whose written attempts would not differ in reward
+    /// compute the group-relative advantages (under
+    /// [`AdvantageMode::PositiveOnly`] brain clamps them at zero, the kind's
+    /// floor). An unprovable attempt is never trained on and still takes part
+    /// in its group: one record of it, nothing supervised, carries its reward
+    /// as `baseline_only`. A group whose attempts do not differ in reward
     /// gives the trainer nothing to compare and is left out.
     pub fn add_advantages(&mut self, groups: &[&RolloutGroup], mode: AdvantageMode) {
         let kind = mode.kind();
         self.advantage = Some(kind);
         for group in groups {
-            let provable: Vec<(usize, &Rollout)> = group
-                .rollouts
-                .iter()
-                .enumerate()
-                .filter(|(_, r)| provable(r))
-                .collect();
-            self.counts.dropped_unprovable += group.rollouts.len() - provable.len();
-            let rewards: Vec<f64> = provable.iter().map(|(_, r)| r.reward).collect();
-            let Some(written) = kind.keeps(&rewards) else {
+            let rewards: Vec<f64> = group.rollouts.iter().map(|r| r.reward).collect();
+            let unprovable = group.rollouts.iter().filter(|r| !provable(r)).count();
+            self.counts.dropped_unprovable += unprovable;
+            if !splinter_data::signals(&rewards) {
                 continue;
-            };
-            for ((at, rollout), keep) in provable.into_iter().zip(written) {
-                if !keep {
+            }
+            for (at, rollout) in group.rollouts.iter().enumerate() {
+                let outcome = RolloutOutcome::of(rollout.reward, &[&group.task], &at.to_string());
+                if provable(rollout) {
+                    let body = RecordBody::chat(conversation(rollout)).with_outcome(outcome);
+                    self.records.push(record("campaign-policy-gradient", body));
+                    self.counts.policy_gradient += 1;
+                }
+            }
+            for (at, rollout) in group.rollouts.iter().enumerate() {
+                if provable(rollout) {
                     continue;
                 }
                 let outcome = RolloutOutcome::of(rollout.reward, &[&group.task], &at.to_string());
-                let body = RecordBody::chat(conversation(rollout)).with_outcome(outcome);
+                let mut messages = conversation(rollout);
+                for message in &mut messages {
+                    message.train = false;
+                }
+                let body = RecordBody::chat(messages).with_outcome(outcome.baseline());
                 self.records.push(record("campaign-policy-gradient", body));
-                self.counts.policy_gradient += 1;
+                self.counts.baseline += 1;
             }
         }
     }
@@ -289,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn two_sided_writes_every_attempt_with_its_reward_and_positive_only_those_above_the_mean() {
+    fn every_attempt_is_written_with_its_reward_and_positive_only_floors_its_advantages() {
         let g = group(vec![
             rollout(1.0, true, "4"),
             rollout(0.0, false, "5"),
@@ -307,25 +320,16 @@ mod tests {
         let rollouts: Vec<Option<&str>> = outcomes.iter().map(|o| o.rollout.as_deref()).collect();
         assert_eq!(rollouts, [Some("0"), Some("1"), Some("2")]);
 
-        // Above the mean of 0.4: the two better attempts, whose rewards still differ.
-        let graded = group(vec![
-            rollout(1.0, true, "4"),
-            rollout(0.6, false, "4.0"),
-            rollout(0.0, false, "5"),
-            rollout(0.0, false, "6"),
-        ]);
+        // Positive-only writes them all too: the failures set the group's
+        // baseline and brain clamps their advantages at zero (the kind's floor).
         let mut positive = BatchRecords::default();
-        positive.add_advantages(&[&graded], AdvantageMode::PositiveOnly);
-        assert_eq!(positive.counts.policy_gradient, 2);
+        positive.add_advantages(&[&g], AdvantageMode::PositiveOnly);
+        assert_eq!(positive.counts.policy_gradient, 3);
         assert_eq!(positive.advantage, Some(AdvantageKind::Positive));
-        assert!(positive
-            .records
-            .iter()
-            .all(|r| outcome_of(r).unwrap().reward > 0.4));
-        // One attempt above the mean leaves the trainer nothing to compare.
-        let mut lone = BatchRecords::default();
-        lone.add_advantages(&[&g], AdvantageMode::PositiveOnly);
-        assert!(lone.records.is_empty());
+        assert_eq!(
+            positive.advantage.unwrap().floor(),
+            splinter_data::AdvantageFloor::Zero
+        );
     }
 
     #[test]
@@ -351,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unprovable_trace_is_never_trained_on() {
+    fn an_unprovable_trace_is_never_trained_on_and_still_sets_its_groups_baseline() {
         let unprovable = || {
             let mut bad = rollout(0.0, false, "x");
             bad.trace = Some(RolloutTrace {
@@ -374,21 +378,39 @@ mod tests {
         batch.add_advantages(&[&g], AdvantageMode::TwoSided);
         assert_eq!(batch.counts.dropped_unprovable, 1);
         assert_eq!(batch.counts.policy_gradient, 2);
-        let rollouts: Vec<Option<String>> = batch
+        assert_eq!(batch.counts.baseline, 1);
+        let written: Vec<(Option<String>, bool)> = batch
             .records
             .iter()
-            .map(|r| outcome_of(r).unwrap().rollout)
+            .map(|r| {
+                let o = outcome_of(r).unwrap();
+                (o.rollout, o.baseline_only)
+            })
             .collect();
         assert_eq!(
-            rollouts,
-            [Some("0".into()), Some("2".into())],
-            "each keeps its place in the group"
+            written,
+            [
+                (Some("0".into()), false),
+                (Some("2".into()), false),
+                (Some("1".into()), true)
+            ],
+            "each keeps its place in the group; the unprovable one only sets the baseline"
         );
-        // Without it the group would be one attempt: nothing to compare.
+        let RecordBody::Chat { messages, .. } = &batch.records[2].body else {
+            panic!("chat");
+        };
+        assert!(
+            messages.iter().all(|m| !m.train),
+            "a baseline trains nothing"
+        );
+        // Beside one provable attempt it still makes the group two rollouts.
         let alone = group(vec![rollout(1.0, true, "4"), unprovable()]);
         let mut batch = BatchRecords::default();
         batch.add_advantages(&[&alone], AdvantageMode::TwoSided);
-        assert!(batch.records.is_empty());
+        assert_eq!(
+            (batch.counts.policy_gradient, batch.counts.baseline),
+            (1, 1)
+        );
     }
 
     #[test]

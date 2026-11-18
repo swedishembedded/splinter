@@ -25,8 +25,8 @@ use serde_json::{json, Value};
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::experience::{Environment, Task};
 use splinter_data::{
-    write_dataset, AdvantageKind, AdvantageNorm, Corpus, Exclusion, Objective, Overlong,
-    PolicyGradient, Projection, RecordBody, RewardShape, RolloutOutcome, Unchecked, View,
+    write_dataset, AdvantageFloor, AdvantageKind, AdvantageNorm, Corpus, Exclusion, Objective,
+    Overlong, PolicyGradient, Projection, RecordBody, RewardShape, RolloutOutcome, Unchecked, View,
     ViewError,
 };
 
@@ -125,6 +125,11 @@ fn graded(
 /// A conversation of the trial: one action that calls a tool, one final
 /// answer.
 fn add(corpus: &mut Corpus, trial: &Trial, evidence: Option<Value>) {
+    add_shown(corpus, trial, evidence, false);
+}
+
+/// [`add`], the conversation shown images when `shown_images`.
+fn add_shown(corpus: &mut Corpus, trial: &Trial, evidence: Option<Value>, shown_images: bool) {
     let mut call_step = call(3, "c0", "shell", json!({"command": "ls"}), "part.py");
     call_step.reasoning_content = Some("look".into());
     let mut trajectory = trajectory(vec![
@@ -137,7 +142,7 @@ fn add(corpus: &mut Corpus, trial: &Trial, evidence: Option<Value>) {
         "name": "shell", "description": "Run a command.", "parameters": {"type": "object"}}})]);
     trajectory.extra = Some(json!({"splinter_harness": {
         "conversation": trial.role, "role": trial.role, "role_source": "export",
-        "shown_images": false}}));
+        "shown_images": shown_images}}));
     let at = format!("2026-11-01T00:00:00.{:03}Z", corpus.entries().len());
     let experience = experience(&bench_task(trial.version), trajectory, Some("Done."), &at);
     let note = graded(&experience, trial, evidence);
@@ -360,54 +365,6 @@ fn the_advantage_kind_names_the_trainers_normalisation_and_writes_every_attempt(
 }
 
 #[test]
-fn positive_writes_only_the_attempts_above_their_groups_mean_reward() {
-    // Shaped rewards 1, 0.4 and 0: mean 0.467, so only t1 is above it and the
-    // trainer would have nothing to compare it with.
-    let shape = RewardShape::shaped(0.5, vec![("iou".into(), 1.0)]).unwrap();
-    let lone = corpus(&[
-        Trial::pass("t1"),
-        Trial::fail("t2", &[("iou", 0.8)]),
-        Trial::fail("t3", &[("iou", 0.0)]),
-    ]);
-    let projection = view()
-        .rewards(shape.clone())
-        .advantage(AdvantageKind::Positive)
-        .project(&lone)
-        .unwrap();
-    assert!(
-        projection.records.is_empty(),
-        "one attempt above the mean says nothing"
-    );
-    assert_eq!(projection.count(Exclusion::NoGroupSignal), 3);
-
-    // Rewards 1, 1 x 0.5 = 0.5, 0.45, 0: mean 0.4875, so t1 and t2 remain.
-    let two = corpus(&[
-        Trial::pass("t1"),
-        Trial::fail("t2", &[("iou", 1.0)]),
-        Trial::fail("t3", &[("iou", 0.9)]),
-        Trial::fail("t4", &[("iou", 0.0)]),
-    ]);
-    let projection = view()
-        .rewards(shape)
-        .advantage(AdvantageKind::Positive)
-        .project(&two)
-        .unwrap();
-    let kept: Vec<String> = outcomes(&projection)
-        .into_iter()
-        .map(|o| o.rollout.unwrap())
-        .collect();
-    assert_eq!(kept, ["t1", "t1", "t2", "t2"]);
-    // The group's report still shows every attempt, written or not.
-    let written: Vec<bool> = projection.groups[0]
-        .trials
-        .iter()
-        .map(|t| t.written)
-        .collect();
-    assert_eq!(written, [true, true, false, false]);
-    assert_eq!(projection.count(Exclusion::NoGroupSignal), 2);
-}
-
-#[test]
 fn a_group_without_a_spread_of_rewards_teaches_nothing() {
     // Three passes: nobody did better than anybody. One lone trial: nothing
     // to compare it with.
@@ -596,6 +553,17 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
         allowed.extend(line.as_object().unwrap().keys().cloned());
     }
     assert!(allowed.contains("reward") && allowed.contains("group") && allowed.contains("rollout"));
+    // A baseline-only record: brain's valid one (line 2 of its refusal file,
+    // which only refuses line 3) names the fields it carries.
+    let baselines = fixture_lines("invalid/baseline_trains.jsonl");
+    let baseline_fields: std::collections::BTreeSet<String> = baselines[1]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .chain(["tools", "metadata"].map(String::from))
+        .collect();
+    assert_eq!(baselines[1]["baseline_only"], true);
     let refused = fixture_lines("invalid/advantage_removed.jsonl");
     assert!(
         refused[0].get("advantage").is_some(),
@@ -603,8 +571,9 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
     );
 
     // Graded groups of several trials, one trial answered by two roles (two
-    // conversations of one rollout), and a group of one that must not be written.
-    let corpus = corpus(&[
+    // conversations of one rollout), a group of one that must not be written,
+    // and a trial whose only conversation cannot be rendered (a baseline).
+    let mut corpus = corpus(&[
         Trial::pass("t1").role("designer"),
         Trial::pass("t1").role("critic"),
         Trial::fail("t2", &[]),
@@ -613,11 +582,12 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
         Trial::fail("b2", &[]).version("2"),
         Trial::pass("alone").model("m2"),
     ]);
-    // (Positive keeps nothing of pass/fail rewards: one attempt above the mean, or several alike.)
+    add_shown(&mut corpus, &Trial::fail("t4", &[]), None, true);
     for kind in [
         AdvantageKind::Standardised,
         AdvantageKind::MeanCentred,
         AdvantageKind::LeaveOneOut,
+        AdvantageKind::Positive,
     ] {
         let projection = view().advantage(kind).project(&corpus).unwrap();
         let dir = std::env::temp_dir().join(format!("pg-contract-{}-{kind:?}", std::process::id()));
@@ -633,10 +603,25 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
             std::collections::BTreeMap::new();
         for line in &lines {
             let keys: Vec<&String> = line.as_object().unwrap().keys().collect();
-            assert!(
-                keys.iter().all(|k| allowed.contains(*k)),
-                "{kind:?}: {keys:?} beyond {allowed:?}"
-            );
+            if line.get("baseline_only").is_some() {
+                assert!(
+                    keys.iter().all(|k| baseline_fields.contains(*k)),
+                    "{kind:?}: {keys:?} beyond {baseline_fields:?}"
+                );
+                assert!(
+                    line["messages"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .all(|m| m["train"] != true),
+                    "{kind:?}: a baseline supervises nothing"
+                );
+            } else {
+                assert!(
+                    keys.iter().all(|k| allowed.contains(*k)),
+                    "{kind:?}: {keys:?} beyond {allowed:?}"
+                );
+            }
             let (group, rollout) = (
                 line["group"].as_str().unwrap(),
                 line["rollout"].as_str().unwrap(),
@@ -663,6 +648,14 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
             *per_group.entry(group.as_str()).or_insert(0) += 1;
         }
         assert!(!per_group.is_empty(), "{kind:?}: something is written");
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|l| l.get("baseline_only").is_some())
+                .count(),
+            1,
+            "{kind:?}: the unrendered trial is one baseline"
+        );
         assert!(
             per_group.values().all(|n| *n >= 2),
             "{kind:?}: no group of one: {per_group:?}"
@@ -675,89 +668,4 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
     }
 }
 
-/// L1 of DAPO's soft over-length penalty, against the formula by hand: with a
-/// budget L = 100 and a buffer B = 20, nothing up to L - B = 80 tokens, then
-/// (80 - n) / 20 down to -1 at 100, and -1 past it.
-#[test]
-fn the_over_length_penalty_is_dapos_soft_ramp() {
-    let overlong = Overlong::new(100, 20).unwrap();
-    for (tokens, penalty) in [
-        (0, 0.0),
-        (80, 0.0),
-        (81, -0.05),
-        (90, -0.5),
-        (99, -0.95),
-        (100, -1.0),
-        (101, -1.0),
-        (u64::MAX, -1.0),
-    ] {
-        assert!(
-            close(overlong.penalty(tokens), penalty),
-            "{tokens}: {} not {penalty}",
-            overlong.penalty(tokens)
-        );
-    }
-    // A buffer of the whole budget ramps from the first token.
-    assert!(close(Overlong::new(10, 10).unwrap().penalty(5), -0.5));
-    for (max_tokens, buffer) in [(100, 0), (100, 101), (0, 0)] {
-        assert!(
-            Overlong::new(max_tokens, buffer).is_err(),
-            "{max_tokens}/{buffer}"
-        );
-    }
-}
-
-/// The penalty is added to the reward each trial earns, from the completion
-/// tokens its verdict records; a trial that recorded none is an error, not a
-/// short trial; the projection records the thresholds for the manifest.
-#[test]
-fn a_trial_over_the_budget_earns_less_by_the_completion_tokens_it_recorded() {
-    let shape = RewardShape::unshaped().with_overlong(Overlong::new(100, 20).unwrap());
-    let evidence = |trial: &Trial, tokens: Option<u64>| {
-        let mut evidence = json!({
-            "trial": trial.name,
-            "task": {"id": "cad/bracket", "version": trial.version},
-            "model": trial.model,
-            "metrics": {},
-        });
-        if let Some(tokens) = tokens {
-            evidence["tokens"] = json!({"prompt": 7, "completion": tokens});
-        }
-        evidence
-    };
-    let mut corpus = Corpus::new();
-    for (trial, tokens) in [
-        (Trial::pass("short"), 50),
-        (Trial::pass("long"), 90),
-        (Trial::fail("cut", &[]), 120),
-    ] {
-        let evidence = evidence(&trial, Some(tokens));
-        add(&mut corpus, &trial, Some(evidence));
-    }
-    let projection = view().rewards(shape.clone()).project(&corpus).unwrap();
-    let mut by_trial: Vec<(String, f64)> = projection.groups[0]
-        .trials
-        .iter()
-        .map(|t| (t.trial.clone(), t.reward))
-        .collect();
-    by_trial.sort_by(|a, b| a.0.cmp(&b.0));
-    assert_eq!(by_trial.len(), 3);
-    for ((name, reward), (expected_name, expected)) in
-        by_trial
-            .iter()
-            .zip([("cut", -1.0), ("long", 0.5), ("short", 1.0)])
-    {
-        assert_eq!(name, expected_name);
-        assert!(close(*reward, expected), "{name}: {reward}");
-    }
-    assert_eq!(projection.overlong, Some(Overlong::new(100, 20).unwrap()));
-    assert!(rewards(&projection).iter().all(|r| r.is_finite()));
-
-    let mut unmeasured = Corpus::new();
-    for trial in [Trial::pass("t1"), Trial::fail("t2", &[])] {
-        let evidence = evidence(&trial, None);
-        add(&mut unmeasured, &trial, Some(evidence));
-    }
-    let error = view().rewards(shape).project(&unmeasured).unwrap_err();
-    assert!(error.to_string().contains("completion token"), "{error}");
-}
+mod shaping;

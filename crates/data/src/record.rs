@@ -41,6 +41,11 @@ pub struct RolloutOutcome {
     /// of its own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rollout: Option<String>,
+    /// The record only sets its group's baseline: its reward counts among the
+    /// group's and nothing of it is trained (brain's `baseline_only`); its
+    /// conversation supervises no message.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub baseline_only: bool,
 }
 
 /// The longest `group` or `rollout` key brain accepts, in bytes.
@@ -65,6 +70,16 @@ impl RolloutOutcome {
             } else {
                 digest_of(rollout).to_string()
             }),
+            baseline_only: false,
+        }
+    }
+
+    /// The same outcome on a record that only sets its group's baseline.
+    #[must_use]
+    pub fn baseline(self) -> Self {
+        Self {
+            baseline_only: true,
+            ..self
         }
     }
 }

@@ -14,7 +14,7 @@
 //! and its group; brain turns a group's rewards into the attempts' advantages
 //! (its `advantage_norm`), so how much better an attempt did is computed in
 //! one place. [`AdvantageKind`] selects that normalisation and, for
-//! [`AdvantageKind::Positive`], which attempts are written at all. Splinter's
+//! [`AdvantageKind::Positive`], the floor at zero brain clamps them to. Splinter's
 //! core knows no domain: which metrics shape a failed attempt's reward, and
 //! how, is the caller's configuration.
 
@@ -259,25 +259,48 @@ impl AdvantageNorm {
     }
 }
 
-/// Which attempts of a group are written, and how brain reads their
-/// advantages from the group's rewards.
+/// What brain does with an advantage below zero: the training job's
+/// `advantage_floor`, by its spelling on the wire.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AdvantageFloor {
+    /// Kept: an attempt below its group's baseline is pushed down.
+    None,
+    /// Clamped at zero after the whole group set the baseline: an attempt
+    /// below it takes part in the group's statistics and trains nothing.
+    Zero,
+}
+
+impl AdvantageFloor {
+    /// The floor's name as brain's training job takes it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Zero => "zero",
+        }
+    }
+}
+
+/// How brain reads the advantages of a group's attempts from its rewards:
+/// every attempt of a group whose rewards differ is written, and every one
+/// takes part in the group's baseline.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AdvantageKind {
-    /// Every attempt; brain standardises the group's rewards (GRPO's).
+    /// Brain standardises the group's rewards (GRPO's).
     #[default]
     Standardised,
-    /// Every attempt; brain subtracts the group mean.
+    /// Brain subtracts the group mean.
     MeanCentred,
-    /// Every attempt; brain subtracts the mean of the others (RLOO).
+    /// Brain subtracts the mean of the others (RLOO).
     LeaveOneOut,
-    /// Only the attempts whose reward is above their group's mean, and no
-    /// record at all for the rest: nothing is pushed down. Wrong answers
-    /// share most of their tokens with right ones, so pushing a wrong answer
-    /// down also pushes down the tokens that were right in it; this keeps
-    /// the better attempts without that damage, and loses the signal of what
-    /// to avoid. brain standardises the rewards of the attempts written, so
-    /// the kept ones of a group still need rewards that differ.
+    /// Brain standardises the group's rewards and clamps the advantages at
+    /// zero ([`AdvantageFloor::Zero`]): the attempts below the baseline set it
+    /// and are not pushed down. Wrong answers share most of their tokens with
+    /// right ones, so pushing a wrong answer down also pushes down the tokens
+    /// that were right in it; this keeps the better attempts without that
+    /// damage, and loses the signal of what to avoid.
     Positive,
 }
 
@@ -292,26 +315,13 @@ impl AdvantageKind {
         }
     }
 
-    /// Which attempts of a group with `rewards` are written, in order; `None`
-    /// when the group says nothing to brain: a single attempt, all rewards
-    /// the same, or (under [`Self::Positive`]) fewer than two kept attempts
-    /// whose rewards differ.
+    /// The floor brain applies to the advantages this kind writes.
     #[must_use]
-    pub fn keeps(self, rewards: &[f64]) -> Option<Vec<bool>> {
-        if !signals(rewards) {
-            return None;
+    pub fn floor(self) -> AdvantageFloor {
+        match self {
+            Self::Positive => AdvantageFloor::Zero,
+            Self::Standardised | Self::MeanCentred | Self::LeaveOneOut => AdvantageFloor::None,
         }
-        if self != Self::Positive {
-            return Some(vec![true; rewards.len()]);
-        }
-        let mean = rewards.iter().sum::<f64>() / rewards.len() as f64;
-        let kept: Vec<bool> = rewards.iter().map(|r| *r > mean).collect();
-        let survivors: Vec<f64> = rewards
-            .iter()
-            .zip(&kept)
-            .filter_map(|(r, k)| k.then_some(*r))
-            .collect();
-        signals(&survivors).then_some(kept)
     }
 }
 
@@ -334,10 +344,15 @@ pub struct TrialReport {
     /// The reward the attempt earned.
     pub reward: f64,
     /// Whether its records were written (with its reward and group): its
-    /// group says something, and [`AdvantageKind::Positive`] kept it. A
-    /// report written before records carried rewards reads as not written.
+    /// group says something. A report written before records carried rewards
+    /// reads as not written.
     #[serde(default)]
     pub written: bool,
+    /// Whether it was written only to set its group's baseline: no
+    /// conversation of it could be rendered, so one record carries its reward
+    /// and group and trains nothing (`baseline_only`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub baseline_only: bool,
     /// How many of its conversations (experiences) the view saw.
     pub conversations: usize,
 }

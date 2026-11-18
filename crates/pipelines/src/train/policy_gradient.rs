@@ -14,7 +14,7 @@
 
 use splinter_agent::CancelToken;
 use splinter_core::training::Regime;
-use splinter_data::{AdvantageKind, AdvantageNorm};
+use splinter_data::{AdvantageFloor, AdvantageKind, AdvantageNorm};
 use splinter_model::policy_gradient::{
     PolicyGradientOptions, PolicyGradientTune, TrainedPolicyGradient,
 };
@@ -33,7 +33,7 @@ pub(super) fn train(
     cancel: &CancelToken,
 ) -> Result<TrainedPolicyGradient, OrchestratorError> {
     let train = combine(plan)?;
-    let advantage_norm = datasets_norm(plan)?;
+    let advantage = datasets_advantage(plan)?;
     let request = PolicyGradientTune {
         model_dir: &plan.base,
         train: &train,
@@ -56,33 +56,45 @@ pub(super) fn train(
         max_block: plan.tuning.max_block,
         thinking: carries_reasoning(&train)?,
         options: PolicyGradientOptions {
-            advantage_norm,
+            advantage_norm: advantage.map(|(norm, _)| norm),
+            advantage_floor: advantage.map(|(_, floor)| floor),
             ..plan.tuning.policy_gradient
         },
     };
     train_policy_gradient_served(&ctx.brain()?, &request).map_err(trainer_error)
 }
 
-/// The normalisation the datasets of `plan` were built for (their manifests
-/// name it); `None` when none of them carries rewards. Datasets built for two
-/// normalisations are refused: one run computes its advantages one way.
-fn datasets_norm(plan: &TrainPlan) -> Result<Option<AdvantageNorm>, OrchestratorError> {
+/// How the datasets of `plan` were built to have their advantages computed
+/// (their manifests name it): the normalisation and the floor; `None` when none
+/// of them carries rewards. Datasets built for two are refused: one run
+/// computes its advantages one way.
+fn datasets_advantage(
+    plan: &TrainPlan,
+) -> Result<Option<(AdvantageNorm, AdvantageFloor)>, OrchestratorError> {
     let kinds: Vec<(String, AdvantageKind)> = plan
         .datasets
         .iter()
         .filter_map(|d| d.manifest.advantage.map(|k| (d.id.to_string(), k)))
         .collect();
-    let norm = kinds.first().map(|(_, k)| k.norm());
-    if let Some((id, other)) = kinds.iter().find(|(_, k)| Some(k.norm()) != norm) {
+    let read = |k: &AdvantageKind| (k.norm(), k.floor());
+    let first = kinds.first().map(|(_, k)| read(k));
+    if let Some((id, other)) = kinds.iter().find(|(_, k)| Some(read(k)) != first) {
+        let says = |k: &AdvantageKind| {
+            format!(
+                "the {} advantage normalisation with floor {}",
+                k.norm().name(),
+                k.floor().name()
+            )
+        };
         return Err(OrchestratorError::Refused(format!(
-            "dataset {id} was built for the {} advantage normalisation and {} for {}; \
-             one run computes its advantages one way, so build them alike",
-            other.norm().name(),
+            "dataset {id} was built for {} and {} for {}; one run computes its advantages \
+             one way, so build them alike",
+            says(other),
             kinds[0].0,
-            kinds[0].1.norm().name()
+            says(&kinds[0].1)
         )));
     }
-    Ok(norm)
+    Ok(first)
 }
 
 /// Refuses settings a run of `regime` cannot honour, so none is dropped
@@ -200,9 +212,9 @@ mod tests {
         }
     }
 
-    /// The trainer is asked for the normalisation the datasets were built
-    /// for, and datasets built for two are refused rather than trained one
-    /// way silently.
+    /// The trainer is asked for the normalisation and floor the datasets were
+    /// built for, and datasets built for two are refused rather than trained
+    /// one way silently.
     #[test]
     fn the_run_normalises_as_its_datasets_were_built_and_refuses_a_mix() {
         let dir = tempfile::tempdir().unwrap();
@@ -215,16 +227,24 @@ mod tests {
         );
         let plain = rollouts(dir.path(), "plain", None);
         assert_eq!(
-            datasets_norm(&plan(dir.path(), vec![loo.clone(), plain.clone()])).unwrap(),
-            Some(AdvantageNorm::LeaveOneOut)
+            datasets_advantage(&plan(dir.path(), vec![loo.clone(), plain.clone()])).unwrap(),
+            Some((AdvantageNorm::LeaveOneOut, AdvantageFloor::None))
         );
         assert_eq!(
-            datasets_norm(&plan(dir.path(), vec![positive, standardised])).unwrap(),
-            Some(AdvantageNorm::ZScore),
-            "both standardise"
+            datasets_advantage(&plan(dir.path(), vec![positive.clone()])).unwrap(),
+            Some((AdvantageNorm::ZScore, AdvantageFloor::Zero)),
+            "positive standardises and floors at zero"
         );
-        assert_eq!(datasets_norm(&plan(dir.path(), vec![plain])).unwrap(), None);
-        let mixed = datasets_norm(&plan(
+        let floors = datasets_advantage(&plan(dir.path(), vec![positive, standardised]));
+        assert!(
+            matches!(&floors, Err(OrchestratorError::Refused(why)) if why.contains("floor zero") && why.contains("floor none")),
+            "{floors:?}"
+        );
+        assert_eq!(
+            datasets_advantage(&plan(dir.path(), vec![plain])).unwrap(),
+            None
+        );
+        let mixed = datasets_advantage(&plan(
             dir.path(),
             vec![
                 loo,

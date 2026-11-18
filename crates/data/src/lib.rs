@@ -123,14 +123,15 @@ pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use trajectory::{projection_refusal, session_dialogue};
 pub use unprojectable::Unprojectable;
+pub use views::signals;
 pub use views::{
     chars_as_tokens, description, Control, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
     OutcomeView, PolicyGradient, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep,
     VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
 pub use views::{
-    AdvantageKind, AdvantageNorm, Distill, GroupKind, GroupReport, Overlong, RewardShape,
-    TrialReport,
+    AdvantageFloor, AdvantageKind, AdvantageNorm, Distill, GroupKind, GroupReport, Overlong,
+    RewardShape, TrialReport,
 };
 
 /// The training objective a view's records serve.

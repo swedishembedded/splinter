@@ -29,8 +29,14 @@
 //!   recorded on the verdict). Each trial counts once, however many
 //!   conversations (roles) it had. A group of one trial, or whose trials all
 //!   earned the same, says nothing: its experiences are counted as
-//!   [`Exclusion::NoGroupSignal`], and so are those of a trial
-//!   [`AdvantageKind::Positive`] leaves out.
+//!   [`Exclusion::NoGroupSignal`]. Every trial of a group with a spread of
+//!   rewards is written, under every [`AdvantageKind`]; [`AdvantageKind::Positive`]
+//!   has brain clamp the advantages at zero instead of leaving trials out.
+//! * A written trial none of whose conversations the view can render (shown
+//!   images, an unrepresentable step: each counted under its reason) still
+//!   took part in its group: one record of its instruction, nothing supervised,
+//!   carries its reward and group as `baseline_only`, so brain counts it in the
+//!   group's baseline and trains none of it.
 //! * Each action of each conversation of a written trial is a record carrying
 //!   the trial's reward, its group's key and the trial's name (brain's
 //!   training-record contract, version 2: the trainer computes each trial's
@@ -69,7 +75,7 @@ use super::privileged::teacher_context;
 use super::rendering::{Judgement, Rendering};
 use super::rewards::{AdvantageKind, GroupKind, GroupReport, RewardShape, TrialReport};
 use crate::curation::HistoryCuration;
-use crate::RolloutOutcome;
+use crate::{render, RecordBody, RolloutOutcome};
 use crate::{Corpus, Entry, Exclusion, Objective, Projection, Provenance, Strip, View, ViewError};
 
 /// The name every policy-gradient record carries.
@@ -389,7 +395,6 @@ impl View for PolicyGradient {
         for (key, trials) in &groups {
             let rewards: Vec<f64> = trials.values().map(|t| t.reward).collect();
             let signal = super::rewards::signals(&rewards);
-            let written = self.advantage.keeps(&rewards);
             let kind = if signal {
                 GroupKind::Graded
             } else if trials.values().any(|t| t.passed) {
@@ -403,9 +408,8 @@ impl View for PolicyGradient {
                 Distill::Every => true,
             };
             let mut reports = Vec::with_capacity(trials.len());
-            for (at, (trial, seen)) in trials.iter().enumerate() {
-                let kept = written.as_ref().is_some_and(|w| w[at]);
-                let treatment = match (distilled, kept) {
+            for (trial, seen) in trials {
+                let treatment = match (distilled, signal) {
                     (true, _) => Treatment::Teacher,
                     (false, true) => Treatment::Reward(RolloutOutcome::of(
                         seen.reward,
@@ -418,6 +422,7 @@ impl View for PolicyGradient {
                     trial: trial.clone(),
                     reward: seen.reward,
                     written: !matches!(treatment, Treatment::Nothing),
+                    baseline_only: false,
                     conversations: seen.conversations,
                 });
                 treatment_of.insert((key, trial), treatment);
@@ -432,12 +437,20 @@ impl View for PolicyGradient {
                 distilled,
             });
         }
+        // The trials that wrote a record, and the first conversation of each
+        // that carries a reward: a trial none of whose conversations could be
+        // rendered still sets its group's baseline, as one record that trains
+        // nothing.
+        let mut rendered: BTreeMap<(&GroupKey, &str), bool> = BTreeMap::new();
         for (entry, harness, rollout) in &placed {
             let treatment = treatment_of.get(&(&rollout.group, rollout.trial.as_str()));
             let Some(treatment @ (Treatment::Reward(_) | Treatment::Teacher)) = treatment else {
                 projection.exclude(Exclusion::NoGroupSignal);
                 continue;
             };
+            let written = rendered
+                .entry((&rollout.group, rollout.trial.as_str()))
+                .or_insert(false);
             let teacher = match treatment {
                 Treatment::Teacher => {
                     match teacher_context(&entry.experience, &rollout.evidence, rollout.passed) {
@@ -471,6 +484,37 @@ impl View for PolicyGradient {
                     _ => record,
                 };
                 projection.push(record, Provenance::of(vec![entry.id.clone()]));
+                *written = true;
+            }
+        }
+        for (entry, _, rollout) in &placed {
+            let key = (&rollout.group, rollout.trial.as_str());
+            let Some(Treatment::Reward(outcome)) = treatment_of.get(&key) else {
+                continue;
+            };
+            if rendered.get(&key) != Some(&false) {
+                continue;
+            }
+            rendered.insert(key, true);
+            let baseline = vec![render::message(
+                "user",
+                &entry.experience.instruction,
+                false,
+            )];
+            projection.push(
+                RecordBody::chat(baseline).with_outcome(outcome.clone().baseline()),
+                Provenance::of(vec![entry.id.clone()]),
+            );
+            if let Some(report) = projection
+                .groups
+                .iter_mut()
+                .filter(|g| {
+                    (&g.task, &g.version, &g.policy) == (&key.0.task, &key.0.version, &key.0.policy)
+                })
+                .flat_map(|g| g.trials.iter_mut())
+                .find(|t| t.trial == key.1)
+            {
+                report.baseline_only = true;
             }
         }
         Ok(projection)

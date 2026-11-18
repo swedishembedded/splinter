@@ -88,7 +88,6 @@ pub fn project(
     for ((case, policy), members) in groups {
         let rewards: Vec<f64> = members.iter().map(|a| a.reward).collect();
         let signal = crate::views::signals(&rewards);
-        let written = advantage_kind.keeps(&rewards);
         let kind = if rewards.iter().all(|r| *r >= 1.0) {
             GroupKind::AllPass
         } else if !signal && rewards.iter().all(|r| *r <= 0.0) {
@@ -96,18 +95,17 @@ pub fn project(
         } else {
             GroupKind::Graded
         };
-        let kept = |i: usize| written.as_ref().is_some_and(|w| w[i]);
         projection.groups.push(GroupReport {
             task: case.to_string(),
             version: String::new(),
             policy: policy.to_string(),
             trials: members
                 .iter()
-                .enumerate()
-                .map(|(i, a)| TrialReport {
+                .map(|a| TrialReport {
                     trial: a.trial.clone(),
                     reward: a.reward,
-                    written: kept(i),
+                    written: signal,
+                    baseline_only: false,
                     conversations: 1,
                 })
                 .collect(),
@@ -115,8 +113,8 @@ pub fn project(
             kind,
             distilled: false,
         });
-        for (i, attempt) in members.iter().enumerate() {
-            if !kept(i) {
+        for attempt in &members {
+            if !signal {
                 *projection
                     .excluded
                     .entry(Exclusion::NoGroupSignal)
@@ -205,39 +203,19 @@ mod tests {
     }
 
     #[test]
-    fn positive_leaves_out_the_conversations_at_or_below_their_groups_mean_reward() {
+    fn positive_writes_every_conversation_of_a_group_and_leaves_the_floor_to_brain() {
+        // Pass/fail rewards: every attempt sets the baseline; brain clamps the
+        // advantages below it at zero (the kind's floor).
         let attempts = [
-            attempt("c1", "a", 1.0, &TALK),
-            attempt("c1", "b", 0.75, &TALK),
-            attempt("c1", "c", 0.0, &TALK),
-        ];
-        let projection = project("You are a lawyer.", &attempts, AdvantageKind::Positive);
-        assert_eq!(
-            projection.records.len(),
-            4,
-            "the two attempts above the mean"
-        );
-        assert!(projection.records.iter().all(|r| matches!(
-            &r.body,
-            RecordBody::Chat { outcome: Some(o), .. } if o.reward > 0.5
-        )));
-        let written: Vec<bool> = projection.groups[0]
-            .trials
-            .iter()
-            .map(|t| t.written)
-            .collect();
-        assert_eq!(written, [true, true, false], "every attempt still reported");
-        assert_eq!(projection.excluded[&Exclusion::NoGroupSignal], 1);
-
-        // One attempt above the mean leaves the trainer nothing to compare.
-        let lone = [
             attempt("c1", "a", 1.0, &TALK),
             attempt("c1", "b", 0.0, &TALK),
             attempt("c1", "c", 0.0, &TALK),
         ];
-        let lone = project("p", &lone, AdvantageKind::Positive);
-        assert!(lone.records.is_empty());
-        assert_eq!(lone.excluded[&Exclusion::NoGroupSignal], 3);
+        let projection = project("You are a lawyer.", &attempts, AdvantageKind::Positive);
+        assert_eq!(projection.records.len(), 6, "every attempt, two turns each");
+        assert!(projection.groups[0].trials.iter().all(|t| t.written));
+        assert!(!projection.excluded.contains_key(&Exclusion::NoGroupSignal));
+        assert_eq!(projection.advantage, Some(AdvantageKind::Positive));
     }
 
     #[test]

@@ -70,12 +70,17 @@ attempt did against the others at the same task:
   records it for `train` to ask brain for: `standardised` (the default, GRPO's: the reward
   less the group mean over the group's standard deviation), `mean-centred` (the reward less
   the mean), `leave-one-out` (the reward less the mean of the other attempts) or `positive`
-  (only the attempts whose reward is above their group's mean are written, standardised among
-  themselves; nothing is pushed down, since a wrong answer shares most of its tokens with a
-  right one and pushing it down damages those). A group of one attempt, or whose attempts all
-  earned the same, teaches nothing and its experiences are counted as `no_group_signal`; so
-  are the attempts `positive` leaves out, and a group with fewer than two kept attempts that
-  differ (pass/fail rewards leave `positive` one attempt above the mean, or several alike).
+  (standardised against the whole group, then clamped at zero: `train` sends brain
+  `advantage_floor: zero`, so every attempt sets the baseline and nothing is pushed down, since
+  a wrong answer shares most of its tokens with a right one and pushing it down damages those).
+  Datasets built for kinds that differ in normalisation or floor are not trained together. A
+  group of one attempt, or whose attempts all earned the same, teaches nothing and its
+  experiences are counted as `no_group_signal`.
+- An attempt of an informative group none of whose conversations the view can render (shown
+  images without `--images`, a step a record cannot represent; each counted under its reason)
+  still took part in its group: one record of its instruction, nothing supervised, carries its
+  reward and group with `"baseline_only": true`, so brain counts it in the group's baseline and
+  trains none of it. The group report marks it `baseline_only`.
 - Each action of each conversation of a written attempt is one record, rendered exactly as
   `sft-step` renders it (the requests its model was sent, `--images`, `--roles`,
   `--only-actions`) with the attempt's reward, its group's key (a digest of the task, its

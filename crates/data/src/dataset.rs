@@ -226,6 +226,8 @@ struct ChatLine<'a> {
     group: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rollout: Option<&'a str>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    baseline_only: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     teacher_context: Option<TeacherContextLine<'a>>,
     metadata: &'a RecordMetadata,
@@ -445,6 +447,7 @@ fn line(
             reward: outcome.as_ref().map(|o| o.reward),
             group: outcome.as_ref().map(|o| o.group.as_str()),
             rollout: outcome.as_ref().and_then(|o| o.rollout.as_deref()),
+            baseline_only: outcome.as_ref().is_some_and(|o| o.baseline_only),
             teacher_context: teacher_line(index, messages, teacher_context)?,
             metadata: &record.metadata,
         })?,
@@ -481,6 +484,7 @@ fn line(
                 reward: None,
                 group: None,
                 rollout: None,
+                baseline_only: false,
                 teacher_context: None,
                 metadata: &record.metadata,
             })?

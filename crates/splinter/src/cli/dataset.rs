@@ -92,9 +92,9 @@ pub struct BuildArgs {
     /// `standardised` (GRPO's: the reward less the group mean over its
     /// standard deviation, the default), `mean-centred` (the reward less the
     /// group mean), `leave-one-out` (the reward less the mean of the others)
-    /// or `positive` (only the attempts above their group's mean reward are
-    /// written, standardised among themselves: nothing is pushed down, and a
-    /// group with fewer than two such attempts that differ yields nothing).
+    /// or `positive` (standardised against the whole group, then clamped at
+    /// zero by brain's `advantage_floor: zero`: every attempt sets the
+    /// baseline and nothing is pushed down).
     #[arg(long, value_parser = advantage, value_name = "KIND")]
     pub advantage: Option<AdvantageKind>,
     /// For the policy-gradient view: distil the groups whose attempts all

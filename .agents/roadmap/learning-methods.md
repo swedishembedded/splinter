@@ -29,11 +29,20 @@ See the table `make test/methods` prints; the figures of the last full run are i
 
 ## Findings that changed the code
 
+- 2026-11-18, positive-only keeps its meaning and unrendered attempts keep the baseline (lane 3, item 4; brain
+  b3d890b0d `advantage_floor`, 42d283331 `baseline_only`): `AdvantageKind::Positive` writes every attempt of an
+  informative group and `train` (and the campaign) send `advantage_floor: zero` with z-score, so the failures set the
+  baseline and train nothing (the filter it replaced standardised the kept attempts among themselves, and pass/fail
+  rewards left it nothing). A written attempt the view cannot render, and the campaign's unprovable rollouts, are one
+  `baseline_only` record each (reward and group, nothing supervised). Datasets differing in floor are refused
+  together. L5: the fixtures are brain's v2 directory at 9751d9f49 (`baseline_trains`, `tokenizer_mismatch`), and the
+  view's baseline line is held to the field set of brain's valid baseline record.
+
 - 2026-11-18, DAPO soft over-length penalty (plan training-regimes step 6, splinter half; lane 3, item 3):
   `RewardShape::with_overlong(Overlong { max_tokens, buffer })` adds `0`, `(L - B - n) / B` or `-1` to each attempt's
   reward from the completion tokens its verdict (else its trajectory) records; `dataset build
   --overlong-max-tokens L [--overlong-buffer B]` (default `B = L / 4`), recorded in the manifest. L1:
-  `policy_gradient::the_over_length_penalty_is_dapos_soft_ramp` against the formula by hand. brain's half (truncated
+  `policy_gradient::shaping::the_over_length_penalty_is_dapos_soft_ramp` against the formula by hand. brain's half (truncated
   keep|mask) is 27c3c3c9b.
 
 - 2026-11-18, Ctrl-C cancels brain jobs (lane 3, item 5; pilot A2 defect 2, knowledge 171): SIGINT/SIGTERM fire the
