@@ -104,6 +104,9 @@ pub(super) fn fine_tune_params(
     if let Some(share) = request.replay_share {
         set(&mut params, "replay_share", share);
     }
+    if let Some(key) = request.resume_key {
+        set(&mut params, "resume_key", key);
+    }
     Ok(Value::Object(params))
 }
 

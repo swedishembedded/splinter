@@ -53,6 +53,7 @@
 
 mod candidate;
 mod full;
+mod identified;
 mod keep;
 mod monitoring;
 mod pairs;
@@ -73,6 +74,7 @@ pub use full::{
     train_full_candidate, train_full_recorded_as, FullCandidate, FullRequest,
     DEFAULT_FULL_LEARNING_RATE,
 };
+pub use identified::train_identified;
 use keep::{keep_candidate, Finished, Outcome};
 pub use pairs::feedback_weights;
 pub(crate) use records::carries_reasoning;
@@ -237,6 +239,9 @@ pub struct TrainPlan {
     pub patience: u32,
     /// The share of the training families set aside to monitor on.
     pub monitor_share: f64,
+    /// The run's durable identity at brain (its `resume_key`), when the run
+    /// is identified ([`train_identified`]); `None` keeps no run record.
+    pub resume_key: Option<String>,
 }
 
 /// Trains a candidate; the seam `train` and `learn` train through. `train`
@@ -450,6 +455,17 @@ pub(crate) fn plan_training(
     ctx: &Context,
     request: &TrainRequest,
 ) -> Result<Planned, OrchestratorError> {
+    plan_training_as(ctx, request, None)
+}
+
+/// [`plan_training`] for the run `identity` names, when it is identified: the
+/// candidate is `candidate-<identity>` and brain keeps the run's record
+/// under `identity`; a fresh id and no record otherwise.
+pub(crate) fn plan_training_as(
+    ctx: &Context,
+    request: &TrainRequest,
+    identity: Option<&str>,
+) -> Result<Planned, OrchestratorError> {
     if request.datasets.is_empty() {
         return Err(OrchestratorError::Refused(
             "name at least one dataset".into(),
@@ -541,7 +557,10 @@ pub(crate) fn plan_training(
     for dataset in &datasets {
         record_dataset_lineage(ctx, dataset)?;
     }
-    let candidate = splinter_store::new_id_with_prefix("candidate");
+    let candidate = identity.map_or_else(
+        || splinter_store::new_id_with_prefix("candidate"),
+        |identity| format!("candidate-{identity}"),
+    );
     let dir = ctx.root().work().join("train").join(&candidate);
     std::fs::create_dir_all(&dir).map_err(io(&dir))?;
     let seed = seeds::resolve(ctx, request.tuning.seed);
@@ -639,6 +658,7 @@ pub(crate) fn plan_training(
         eval_every,
         patience,
         monitor_share,
+        resume_key: identity.map(str::to_string),
     };
     Ok(Planned { plan, replay })
 }
@@ -653,7 +673,17 @@ pub fn train(
     trainer: &dyn Trainer,
     cancel: &CancelToken,
 ) -> Result<Candidate, OrchestratorError> {
-    let Planned { plan, replay } = plan_training(ctx, request)?;
+    let planned = plan_training(ctx, request)?;
+    train_planned(ctx, request, planned, trainer, cancel)
+}
+
+pub(crate) fn train_planned(
+    ctx: &Context,
+    request: &TrainRequest,
+    Planned { plan, replay }: Planned,
+    trainer: &dyn Trainer,
+    cancel: &CancelToken,
+) -> Result<Candidate, OrchestratorError> {
     let (candidate, dir, regime) = (plan.candidate.clone(), plan.dir.clone(), plan.regime);
     let trained = match regime {
         Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),

@@ -714,6 +714,7 @@ impl Lineage<'_> {
             pack_answers: TRAIN_PACKED,
             on_step: None,
             keep_evaluations: None,
+            resume_key: None,
         };
         let trained = fine_tune_served(&endpoints, &request)
             .map_err(|e| anyhow::anyhow!("training {tag}: {e}"))?;

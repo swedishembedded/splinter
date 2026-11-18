@@ -121,6 +121,12 @@ pub struct FineTune<'a> {
     /// `step-<N>.safetensors`; `None` keeps only the one exported. Needs
     /// `eval_every > 0`.
     pub keep_evaluations: Option<&'a Path>,
+    /// The run's durable identity at brain (its `resume_key`): asked again
+    /// under the same key, brain continues the run from its saved state or,
+    /// when it completed, answers with the result it recorded and trains
+    /// nothing. One key is one run: brain refuses it for other settings.
+    /// `None` keeps no run record.
+    pub resume_key: Option<&'a str>,
 }
 
 /// A caller's function told of each optimizer step.

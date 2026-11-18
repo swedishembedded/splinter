@@ -84,6 +84,7 @@ pub(super) fn train(
         pack_answers: plan.datasets.iter().all(|d| d.manifest.packed),
         on_step: None,
         keep_evaluations: kept.as_deref(),
+        resume_key: plan.resume_key.as_deref(),
     };
     fine_tune_served(&ctx.brain()?, &request)
         .map_err(trainer_error)

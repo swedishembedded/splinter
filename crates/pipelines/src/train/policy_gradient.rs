@@ -210,6 +210,7 @@ mod tests {
             eval_every: 0,
             patience: 0,
             monitor_share: 0.0,
+            resume_key: None,
         }
     }
 

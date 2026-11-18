@@ -110,6 +110,7 @@ pub fn train(
             pack_answers: false,
             on_step: Some(StepHook(narrate)),
             keep_evaluations: None,
+            resume_key: None,
         },
     )?;
 

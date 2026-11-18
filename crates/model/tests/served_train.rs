@@ -20,8 +20,7 @@
 #![allow(clippy::unwrap_used)]
 
 use std::cell::{Cell, RefCell};
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::path::Path;
 
 use splinter_core::digest::Digest;
 use splinter_model::consolidate::FullTune;
@@ -31,105 +30,18 @@ use splinter_model::scripted_endpoint::{Card, ScriptedEndpoint, SCRIPTED_KEY};
 use splinter_model::scripted_jobs::JobScript;
 use splinter_model::served_train::{
     check_dataset, fine_tune_served, full_fine_tune_served, merge_served, score_chat,
-    train_feedback_served, train_policy_gradient_served, train_preference_served, ArtifactStore,
-    CheckSpec, Install,
+    train_feedback_served, train_policy_gradient_served, train_preference_served, CheckSpec,
+    Install,
 };
 use splinter_model::train::{
-    BasePrecision, FeedbackTune, FineTune, PairLoss, PreferenceTune, StepHook, StepReport,
+    BasePrecision, FeedbackTune, PairLoss, PreferenceTune, StepHook, StepReport,
 };
 use splinter_model::LocalWeights;
 use splinter_model::PolicyError;
 
-struct Rig {
-    dir: tempfile::TempDir,
-    model_dir: PathBuf,
-    store: PathBuf,
-}
-
-/// A checkpoint directory brain's store would name `Qwen/Toy`, an artifact
-/// store, and a training set of three conversations.
-fn rig() -> Rig {
-    let dir = tempfile::tempdir().unwrap();
-    let model_dir = dir.path().join("models/Qwen/Toy");
-    std::fs::create_dir_all(&model_dir).unwrap();
-    let store = dir.path().join("artifacts");
-    std::fs::create_dir_all(&store).unwrap();
-    Rig {
-        dir,
-        model_dir,
-        store,
-    }
-}
-
-fn records(path: &Path, rollouts: bool) {
-    let lines: Vec<String> = ["cab", "fed", "ace"]
-        .iter()
-        .enumerate()
-        .map(|(i, prompt)| {
-            let mut record = serde_json::json!({
-                "messages": [
-                    {"role": "user", "content": prompt, "train": false},
-                    {"role": "assistant", "content": format!("answer {i}"), "train": true}
-                ],
-                "tools": []
-            });
-            if rollouts {
-                record["reward"] = serde_json::json!(if i == 0 { 1.0 } else { 0.0 });
-                record["group"] = serde_json::json!("g");
-            }
-            record.to_string()
-        })
-        .collect();
-    std::fs::write(path, lines.join("\n")).unwrap();
-}
-
-fn endpoints(service: &ScriptedEndpoint, rig: &Rig) -> BrainEndpoints {
-    BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY)
-        .unwrap()
-        .with_artifact_store(ArtifactStore::open(&rig.store).unwrap())
-        .with_refused_wait(Duration::from_millis(50))
-}
-
-fn fine_tune_request<'a>(
-    rig: &'a Rig,
-    attempt: &'a Path,
-    train: &'a Path,
-    held_out: &'a Path,
-) -> FineTune<'a> {
-    FineTune {
-        model_dir: &rig.model_dir,
-        train,
-        held_out,
-        held_out_text: None,
-        monitor: None,
-        eval_every: 0,
-        patience: 0,
-        attempt_dir: attempt,
-        steps: 3,
-        rank: 4,
-        alpha: 8.0,
-        replay: &[],
-        replay_share: None,
-        weighted_replay: &[],
-        grad_accum: 2,
-        continue_from: None,
-        cancel: None,
-        base: BasePrecision::Bf16,
-        learning_rate: Some(2e-4),
-        weight_decay: 0.01,
-        // seed: the job's request carries it, and the spec reads it back.
-        seed: 7,
-        max_block: None,
-        thinking: false,
-        pack_answers: false,
-        on_step: None,
-        keep_evaluations: None,
-    }
-}
-
-fn data_of(params: &serde_json::Value) -> serde_json::Value {
-    serde_json::from_str(params["data"].as_str().unwrap()).unwrap()
-}
+#[path = "support/served.rs"]
+mod served;
+use served::{data_of, endpoints, fine_tune_request, records, rig};
 
 #[test]
 fn a_fine_tune_is_a_job_whose_data_goes_by_digest_and_whose_adapter_comes_back_checked() {
@@ -204,6 +116,42 @@ fn a_fine_tune_is_a_job_whose_data_goes_by_digest_and_whose_adapter_comes_back_c
             trained.curve.selected_step
         ),
         (3, 3, 3)
+    );
+}
+
+#[test]
+fn a_fine_tune_under_a_resume_key_brain_completed_is_answered_from_its_record_not_trained_again() {
+    let rig = rig();
+    let (train, held_out) = (
+        rig.dir.path().join("train.jsonl"),
+        rig.dir.path().join("held.jsonl"),
+    );
+    records(&train, false);
+    records(&held_out, false);
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
+    let brain = endpoints(&service, &rig);
+    let attempt = rig.dir.path().join("attempt-1");
+    let mut request = fine_tune_request(&rig, &attempt, &train, &held_out);
+    request.resume_key = Some("campaign-g1-train");
+    let first = fine_tune_served(&brain, &request).unwrap();
+    // The process that asked died; the next one asks again under the same key.
+    std::fs::remove_dir_all(&attempt).unwrap();
+    let again = fine_tune_served(&brain, &request).unwrap();
+
+    let created = service.jobs().created();
+    assert_eq!(created.len(), 2);
+    assert!(created
+        .iter()
+        .all(|params| params["resume_key"] == "campaign-g1-train"));
+    assert_eq!(service.jobs().trained(), 1, "brain trained the run once");
+    assert_eq!(first.adapter_digest, again.adapter_digest);
+    let mut other = fine_tune_request(&rig, &attempt, &train, &held_out);
+    other.resume_key = Some("campaign-g1-train");
+    other.steps = 9;
+    let refused = fine_tune_served(&brain, &other).unwrap_err().to_string();
+    assert!(
+        refused.contains("resume_key"),
+        "one key is one run: {refused}"
     );
 }
 

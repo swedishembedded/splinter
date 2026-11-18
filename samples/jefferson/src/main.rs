@@ -268,6 +268,7 @@ fn train_command(flags: &splinter_sdk::device::DeviceFlags, args: &[String]) -> 
         eval_every: 0,
         patience: 0,
         keep_evaluations: None,
+        resume_key: None,
         attempt_dir: &attempt,
         steps: u32::try_from(number(args, "--steps", 200)?)?,
         rank: u32::try_from(number(args, "--rank", 16)?)?,

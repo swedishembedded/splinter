@@ -213,6 +213,7 @@ pub fn fine_tune(
         eval_every: 0,
         patience: 0,
         keep_evaluations: None,
+        resume_key: None,
         attempt_dir: job.attempt,
         steps: settings.steps,
         rank: settings.rank,

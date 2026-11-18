@@ -130,6 +130,7 @@ pub fn train_command(brain: &splinter_sdk::model::BrainEndpoints, t: &Train) -> 
         eval_every: 0,
         patience: 0,
         keep_evaluations: None,
+        resume_key: None,
         attempt_dir: &t.attempt,
         steps: t.steps,
         rank: t.rank,

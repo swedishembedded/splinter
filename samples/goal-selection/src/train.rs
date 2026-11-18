@@ -109,6 +109,7 @@ fn main() -> anyhow::Result<()> {
             pack_answers: false,
             on_step: None,
             keep_evaluations: None,
+            resume_key: None,
         },
     )
     .context("training")?;

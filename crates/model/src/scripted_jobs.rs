@@ -93,6 +93,10 @@ pub struct Jobs {
     report: Mutex<Value>,
     cancelled: AtomicBool,
     deleted: AtomicBool,
+    /// The runs created under a `resume_key`: their identity (every param
+    /// but the key and `checkpoint_every`) and their report.
+    runs: Mutex<std::collections::BTreeMap<String, (String, Value)>>,
+    trained: AtomicUsize,
 }
 
 impl Jobs {
@@ -127,6 +131,24 @@ impl Jobs {
     pub fn refusals(&self) -> usize {
         self.refused.load(Ordering::SeqCst)
     }
+
+    /// How many adapter runs actually trained: a run resubmitted under a
+    /// `resume_key` whose record is completed is answered from the record
+    /// and does not count.
+    pub fn trained(&self) -> usize {
+        self.trained.load(Ordering::SeqCst)
+    }
+}
+
+/// The identity of a resumable run: its action and every param but the ones
+/// that configure resumption, as brain keys a run record.
+fn run_identity(action: &str, params: &Value) -> String {
+    let mut params = params.clone();
+    if let Some(map) = params.as_object_mut() {
+        map.remove("resume_key");
+        map.remove("checkpoint_every");
+    }
+    json!({"action": action, "params": params}).to_string()
 }
 
 const JOB_ID: &str = "11111111-2222-3333-4444-555555555555";
@@ -251,10 +273,41 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
     jobs.actions.lock().unwrap().push(action.clone());
     *jobs.events.lock().unwrap() = None;
     jobs.cancelled.store(false, Ordering::SeqCst);
-    let (frames, report) = match action.as_str() {
-        "check_dataset" => (Vec::new(), check(script, &params)),
-        "full_train" | "merge" => checkpoint(script, &action, &params),
-        _ => train(script, &params),
+    let resume = params["resume_key"].as_str().map(str::to_string);
+    let identity = run_identity(&action, &params);
+    let recorded = resume
+        .as_ref()
+        .and_then(|key| jobs.runs.lock().unwrap().get(key).cloned());
+    let (frames, report) = match (recorded, action.as_str()) {
+        // brain answers a completed run's resubmission from its record.
+        (Some((known, mut report)), _) if known == identity => {
+            report["resume"] = json!({"state": "completed"});
+            (Vec::new(), report)
+        }
+        (Some(_), _) => {
+            error(
+                stream,
+                "400 Bad Request",
+                &format!(
+                    "resume_key {:?}: its record names another run; one key is one run",
+                    resume.unwrap_or_default()
+                ),
+            );
+            return;
+        }
+        (None, "check_dataset") => (Vec::new(), check(script, &params)),
+        (None, "full_train" | "merge") => checkpoint(script, &action, &params),
+        (None, _) => {
+            jobs.trained.fetch_add(1, Ordering::SeqCst);
+            let (frames, report) = train(script, &params);
+            if let Some(key) = &resume {
+                jobs.runs
+                    .lock()
+                    .unwrap()
+                    .insert(key.clone(), (identity, report.clone()));
+            }
+            (frames, report)
+        }
     };
     *jobs.events.lock().unwrap() = Some(frames);
     *jobs.report.lock().unwrap() = report;
