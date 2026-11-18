@@ -41,24 +41,22 @@ Everything that touches brain lives in `splinter-model`, which links `brain` (fe
 - Still in-process after this commit: training (`train`, `policy_gradient`, `consolidate`, `timeline`), dataset parsers and the tokenizer (`capabilities`, `measure`, `tokens`), speech, the timeline model, `device` inventory, statistics.
 - 2026-11-17: `splinter-model` no longer links `brain-catalog` or `brain-testutil`. brain moved the manifest follower into its serving internals; the manifest spec now holds a written manifest to `brain::AdapterManifest`, the public type the server parses it with, and leaves the digest and base checks to brain's own tests.
 
-## Open (what remains before `splinter-model` drops its brain crates)
+## Open (what remains before `splinter-model` drops `brain`)
 
-Each item is brain API to add first (in brain, with a regression test), then the Splinter call site moves and the in-process code goes.
+`splinter-model` links two brain crates, each a `[[brain.exception]]` of `architecture.toml`: `brain-survival` (survival evaluation arithmetic, no dependency and no model: the exception that stays) and `brain` with the `timeline` feature alone, for the timeline model. Every other in-process use is gone (2026-11-17/18). The timeline moves onto `timeline_train` and the served horizon model's `predict`/`eval`/`calibrate` once brain offers (brain gaps, each to add in brain with a regression test):
 
-| Gap | Replaces | Note |
-|---|---|---|
-| `brain/train` objective `dpo` | `train::train_preference` | `served_train` refuses DPO by name today |
-| Full-parameter job and adapter merge | `consolidate::{full_fine_tune, merge}` | refused by name with endpoints today |
-| Dataset dry-run (validate a chat or preference file and report rows and token lengths without a job) | `capabilities`, `train::validate_*`, `measure::RecordMeter`, `tokens::TokenCounter`, `pictures` | job admission already refuses a bad record by line, but the pipelines check before publishing |
-| Teacher-forced held-out scoring of a base or adapter on a dataset | `train::score_chat`, `timeline/scoring` | the `sft` job report carries base and tuned scores only |
-| Device inventory (`GET /v1/devices`: card, total and free bytes) | `device::gpu_cards`, `Devices`, `device::select*` (used by `roles::discovered_assistant`, `doctor`) | |
-| Timeline (survival) model as a served class | `timeline/` | its survival arithmetic (`brain::timeline::survival`) is pure statistics |
-| Speech synthesis route; transcription exists (`/v1/audio/transcriptions`) | `speech/` | |
-| Statistics: paired sign test, bootstrap interval | `stats.rs` | pure arithmetic: a reviewed exception, or a brain route |
-| A toy chat checkpoint writer in the brain CLI | `fixture::toy_chat_checkpoint` | the method smokes and `dataset_split` tests build checkpoints with `brain::toy` |
-| Delete `campaign::brain::{ChatCollector, ChatValidator, BrainTrainer}` | | `campaign-lua`'s `main` still uses them; `rsi2` already uses `campaign::served` |
-| Pass endpoints explicitly instead of `BrainDefaults` | `orchestrator::config::set_brain_defaults` | samples that build a `Config` in several places state the flags once |
-| ~~`scripts/gates/` refusing a brain crate outside the allowed client~~ | | landed: `[[brain.exception]]` in `architecture.toml` names each (package, brain crate) pair still linked, with a why; any other brain dependency fails `check/gates/architecture`, and an exception whose dependency is gone fails as stale, so the list only shrinks |
+| Gap | Splinter's use |
+|---|---|
+| `timeline_train` params `additive`, `lr`, `mask_rate`, `max_tokens`, the forecast weight and the backbone choice (horizon's `TrainSpec` has them) | `TimelineTraining`; the health sample's `--additive`, lifecourse's baseline arms and recipes |
+| A calibration installed on a served model (`calibrate` with `install_as`, or calibration inputs on `timeline_train`) | calibrated risks for the pipeline's calibrated arm, its probe and the release's served check |
+| A synthetic population action (`n`, `seed`, shifts; a `timeline-v1` blob) | the timeline specs and the health sample's `synth` |
+| Installing a released model directory (bundle or manifest of digests) as `local/<name>` | the health sample's `predict` and the release check that plain brain serves the shipped file |
+| `predict` with next-event curves and value forecasts; `eval`/`calibrate` of ensembles | lifecourse's ensembles, next-event reports |
+| `/v1/audio/speech` `seed` and reference voice | a speaker profile's voice (today the server's fixed voice) |
+| Defaults of the `policy_gradient` params in `GET /v1/capabilities` | the CLI help and a plan state brain's defaults before a run (today the training record states them after) |
+| Which stored chat model fits which card at which context | choosing an assistant when none is named (retired) |
+
+Also open: `BrainDefaults` (`orchestrator::config::set_brain_defaults`), which samples that build a `Config` in several places use to state the brain flags once; it links nothing of brain.
 
 Brain landed: `/v1/embeddings` takes `instruction` and `max_tokens` (the client sends both; a brain without them drops the instruction silently, so Splinter needs a brain with ab4379f00).
 

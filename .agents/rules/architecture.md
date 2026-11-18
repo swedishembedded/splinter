@@ -36,8 +36,10 @@ loads weights, decodes or trains in its own process, and nothing re-implements
 what brain computes. What brain's API does not offer yet is a gap to fix in
 brain, recorded in `.agents/roadmap/api-only-brain.md`, never an in-process
 fallback. The brain crates `splinter-model` still links are the
-`[[brain.exception]]` rows of `architecture.toml`, each with the API that
-replaces it; the architecture gate refuses any other brain dependency.
+`[[brain.exception]]` rows of `architecture.toml`: `brain-survival` (pure
+survival arithmetic, no dependency) and, temporarily, `brain` for the timeline
+model alone, with the gaps that keep it; the architecture gate refuses any
+other brain dependency, and a stale row.
 
 **The rule that decides a boundary:** each project proves its own capabilities
 with its own standalone samples, and Splinter proves they compose. If moving

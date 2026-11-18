@@ -76,17 +76,7 @@ splinter-minimind = "sample"
 [[brain.exception]]
 package = "splinter-model"
 crate = "brain"
-why = "in-process training, scoring, speech and timeline code that the served API now offers; being moved onto it (.agents/roadmap/api-only-brain.md)"
-
-[[brain.exception]]
-package = "splinter-model"
-crate = "brain-gpu-core"
-why = "the device inventory and panic payloads of the in-process trainers; GET /v1/devices replaces it"
-
-[[brain.exception]]
-package = "splinter-model"
-crate = "brain-data"
-why = "the dataset parsers behind BrainDatasetCheck; the check_dataset job replaces them"
+why = "the timeline (survival) model only: brain's API does not yet take its training settings (additive, lr, mask_rate, max_tokens, forecast weight, backbone), install a calibration, generate synthetic populations, install a released model or forecast next events (.agents/roadmap/api-only-brain.md, Open); temporary"
 
 [[brain.exception]]
 package = "splinter-model"

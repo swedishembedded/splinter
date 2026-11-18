@@ -43,21 +43,15 @@ expect_used = "warn"
 # Cargo.lock. A local build against sibling checkouts is a gitignored
 # override written by `make deps/local`; it never edits this file or the lock.
 #
-# Splinter depends on exactly two upstream crates, their public SDKs:
-# `sven-sdk` and `brain`. `brain` selects only the surfaces used: `text` for
-# chat inference, `study` for fine-tuning, held-out scoring and
-# `brain::promote`, whose paired sign test decides a release.
+# Splinter consumes sven through its public SDK, `sven-sdk`, and brain
+# through its API. The `brain` SDK is linked only for the timeline model, whose
+# training settings, calibration and synthetic populations brain's API does
+# not take yet (a reviewed, temporary exception in architecture.toml).
 sven-sdk = { git = "https://github.com/swedishembedded/sven" }
 # sven's trajectory format, the one type of sven's that Splinter's vocabulary
 # holds; `sven-sdk` re-exports it, and it depends on no other sven crate.
 atif = { git = "https://github.com/swedishembedded/sven" }
-brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["text", "study", "timeline", "audio"] }
-# A crate of brain beyond the SDK, for the state of the machine the SDK's
-# primitives run on: only `splinter-model` uses it.
-brain-gpu-core = { git = "https://github.com/swedishembedded/brain" }
-# brain's chat-record parser, for the check a stored dataset passes before any
-# base is chosen: only `splinter-model` uses it.
-brain-data = { git = "https://github.com/swedishembedded/brain" }
+brain = { git = "https://github.com/swedishembedded/brain", default-features = false, features = ["timeline"] }
 # brain's survival evaluation arithmetic (concordance, AUC, Brier score,
 # calibration at a horizon, the clustered bootstrap): pure host arithmetic with
 # no dependency, the one brain crate a reviewed exception keeps; only

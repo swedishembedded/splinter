@@ -52,7 +52,7 @@ It names no other project: describe an orchestrator or host generically.
 | `crates/sdk` | `splinter-sdk`, the one way to embed Splinter; the CLI and every sample use only it |
 | `crates/pipelines` | the stages and the pipelines that order them (`learn`, `practice`, `absorb`, `acquire`, release gate) |
 | `crates/orchestrator` | configuration (the only reader of the environment), model roles, the stage engine and the release store |
-| `crates/agent`, `crates/model` | the adapters: the only code that runs sven, and the only code that touches brain |
+| `crates/agent`, `crates/model` | the adapters: the only code that runs sven, and the only code that reaches brain (through its API) |
 | `crates/core`, `crates/store`, `crates/expdb` | the vocabulary, durable state, and the experience database under it |
 | `samples/` | one controlled learning sample per directory, a standalone program on the SDK whose README states what it measures |
 | `tasks/` | the frozen repository task families shared by samples (`tasks/README.md`, `tasks/catalog.toml`) |

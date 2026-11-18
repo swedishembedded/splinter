@@ -3,7 +3,7 @@
 
 [package]
 name = "splinter-model"
-description = "The model Splinter trains: in-process inference on brain behind sven's provider seam, model selection, LoRA fine-tuning and held-out scoring. The only crate that touches brain."
+description = "The model Splinter trains, reached through brain's API: served inference behind sven's provider seam, model selection, training jobs, dataset checks and held-out scoring. The only crate that reaches brain."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,8 +15,6 @@ splinter-eval = { workspace = true }
 splinter-data = { workspace = true }
 sven-sdk = { workspace = true }
 brain = { workspace = true }
-brain-gpu-core = { workspace = true }
-brain-data = { workspace = true }
 brain-survival = { workspace = true }
 
 anyhow = { workspace = true }
