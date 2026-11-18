@@ -510,9 +510,12 @@ pub enum ExperiencesCommand {
     /// the manifest against the export's index, a tampered or partial trial is
     /// refused with the reason, the benchmark's grade is the verdict and the
     /// ATIF trajectory the record. Ingesting an export again changes nothing;
-    /// a trial name with other content is refused. Trials come out in one
-    /// experience set per split: `train` trials can be built into datasets,
-    /// `eval` trials are examination material no dataset accepts.
+    /// a trial name with other content is refused. The examiner's score
+    /// record must agree with the grade; a trial it does not count has no
+    /// verdict, never a fail. A confidential trial, and an export of sealed
+    /// material (`sealed-export.json` beside it), are refused. Trials come
+    /// out in one experience set per split: `train` trials can be built into
+    /// datasets, `eval` trials are examination material no dataset accepts.
     IngestBench {
         /// The export directories (each holds index.jsonl).
         #[arg(required = true, value_name = "EXPORT")]

@@ -29,6 +29,16 @@ index row, and every file in the directory is one the manifest lists with the di
 lists. A tampered, partial or unlisted file refuses that trial with the reason, the rest
 of the export is still admitted, and the command exits 1.
 
+The manifest's score record (`score`, schema `bench.score/1`: how the trial ended, whether it
+is counted, the score) must name the manifest's task and digest and, for a counted trial,
+the grade's verdict and reward; a record that disagrees refuses the trial. A trial the record
+does not count (the sandbox, the model server, the agent or the verifier failed, a budget ran
+out) has no verdict, never a fail, so an infrastructure failure never becomes a reward of 0;
+the record is kept in the verdict's evidence. A trial marked `confidential` (it ran a released
+harness package, whose method is not training material) is refused, and so is a whole export
+with `sealed-export.json` beside it (exam material exported under the benchmark's audited
+override).
+
 The experience is the trial's ATIF trajectory under a task whose environment records the
 benchmark task (id, version, digest), the repository snapshot, the verifier and the split
 the task is on. The verdict is the benchmark's grade (`pass` or `fail`), an executable

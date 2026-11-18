@@ -37,6 +37,7 @@
 
 pub mod artifact;
 pub mod examine;
+pub mod score;
 pub mod split;
 
 use std::collections::BTreeMap;
@@ -57,6 +58,10 @@ use split::{Split, SplitSource, TrialRecord};
 
 /// The producer of a benchmark verdict.
 pub const VERIFIER_PRODUCER: &str = "bench/verifier";
+
+/// The record the examiner writes beside an export of sealed exam material
+/// made under its audited override.
+const SEALED_EXPORT: &str = "sealed-export.json";
 
 /// What the operator decides about an ingestion.
 #[derive(Clone, Copy, Debug, Default)]
@@ -118,6 +123,17 @@ pub fn ingest_bench_trials(
     let mut done = BenchIngested::default();
     let mut members: BTreeMap<Split, Vec<ExperienceId>> = BTreeMap::new();
     for export in exports {
+        if export.join(SEALED_EXPORT).exists() {
+            done.refused.push(BenchRefused {
+                export: export.clone(),
+                trial: None,
+                reason: format!(
+                    "{SEALED_EXPORT} is beside it: exam material exported under the examiner's \
+                     audited override, never admitted"
+                ),
+            });
+            continue;
+        }
         let rows = match read_index(export) {
             Ok(rows) => rows,
             Err(reason) => {
@@ -242,11 +258,14 @@ fn admit(
         Err(reason) => return Ok(Err(reason)),
     };
     let manifest = &artifact.manifest;
-    let outcome = match manifest.grade.verdict.as_str() {
-        "pass" => Outcome::Pass,
-        "fail" => Outcome::Fail,
-        _ => Outcome::Abstain,
-    };
+    if manifest.confidential {
+        return Ok(Err(
+            "confidential: the trial ran a released harness package, whose method is not \
+             training material"
+                .into(),
+        ));
+    }
+    let outcome = verdict_of(manifest);
     let held: Vec<&TrialRecord> = register
         .iter()
         .filter(|t| t.trial == manifest.trial)
@@ -319,6 +338,20 @@ fn admit(
         });
     }
     Ok(Ok(admissions))
+}
+
+/// The verdict of a trial: the grade's, when the score record counts it (or
+/// there is none); a trial the record does not count has no verdict, never
+/// a fail.
+fn verdict_of(manifest: &artifact::Manifest) -> Outcome {
+    if manifest.score.as_ref().is_some_and(|score| !score.counted) {
+        return Outcome::Abstain;
+    }
+    match manifest.grade.verdict.as_str() {
+        "pass" => Outcome::Pass,
+        "fail" => Outcome::Fail,
+        _ => Outcome::Abstain,
+    }
 }
 
 /// The model that ran `unit`: the model of the conversation's role when the
@@ -527,6 +560,7 @@ fn evidence(artifact: &Artifact, unit: &Unit, side: Split, source: SplitSource) 
         "verifier": {"digest": manifest.verifier.digest, "scoring": manifest.verifier.scoring},
         "reward": manifest.grade.reward,
         "metrics": manifest.grade.metrics,
+        "score": manifest.score,
         "verification": artifact.verifier_reason.as_ref().map(|reason| json!({"reason": reason})),
         "agent": {
             "name": manifest.agent.name,

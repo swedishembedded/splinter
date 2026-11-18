@@ -30,10 +30,12 @@ use std::path::{Component, Path};
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest as _, Sha256};
-use splinter_core::harness::{
-    is_media, message_parts, HarnessConversation, ModelCall, ModelResponse, ModelToolCall,
-    RecordedCalls, RoleSource,
-};
+use splinter_core::harness::{HarnessConversation, RecordedCalls, RoleSource};
+
+use super::score::ScoreRecord;
+use request_log::RequestLog;
+
+mod request_log;
 
 /// The manifest schema this reader understands.
 pub const MANIFEST_SCHEMA: &str = "bench.trial-artifact/1";
@@ -70,6 +72,10 @@ pub struct IndexRow {
     /// The split the task belongs to, when the export states it.
     #[serde(default)]
     pub set: Option<String>,
+    /// Whether the trial ran a released harness package, whose method is
+    /// not the learner's to train on; absent in exports made before it.
+    #[serde(default)]
+    pub confidential: Option<bool>,
     /// The sha256 of the trial's `manifest.json`.
     pub manifest_sha256: String,
     /// The trial directory relative to the export.
@@ -164,6 +170,12 @@ pub struct Manifest {
     /// Wall-clock seconds the trial took.
     #[serde(default)]
     pub wall_seconds: Option<f64>,
+    /// Whether the trial ran a released harness package.
+    #[serde(default)]
+    pub confidential: bool,
+    /// The examiner's score record; absent in exports made before it.
+    #[serde(default)]
+    pub score: Option<ScoreRecord>,
     /// The sha256 of every file of the trial directory but the manifest.
     pub files: BTreeMap<String, String>,
 }
@@ -400,186 +412,6 @@ fn units_of(manifest: &Manifest, read: Read) -> Result<Vec<Unit>, String> {
         .collect())
 }
 
-/// The requests of one conversation as the request log attributes them.
-#[derive(Clone, Debug)]
-struct Attribution {
-    /// The one model role all its requests name, if they do.
-    role: Option<String>,
-    images: bool,
-    /// Which requests of the log they are.
-    requests: std::ops::Range<usize>,
-}
-
-impl Attribution {
-    fn source(&self) -> RoleSource {
-        if self.role.is_some() {
-            RoleSource::RequestLog
-        } else {
-            RoleSource::Unknown
-        }
-    }
-}
-
-/// One request of the log.
-struct Logged {
-    role: Option<String>,
-    /// Whether any message of the request carries media (an image).
-    media: bool,
-    /// The request and its response; `None` when the log holds no response
-    /// to it, or one that cannot be read.
-    call: Option<ModelCall>,
-}
-
-/// What `model-requests.jsonl` says about each request: the model role it
-/// was sent to, whether it carries an image, and the request itself with the
-/// response it got.
-struct RequestLog {
-    requests: Vec<Logged>,
-    any_image: bool,
-}
-
-impl RequestLog {
-    fn parse(bytes: &[u8]) -> Result<Self, String> {
-        let mut requests: Vec<(u64, Logged)> = Vec::new();
-        let mut responses: BTreeMap<u64, Value> = BTreeMap::new();
-        for (n, line) in bytes.split(|b| *b == b'\n').enumerate() {
-            if line.is_empty() {
-                continue;
-            }
-            let mut row: Value = serde_json::from_slice(line)
-                .map_err(|e| format!("{REQUESTS} line {}: {e}", n + 1))?;
-            let seq = row.get("seq").and_then(Value::as_u64);
-            match (row.get("kind").and_then(Value::as_str), seq) {
-                (Some("request"), _) => {
-                    let role = row.get("model").and_then(Value::as_str).map(str::to_string);
-                    let mut request = row.get_mut("request").map(Value::take).unwrap_or_default();
-                    let messages = take_array(&mut request, "messages");
-                    let tools = take_array(&mut request, "tools");
-                    let media = messages.iter().any(|m| message_parts(m).any(is_media));
-                    let call = seq.map(|seq| ModelCall {
-                        seq,
-                        messages,
-                        tools,
-                        response: ModelResponse {
-                            text: String::new(),
-                            reasoning: None,
-                            tool_calls: Vec::new(),
-                        },
-                    });
-                    let logged = Logged { role, media, call };
-                    requests.push((seq.unwrap_or(0), logged));
-                }
-                (Some("response"), Some(seq)) => {
-                    if let Some(response) = row.get_mut("response") {
-                        responses.insert(seq, response.take());
-                    }
-                }
-                _ => {}
-            }
-        }
-        for (seq, logged) in &mut requests {
-            let response = responses.get(seq).and_then(response_of);
-            logged.call = match (logged.call.take(), response) {
-                (Some(call), Some(response)) => Some(ModelCall { response, ..call }),
-                _ => None,
-            };
-        }
-        let requests: Vec<Logged> = requests.into_iter().map(|(_, logged)| logged).collect();
-        let any_image = requests.iter().any(|r| r.media);
-        Ok(Self {
-            requests,
-            any_image,
-        })
-    }
-
-    /// Divides the requests among `conversations`, in order, one request per
-    /// agent step. Only an exact division counts: the request count must
-    /// equal the agent steps of all the conversations, or the requests cannot
-    /// be told apart and nothing is attributed.
-    fn attribute(&self, conversations: &[&atif::Trajectory]) -> Option<Vec<Attribution>> {
-        let steps: Vec<usize> = conversations
-            .iter()
-            .map(|t| {
-                t.steps
-                    .iter()
-                    .filter(|s| s.source == atif::StepOrigin::Agent)
-                    .count()
-            })
-            .collect();
-        if steps.iter().sum::<usize>() != self.requests.len() {
-            return None;
-        }
-        let mut start = 0;
-        Some(
-            steps
-                .into_iter()
-                .map(|n| {
-                    let own = &self.requests[start..start + n];
-                    let first = own.first().and_then(|r| r.role.clone());
-                    let one_role = own.iter().all(|r| r.role == first);
-                    let attribution = Attribution {
-                        role: first.filter(|_| one_role),
-                        images: own.iter().any(|r| r.media),
-                        requests: start..start + n,
-                    };
-                    start += n;
-                    attribution
-                })
-                .collect(),
-        )
-    }
-
-    /// The calls of the requests attributed to a conversation; `None` unless
-    /// the log holds a readable response to every one of them.
-    fn calls_of(&self, attribution: &Attribution) -> Option<Vec<ModelCall>> {
-        self.requests[attribution.requests.clone()]
-            .iter()
-            .map(|r| r.call.clone())
-            .collect()
-    }
-}
-
-/// The array under `key` of `request`, moved out of it; empty when absent.
-fn take_array(request: &mut Value, key: &str) -> Vec<Value> {
-    match request.get_mut(key).map(Value::take) {
-        Some(Value::Array(items)) => items,
-        _ => Vec::new(),
-    }
-}
-
-/// A logged response as the model answered it: its text, its reasoning and
-/// its tool calls. `None` for a response that is not an object or whose calls
-/// do not name an id, a tool and arguments.
-fn response_of(response: &Value) -> Option<ModelResponse> {
-    let object = response.as_object()?;
-    let tool_calls = object
-        .get("tool_calls")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|call| {
-            let field = |key: &str| call.get(key).and_then(Value::as_str).map(str::to_string);
-            Some(ModelToolCall {
-                id: field("id")?,
-                name: field("name")?,
-                arguments: field("arguments")?,
-            })
-        })
-        .collect::<Option<Vec<_>>>()?;
-    Some(ModelResponse {
-        text: object
-            .get("text")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
-        reasoning: object
-            .get("reasoning")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        tool_calls,
-    })
-}
-
 /// The manifest and the index row must say the same about the trial.
 fn agree(row: &IndexRow, manifest: &Manifest) -> Result<(), String> {
     if manifest.schema != MANIFEST_SCHEMA {
@@ -608,7 +440,13 @@ fn agree(row: &IndexRow, manifest: &Manifest) -> Result<(), String> {
     if manifest.task.set != row.set {
         return differs("set", &row.set, &manifest.task.set);
     }
-    Ok(())
+    if row.confidential.is_some_and(|c| c != manifest.confidential) {
+        return differs("confidentiality", &row.confidential, &manifest.confidential);
+    }
+    manifest
+        .score
+        .as_ref()
+        .map_or(Ok(()), |score| score.agrees_with(manifest))
 }
 
 /// The names of the files in `dir`: a harness trial's conversation files as

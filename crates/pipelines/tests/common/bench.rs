@@ -71,6 +71,11 @@ pub struct Trial {
     pub picture: bool,
     /// The verifier's own statement of why it decided as it did.
     pub reason: Option<&'static str>,
+    /// The examiner's score record (`bench.score/1`), when the export has
+    /// one.
+    pub score: Option<Value>,
+    /// Whether the trial ran a released harness package.
+    pub confidential: bool,
 }
 
 impl Trial {
@@ -88,6 +93,39 @@ impl Trial {
             metrics: json!({"build_success": 1.0}),
             picture: false,
             reason: None,
+            score: None,
+            confidential: false,
+        }
+    }
+
+    /// The same trial with the score record the examiner gives a graded
+    /// trial of its verdict.
+    pub fn scored(self) -> Self {
+        let reward = if self.pass { 1.0 } else { 0.0 };
+        let score = json!({
+            "schema": "bench.score/1", "status": "graded", "counted": true,
+            "score": reward, "pass": self.pass, "threshold": 1.0, "cause": null,
+            "metrics": self.metrics, "vetoes": [],
+            "usage": {"requests": 2, "prompt_tokens": 10, "completion_tokens": 5},
+            "identity": {"task": self.task, "version": "2", "digest": "d1", "attempt": 1,
+                         "models": {"main": "qwen-27b"}},
+        });
+        self.score(score)
+    }
+
+    /// The same trial with `score` as its score record.
+    pub fn score(self, score: Value) -> Self {
+        Self {
+            score: Some(score),
+            ..self
+        }
+    }
+
+    /// The same trial run with a released harness package.
+    pub fn confidential(self) -> Self {
+        Self {
+            confidential: true,
+            ..self
         }
     }
 
@@ -201,7 +239,7 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         if let Some(set) = t.set {
             task["set"] = json!(set);
         }
-        let manifest = json!({
+        let mut manifest = json!({
             "schema": "bench.trial-artifact/1",
             "trial": t.name,
             "task": task,
@@ -217,6 +255,12 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
                 .map(|(n, bytes)| (n.clone(), json!(sha256_hex(bytes))))
                 .collect::<serde_json::Map<String, Value>>(),
         });
+        if let Some(score) = &t.score {
+            manifest["score"] = score.clone();
+        }
+        if t.confidential {
+            manifest["confidential"] = json!(true);
+        }
         let manifest_text = serde_json::to_string_pretty(&manifest).unwrap();
         fs::write(trial_dir.join("manifest.json"), &manifest_text).unwrap();
         let mut row = json!({"trial": t.name, "task": t.task, "reward": reward,

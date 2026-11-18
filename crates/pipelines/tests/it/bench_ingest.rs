@@ -392,3 +392,98 @@ fn an_experience_of_a_task_registered_as_eval_is_refused_even_if_it_claims_train
     let refused = build(&ctx, &sft_request(set)).unwrap_err().to_string();
     assert!(refused.contains("registered as an eval task"), "{refused}");
 }
+
+#[test]
+fn the_examiners_score_record_is_checked_against_the_grade_and_kept_with_the_verdict() {
+    let (scratch, ctx) = context("bench-score");
+    let mut lying = Trial::new("lying", "org/a", Some("train"), false).scored();
+    lying.score.as_mut().unwrap()["pass"] = json!(true);
+    let mut other_task = Trial::new("other-task", "org/a", Some("train"), true).scored();
+    other_task.score.as_mut().unwrap()["identity"]["task"] = json!("org/b");
+    let dir = export(
+        &scratch.0.join("export"),
+        &[
+            Trial::new("graded", "org/a", Some("train"), true).scored(),
+            lying,
+            other_task,
+        ],
+    );
+    let done = ingest_bench_trials(&ctx, &[dir], NO_OPTIONS).unwrap();
+    assert_eq!(done.admitted.get("train"), Some(&1), "{:?}", done.refused);
+    let why = |trial: &str| {
+        done.refused
+            .iter()
+            .find(|r| r.trial.as_deref() == Some(trial))
+            .unwrap_or_else(|| panic!("{trial} was not refused"))
+            .reason
+            .clone()
+    };
+    assert!(
+        why("lying").contains("the score says pass"),
+        "{}",
+        why("lying")
+    );
+    assert!(why("other-task").contains("the score is of task"));
+    let store = ctx.experiences();
+    let id = &store.get_set(&done.train_set.unwrap()).unwrap().members[0];
+    let verdict = store
+        .annotations(id)
+        .unwrap()
+        .annotations
+        .into_iter()
+        .find_map(|a| match a.body {
+            splinter_core::annotation::AnnotationBody::Verdict { evidence, .. } => Some(evidence),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(verdict["score"]["status"], "graded");
+    assert_eq!(verdict["score"]["usage"]["requests"], 2);
+}
+
+#[test]
+fn a_trial_the_score_does_not_count_has_no_verdict_and_is_never_a_failure_to_train_on() {
+    let (scratch, ctx) = context("bench-uncounted");
+    let crashed = Trial::new("crashed", "org/a", Some("train"), false).score(json!({
+        "schema": "bench.score/1", "status": "model_error", "counted": false,
+        "score": null, "pass": null, "cause": {"code": "server_error", "message": "502"},
+    }));
+    let dir = export(&scratch.0.join("export"), &[crashed]);
+    let done = ingest_bench_trials(&ctx, &[dir], NO_OPTIONS).unwrap();
+    assert!(done.refused.is_empty(), "{:?}", done.refused);
+    assert_eq!(
+        done.verdicts.get("abstain"),
+        Some(&1),
+        "{:?}",
+        done.verdicts
+    );
+    assert_eq!(done.verdicts.get("fail"), None);
+}
+
+#[test]
+fn a_confidential_trial_and_an_export_of_sealed_material_are_refused() {
+    let (scratch, ctx) = context("bench-confidential");
+    let dir = export(
+        &scratch.0.join("export"),
+        &[
+            Trial::new("open", "org/a", Some("train"), true).scored(),
+            Trial::new("package", "org/a", Some("train"), true)
+                .scored()
+                .confidential(),
+        ],
+    );
+    let done = ingest_bench_trials(&ctx, &[dir], NO_OPTIONS).unwrap();
+    assert_eq!(done.admitted.get("train"), Some(&1));
+    assert_eq!(done.refused.len(), 1);
+    assert!(done.refused[0].reason.starts_with("confidential"));
+
+    let sealed = export(
+        &scratch.0.join("sealed"),
+        &[Trial::new("exam", "org/x", Some("train"), true).scored()],
+    );
+    fs::write(sealed.join("sealed-export.json"), "{\"reason\": \"audit\"}").unwrap();
+    let refused = ingest_bench_trials(&ctx, &[sealed], NO_OPTIONS).unwrap();
+    assert_eq!(refused.admitted.values().sum::<usize>(), 0);
+    assert!(refused.refused[0].trial.is_none());
+    assert!(refused.refused[0].reason.contains("sealed-export.json"));
+    assert_eq!(ctx.experiences().list().unwrap().len(), 1);
+}
