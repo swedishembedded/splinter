@@ -42,6 +42,9 @@
 //! the student's own suffix from the same step; supervised training on it
 //! learns the teacher's suffix only.
 //!
+//! Each repair is kept as soon as it is graded, so a stopped run keeps every
+//! repair it finished.
+//!
 //! **Idempotent.** A repair is keyed by the student's experience, the teacher
 //! and the intervention, and its record is stored under the state root; a
 //! rerun finds a graded record (accepted or rejected) and does nothing. A
@@ -490,11 +493,14 @@ pub fn repair_with(
         })
         .collect();
     let next = Mutex::new(jobs.into_iter());
-    let done: Mutex<Vec<(RepairRecord, Option<Experience>)>> = Mutex::new(Vec::new());
+    // Each repair is kept as soon as it is graded, under one lock: a run that
+    // is stopped keeps every repair it finished, and a rerun holds them.
+    let done: Mutex<(Vec<RepairRecord>, Vec<ExperienceId>)> = Mutex::new((Vec::new(), Vec::new()));
+    let failed: Mutex<Option<OrchestratorError>> = Mutex::new(None);
     std::thread::scope(|scope| {
         for _ in 0..request.jobs.max(1) {
             scope.spawn(|| loop {
-                if request.cancel.is_cancelled() {
+                if request.cancel.is_cancelled() || failed.lock().is_ok_and(|f| f.is_some()) {
                     return;
                 }
                 let Some((trial, result, student_id, key, sample)) =
@@ -505,7 +511,7 @@ pub fn repair_with(
                 let Some(run) = run_of.get(trial.export.as_path()) else {
                     continue;
                 };
-                let made = attempt_case(
+                let (record, experience) = attempt_case(
                     ctx,
                     intervention,
                     trial,
@@ -516,26 +522,33 @@ pub fn repair_with(
                     sample,
                     &teacher_identity,
                 );
-                if let Ok(mut done) = done.lock() {
-                    done.push(made);
+                let Ok(mut done) = done.lock() else {
+                    return;
+                };
+                match keep(ctx, record, experience.as_ref()) {
+                    Ok((record, id)) => {
+                        done.0.push(record);
+                        done.1.extend(id);
+                    }
+                    Err(error) => {
+                        if let Ok(mut failed) = failed.lock() {
+                            failed.get_or_insert(error);
+                        }
+                        return;
+                    }
                 }
             });
         }
     });
+    if let Some(error) = failed.into_inner().ok().flatten() {
+        return Err(error);
+    }
     if request.cancel.is_cancelled() {
         return Err(OrchestratorError::Cancelled);
     }
-    let mut accepted = Vec::new();
-    let mut made = done.into_inner().unwrap_or_default();
-    made.sort_by(|a, b| a.0.trial.cmp(&b.0.trial));
-    for (mut record, experience) in made {
-        if let Some(experience) = experience {
-            let id = keep_accepted(ctx, &record, &experience)?;
-            record.experience = Some(id.clone());
-            accepted.push(id);
-        }
-        annotate_failure(ctx, &record)?;
-        ctx.workspace().put_document(RECORD, &record)?;
+    let (mut made, accepted) = done.into_inner().unwrap_or_default();
+    made.sort_by(|a, b| a.trial.cmp(&b.trial));
+    for record in made {
         let tally = by_class
             .entry(record.diagnosis.class.as_str().to_string())
             .or_default();
@@ -633,6 +646,27 @@ fn attempt_case(
             (record, passed.then_some(attempted.experience))
         }
     }
+}
+
+/// Keeps one graded repair: the accepted experience with its annotations,
+/// the class on the student's attempt, and the record; the record and the
+/// experience's id.
+fn keep(
+    ctx: &Context,
+    mut record: RepairRecord,
+    experience: Option<&Experience>,
+) -> Result<(RepairRecord, Option<ExperienceId>), OrchestratorError> {
+    let id = match experience {
+        Some(experience) => {
+            let id = keep_accepted(ctx, &record, experience)?;
+            record.experience = Some(id.clone());
+            Some(id)
+        }
+        None => None,
+    };
+    annotate_failure(ctx, &record)?;
+    ctx.workspace().put_document(RECORD, &record)?;
+    Ok((record, id))
 }
 
 /// Stores an accepted repair with the verifier's pass and its relation to
