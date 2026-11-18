@@ -161,9 +161,15 @@ check/papers:
 check/fmt:
 	rustfmt --edition 2021 --check $(RUST_SOURCES)
 
-## check/clippy - clippy on every target, warnings denied
+## check/clippy - clippy on every target, warnings denied (compiler, clippy and cargo's
+##   manifest lints such as `unused dependency`, which -D warnings does not promote and
+##   which carry no file:line prefix, so the log is checked by scripts/gates/cargo-warnings.sh)
+CLIPPY_LOG = $(or $(CARGO_TARGET_DIR),target)/clippy-warnings.log
 check/clippy:
-	$(CARGO) clippy $(PROFILE) --workspace --all-targets -- -D warnings
+	@$(CARGO) clippy $(PROFILE) --workspace --all-targets --message-format=short -- -D warnings >$(CLIPPY_LOG) 2>&1; st=$$?; \
+	cat $(CLIPPY_LOG); [ $$st -eq 0 ] || exit $$st; \
+	w=$$(scripts/gates/cargo-warnings.sh $(CLIPPY_LOG)); \
+	if [ -n "$$w" ]; then echo "cargo warnings:" >&2; echo "$$w" >&2; exit 1; fi
 
 # ---------------------------------------------------------------------------
 ## env - lists the environment targets; does nothing
