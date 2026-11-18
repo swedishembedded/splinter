@@ -11,7 +11,7 @@ Scope: `splinter campaign` (resumable multi-generation learning over the stage l
   non-inferior (one-sided 95% bound above -0.05) and a fresh sealed slice, each on a `bench.examination/1` verdict
   verified in-process (HMAC-SHA256 over bench's canonical bytes, knowledge 174; schema, validity, integrity flags,
   candidate and predecessor identities, `alpha = 0.05`, the slice's burn record). Typed reasons. Bench's verdict carries
-  the burn record since bench 3bb2195e (now 3d606989's ancestor, docs/examination.md "Burn").
+  the burn record since bench 63a1b127 (docs/examination.md "Burn").
 - `splinter campaign run|status|rollback` on `CampaignController`: rollout (practice material, frontier by
   `PassRates`), ingest, curate (dataset id = manifest digest), train (`train::train_identified`, brain `resume_key`,
   knowledge 175), evaluate (`bench examine` x3), gate, promote; every stage a stage-ledger unit keyed by content;
