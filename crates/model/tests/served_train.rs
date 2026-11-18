@@ -270,6 +270,47 @@ fn a_policy_gradient_run_sends_only_the_settings_named_and_reads_its_series_from
 }
 
 #[test]
+fn a_continued_adapter_keeps_its_own_rank_and_alpha() {
+    let rig = rig();
+    let (train, attempt, start) = (
+        rig.dir.path().join("rollouts.jsonl"),
+        rig.dir.path().join("attempt-pg-continued"),
+        rig.dir.path().join("start.safetensors"),
+    );
+    records(&train, true);
+    std::fs::write(&start, b"adapter").unwrap();
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
+    let brain = endpoints(&service, &rig);
+    let request = PolicyGradientTune {
+        model_dir: &rig.model_dir,
+        train: &train,
+        attempt_dir: &attempt,
+        steps: 1,
+        rank: 8,
+        alpha: 16.0,
+        weight_decay: 0.0,
+        grad_accum: 1,
+        continue_from: Some(&start),
+        cancel: None,
+        base: BasePrecision::Bf16,
+        learning_rate: None,
+        // seed: the job's request carries it.
+        seed: 11,
+        max_block: Some(256),
+        thinking: true,
+        pack_answers: false,
+        options: PolicyGradientOptions::default(),
+    };
+    train_policy_gradient_served(&brain, &request).unwrap();
+    let params = &service.jobs().created()[0];
+    assert!(
+        params.get("rank").is_none() && params.get("alpha").is_none(),
+        "brain refuses a continuation at another rank than the adapter's: {params}"
+    );
+    assert!(params["data"].as_str().unwrap().contains("start_adapter"));
+}
+
+#[test]
 fn a_run_the_service_has_no_room_for_is_asked_again_until_it_is_placed() {
     let rig = rig();
     let (train, held_out, attempt) = (

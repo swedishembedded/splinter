@@ -71,8 +71,12 @@ pub(super) fn fine_tune_params(
     set(&mut params, "data", Value::Object(data).to_string());
     set(&mut params, "objective", "sft");
     set(&mut params, "steps", request.steps);
-    set(&mut params, "rank", request.rank);
-    set(&mut params, "alpha", request.alpha);
+    // A continued adapter keeps its own rank and alpha; brain refuses a
+    // continuation asked for at another rank.
+    if request.continue_from.is_none() {
+        set(&mut params, "rank", request.rank);
+        set(&mut params, "alpha", request.alpha);
+    }
     set(&mut params, "weight_decay", request.weight_decay);
     set(&mut params, "grad_accum", request.grad_accum);
     set(&mut params, "seed", request.seed);
@@ -128,8 +132,12 @@ pub(super) fn policy_gradient_params(
     set(&mut params, "data", Value::Object(data).to_string());
     set(&mut params, "objective", "policy_gradient");
     set(&mut params, "steps", request.steps);
-    set(&mut params, "rank", request.rank);
-    set(&mut params, "alpha", request.alpha);
+    // A continued adapter keeps its own rank and alpha; brain refuses a
+    // continuation asked for at another rank.
+    if request.continue_from.is_none() {
+        set(&mut params, "rank", request.rank);
+        set(&mut params, "alpha", request.alpha);
+    }
     set(&mut params, "weight_decay", request.weight_decay);
     set(&mut params, "grad_accum", request.grad_accum);
     set(&mut params, "seed", request.seed);
