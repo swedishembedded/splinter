@@ -189,6 +189,7 @@ impl DeviceFlags {
             backend: config.brain_backend.clone(),
             max_batch: config.brain_max_batch,
             serve_adapters: true,
+            adapter_base: Some(config.policy_base.clone()).filter(|base| base.exists()),
         };
         ManagedBrain::start(&settings, &crate::agent::CancelToken::default())
             .map(BrainConnection::Owned)

@@ -68,6 +68,7 @@ impl Lab {
                 backend: Some("cpu".into()),
                 max_batch: Some(4),
                 serve_adapters: true,
+                adapter_base: Some(base.clone()),
             },
             &sven_sdk::CancelToken::default(),
         )

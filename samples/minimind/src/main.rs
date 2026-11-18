@@ -250,6 +250,7 @@ fn run(
                 max_batch: Some(config.agent.concurrency),
                 // A from-scratch run trains whole checkpoints, never adapters.
                 serve_adapters: false,
+                adapter_base: None,
             };
             std::fs::create_dir_all(&settings.models)?;
             // The binary's own digest: a rebuilt brain is other code.

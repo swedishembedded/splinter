@@ -45,6 +45,7 @@ fn settings(dir: &Path, binary: std::path::PathBuf) -> ServiceSettings {
         backend: None,
         max_batch: Some(24),
         serve_adapters: true,
+        adapter_base: None,
     }
 }
 
@@ -54,14 +55,22 @@ fn the_server_a_run_owns_serves_the_store_the_adapters_and_training_and_is_asked
     let dir = tempfile::tempdir().unwrap();
     let binary = stand_in(dir.path());
 
+    let base = dir.path().join("models/Qwen/Qwen3-4B");
     let brain = ManagedBrain::start(
-        &settings(dir.path(), binary.clone()),
+        &ServiceSettings {
+            adapter_base: Some(base.clone()),
+            ..settings(dir.path(), binary.clone())
+        },
         &CancelToken::default(),
     )
     .unwrap();
 
     let args = std::fs::read_to_string(dir.path().join("brain.args")).unwrap();
+    // The adapters sit on the base the run trains, on every layer it trains.
+    let checkpoint = format!("--checkpoint {}", base.display());
     for wanted in [
+        checkpoint.as_str(),
+        "--adapter-targets all",
         "--device gpu1",
         "serve --openai 127.0.0.1:",
         "--max-batch 24",

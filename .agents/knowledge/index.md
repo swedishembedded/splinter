@@ -153,3 +153,4 @@ in the same commit.
 | [165](165-episodes-collected-through-the-sven-library-were-not-the-requests-the-headless-exam-run-sent.md) | Episodes collected through the sven library were not the requests the headless exam run sent |
 | [166](166-a-small-model-trained-only-on-made-up-names-could-not-copy-a-real-word-name-from-its-context.md) | A small model trained only on made-up names could not copy a real-word name from its context |
 | [167](167-a-practice-folder-whose-verifier-sources-a-library-it-does-not-ship-was-imported-and-every-attempt-was-a-verifier-error.md) | A practice folder whose verifier sources a library it does not ship was imported, and its attempts were verifier errors |
+| [168](168-a-managed-brain-over-a-store-of-several-bases-refused-the-adapters-of-the-base-the-run-trained.md) | A managed brain over a store of several bases refused the adapters of the base the run trained |

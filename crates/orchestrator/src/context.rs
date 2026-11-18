@@ -236,6 +236,7 @@ impl Runtime {
             backend: self.config.brain_backend.clone(),
             max_batch: self.config.brain_max_batch,
             serve_adapters: true,
+            adapter_base: Some(self.config.policy_base.clone()).filter(|base| base.exists()),
         };
         let managed = ManagedBrain::start(&settings, &splinter_agent::CancelToken::default())
             .map_err(|e| OrchestratorError::Refused(format!("the brain server: {e}")))?;

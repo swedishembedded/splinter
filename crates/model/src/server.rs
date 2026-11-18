@@ -313,6 +313,9 @@ pub struct ServiceLaunch<'a> {
     /// `None` serves none, for a store with no base an adapter can sit on
     /// (brain refuses `--serve-adapters` then).
     pub adapters: Option<&'a Path>,
+    /// The base those adapters sit on (`--checkpoint`); brain's choice when
+    /// `None`.
+    pub adapter_base: Option<&'a Path>,
     /// The directory datasets and trained adapters move through
     /// (`--artifact-store`), which also turns the training workload on.
     pub artifacts: &'a Path,
@@ -413,6 +416,9 @@ pub fn start_service(launch: &ServiceLaunch<'_>, cancel: &CancelToken) -> Result
             .arg("--serve-adapters")
             .arg(adapters)
             .args(["--adapter-targets", "all"]);
+        if let Some(base) = launch.adapter_base {
+            command.arg("--checkpoint").arg(base);
+        }
     }
     command
         .arg("--training")

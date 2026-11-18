@@ -53,6 +53,11 @@ pub struct ServiceSettings {
     /// server whose store holds no base an adapter can sit on refuses to
     /// start with it.
     pub serve_adapters: bool,
+    /// The base the adapters it serves sit on (`--checkpoint`): brain binds
+    /// every adapter of the directory to one served base, and in a store of
+    /// several it would pick another than the one the run trains (found
+    /// against a real server, 2026-11-18). `None` leaves the choice to brain.
+    pub adapter_base: Option<PathBuf>,
 }
 
 /// A brain server this process started: stopped, and its scratch directory
@@ -84,6 +89,7 @@ impl ManagedBrain {
             work: &work,
             models: &settings.models,
             adapters: settings.serve_adapters.then_some(adapters.as_path()),
+            adapter_base: settings.adapter_base.as_deref(),
             artifacts: &artifacts,
             device: settings.device.as_deref(),
             backend: settings.backend.as_deref(),
