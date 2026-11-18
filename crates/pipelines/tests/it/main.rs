@@ -21,6 +21,7 @@ mod batched_probing;
 mod bench_harness;
 mod bench_ingest;
 mod bench_policy_gradient;
+mod bench_practice;
 mod bench_request_records;
 mod budget;
 mod campaign;

@@ -127,7 +127,13 @@ Every arm:
   holds the policy trace (the prompt and generated token ids and their log-probabilities as the serving endpoint
   returned them). An attempt with no reward (the infrastructure or the verifier failed) enters no group, and one whose
   trace is not provable is never trained on, never re-tokenized.
-- the served path, a model brain serves sampled at temperature 1 against a verifier the policy cannot reach.
+- the served path, a model brain serves sampled at temperature 1 against a verifier the policy cannot reach;
+- the examiner's practice material: the train side of a collection bench publishes for learners, staged as a Harbor
+  job (`bench task practice`), run under the served policy and graded by the examiner's verifiers (`tasks harbor
+  practice`, and `bench::practice::BenchPractice` as the campaign's episode executor; see [Benchmark trials as
+  training data](../guides/bench-trials.md#practice-material-the-examiners-staged-train-side)). Its trials carry no
+  sampler log-probabilities, so they train as demonstrations, or on a policy-gradient step with a proxy for the
+  behaviour policy.
 
 **Where its tasks come from.** A campaign's tasks may be environments from the environment factory ([Environments
 from an objective](../guides/environment-factory.md)). Only an `Admitted` environment whose recorded base pass rate
@@ -140,8 +146,8 @@ is quarantined for the rest of the campaign.
 
 The controller never drives `bench run` on bench collections to get training data. A benchmark is the sealed
 measurement authority: it holds the exams, and the proposer must not be able to see or influence them. Bench is asked
-for one thing only, a verdict on a finished candidate; the campaign's own gate is a dev-validation gate on tasks of
-its own, and it does not move a release alias.
+for verdicts on finished candidates and for its practice material, which is never a sealed collection or the eval
+side; the campaign's own gate is a dev-validation gate on tasks of its own, and it does not move a release alias.
 
 The bench-mediated flow (a benchmark run exported and admitted with `experiences ingest-bench`, see
 [Benchmark trials as training data](../guides/bench-trials.md)) is **legacy** for new work: it remains for the

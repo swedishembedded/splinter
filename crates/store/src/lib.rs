@@ -152,6 +152,14 @@ impl StateRoot {
         self.0.join("audit").join("agent.jsonl")
     }
 
+    /// Where staged practice runs are kept, one directory per run: the
+    /// examiner's staging of the practice material for the policy, the
+    /// Harbor job it ran and the export it was ingested from.
+    #[must_use]
+    pub fn practice(&self) -> PathBuf {
+        self.0.join("practice")
+    }
+
     /// The experience database's directory.
     #[must_use]
     pub fn expdb(&self) -> PathBuf {

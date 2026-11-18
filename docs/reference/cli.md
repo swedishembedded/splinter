@@ -118,6 +118,7 @@ Every command takes these.
     - [splinter tasks harbor import](#splinter-tasks-harbor-import) - Import Harbor tasks (each a task directory) as workspace tasks in one task set
     - [splinter tasks harbor export](#splinter-tasks-harbor-export) - Write the workspace tasks of a task set as Harbor tasks, one directory each under --out, with everything needed to import them back exactly
     - [splinter tasks harbor episodes](#splinter-tasks-harbor-episodes) - Run a directory of practice task folders (or one folder) as episodes
+    - [splinter tasks harbor practice](#splinter-tasks-harbor-practice) - Run the examiner's staged practice material (a directory written by `bench task practice`, holding practice.json and job.yaml) under the policy brain serves
   - [splinter tasks list](#splinter-tasks-list) - List the stored task sets
   - [splinter tasks show](#splinter-tasks-show) - Show a task set's tasks, or one task
 - [splinter solve](#splinter-solve) - Solve every task of a task set, each in the environment it records
@@ -1197,6 +1198,7 @@ Subcommands:
 - [`import`](#splinter-tasks-harbor-import) - Import Harbor tasks (each a task directory) as workspace tasks in one task set
 - [`export`](#splinter-tasks-harbor-export) - Write the workspace tasks of a task set as Harbor tasks, one directory each under --out, with everything needed to import them back exactly
 - [`episodes`](#splinter-tasks-harbor-episodes) - Run a directory of practice task folders (or one folder) as episodes
+- [`practice`](#splinter-tasks-harbor-practice) - Run the examiner's staged practice material (a directory written by `bench task practice`, holding practice.json and job.yaml) under the policy brain serves
 
 ##### splinter tasks harbor discover
 
@@ -1265,6 +1267,30 @@ Options:
 - `--max-tool-calls <N>`: Tool calls one attempt may request.
 - `--max-output-tokens <N>`: Output tokens one attempt may generate.
 - `--out <FILE>`: Also write every attempt's record to this file, one JSON object per line.
+
+##### splinter tasks harbor practice
+
+Run the examiner's staged practice material (a directory written by `bench task practice`, holding practice.json and job.yaml) under the policy brain serves: the examiner's gateway forwards the main role of a profile derived from the one the material was staged under to the policy, the material is staged again under it into the run's own directory (refused unless every task digest, the draw and the collection's digests are the ones practice.json names), Harbor runs the job with these attempts and tasks, and the examiner's export of the graded trials is admitted as `experiences ingest-bench` admits it. Each trial's outcome is read from the examiner's score record: passed, failed, exposed, verifier failure, ungraded or infrastructure; only the first three have a reward. A rerun of a finished run runs nothing and admits nothing twice
+
+```text
+splinter tasks harbor practice [OPTIONS] --bench <DIR> <DIR>
+```
+
+Arguments:
+
+- `<DIR>` (required): The practice directory (the one holding practice.json)
+
+Options:
+
+- `--policy <REF>`: The policy: a local model the brain endpoint serves. Default: `policy:default`.
+- `--bench <DIR>` (required): The examiner's checkout (`./bench` is run from it)
+- `--harbor <PATH>`: The `harbor` program that runs the job (default: the checkout's .venv/bin/harbor)
+- `--sven-build <PATH>`: The sven build the examiner runs the agent from (given to it as BENCH_SVEN_BUILD; without it, the environment's)
+- `--profile <FILE>`: The profile the policy's is derived from (default: the one the material was staged under, as its bench-run.json records it)
+- `--attempts <N>`: Attempts of each task. Default: `1`.
+- `--seed <SEED>`: The seed the run is named and recorded by (drawn and printed when not given; a rerun with the same seed finds its run)
+- `--jobs <N>`: Trials run at once. Default: `1`.
+- `--task <NAME>...`: Run only this staged task (repeatable); every task when not given.
 
 #### splinter tasks list
 

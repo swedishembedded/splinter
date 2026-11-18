@@ -58,6 +58,7 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
 pub use collection::{load_collection, PracticeTask};
+pub(crate) use executor::episode_of;
 pub use executor::SvenEpisodes;
 
 use crate::solving::harness_protocol;
@@ -229,6 +230,15 @@ pub enum EpisodeOutcome {
     },
     /// The verifier ran out of time. No reward.
     VerifierTimeout,
+    /// The examiner's rules give the attempt no grade, though nothing
+    /// failed: a time limit on a task that does not grade timeouts, a spent
+    /// budget, a capability the agent lacks, a defective task. No reward.
+    Ungraded {
+        /// The examiner's status (`timeout`, `budget_exhausted`, ...).
+        status: String,
+        /// Why, in the examiner's words.
+        detail: String,
+    },
     /// The episode could not run (the policy could not be reached, the
     /// task's environment could not be laid out). No reward and no
     /// experience; a rerun runs it again.
@@ -246,9 +256,10 @@ impl EpisodeOutcome {
         match self {
             Self::Passed => Some(1.0),
             Self::Failed | Self::Exposed => Some(0.0),
-            Self::VerifierError { .. } | Self::VerifierTimeout | Self::Infrastructure { .. } => {
-                None
-            }
+            Self::VerifierError { .. }
+            | Self::VerifierTimeout
+            | Self::Ungraded { .. }
+            | Self::Infrastructure { .. } => None,
         }
     }
 }

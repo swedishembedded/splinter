@@ -37,6 +37,7 @@
 
 pub mod artifact;
 pub mod examine;
+pub mod practice;
 pub mod score;
 pub mod split;
 

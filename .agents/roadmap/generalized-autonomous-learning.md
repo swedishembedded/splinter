@@ -96,7 +96,16 @@ training capability layer, release lineage, Bench's signed verdicts). Bench is n
   `EpisodeExecutor` over sven (`episodes::SvenEpisodes`): practice folders imported (sealed exam material refused), fresh
   workspace per attempt, the verifier outside the agent's reach, typed outcomes (graded, exposed, verifier error or
   timeout, infrastructure; only graded attempts have a reward), content-keyed resumable records; open: strict record
-  validation against a served brain's traces, and the sampler's `behavior_logprobs` in the training records. Brain: exact token/probability correspondence, serving identity,
+  validation against a served brain's traces, and the sampler's `behavior_logprobs` in the training records. Splinter
+  (2026-11-18): the examiner's practice material (`bench.practice/2`) as a second executor
+  (`bench::practice::BenchPractice`, `tasks harbor practice`): the policy is a profile derived from the staging's,
+  served by bench's gateway; the material is restaged and refused unless its digests match; typed outcomes from
+  `bench.score/1`; the export goes through `ingest-bench` (which now checks the score record, refuses confidential
+  trials and sealed exports). Run once against the real bench, Harbor and a served Qwen3-4B (one support task: graded
+  fail, admitted; the rerun ran and admitted nothing). The 27B teacher's support export (197 trials, 186 pass) built
+  `sft-step --pack` into 186 records, read by brain's `check_dataset` for Qwen3-4B (`dataset check`): 1.49M tokens,
+  781k supervised, longest 32179, none refused. Open: the trials carry no sampler log-probabilities (bench's
+  adapter records none), no sampling seed reaches the policy, and an interrupted job is restaged and rerun whole. Brain: exact token/probability correspondence, serving identity,
   adapter revisions, trainer numerics. Bench: a cross-project smoke examining the resulting candidate. Make the snapshot-store
   isolation an executable security test. Exit: a tiny agent completes sandboxed tasks, Splinter builds a valid dataset, Brain
   trains, Sven serves the candidate, Bench signs a verdict; truncated, mismatched or unprovable traces are refused.

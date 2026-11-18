@@ -3,12 +3,14 @@
 
 # Benchmark trials as training data
 
-> **Legacy for new work.** A new learning campaign collects its training episodes through sven's training
-> executor (Harbor-format task folders, one `attempt.jsonl` per attempt with the reward, the trajectory and the
-> policy trace) or in process, never by driving `bench run` on a benchmark's collections: a benchmark is the sealed
-> measurement authority and is asked only for verdicts on finished candidates. See [A continuous campaign, and where
-> its rollouts come from](../concepts/learning-loop.md#a-continuous-campaign-and-where-its-rollouts-come-from). What
-> follows stays for the recorded arms and for exports that cannot be regenerated.
+> **Practice material, not benchmark runs.** A learning campaign never drives `bench run` on a benchmark's
+> collections for training data: a benchmark is the sealed measurement authority, asked for verdicts on finished
+> candidates. What the examiner publishes *for* a learner is its practice material, the train side of a collection
+> staged as a Harbor job (`bench task practice`); [Practice material](#practice-material-the-examiners-staged-train-side)
+> below runs it under a policy and admits the graded trials through the same intake. The other source of training
+> episodes is sven's training executor (see [A continuous campaign, and where its rollouts come
+> from](../concepts/learning-loop.md#a-continuous-campaign-and-where-its-rollouts-come-from)). Ingesting a benchmark
+> run's export stays for the recorded arms and for exports that cannot be regenerated.
 
 A benchmark that runs an agent on tasks it grades itself can feed Splinter's
 experience, dataset, train and select pipeline. The benchmark exports each run as a
@@ -45,6 +47,69 @@ the task is on. The verdict is the benchmark's grade (`pass` or `fail`), an exec
 one. The agent build, the model, the image, the reward and metrics and the artifact's
 digests are the verdict's evidence. Ingesting an export again changes nothing; a trial
 name that returns with other content is refused.
+
+## Practice material: the examiner's staged train side
+
+`bench task practice <collection> [--count N --seed S] --environment userns --profile P --out DIR` writes
+`DIR/<collection>/`: the staged task folders, `job.yaml` (the Harbor job), `practice.json` (schema
+`bench.practice/2`: the collection's manifest and content digests, each staged task's digest, and the draw) and
+`bench-run.json`. Only the train side is ever written; `practice.json` of any other side is refused.
+
+A teacher's run of it, exported by the examiner (`bench export <job> --out EXPORT`), is ingested as above. To run
+the material under a policy brain serves:
+
+```sh
+splinter --brain-endpoint http://127.0.0.1:8811/v1 --brain-key-file brain.key \
+    tasks harbor practice ~/practice/support --policy local:Qwen/Qwen3-4B \
+    --bench ~/code/bench --sven-build ~/sven-build/sven --attempts 2 --jobs 16
+```
+
+The examiner owns everything that runs inside a trial, so the policy is named to it the way it documents: a
+profile. The command derives one from the profile the material was staged under (`bench-run.json` names it and its
+sha256; `--profile` names another), changing only the main role's upstream to the endpoint and the id brain lists
+the policy under, and starts the examiner's gateway for it (`bench gateway serve`, with the endpoint's key in the
+gateway's environment only). It then stages the same material again under that profile into the run's own directory
+under the state root (`bench task practice`, which writes the job config, registers the job with the gateway and
+records the run), and refuses to go on unless every staged task's digest, the draw and the collection's digests are
+the ones the given `practice.json` names. Harbor runs the job (`harbor run -c`, the checkout's own Harbor unless
+`--harbor` names another) with the attempts, concurrency and tasks (`--task`) of the command, the gateway is
+stopped, the examiner exports the graded trials and they are admitted exactly as `experiences ingest-bench` admits
+them. The material is never edited.
+
+Every trial is reported with a typed outcome read from the examiner's score record: `passed`, `failed`, `exposed`
+(the agent reached for the hidden answers), a verifier failure, `ungraded` (a time limit on a task that does not
+grade timeouts, a spent budget, an unsupported capability, a defective task) or an infrastructure failure (the
+sandbox, the model server or the agent failed). Only the first three have a reward; an infrastructure failure is
+never a reward of 0 and leaves no experience. The report keeps the material's provenance (the `practice.json`
+sha256, the collection digests, the draw, the examiner's commit, the profile and its sha256), the policy (its
+identity and adapter digest, and the id it was served under) and the seed; it is also written as `report.json` in
+the run's directory.
+
+A run is keyed by the material, the policy, the profile, the attempts, the tasks and the seed. Running it again
+after it finished runs nothing, exports again (the export is idempotent) and admits nothing twice. A run that did
+not finish is staged and run again whole: the examiner's gateway forgets the jobs registered with it when it stops,
+and only a staging registers one. The seed names the run; the examiner's agent sends no sampling seed, so the
+policy samples as its server does. Material staged for docker sandboxes is refused: the gateway is served on the
+loopback address, which userns sandboxes reach.
+
+From the trials to a candidate:
+
+```sh
+splinter experiences ingest-bench ~/practice/export-support    # a teacher's export (the command above admits its own)
+splinter dataset build --view sft-step --pack --max-block 32768 --from local:Qwen/Qwen3-4B TRAIN-SET-ID
+splinter dataset check DATASET-ID --from local:Qwen/Qwen3-4B --max-block 32768
+splinter --brain-artifact-store /srv/brain-artifacts train DATASET-ID --from local:Qwen/Qwen3-4B --max-block 32768
+```
+
+`sft-step --pack` is one record per passing trajectory, the system prompt, the instruction and every tool result as
+context and every assistant turn (its reasoning, its tool calls, its answer) supervised. `sft-final` does not fit an
+agent's trial: the trial's work is its tool calls, and it records no final answer (the build counts every trial as
+`NoFinalOutput`). `dataset check` is brain's own reading of the stored dataset (`check_dataset`, every record
+listed) for the base `--from` names and in the mode a run would read it (reasoning when the records carry it, one
+example per record when the dataset was built packed): the tokens and supervised tokens per example, the examples
+that supervise nothing, the longest records and every record the trainer refuses (the command exits 1 when it
+refuses any). It needs a brain service started with `--training --artifact-store DIR` and that directory as
+`--brain-artifact-store`, as `train` does.
 
 ## Harness trials: one experience per conversation
 

@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use splinter_agent::CancelToken;
 use splinter_core::chat::WireMessage;
 use splinter_core::digest::Digest;
+use splinter_core::experience::Experience;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 
@@ -157,31 +158,45 @@ impl EpisodeExecutor for SvenEpisodes<'_> {
                 .map(|id| store.get(id))
                 .transpose()
                 .map_err(collector)?;
-            episodes.push(Episode {
-                task: record.task.to_string(),
-                reward: record.reward,
-                passed: record.outcome == EpisodeOutcome::Passed,
-                prompt: experience
-                    .iter()
-                    .map(|e| WireMessage {
-                        role: "user".into(),
-                        content: e.instruction.clone(),
-                        images: Vec::new(),
-                        tool_calls: Vec::new(),
-                        tool_call_id: None,
-                        reasoning_content: None,
-                        train: false,
-                    })
-                    .collect(),
-                completion: experience
-                    .as_ref()
-                    .and_then(|e| e.final_output.clone())
-                    .unwrap_or_default(),
-                feedback: None,
-                privileged: None,
-                trace: experience.as_ref().map(|e| rollout_trace(&e.trajectory)),
-            });
+            episodes.push(episode_of(
+                record.task.to_string(),
+                &record.outcome,
+                experience.as_ref(),
+            ));
         }
         Ok(episodes)
+    }
+}
+
+/// The episode of an attempt at `task` that ended in `outcome`, with the
+/// experience it left: the instruction as its prompt, the final output as
+/// its completion and the calls its trajectory sampled.
+pub(crate) fn episode_of(
+    task: String,
+    outcome: &EpisodeOutcome,
+    experience: Option<&Experience>,
+) -> Episode {
+    Episode {
+        task,
+        reward: outcome.reward(),
+        passed: *outcome == EpisodeOutcome::Passed,
+        prompt: experience
+            .iter()
+            .map(|e| WireMessage {
+                role: "user".into(),
+                content: e.instruction.clone(),
+                images: Vec::new(),
+                tool_calls: Vec::new(),
+                tool_call_id: None,
+                reasoning_content: None,
+                train: false,
+            })
+            .collect(),
+        completion: experience
+            .and_then(|e| e.final_output.clone())
+            .unwrap_or_default(),
+        feedback: None,
+        privileged: None,
+        trace: experience.map(|e| rollout_trace(&e.trajectory)),
     }
 }

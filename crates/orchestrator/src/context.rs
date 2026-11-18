@@ -57,6 +57,10 @@ use crate::releases::ReleaseStore;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
 
+mod served;
+
+pub use served::ServedEndpoint;
+
 /// How long a local model may stay silent between two stream chunks: as
 /// long as its run lasts. sven's idle limit guards a remote wire going
 /// stale; a local provider is silent through its prefill for as long as the
