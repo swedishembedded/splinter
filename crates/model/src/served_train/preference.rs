@@ -83,7 +83,8 @@ pub fn train_preference_served(
     let mut params = Map::new();
     set(&mut params, "base", base.as_str());
     set(&mut params, "data", Value::Object(data).to_string());
-    set(&mut params, "objective", "dpo");
+    set(&mut params, "objective", "preference");
+    set(&mut params, "loss", "dpo");
     set(&mut params, "steps", request.steps);
     set(&mut params, "rank", request.rank);
     set(&mut params, "alpha", request.alpha);

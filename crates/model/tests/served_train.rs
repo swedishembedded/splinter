@@ -519,7 +519,10 @@ fn a_preference_run_is_a_dpo_job_sized_to_its_longest_pair() {
     );
     assert_eq!(jobs.checks()[0]["kind"], "preference");
     let params = &jobs.created()[0];
-    assert_eq!(params["objective"], "dpo");
+    assert_eq!(
+        (&params["objective"], &params["loss"]),
+        (&serde_json::json!("preference"), &serde_json::json!("dpo"))
+    );
     let longest = std::fs::read_to_string(&train)
         .unwrap()
         .lines()

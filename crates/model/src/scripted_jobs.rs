@@ -270,7 +270,7 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
 /// frames a run streams and its report.
 fn train(script: &JobScript, params: &Value) -> (Vec<(u64, String, Value)>, Value) {
     let pg = params["objective"] == "policy_gradient";
-    let dpo = params["objective"] == "dpo";
+    let dpo = params["objective"] == "preference";
     let publish = |bytes: &[u8]| {
         let digest = Digest::of(bytes);
         std::fs::write(script.store.join(digest.hex()), bytes).unwrap();
