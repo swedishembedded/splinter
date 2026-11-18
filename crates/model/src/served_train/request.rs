@@ -156,6 +156,9 @@ fn options(params: &mut Map<String, Value>, options: &PolicyGradientOptions) {
         Reference::Base => "base",
         Reference::StartOfRun => "start",
     };
+    if let Some(v) = options.algorithm {
+        set(params, "algorithm", v.name());
+    }
     if let Some(v) = options.clip_eps {
         set(params, "clip_eps", v);
     }
@@ -226,6 +229,7 @@ mod tests {
         options(
             &mut params,
             &PolicyGradientOptions {
+                algorithm: Some(crate::policy_gradient::Algorithm::Dapo),
                 clip_eps: Some(0.3),
                 clip_eps_high: Some(0.28),
                 max_step_kl: Some(0.5),
@@ -248,7 +252,8 @@ mod tests {
         assert_eq!(params["teacher"], "base");
         assert_eq!(params["advantage_norm"], "leave-one-out");
         assert_eq!(params["advantage_floor"], "zero");
-        assert_eq!(params.len(), 14);
+        assert_eq!(params["algorithm"], "dapo");
+        assert_eq!(params.len(), 15);
         assert_eq!(
             params["clip_eps_high"]
                 .as_f64()

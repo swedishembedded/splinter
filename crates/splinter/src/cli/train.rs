@@ -8,7 +8,7 @@ use clap::Args;
 use splinter_sdk::learn::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::measure::memorisation::MEMORISATION_GAP_RATIO;
 use splinter_sdk::model::policy_gradient::{
-    Behaviour, LossAggregation, PolicyGradientOptions, Reference,
+    Algorithm, Behaviour, LossAggregation, PolicyGradientOptions, Reference,
 };
 use splinter_sdk::model::train::BasePrecision;
 use splinter_sdk::seed::Seed;
@@ -154,6 +154,12 @@ fn clip_eps(text: &str) -> Result<f32, String> {
 /// itself, at its own `--temperature`.
 #[derive(Debug, Default, Clone, Copy, Args)]
 pub struct PolicyGradientArgs {
+    /// The named algorithm whose settings are the run's defaults.
+    #[arg(long, value_name = "grpo|dr-grpo|dapo|rloo", value_parser = clap::value_parser!(Algorithm), help =
+        "For a dataset of rollouts: a named policy-gradient algorithm brain expands into the run's \
+         defaults (grpo, dr-grpo, dapo or rloo); every setting named beside it overrides it, and \
+         the training record names it [default: none, brain's defaults setting by setting]")]
+    pub algorithm: Option<Algorithm>,
     /// Half-width of the clip band `[1 - eps, 1 + eps]` of the importance
     /// ratio.
     #[arg(long, value_name = "EPS", value_parser = clip_eps, help =
@@ -209,6 +215,7 @@ impl PolicyGradientArgs {
     #[must_use]
     pub fn options(self, temperature: Option<f32>) -> PolicyGradientOptions {
         PolicyGradientOptions {
+            algorithm: self.algorithm,
             clip_eps: self.clip_eps,
             kl_beta: self.kl_beta,
             reference: self.reference,

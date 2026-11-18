@@ -54,6 +54,49 @@ impl std::str::FromStr for Reference {
     }
 }
 
+/// A named policy-gradient algorithm: brain expands it into its settings,
+/// which are the run's defaults; every setting named beside it overrides it.
+/// The training record names the algorithm and every setting it trained with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Algorithm {
+    /// GRPO: z-score advantages, per-sequence mean, a symmetric clip band and
+    /// the KL term.
+    Grpo,
+    /// Dr. GRPO: mean-centred advantages, a constant-length normaliser and no
+    /// KL term.
+    DrGrpo,
+    /// DAPO: z-score advantages, clip-higher, token sum, truncated rollouts
+    /// masked and no KL term.
+    Dapo,
+    /// RLOO: leave-one-out advantages and token sum.
+    Rloo,
+}
+
+impl Algorithm {
+    /// The name brain's training job takes.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Grpo => "grpo",
+            Self::DrGrpo => "dr-grpo",
+            Self::Dapo => "dapo",
+            Self::Rloo => "rloo",
+        }
+    }
+}
+
+impl std::str::FromStr for Algorithm {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        [Self::Grpo, Self::DrGrpo, Self::Dapo, Self::Rloo]
+            .into_iter()
+            .find(|a| a.name() == text)
+            .ok_or_else(|| format!("{text:?} is not an algorithm: grpo, dr-grpo, dapo or rloo"))
+    }
+}
+
 /// Where the behaviour log-probabilities of the importance ratio come from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -110,6 +153,9 @@ impl std::str::FromStr for LossAggregation {
 /// leaves out is brain's default, which the run's training record states.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 pub struct PolicyGradientOptions {
+    /// The named algorithm whose settings are the run's defaults; unset:
+    /// brain's own defaults, setting by setting.
+    pub algorithm: Option<Algorithm>,
     /// Half-width of the clip band `[1 - eps, 1 + eps]` of the importance
     /// ratio, in (0, 1).
     pub clip_eps: Option<f32>,
@@ -160,6 +206,7 @@ impl PolicyGradientOptions {
     #[must_use]
     pub fn named(&self) -> Vec<&'static str> {
         [
+            (self.algorithm.is_some(), "--algorithm"),
             (self.clip_eps.is_some(), "--clip-eps"),
             (self.clip_eps_high.is_some(), "--clip-eps-high"),
             (self.max_step_kl.is_some(), "--max-step-kl"),
@@ -257,5 +304,8 @@ mod tests {
         assert_eq!("seq-mean".parse(), Ok(LossAggregation::SeqMean));
         assert_eq!("token-sum".parse(), Ok(LossAggregation::TokenSum));
         assert!("mean".parse::<LossAggregation>().is_err());
+        assert_eq!("dr-grpo".parse(), Ok(Algorithm::DrGrpo));
+        assert_eq!(Algorithm::Grpo.name(), "grpo");
+        assert!("ppo".parse::<Algorithm>().is_err());
     }
 }
