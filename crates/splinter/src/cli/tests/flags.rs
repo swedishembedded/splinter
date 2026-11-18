@@ -3,8 +3,10 @@
 
 //! The grammar's specs for the flags that reach the models: the remote
 //! request width, the served temperature, the solve deadline and the training
-//! row's bound, the tier the frozen base is held at, and the seed a dataset's
-//! held-out split is drawn by.
+//! row's bound, the tier the frozen base is held at, the seed a dataset's
+//! held-out split is drawn by, and the settings of preference and feedback
+//! datasets and runs (the pairing bound and seed, the pair loss and its
+//! margin, KTO's class weights).
 
 use super::{command, parse, Command, DatasetCommand};
 
@@ -284,4 +286,56 @@ fn a_dataset_build_takes_the_seed_its_split_is_drawn_by() {
         None,
         "derived from the experiences when not given"
     );
+}
+
+#[test]
+fn the_pair_loss_its_settings_and_the_pairing_bound_parse() {
+    // The pair loss and KTO's class weights; a loss brain does not name is
+    // refused at the command line.
+    let Command::Train(pairs) = command(&[
+        "train",
+        "ab12",
+        "--loss",
+        "simpo",
+        "--gamma",
+        "0.5",
+        "--nll-weight",
+        "1",
+        "--desirable-weight",
+        "1.33",
+    ]) else {
+        panic!("train");
+    };
+    let settings = pairs.pairs.settings();
+    assert_eq!(
+        (
+            settings.loss.map(|l| l.name()),
+            settings.gamma,
+            settings.nll_weight
+        ),
+        (Some("simpo"), Some(0.5), Some(1.0))
+    );
+    assert_eq!(settings.desirable_weight, Some(1.33));
+    assert!(parse(&["train", "ab12", "--loss", "kto"]).is_err());
+    let Command::Dataset(DatasetCommand::Build(build)) = command(&[
+        "dataset",
+        "build",
+        "ab12",
+        "--view",
+        "preference",
+        "--pairs-per-group",
+        "2",
+        "--pair-seed",
+        "7",
+    ]) else {
+        panic!("dataset build");
+    };
+    assert_eq!(
+        (
+            build.pairs_per_group,
+            build.pair_seed.map(splinter_sdk::seed::Seed::value)
+        ),
+        (Some(2), Some(7))
+    );
+    assert!(parse(&["dataset", "build", "ab12", "--view", "feedback"]).is_ok());
 }

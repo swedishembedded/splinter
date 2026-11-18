@@ -22,8 +22,8 @@ use splinter_core::terms::{combine_stated, Terms};
 pub use splinter_data::curation::{Curation, HistoryCuration};
 pub use splinter_data::holdout::SplitPolicy;
 use splinter_data::{
-    manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Distill, Exclusion, Format,
-    Objective, OutcomeView, PolicyGradient, Preference, Projection, RecordBody, Rehearsal,
+    manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Distill, Exclusion, Feedback,
+    Format, Objective, OutcomeView, PolicyGradient, Preference, Projection, RecordBody, Rehearsal,
     Retrieval, SftFinal, SftStep, StoredDataset, VerifierView, View, Voice,
     DEFAULT_MAX_FAMILY_SHARE,
 };
@@ -55,7 +55,7 @@ pub use crate::dataset_views::{
     parse_advantage, parse_reward_metric, parse_strength, parse_strip, StripPolicy, ViewName,
     DEFAULT_MIN_STRENGTH,
 };
-pub use crate::rl_build::{RlBuild, DEFAULT_FAIL_CEILING};
+pub use crate::rl_build::{RlBuild, DEFAULT_FAIL_CEILING, DEFAULT_PAIRS_PER_GROUP};
 
 /// What `dataset build` reports.
 #[derive(Clone, Debug, Serialize)]
@@ -215,7 +215,8 @@ fn project_without(
             view.as_str()
         )));
     }
-    if request.history != HistoryCuration::default() && view != ViewName::SftStep {
+    let judges_runs = matches!(view, ViewName::Preference | ViewName::Feedback);
+    if request.history != HistoryCuration::default() && view != ViewName::SftStep && !judges_runs {
         return Err(OrchestratorError::Refused(format!(
             "view {} imitates no demonstration, so --repository-history does not apply",
             view.as_str()
@@ -228,6 +229,7 @@ fn project_without(
         )));
     }
     if request.serialise_calls
+        && !judges_runs
         && !matches!(
             view,
             ViewName::SftStep | ViewName::PolicyGradient | ViewName::SelfDistill
@@ -248,8 +250,14 @@ fn project_without(
             view.as_str()
         )));
     }
+    if !request.rl.pairing_is_default() && view != ViewName::Preference {
+        return Err(OrchestratorError::Refused(format!(
+            "view {} makes no pairs, so --pairs-per-group and --pair-seed do not apply",
+            view.as_str()
+        )));
+    }
     let rewards_attempts = matches!(view, ViewName::PolicyGradient | ViewName::SelfDistill);
-    if !request.rl.is_default() && !rewards_attempts {
+    if !request.rl.rewards_are_default() && !rewards_attempts {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no rewards or advantages, so --reward-metric, --fail-ceiling, \
              --advantage, --cliff-distill and --overlong-max-tokens do not apply",
@@ -323,7 +331,25 @@ fn project_without(
             .images(request.images)
             .project(&corpus),
         ViewName::Critic => Critic::new(strength).with_strip(strip).project(&corpus),
-        ViewName::Preference => Preference::new(strength).with_strip(strip).project(&corpus),
+        ViewName::Preference => Preference::new(strength)
+            .with_strip(strip)
+            .history(request.history)
+            .only_roles(request.roles.clone().unwrap_or_default())
+            .serialise_calls(request.serialise_calls)
+            .pairs_per_group(
+                request
+                    .rl
+                    .pairs_per_group
+                    .unwrap_or(DEFAULT_PAIRS_PER_GROUP),
+                request.rl.pair_seed.unwrap_or_else(|| corpus_seed(&corpus)),
+            )
+            .project(&corpus),
+        ViewName::Feedback => Feedback::new(strength)
+            .with_strip(strip)
+            .history(request.history)
+            .only_roles(request.roles.clone().unwrap_or_default())
+            .serialise_calls(request.serialise_calls)
+            .project(&corpus),
         ViewName::Verifier => VerifierView::new(strength)
             .with_strip(strip)
             .project(&corpus),
@@ -465,6 +491,15 @@ fn project_without(
     assign_groups(ctx, &corpus, &mut projection)?;
     let projection = assign_draws(&corpus, projection, request.split_seed);
     Ok((projection, described, corpus))
+}
+
+/// A seed that is a function of the experiences of `corpus`, in no particular
+/// order: the first eight bytes of the digest of their sorted ids. Building
+/// again from the same experiences draws the same.
+fn corpus_seed(corpus: &Corpus) -> u64 {
+    let ids: BTreeSet<String> = corpus.entries().iter().map(|e| e.id.to_string()).collect();
+    let joined = ids.into_iter().collect::<Vec<_>>().join("\n");
+    Digest::of(joined.as_bytes()).leading_u64()
 }
 
 /// The terms a dataset made from `sources` comes under: the most restrictive

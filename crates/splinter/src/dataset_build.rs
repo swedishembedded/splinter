@@ -56,6 +56,8 @@ pub fn run(ctx: &Context, json: bool, args: BuildArgs) -> Result<(), Error> {
         cliff_distill,
         overlong_max_tokens,
         overlong_buffer,
+        pairs_per_group,
+        pair_seed,
     } = args;
     let request = BuildRequest {
         sets: sets
@@ -93,6 +95,8 @@ pub fn run(ctx: &Context, json: bool, args: BuildArgs) -> Result<(), Error> {
             cliff_distill,
             overlong_max_tokens: overlong_max_tokens.map(|n| n as u64),
             overlong_buffer: overlong_buffer.map(|n| n as u64),
+            pairs_per_group,
+            pair_seed: pair_seed.map(splinter_sdk::seed::Seed::value),
         },
         history: repository_history.unwrap_or_default(),
         split_seed: split_seed.map(splinter_sdk::seed::Seed::value),

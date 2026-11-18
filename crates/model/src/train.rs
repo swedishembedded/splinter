@@ -195,8 +195,12 @@ pub struct PreferenceTune<'a> {
     /// ([`DEFAULT_DPO_BETA`] unless the caller chooses otherwise).
     pub beta: f32,
     /// Weight of an anchor on the chosen answer's own likelihood, added to
-    /// the DPO loss; 0 is plain DPO.
+    /// the pair loss; 0 is none.
     pub nll_weight: f32,
+    /// The pair loss.
+    pub loss: PairLoss,
+    /// SimPO's target margin; `None` is brain's default. Only SimPO takes it.
+    pub gamma: Option<f32>,
     /// Pairs summed into each optimizer step: the effective batch size.
     pub grad_accum: u32,
     /// The peak learning rate; brain's default when `None`.
@@ -211,6 +215,111 @@ pub struct PreferenceTune<'a> {
     /// Stops training at the next optimizer step once cancelled; a
     /// cancelled fine-tune exports no adapter and is reported as an error.
     pub cancel: Option<&'a sven_sdk::CancelToken>,
+}
+
+/// One KTO fine-tune: what to train, on which judged completions, and where
+/// its files go.
+#[derive(Clone, Debug)]
+pub struct FeedbackTune<'a> {
+    /// Base checkpoint directory (the model the agent serves).
+    pub model_dir: &'a Path,
+    /// `generic-feedback-v1` JSONL judged completions to train on.
+    pub train: &'a Path,
+    /// This attempt's own directory: the adapter and its training record
+    /// land here.
+    pub attempt_dir: &'a Path,
+    /// Optimizer steps.
+    pub steps: u32,
+    /// LoRA rank of a fresh adapter.
+    pub rank: u32,
+    /// LoRA alpha of a fresh adapter.
+    pub alpha: f32,
+    /// The KTO temperature; `None` is brain's default.
+    pub beta: Option<f32>,
+    /// The weight of a desirable example's term.
+    pub desirable_weight: f32,
+    /// The weight of an undesirable example's term.
+    pub undesirable_weight: f32,
+    /// Examples summed into each optimizer step.
+    pub grad_accum: u32,
+    /// The peak learning rate; brain's default when `None`.
+    pub learning_rate: Option<f32>,
+    /// The seed of a fresh adapter's initialisation and the batch order.
+    pub seed: u64,
+    /// An adapter to continue instead of starting a fresh one; base plus
+    /// this adapter is then the frozen reference.
+    pub continue_from: Option<&'a Path>,
+    /// Stops training at the next optimizer step once cancelled.
+    pub cancel: Option<&'a sven_sdk::CancelToken>,
+}
+
+/// What one KTO fine-tune produced.
+#[derive(Clone, Debug)]
+pub struct TrainedFeedback {
+    /// The adapter file, carrying its ModelCard.
+    pub adapter: PathBuf,
+    /// `sha256:<hex>` of the adapter file.
+    pub adapter_digest: String,
+    /// `sha256:<hex>` of the base checkpoint the adapter was trained on.
+    pub base_digest: String,
+    /// brain's training record for the adapter, beside it.
+    pub training_record: PathBuf,
+    /// Examples trained on.
+    pub records: usize,
+    /// The run's measurements, as the service reported them.
+    pub summary: splinter_core::training::FeedbackSummary,
+}
+
+/// The loss a preference fine-tune trains its pairs by: brain's pair losses.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PairLoss {
+    /// Direct preference optimisation: the reference-normalised margin
+    /// through a log-sigmoid.
+    #[default]
+    Dpo,
+    /// Identity preference optimisation: the margin's squared distance to
+    /// `1 / (2 beta)`.
+    Ipo,
+    /// SimPO: the length-normalised margin against a target `gamma`, with no
+    /// reference model.
+    Simpo,
+    /// ORPO: the chosen answer's likelihood and the odds ratio, with no
+    /// reference model.
+    Orpo,
+}
+
+impl PairLoss {
+    /// Every pair loss, in the order a command lists them.
+    pub const ALL: [Self; 4] = [Self::Dpo, Self::Ipo, Self::Simpo, Self::Orpo];
+
+    /// brain's name for the loss.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Dpo => "dpo",
+            Self::Ipo => "ipo",
+            Self::Simpo => "simpo",
+            Self::Orpo => "orpo",
+        }
+    }
+}
+
+impl std::str::FromStr for PairLoss {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        Self::ALL
+            .into_iter()
+            .find(|loss| loss.name() == text)
+            .ok_or_else(|| format!("{text:?} is not a pair loss: dpo, ipo, simpo or orpo"))
+    }
+}
+
+impl std::fmt::Display for PairLoss {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 /// What one preference fine-tune produced.
@@ -229,8 +338,10 @@ pub struct TrainedPreference {
     pub records: usize,
     /// Training row length, sized to the longest candidate.
     pub block: u32,
-    /// The DPO temperature it trained with.
+    /// The temperature it trained with.
     pub beta: f32,
+    /// The pair loss it trained by.
+    pub loss: PairLoss,
     /// The digest of the adapter the reference carried (the one continued);
     /// `None` when the reference was the base alone.
     pub reference_adapter: Option<String>,

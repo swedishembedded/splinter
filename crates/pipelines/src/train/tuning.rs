@@ -10,6 +10,7 @@
 
 use serde::Serialize;
 use splinter_model::policy_gradient::PolicyGradientOptions;
+use splinter_model::train::PairLoss;
 
 /// How a run trains beyond its step count and rank: what depends on the
 /// base and the card, not on the data.
@@ -68,4 +69,52 @@ pub struct Tuning {
     /// records; a run of any other regime refuses them. Brain's defaults for
     /// what is left out.
     pub policy_gradient: PolicyGradientOptions,
+    /// The settings of the preference and feedback objectives; a run of any
+    /// other regime refuses them.
+    pub pairs: PairSettings,
+}
+
+/// What a run on preference pairs or judged completions is trained by, beyond
+/// its temperature (`beta`, named on the request). Brain's defaults for what
+/// is left out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+pub struct PairSettings {
+    /// Preference: the pair loss; `None` is DPO.
+    pub loss: Option<PairLoss>,
+    /// Preference with the SimPO loss: the target margin.
+    pub gamma: Option<f32>,
+    /// Preference: the weight of the chosen answer's own likelihood added to
+    /// the pair loss; `None` is none.
+    pub nll_weight: Option<f32>,
+    /// Feedback: the weight of a desirable example's term; `None` is the one
+    /// the datasets' manifests record (their classes balanced).
+    pub desirable_weight: Option<f32>,
+    /// Feedback: the weight of an undesirable example's term; `None` as
+    /// above.
+    pub undesirable_weight: Option<f32>,
+}
+
+impl PairSettings {
+    /// The preference settings that were named, by their flags.
+    pub(crate) fn preference_named(&self) -> Vec<&'static str> {
+        [
+            (self.loss.is_some(), "--loss"),
+            (self.gamma.is_some(), "--gamma"),
+            (self.nll_weight.is_some(), "--nll-weight"),
+        ]
+        .into_iter()
+        .filter_map(|(named, flag)| named.then_some(flag))
+        .collect()
+    }
+
+    /// The feedback settings that were named, by their flags.
+    pub(crate) fn feedback_named(&self) -> Vec<&'static str> {
+        [
+            (self.desirable_weight.is_some(), "--desirable-weight"),
+            (self.undesirable_weight.is_some(), "--undesirable-weight"),
+        ]
+        .into_iter()
+        .filter_map(|(named, flag)| named.then_some(flag))
+        .collect()
+    }
 }

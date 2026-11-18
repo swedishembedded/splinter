@@ -212,6 +212,8 @@ impl Lab {
                 alpha: 64.0,
                 beta: DEFAULT_DPO_BETA,
                 nll_weight: run.nll_weight,
+                loss: splinter_model::train::PairLoss::Dpo,
+                gamma: None,
                 grad_accum: 4,
                 learning_rate: Some(run.learning_rate),
                 // seed: the thresholds of the smokes were set on this run, and a rerun must draw the same batches.

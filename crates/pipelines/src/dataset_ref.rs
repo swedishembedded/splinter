@@ -33,9 +33,9 @@ use crate::datasets::{record_dataset_lineage, resolve_dataset};
 #[derive(Clone, Debug, PartialEq)]
 pub enum AnyDataset {
     /// Chat or preference records projected from experience.
-    Chat(StoredDataset),
+    Chat(Box<StoredDataset>),
     /// Timeline records projected from longitudinal episodes.
-    Timeline(StoredTimeline),
+    Timeline(Box<StoredTimeline>),
 }
 
 impl AnyDataset {
@@ -75,9 +75,11 @@ pub fn resolve_any(ctx: &Context, id: &str) -> Result<AnyDataset, OrchestratorEr
     let all = timeline.iter().chain(&chat).map(|d| d.0.clone());
     let found = DatasetId(ids::resolve("dataset", id, all)?);
     if timeline.contains(&found) {
-        Ok(AnyDataset::Timeline(ctx.timeline_datasets().get(&found)?))
+        Ok(AnyDataset::Timeline(Box::new(
+            ctx.timeline_datasets().get(&found)?,
+        )))
     } else {
-        resolve_dataset(ctx, &found.to_string()).map(AnyDataset::Chat)
+        resolve_dataset(ctx, &found.to_string()).map(|d| AnyDataset::Chat(Box::new(d)))
     }
 }
 

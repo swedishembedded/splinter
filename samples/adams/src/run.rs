@@ -501,6 +501,8 @@ pub fn dpo_command(brain: &splinter_sdk::model::BrainEndpoints, d: &Dpo) -> anyh
         alpha: d.alpha,
         beta: d.beta,
         nll_weight: d.nll_weight,
+        loss: splinter_sdk::model::train::PairLoss::Dpo,
+        gamma: None,
         grad_accum: d.grad_accum,
         learning_rate: d.learning_rate,
         seed: d.seed,

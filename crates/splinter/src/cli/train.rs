@@ -10,10 +10,10 @@ use splinter_sdk::measure::memorisation::MEMORISATION_GAP_RATIO;
 use splinter_sdk::model::policy_gradient::{
     Algorithm, Behaviour, LossAggregation, PolicyGradientOptions, Reference,
 };
-use splinter_sdk::model::train::BasePrecision;
+use splinter_sdk::model::train::{BasePrecision, PairLoss};
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{
-    Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE, DEFAULT_LORA_ALPHA_PER_RANK,
+    PairSettings, Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE, DEFAULT_LORA_ALPHA_PER_RANK,
     DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, DEFAULT_REPLAY_FRACTION,
     DEFAULT_WEIGHT_DECAY, EVALUATIONS_PER_BUDGET, MAX_MONITOR_SHARE, MAX_PASSES,
 };
@@ -231,7 +231,8 @@ impl PolicyGradientArgs {
 }
 
 /// `train`: the datasets' objective decides how - chat datasets by
-/// supervised fine-tuning, preference datasets by DPO, rollout datasets (the
+/// supervised fine-tuning, preference datasets by a pair loss (DPO, IPO,
+/// SimPO, ORPO), feedback datasets by KTO, rollout datasets (the
 /// policy-gradient view) by a clipped policy gradient.
 #[derive(Debug, Args)]
 pub struct TrainArgs {
@@ -264,9 +265,13 @@ pub struct TrainArgs {
     /// LoRA rank of a new adapter.
     #[arg(long, default_value_t = DEFAULT_LORA_RANK, value_name = "R")]
     pub rank: u32,
-    /// The DPO temperature, for preference datasets only.
+    /// The temperature of the pair loss (preference datasets) or of KTO
+    /// (feedback datasets).
     #[arg(long, value_name = "BETA", help = beta_help())]
     pub beta: Option<f32>,
+    /// The settings of a run on preference pairs or judged completions.
+    #[command(flatten)]
+    pub pairs: PairArgs,
     /// The longest training record, in tokens, the card fits: a longer
     /// record is named and refused before any device is claimed (build the
     /// dataset with the same `--max-block` to leave such records out).
@@ -314,6 +319,52 @@ pub struct TrainArgs {
     pub memorisation_ratio: Option<f32>,
 }
 
+/// What a run on preference pairs (the preference view) or judged
+/// completions (the feedback view) is trained by, beyond `--beta`: each names
+/// brain's own setting, and a setting of the other objective is refused.
+#[derive(Debug, Default, Clone, Copy, Args)]
+pub struct PairArgs {
+    /// The pair loss.
+    #[arg(long, value_name = "dpo|ipo|simpo|orpo", value_parser = clap::value_parser!(PairLoss), help =
+        "For a preference dataset: the pair loss, `dpo`, `ipo`, or the reference-free `simpo` \
+         and `orpo` [default: dpo]")]
+    pub loss: Option<PairLoss>,
+    /// SimPO's target margin.
+    #[arg(long, value_name = "GAMMA", value_parser = non_negative_rate, help =
+        "For a preference dataset trained with --loss simpo: the target margin [default: \
+         brain's, stated in the training record]")]
+    pub gamma: Option<f32>,
+    /// The weight of the chosen answer's own likelihood added to the loss.
+    #[arg(long, value_name = "W", value_parser = non_negative_rate, help =
+        "For a preference dataset: the weight of the chosen continuation's own likelihood added \
+         to the pair loss, an anchor against likelihood displacement [default: 0]")]
+    pub nll_weight: Option<f32>,
+    /// The weight of a desirable example's term.
+    #[arg(long, value_name = "W", value_parser = positive_rate, help =
+        "For a feedback dataset: the weight of a desirable (passed) example's term [default: \
+         the classes balanced, as the dataset's manifest records]")]
+    pub desirable_weight: Option<f32>,
+    /// The weight of an undesirable example's term.
+    #[arg(long, value_name = "W", value_parser = positive_rate, help =
+        "For a feedback dataset: the weight of an undesirable (failed) example's term \
+         [default: the classes balanced, as the dataset's manifest records]")]
+    pub undesirable_weight: Option<f32>,
+}
+
+impl PairArgs {
+    /// The settings as a training run takes them.
+    #[must_use]
+    pub fn settings(self) -> PairSettings {
+        PairSettings {
+            loss: self.loss,
+            gamma: self.gamma,
+            nll_weight: self.nll_weight,
+            desirable_weight: self.desirable_weight,
+            undesirable_weight: self.undesirable_weight,
+        }
+    }
+}
+
 /// `rehearse`.
 #[derive(Debug, Args)]
 pub struct RehearseArgs {
@@ -329,5 +380,8 @@ pub struct RehearseArgs {
 
 /// `--beta`'s help, naming the default it falls back to.
 fn beta_help() -> String {
-    format!("The DPO temperature, for preference datasets only [default: {DEFAULT_DPO_BETA}]")
+    format!(
+        "The temperature of the pair loss (preference datasets) or of KTO (feedback datasets) \
+         [default: {DEFAULT_DPO_BETA}]"
+    )
 }

@@ -58,8 +58,10 @@ fn record(pair: &Pair) -> Record {
     Record {
         body: RecordBody::Preference {
             prompt,
-            chosen: Box::new(message("assistant", &pair.chosen, true)),
-            rejected: Box::new(message("assistant", &pair.rejected, true)),
+            chosen: vec![message("assistant", &pair.chosen, true)],
+            rejected: vec![message("assistant", &pair.rejected, true)],
+            tools: Vec::new(),
+            identity: None,
         },
         metadata: RecordMetadata {
             experiences: Vec::new(),
@@ -73,7 +75,7 @@ fn record(pair: &Pair) -> Record {
             split: None,
             split_draw: None,
             view: VIEW.into(),
-            objective: Objective::Dpo,
+            objective: Objective::Preference,
         },
     }
 }
@@ -117,7 +119,7 @@ pub(super) fn store(
     let mut projection = Projection {
         records: pairs.iter().map(record).collect(),
         terms: source_terms(ctx, sessions.iter())?,
-        ..Projection::new(VIEW, Objective::Dpo, None, None)
+        ..Projection::new(VIEW, Objective::Preference, None, None)
     };
     if let Some(prompt) = system {
         projection = projection.with_system_prompt(prompt);

@@ -134,4 +134,24 @@ pub enum Exclusion {
     /// An action after one that read the repository's history, in a
     /// demonstration the curation truncates there ([`crate::curation`]).
     AfterRepositoryHistory,
+    /// An attempt the infrastructure failed (the examiner's score record says
+    /// the sandbox, the model server or the agent failed): it has no verdict,
+    /// and it is never a rejected or undesirable sample.
+    InfrastructureFailure,
+    /// An attempt decided pass below the view's minimum strength: never a
+    /// chosen or desirable sample.
+    UnverifiedPass,
+    /// A verified attempt whose group holds no verified attempt of the other
+    /// verdict to pair it with (or, for a repair, no failed attempt of its
+    /// task).
+    NoCounterpart,
+    /// Two attempts that were not shown the same prompt (the messages before
+    /// the first action, or the tool list), so neither continues the other's.
+    DifferentPrompt,
+    /// Steps of one attempt, or the two sides of a pair, name different
+    /// tokenizers.
+    MixedTokenizerDigest,
+    /// A repair whose copied prefix is not the failed attempt's own
+    /// conversation, so the two do not continue one state.
+    PrefixMismatch,
 }

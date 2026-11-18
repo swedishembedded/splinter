@@ -16,11 +16,11 @@ use splinter_core::build::BinaryIdentity;
 use splinter_core::digest::Digest;
 use splinter_core::terms::{combine_stated, Terms};
 use splinter_core::training::{
-    HeldOutScore, PolicyGradientSummary, PreferenceSummary, Regime, RehearsalSample, ReplaySample,
-    TrainingCurve,
+    FeedbackSummary, HeldOutScore, PolicyGradientSummary, PreferenceSummary, Regime,
+    RehearsalSample, ReplaySample, TrainingCurve,
 };
 use splinter_model::policy_gradient::TrainedPolicyGradient;
-use splinter_model::train::{Trained, TrainedPreference};
+use splinter_model::train::{Trained, TrainedFeedback, TrainedPreference};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
 use splinter_store::artifacts::ArtifactSpec;
@@ -155,6 +155,7 @@ pub(super) fn keep_candidate(
         base_score: trained.base_score,
         tuned_score: trained.tuned_score,
         preference: trained.preference,
+        feedback: trained.feedback,
         curve: trained.curve,
         policy_gradient: trained.policy_gradient,
         checkpoints,
@@ -192,6 +193,7 @@ pub(super) struct Outcome {
     base_score: Option<HeldOutScore>,
     tuned_score: Option<HeldOutScore>,
     preference: Option<PreferenceSummary>,
+    feedback: Option<FeedbackSummary>,
     curve: Option<TrainingCurve>,
     policy_gradient: Option<PolicyGradientSummary>,
     evaluations: Vec<(u32, PathBuf)>,
@@ -208,6 +210,7 @@ impl From<Trained> for Outcome {
             base_score: Some(t.base),
             tuned_score: Some(t.tuned),
             preference: None,
+            feedback: None,
             curve: Some(t.curve),
             policy_gradient: None,
             evaluations: t.evaluations,
@@ -227,10 +230,12 @@ impl From<TrainedPreference> for Outcome {
             tuned_score: None,
             preference: Some(PreferenceSummary {
                 beta: t.beta,
+                loss: Some(t.loss.name().to_string()),
                 reference_adapter: t.reference_adapter,
                 train_score: t.train_score,
                 held_out_score: t.held_out_score,
             }),
+            feedback: None,
             curve: None,
             policy_gradient: None,
             evaluations: Vec::new(),
@@ -250,8 +255,29 @@ impl From<TrainedPolicyGradient> for Outcome {
             base_score: None,
             tuned_score: None,
             preference: None,
+            feedback: None,
             curve: None,
             policy_gradient: Some(t.statistics),
+            evaluations: Vec::new(),
+        }
+    }
+}
+
+impl From<TrainedFeedback> for Outcome {
+    fn from(t: TrainedFeedback) -> Self {
+        Self {
+            adapter: t.adapter,
+            adapter_digest: t.adapter_digest,
+            base_digest: t.base_digest,
+            training_record: t.training_record,
+            records: t.records,
+            // Nothing is held out: the release gate and the exam judge it.
+            base_score: None,
+            tuned_score: None,
+            preference: None,
+            feedback: Some(t.summary),
+            curve: None,
+            policy_gradient: None,
             evaluations: Vec::new(),
         }
     }

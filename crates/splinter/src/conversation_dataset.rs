@@ -54,7 +54,7 @@ pub fn dispatch(ctx: &Context, json: bool, command: DatasetCommand) -> Result<bo
         DatasetCommand::Check(args) => {
             let checked = check(ctx, &args.id, args.from.as_ref(), args.max_block)?;
             emit(json, &checked);
-            return Ok(checked.refused.is_empty());
+            return Ok(checked.passes());
         }
         DatasetCommand::Export { id, out } => emit(json, &export(ctx, &id, &out)?),
         DatasetCommand::Build(_) => {
@@ -103,6 +103,35 @@ impl crate::output::Report for splinter_sdk::datasets::DatasetCheck {
         }
         for refusal in &self.refused {
             let _ = writeln!(out, "  refused {refusal}");
+        }
+        if let Some(pairing) = &self.pairing {
+            let _ = writeln!(
+                out,
+                "  pairs: {} from attempts, {} from repairs, {} recorded; at most {} per group, seed {}",
+                pairing.attempts,
+                pairing.repairs,
+                pairing.recorded,
+                pairing.per_group.map_or("all".to_string(), |n| n.to_string()),
+                pairing.seed.map_or("none".to_string(), |s| s.to_string())
+            );
+        }
+        if let Some(balance) = &self.feedback {
+            let _ = writeln!(
+                out,
+                "  judged: {} desirable (weight {:.3}), {} undesirable (weight {:.3})",
+                balance.desirable,
+                balance.desirable_weight,
+                balance.undesirable,
+                balance.undesirable_weight
+            );
+        }
+        if self.tokenizers.len() > 1 {
+            let _ = writeln!(
+                out,
+                "  refused: the records name {} tokenizers ({}); a dataset holds the attempts of one",
+                self.tokenizers.len(),
+                self.tokenizers.join(", ")
+            );
         }
         out
     }

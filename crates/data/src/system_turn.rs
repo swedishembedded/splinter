@@ -46,12 +46,32 @@ pub(crate) fn under_system_prompt(body: RecordBody) -> RecordBody {
             mut prompt,
             chosen,
             rejected,
+            tools,
+            identity,
         } => {
             open_with_system(&mut prompt, system);
             RecordBody::Preference {
                 prompt,
                 chosen,
                 rejected,
+                tools,
+                identity,
+            }
+        }
+        RecordBody::Feedback {
+            mut prompt,
+            completion,
+            desirable,
+            tools,
+            identity,
+        } => {
+            open_with_system(&mut prompt, system);
+            RecordBody::Feedback {
+                prompt,
+                completion,
+                desirable,
+                tools,
+                identity,
             }
         }
         other @ (RecordBody::Contrastive { .. } | RecordBody::Text { .. }) => other,

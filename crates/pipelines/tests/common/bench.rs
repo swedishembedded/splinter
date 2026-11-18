@@ -83,6 +83,9 @@ pub struct Trial {
     pub dimension: &'static str,
     /// The shell command its one tool call runs.
     pub command: &'static str,
+    /// The commit its agent's system prompt and its instruction name; `None`
+    /// is the trial's own name (each trial checked out a commit of its own).
+    pub commit: Option<&'static str>,
 }
 
 impl Trial {
@@ -104,6 +107,16 @@ impl Trial {
             confidential: false,
             dimension: "firmware.x",
             command: "ls",
+            commit: None,
+        }
+    }
+
+    /// The same trial of a task checked out at `commit`, as the other attempts
+    /// of the task are: one prompt for all of them.
+    pub fn at_commit(self, commit: &'static str) -> Self {
+        Self {
+            commit: Some(commit),
+            ..self
         }
     }
 
@@ -229,9 +242,12 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         let mut files: Vec<(String, Vec<u8>)> = vec![
             (
                 "trajectory.atif.json".into(),
-                trajectory(t.name, t.picture, t.command).into_bytes(),
+                trajectory(t.commit.unwrap_or(t.name), t.picture, t.command).into_bytes(),
             ),
-            ("model-requests.jsonl".into(), requests(t.name).into_bytes()),
+            (
+                "model-requests.jsonl".into(),
+                requests(t.commit.unwrap_or(t.name)).into_bytes(),
+            ),
             (
                 "verification.json".into(),
                 match t.reason {

@@ -7,8 +7,9 @@
 // you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! Direct preference optimisation as a job of the brain service: the `dpo`
-//! objective of `brain/train`.
+//! Preference optimisation as a job of the brain service: the `preference`
+//! objective of `brain/train`, by the pair loss the request names (DPO, IPO,
+//! SimPO, ORPO).
 //!
 //! The pairs are checked by the service first (`check_dataset`, kind
 //! `preference`): a pair the trainer refuses is named by its line before a
@@ -35,8 +36,9 @@ use crate::train_checks::MIN_BLOCK;
 /// names none: brain's default for the objective.
 pub const DEFAULT_DPO_BETA: f32 = 0.1;
 
-/// Fine-tunes a LoRA by DPO on `request.train`'s pairs as a job of the
-/// service, and scores it against its reference on the held-out pairs.
+/// Fine-tunes a LoRA by the pair loss `request.loss` on `request.train`'s
+/// pairs as a job of the service, and scores it against its reference on the
+/// held-out pairs.
 ///
 /// # Errors
 /// A pair is refused, no artifact store is configured, or the job was
@@ -84,7 +86,10 @@ pub fn train_preference_served(
     set(&mut params, "base", base.as_str());
     set(&mut params, "data", Value::Object(data).to_string());
     set(&mut params, "objective", "preference");
-    set(&mut params, "loss", "dpo");
+    set(&mut params, "loss", request.loss.name());
+    if let Some(gamma) = request.gamma {
+        set(&mut params, "gamma", gamma);
+    }
     set(&mut params, "steps", request.steps);
     set(&mut params, "rank", request.rank);
     set(&mut params, "alpha", request.alpha);
@@ -128,6 +133,7 @@ pub fn train_preference_served(
         records: pairs,
         block: super::field(&report, "block").map_err(failed)?,
         beta: super::field(&report, "beta").map_err(failed)?,
+        loss: request.loss,
         reference_adapter: report["trained_from"].as_str().map(str::to_string),
         train_score: score("train_score")?,
         held_out_score: score("held_out_score")?,
@@ -136,7 +142,7 @@ pub fn train_preference_served(
 
 /// `path` as the run trains it: unchanged, or, for a base that opens a
 /// reasoning block, rewritten so each candidate follows an empty closed one.
-fn prepared(
+pub(super) fn prepared(
     path: &Path,
     reasoning: bool,
     attempt_dir: &Path,

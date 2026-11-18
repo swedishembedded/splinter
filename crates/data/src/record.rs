@@ -114,14 +114,41 @@ pub enum RecordBody {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         teacher_context: Vec<TeacherMessage>,
     },
-    /// A shared prompt and two replies to it, the first preferred. DPO.
+    /// A shared prompt and two continuations of it, the first preferred:
+    /// preference optimisation (DPO, IPO, SimPO, ORPO).
     Preference {
-        /// The conversation before the reply.
+        /// The conversation before the continuations: never trained on.
         prompt: Vec<WireMessage>,
-        /// The preferred reply.
-        chosen: Box<WireMessage>,
-        /// The reply it is preferred over.
-        rejected: Box<WireMessage>,
+        /// The preferred continuation: one assistant turn, or the turns of an
+        /// agent's run from where the two parted (its assistant turns trained
+        /// on, the tool results between them context). It opens and ends with
+        /// an assistant turn.
+        chosen: Vec<WireMessage>,
+        /// The continuation it is preferred over, of the same form.
+        rejected: Vec<WireMessage>,
+        /// The tool schemas the conversation was held under (see
+        /// [`Self::Chat::tools`]); empty for none.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tools: Vec<serde_json::Value>,
+        /// The attempts the pair compares, when it was derived from attempts.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        identity: Option<RolloutIdentity>,
+    },
+    /// A prompt, one continuation of it and whether it is one to learn from
+    /// (`desirable`) or to unlearn: KTO's judged completion.
+    Feedback {
+        /// The conversation before the continuation: never trained on.
+        prompt: Vec<WireMessage>,
+        /// The continuation, of [`Self::Preference::chosen`]'s form.
+        completion: Vec<WireMessage>,
+        /// Whether the continuation is desirable: its attempt verified as
+        /// passed.
+        desirable: bool,
+        /// The tool schemas the conversation was held under; empty for none.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tools: Vec<serde_json::Value>,
+        /// The attempt the completion is.
+        identity: RolloutIdentity,
     },
     /// A query, the text that answers it, and texts that do not. Contrastive.
     Contrastive {
@@ -204,6 +231,7 @@ impl RecordBody {
         match self {
             Self::Chat { .. } => "chat",
             Self::Preference { .. } => "preference",
+            Self::Feedback { .. } => "feedback",
             Self::Contrastive { .. } => "contrastive",
             Self::Rewarded { .. } => "rewarded",
             Self::Text { .. } => "text",
@@ -218,7 +246,8 @@ impl RecordBody {
             (
                 Self::Chat { .. },
                 Objective::Sft | Objective::Classification | Objective::PolicyGradient
-            ) | (Self::Preference { .. }, Objective::Dpo)
+            ) | (Self::Preference { .. }, Objective::Preference)
+                | (Self::Feedback { .. }, Objective::Feedback)
                 | (Self::Contrastive { .. }, Objective::Contrastive)
                 | (Self::Rewarded { .. }, Objective::Reward)
                 | (Self::Text { .. }, Objective::Cpt)
@@ -312,4 +341,41 @@ pub struct RecordMetadata {
     pub view: String,
     /// The objective it serves.
     pub objective: Objective,
+}
+
+/// Which attempts a preference pair or a judged completion comes from: the
+/// group of attempts they belong to, the attempts themselves and the
+/// tokenizer their model encoded them with. Written into the line's
+/// `metadata` (as `rollout`), which the trainer carries and never reads, so a
+/// dataset can be traced to its attempts and checked for one tokenizer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RolloutIdentity {
+    /// The key of the group: a digest of the task, its version and the policy
+    /// that attempted it, as a policy-gradient record names its group.
+    pub group: String,
+    /// The attempts, by trial (else experience) name: for a pair the chosen
+    /// one, then the rejected one; for a judged completion its own.
+    pub rollouts: Vec<String>,
+    /// The tokenizer the policy's server encoded the attempts with
+    /// (`sha256:<hex>`, as its policy trace names it), when the trajectories
+    /// recorded it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokenizer_digest: Option<String>,
+    /// Where a pair comes from: grouped attempts of one task, or a repair (a
+    /// failed attempt's prefix continued to a verified pass, against that
+    /// attempt's own failed suffix); `None` for a judged completion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<PairSource>,
+}
+
+/// Where a preference pair comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PairSource {
+    /// A verified pass and a verified fail of one task by one policy, from
+    /// the same rendered prompt.
+    Attempts,
+    /// A failed attempt's prefix continued to a verified pass, against the
+    /// failed attempt's own suffix: only where the two part is trained.
+    Repair,
 }

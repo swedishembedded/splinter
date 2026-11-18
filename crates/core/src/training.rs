@@ -59,9 +59,12 @@ pub enum Regime {
     /// regime of a record that names none.
     #[default]
     Sft,
-    /// Direct preference optimisation on chosen/rejected pairs
-    /// (`generic-preference-v1`).
+    /// Preference optimisation on chosen/rejected pairs
+    /// (`generic-preference-v1`) by a pair loss (DPO, IPO, SimPO, ORPO); the
+    /// name is the one candidates recorded before the other losses.
     Dpo,
+    /// KTO on judged completions (`generic-feedback-v1`).
+    Feedback,
     /// A clipped policy gradient on chat records that each carry the reward
     /// of the attempt they come from and its group (`generic-messages-v2` with
     /// `reward` and `group`, brain's training-record contract v2), on the
@@ -79,7 +82,8 @@ impl Regime {
     pub fn label(self) -> &'static str {
         match self {
             Self::Sft => "supervised fine-tuning",
-            Self::Dpo => "preference (DPO) fine-tuning",
+            Self::Dpo => "preference fine-tuning",
+            Self::Feedback => "feedback (KTO) fine-tuning",
             Self::PolicyGradient => "policy-gradient reinforcement learning",
             Self::Other => "an objective brain owns",
         }
@@ -138,8 +142,13 @@ pub struct RehearsalSample {
 /// adapter against the reference it was trained against.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PreferenceSummary {
-    /// The DPO temperature it trained with.
+    /// The temperature it trained with.
     pub beta: f32,
+    /// The pair loss it trained by (`dpo`, `ipo`, `simpo`, `orpo`); `None`
+    /// for a candidate recorded before the loss was chosen, which trained by
+    /// DPO.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loss: Option<String>,
     /// The digest of the adapter the reference carried (the one
     /// continued); `None` when the reference was the base alone.
     pub reference_adapter: Option<String>,
@@ -147,6 +156,37 @@ pub struct PreferenceSummary {
     pub train_score: Option<PreferenceScore>,
     /// On the held-out pairs; `None` when not measured.
     pub held_out_score: Option<PreferenceScore>,
+}
+
+/// What a KTO run (brain's `feedback` objective) reported: the examples of
+/// each class, the weights they were trained at and the log-ratio of each
+/// class to the starting policy after the run.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct FeedbackSummary {
+    /// The temperature it trained with.
+    pub beta: f32,
+    /// The weight of a desirable example's term.
+    pub desirable_weight: f32,
+    /// The weight of an undesirable example's term.
+    pub undesirable_weight: f32,
+    /// Desirable examples trained on.
+    pub desirable_examples: usize,
+    /// Undesirable examples trained on.
+    pub undesirable_examples: usize,
+    /// The loss before the first step; `None` when not reported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_loss: Option<f32>,
+    /// The loss after the last step; `None` when not reported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_loss: Option<f32>,
+    /// The mean log-ratio of the desirable completions to the starting
+    /// policy after the run: positive when the run raised them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desirable_logratio: Option<f32>,
+    /// The same of the undesirable completions: negative when it lowered
+    /// them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub undesirable_logratio: Option<f32>,
 }
 
 /// What one optimiser step of a policy-gradient run measured (brain's

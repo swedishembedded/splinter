@@ -24,8 +24,9 @@ pub struct BuildArgs {
     /// The experience sets, by id or unique prefix.
     #[arg(required = true, value_name = "EXPERIENCE-SET")]
     pub sets: Vec<String>,
-    /// sft-final, sft-step, critic, preference, verifier, decision,
-    /// retrieval, outcome, denoise, cpt, voice, rehearsal or policy-gradient.
+    /// sft-final, sft-step, critic, preference, feedback, verifier, decision,
+    /// retrieval, outcome, denoise, cpt, voice, rehearsal, policy-gradient or
+    /// self-distill.
     #[arg(long, required = true, value_parser = view, value_name = "VIEW")]
     pub view: ViewName,
     /// What the student sees: all (only the instruction), keep:K,..
@@ -118,6 +119,18 @@ pub struct BuildArgs {
     /// (default a quarter of it, DAPO's 4096 of 16384).
     #[arg(long, value_name = "N", requires = "overlong_max_tokens", value_parser = positive_count)]
     pub overlong_buffer: Option<usize>,
+    /// For the preference view: the most pairs made of one group of attempts
+    /// (one task version attempted by one policy) or of one repaired task
+    /// (default 4). The candidate pairs are ordered by a hash of
+    /// `--pair-seed` and the first that make a record are kept; the rest are
+    /// counted as `OverLimit`. The manifest records the bound and the seed.
+    #[arg(long, value_name = "N", value_parser = positive_count)]
+    pub pairs_per_group: Option<usize>,
+    /// For the preference view: the seed the pairs of a group are chosen by.
+    /// Without it, the seed is derived from the experiences, so building again
+    /// from them pairs the same.
+    #[arg(long, value_name = "N")]
+    pub pair_seed: Option<Seed>,
     /// For the sft-step view: one record per trajectory with every
     /// admitted action supervised, not one record per action.
     #[arg(long)]
@@ -128,7 +141,8 @@ pub struct BuildArgs {
     /// actions - the edits and the conclusion - instead of the exploration.
     #[arg(long, value_delimiter = ',', value_name = "TOOLS")]
     pub only_actions: Option<Vec<String>>,
-    /// For the sft-step view: keep only the conversations of a harness trial
+    /// For the sft-step, policy-gradient, preference and feedback views: keep
+    /// only the conversations of a harness trial
     /// answered by these model roles (comma separated, as `ingest-bench`
     /// recorded them); every other experience, and a conversation whose role
     /// is unknown, is counted as `RoleNotWanted`.
@@ -158,7 +172,9 @@ pub struct BuildArgs {
     /// given).
     #[arg(long, value_name = "N", requires = "control")]
     pub control_seed: Option<Seed>,
-    /// For the sft-step view: what becomes of an action whose tool call reads
+    /// For the sft-step view (and the preference and feedback views, where
+    /// `drop-step` and `truncate` both leave out a pair or completion that
+    /// holds such a read): what becomes of an action whose tool call reads
     /// the repository's history (`git log`, `git show`, `git reflog`,
     /// `git cat-file`, a commit before `HEAD`) or git's storage (`.git/refs`,
     /// `.git/objects`, `.git/HEAD`): `drop-step` (the default) does not
@@ -250,12 +266,16 @@ pub struct DecisionFixturesArgs {
 }
 
 /// `dataset check`: brain's own reading of a stored dataset (its
-/// `check_dataset` over every record), for the base a run trains and in the
-/// mode it would read the records (reasoning when they carry it, one example
-/// per record when the dataset was built packed): records and examples, the
-/// tokens and supervised tokens per example, examples that train on
-/// nothing, the longest records and every record the trainer refuses.
-/// Exits 1 when it refuses any.
+/// `check_dataset` over every record, read as chat records, preference pairs
+/// or judged completions as the dataset's format is), for the base a run
+/// trains and in the mode it would read the records (reasoning when they
+/// carry it, one example per record when the dataset was built packed):
+/// records and examples, the tokens and supervised tokens per example,
+/// examples that train on nothing, the longest records and every record the
+/// trainer refuses; for pairs and judged completions also the pairing policy
+/// or the class weights the manifest records, and the tokenizers the
+/// records' attempts name. Exits 1 when the trainer refuses any record or
+/// the records name more than one tokenizer.
 #[derive(Debug, clap::Args)]
 pub struct CheckArgs {
     /// The dataset, by id or unique prefix.

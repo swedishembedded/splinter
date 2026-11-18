@@ -43,6 +43,8 @@ pub enum DatasetKind {
     Chat,
     /// `generic-preference-v1` pairs: preference optimisation.
     Preference,
+    /// `generic-feedback-v1` judged completions: KTO.
+    Feedback,
     /// `timeline-v1` subjects: each line validated, no token counted.
     Timeline,
 }
@@ -52,6 +54,7 @@ impl DatasetKind {
         match self {
             Self::Chat => "chat",
             Self::Preference => "preference",
+            Self::Feedback => "feedback",
             Self::Timeline => "timeline",
         }
     }

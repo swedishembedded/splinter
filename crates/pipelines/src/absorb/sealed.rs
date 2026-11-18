@@ -258,10 +258,20 @@ fn record_texts(record: &Record) -> Vec<&str> {
             prompt,
             chosen,
             rejected,
+            ..
         } => prompt
             .iter()
             .filter(|m| m.role != "system")
-            .chain([&**chosen, &**rejected])
+            .chain(chosen)
+            .chain(rejected)
+            .map(|m| m.content.as_str())
+            .collect(),
+        RecordBody::Feedback {
+            prompt, completion, ..
+        } => prompt
+            .iter()
+            .filter(|m| m.role != "system")
+            .chain(completion)
             .map(|m| m.content.as_str())
             .collect(),
         RecordBody::Text { text } => vec![text.as_str()],

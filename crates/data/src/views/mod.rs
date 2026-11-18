@@ -4,10 +4,12 @@
 //! The views, one module each; the crate documentation lists what each
 //! projects.
 
+mod attempts;
 mod cpt;
 mod critic;
 mod decision;
 mod denoise;
+mod feedback;
 mod outcome;
 mod policy_gradient;
 mod preference;
@@ -25,9 +27,10 @@ pub use cpt::Cpt;
 pub use critic::Critic;
 pub use decision::DecisionView;
 pub use denoise::DenoiseView;
+pub use feedback::{Feedback, FeedbackBalance};
 pub use outcome::OutcomeView;
 pub use policy_gradient::{Distill, PolicyGradient};
-pub use preference::Preference;
+pub use preference::{PairingPolicy, Preference, PAIRING_RULE};
 pub use rehearsal::Rehearsal;
 pub use retrieval::Retrieval;
 pub use rewards::signals;

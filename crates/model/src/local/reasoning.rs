@@ -69,17 +69,28 @@ pub const CLOSED_THINK: &str = "<think>\n\n</think>\n\n";
 pub fn closed_think_pairs(dataset: &str) -> Result<String, serde_json::Error> {
     let mut out = String::with_capacity(dataset.len() + 64);
     for line in dataset.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        let mut pair: serde_json::Value = serde_json::from_str(line)?;
-        for side in ["chosen", "rejected"] {
-            let text = pair
-                .get(side)
-                .and_then(|m| m.get("content"))
-                .and_then(|c| c.as_str());
-            if let Some(text) = text.filter(|t| !t.contains("</think>")) {
-                pair[side]["content"] = format!("{CLOSED_THINK}{text}").into();
+        let mut record: serde_json::Value = serde_json::from_str(line)?;
+        for side in ["chosen", "rejected", "completion"] {
+            let Some(candidate) = record.get_mut(side) else {
+                continue;
+            };
+            // One turn, or a continuation: every assistant turn of it was
+            // decoded after an opened block.
+            let turns: Vec<&mut serde_json::Value> = match candidate {
+                serde_json::Value::Array(turns) => turns.iter_mut().collect(),
+                turn => vec![turn],
+            };
+            for turn in turns {
+                if turn.get("role").and_then(|r| r.as_str()) != Some("assistant") {
+                    continue;
+                }
+                let text = turn.get("content").and_then(|c| c.as_str());
+                if let Some(text) = text.filter(|t| !t.contains("</think>")) {
+                    turn["content"] = format!("{CLOSED_THINK}{text}").into();
+                }
             }
         }
-        out.push_str(&serde_json::to_string(&pair)?);
+        out.push_str(&serde_json::to_string(&record)?);
         out.push('\n');
     }
     Ok(out)

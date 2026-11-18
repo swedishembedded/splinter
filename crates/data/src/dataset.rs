@@ -15,14 +15,22 @@
 //!   its destination, parsed with brain's own dataset parser (through
 //!   `splinter-model`), and only then moved into place - so a dataset the
 //!   trainer would refuse is never reported written.
-//! * DPO preference pairs are written as brain's `generic-preference-v1`
+//! * Preference pairs are written as brain's `generic-preference-v1`
 //!   ([`Format::GenericPreferenceV1`]): one pair per line,
-//!   `{"prompt":[messages],"chosen":{message},"rejected":{message},
+//!   `{"prompt":[messages],"chosen":C,"rejected":C,"tools":[...],
 //!   "metadata":{...}}`, the messages in the `generic-messages-v2` shape
 //!   without `train` - supervision follows from position: the prompt is
-//!   never trained on, the two candidates always are. It is checked by
-//!   brain's own preference parser the same way before it is moved into
-//!   place.
+//!   never trained on, a candidate always is. A candidate `C` is one
+//!   assistant turn (an object) or a continuation (an array of turns that
+//!   opens and ends with an assistant turn: its assistant turns are trained
+//!   on, the tool results between them are context).
+//! * Judged completions (KTO) are written as brain's `generic-feedback-v1`
+//!   ([`Format::GenericFeedbackV1`]): `{"prompt":[messages],"completion":C,
+//!   "desirable":bool,"tools":[...],"metadata":{...}}`, `C` as above.
+//!
+//!   The attempts a pair or a completion comes from ([`crate::RolloutIdentity`])
+//!   are written into its `metadata` as `rollout`: brain carries `metadata`
+//!   and never reads it.
 //! * A raw text corpus (continued pretraining) is written as chat lines: each
 //!   text is one assistant turn with nothing before it, supervised whole, so
 //!   the loss is the next-token loss over every token of the text.
@@ -77,6 +85,9 @@ pub enum Format {
     /// Brain's preference pair format.
     #[serde(rename = "generic-preference-v1")]
     GenericPreferenceV1,
+    /// Brain's judged-completion format (KTO).
+    #[serde(rename = "generic-feedback-v1")]
+    GenericFeedbackV1,
     /// Splinter's export-only format, which no trainer reads.
     #[serde(rename = "splinter-export-v1")]
     SplinterExportV1,
@@ -194,6 +205,15 @@ pub struct Manifest {
     /// thresholds ([`crate::Overlong`]); `None` for rewards without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overlong: Option<crate::Overlong>,
+    /// How the pairs of a preference dataset were chosen, the seed and the
+    /// pairs from each source ([`crate::PairingPolicy`]); `None` for any
+    /// other dataset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pairing: Option<crate::PairingPolicy>,
+    /// The classes of a feedback dataset and the weight of each
+    /// ([`crate::FeedbackBalance`]); `None` for any other dataset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<crate::FeedbackBalance>,
 }
 
 /// How many records a projection yielded and how many candidates it left
@@ -204,6 +224,29 @@ pub struct Counts {
     pub records: usize,
     /// Candidates left out, by reason.
     pub excluded: BTreeMap<Exclusion, usize>,
+}
+
+/// The tokenizers the lines of a dataset's `text` name in their
+/// `metadata.rollout.tokenizer_digest` (pairs and judged completions from
+/// grouped attempts), in first-use order: a dataset holds the attempts of one
+/// tokenizer, so more than one is a dataset to refuse. A line that is not
+/// JSON names none.
+#[must_use]
+pub fn named_tokenizers(text: &str) -> Vec<String> {
+    let mut named: Vec<String> = Vec::new();
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let digest = serde_json::from_str::<serde_json::Value>(line)
+            .ok()
+            .and_then(|v| {
+                v.pointer("/metadata/rollout/tokenizer_digest")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+            });
+        if let Some(digest) = digest.filter(|d| !named.contains(d)) {
+            named.push(digest);
+        }
+    }
+    named
 }
 
 /// Where the manifest of the dataset at `dataset` lies.
@@ -245,13 +288,55 @@ struct TeacherContextLine<'a> {
 #[derive(Serialize)]
 struct PreferenceLine<'a> {
     prompt: Vec<Turn<'a>>,
-    chosen: Turn<'a>,
-    rejected: Turn<'a>,
-    metadata: &'a RecordMetadata,
+    chosen: Candidate<'a>,
+    rejected: Candidate<'a>,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    tools: &'a [serde_json::Value],
+    metadata: LineMetadata<'a>,
 }
 
-/// A `generic-messages-v2` message without `train`, as a preference line
-/// carries it.
+/// One line of the judged-completion format.
+#[derive(Serialize)]
+struct FeedbackLine<'a> {
+    prompt: Vec<Turn<'a>>,
+    completion: Candidate<'a>,
+    desirable: bool,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    tools: &'a [serde_json::Value],
+    metadata: LineMetadata<'a>,
+}
+
+/// A record's metadata as a pair or completion line carries it: the record's
+/// own, and the attempts it comes from.
+#[derive(Serialize)]
+struct LineMetadata<'a> {
+    #[serde(flatten)]
+    record: &'a RecordMetadata,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rollout: Option<&'a crate::RolloutIdentity>,
+}
+
+/// A candidate of a pair or a judged completion: one turn is written as the
+/// turn itself (the form every earlier pair has), a continuation as the
+/// array of its turns.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum Candidate<'a> {
+    Turn(Turn<'a>),
+    Continuation(Vec<Turn<'a>>),
+}
+
+impl<'a> Candidate<'a> {
+    fn of(turns: &'a [splinter_core::chat::WireMessage]) -> Self {
+        match turns {
+            [one] => Self::Turn(one.into()),
+            many => Self::Continuation(many.iter().map(Turn::from).collect()),
+        }
+    }
+}
+
+/// A `generic-messages-v2` message without `train`, as a preference or
+/// feedback line carries it.
 #[derive(Serialize)]
 struct Turn<'a> {
     role: &'a str,
@@ -260,6 +345,8 @@ struct Turn<'a> {
     tool_calls: &'a [splinter_core::chat::WireToolCall],
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_call_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_content: Option<&'a str>,
 }
 
 impl<'a> From<&'a splinter_core::chat::WireMessage> for Turn<'a> {
@@ -269,6 +356,7 @@ impl<'a> From<&'a splinter_core::chat::WireMessage> for Turn<'a> {
             content: &message.content,
             tool_calls: &message.tool_calls,
             tool_call_id: message.tool_call_id.as_deref(),
+            reasoning_content: message.reasoning_content.as_deref(),
         }
     }
 }
@@ -457,12 +545,37 @@ fn line(
                 prompt,
                 chosen,
                 rejected,
+                tools,
+                identity,
             },
         ) => serde_json::to_string(&PreferenceLine {
             prompt: prompt.iter().map(Turn::from).collect(),
-            chosen: (&**chosen).into(),
-            rejected: (&**rejected).into(),
-            metadata: &record.metadata,
+            chosen: Candidate::of(chosen),
+            rejected: Candidate::of(rejected),
+            tools,
+            metadata: LineMetadata {
+                record: &record.metadata,
+                rollout: identity.as_ref(),
+            },
+        })?,
+        (
+            Format::GenericFeedbackV1,
+            RecordBody::Feedback {
+                prompt,
+                completion,
+                desirable,
+                tools,
+                identity,
+            },
+        ) => serde_json::to_string(&FeedbackLine {
+            prompt: prompt.iter().map(Turn::from).collect(),
+            completion: Candidate::of(completion),
+            desirable: *desirable,
+            tools,
+            metadata: LineMetadata {
+                record: &record.metadata,
+                rollout: Some(identity),
+            },
         })?,
         // Continued pretraining on a text: the text is one assistant turn
         // with nothing before it, supervised whole, which is the next-token
@@ -545,6 +658,8 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         split: projection.split_policy(),
         curation: projection.curation.clone(),
         overlong: projection.overlong,
+        pairing: projection.pairing.clone(),
+        feedback: projection.feedback,
     }
 }
 

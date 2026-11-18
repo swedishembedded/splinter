@@ -151,7 +151,7 @@ fn preference_pairs_recorded_preferences_and_comparable_pass_fail_decisions() {
         .unwrap();
 
     let view = Preference::new(Strength::Judged);
-    assert_eq!(view.objective(), Objective::Dpo);
+    assert_eq!(view.objective(), Objective::Preference);
     let projection = view.project(&corpus).unwrap();
     let pairs: Vec<(Vec<_>, String, String, String)> = projection
         .records
@@ -161,11 +161,12 @@ fn preference_pairs_recorded_preferences_and_comparable_pass_fail_decisions() {
                 prompt,
                 chosen,
                 rejected,
+                ..
             } => (
                 r.metadata.experiences.clone(),
                 after_system(prompt)[0].content.clone(),
-                chosen.content.clone(),
-                rejected.content.clone(),
+                chosen[0].content.clone(),
+                rejected[0].content.clone(),
             ),
             other => panic!("a preference record, got {other:?}"),
         })

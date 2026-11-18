@@ -10,6 +10,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod attempt_pairs;
 mod chat_tools;
 mod corrections;
 mod dataset;

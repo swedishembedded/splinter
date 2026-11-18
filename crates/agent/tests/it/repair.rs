@@ -452,13 +452,14 @@ fn a_failed_construct_task_is_critiqued_retried_and_the_chain_feeds_the_views() 
             prompt,
             chosen,
             rejected,
+            ..
         } => {
             assert_eq!(
                 (prompt[0].content.as_str(), prompt[1].content.as_str()),
                 (SYSTEM_PROMPT, INSTRUCTION)
             );
-            assert_eq!(chosen.content, CORRECT);
-            assert_eq!(rejected.content, WRONG);
+            assert_eq!(chosen.last().unwrap().content, CORRECT);
+            assert_eq!(rejected.last().unwrap().content, WRONG);
         }
         other => panic!("a preference record, got {other:?}"),
     }

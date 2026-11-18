@@ -494,6 +494,7 @@ impl Session {
                         seed: args.seed,
                         base_precision: args.base_precision,
                         policy_gradient: args.policy_gradient.options(args.temperature),
+                        pairs: args.pairs.settings(),
                         ..Tuning::default()
                     }),
                 };

@@ -34,8 +34,13 @@ pub enum ViewName {
     SftStep,
     /// A task and candidate answer, and a verified critique of it.
     Critic,
-    /// A chosen and a rejected answer to one task.
+    /// A prompt and two continuations of it, the first preferred: a verified
+    /// pass and a verified fail of one task by one policy, or a repair against
+    /// the failure it continues.
     Preference,
+    /// A verified attempt's continuation of its prompt, desirable when it
+    /// passed: KTO.
+    Feedback,
     /// A task and candidate answer, and `pass` or `fail`.
     Verifier,
     /// The passing action where a passing and a failed attempt part.
@@ -66,11 +71,12 @@ pub enum ViewName {
 
 impl ViewName {
     /// Every view, in the order `--help` lists them.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::SftFinal,
         Self::SftStep,
         Self::Critic,
         Self::Preference,
+        Self::Feedback,
         Self::Verifier,
         Self::Decision,
         Self::Retrieval,
@@ -91,6 +97,7 @@ impl ViewName {
             Self::SftStep => "sft-step",
             Self::Critic => "critic",
             Self::Preference => "preference",
+            Self::Feedback => "feedback",
             Self::Verifier => "verifier",
             Self::Decision => "decision",
             Self::Retrieval => "retrieval",

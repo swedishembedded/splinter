@@ -55,6 +55,7 @@ mod candidate;
 mod full;
 mod keep;
 mod monitoring;
+mod pairs;
 mod policy_gradient;
 
 mod supervised;
@@ -73,6 +74,7 @@ pub use full::{
     DEFAULT_FULL_LEARNING_RATE,
 };
 use keep::{keep_candidate, Finished, Outcome};
+pub use pairs::feedback_weights;
 pub(crate) use records::carries_reasoning;
 use records::{combine, concatenate};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
@@ -83,7 +85,7 @@ pub use sizing::{
     DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET, MAX_AUTO_STEPS, MAX_MONITOR_SHARE, MAX_PASSES,
 };
 pub use splinter_model::consolidate::Checkpoint as ModelCheckpoint;
-pub use tuning::Tuning;
+pub use tuning::{PairSettings, Tuning};
 
 use std::path::{Path, PathBuf};
 
@@ -91,11 +93,9 @@ use serde::Serialize;
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::training::{Regime, ReplaySample, ReplaySource};
-use splinter_data::holdout::split_dataset_file;
 use splinter_data::{select_replay, Format, Fraction, Objective, ReplayPolicy, StoredDataset};
 use splinter_model::policy_gradient::TrainedPolicyGradient;
-use splinter_model::served_train::train_preference_served;
-use splinter_model::train::{PreferenceTune, Trained, TrainedPreference};
+use splinter_model::train::{Trained, TrainedFeedback, TrainedPreference};
 use splinter_model::{LocalWeights, ModelSelection, PolicyError};
 
 use crate::datasets::{examples_in, record_dataset_lineage, resolve_dataset};
@@ -157,6 +157,7 @@ pub fn regime_of(format: Format, objective: Objective) -> Option<Regime> {
         }
         Format::GenericMessagesV2 => Some(Regime::Sft),
         Format::GenericPreferenceV1 => Some(Regime::Dpo),
+        Format::GenericFeedbackV1 => Some(Regime::Feedback),
         Format::SplinterExportV1 => None,
         // Trained by the timeline objective, not by an adapter regime.
         Format::TimelineV1 => None,
@@ -183,8 +184,8 @@ pub struct TrainRequest {
     pub steps: Option<u32>,
     /// LoRA rank of a new adapter.
     pub rank: u32,
-    /// The DPO temperature, for preference datasets only;
-    /// [`DEFAULT_DPO_BETA`] when `None`.
+    /// The temperature of the preference or feedback loss, for those
+    /// datasets only; [`DEFAULT_DPO_BETA`] when `None`.
     pub beta: Option<f32>,
     /// The base's precision, the learning rate and how the run is watched.
     pub tuning: Tuning,
@@ -218,7 +219,8 @@ pub struct TrainPlan {
     pub steps: u32,
     /// LoRA rank of a new adapter.
     pub rank: u32,
-    /// The DPO temperature; used by the preference regime only.
+    /// The temperature of the pair or feedback loss; used by those regimes
+    /// only.
     pub beta: f32,
     /// The base's precision and the learning rate, every option resolved.
     pub tuning: Tuning,
@@ -265,6 +267,20 @@ pub trait Trainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<TrainedPreference, OrchestratorError>;
+
+    /// Trains the KTO adapter `plan` describes into `plan.dir` on the judged
+    /// completions of its datasets, stopping when `cancel` fires. A trainer
+    /// without the objective refuses.
+    fn train_feedback(
+        &self,
+        _ctx: &Context,
+        _plan: &TrainPlan,
+        _cancel: &CancelToken,
+    ) -> Result<TrainedFeedback, OrchestratorError> {
+        Err(OrchestratorError::Refused(
+            "this trainer cannot train KTO on judged completions".into(),
+        ))
+    }
 
     /// Trains the policy-gradient adapter `plan` describes into `plan.dir`
     /// on the rollout records of its datasets, stopping when `cancel` fires.
@@ -354,30 +370,16 @@ impl Trainer for BrainTrainer {
         plan: &TrainPlan,
         cancel: &CancelToken,
     ) -> Result<TrainedPreference, OrchestratorError> {
-        let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
-        train_preference_served(
-            &ctx.brain()?,
-            &PreferenceTune {
-                model_dir: &plan.base,
-                train: &split.train,
-                held_out: &split.held_out,
-                attempt_dir: &plan.dir,
-                steps: plan.steps,
-                rank: plan.rank,
-                alpha: plan
-                    .tuning
-                    .alpha
-                    .unwrap_or_else(|| default_alpha(plan.rank)),
-                beta: plan.beta,
-                nll_weight: 0.0,
-                grad_accum: 1,
-                learning_rate: plan.tuning.learning_rate,
-                seed: plan.seed,
-                continue_from: plan.continue_from.as_deref(),
-                cancel: Some(cancel),
-            },
-        )
-        .map_err(trainer_error)
+        pairs::train_preference(ctx, plan, cancel)
+    }
+
+    fn train_feedback(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        cancel: &CancelToken,
+    ) -> Result<TrainedFeedback, OrchestratorError> {
+        pairs::train_feedback(ctx, plan, cancel)
     }
 
     fn train_policy_gradient(
@@ -410,7 +412,7 @@ impl Trainer for BrainTrainer {
     }
 }
 
-fn trainer_error(e: PolicyError) -> OrchestratorError {
+pub(super) fn trainer_error(e: PolicyError) -> OrchestratorError {
     match e {
         PolicyError::Cancelled { job: None, .. } => OrchestratorError::Cancelled,
         PolicyError::Cancelled { job: Some(job), .. } => OrchestratorError::JobCancelled(job),
@@ -475,14 +477,16 @@ pub(crate) fn plan_training(
                 "the datasets are for a regime brain's adapter trainers do not run".into(),
             ))
         }
-        (Regime::Dpo, beta) => beta.unwrap_or(DEFAULT_DPO_BETA),
+        (Regime::Dpo | Regime::Feedback, beta) => beta.unwrap_or(DEFAULT_DPO_BETA),
         (Regime::Sft | Regime::PolicyGradient, None) => DEFAULT_DPO_BETA,
         (Regime::Sft | Regime::PolicyGradient, Some(_)) => {
             return Err(OrchestratorError::Refused(
-                "beta applies to preference datasets only; these are chat datasets".into(),
+                "beta applies to preference and feedback datasets only; these are chat datasets"
+                    .into(),
             ))
         }
     };
+    pairs::check_settings(regime, &request.tuning.pairs)?;
     policy_gradient::check_settings(regime, &request.tuning)?;
     let datasets: Vec<StoredDataset> = resolved.into_iter().map(|(d, _)| d).collect();
     let monitor_share = request
@@ -560,6 +564,12 @@ pub(crate) fn plan_training(
         (Some(_), Regime::Dpo) => {
             return Err(OrchestratorError::Refused(
                 "a preference run trains on its pairs alone and rehearses nothing".into(),
+            ))
+        }
+        (Some(_), Regime::Feedback) => {
+            return Err(OrchestratorError::Refused(
+                "a feedback run trains on its judged completions alone and rehearses nothing"
+                    .into(),
             ))
         }
         (Some(_), Regime::PolicyGradient) => {
@@ -648,6 +658,7 @@ pub fn train(
     let trained = match regime {
         Regime::Sft => Outcome::from(trainer.train(ctx, &plan, cancel)?),
         Regime::Dpo => Outcome::from(trainer.train_preference(ctx, &plan, cancel)?),
+        Regime::Feedback => Outcome::from(trainer.train_feedback(ctx, &plan, cancel)?),
         Regime::PolicyGradient => Outcome::from(trainer.train_policy_gradient(ctx, &plan, cancel)?),
         Regime::Other => {
             return Err(OrchestratorError::Refused(

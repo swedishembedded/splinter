@@ -21,7 +21,8 @@
 //! | [`SftFinal`] | SFT | a passed experience's instruction and final answer |
 //! | [`SftStep`] | SFT | each action of a trajectory, in the context before it |
 //! | [`Critic`] | SFT | a task and candidate answer, and a verified critique of it |
-//! | [`Preference`] | DPO | a chosen and a rejected answer to one task |
+//! | [`Preference`] | preference | a chosen and a rejected continuation of one prompt: a verified pass and a verified fail of one task by one policy, or a repair against the failure it continues |
+//! | [`Feedback`] | feedback (KTO) | a verified attempt's continuation of its prompt, desirable when it passed |
 //! | [`VerifierView`] | classification | a task and candidate answer, and `pass` or `fail` |
 //! | [`DecisionView`] | SFT | the passing action where a passing and a failed attempt part |
 //! | [`Retrieval`] | contrastive | an instruction and the source span it is grounded in |
@@ -111,12 +112,13 @@ use splinter_store::experiences::StoreError;
 
 pub use corpus::{Corpus, Entry};
 pub use dataset::{
-    dataset_line, manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest,
-    Unchecked, EXPORT_FORMAT,
+    dataset_line, manifest_path, named_tokenizers, write_dataset, Counts, Dataset, DatasetCheck,
+    Format, Manifest, Unchecked, EXPORT_FORMAT,
 };
 pub use exclusion::Exclusion;
 pub use record::{
-    Record, RecordBody, RecordMetadata, RolloutOutcome, Side, SplitDraw, TeacherMessage,
+    PairSource, Record, RecordBody, RecordMetadata, RolloutIdentity, RolloutOutcome, Side,
+    SplitDraw, TeacherMessage,
 };
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
 pub use store::{DatasetStore, StoredDataset};
@@ -126,8 +128,9 @@ pub use unprojectable::Unprojectable;
 pub use views::signals;
 pub use views::{
     chars_as_tokens, description, Control, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
-    OutcomeView, PolicyGradient, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep,
-    VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
+    Feedback, FeedbackBalance, OutcomeView, PairingPolicy, PolicyGradient, Preference, Rehearsal,
+    Retrieval, Sectioner, SftFinal, SftStep, VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
+    PAIRING_RULE,
 };
 pub use views::{
     AdvantageFloor, AdvantageKind, AdvantageNorm, Distill, GroupKind, GroupReport, Overlong,
@@ -144,8 +147,14 @@ pub enum Objective {
     /// is the supervised assistant turn, so brain's chat fine-tuning trains
     /// it, with no classification head.
     Classification,
-    /// Direct preference optimisation on (chosen, rejected) pairs.
-    Dpo,
+    /// Preference optimisation on (chosen, rejected) pairs, by the pair loss
+    /// a run names (DPO, IPO, SimPO, ORPO). Read as `dpo` too, the name a
+    /// dataset built before the other losses records.
+    #[serde(alias = "dpo")]
+    Preference,
+    /// KTO on judged completions: each one desirable or undesirable, no
+    /// second completion needed.
+    Feedback,
     /// Contrastive retrieval on (query, positive, negatives).
     Contrastive,
     /// A whole trajectory with a scalar reward.
@@ -162,7 +171,8 @@ impl Objective {
     /// The line format this objective's records are written in: chat lines
     /// for SFT and classification (rendered as SFT) and for continued
     /// pretraining (a text is one supervised assistant turn), preference
-    /// pairs for DPO, and Splinter's own export format for the objectives
+    /// pairs for preference optimisation, judged completions for KTO, and
+    /// Splinter's own export format for the objectives
     /// whose records no trainer reads as a dataset file (contrastive
     /// triples, rewarded trajectories). Whether a backend trains a
     /// format is that backend's to say.
@@ -172,7 +182,8 @@ impl Objective {
             Self::Sft | Self::Classification | Self::PolicyGradient | Self::Cpt => {
                 Format::GenericMessagesV2
             }
-            Self::Dpo => Format::GenericPreferenceV1,
+            Self::Preference => Format::GenericPreferenceV1,
+            Self::Feedback => Format::GenericFeedbackV1,
             Self::Contrastive | Self::Reward => Format::SplinterExportV1,
         }
     }
@@ -269,6 +280,14 @@ pub struct Projection {
     /// `None` when they carry none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overlong: Option<Overlong>,
+    /// How a preference view chose its pairs ([`PairingPolicy`]); `None` for
+    /// any other view.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pairing: Option<PairingPolicy>,
+    /// The classes of a feedback view's records and their weights
+    /// ([`FeedbackBalance`]); `None` for any other view.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<FeedbackBalance>,
 }
 
 /// What a record's size was counted by when a projection was bounded to a
@@ -326,6 +345,8 @@ impl Projection {
             block_measure: None,
             curation: None,
             overlong: None,
+            pairing: None,
+            feedback: None,
         }
     }
 
@@ -340,7 +361,9 @@ impl Projection {
                 RecordBody::Chat { messages, .. } | RecordBody::Rewarded { messages, .. } => {
                     Some(messages)
                 }
-                RecordBody::Preference { prompt, .. } => Some(prompt),
+                RecordBody::Preference { prompt, .. } | RecordBody::Feedback { prompt, .. } => {
+                    Some(prompt)
+                }
                 _ => None,
             };
             let Some(messages) = messages else { continue };
@@ -370,7 +393,9 @@ impl Projection {
                 RecordBody::Chat { messages, .. } | RecordBody::Rewarded { messages, .. } => {
                     messages
                 }
-                RecordBody::Preference { prompt, .. } => prompt,
+                RecordBody::Preference { prompt, .. } | RecordBody::Feedback { prompt, .. } => {
+                    prompt
+                }
                 _ => continue,
             };
             if let Some(first) = messages.first().filter(|m| m.role == "system") {
@@ -664,6 +689,18 @@ pub enum ViewError {
     /// A split or a dataset about to be written fails a leakage gate.
     #[error(transparent)]
     Leakage(#[from] split::LeakageError),
+    /// The records name two tokenizers: the attempts were encoded by two
+    /// models' servers, and one dataset holds the attempts of one.
+    #[error(
+        "the records name two tokenizers, {first} and {second}: the attempts of one dataset are \
+         encoded by one tokenizer, so build one dataset per policy"
+    )]
+    MixedTokenizerDigest {
+        /// The tokenizer the first record names.
+        first: String,
+        /// Another tokenizer a later record names.
+        second: String,
+    },
     /// A file operation failed.
     #[error("{path}: {source}")]
     Io {

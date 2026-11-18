@@ -35,6 +35,7 @@
 mod artifacts;
 mod check;
 mod checkpoint;
+mod feedback;
 mod job;
 mod preference;
 mod request;
@@ -46,6 +47,7 @@ pub use check::{
     RecordLength, Refusal, MAX_BLOCK,
 };
 pub use checkpoint::{full_fine_tune_served, merge_served, Install};
+pub use feedback::train_feedback_served;
 pub use job::REFUSED_WAIT;
 pub use preference::{train_preference_served, DEFAULT_DPO_BETA};
 pub use score::score_chat;

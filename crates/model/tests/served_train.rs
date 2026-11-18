@@ -31,9 +31,12 @@ use splinter_model::scripted_endpoint::{Card, ScriptedEndpoint, SCRIPTED_KEY};
 use splinter_model::scripted_jobs::JobScript;
 use splinter_model::served_train::{
     check_dataset, fine_tune_served, full_fine_tune_served, merge_served, score_chat,
-    train_policy_gradient_served, train_preference_served, ArtifactStore, CheckSpec, Install,
+    train_feedback_served, train_policy_gradient_served, train_preference_served, ArtifactStore,
+    CheckSpec, Install,
 };
-use splinter_model::train::{BasePrecision, FineTune, PreferenceTune, StepHook, StepReport};
+use splinter_model::train::{
+    BasePrecision, FeedbackTune, FineTune, PairLoss, PreferenceTune, StepHook, StepReport,
+};
 use splinter_model::LocalWeights;
 use splinter_model::PolicyError;
 
@@ -490,7 +493,7 @@ fn a_dataset_check_is_the_services_report_with_every_records_length_by_line() {
 }
 
 #[test]
-fn a_preference_run_is_a_dpo_job_sized_to_its_longest_pair() {
+fn a_preference_run_is_a_job_of_its_pair_loss_sized_to_its_longest_pair() {
     let rig = rig();
     let (train, held_out, attempt) = (
         rig.dir.path().join("pairs.jsonl"),
@@ -509,7 +512,9 @@ fn a_preference_run_is_a_dpo_job_sized_to_its_longest_pair() {
         rank: 4,
         alpha: 8.0,
         beta: 0.2,
-        nll_weight: 0.0,
+        nll_weight: 0.5,
+        loss: PairLoss::Simpo,
+        gamma: Some(0.3),
         grad_accum: 1,
         learning_rate: None,
         // seed: the job's request carries it.
@@ -529,8 +534,14 @@ fn a_preference_run_is_a_dpo_job_sized_to_its_longest_pair() {
     let params = &jobs.created()[0];
     assert_eq!(
         (&params["objective"], &params["loss"]),
-        (&serde_json::json!("preference"), &serde_json::json!("dpo"))
+        (
+            &serde_json::json!("preference"),
+            &serde_json::json!("simpo")
+        )
     );
+    assert!((params["gamma"].as_f64().unwrap() - 0.3).abs() < 1e-6);
+    assert!((params["nll_weight"].as_f64().unwrap() - 0.5).abs() < 1e-6);
+    assert_eq!(trained.loss, PairLoss::Simpo);
     let longest = std::fs::read_to_string(&train)
         .unwrap()
         .lines()
@@ -545,6 +556,58 @@ fn a_preference_run_is_a_dpo_job_sized_to_its_longest_pair() {
     );
     assert_eq!(trained.records, 6);
     assert_eq!(trained.held_out_score.map(|s| s.pairs), Some(4));
+    assert!(trained.adapter.is_file() && trained.training_record.is_file());
+}
+
+#[test]
+fn a_feedback_run_is_a_kto_job_with_its_class_weights_and_no_held_out_set() {
+    let rig = rig();
+    let (train, attempt) = (
+        rig.dir.path().join("judged.jsonl"),
+        rig.dir.path().join("attempt-kto"),
+    );
+    let lines: Vec<String> = [("a", true), ("bb", true), ("ccc", false)]
+        .iter()
+        .map(|(p, desirable)| {
+            serde_json::json!({
+                "prompt": [{"role": "user", "content": p}],
+                "completion": [{"role": "assistant", "content": format!("{p} done")}],
+                "desirable": desirable,
+            })
+            .to_string()
+        })
+        .collect();
+    std::fs::write(&train, lines.join("\n")).unwrap();
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
+    let request = FeedbackTune {
+        model_dir: &rig.model_dir,
+        train: &train,
+        attempt_dir: &attempt,
+        steps: 3,
+        rank: 4,
+        alpha: 8.0,
+        beta: None,
+        desirable_weight: 1.0,
+        undesirable_weight: 2.0,
+        grad_accum: 1,
+        learning_rate: None,
+        // seed: the job's request carries it.
+        seed: 5,
+        continue_from: None,
+        cancel: None,
+    };
+    let trained = train_feedback_served(&endpoints(&service, &rig), &request).unwrap();
+    let jobs = service.jobs();
+    assert_eq!(jobs.actions(), vec!["check_dataset", "train"]);
+    assert_eq!(jobs.checks()[0]["kind"], "feedback");
+    let params = &jobs.created()[0];
+    assert_eq!(params["objective"], "feedback");
+    assert!((params["undesirable_weight"].as_f64().unwrap() - 2.0).abs() < 1e-6);
+    assert!((params["desirable_weight"].as_f64().unwrap() - 1.0).abs() < 1e-6);
+    assert!(params.get("beta").is_none(), "brain's default when unnamed");
+    assert!(data_of(params).get("held_out").is_none());
+    assert_eq!(trained.records, 3);
+    assert_eq!(trained.summary.undesirable_logratio, Some(-0.3));
     assert!(trained.adapter.is_file() && trained.training_record.is_file());
 }
 

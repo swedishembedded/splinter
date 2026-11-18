@@ -324,6 +324,7 @@ impl Trainer for Learner {
                 .sum(),
             block: 0,
             beta: plan.beta,
+            loss: splinter_model::train::PairLoss::Dpo,
             reference_adapter: None,
             train_score: None,
             held_out_score: None,

@@ -114,7 +114,7 @@ fn a_preference_dataset_is_written_as_generic_preference_v1() {
         )
         .unwrap();
     let projection = Preference::new(Strength::Formal).project(&corpus).unwrap();
-    assert_eq!(projection.objective, Objective::Dpo);
+    assert_eq!(projection.objective, Objective::Preference);
 
     let scratch = Scratch::new("preference");
     let path = scratch.0.join("dpo.jsonl");
@@ -136,7 +136,12 @@ fn a_preference_dataset_is_written_as_generic_preference_v1() {
             "metadata": {
                 "experiences": [id(&pass), id(&fail)],
                 "view": "preference",
-                "objective": "dpo",
+                "objective": "preference",
+                "rollout": {
+                    "group": line["metadata"]["rollout"]["group"],
+                    "rollouts": [id(&pass), id(&fail)],
+                    "source": "attempts",
+                },
             },
         })
     );
@@ -176,7 +181,8 @@ fn a_preference_candidate_carries_the_tool_calls_of_its_final_turn() {
             "role": "assistant",
             "content": "4",
             "tool_calls": [{
-                "id": "call-1",
+                // The rendered conversation names a call by its step.
+                "id": "s2-call-1",
                 "type": "function",
                 "function": {"name": "run_code", "arguments": "{\"code\":\"print(2+2)\"}"},
             }],
@@ -238,6 +244,8 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
             terms: None,
             curation: None,
             overlong: None,
+            pairing: None,
+            feedback: None,
         };
         assert_eq!(objective.line_format(), Format::SplinterExportV1);
         let path = scratch.0.join(format!("{objective:?}.jsonl"));
@@ -291,6 +299,8 @@ fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised
         terms: None,
         curation: None,
         overlong: None,
+        pairing: None,
+        feedback: None,
     };
     assert_eq!(Objective::Cpt.line_format(), Format::GenericMessagesV2);
     let scratch = Scratch::new("cpt-text-lines");

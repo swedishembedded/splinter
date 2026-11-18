@@ -18,8 +18,8 @@ use splinter_core::digest::Digest;
 use splinter_core::release::ReleaseId;
 use splinter_core::terms::Terms;
 use splinter_core::training::{
-    HeldOutScore, PolicyGradientSummary, PreferenceSummary, Regime, RehearsalSample, ReplaySample,
-    TrainingCurve,
+    FeedbackSummary, HeldOutScore, PolicyGradientSummary, PreferenceSummary, Regime,
+    RehearsalSample, ReplaySample, TrainingCurve,
 };
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -70,6 +70,8 @@ pub(super) struct StoredCandidate {
     tuned_score: Option<HeldOutScore>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     preference: Option<PreferenceSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    feedback: Option<FeedbackSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     curve: Option<TrainingCurve>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -135,6 +137,10 @@ pub struct Candidate {
     /// The preference measurements; `None` for the supervised regime.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preference: Option<PreferenceSummary>,
+    /// What a KTO run measured: the classes, their weights and log-ratios;
+    /// `None` for the other regimes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<FeedbackSummary>,
     /// The monitoring curve and which step the adapter is; `None` for the
     /// preference regime and for a candidate recorded before curves were.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -198,6 +204,7 @@ impl Candidate {
             base_score: self.base_score,
             tuned_score: self.tuned_score,
             preference: self.preference.clone(),
+            feedback: self.feedback.clone(),
             curve: self.curve.clone(),
             policy_gradient: self.policy_gradient.clone(),
             checkpoints: self.checkpoints.clone(),
@@ -228,6 +235,7 @@ impl Candidate {
             base_score: stored.base_score,
             tuned_score: stored.tuned_score,
             preference: stored.preference,
+            feedback: stored.feedback,
             curve: stored.curve,
             policy_gradient: stored.policy_gradient,
             checkpoints: stored.checkpoints,
@@ -252,6 +260,7 @@ pub(super) fn record_candidate(
         match regime {
             Regime::Sft => "sft",
             Regime::Dpo => "dpo",
+            Regime::Feedback => "feedback",
             Regime::PolicyGradient => "policy_gradient",
             Regime::Other => "other",
         },
@@ -376,6 +385,7 @@ mod tests {
             base_score: None,
             tuned_score: None,
             preference: None,
+            feedback: None,
             curve: None,
             policy_gradient: None,
             checkpoints: Vec::new(),

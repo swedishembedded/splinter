@@ -271,6 +271,7 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
 fn train(script: &JobScript, params: &Value) -> (Vec<(u64, String, Value)>, Value) {
     let pg = params["objective"] == "policy_gradient";
     let dpo = params["objective"] == "preference";
+    let kto = params["objective"] == "feedback";
     let publish = |bytes: &[u8]| {
         let digest = Digest::of(bytes);
         std::fs::write(script.store.join(digest.hex()), bytes).unwrap();
@@ -330,6 +331,19 @@ fn train(script: &JobScript, params: &Value) -> (Vec<(u64, String, Value)>, Valu
         report["base_score"] = Value::Null;
         report["tuned_score"] = Value::Null;
     }
+    if kto {
+        report["beta"] = json!(0.1);
+        report["desirable_weight"] = params["desirable_weight"].clone();
+        report["undesirable_weight"] = params["undesirable_weight"].clone();
+        report["desirable_examples"] = json!(2);
+        report["undesirable_examples"] = json!(1);
+        report["initial_loss"] = json!(0.69);
+        report["final_loss"] = json!(0.5);
+        report["desirable_logratio"] = json!(0.2);
+        report["undesirable_logratio"] = json!(-0.3);
+        report["base_score"] = Value::Null;
+        report["tuned_score"] = Value::Null;
+    }
     (frames, report)
 }
 
@@ -366,6 +380,8 @@ fn check(script: &JobScript, params: &Value) -> Value {
             }),
             "preference" => (record.get("chosen").is_some() && record.get("rejected").is_some())
                 .then(|| (line.chars().count(), 0, 2)),
+            "feedback" => (record.get("completion").is_some() && record["desirable"].is_boolean())
+                .then(|| (line.chars().count(), 0, 1)),
             _ => record.get("subject").map(|_| (0, 0, 1)),
         };
         match measured {

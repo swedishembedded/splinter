@@ -71,9 +71,35 @@ fn decode_base64(text: &str) -> Option<Vec<u8>> {
 impl RecordBody {
     /// The record as the text a tokenizer measures and the rows its images
     /// add: its JSON with every image taken out, and the sum of
-    /// [`image_rows`] over them.
+    /// [`image_rows`] over them. A pair is measured as its longer row, the
+    /// prompt and the longer candidate: the trainer packs each candidate
+    /// after the prompt in a row of its own.
     #[must_use]
     pub fn text_and_image_rows(&self) -> (String, usize) {
+        if let Self::Preference {
+            prompt,
+            chosen,
+            rejected,
+            ..
+        } = self
+        {
+            let row = |candidate: &[splinter_core::chat::WireMessage]| {
+                Self::chat(prompt.iter().chain(candidate).cloned().collect()).text_and_image_rows()
+            };
+            let (a, b) = (row(chosen), row(rejected));
+            return if a.0.len() + a.1 >= b.0.len() + b.1 {
+                a
+            } else {
+                b
+            };
+        }
+        if let Self::Feedback {
+            prompt, completion, ..
+        } = self
+        {
+            return Self::chat(prompt.iter().chain(completion).cloned().collect())
+                .text_and_image_rows();
+        }
         let mut rows = 0;
         let mut without = self.clone();
         let messages = match &mut without {

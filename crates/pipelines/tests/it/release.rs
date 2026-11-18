@@ -42,10 +42,10 @@
 
 use crate::common;
 
+use common::gate::variants::{variant_asking, variant_set, variant_set_of};
 use common::gate::{
     anchor_file, candidate, candidate_on, dataset, dataset_of, decide, fast_gate, gate_context,
-    policy, question, released, variant_asking, variant_set, variant_set_of, Brain, FakeTrainer,
-    ANCHOR, BASE_BYTES, FACTS, NOW,
+    policy, question, released, Brain, FakeTrainer, ANCHOR, BASE_BYTES, FACTS, NOW,
 };
 use common::Scratch;
 use splinter_agent::CancelToken;

@@ -7,7 +7,8 @@
 // our services by sending an email to info@swedishembedded.com.
 
 //! How a dataset build rewards an attempt and reads its advantage (the
-//! policy-gradient and self-distill views).
+//! policy-gradient and self-distill views), and how many pairs of attempts
+//! it makes (the preference view).
 
 use serde::Serialize;
 use splinter_data::{AdvantageKind, Overlong, RewardShape};
@@ -38,7 +39,20 @@ pub struct RlBuild {
     /// from nothing to a whole reward (`B`); needs `overlong_max_tokens`.
     /// `None` is a quarter of the budget, DAPO's ratio.
     pub overlong_buffer: Option<u64>,
+    /// For the preference view: the most pairs of one group of attempts (one
+    /// task version by one policy) or one repaired task; `None` is
+    /// [`DEFAULT_PAIRS_PER_GROUP`].
+    pub pairs_per_group: Option<usize>,
+    /// For the preference view: the seed the pairs of a group are chosen by;
+    /// `None` derives it from the experiences, so building again from them
+    /// pairs the same.
+    pub pair_seed: Option<u64>,
 }
+
+/// The most pairs the preference view makes of one group of attempts when
+/// none is named: a group of eight attempts that split evenly offers sixteen,
+/// and a task with many attempts would otherwise outweigh the others.
+pub const DEFAULT_PAIRS_PER_GROUP: usize = 4;
 
 /// The share of the over-length budget the penalty grows over when no buffer
 /// is named, as its divisor: a quarter (DAPO's 4096 tokens of 16384).
@@ -88,7 +102,13 @@ impl RlBuild {
         }
     }
 
-    pub(crate) fn is_default(&self) -> bool {
+    /// Whether no pairing setting was named.
+    pub(crate) fn pairing_is_default(&self) -> bool {
+        self.pairs_per_group.is_none() && self.pair_seed.is_none()
+    }
+
+    /// Whether no reward or advantage setting was named.
+    pub(crate) fn rewards_are_default(&self) -> bool {
         self.reward_metrics.is_empty()
             && self.fail_ceiling.is_none()
             && self.advantage == AdvantageKind::default()

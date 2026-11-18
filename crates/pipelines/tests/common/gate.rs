@@ -49,12 +49,13 @@ use splinter_pipelines::release::{arm, release, ReleaseRequest, Released};
 use splinter_pipelines::train::{
     train, Candidate, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
 };
-use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 use super::fake_brain::fake_brain;
 pub use super::fake_brain::Brain;
 use super::repo::Mender;
 use super::{config, Scratch, Scripted};
+
+pub mod variants;
 
 /// The bytes of the base checkpoint every gate spec's policy sits on: a
 /// safetensors file holding no tensor, so a load that reaches it fails
@@ -268,6 +269,8 @@ fn dataset_made(
         terms,
         curation: None,
         overlong: None,
+        pairing: None,
+        feedback: None,
     };
     let projection = match prompt {
         Some(prompt) => projection.with_system_prompt(prompt),
@@ -299,18 +302,20 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         records.push(Record {
             body: RecordBody::Preference {
                 prompt: vec![message("user", question(topic, i), false)],
-                chosen: Box::new(message("assistant", answer(topic, i), true)),
-                rejected: Box::new(message("assistant", "I do not know.".into(), true)),
+                chosen: vec![message("assistant", answer(topic, i), true)],
+                rejected: vec![message("assistant", "I do not know.".into(), true)],
+                tools: Vec::new(),
+                identity: None,
             },
             metadata: RecordMetadata {
                 task: Some(task.task.id.clone()),
-                ..RecordMetadata::of("preference", Objective::Dpo)
+                ..RecordMetadata::of("preference", Objective::Preference)
             },
         });
     }
     let projection = Projection {
         view: "preference".into(),
-        objective: Objective::Dpo,
+        objective: Objective::Preference,
         strip: Some(Strip::All),
         min_strength: Some(Strength::Formal),
         records,
@@ -324,6 +329,8 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         terms: None,
         curation: None,
         overlong: None,
+        pairing: None,
+        feedback: None,
     };
     store_dataset(ctx, &projection, false).unwrap().id
 }
@@ -465,53 +472,6 @@ const WORDINGS: [&str; 3] = [
     "Here is a question for you:",
     "Quick one before we go on:",
 ];
-
-/// `fact(topic, i)` asked in other words ([`WORDINGS`]), stored.
-pub fn variant_of_fact(ctx: &Context, topic: &str, i: usize, wording: usize) -> Task {
-    let instruction = format!("{} {}", WORDINGS[wording], question(topic, i));
-    variant_asking(ctx, topic, i, &instruction)
-}
-
-/// `fact(topic, i)` asking `instruction`, stored.
-pub fn variant_asking(ctx: &Context, topic: &str, i: usize, instruction: &str) -> Task {
-    let variant = fact(topic, i).with_instruction(instruction).unwrap();
-    ctx.tasks().put(&variant).unwrap();
-    variant
-}
-
-/// Stores a task set of variants: `variants` of the facts about `topic`
-/// numbered `facts`, each in the first `wordings` ways, each recorded as a
-/// variant of its fact.
-pub fn variant_set(ctx: &Context, topic: &str, facts: &[usize], wordings: usize) -> TaskSetId {
-    let mut members = Vec::new();
-    for &i in facts {
-        for wording in 0..wordings {
-            members.push((i, variant_of_fact(ctx, topic, i, wording)));
-        }
-    }
-    variant_set_of(ctx, topic, members)
-}
-
-/// Stores a task set of `variants`, each with the fact about `topic` it is
-/// a variant of.
-pub fn variant_set_of(ctx: &Context, topic: &str, variants: Vec<(usize, Task)>) -> TaskSetId {
-    let members = variants
-        .into_iter()
-        .map(|(i, task)| TaskEntry {
-            task: task.task.id,
-            generator: Some("scripted/generator".into()),
-            prompt: None,
-            variant_of: Some(fact(topic, i).task.id),
-            subject: None,
-        })
-        .collect();
-    ctx.tasks()
-        .put_set(&TaskSet {
-            name: format!("variants of {topic} facts"),
-            members,
-        })
-        .unwrap()
-}
 
 /// Runs the gate on `candidate` under `default`; a release it writes is
 /// then served to the context as its adapter says.
@@ -776,9 +736,35 @@ impl Trainer for FakeTrainer {
             records: fake.records,
             block: 0,
             beta: plan.beta,
+            loss: plan.tuning.pairs.loss.unwrap_or_default(),
             reference_adapter: None,
             train_score: None,
             held_out_score: None,
+        })
+    }
+
+    fn train_feedback(
+        &self,
+        ctx: &Context,
+        plan: &TrainPlan,
+        _cancel: &CancelToken,
+    ) -> Result<splinter_model::train::TrainedFeedback, OrchestratorError> {
+        self.called.lock().unwrap().push(Regime::Feedback);
+        let fake = self.fake(ctx, plan);
+        let (desirable_weight, undesirable_weight) =
+            splinter_pipelines::train::feedback_weights(plan);
+        Ok(splinter_model::train::TrainedFeedback {
+            adapter: fake.adapter,
+            adapter_digest: fake.digest,
+            base_digest: Digest::sha256_of(BASE_BYTES).to_string(),
+            training_record: fake.record,
+            records: fake.records,
+            summary: splinter_core::training::FeedbackSummary {
+                beta: plan.beta,
+                desirable_weight,
+                undesirable_weight,
+                ..Default::default()
+            },
         })
     }
 }

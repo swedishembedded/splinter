@@ -18,7 +18,8 @@ fn only_the_objectives_brain_trains_from_a_file_are_trainable() {
     for objective in [
         Objective::Sft,
         Objective::Classification,
-        Objective::Dpo,
+        Objective::Preference,
+        Objective::Feedback,
         Objective::Cpt,
     ] {
         assert!(brain.require(objective).is_ok(), "{objective:?}");

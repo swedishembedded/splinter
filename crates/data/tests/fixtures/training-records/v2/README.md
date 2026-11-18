@@ -7,11 +7,12 @@
 
 # Training records, contract version 2 (`training-records-v2`)
 
-This directory is brain's own (`crates/data/tests/fixtures/training-records/v2` at brain commit 9751d9f49), copied
+This directory is brain's own (`crates/data/tests/fixtures/training-records/v2` at brain commit 15f6f67ee), copied
 unchanged but for this paragraph. Splinter is the producer: its test
 `crates/data/tests/it/policy_gradient/mod.rs` (`the_records_the_view_writes_keep_brains_training_record_contract`)
 holds the policy-gradient view's records to the field set of the rollout records here and to the rules between
-records below. Replace the directory, never edit it, when brain's contract changes.
+records below, and `crates/data/tests/it/attempt_pairs.rs` holds the preference and feedback views' lines to
+`preference.jsonl` and `feedback.jsonl`. Replace the directory, never edit it, when brain's contract changes.
 
 These files are the contract brain's trainer holds a producer of training data to, as examples: what it accepts and
 what it refuses, and why. brain's test `crates/sdk/tests/it/training_records.rs` checks every file against
@@ -33,7 +34,8 @@ rollouts) and in its guide to training as a served job.
 | `model/` | tokenizer | the tokenizer (letters `a` to `w` as ids 0 to 22, `<|endoftext|>` 151643, `<|im_start|>` 151644, `<|im_end|>` 151645) and the chat template every `token_ids` here is computed with; `check_dataset` reads nothing else of a model |
 | `chat.jsonl` | `generic-messages-v2` | supervised records: per-message `train` masks, a record with two supervised answers, an assistant turn that is context |
 | `chat_rollout.jsonl` | `generic-messages-v2` with rollout fields | group `cab`: two rollouts named by `rollout`, one of them two records (two calls) that share its reward, each record naming the `tokenizer_digest` (the sha256 of `model/tokenizer.json`); group `fed`: three records that are a rollout each, one of them `truncated` (it takes no part in the group); an imitation record (no `reward`) in the same file |
-| `preference.jsonl` | `generic-preference-v1` | a prompt and its `chosen` and `rejected` answers |
+| `preference.jsonl` | `generic-preference-v1` | a prompt and its `chosen` and `rejected` answers; line 3's `chosen` is a continuation (a tool call, its result, the answer) against a single `rejected` turn |
+| `feedback.jsonl` | `generic-feedback-v1` | a desirable and an undesirable judged `completion`, and a desirable continuation |
 | `invalid/behavior_logprob_count.jsonl` | line 1 refused | `behavior_logprobs` holds three values for an answer of four tokens |
 | `invalid/token_ids_mismatch.jsonl` | line 1 refused | `token_ids` that are not the tokens the answer's text renders to |
 | `invalid/missing_reward.jsonl` | refused | `behavior_logprobs` on a record with no `reward` |
@@ -71,6 +73,10 @@ rollouts) and in its guide to training as a served job.
   (`baseline_trains`).
 - `behavior_logprobs`, `token_ids`, `truncated`, `rollout` and `tokenizer_digest` belong to a rollout: a record
   carrying any of them carries a `reward` and `group` (or a `teacher_context`).
+- A preference candidate (`chosen`, `rejected`) and a feedback `completion` is one assistant turn or a continuation: a
+  non-empty array of turns that starts and ends with an assistant turn. Its assistant turns are supervised, every
+  other turn (a tool result, a user turn) is context, and tool calls pair with their results over the prompt and the
+  continuation together. Two candidates that are the same turns in order are refused.
 - Every other field and message rule (roles, tool calls, `deny_unknown_fields`) is that of `generic-messages-v2`.
 
 A refusal of one of these rules is reported typed: `rule` and `field` (a JSON path into the record, such as

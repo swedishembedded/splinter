@@ -33,6 +33,8 @@ pub struct TrainingCapabilities {
     pub chat_sft: bool,
     /// Preference optimisation on (chosen, rejected) pairs.
     pub preference: bool,
+    /// KTO on judged completions.
+    pub feedback: bool,
     /// Time-to-event training on subject timelines (`timeline-v1`).
     pub timeline: bool,
 }
@@ -41,11 +43,12 @@ impl TrainingCapabilities {
     /// What brain's public SDK trains from a dataset file: chat fine-tuning
     /// (which also trains a raw text corpus, written as one supervised
     /// assistant turn per text), preference fine-tuning and subject
-    /// timelines. It has no trainer that reads contrastive triples for the
+    /// timelines, KTO on judged completions. It has no trainer that reads contrastive triples for the
     /// policy model or rewarded trajectories.
     pub const BRAIN: Self = Self {
         chat_sft: true,
         preference: true,
+        feedback: true,
         timeline: true,
     };
 
@@ -55,6 +58,7 @@ impl TrainingCapabilities {
         match format {
             Format::GenericMessagesV2 => self.chat_sft,
             Format::GenericPreferenceV1 => self.preference,
+            Format::GenericFeedbackV1 => self.feedback,
             Format::SplinterExportV1 => false,
             Format::TimelineV1 => self.timeline,
         }
