@@ -259,6 +259,9 @@ fn request<'a>(
         jobs: 2,
         deadline: DEFAULT_REPAIR_DEADLINE,
         classes: &[],
+        per_task: None,
+        // The run has one task, which any seed selects.
+        seed: splinter_model::seed::draw().value(),
         cancel: CancelToken::new(),
     }
 }

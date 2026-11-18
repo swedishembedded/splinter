@@ -115,6 +115,12 @@ pub struct RepairRequest<'a> {
     /// The classes repaired; empty for every class [`route`] sends to an
     /// intervention.
     pub classes: &'a [FailureClass],
+    /// The most repairs of one task, counting the ones already graded;
+    /// `None` for no bound.
+    pub per_task: Option<usize>,
+    /// The seed that orders the tasks and the attempts of each task
+    /// ([`spread`]).
+    pub seed: u64,
     /// Stops the run between repairs.
     pub cancel: CancelToken,
 }
@@ -228,6 +234,11 @@ pub struct RepairReport {
     pub format: &'static str,
     /// The teacher.
     pub teacher: String,
+    /// The seed that ordered the selection.
+    pub seed: u64,
+    /// The bound on repairs of one task, when there was one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_task: Option<usize>,
     /// Per class.
     pub by_class: BTreeMap<String, ClassYield>,
     /// The records of this run's repairs and of the ones held.
@@ -369,6 +380,7 @@ pub fn repair_with(
     let mut skipped = Vec::new();
     let mut repairs = Vec::new();
     let mut cases = Vec::new();
+    let mut held_per_task: BTreeMap<&str, usize> = BTreeMap::new();
     for trial in &diagnosis.attempts {
         let Some(result) = &trial.diagnosis else {
             continue;
@@ -391,10 +403,10 @@ pub fn repair_with(
                     .filter(|r| r.outcome != RepairOutcome::Refused)
                 {
                     tally.held += 1;
+                    *held_per_task.entry(trial.task.as_str()).or_default() += 1;
                     repairs.push(record.clone());
                     continue;
                 }
-                tally.routed += 1;
                 cases.push((trial, result, student.clone(), key));
                 None
             }
@@ -406,7 +418,29 @@ pub fn repair_with(
             skipped.push((trial.trial.clone(), why));
         }
     }
-    cases.truncate(request.max);
+    let (cases, unselected) = spread(
+        cases,
+        |case| case.0.task.as_str(),
+        |case| case.0.trial.as_str(),
+        &Spread {
+            per_task: request.per_task,
+            max: request.max,
+            seed: request.seed,
+            held: &held_per_task,
+        },
+    );
+    for (trial, _, _, _) in unselected {
+        skipped.push((
+            trial.trial.clone(),
+            "not selected: the run's bound on repairs, or of one task, is reached".to_string(),
+        ));
+    }
+    for (_, result, _, _) in &cases {
+        by_class
+            .entry(result.class.as_str().to_string())
+            .or_default()
+            .routed += 1;
+    }
     let run_of: BTreeMap<PathBuf, &Path> = request
         .runs
         .iter()
@@ -479,12 +513,82 @@ pub fn repair_with(
     Ok(RepairReport {
         format: REPAIR_FORMAT,
         teacher: teacher_identity,
+        seed: request.seed,
+        per_task: request.per_task,
         by_class,
         repairs,
         skipped,
         repair_set,
         diagnosis,
     })
+}
+
+/// How [`spread`] selects.
+pub struct Spread<'a> {
+    /// The most of one task, counting `held`.
+    pub per_task: Option<usize>,
+    /// The most in all.
+    pub max: usize,
+    /// Orders the tasks and the items of each.
+    pub seed: u64,
+    /// Items of each task already taken in an earlier run.
+    pub held: &'a BTreeMap<&'a str, usize>,
+}
+
+/// The rank of `name` under `seed`: an order no listing of the store moves.
+fn rank(seed: u64, name: &str) -> String {
+    Digest::of(format!("{seed}:{name}").as_bytes())
+        .hex()
+        .to_string()
+}
+
+/// `items` selected so they spread across tasks: the tasks in the order of
+/// their seeded rank, each task's items in theirs, taken one task at a time
+/// in turn, at most `per_task` of a task (its held ones counted) and `max` in
+/// all. Returns the selected items, then the rest.
+pub fn spread<T>(
+    items: Vec<T>,
+    task_of: impl Fn(&T) -> &str,
+    name_of: impl Fn(&T) -> &str,
+    bounds: &Spread<'_>,
+) -> (Vec<T>, Vec<T>) {
+    let mut by_task: BTreeMap<String, Vec<(String, T)>> = BTreeMap::new();
+    for item in items {
+        let task = rank(bounds.seed, task_of(&item));
+        let name = rank(bounds.seed, name_of(&item));
+        by_task.entry(task).or_default().push((name, item));
+    }
+    let mut queues: Vec<(usize, std::collections::VecDeque<T>)> = Vec::new();
+    for (_, mut group) in by_task {
+        group.sort_by(|a, b| a.0.cmp(&b.0));
+        let held = group
+            .first()
+            .map(|(_, item)| bounds.held.get(task_of(item)).copied().unwrap_or(0))
+            .unwrap_or(0);
+        queues.push((held, group.into_iter().map(|(_, item)| item).collect()));
+    }
+    let mut chosen = Vec::new();
+    let mut rest = Vec::new();
+    loop {
+        let mut took = false;
+        for (taken, queue) in &mut queues {
+            if chosen.len() >= bounds.max || bounds.per_task.is_some_and(|cap| *taken >= cap) {
+                continue;
+            }
+            if let Some(item) = queue.pop_front() {
+                chosen.push(item);
+                *taken += 1;
+                took = true;
+            }
+        }
+        if !took {
+            break;
+        }
+    }
+    for (_, queue) in queues {
+        rest.extend(queue);
+    }
+    (chosen, rest)
 }
 
 /// Runs the intervention on one case and makes its record.
@@ -626,4 +730,52 @@ fn annotate_failure(ctx: &Context, record: &RepairRecord) -> Result<(), Orchestr
         })?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_selection_spreads_across_tasks_within_the_bounds_and_the_seed_fixes_it() {
+        // Three tasks with 6, 2 and 1 failed attempts.
+        let items: Vec<(String, String)> = [("a", 6), ("b", 2), ("c", 1)]
+            .iter()
+            .flat_map(|(task, n)| (0..*n).map(move |i| (task.to_string(), format!("{task}{i}"))))
+            .collect();
+        let none = BTreeMap::new();
+        let seed = splinter_model::seed::draw().value();
+        // Any seed: the same one must select the same items.
+        let bounds = |per_task, max, held| Spread {
+            per_task,
+            max,
+            seed,
+            held,
+        };
+        let (chosen, rest) = spread(
+            items.clone(),
+            |i| &i.0,
+            |i| &i.1,
+            &bounds(Some(2), 4, &none),
+        );
+        let count = |task: &str| chosen.iter().filter(|i| i.0 == task).count();
+        // Every task gets one before any gets a second, and none more than two.
+        assert_eq!(chosen.len(), 4);
+        for task in ["a", "b", "c"] {
+            assert!((1..=2).contains(&count(task)), "{task}: {chosen:?}");
+        }
+        assert_eq!(chosen.len() + rest.len(), items.len());
+        let again = spread(
+            items.clone(),
+            |i| &i.0,
+            |i| &i.1,
+            &bounds(Some(2), 4, &none),
+        )
+        .0;
+        assert_eq!(chosen, again);
+        // Repairs already graded count against a task's bound.
+        let held = BTreeMap::from([("a", 2)]);
+        let (chosen, _) = spread(items, |i| &i.0, |i| &i.1, &bounds(Some(2), 9, &held));
+        assert!(chosen.iter().all(|i| i.0 != "a"), "{chosen:?}");
+    }
 }

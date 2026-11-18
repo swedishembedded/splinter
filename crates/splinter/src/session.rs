@@ -455,7 +455,9 @@ impl Session {
                 };
                 let checkout =
                     splinter_sdk::bench::practice::BenchCheckout::new(args.bench.clone());
+                let seed = splinter_sdk::seed::resolve("seed", args.seed.map(|s| s.value()));
                 let arguments = json!({ "runs": args.runs, "teacher": args.teacher.to_string(),
+                    "seed": seed, "per_task": args.per_task,
                     "classes": args.classes.iter().map(|c| c.as_str()).collect::<Vec<_>>() });
                 let report = record(ctx, "experiences repair", &arguments, |run| {
                     repair(
@@ -468,6 +470,8 @@ impl Session {
                             jobs: args.jobs.unwrap_or(DEFAULT_REPAIR_JOBS),
                             deadline: DEFAULT_REPAIR_DEADLINE,
                             classes: &args.classes,
+                            per_task: args.per_task,
+                            seed,
                             cancel: run.cancel_token(),
                         },
                     )

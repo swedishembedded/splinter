@@ -153,7 +153,9 @@ student, the diagnosis, the kept step, the shared prefix, the teacher, the grade
 experience set, which `dataset build --view sft-step` trains on the teacher's suffix alone. A fail is counted and
 recorded, never stored. A repair is keyed by the student's attempt, the teacher and the intervention: a rerun finds
 the record and does nothing. `--jobs` repairs run at once (the teacher's decode slots), `--max` bounds a run and
-`--class` picks the classes.
+`--class` picks the classes. `--per-task N` spreads a run across task families: the tasks are taken in turn, in an
+order `--seed` fixes (drawn and printed when not given), at most N repairs of a task, the ones an earlier run
+already graded counted.
 
 ## Harness trials: one experience per conversation
 

@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use clap::Args;
 use splinter_sdk::bench::repair::{DEFAULT_MAX_REPAIRS, DEFAULT_REPAIR_JOBS};
 use splinter_sdk::measure::strata::StratumCutoffs;
+use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::outcome::FailureClass;
 
@@ -52,6 +53,14 @@ pub struct RepairArgs {
     #[arg(long, value_name = "N", value_parser = super::positive_count,
           help = format!("Repairs run at once [default: {DEFAULT_REPAIR_JOBS}]"))]
     pub jobs: Option<usize>,
+    /// The most repairs of one task, the ones a run already graded counted:
+    /// spreads a run across task families.
+    #[arg(long, value_name = "N", value_parser = super::positive_count)]
+    pub per_task: Option<usize>,
+    /// The seed that orders the tasks and the attempts of each (drawn and
+    /// printed when not given).
+    #[arg(long, value_name = "N")]
+    pub seed: Option<Seed>,
     /// Only failures of this class (repeatable; `wrong_content`, `tool`, ...).
     #[arg(long = "class", value_parser = failure_class, value_name = "CLASS")]
     pub classes: Vec<FailureClass>,

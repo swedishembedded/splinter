@@ -1646,6 +1646,8 @@ Options:
 - `--bench <DIR>` (required): The examiner's checkout, which lays out and grades the workspaces.
 - `--max <N>`: The most repairs this run makes [default: 32]
 - `--jobs <N>`: Repairs run at once [default: 8]
+- `--per-task <N>`: The most repairs of one task, the ones a run already graded counted: spreads a run across task families.
+- `--seed <N>`: The seed that orders the tasks and the attempts of each (drawn and printed when not given)
 - `--class <CLASS>...`: Only failures of this class (repeatable; `wrong_content`, `tool`, ...)
 
 #### splinter experiences compare

@@ -39,6 +39,15 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
   (python modules 1, git config under confinement 1), sven error text drift (2), no continuation after a final reply
   (1), a mid-run system turn (1), a support task's host-side service (1). Before the sven listing and duration
   normalisation and the request-log observations, 0 of 11 forks replayed.
+- 2026-11-18 G=8 repair smoke (same teacher and brain, gpu2; lane R's support and compiled 8-attempt practice
+  exports, 640 trials, 129 failed). Diagnosis: compiled wrong content 67, resource 14, history probing 3, gateway 2,
+  repetition 1; support wrong content 40, resource 2. Compiled wrong content: 67 routed, 10 accepted (reward 1.0:
+  lookup-fact 5, lookup-amended 2, defects-thresholds 2, lookup-definition 1), 50 rejected (the apply-* families,
+  where the teacher too gets `outcome` wrong, reward 0.5), 7 refused at replay (host against sandbox output of
+  `ls`, `date` and tool errors; one continuation prefix mismatch; one final reply); repetition 1 refused; support
+  40 refused (no grade for service-backed tasks); resource, history probing and gateway not routed. The preference
+  view over the repairs and the train trials made 129 records, 9 from repairs (9 of the 10 accepted). A run took its
+  cases in trial order, so a bounded run piled onto the hard apply-* tasks: `--per-task` and `--seed` spread it.
 
 ## Open
 
@@ -47,7 +56,6 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
 - Model-assisted hypotheses: the type exists (`Hypothesis`); no producer asks a model yet.
 - Gateway statuses per request are not read from the gateway's usage log; a model error is typed from the score
   record's cause.
-- A smoke on about 30 student failures: the first one had 13 (below), as lane R's 8-attempt runs had not exported.
 - The headless sven runner records a tool's raw output in ATIF, not what the model was shown (knowledge 173); the
   repair reads the request log instead, a fix belongs in sven's runner.
 - A tool's error text differs between sven builds (the student's a0235c71 against the fork's main): such a fork is
