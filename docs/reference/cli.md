@@ -139,6 +139,7 @@ Every command takes these.
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
   - [splinter dataset conversations](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
   - [splinter dataset decision-fixtures](#splinter-dataset-decision-fixtures) - Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits
+  - [splinter dataset check](#splinter-dataset-check) - Have the trainer read a stored dataset before any device is claimed
   - [splinter dataset export](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 - [splinter goal](#splinter-goal) - Goal-directed learning
   - [splinter goal admit](#splinter-goal-admit) - Admit documents into a selection of learning material
@@ -1551,6 +1552,7 @@ Subcommands:
 - [`build`](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
 - [`conversations`](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
 - [`decision-fixtures`](#splinter-dataset-decision-fixtures) - Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits
+- [`check`](#splinter-dataset-check) - Have the trainer read a stored dataset before any device is claimed
 - [`export`](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 
 #### splinter dataset build
@@ -1630,6 +1632,23 @@ Options:
 - `--validation-fraction <F>`: The share of each family's seeds held for validation. Default: `0.2`.
 - `--test-fraction <F>`: The share of each family's seeds held for test. Default: `0.2`.
 - `--holdout-suite <FAMILY>...`: A whole task family that is test only (repeatable)
+
+#### splinter dataset check
+
+Have the trainer read a stored dataset before any device is claimed
+
+```text
+splinter dataset check [OPTIONS] <DATASET-ID>
+```
+
+Arguments:
+
+- `<DATASET-ID>` (required): The dataset, by id or unique prefix.
+
+Options:
+
+- `--from <REF>`: The model the training starts from, as `train --from` names it: its base's tokenizer and chat template read the records. Without it, the policy.
+- `--max-block <TOKENS>`: The training row to check against, in tokens: longer examples are counted. Without it, the widest row brain takes.
 
 #### splinter dataset export
 

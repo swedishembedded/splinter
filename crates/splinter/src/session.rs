@@ -16,7 +16,7 @@ use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::canaries;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::datasets::{
-    build, build_dropping_leaks, export, BuildRequest, Control, RlBuild, VoiceBuild,
+    build, build_dropping_leaks, BuildRequest, Control, RlBuild, VoiceBuild,
 };
 use splinter_sdk::describe::DescribeRequest;
 use splinter_sdk::doctor::doctor;
@@ -556,16 +556,15 @@ impl Session {
                     })?,
                 );
             }
-            Command::Dataset(
-                command @ (DatasetCommand::Conversations(_) | DatasetCommand::DecisionFixtures(_)),
-            ) => conversation_dataset::dispatch(ctx, json, command)?,
+            Command::Dataset(command) => {
+                if !conversation_dataset::dispatch(ctx, json, command)? {
+                    return Ok(Exit::Failed);
+                }
+            }
             Command::Goal(command) => {
                 if !crate::goal_session::run(json, command)? {
                     return Ok(Exit::Refused);
                 }
-            }
-            Command::Dataset(DatasetCommand::Export { id, out }) => {
-                emit(json, &export(ctx, &id, &out)?);
             }
             Command::Train(args) => {
                 let request = TrainRequest {

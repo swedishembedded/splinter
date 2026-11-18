@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! The datasets made from files rather than from experience sets:
-//! `dataset conversations` (graded conversations with a counterpart, as a
-//! policy-gradient dataset) and `dataset decision-fixtures`.
+//! The dataset commands besides `dataset build`: the datasets made from
+//! files rather than from experience sets (`dataset conversations`, graded
+//! conversations with a counterpart as a policy-gradient dataset, and
+//! `dataset decision-fixtures`), `dataset check` and `dataset export`.
 
 use std::path::Path;
 
 use splinter_sdk::conversation_policy_gradient::store;
 use splinter_sdk::data::AdvantageKind;
+use splinter_sdk::datasets::{check, export};
 use splinter_sdk::{Context, Error};
 
 use crate::cli::DatasetCommand;
@@ -31,11 +33,12 @@ pub fn run(
     Ok(())
 }
 
-/// Runs the dataset command `command`, one of the two this module serves.
-pub fn dispatch(ctx: &Context, json: bool, command: DatasetCommand) -> Result<(), Error> {
+/// Runs the dataset command `command`, any but `build`; `false` when it
+/// found what fails it (a dataset check that refused records).
+pub fn dispatch(ctx: &Context, json: bool, command: DatasetCommand) -> Result<bool, Error> {
     match command {
         DatasetCommand::Conversations(args) => {
-            run(ctx, json, &args.input, &args.system_prompt, args.advantage)
+            run(ctx, json, &args.input, &args.system_prompt, args.advantage)?;
         }
         DatasetCommand::DecisionFixtures(args) => crate::decision_fixtures_dataset::run(
             json,
@@ -47,9 +50,60 @@ pub fn dispatch(ctx: &Context, json: bool, command: DatasetCommand) -> Result<()
                 test_fraction: args.test_fraction,
                 holdout_suites: args.holdout_suites,
             },
-        ),
-        other => Err(Error::Refused(format!(
-            "{other:?} is not a dataset made from a file"
-        ))),
+        )?,
+        DatasetCommand::Check(args) => {
+            let checked = check(ctx, &args.id, args.from.as_ref(), args.max_block)?;
+            emit(json, &checked);
+            return Ok(checked.refused.is_empty());
+        }
+        DatasetCommand::Export { id, out } => emit(json, &export(ctx, &id, &out)?),
+        DatasetCommand::Build(_) => {
+            return Err(Error::Refused("dataset build is not served here".into()))
+        }
+    }
+    Ok(true)
+}
+
+impl crate::output::Report for splinter_sdk::datasets::DatasetCheck {
+    fn human(&self) -> String {
+        use std::fmt::Write as _;
+        let spread = |d: &splinter_sdk::model::served_train::Distribution| {
+            format!(
+                "total {}, min {}, mean {:.0}, p50 {}, p90 {}, p99 {}, max {}",
+                d.total, d.min, d.mean, d.p50, d.p90, d.p99, d.max
+            )
+        };
+        let mut out = format!(
+            "dataset {} read by the trainer for {} ({}, {}): {} record(s), {} read, {} example(s)\n",
+            self.dataset,
+            self.base,
+            if self.thinking { "reasoning" } else { "no reasoning" },
+            if self.pack_answers { "one example per record" } else { "one example per answer" },
+            self.records,
+            self.valid_records,
+            self.examples
+        );
+        let _ = writeln!(out, "  tokens per example: {}", spread(&self.tokens));
+        let _ = writeln!(
+            out,
+            "  supervised tokens per example: {}",
+            spread(&self.supervised_tokens)
+        );
+        let _ = writeln!(
+            out,
+            "  {} example(s) supervise nothing; {} longer than {} tokens",
+            self.examples_without_supervision, self.over_max_block, self.max_block
+        );
+        for record in &self.longest {
+            let _ = writeln!(
+                out,
+                "  line {}: {} tokens ({} supervised), {} example(s)",
+                record.line, record.tokens, record.trained, record.examples
+            );
+        }
+        for refusal in &self.refused {
+            let _ = writeln!(out, "  refused {refusal}");
+        }
+        out
     }
 }

@@ -18,7 +18,7 @@ use super::TrainPlan;
 
 /// Whether any message of the JSON Lines chat records at `path` carries the
 /// reasoning of its step (`reasoning_content`).
-pub(super) fn carries_reasoning(path: &Path) -> Result<bool, OrchestratorError> {
+pub(crate) fn carries_reasoning(path: &Path) -> Result<bool, OrchestratorError> {
     use std::io::BufRead;
     let file = std::fs::File::open(path).map_err(io(path))?;
     for line in std::io::BufReader::new(file).lines() {

@@ -6,7 +6,7 @@
 // in curating training datasets from agent trajectories then you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! The grammar of `dataset build`.
+//! The grammar of `dataset build` and `dataset check`.
 
 use splinter_sdk::datasets::{AdvantageKind, StripPolicy, ViewName};
 use splinter_sdk::seed::Seed;
@@ -211,4 +211,27 @@ pub struct DecisionFixturesArgs {
     /// A whole task family that is test only (repeatable).
     #[arg(long = "holdout-suite", value_name = "FAMILY")]
     pub holdout_suites: Vec<String>,
+}
+
+/// `dataset check`: brain's own reading of a stored dataset (its
+/// `check_dataset` over every record), for the base a run trains and in the
+/// mode it would read the records (reasoning when they carry it, one example
+/// per record when the dataset was built packed): records and examples, the
+/// tokens and supervised tokens per example, examples that train on
+/// nothing, the longest records and every record the trainer refuses.
+/// Exits 1 when it refuses any.
+#[derive(Debug, clap::Args)]
+pub struct CheckArgs {
+    /// The dataset, by id or unique prefix.
+    #[arg(value_name = "DATASET-ID")]
+    pub id: String,
+    /// The model the training starts from, as `train --from` names it: its
+    /// base's tokenizer and chat template read the records. Without it, the
+    /// policy.
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
+    pub from: Option<ModelRef>,
+    /// The training row to check against, in tokens: longer examples are
+    /// counted. Without it, the widest row brain takes.
+    #[arg(long, value_name = "TOKENS")]
+    pub max_block: Option<u32>,
 }

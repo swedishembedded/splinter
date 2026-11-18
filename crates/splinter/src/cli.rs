@@ -593,6 +593,8 @@ pub enum DatasetCommand {
     /// directory, split by task family and seed so that no task is in two
     /// splits. The output is a JSON-lines file, not a stored dataset.
     DecisionFixtures(DecisionFixturesArgs),
+    /// Have the trainer read a stored dataset before any device is claimed.
+    Check(CheckArgs),
     /// Copy a dataset and its manifest into a directory.
     Export {
         /// The dataset, by id or unique prefix.
@@ -770,7 +772,7 @@ pub use bench::BenchSplit;
 pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;
-pub use dataset::{BuildArgs, ConversationsArgs, DecisionFixturesArgs};
+pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use gate::GateArgs;

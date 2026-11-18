@@ -73,6 +73,7 @@ pub use full::{
     DEFAULT_FULL_LEARNING_RATE,
 };
 use keep::{keep_candidate, Finished, Outcome};
+pub(crate) use records::carries_reasoning;
 use records::{combine, concatenate};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
 pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};

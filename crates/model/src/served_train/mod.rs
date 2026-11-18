@@ -43,7 +43,7 @@ mod score;
 pub use artifacts::ArtifactStore;
 pub use check::{
     check_dataset, check_published, CheckSpec, DatasetKind, DatasetReport, Distribution,
-    RecordLength, Refusal,
+    RecordLength, Refusal, MAX_BLOCK,
 };
 pub use checkpoint::{full_fine_tune_served, merge_served, Install};
 pub use job::REFUSED_WAIT;

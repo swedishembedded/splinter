@@ -34,6 +34,10 @@ use splinter_store::error::StoreError;
 use splinter_store::experiences::SetId;
 use splinter_store::lineage::DatasetLineage;
 
+mod check;
+
+pub use check::{check, DatasetCheck};
+
 use crate::describe::{describe, DescribeRequest, Described};
 use crate::exam_seal;
 use crate::grouping::{assign_groups, part_families};

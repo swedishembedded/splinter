@@ -135,3 +135,14 @@ source content under them. The manifest also keeps the seeds the build drew (for
 names the part it prints and no experience, so a dataset shows what is the writer's and what a
 model wrote. The manifest is what lets `splinter lineage` walk from a release back to the
 bytes it learned from.
+
+## Checking a stored dataset
+
+`splinter dataset check DATASET-ID --from REF [--max-block TOKENS]` has the trainer read a stored dataset before any
+device is claimed: brain's `check_dataset` over every record, rendered for the base `--from` names (the policy's
+without it) and in the mode a supervised run reads it (reasoning when the records carry it, one example per record
+when the dataset was built `--pack`). It reports the records and examples, the tokens and the supervised tokens per
+example (total, min, mean, p50, p90, p99, max), the examples that supervise nothing, the examples longer than
+`--max-block`, the longest records by line and every record the trainer refuses with why; it exits 1 when it refuses
+any. It asks a brain service started with `--training --artifact-store DIR`, with that directory given as
+`--brain-artifact-store`.

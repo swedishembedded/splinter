@@ -291,3 +291,37 @@ fn a_build_counts_records_for_the_base_the_training_starts_from() {
         "the trained base reads the records"
     );
 }
+
+#[test]
+fn a_stored_dataset_is_read_by_the_trainer_in_the_mode_a_run_reads_it_every_record_listed() {
+    let (scratch, ctx, _service, _brain) = served_context("dataset-check");
+    let dir = common::bench::export(
+        &scratch.0.join("export"),
+        &[
+            common::bench::Trial::new("one", "org/a", Some("train"), true).scored(),
+            common::bench::Trial::new("two", "org/b", Some("train"), true).scored(),
+        ],
+    );
+    let ingested =
+        splinter_pipelines::bench::ingest_bench_trials(&ctx, &[dir], common::bench::NO_OPTIONS)
+            .unwrap();
+    let mut request = common::bench::sft_request(ingested.train_set.unwrap());
+    request.pack = true;
+    let built = splinter_pipelines::datasets::build(&ctx, &request).unwrap();
+
+    let checked =
+        splinter_pipelines::datasets::check(&ctx, built.dataset.0.as_str(), None, None).unwrap();
+    assert_eq!(checked.dataset, built.dataset);
+    assert_eq!(
+        checked.base, "Qwen/Qwen3-0.6B",
+        "the policy's base reads it"
+    );
+    assert!(checked.pack_answers, "built packed, one example per record");
+    assert!(checked.thinking, "the trajectories carry their reasoning");
+    assert_eq!((checked.records, checked.valid_records), (2, 2));
+    assert!(checked.refused.is_empty());
+    assert_eq!(checked.longest.len(), 2, "every record is listed");
+    assert!(checked.supervised_tokens.total > 0);
+    assert!(checked.supervised_tokens.total < checked.tokens.total);
+    assert_eq!(checked.examples_without_supervision, 0);
+}

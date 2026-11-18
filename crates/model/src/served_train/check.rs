@@ -23,7 +23,7 @@
 
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
 use splinter_core::digest::Digest;
@@ -96,7 +96,7 @@ impl<'a> CheckSpec<'a> {
 pub const MAX_BLOCK: u32 = 1_048_576;
 
 /// A spread of per-example token counts.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct Distribution {
     /// Summed over the examples.
     pub total: u64,
@@ -115,7 +115,7 @@ pub struct Distribution {
 }
 
 /// A record the trainer refuses.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct Refusal {
     /// Its 1-based line in the file.
     pub line: usize,
@@ -136,7 +136,7 @@ impl std::fmt::Display for Refusal {
 }
 
 /// One valid record's length, in the base's tokens.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct RecordLength {
     /// Its 1-based line in the file.
     pub line: usize,
