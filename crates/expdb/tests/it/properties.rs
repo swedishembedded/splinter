@@ -8,7 +8,7 @@
 
 //! Properties that must hold for any input, not only the examples: formats
 //! round-trip, damage is always noticed, history merges in any order, and
-//! clock conversions and flow targets obey their formulae.
+//! clock conversions obey their formula.
 #![allow(clippy::unwrap_used)]
 
 use crate::common;
@@ -22,7 +22,6 @@ use splinter_expdb::blob::BlobStore;
 use splinter_expdb::format::{encode_segment, Segment};
 use splinter_expdb::manifest::{ObjectKind, ObjectRef};
 use splinter_expdb::model::{Body, ClockMapping, Record, Skill};
-use splinter_expdb::train::flow_matching;
 use splinter_expdb::{Compression, Config, ContentId};
 
 fn config() -> ProptestConfig {
@@ -181,19 +180,5 @@ proptest! {
         };
         let t = src_ref + delta;
         prop_assert!((mapping.to_source(mapping.to_destination(t)) - t).abs() <= 1);
-    }
-
-    #[test]
-    fn flow_matching_always_satisfies_its_defining_equations(
-        clean in prop::collection::vec(-10.0f32..10.0, 1..64),
-        seed in any::<u64>(),
-        step in any::<u64>(),
-    ) {
-        let flow = flow_matching(&clean, seed, step);
-        prop_assert!(flow.t > 0.0 && flow.t < 1.0);
-        for (i, action) in clean.iter().enumerate() {
-            prop_assert_eq!(flow.noisy[i], (1.0 - flow.t) * flow.noise[i] + flow.t * action);
-            prop_assert_eq!(flow.target[i], action - flow.noise[i]);
-        }
     }
 }

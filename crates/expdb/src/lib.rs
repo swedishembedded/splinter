@@ -9,7 +9,7 @@
 //! A versioned Experience Graph database.
 //!
 //! Raw experience is written once and never changed. Evaluations, credit,
-//! skills and training views are interpretations derived from it, so a better
+//! skills and datasets are interpretations derived from it, so a better
 //! algorithm can reinterpret old experience without any of it having been
 //! thrown away.
 //!
@@ -40,7 +40,6 @@ pub mod query;
 mod session;
 mod signal;
 pub mod timeline;
-pub mod train;
 pub mod view;
 
 pub use clock::{Clock, StepClock, SystemClock};

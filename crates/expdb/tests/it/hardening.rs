@@ -17,14 +17,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use common::{attempt, rid, Scratch};
+use common::{rid, Scratch};
 use splinter_expdb::backend::{Key, Kind, PosixBackend, StorageBackend};
 use splinter_expdb::blob::Tree;
 use splinter_expdb::model::{
-    Action, Body, ClockDomain, ClockMapping, Decision, Evaluation, EvaluatorRef, Outcome,
-    PolicyRef, Target,
+    Action, Body, ClockDomain, ClockMapping, Decision, Evaluation, EvaluatorRef, PolicyRef, Target,
 };
-use splinter_expdb::train::{DataRef, Recipe, Rng};
 use splinter_expdb::{Clock, Config, ContentId, Database, StepClock, WriterIdentity};
 
 /// A backend whose next ref replacement fails, as a full disk would.
@@ -150,26 +148,6 @@ fn pinning_a_snapshot_of_an_empty_database_works_and_does_not_break_collection()
         .records()
         .unwrap()
         .is_empty());
-}
-
-#[test]
-fn the_snapshot_a_plan_was_compiled_from_can_always_be_reopened() {
-    let scratch = Scratch::new();
-    let db = scratch.open();
-    for rank in 0..3 {
-        let mut c = db
-            .collector(&WriterIdentity::new("exp", "job", "node", rank))
-            .unwrap();
-        attempt(&mut c, u64::from(rank), "p", 2, Outcome::Pass);
-        c.flush().unwrap();
-    }
-    let snapshot = db.snapshot().unwrap();
-    let plan = snapshot.compile(&Recipe::sft()).unwrap();
-    let reopened = db.snapshot_at(plan.snapshot).unwrap();
-    assert_eq!(
-        reopened.compile(&plan.recipe).unwrap().id().unwrap(),
-        plan.id().unwrap()
-    );
 }
 
 #[test]
@@ -343,51 +321,6 @@ fn a_zero_priority_means_never_and_a_non_finite_one_is_refused() {
 }
 
 #[test]
-fn an_episode_without_an_end_still_renders_what_happened() {
-    let scratch = Scratch::new();
-    let db = scratch.open();
-    let mut c = db
-        .collector(&WriterIdentity::new("exp", "job", "node", 0))
-        .unwrap();
-    let (definition, instance, initial) = common::coding_task(1);
-    let mut run = c
-        .start_attempt(
-            &definition,
-            &instance,
-            &initial,
-            &PolicyRef::new("p", "1"),
-            None,
-        )
-        .unwrap();
-    let attempt_id = run.attempt();
-    run.decision()
-        .commit(Action::new("grep", serde_json::json!({ "q": "x" })))
-        .unwrap();
-    // An evaluation is the newest record of the attempt, but it is not part of the path.
-    run.evaluate(Evaluation::new(
-        Target::Record(attempt_id),
-        EvaluatorRef::new("v", "1"),
-        "task_completion",
-        1.0,
-        1.0,
-    ))
-    .unwrap();
-    // The attempt never finished: the run is dropped.
-    c.flush().unwrap();
-
-    let snapshot = db.snapshot().unwrap();
-    let text = snapshot
-        .render(&DataRef::Episode {
-            attempt: attempt_id,
-        })
-        .unwrap();
-    assert!(
-        text.contains("grep"),
-        "the episode shows the action: {text:?}"
-    );
-}
-
-#[test]
 fn a_path_that_is_both_a_file_and_a_directory_is_an_error() {
     let scratch = Scratch::new();
     let db = scratch.open();
@@ -397,22 +330,6 @@ fn a_path_that_is_both_a_file_and_a_directory_is_an_error() {
         ("a/b".to_owned(), b"nested".to_vec()),
     ]);
     assert!(Tree::write(&mut blobs, &files).is_err());
-}
-
-#[test]
-fn consecutive_flow_matching_steps_draw_from_independent_streams_even_with_seed_zero() {
-    let first: Vec<u64> = {
-        let mut r = Rng::for_step(0, 0);
-        (0..8).map(|_| r.next_u64()).collect()
-    };
-    let second: Vec<u64> = {
-        let mut r = Rng::for_step(0, 1);
-        (0..8).map(|_| r.next_u64()).collect()
-    };
-    assert!(
-        first.iter().all(|v| !second.contains(v)),
-        "step 1 must not replay step 0 shifted by one"
-    );
 }
 
 #[test]

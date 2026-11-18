@@ -86,16 +86,13 @@ let mut branch = collector.fork(&decision, &policy)?;   // an alternative; share
 collector.flush()?;                                      // nothing is visible before this
 
 let snapshot = db.snapshot()?;
-snapshot.pin("training-run-1")?;
-let plan = snapshot.compile(&Recipe::dpo().min_gap(0.5))?;   // the dataset is recipe + snapshot
+snapshot.pin("training-run-1")?;                         // a fixed view a run can come back to
 ```
 
 An attempt's reward is what its strongest evidence decides: ranked pass or fail
 verdicts on its evaluations, where the highest rank present rules, equal-rank
 disagreement decides nothing and an unjudged attempt has no reward rather than
-zero. A recipe can require evidence of a rank (`min_rank`), pair the passing and
-failing attempts of one task (`Recipe::dpo().by_task()`), and follow relations
-recorded between attempts (`Recipe::relations(Rel::RetryOf)`).
+zero.
 
 Beside the graph, an application can keep **entities**: keyed JSON records of a
 class (a dataset manifest, a task, an artifact), looked up by key, listed in
@@ -106,9 +103,8 @@ version claim or a cancel request needs. A **session** opens a database for one
 process, sees its own writes at once, commits in groups, and rolls a failed
 write back as a whole.
 
-`cargo run --release -p splinter-expdb --example quickstart` runs a complete
-version of this. The specs under `tests/` are the reference for everything
-else, one file per concern:
+The specs under `tests/` are the reference for everything, one file per
+concern:
 
 | Concern | Spec |
 |---|---|
@@ -116,25 +112,9 @@ else, one file per concern:
 | Writers, spool, concurrency | `collector`, `concurrency` |
 | Graph, families, indexes, queries | `graph`, `families`, `indexes`, `queries` |
 | Evaluations, skills, lineage, experiments | `evaluations`, `skills`, `derivations`, `experiments`, `analysis` |
-| Training views for text and decisions | `training_views`, `loader`, `overlay` |
-| Streams, clocks, windows, multimodal views | `streams`, `clocks`, `windows`, `mm_views` |
+| Replay priorities | `overlay` |
+| Streams, clocks, windows | `streams`, `clocks`, `windows` |
 | Compaction and properties | `compaction`, `properties` |
-
-## Training views
-
-A [`Recipe`] compiled against a snapshot is a plan of references, not a copy:
-
-- imitation (steps or whole episodes), preference pairs at one state and
-  context, group-relative learning over families whose rewards differ,
-  single transitions, step labels;
-- world-model windows (past and an action to the future), contrastive pairs
-  with hard negatives from nearby in time, masked prediction, action chunks
-  conditioned on observations and an instruction.
-
-Flow-matching noise, time, noisy action and velocity are derived when a sample
-is materialised, from the clean action and a seed. Nothing pre-noised is
-stored. An export to JSON lines is a projection; the plan and its snapshot
-remain the dataset.
 
 ## Verification
 

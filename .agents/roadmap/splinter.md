@@ -120,10 +120,10 @@ the released adapter answers the same questions from plain `brain serve`.
    keeps sources, tasks, experiences, annotations, sets
    and runs in `crates/expdb`; each experience is also an attempt in its graph,
    verdicts are ranked evidence about it, and datasets, training runs and
-   releases record where they came from. Open: the training views still decide
-   and render from whole experience values (a view reports why it left each
-   candidate out, which a recipe does not); moving objectives onto recipes
-   needs a mode that carries exclusion reasons. Releases, datasets, suites,
+   releases record where they came from. The training views decide and render
+   from whole experience values and report why they left each candidate out;
+   they are the one dataset system (the database's own recipe compiler, used
+   only by its tests, was removed 2026-11-18). Releases, datasets, suites,
    answers, calibrations and the queue are documents and pointers in the
    database too; only adapters and dataset files stay plain files, tracked as
    artifacts, because brain needs a path to them. The database and its files pack

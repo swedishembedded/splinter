@@ -115,6 +115,19 @@ impl Snapshot {
         &self.cache
     }
 
+    /// The blob store over the snapshot's packs, opened once and kept in the
+    /// snapshot's cache.
+    pub(crate) fn blob_store(&self) -> Result<std::sync::Arc<crate::blob::BlobStore>> {
+        if let Some(found) = crate::index::locked(&self.cache().blobs).as_ref() {
+            return Ok(std::sync::Arc::clone(found));
+        }
+        let packs: Vec<ContentId> = self.blob_packs().iter().map(|p| p.id).collect();
+        let store =
+            std::sync::Arc::new(crate::blob::BlobStore::with_packs(self.database(), &packs)?);
+        *crate::index::locked(&self.cache().blobs) = Some(std::sync::Arc::clone(&store));
+        Ok(store)
+    }
+
     pub(crate) fn objects(&self, kind: ObjectKind) -> Vec<ObjectRef> {
         self.of_kind(kind)
     }

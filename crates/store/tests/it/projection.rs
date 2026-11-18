@@ -8,9 +8,9 @@
 
 //! Spec: an experience is also the graph the experience database reads. Each
 //! stored experience is an attempt at its task with a decision per agent
-//! step; a verdict is evidence about that attempt, so the database's recipes
-//! select and pair Splinter's own experience; a relation is an edge between
-//! attempts and a step label is evidence about a decision.
+//! step; a verdict is evidence about that attempt and decides its reward; a
+//! relation is an edge between attempts and a step label is evidence about a
+//! decision.
 #![allow(clippy::unwrap_used)]
 
 use std::path::PathBuf;
@@ -27,7 +27,6 @@ use splinter_core::experience::{
 };
 use splinter_expdb::model::{RecordKind, Rel};
 use splinter_expdb::query::Query;
-use splinter_expdb::train::{Recipe, SampleBody};
 use splinter_expdb::{Config, Database};
 use splinter_store::experiences::ExperienceStore;
 use splinter_store::workspace::Workspace;
@@ -188,7 +187,7 @@ fn attempts_at_one_task_form_one_family() {
 }
 
 #[test]
-fn a_verdict_is_evidence_about_the_attempt_and_recipes_read_it_by_rank() {
+fn a_verdict_is_evidence_about_the_attempt_and_decides_its_reward() {
     let scratch = Scratch::new("verdict");
     let store = scratch.store();
     let formal = store.put(&experience("six times seven?", &["42"])).unwrap();
@@ -220,18 +219,10 @@ fn a_verdict_is_evidence_about_the_attempt_and_recipes_read_it_by_rank() {
     };
     assert_eq!(rewards, vec![Some(1.0), Some(1.0), Some(0.0)]);
 
-    let strong = snapshot
-        .compile(&Recipe::sft().episodes().min_rank(Strength::Formal.rank()))
-        .unwrap();
-    assert_eq!(strong.samples.len(), 1, "only the formally verified pass");
-    let any = snapshot.compile(&Recipe::sft().episodes()).unwrap();
-    assert_eq!(any.samples.len(), 2, "both passes, never the fail");
-
-    let pairs = snapshot.compile(&Recipe::dpo().by_task()).unwrap();
     assert_eq!(
-        pairs.samples.len(),
-        1,
-        "the formal pass against the formal fail"
+        count(&snapshot, RecordKind::Evaluation),
+        3,
+        "one evaluation per verdict"
     );
 }
 
@@ -255,18 +246,8 @@ fn a_relation_is_an_edge_between_attempts() {
         })
         .unwrap();
 
-    let plan = scratch
-        .snapshot()
-        .compile(&Recipe::relations(Rel::RetryOf))
-        .unwrap();
-    assert_eq!(plan.samples.len(), 1);
-    assert!(matches!(
-        plan.samples[0].body,
-        SampleBody::Related {
-            rel: Rel::RetryOf,
-            ..
-        }
-    ));
+    let edges = scratch.snapshot().edges().unwrap();
+    assert_eq!(edges.iter().filter(|e| e.rel == Rel::RetryOf).count(), 1);
     assert_eq!(store.annotations(&retry).unwrap().annotations.len(), 1);
     assert!(store.annotations(&failed).unwrap().annotations.is_empty());
 }
@@ -293,11 +274,11 @@ fn a_step_label_is_evidence_about_that_steps_decision() {
         })
         .unwrap();
 
-    let plan = scratch
-        .snapshot()
-        .compile(&Recipe::prm().criterion("step_label"))
-        .unwrap();
-    assert_eq!(plan.samples.len(), 1);
+    assert_eq!(
+        count(&scratch.snapshot(), RecordKind::Evaluation),
+        1,
+        "the label is an evaluation"
+    );
     assert_eq!(store.annotations(&id).unwrap().annotations.len(), 1);
 }
 
