@@ -58,10 +58,11 @@ bench = "<bench-checkout>"
 jobs = 16                      # trials run at once
 # harbor, sven_build and profile as for `tasks harbor practice`
 
-[examine]                      # who examines: bench's `bench examine`
+[examine]                      # who examines: bench
 bench = "<bench-checkout>"
-signing_key = "<verdict-key>"    # mode 600, the examiner's key
-private = "<bench-private>"      # the examiner's item-level grades and burn records
+public_key = "<bench-checkout>/.bench-data/private/verdict.key.pub"  # bench's public key; bench signs with its own
+protocol = "direct-completion"   # or "agent" (below)
+private = "<bench-private>"      # the examiner's item-level grades (or its jobs); never read by Splinter
 dev = "tasks/support"                # the development split
 retention = "tasks/anchor"           # the retention suite
 slices = ["exams/support-s1", "exams/support-s2", "exams/support-s3"]  # one fresh sealed slice per generation
@@ -69,6 +70,25 @@ base = "Qwen/Qwen3-4B"
 proposer_commit = "d81c60d99"
 brain_commit = "e9044bbeb"
 serving = ["--brain", "<brain-binary>", "--models-dir", "<models>", "--api-key-file", "<brain-key>", "--device", "gpu0"]
+```
+
+On the agent protocol bench runs Sven on every task instead, against the endpoint brain serves each model under
+(the one `[brain]` in Splinter's configuration names, as for the rollouts). Replace `serving` with:
+
+```toml
+[examine]
+protocol = "agent"
+dev = "tasks/support"          # bench run collections; the slices are sealed exams in bench's private directory
+retention = "tasks/anchor"
+slices = [".bench-data/exams/support-s1", ".bench-data/exams/support-s2"]
+# bench, public_key, private, base, proposer_commit, brain_commit as above
+
+[examine.agent]
+profile = "<bench-checkout>/profiles/<profile>.toml"  # each model's profile is derived from it: the main role points at its endpoint
+min_gain = 0.05                # bench verdict --min-gain (bench's own outcome; the gate decides on the aggregates)
+serving_build = "brain-e9044bbeb"  # declared by both sides; bench pairs only runs of one build
+dev_set = "eval"               # optional: bench run --set for the dev collection
+sven_build = "<sven-binary>"   # optional: BENCH_SVEN_BUILD
 ```
 
 A seed above what a TOML integer holds is written as a string, decimal or `0x` hex. A campaign is continued as it began:
@@ -92,40 +112,56 @@ exam generated with `make <domain>/exam/generate SEED_FILE=...`).
    `resume_key` are both derived from the stage's identity. If a crash stops a training job, the next run asks brain again
    under the same key. Brain then continues the run from its saved state, or answers with the result it recorded, and
    trains nothing again.
-5. **evaluate.** Three `bench examine` verdicts of the candidate against the champion: over `dev`, over `retention`, and
-   over the generation's own slice. The dataset is passed to bench for its overlap audit.
+5. **evaluate.** Three verdicts of the candidate against the champion: over `dev`, over `retention`, and over the
+   generation's own slice. On direct completion they are `bench examine` verdicts and the dataset is passed to bench for
+   its overlap audit. On the agent protocol bench runs each collection once per model (`bench run`, under a profile
+   pointed at the model's endpoint, both in the session `<name>-gNNNN` on the declared serving build, the jobs in
+   `<private>/jobs/<name>/gNNNN/<dev|retention|sealed>/<champion|candidate>`), and pairs each two jobs into one
+   `bench verdict` that names the pair by their candidate files, takes the retention suite as its anchor and spends the
+   slice. A rerun of the stage runs again from fresh job directories.
 6. **gate.** The promotion gate, on the three verdicts (below).
 7. **promote.** The candidate becomes the champion, or the champion stays and the gate's reasons are recorded.
 
 A budget is checked before the rollout and the train stage. A stage that would exceed one does not start. The campaign
-stops and says which limit stopped it. GPU-hours are training's wall time times `--gpus`. Tokens are those the rollouts
-counted.
+stops and says which limit stopped it. GPU-hours are training's wall time times `--gpus`. Tokens are the prompt and
+completion tokens of every rollout trial, summed from the usage in each trial's score record. A trial whose record states
+none counts nothing, and a rollout none of whose trials does records no tokens.
 
 ## The promotion gate
 
-The gate reads only the examiner's signed aggregates (`bench.examination/1`). It never reads an item. Each verdict is
-verified in Splinter's own process. Its HMAC-SHA256 signature under the examiner's key is checked over the document's
-canonical bytes, then the schema, the examiner's own validity and integrity flags, and the candidate and predecessor it
-names. These must be the candidate's adapter and the champion's (by their `sha256:` digests, none for the base). The level
-must be `alpha = 0.05`. A verdict that fails any check is rejected with a typed reason. A candidate is promoted only when
-all three rules hold:
+The gate reads only the examiner's signed aggregates. It never reads an item. It accepts two schemas:
+`bench.examination/2` (direct completion) and `bench.verdict/3` (the agent protocol). Each verdict is verified in
+Splinter's own process. Bench's Ed25519 signature is checked over the document's canonical bytes with bench's public key
+(`public_key`); Splinter holds no signing key, so it cannot make a verdict it would accept. Then come the schema, the
+examiner's own validity (a valid examination, a bench verdict that is not `Invalid` and whose integrity checks all hold,
+and a candidate role, never a control arm) and integrity flags, and the candidate and predecessor the verdict names.
+These must be the candidate's adapter and the champion's (by their `sha256:` digests, none for the base). The level
+must be `alpha = 0.05`. A verdict that fails any check is rejected with a typed reason. On a `bench.verdict/3` the gate
+reads the `retention` section for the retention rule and the `overall` section otherwise. A candidate is promoted only
+when all three rules hold:
 
 | Rule | Verdict | Holds when |
 |---|---|---|
 | Dev gain | `dev` | the two-sided 95% family-clustered interval of the paired gain is above 0 |
 | Retention | `retention` | the lower bound of the one-sided 95% interval of the paired change is above -0.05 |
-| Sealed slice | the generation's slice | it verifies, the slice is sealed, and its burn record names this candidate and this champion |
+| Sealed slice | the generation's slice | it verifies, it is over sealed exams, and each of them has a burn record that names this candidate and this champion |
 
 The sealed slice's gain is recorded and never decided on. A slice is spent by the first verdict issued over it. Bench
-carries the pair that spent it in the verdict's signed `burn` record, so a verdict over a slice an earlier decision spent
-is rejected. Every failed rule adds a typed reason to the gate's record. The reasons are `verdict` (with the role
+carries the pair that spent it in the verdict's signed burn record (`burn`, or one per exam in `burns`), so a verdict
+over a slice an earlier decision spent is rejected, and so is a burn record of an exam the verdict is not over. Every
+failed rule adds a typed reason to the gate's record. The reasons are `verdict` (with the role
 `dev`, `retention` or `sealed`, and a rejection: `unsigned`, `bad_signature`, `schema`, `malformed`, `invalid`,
 `flagged`, `candidate`, `predecessor`, `level`, `not_sealed`, `no_burn`, `burn_of_another_exam`, `spent`),
-`no_dev_gain`, `dev_unmeasured`, `inferior` and `retention_unmeasured`.
+`no_dev_gain`, `dev_unmeasured`, `inferior` and `retention_unmeasured`. The record also names its `rule` (`examined`)
+and `exam_verified: true`.
 
-The signature is a shared-key MAC: whoever verifies a verdict holds the key that signs one. Keep the key readable by its
-owner alone, and treat the gate as proof against altered or misattributed verdicts, not against a party that holds the
-key.
+A verdict signed with bench's retired shared key (`hmac-sha256`) is `unsigned` here: that is a clean break. Make bench's
+key pair with `bench keygen` and give the campaign its `verdict.key.pub`.
+
+**Where no sealed slice applies.** A decision with no examiner exam for its candidate (a release from `learn`, whose exam
+the learner generated itself) is decided by one explicit rule, `promotion::decide_unexamined`. It applies the dev-gain and
+retention rules to the caller's own measurements and has no sealed slice. Its record says `rule: not_exam_verified` with
+why, and `exam_verified: false`. It is never a silent bypass. A campaign always decides with the examiner's verdicts.
 
 ## The ledger
 
@@ -152,12 +188,12 @@ The records (`summary`):
 | Unit | Holds |
 |---|---|
 | `campaign` | `identity` (the specification's identity, the rollouts' and the examiner's), `seed` |
-| `rollout` | `champion`, `tasks`, `trials` (task, reward, passed), `rollouts`, `tokens` |
+| `rollout` | `champion`, `tasks`, `trials` (task, reward, passed), `rollouts`, `tokens` (prompt and completion, from the trials' usage) |
 | `ingest` | `train_set`, `experiences`, `refused` |
 | `curate` | `dataset` (the manifest digest), `records`, `sets` |
 | `train` | `candidate` (generation, model, candidate id, adapter digest), `resume_key`, `steps`, `gpu_hours` |
 | `evaluate` | `slice`; outputs `dev`, `retention`, `sealed` (the three verdicts) |
-| `gate` | `promoted`, `reasons`, `pair`, and the aggregates of each verdict that verified |
+| `gate` | `promoted`, `rule`, `exam_verified`, `reasons`, `pair`, and the aggregates of each verdict that verified |
 | `promote`, `rollback/N` | `kind` (`promote`, `keep`, `rollback`), `generation`, `from`, `to`, `reason` |
 
 The champion is the base until the first promotion, and then what the newest `promote` or `rollback` record moved it to.

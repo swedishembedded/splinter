@@ -25,16 +25,39 @@ Scope: `splinter campaign` (resumable multi-generation learning over the stage l
   `served_train` resume test, pipelines `campaign::generations` (7: two-generation E2E, kill mid-rollout and
   mid-training at seed-drawn points, duplicate delivery, forged and mismatched verdicts, rollback, budget, identity).
 
+## Done (2026-11-18, lane C2)
+
+- The gate verifies bench's Ed25519 signatures with bench's public key (`promotion::PublicKey`, ed25519-dalek =3.0.0,
+  strict verification); Splinter holds no signing key (`[examine] public_key`, the `.pub` of `bench keygen`). Clean break:
+  a bench `hmac-sha256` verdict is `unsigned`. Schemas: `bench.examination/2` and the agent-protocol `bench.verdict/3`
+  (bench 80ab3135: candidate and predecessor identities, `sealed_exams`, one burn record per exam in `burns`,
+  `one_sided_lower` per comparison, the `served_model` check). On a verdict/3 the gate reads `retention` for the
+  retention rule and `overall` otherwise; a burn of an exam the verdict is not over, an exam without a burn, an
+  `Invalid` verdict or a control arm are typed rejections.
+- `promotion::decide_unexamined`: the reviewed rule where no sealed slice applies (dev gain plus retention on the
+  caller's own measurements), recorded as `rule: not_exam_verified {why}`, `exam_verified: false`.
+- `splinter campaign`'s evaluate stage examines on bench's agent protocol (`[examine] protocol = "agent"`,
+  `[examine.agent]`): per collection one `bench run` per model under a profile derived as practice derives one
+  (endpoint, session `<name>-gNNNN`, the declared serving build), jobs in bench's private directory, one `bench
+  verdict` per pair with the candidate files, the retention suite as anchor, `--alpha 0.05`. Spec
+  `campaign::agentic` (scripted bench double).
+- The rollout stage's tokens are summed from each trial's score-record usage (prompt plus completion), so
+  `[budget].tokens` binds (knowledge 176; spec `bench_practice::as_a_campaigns_rollouts_...`).
+- `bench::examine::Bench` (the minimind sample's examiner) verifies verdicts in-process with the public key and names
+  each sitting's checkpoint in a candidate file (the workspace-tools exam is sealed, so bench requires the pair).
+
 ## Open
 
 - `release` and `harness_opt` still decide with their own gates (release: sign test, retention bound, anchor, serve,
   canary over Splinter's in-process probes; harness_opt: family sign test or evidence gate). Moving them onto
   `promotion::decide` needs bench verdicts for their candidates (a release from `learn` has none today) or a reviewed
   rule for when the sealed slice does not apply. Not done.
-- The examiner is `bench examine` (direct completion). Agentic candidates are judged by `bench run` + `bench verdict`
-  (`bench.verdict.v1`), which carries no candidate identity and no burn record: the campaign cannot gate on it yet.
-- The rollout stage records no generated tokens through `PracticeRollouts` (bench's export has per-trial token counts;
-  not summed yet), so a token budget only binds with an executor that counts them.
+- The agent protocol's evaluate stage has not run against a real bench and brain (no GPUs in lane C2); its contract is
+  covered by the scripted double only. Bench's `served_model` check needs brain's `brain` object on every reply.
+- The agent examiner passes `--min-gain` and `--alpha` itself; bench's pre-registered exam plans (`bench verdict --plan FILE
+  --slice NAME`, bench 8aeafd63) are not yet named by `[examine.agent]`. Name the plan and slice per generation there.
+- A minimind sitting's checkpoint is named by its sitting, not by a content digest (identity none, like a base): its
+  burns name the pair (none, none). It decides on bench's Promote, not on the gate.
 - `generation run` (`pipelines::generations`) is a second multi-generation driver over `practice`; retire it onto
   the campaign once its consumers move.
 - No real-model campaign has run (no GPUs in this lane).

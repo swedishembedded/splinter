@@ -18,3 +18,8 @@ values while passing every self-signed test. `promotion::canonical` implements b
 table of spellings was printed by bench's own serialiser, and
 `promotion_gate::a_verdict_the_examiner_signed_verifies_here_and_an_altered_or_forged_one_does_not`
 verifies a fixture `bench examine` signed (`crates/eval/tests/fixtures/`).
+
+Update 2026-11-18 (lane C2): bench now signs with Ed25519 and the gate verifies with its public key
+(`promotion::PublicKey`); the signed bytes are the same canonical bytes, so the rule above still decides whether a
+signature verifies. The fixtures `bench-examination-signed.json` and `bench-verdict-signed.json` were signed by bench's
+own code, and the agent-protocol one carries dozens of floats of every spelling.

@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (promotion gate evidence)
+- The promotion gate verifies the examiner's Ed25519 signatures with its public key and holds no signing key: `[examine] signing_key` is replaced by `public_key` (bench's `verdict.key.pub`), and a verdict under bench's retired shared-key MAC is rejected as unsigned. It reads `bench.examination/2` and the agent-protocol `bench.verdict/3` (candidate and predecessor identities, the sealed exams and their burn records).
+- `splinter campaign` examines on bench's agent protocol with `[examine] protocol = "agent"` and `[examine.agent]` (`profile`, `min_gain`, `serving_build`, optional `dev_set`, `sven_build`): bench runs each collection per model against its endpoint and pairs the jobs into signed verdicts.
+- `promotion::decide_unexamined`: where no sealed slice applies, dev gain plus retention decide and the record says `not_exam_verified`.
+- A campaign's `[budget].tokens` binds: the rollouts sum each trial's prompt and completion tokens from its score record (it counted none before).
+- The minimind sample takes `--bench-public-key` instead of `--bench-key`.
+
 ### Added (learn generations)
 - `learn --source ... --replay-from RUN` (repeatable) trains each round beside the datasets of the accepted rounds of earlier acquisition runs (the datasets that run itself replayed come with it), recorded in a `replay` stage; a missing run or dataset is refused. `--pooled-retention-drop SHARE` (default 0) rejects a candidate when the passes of all the other skills taken together fall by more than that share of their graded dev probes, which the per-skill `--retention-drop` lets through when the loss is spread over many skills.
 

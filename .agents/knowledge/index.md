@@ -161,3 +161,4 @@ in the same commit.
 | [173](173-a-bench-trajectory-records-the-raw-tool-output-not-what-the-model-was-shown.md) | A bench trial's trajectory records the raw tool output, not what the model was shown |
 | [174](174-an-examiners-signature-verifies-only-over-its-own-float-spelling.md) | An examiner's signature verifies only over its own float spelling |
 | [175](175-a-resume-key-reuses-a-brain-job-only-when-every-other-param-is-the-same.md) | A resume key reuses a brain job only when every other param is the same |
+| [176](176-a-campaign-token-budget-never-bound-because-its-rollouts-counted-no-tokens.md) | A campaign's token budget never bound, because its rollouts counted no tokens |
