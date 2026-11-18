@@ -35,7 +35,7 @@ use splinter_core::rng::Seed;
 use splinter_eval::campaign::evidence::EvidenceGate;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
-use splinter_pipelines::harness_opt::gate::{PromotionRule, PromotionTest, Verdict};
+use splinter_pipelines::harness_opt::gate::{PromotionRule, Verdict, NOT_EXAM_VERIFIED};
 use splinter_pipelines::harness_opt::space::MutationSpace;
 use splinter_pipelines::harness_opt::{
     optimise, OptimiseRequest, ProposerChoice, CHAMPION_POINTER,
@@ -204,7 +204,7 @@ fn request<'a>(
         parallelism: 1,
         attempts: 1,
         rule: PromotionRule {
-            test: PromotionTest::SignTest { alpha: 0.1 },
+            evidence: None,
             min_paired: 3,
         },
         // seed: the search seed fixes which candidates are drawn, and the
@@ -232,6 +232,18 @@ fn a_candidate_that_verifiably_solves_what_the_baseline_does_not_is_promoted() {
     assert!(line.evidence.regressed_families.is_empty());
     assert!(line.evidence.candidate_right > line.evidence.baseline_right);
     assert!(report.metrics.solved);
+    // The promotion rule decided, on the frozen set alone: not exam-verified.
+    let promotion = &line.decision.promotion;
+    assert!(
+        promotion.promoted && !promotion.exam_verified,
+        "{promotion:#?}"
+    );
+    assert_eq!(
+        promotion.rule,
+        splinter_eval::promotion::Rule::NotExamVerified {
+            why: NOT_EXAM_VERIFIED.into()
+        }
+    );
 
     // The pointer names the stored champion, whose document is the candidate.
     let (version, value) = ctx.workspace().pointer(CHAMPION_POINTER).unwrap().unwrap();
@@ -242,6 +254,10 @@ fn a_candidate_that_verifiably_solves_what_the_baseline_does_not_is_promoted() {
         .unwrap()
         .unwrap();
     assert!(champion["document"].as_str().unwrap().contains("MEND"));
+    assert_eq!(
+        champion["promotion"]["exam_verified"], false,
+        "the stored champion says it is not exam-verified"
+    );
 }
 
 #[test]
@@ -251,7 +267,7 @@ fn under_the_evidence_gate_each_evaluation_is_a_round_of_one_budget_and_the_impr
     let baseline = harness(PLAIN);
     let gate = EvidenceGate::new(0.02, 0.6, 0.01).unwrap();
     let mut asked = request(&tasks, &solver, &baseline);
-    asked.rule.test = PromotionTest::Evidence(gate);
+    asked.rule.evidence = Some(gate);
 
     let report = optimise(&ctx, &asked).unwrap();
 

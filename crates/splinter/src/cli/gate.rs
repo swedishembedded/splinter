@@ -14,17 +14,14 @@ use splinter_sdk::measure::gate::GatePlan;
 
 use super::share;
 
-/// How the improvement check is held to its significance level.
+/// What the gate's report says about the power of its exam, and how its
+/// anchor floor is held. The gain and retention are decided by the one
+/// promotion rule at its fixed level, which no flag changes.
 #[derive(Clone, Copy, Debug, Default, Args)]
 pub struct GateArgs {
-    /// Spend the significance level across the releases of a lineage by a
-    /// fixed schedule, so that a long run of candidates no better than their
-    /// champions releases one with probability below the level.
-    #[arg(long)]
-    pub alpha_spending: bool,
     /// The lead, as a share of the exam's families won, the exam must be able
-    /// to see: a miss on an exam too small to see it is reported
-    /// inconclusive, not as a failure.
+    /// to see: a gain not shown on an exam too small to see it is reported
+    /// inconclusive, not as a failure (either way nothing is released).
     #[arg(long, value_name = "SHARE", value_parser = share)]
     pub target_effect: Option<f64>,
     /// Decide the anchor check on the answers the candidate loses net of the
@@ -39,7 +36,7 @@ impl GateArgs {
     #[must_use]
     pub fn plan(self) -> GatePlan {
         GatePlan {
-            alpha_spending: self.alpha_spending,
+            alpha_spending: false,
             target_effect: self.target_effect,
             anchor_max_net_lost: self.anchor_max_net_lost,
         }

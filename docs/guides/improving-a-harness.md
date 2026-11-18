@@ -26,15 +26,19 @@ is sven's (best-of-N or simulated annealing) and follows the share of tasks the
 candidate solved, which guides and never decides. Each candidate is run on the
 whole task set, its attempts verified by the tasks' own verifiers, and compared
 with the baseline's attempts, a family counted once. A candidate is promoted
-only if no family got worse and the one-sided sign test over families is below
-`--alpha`; one that regressed a family is rejected whatever its totals, and one
-that merely did not regress is inconclusive. The first evaluation is the
+only by the one promotion rule (the paired gain's two-sided 95% interval,
+resampling families, above 0; the frozen task set is also the retention suite)
+and only if no family got worse and at least `--min-paired` tasks have a verdict
+in both arms. No examiner draws a sealed slice for a harness, so every decision
+is recorded as not exam-verified, with why. One that regressed a family, or lost
+ground, is rejected whatever its totals, and one that merely did not regress is
+inconclusive. The first evaluation is the
 baseline against its own arm, a replicate that shows how far two identical runs
 differ. A promotion stores the candidate document with its evidence and the
 experience sets behind it and moves the `harness/champion` pointer, whose
 history is the lineage of champions. `--search-seed` has no default: the same
-seed draws the same candidates. `--gate evidence` with `--gate-eps`, `--gate-q` and `--gate-beta` replaces the sign
-test with the evidence gate, which holds the share of promoted-worse candidates to a budget over the search's
+seed draws the same candidates. `--gate evidence` with `--gate-eps`, `--gate-q` and `--gate-beta` adds the evidence
+gate beside the promotion rule, which holds the share of promoted-worse candidates to a budget over the search's
 evaluations; see [Choose an acceptance gate](acceptance-gates.md).
 
 `--proposer model --proposer-model REF` has a model propose the candidates instead of

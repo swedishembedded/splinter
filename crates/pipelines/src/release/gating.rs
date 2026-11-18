@@ -21,14 +21,17 @@ use splinter_core::rng::Seed;
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuitePrompts, SuiteSummary};
 use splinter_eval::paired::PairedOutcome;
 use splinter_eval::power;
+use splinter_eval::promotion::{Measured, Pair, Promotion};
 use splinter_model::stats::ExactSignTest;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::releases::StoredRelease;
 
+use super::decision::{self, ExaminerVerdicts};
 use super::probe::{self, clustered, pair, Arm, Probe, Suite};
 use super::statistics::{drop_interval, items_to_see_two_points, task_level, with_task_level};
 use super::{agentic, anchor, arm, canary, exams, leakage, serve};
+use crate::promotion::measurement_of;
 use crate::train::Candidate;
 
 /// One model's answer and outcome on each task of a suite.
@@ -354,12 +357,37 @@ pub(super) struct GateRun<'a> {
     pub config: &'a GateConfig,
     /// Tasks no honest solution passes; see [`canary`].
     pub canaries: &'a [Task],
-    /// The seed the report's intervals are resampled from.
+    /// The seed the report's intervals, and the promotion's measurements,
+    /// are resampled from.
     pub interval_seed: Seed,
+    /// The candidate and the champion it would replace, as the promotion
+    /// decision names them.
+    pub pair: &'a Pair,
+    /// The examiner's signed verdicts on the pair, when the caller holds
+    /// them; without, the decision is not exam-verified.
+    pub examined: Option<&'a ExaminerVerdicts>,
+}
+
+/// `outcomes` of the suite `suite`, each family named within it, so that
+/// suites pooled into one measurement keep their families apart.
+fn within(suite: &str, outcomes: &[PairedOutcome]) -> Vec<PairedOutcome> {
+    outcomes
+        .iter()
+        .map(|o| PairedOutcome {
+            cluster: Some(format!(
+                "{suite}/{}",
+                o.cluster.as_deref().unwrap_or(o.item.as_str())
+            )),
+            ..o.clone()
+        })
+        .collect()
 }
 
 /// The four checks on `candidate` against `champion`, the report's bootstrap
-/// intervals resampled from `interval_seed`.
+/// intervals resampled from `interval_seed`, with the promotion decision its
+/// improvement and retention checks carry ([`decision`]): the dev split is
+/// the improvement suite, the retention suite every earlier release's suite
+/// and the anchor suite together, everything the candidate must not lose.
 pub(super) fn run_gate(
     ctx: &Context,
     candidate: &Candidate,
@@ -367,19 +395,12 @@ pub(super) fn run_gate(
     base_source: &Path,
     run: &GateRun<'_>,
     cancel: &CancelToken,
-) -> Result<GateReport, OrchestratorError> {
+) -> Result<(GateReport, Promotion), OrchestratorError> {
     let (config, canaries, interval_seed) = (run.config, run.canaries, run.interval_seed);
     let suites = Suites::build(ctx, candidate, champion, config)?;
-    // The candidate's place in the sequence of releases decides the level it
-    // may spend; a first release has no champion to descend from.
-    let generation = match (config.alpha_spending, champion) {
-        (false, _) => None,
-        (true, None) => Some(1),
-        (true, Some(champion)) => {
-            let behind = ctx.releases().lineage(&champion.id)?.len();
-            Some(u32::try_from(behind + 1).unwrap_or(u32::MAX))
-        }
-    };
+    // The sign test is reported at the plain level: the promotion rule
+    // decides, and `release` refuses a request to spend the level.
+    let generation = None;
     let rule = power::Rule {
         alpha: config.alpha,
         generation,
@@ -428,12 +449,16 @@ pub(super) fn run_gate(
     };
 
     let mut in_process: Option<Outcomes> = None;
+    // The paired outcomes the promotion decides on.
+    let mut dev_outcomes: Vec<PairedOutcome> = Vec::new();
+    let mut retained_outcomes: Vec<PairedOutcome> = Vec::new();
     let improvement = match &suites.held_out {
         Err(why) => Check::unmeasured(why.clone()),
         Ok(suite) => match next() {
             Err(why) => Check::unmeasured(why),
             Ok((c, b)) => {
                 let outcomes = clustered(ctx, suite, pair(suite, &c, &b))?;
+                dev_outcomes.clone_from(&outcomes);
                 let mut check = power::judged_improvement(
                     suite.summary(),
                     suites.variants.clone(),
@@ -478,7 +503,9 @@ pub(super) fn run_gate(
                 match next() {
                     Ok((c, b)) => {
                         withheld.push(agentic::withheld(suite, &c, &b));
-                        measured.push((release.clone(), suite.summary(), pair(suite, &c, &b)))
+                        let outcomes = pair(suite, &c, &b);
+                        retained_outcomes.extend(within(&suite.name, &outcomes));
+                        measured.push((release.clone(), suite.summary(), outcomes))
                     }
                     Err(why) => failure = failure.or(Some(format!("{}: {why}", suite.name))),
                 }
@@ -506,6 +533,7 @@ pub(super) fn run_gate(
             Err(why) => Check::unmeasured(why),
             Ok((c, b)) => {
                 let outcomes = pair(suite, &c, &b);
+                retained_outcomes.extend(within(&suite.name, &outcomes));
                 let mut check = gate::anchor(
                     frozen.suite.version,
                     frozen.digest.clone(),
@@ -559,11 +587,22 @@ pub(super) fn run_gate(
         },
         _ => Check::unmeasured("the held-out tasks were not graded in-process to compare with"),
     };
+    let promotion = decision::decide(
+        run.pair,
+        run.examined,
+        &Measured {
+            dev: measurement_of(&dev_outcomes, interval_seed),
+            retention: measurement_of(&retained_outcomes, interval_seed),
+        },
+    );
+    let improvement = decision::improvement(improvement, &promotion);
+    let retention = decision::retention(retention, &promotion);
     let report = GateReport::new(*config, improvement, retention, anchor, serve)
         .with_prompts(prompts)
         .with_interval_seed(interval_seed);
-    Ok(match canary {
+    let report = match canary {
         Some(canary) => report.with_canary(canary),
         None => report,
-    })
+    };
+    Ok((report, promotion))
 }

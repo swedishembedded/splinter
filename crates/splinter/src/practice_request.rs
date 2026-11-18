@@ -253,8 +253,8 @@ mod tests {
 
     #[test]
     fn the_gate_settings_reach_the_request() {
-        let asked = request(&["./shop", "--alpha-spending", "--target-effect", "0.25"]);
-        assert!(asked.gate.alpha_spending);
+        let asked = request(&["./shop", "--target-effect", "0.25"]);
+        assert!(!asked.gate.alpha_spending);
         assert_eq!(asked.gate.target_effect, Some(0.25));
         assert_eq!(request(&["./shop"]).gate, Default::default());
     }

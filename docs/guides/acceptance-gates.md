@@ -78,6 +78,7 @@ promotion gate on the examiner's signed verdicts, over a sealed slice spent by t
 ([Campaigns](campaigns.md)).
 
 **Harness optimisation** (`splinter harness optimise`): `--gate evidence --gate-eps EPS --gate-q Q --gate-beta BETA`
-replaces the sign test over families with the evidence gate over the paired tasks; every evaluation is a round of one
+adds the evidence gate over the paired tasks beside the promotion rule (which always decides the gain, not
+exam-verified); every evaluation is a round of one
 budget planned over `--evaluations`, its level taken before its arm runs. A family that got worse still rejects the
 candidate. The frozen task set is reused by every evaluation, so from the second on every task counts as reused.

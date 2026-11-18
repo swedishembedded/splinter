@@ -246,14 +246,8 @@ mod tests {
 
     #[test]
     fn the_gate_settings_reach_the_request() {
-        let asked = request(&[
-            "learn",
-            "docs",
-            "--alpha-spending",
-            "--target-effect",
-            "0.3",
-        ]);
-        assert!(asked.gate.alpha_spending);
+        let asked = request(&["learn", "docs", "--target-effect", "0.3"]);
+        assert!(!asked.gate.alpha_spending);
         assert_eq!(asked.gate.target_effect, Some(0.3));
         assert_eq!(request(&["learn", "docs"]).gate, Default::default());
     }

@@ -589,6 +589,7 @@ mod tests {
                 Check::unmeasured("no anchor suite"),
                 Check::unmeasured("no brain binary"),
             ),
+            promotion: None,
             requeued: Vec::new(),
             warnings: Vec::new(),
             release: None,

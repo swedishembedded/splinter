@@ -115,6 +115,7 @@ fn unmeasured_gate() -> ReleaseGate {
             Check::unmeasured(why),
             Check::unmeasured(why),
         )),
+        promotion: None,
     }
 }
 

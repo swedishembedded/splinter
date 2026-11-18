@@ -8,14 +8,15 @@
 
 //! Spec: a candidate becomes the policy only through the release gate.
 //!
-//! * It is released when it beats the champion on the new data's held-out
-//!   tasks - the records training held out, and the variants (the same
-//!   fact in other words) of the tasks it trained on - by a significant
-//!   sign test, keeps every earlier release's
-//!   held-out tasks, holds the anchor suite, and serves on plain brain with
+//! * It is released when the promotion rule finds a gain over the champion
+//!   on the new data's held-out tasks (the records training held out, and
+//!   the variants, the same fact in other words, of the tasks it trained on)
+//!   and retention over every earlier release's held-out tasks and the
+//!   anchor suite, holds the anchor floor, and serves on plain brain with
 //!   its own digest and the same answers, graded the same; the release is
-//!   immutable, its manifest records every number, and `default` points at
-//!   it.
+//!   immutable, its manifest records every number and the promotion
+//!   decision (not exam-verified: the learner made its exam), and `default`
+//!   points at it.
 //! * A served candidate that answers in other words than in-process is not
 //!   released, however its answers are graded: each disagreement is
 //!   reported with both answers.
@@ -24,9 +25,6 @@
 //! * A held-out task the candidate was trained on - the same question, or
 //!   a near duplicate of it, among its training records - measures nothing
 //!   and is left out of the gate's suites, counted as leaked.
-//! * The variants are counted: how many were measured, and how many were
-//!   left out and why. A variant of a task that was held out, not trained
-//!   on, is not a measure of what was learned.
 //! * The next candidate trains from the champion, replaying a seeded
 //!   sample of the earlier release's training records.
 //! * `rollback` moves an alias back along its lineage, and refuses with no
@@ -42,10 +40,9 @@
 
 use crate::common;
 
-use common::gate::variants::{variant_asking, variant_set, variant_set_of};
 use common::gate::{
-    anchor_file, candidate, candidate_on, dataset, dataset_of, decide, fast_gate, gate_context,
-    policy, question, released, Brain, FakeTrainer, ANCHOR, BASE_BYTES, FACTS, NOW,
+    anchor_file, candidate, dataset, dataset_of, decide, fast_gate, gate_context, policy, question,
+    released, Brain, FakeTrainer, ANCHOR, BASE_BYTES, FACTS, NOW,
 };
 use common::Scratch;
 use splinter_agent::CancelToken;
@@ -164,6 +161,21 @@ fn a_candidate_that_passes_every_check_is_released() {
             .collect::<Vec<_>>()
     );
     assert_eq!(manifest.gate.llm(), Some(gate));
+    // A release of what `learn` learned has no examiner's sealed slice: the
+    // promotion rule decided on the gate's own suites, and the release
+    // record says it is not exam-verified.
+    let promotion = manifest.gate.promotion().expect("the decision is recorded");
+    assert_eq!(decided.promotion.as_ref(), Some(promotion));
+    assert!(
+        promotion.promoted && !promotion.exam_verified,
+        "{promotion:#?}"
+    );
+    assert_eq!(
+        promotion.rule,
+        splinter_eval::promotion::Rule::NotExamVerified {
+            why: splinter_pipelines::release::NOT_EXAM_VERIFIED.into()
+        }
+    );
     assert_eq!(manifest.created_at, NOW);
     assert_eq!(
         stored.artifact, candidate.adapter,
@@ -272,7 +284,7 @@ fn the_gate_states_the_seed_its_intervals_were_resampled_with() {
 #[test]
 fn each_failing_check_blocks_the_release_and_says_why() {
     // No improvement: the candidate knows no more than the base, so no
-    // held-out task is discordant and the sign test is not significant.
+    // held-out task is discordant and the dev gain's interval is 0.
     let (scratch, ctx) = gate_context("release-no-gain", Brain::Honest);
     freeze_anchor(&scratch, &ctx);
     let (same, _) = candidate(&ctx, "alpha", &[ANCHOR]);
@@ -283,7 +295,13 @@ fn each_failing_check_blocks_the_release_and_says_why() {
     assert_eq!(improvement.sign_test.discordant, 0);
     assert_eq!(improvement.comparison.both_wrong, 8, "ties are counted");
     let why = gate.improvement.reason.as_deref().unwrap();
-    assert!(why.contains("no significant improvement"), "{why}");
+    assert!(why.contains("no dev gain"), "{why}");
+    let promotion = decided.promotion.as_ref().unwrap();
+    assert!(!promotion.promoted && !promotion.exam_verified);
+    assert!(matches!(
+        promotion.reasons.as_slice(),
+        [splinter_eval::promotion::Reason::NoDevGain { .. }]
+    ));
     assert!(
         gate.retention.passed && gate.anchor.passed && gate.serve.passed,
         "{gate:#?}"
@@ -469,7 +487,15 @@ fn a_retention_drop_beyond_the_bound_blocks_the_release() {
     };
     assert_eq!(suite.release, first);
     assert_eq!(suite.drop, Some(1.0));
-    assert!(!suite.passed);
+    assert!(!suite.passed, "the suite's drop names what was forgotten");
+    // The promotion rule decides retention: the earlier release's suite and
+    // the anchor suite together are not shown non-inferior.
+    let why = gate.retention.reason.as_deref().unwrap();
+    assert!(why.contains("retention not shown"), "{why}");
+    assert!(matches!(
+        decided.promotion.as_ref().unwrap().reasons.as_slice(),
+        [splinter_eval::promotion::Reason::Inferior { .. }]
+    ));
 }
 
 #[test]
@@ -694,99 +720,4 @@ fn eval_freezes_the_anchor_suite_and_scores_one_model_on_a_suite() {
         refused.is_refusal(),
         "no release, so no held-out suite: {refused}"
     );
-}
-
-#[test]
-fn variants_of_the_trained_facts_give_the_sign_test_enough_tasks() {
-    let (scratch, ctx) = gate_context("release-variants", Brain::Honest);
-    freeze_anchor(&scratch, &ctx);
-    // Twelve facts: three held out (a quarter is the most), so a sign test
-    // over the records alone can never reach significance (three wins is
-    // p = 0.125).
-    let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 12), &[ANCHOR, "alpha"]);
-    let alone = blocked(&ctx, &candidate).gate;
-    assert!(!alone.improvement.passed, "{alone:#?}");
-    let measured = alone.improvement.measured.as_ref().unwrap();
-    assert_eq!(measured.suite.tasks, 3);
-    assert_eq!(measured.variants, None, "no variant was written");
-
-    // Nine variants of three trained facts; a variant of a held-out fact
-    // (not learned from); and a variant whose wording is a question the
-    // candidate trained on.
-    variant_set(&ctx, "alpha", &[0, 1, 2], 3);
-    variant_set(&ctx, "alpha", &[11], 3);
-    variant_set_of(
-        &ctx,
-        "alpha",
-        vec![(3, variant_asking(&ctx, "alpha", 3, &question("alpha", 4)))],
-    );
-
-    let decided = decide(&ctx, &candidate);
-    let gate = &decided.gate;
-    assert!(gate.passed, "{gate:#?}");
-    let improvement = gate.improvement.measured.as_ref().unwrap();
-    assert_eq!(
-        improvement.suite.tasks,
-        3 + 9,
-        "held-out records and variants"
-    );
-    assert_eq!(improvement.comparison.candidate_wins, 12);
-    assert!(improvement.sign_test.p_value < improvement.alpha);
-    // The two kinds of task are reported apart: generalisation to the
-    // held-out records, recall of trained facts under paraphrase.
-    let generalisation = improvement.generalisation.as_ref().unwrap();
-    assert_eq!(generalisation.suite.tasks, 3);
-    assert_eq!(generalisation.comparison.candidate_wins, 3);
-    assert!(
-        generalisation.sign_test.p_value > improvement.alpha,
-        "three records alone are not significant: {generalisation:?}"
-    );
-    // What the tasks say beside the family-level decision: twelve wins, no
-    // losses, over the held-out records and the variants together.
-    let by_task = improvement.task_level.unwrap();
-    assert!(by_task.p_value < 0.001, "{by_task:?}");
-    assert!(by_task.low <= by_task.difference && by_task.difference <= by_task.high);
-    assert!(improvement
-        .generalisation
-        .as_ref()
-        .unwrap()
-        .task_level
-        .is_some());
-    let recall = improvement.recall.as_ref().unwrap();
-    assert_eq!(recall.suite.tasks, 9);
-    assert_eq!(recall.comparison.candidate_wins, 9);
-    let variants = improvement.variants.as_ref().unwrap();
-    assert_eq!(variants.tasks, 9, "{variants:#?}");
-    assert_eq!(
-        variants.excluded.iter().collect::<Vec<_>>(),
-        [(&"leaked".to_string(), &1)],
-        "the question trained on measures nothing"
-    );
-    assert!(decided.release.is_some());
-}
-
-#[test]
-fn variants_of_what_the_candidate_did_not_learn_do_not_count_as_evidence() {
-    let (scratch, ctx) = gate_context("release-variants-unlearned", Brain::Honest);
-    freeze_anchor(&scratch, &ctx);
-    // It learned nothing of "alpha": its variants stay wrong, like its
-    // held-out records, so the extra tasks add ties, not wins.
-    let (candidate, _) = candidate_on(&ctx, dataset(&ctx, "alpha", 12), &[ANCHOR]);
-    variant_set(&ctx, "alpha", &[0, 1, 2], 3);
-
-    let gate = blocked(&ctx, &candidate).gate;
-    let improvement = gate.improvement.measured.as_ref().unwrap();
-    assert_eq!(improvement.variants.as_ref().unwrap().tasks, 9);
-    assert_eq!(improvement.sign_test.discordant, 0);
-    assert_eq!(improvement.recall.as_ref().unwrap().comparison.paired, 9);
-    assert_eq!(
-        improvement
-            .generalisation
-            .as_ref()
-            .unwrap()
-            .comparison
-            .paired,
-        3
-    );
-    assert!(!gate.improvement.passed);
 }

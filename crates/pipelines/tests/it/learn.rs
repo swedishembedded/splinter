@@ -163,6 +163,19 @@ fn learn_runs_every_stage_to_a_trainable_dataset_and_an_unreleased_candidate() {
     assert!(!gated.gate.passed && gated.release.is_none(), "{gated:#?}");
     assert!(gated.gate.anchor.measured.is_none());
     assert!(gated.gate.serve.measured.is_none());
+    // `learn` made its own exam: no examiner's sealed slice applies, and the
+    // decision record says it is not exam-verified.
+    let promotion = gated.promotion.as_ref().expect("the decision is recorded");
+    assert!(
+        !promotion.promoted && !promotion.exam_verified,
+        "{promotion:#?}"
+    );
+    assert_eq!(
+        promotion.rule,
+        splinter_eval::promotion::Rule::NotExamVerified {
+            why: splinter_pipelines::release::NOT_EXAM_VERIFIED.into()
+        }
+    );
     assert!(!report.finished(true) && report.finished(false));
     // With no assistant configured the policy would be its own judge, which
     // a judge refuses; the exam says why it did not run and the gate decides.

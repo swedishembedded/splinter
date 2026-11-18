@@ -10,6 +10,7 @@ use splinter_sdk::eval::{EvalReport, Evaluated};
 use splinter_sdk::graded::Verdict;
 use splinter_sdk::measure::gate::{AgenticProbe, Agreement, Check, GateReport};
 use splinter_sdk::measure::power::PowerAssessment;
+use splinter_sdk::measure::promotion::{Promotion, Rule};
 use splinter_sdk::release::{ReleaseList, Released, RolledBack};
 
 use crate::output::{tally, Report};
@@ -313,6 +314,9 @@ impl Report for Released {
             self.alias,
             self.gate.human()
         );
+        if let Some(promotion) = &self.promotion {
+            let _ = writeln!(out, "  promotion    {}", promotion_line(promotion));
+        }
         for concept in &self.requeued {
             let _ = writeln!(out, "forgotten, queued for new tasks: {concept}");
         }
@@ -328,6 +332,19 @@ impl Report for Released {
             }
         }
         out
+    }
+}
+
+/// Which rule decided the promotion, and whether it is exam-verified.
+fn promotion_line(promotion: &Promotion) -> String {
+    let decided = if promotion.promoted {
+        "promoted"
+    } else {
+        "not promoted"
+    };
+    match &promotion.rule {
+        Rule::Examined => format!("{decided}, exam-verified on the examiner's signed verdicts"),
+        Rule::NotExamVerified { why } => format!("{decided}, NOT exam-verified: {why}"),
     }
 }
 
@@ -460,6 +477,35 @@ mod tests {
     use splinter_sdk::measure::power::{PowerAssessment, Verdict};
 
     use super::*;
+
+    /// A decision with no sealed slice says so in the release output.
+    #[test]
+    fn a_promotion_not_exam_verified_says_so_and_why() {
+        use splinter_sdk::measure::promotion::{decide_unexamined, Measured, Measurement, Pair};
+        let measurement = |low: f64| Measurement {
+            items: 8,
+            gain: Some(low + 0.1),
+            interval: Some((low, low + 0.2)),
+            one_sided_lower: Some(low),
+        };
+        let pair = Pair {
+            candidate: Some("cand".into()),
+            predecessor: None,
+        };
+        let measured = Measured {
+            dev: measurement(0.1),
+            retention: measurement(0.0),
+        };
+        let line = promotion_line(&decide_unexamined(
+            &pair,
+            &measured,
+            "the learner made its exam",
+        ));
+        assert_eq!(
+            line,
+            "promoted, NOT exam-verified: the learner made its exam"
+        );
+    }
 
     fn assessment(units: usize, share: Option<Share>) -> PowerAssessment {
         PowerAssessment {

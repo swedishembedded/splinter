@@ -24,19 +24,23 @@ pub enum HarnessCommand {
     /// verifiably beats it: each candidate is run on the task set through
     /// sven, its attempts verified by the tasks' own verifiers and compared
     /// with the baseline's (a family counted once). A candidate is promoted
-    /// only when no family got worse and the sign test over families finds it
-    /// better (or, with `--gate evidence`, the evidence gate's e-process
-    /// crosses its level); the promotion moves the `harness/champion` pointer.
+    /// only when the promotion rule finds a gain (its two-sided interval resampling
+    /// families above zero, recorded as not exam-verified), no family got
+    /// worse and, with `--gate evidence`, the evidence gate's e-process
+    /// crosses its level too; the promotion moves the `harness/champion`
+    /// pointer.
     Optimise(Box<OptimiseArgs>),
 }
 
-/// The test a candidate must pass to be promoted.
+/// What a candidate must pass to be promoted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum PromotionGateArg {
-    /// The one-sided sign test over families, below `--alpha`.
-    SignTest,
-    /// A noninferiority e-process over the paired tasks, the false evolution
-    /// rate held to `--gate-q` over the search's evaluations.
+    /// The promotion rule alone: the paired gain's 95% interval, resampling
+    /// families, above zero, and no family worse.
+    Promotion,
+    /// The promotion rule and a noninferiority e-process over the paired
+    /// tasks, the false evolution rate held to `--gate-q` over the search's
+    /// evaluations.
     Evidence,
 }
 
@@ -102,17 +106,9 @@ pub struct OptimiseArgs {
     /// Solves per task and harness.
     #[arg(long, default_value_t = 1, value_name = "K")]
     pub attempts: usize,
-    /// The test a candidate must pass to be promoted.
-    #[arg(long, value_enum, default_value = "sign-test")]
+    /// What a candidate must pass to be promoted.
+    #[arg(long, value_enum, default_value = "promotion")]
     pub gate: PromotionGateArg,
-    /// A candidate's sign test must have a p-value below this to be promoted.
-    #[arg(
-        long,
-        default_value_t = 0.05,
-        value_name = "P",
-        conflicts_with = "gate_q"
-    )]
-    pub alpha: f64,
     /// With `--gate evidence`: the tolerated loss, on the paired difference
     /// scale [-1, 1]; a candidate worse by this much is a false evolution.
     #[arg(long, value_name = "EPS", required_if_eq("gate", "evidence"))]

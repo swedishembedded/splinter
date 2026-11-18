@@ -340,7 +340,7 @@ fn a_candidate_that_loses_or_ties_is_not_released_and_the_run_says_why() {
             .reason
             .as_deref()
             .unwrap()
-            .contains("no significant improvement"),
+            .contains("no dev gain"),
         "{:#?}",
         tied.gate.improvement
     );

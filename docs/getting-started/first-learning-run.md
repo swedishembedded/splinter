@@ -216,10 +216,13 @@ its numbers; a check that could not be measured fails:
   retention    ...
   anchor       ...
   serve        ...
+  promotion    <promoted|not promoted>, NOT exam-verified: <why>
 released <id>; default points at it
 ```
 
-or `not released: the gate blocked it`. A release is immutable and carries every number the gate measured; `release list` shows each release with its parent
+or `not released: the gate blocked it`. Improvement and retention are decided by the one promotion rule (the dev gain's 95%
+interval above 0, retention's one-sided bound above -0.05); a release from `learn` has no examiner's sealed exam, so its
+record says it is not exam-verified, and why. A release is immutable and carries every number the gate measured; `release list` shows each release with its parent
 and the aliases that point at it. The manifest `brain serve` follows is written to `<state>/serving/default.json`, and `splinter rollback default` points the
 alias back at the release it was trained from. See [Release, serve and roll back](../guides/releases.md) and [release policy](../concepts/release-policy.md).
 

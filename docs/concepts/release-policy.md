@@ -17,22 +17,40 @@ verifiers. It releases only if all four checks pass:
 
 - **Improvement.** The candidate learned what it was trained on, measured on questions it was
   not trained on: the held-out records and differently worded variants of trained tasks.
-- **Retention.** It still does what earlier releases learned.
-- **Anchor.** It still behaves like a general model on a frozen suite of general tasks.
+- **Retention.** It still does what earlier releases learned and what the frozen suite of
+  general tasks holds.
+- **Anchor.** It stays within a tighter floor on that frozen suite of general tasks.
 - **Serve.** It runs on plain `brain serve` and answers as it did in-process.
 
 A check that could not be measured fails. A number that was not measured is absent, never zero.
+
+## One promotion rule
+
+Improvement and retention are decided by the one promotion rule every promotion in Splinter goes
+through (the same rule `splinter campaign` decides on): the paired gain on the improvement suite
+must have its two-sided 95% interval above zero, and on the retention suites (every earlier
+release's suite and the anchor suite together) the lower bound of the one-sided 95% interval of
+the paired change must be above -0.05, both intervals resampling whole families. The other
+checks (every assigned task counted for each arm, the anchor floor, the served candidate, the
+canaries) refuse beside the rule, never in its place.
+
+When the caller holds an examiner's signed verdicts on the candidate, the rule decides on them and
+a fresh sealed exam slice is part of the decision: the release is **exam-verified**. A release
+decided on Splinter's own suites, a release from `learn` among them, whose exam the learner made
+itself, has no sealed slice: the same two rules decide, and the release record (and the `release`
+output) says **not exam-verified**, with why. It is never a silent bypass.
 
 ## Why the tests are paired and counted by family
 
 Records about one family of source text (two prints of a letter, several questions about one
 document) are one piece of evidence: a model that knows the letter gets all its questions right.
-The gate's sign test therefore counts a family once, won or lost by which model got more of its
-tasks right. The report adds an interval that resamples families and the exact sign test over tasks,
-so a result on a few families is read by its spread. An exam too small to see the lead you asked
-for (`--target-effect`) is reported inconclusive and not as a failure. Over a lineage of releases,
-`--alpha-spending` spends the significance level on a fixed schedule so that a long run of
-candidates no better than their champions does not eventually release one by chance.
+The promotion rule's intervals therefore resample whole families, and a gain resting on one or two
+families shows as a wide interval (with a single family there is no interval, and no promotion).
+The report adds the sign test that counts a family once and the exact sign test over tasks; they
+are read beside the decision and do not make it. A gain not shown on an exam too small to see the
+lead you asked for (`--target-effect`) is reported inconclusive and not as a failure; either way
+nothing is released. The rule decides at its fixed level: a run asked to spend the level across a
+lineage is refused.
 
 ## What stops a release from lying
 

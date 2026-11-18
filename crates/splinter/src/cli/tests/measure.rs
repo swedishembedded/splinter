@@ -13,7 +13,6 @@ fn the_release_gate_takes_its_statistical_settings_and_canaries() {
     let Command::Release(planned) = command(&[
         "release",
         "candidate-1",
-        "--alpha-spending",
         "--target-effect",
         "0.2",
         "--anchor-max-net-lost",
@@ -22,8 +21,11 @@ fn the_release_gate_takes_its_statistical_settings_and_canaries() {
         panic!("release with a gate plan");
     };
     assert_eq!(planned.gate.anchor_max_net_lost, Some(6));
-    assert!(planned.gate.alpha_spending);
     assert_eq!(planned.gate.target_effect, Some(0.2));
+    assert!(
+        parse(&["release", "candidate-1", "--alpha-spending"]).is_err(),
+        "the promotion rule decides at its fixed level: no flag spends it"
+    );
     let Command::Release(canaried) = command(&["release", "c", "--canaries", "ab12"]) else {
         panic!("release with canaries");
     };

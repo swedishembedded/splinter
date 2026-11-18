@@ -35,7 +35,16 @@ GPU run must still show. Update this file in the same commit that finishes or ch
   rejection on a family retention limit, a mean regression limit and no gain on the new exam, the
   gate as the only thing that moves an alias, a ledger of everything each decision rested on,
   and the full retention matrix (the base as generation 0, every cell measured) with ACC, BWT,
-  forgetting, forward transfer and learning gain.
+  forgetting, forward transfer and learning gain. Since 2026-11-18 its release goes through the
+  one promotion rule (not exam-verified) like every release.
+  Open: `generation run` duplicates `splinter campaign`'s multi-generation driver. Retiring it
+  needs a campaign rollouts/examiner pair over a repository (rollouts through `practice`'s solve
+  stage, examination by the in-process panels) and a campaign gate stage that decides with
+  `promotion::decide_unexamined` when the examiner signs nothing; the campaign controller decides
+  only on signed verdicts today. Consumers to move then: `scripts/qualify/plan.toml` (the
+  generations and no-replay ablation steps), `docs/guides/repositories.md`, the
+  failure-targeted and learning-progress replay choices (which read the panel), the
+  `generations` integration specs.
 - **Qualification harness** (`make qualify/list|test|run`, `scripts/qualify/`): the roadmap's
   matrix and the six mandatory ablations as one recorded command; the plan is registered (its
   digest written before the first check); BLOCKED is never a pass; an unmeasured assertion

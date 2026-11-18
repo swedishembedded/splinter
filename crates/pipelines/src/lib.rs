@@ -122,6 +122,7 @@ pub mod plan;
 pub mod powered;
 pub mod practice;
 pub mod preflight;
+mod promotion;
 pub mod raft;
 pub mod rehearsal;
 pub mod release;

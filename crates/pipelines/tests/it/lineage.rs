@@ -147,6 +147,7 @@ fn write_release(ctx: &Context, candidate: &Candidate) -> ReleaseId {
                 Check::unmeasured(unmeasured),
                 Check::unmeasured(unmeasured),
             )),
+            promotion: None,
         },
         metrics: None,
         provenance: Provenance::default(),

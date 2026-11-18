@@ -183,6 +183,7 @@ fn manifest(
                 Check::unmeasured(why),
                 Check::unmeasured(why),
             )),
+            promotion: None,
         },
         metrics: None,
         terms: Terms::unknown("spec"),

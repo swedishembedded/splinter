@@ -277,6 +277,7 @@ pub fn learn(
     request: &LearnRequest,
     trainer: &dyn Trainer,
 ) -> Result<Learned, OrchestratorError> {
+    crate::release::decided_at_fixed_level(request.gate.alpha_spending)?;
     if request.plan && !request.kinds.is_empty() {
         return Err(OrchestratorError::Refused(
             "name the task kinds or ask for a plan, not both: one of them decides".into(),

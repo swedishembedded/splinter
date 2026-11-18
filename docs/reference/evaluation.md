@@ -14,13 +14,20 @@ anchor suite. How to run an evaluation is in the [evaluation guide](../guides/ev
 any release - and refuses a candidate that was not trained from it. Both
 are graded closed-book by each task's own verifiers (the judged kinds by
 `--judge REF`, a calibrated judge) on the same suites, and the candidate is released only if all four checks pass; each
-is printed with its numbers, and a check that could not be measured fails:
+is printed with its numbers, and a check that could not be measured fails.
+Improvement and retention carry the one promotion decision
+(`splinter_eval::promotion`): on the examiner's signed verdicts when the
+caller holds them (exam-verified), else on the gate's own suites, where no
+sealed slice applies (a release from `learn`, whose exam the learner made
+itself). That decision is recorded as `promotion` in the report and in the
+release manifest's gate (`rule`: `examined`, or `not_exam_verified` with
+`why`; `exam_verified`; typed `reasons`), and `release` prints it:
 
 | Check | Passes when |
 |---|---|
-| improvement | on the new datasets' held-out tasks - the records training held out, and the variants of the tasks it trained on - a one-sided paired sign test over the tasks only one model got right is significant at alpha 0.05, tasks about one family of source text counting once (a family is won or lost by which model got more of its tasks right); ties and tasks without a verdict for both are excluded and counted |
-| retention | on each earlier release's held-out tasks, the candidate's accuracy is at most 0.05 below the champion's (each release reported) |
-| anchor | on the anchor suite in force, the candidate's accuracy is at most 0.02 below the champion's; both arms are asked it under the default prompt, so it measures what the weights kept and not the persona prompt; the report gives the drop's bootstrap interval over the paired items beside it |
+| improvement | on the new datasets' held-out tasks - the records training held out, and the variants of the tasks it trained on - the promotion rule's dev gain: the paired change in the share of tasks right, over the tasks both models were graded on, has its two-sided 95% interval above 0, the interval resampling whole families of source text; and the candidate solved at least as many of the assigned tasks as the champion (a task it was not graded on counts as unsolved). The sign test that counts a family once is reported beside it and decides nothing |
+| retention | the promotion rule's retention: over every earlier release's held-out tasks and the anchor suite together, the lower bound of the one-sided 95% interval of the paired change, resampling families, is above -0.05. Each earlier release's drop is reported, and a suite that dropped more than 0.05 names the concepts queued for new tasks |
+| anchor | beside the promotion rule, a tighter floor on the anchor suite in force: the candidate's accuracy is at most 0.02 below the champion's; both arms are asked it under the default prompt, so it measures what the weights kept and not the persona prompt; the report gives the drop's bootstrap interval over the paired items beside it |
 | serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `--brain-bin`), with the base checkpoint the candidate was trained on as its `--checkpoint`, in a runtime directory of its own, starts - brain binds the adapter only to the base whose digest training recorded on it - reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and either the same text over its first nine tenths, runs of whitespace aside, or - worded otherwise, as a sampling server or another summation order will - the same meaning: embedded by Qwen3-Embedding, an answer must be nearer its own in-process answer than to the in-process answer of any other task, so the comparison cannot call everything alike); each task answered differently is reported with both answers |
 
 ### The improvement check
@@ -28,8 +35,8 @@ is printed with its numbers, and a check that could not be measured fails:
 The improvement check measures whether the candidate learned the facts it
 was trained on, on questions it was not trained on: the held-out records (a
 tenth of the new data drawn by seed and stratum, grown to eight families of source text where
-the data has them, within a quarter of it, so that a sign test over families
-can reach significance) are few, and questions about other facts cannot
+the data has them, within a quarter of it, so that an interval over families
+can show a gain) are few, and questions about other facts cannot
 improve for a campaign that teaches facts. So the suite is completed with the stored
 variants of the tasks the candidate's trained-on records were projected
 from (`learn` writes them; `tasks variants` writes them for any task
@@ -38,10 +45,10 @@ candidate learned and is not used. A variant whose wording the candidate
 trained on - the same question, a near duplicate, or its words inside a
 longer training prompt - is left out like any leaked held-out task. The
 gate prints how many variants were measured and how many were left out,
-by reason; the manifest records them. The decision rests on the two together by the family-level sign test, which stays the rule even
-though its p-value moves with one family when only a dozen are discordant; the report therefore
-also gives, for the whole suite and for each part, the difference in the share right with an
-interval that resamples families and the exact sign test over the tasks, to read it by.
+by reason; the manifest records them. The decision rests on the two together by the promotion
+rule's family-resampled interval; the report also gives the family-level sign test and, for the
+whole suite and for each part, the difference in the share right with its interval and the exact
+sign test over the tasks, to read it by.
 The decision rests on the two together,
 but the report keeps them apart: generalisation (the held-out records, text
 the candidate was not trained on) and recall under paraphrase (the variants
@@ -63,8 +70,8 @@ A candidate trained by `practice` is gated on a different suite than a
 candidate trained on documents: the champion and the candidate attempt, as
 agents in copies of the tree, the tasks of the exam that candidate's run set
 apart before any attempt (every earlier release is held to the exam of the run
-that made it), and the paired outcomes are counted by family in the same sign
-test. Attempts that read the hidden tests, and attempts the harness could not
+that made it), and the paired outcomes are resampled by family in the same promotion
+rule. Attempts that read the hidden tests, and attempts the harness could not
 carry out, are set aside and counted for each arm in the report; neither is
 in a denominator. The serve check asks the served candidate the same tasks
 through the same worker and requires its verdicts to agree with the

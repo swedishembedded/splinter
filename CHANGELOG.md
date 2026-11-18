@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (release and harness decisions on the promotion gate)
+- `release` (and every run that ends in one: `learn`, `practice`, `acquire`, `generation run`) decides improvement and retention by the one promotion rule (`splinter_eval::promotion`): the dev gain's two-sided 95% interval, resampling families, above 0, and the one-sided 95% bound of the change over every earlier release's suite and the anchor suite above -0.05. With the examiner's signed verdicts (`ReleaseRequest::examined`) the decision is exam-verified; without, it is recorded as not exam-verified, with why. The decision is kept as `promotion` in the release output, the JSON report and the release manifest's gate. The sign test and each earlier release's drop are reported and decide nothing; the assigned-task count, the anchor floor, the serve check and the canaries still refuse beside the rule.
+- `--alpha-spending` is removed from `release`, `learn` and `practice`, and a request that asks to spend the level is refused: the promotion rule decides at its fixed level.
+- `harness optimise` decides by the same rule (not exam-verified: its frozen task set is both its dev split and its retention suite), with a regressed family, `--min-paired` and, with `--gate evidence`, the evidence gate as refusals beside it. `--gate sign-test` and `--alpha` are replaced by `--gate promotion` (the default); a stored champion records its `promotion`.
+
 ### Changed (promotion gate evidence)
 - The promotion gate verifies the examiner's Ed25519 signatures with its public key and holds no signing key: `[examine] signing_key` is replaced by `public_key` (bench's `verdict.key.pub`), and a verdict under bench's retired shared-key MAC is rejected as unsigned. It reads `bench.examination/2` and the agent-protocol `bench.verdict/3` (candidate and predecessor identities, the sealed exams and their burn records).
 - `splinter campaign` examines on bench's agent protocol with `[examine] protocol = "agent"` and `[examine.agent]` (`profile`, `min_gain`, `serving_build`, optional `dev_set`, `sven_build`): bench runs each collection per model against its endpoint and pairs the jobs into signed verdicts.

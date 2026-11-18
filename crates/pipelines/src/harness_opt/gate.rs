@@ -7,44 +7,49 @@
 // change really helped, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! The promotion rule for a candidate harness: what the paired comparison of
-//! its verified attempts against the baseline's must show.
+//! The promotion rule for a candidate harness: the one promotion gate
+//! ([`splinter_eval::promotion`]) on the paired comparison of its verified
+//! attempts against the baseline's, and the refusals a search adds to it.
 //!
-//! A candidate is promoted only when no family of tasks got worse (a family
-//! the baseline won more often than the candidate is a regression, whatever
-//! the totals say) and the one-sided sign test over families - the release
-//! gate's own statistic - finds the candidate better at the stated level.
-//! Anything short of that is rejected (a regression) or inconclusive (no
-//! regression, but no evidence of improvement), and the dense score the
-//! search follows is only guidance: it never promotes.
+//! No examiner draws a sealed slice for a harness, so the gate's explicit
+//! rule for that case decides ([`promotion::decide_unexamined`]): the paired
+//! gain, its two-sided interval at the rule's level, resampling whole families, above zero,
+//! and retention, the lower bound of its one-sided 95% interval above
+//! `-RETENTION_MARGIN`. A harness change keeps the model's weights, so its one
+//! frozen task set is both its development split and its retention suite.
+//! The decision record says it is not exam-verified ([`NOT_EXAM_VERIFIED`]).
 //!
-//! The sign test is the default. [`PromotionTest::Evidence`] replaces it with
-//! the evidence gate: a noninferiority e-process over the paired tasks, each
-//! evaluation a round of a false evolution budget planned over the search
-//! ([`evidence_outcome`]); the family-regression veto applies to both.
+//! Beside the rule, and never instead of it, a candidate is refused when a
+//! family of tasks got worse (a family the baseline won more often than the
+//! candidate is a regression, whatever the totals say), when too few tasks
+//! have a verdict in both arms, and, under the evidence gate, when its
+//! noninferiority e-process did not cross: each evaluation is a round of one
+//! false evolution budget planned over the search ([`evidence_outcome`]),
+//! which bounds the false promotions of a search over many candidates.
+//! Anything short of a promotion is rejected (a regression, or retention
+//! not shown) or inconclusive, and the dense score the search follows is
+//! only guidance: it never promotes.
 
 use serde::Serialize;
 use splinter_eval::campaign::evidence::{Allocation, EProcess, EvidenceError, EvidenceGate};
+use splinter_eval::promotion::{self, Measured, Measurement, Pair, Promotion, Reason};
 
 use crate::compare::SetComparison;
+use crate::promotion::measurement;
 
-/// The test a candidate's evidence must pass.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum PromotionTest {
-    /// The one-sided sign test over families, its p-value below `alpha`.
-    SignTest {
-        /// The level.
-        alpha: f64,
-    },
-    /// The evidence gate over the paired tasks.
-    Evidence(EvidenceGate),
-}
+/// Why a harness promotion is not exam-verified: the record says so beside
+/// every decision.
+pub const NOT_EXAM_VERIFIED: &str = "a harness change keeps the model's weights: its one frozen \
+     task set is both its development split and its retention suite, and no examiner drew a \
+     sealed slice for it";
 
-/// What the evidence has to show.
+/// What the evidence has to show beside the promotion rule.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PromotionRule {
-    /// The test.
-    pub test: PromotionTest,
+    /// The evidence gate over the paired tasks, when the search holds its
+    /// candidates to a false evolution budget; `None`: the promotion rule
+    /// alone.
+    pub evidence: Option<EvidenceGate>,
     /// The fewest tasks with a verdict in both arms; fewer is inconclusive.
     pub min_paired: usize,
 }
@@ -125,9 +130,13 @@ pub struct Evidence {
     pub regressed_families: Vec<String>,
     /// Families the candidate won more of than the baseline.
     pub improved_families: usize,
-    /// The one-sided sign test's p-value over families.
+    /// The one-sided sign test's p-value over families: reported, it
+    /// decides nothing.
     pub p_value: f64,
-    /// What the evidence gate found; only under [`PromotionTest::Evidence`].
+    /// The paired gain in the share of tasks right, with its intervals
+    /// resampling whole families: what the promotion rule decides on.
+    pub measurement: Measurement,
+    /// What the evidence gate found; only under [`PromotionRule::evidence`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evidence: Option<EvidenceOutcome>,
 }
@@ -148,6 +157,14 @@ impl Evidence {
                 .collect(),
             improved_families: comparison.clusters.wins,
             p_value: comparison.sign_test.p_value,
+            measurement: measurement(
+                &comparison
+                    .families
+                    .iter()
+                    .map(|f| (f.candidate_right as f64 - f.baseline_right as f64, f.paired))
+                    .collect::<Vec<_>>(),
+                comparison.interval_seed,
+            ),
             evidence: None,
         }
     }
@@ -168,164 +185,260 @@ impl Evidence {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {
-    /// Verified improvement with no regression.
+    /// Promoted by the promotion rule, and refused by nothing beside it.
     Promote,
-    /// A family got worse.
+    /// A family got worse, or retention was not shown.
     Reject,
-    /// No regression, no evidence of improvement.
+    /// Nothing got worse, but no gain was shown.
     Inconclusive,
 }
 
-/// A verdict and why.
+/// What a search refuses a candidate for beside the promotion rule.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "refusal", rename_all = "snake_case")]
+pub enum Refusal {
+    /// Families the baseline won more of than the candidate.
+    RegressedFamilies {
+        /// Their names.
+        families: Vec<String>,
+    },
+    /// Too few tasks with a verdict in both arms.
+    TooFewPaired {
+        /// Tasks with one.
+        paired: usize,
+        /// The fewest asked for.
+        needed: usize,
+    },
+    /// The evidence gate's e-process did not cross its threshold.
+    EvidenceShort {
+        /// The e-value at the stop.
+        e_value: f64,
+        /// The threshold, `1 / alpha`.
+        threshold: f64,
+        /// Paired tasks it took.
+        observed: usize,
+    },
+    /// The evidence gate was asked for and not computed.
+    EvidenceMissing,
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RegressedFamilies { families } => write!(f, "regressed: {}", families.join(", ")),
+            Self::TooFewPaired { paired, needed } => write!(
+                f,
+                "{paired} tasks with a verdict in both arms, at least {needed} needed"
+            ),
+            Self::EvidenceShort {
+                e_value,
+                threshold,
+                observed,
+            } => write!(
+                f,
+                "e-value {e_value:.3} stayed below {threshold:.3} over {observed} paired tasks"
+            ),
+            Self::EvidenceMissing => {
+                write!(f, "the evidence gate was not computed for this candidate")
+            }
+        }
+    }
+}
+
+/// A verdict, why, and what it was decided by.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Decision {
     /// The verdict.
     pub verdict: Verdict,
     /// Why, in a sentence.
     pub reason: String,
+    /// The promotion rule's decision, labelled not exam-verified.
+    pub promotion: Promotion,
+    /// What the search refused the candidate for beside it.
+    pub refusals: Vec<Refusal>,
 }
 
-/// Decides on `evidence` under `rule`.
+/// Decides on `evidence` about `pair` (the candidate harness against the
+/// baseline) under `rule`.
 #[must_use]
-pub fn decide(evidence: &Evidence, rule: &PromotionRule) -> Decision {
-    let decision = |verdict, reason: String| Decision { verdict, reason };
+pub fn decide(evidence: &Evidence, rule: &PromotionRule, pair: &Pair) -> Decision {
+    let promotion = promotion::decide_unexamined(
+        pair,
+        &Measured {
+            dev: evidence.measurement.clone(),
+            retention: evidence.measurement.clone(),
+        },
+        NOT_EXAM_VERIFIED,
+    );
+    let mut refusals = Vec::new();
     if !evidence.regressed_families.is_empty() {
-        return decision(
-            Verdict::Reject,
-            format!("regressed: {}", evidence.regressed_families.join(", ")),
-        );
+        refusals.push(Refusal::RegressedFamilies {
+            families: evidence.regressed_families.clone(),
+        });
     }
     if evidence.paired < rule.min_paired {
-        return decision(
-            Verdict::Inconclusive,
-            format!(
-                "{} tasks with a verdict in both arms, at least {} needed",
-                evidence.paired, rule.min_paired
-            ),
-        );
+        refusals.push(Refusal::TooFewPaired {
+            paired: evidence.paired,
+            needed: rule.min_paired,
+        });
     }
-    let alpha = match rule.test {
-        PromotionTest::SignTest { alpha } => alpha,
-        PromotionTest::Evidence(_) => {
-            return match &evidence.evidence {
-                Some(found) if found.crossed_at.is_some() => decision(
-                    Verdict::Promote,
-                    format!(
-                        "no family regressed, e-value {:.3} reached 1/{:.4} after {} paired tasks",
-                        found.e_value, found.allocation.alpha, found.observed
-                    ),
-                ),
-                Some(found) => decision(
-                    Verdict::Inconclusive,
-                    format!(
-                        "no family regressed, but e-value {:.3} stayed below 1/{:.4} over {} paired tasks",
-                        found.e_value, found.allocation.alpha, found.observed
-                    ),
-                ),
-                None => decision(
-                    Verdict::Inconclusive,
-                    "the evidence gate was not computed for this candidate".to_string(),
-                ),
-            };
+    if rule.evidence.is_some() {
+        match &evidence.evidence {
+            Some(found) if found.crossed_at.is_some() => {}
+            Some(found) => refusals.push(Refusal::EvidenceShort {
+                e_value: found.e_value,
+                threshold: found.threshold,
+                observed: found.observed,
+            }),
+            None => refusals.push(Refusal::EvidenceMissing),
         }
-    };
-    if evidence.improved_families > 0 && evidence.p_value < alpha {
-        return decision(
-            Verdict::Promote,
-            format!(
-                "{} families improved, none regressed, sign test p = {:.4} < {alpha}",
-                evidence.improved_families, evidence.p_value
-            ),
-        );
     }
-    decision(
-        Verdict::Inconclusive,
-        format!(
-            "no family regressed, but sign test p = {:.4} is not below {alpha}",
-            evidence.p_value
-        ),
-    )
+    let regressed = refusals
+        .iter()
+        .any(|r| matches!(r, Refusal::RegressedFamilies { .. }))
+        || promotion
+            .reasons
+            .iter()
+            .any(|r| matches!(r, Reason::Inferior { .. }));
+    let verdict = if promotion.promoted && refusals.is_empty() {
+        Verdict::Promote
+    } else if regressed {
+        Verdict::Reject
+    } else {
+        Verdict::Inconclusive
+    };
+    let reason = match verdict {
+        Verdict::Promote => {
+            let m = &evidence.measurement;
+            let (low, high) = m.interval.unwrap_or_default();
+            format!(
+                "no family regressed, the gain {:+.3} has its two-sided interval [{low:+.3}, {high:+.3}] \
+                 above 0 over {} paired tasks (not exam-verified)",
+                m.gain.unwrap_or_default(),
+                m.items
+            )
+        }
+        Verdict::Reject | Verdict::Inconclusive => refusals
+            .iter()
+            .map(ToString::to_string)
+            .chain(promotion.reasons.iter().map(ToString::to_string))
+            .collect::<Vec<_>>()
+            .join("; "),
+    };
+    Decision {
+        verdict,
+        reason,
+        promotion,
+        refusals,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use splinter_eval::campaign::evidence::Budget;
+    use splinter_eval::promotion::Rule;
 
     const RULE: PromotionRule = PromotionRule {
-        test: PromotionTest::SignTest { alpha: 0.05 },
+        evidence: None,
         min_paired: 4,
     };
 
-    fn evidence(regressed: &[&str], improved: usize, p_value: f64, paired: usize) -> Evidence {
+    fn pair() -> Pair {
+        Pair {
+            candidate: Some("candidate".into()),
+            predecessor: Some("baseline".into()),
+        }
+    }
+
+    /// Evidence over `paired` tasks whose gain has the interval `interval`
+    /// (and its low end as the one-sided bound).
+    fn evidence(regressed: &[&str], interval: Option<(f64, f64)>, paired: usize) -> Evidence {
         Evidence {
             paired,
             candidate_right: paired / 2,
             baseline_right: paired / 2,
             regressed_families: regressed.iter().map(ToString::to_string).collect(),
-            improved_families: improved,
-            p_value,
+            improved_families: 0,
+            p_value: 1.0,
+            measurement: Measurement {
+                items: paired as u64,
+                gain: interval.map(|(low, high)| (low + high) / 2.0),
+                interval,
+                one_sided_lower: interval.map(|(low, _)| low),
+            },
             evidence: None,
         }
     }
 
     #[test]
-    fn an_improvement_with_no_regression_and_a_small_p_value_is_promoted() {
-        let d = decide(&evidence(&[], 5, 0.03, 10), &RULE);
+    fn a_gain_whose_interval_is_above_zero_with_no_regression_is_promoted_not_exam_verified() {
+        let d = decide(&evidence(&[], Some((0.1, 0.4)), 10), &RULE, &pair());
         assert_eq!(d.verdict, Verdict::Promote, "{}", d.reason);
+        assert!(d.promotion.promoted && !d.promotion.exam_verified);
+        assert_eq!(
+            d.promotion.rule,
+            Rule::NotExamVerified {
+                why: NOT_EXAM_VERIFIED.into()
+            }
+        );
+        assert!(d.reason.contains("not exam-verified"), "{}", d.reason);
     }
 
     #[test]
-    fn one_regressed_family_rejects_whatever_the_totals_say() {
-        let d = decide(&evidence(&["parsing"], 9, 0.001, 20), &RULE);
+    fn one_regressed_family_rejects_whatever_the_gain_says() {
+        let d = decide(
+            &evidence(&["parsing"], Some((0.2, 0.6)), 20),
+            &RULE,
+            &pair(),
+        );
         assert_eq!(d.verdict, Verdict::Reject);
+        assert!(d.promotion.promoted, "the rule alone would promote");
         assert!(d.reason.contains("parsing"));
     }
 
     #[test]
-    fn too_little_evidence_or_a_large_p_value_is_inconclusive_never_a_promotion() {
+    fn a_gain_not_shown_is_inconclusive_and_a_loss_is_rejected_never_a_promotion() {
+        let flat = decide(&evidence(&[], Some((-0.02, 0.2)), 10), &RULE, &pair());
+        assert_eq!(flat.verdict, Verdict::Inconclusive, "{}", flat.reason);
+        assert!(flat.reason.contains("no dev gain"), "{}", flat.reason);
+        let few = decide(&evidence(&[], Some((0.1, 0.4)), 3), &RULE, &pair());
+        assert_eq!(few.verdict, Verdict::Inconclusive);
+        let one_family = decide(&evidence(&[], None, 10), &RULE, &pair());
+        assert_eq!(one_family.verdict, Verdict::Inconclusive);
+        let worse = decide(&evidence(&[], Some((-0.4, -0.1)), 10), &RULE, &pair());
         assert_eq!(
-            decide(&evidence(&[], 2, 0.01, 3), &RULE).verdict,
-            Verdict::Inconclusive
-        );
-        assert_eq!(
-            decide(&evidence(&[], 3, 0.2, 10), &RULE).verdict,
-            Verdict::Inconclusive
-        );
-        assert_eq!(
-            decide(&evidence(&[], 0, 1.0, 10), &RULE).verdict,
-            Verdict::Inconclusive
+            worse.verdict,
+            Verdict::Reject,
+            "retention not shown rejects: {}",
+            worse.reason
         );
     }
 
     #[test]
-    fn under_the_evidence_gate_only_a_crossing_promotes_and_a_regression_still_rejects() {
+    fn under_the_evidence_gate_a_crossing_is_also_needed_and_a_regression_still_rejects() {
         let gate = EvidenceGate::new(0.02, 0.3, 0.01).unwrap();
         let rule = PromotionRule {
-            test: PromotionTest::Evidence(gate),
+            evidence: Some(gate),
             min_paired: 4,
         };
         let allocation = Budget::start(&gate).allocate(&gate, 4);
         let wins = [1.0; 12];
         let ties = [0.0; 12];
         let with = |found: EvidenceOutcome, regressed: &[&str]| {
-            let mut e = evidence(regressed, 0, 1.0, 12);
+            let mut e = evidence(regressed, Some((0.2, 0.6)), 12);
             e.evidence = Some(found);
-            decide(&e, &rule)
+            decide(&e, &rule, &pair())
         };
         let crossed = evidence_outcome(&gate, &allocation, &wins, 1.0).unwrap();
         assert!(crossed.crossed_at.is_some());
-        assert_eq!(
-            with(crossed.clone(), &[]).verdict,
-            Verdict::Promote,
-            "the p-value is not read"
-        );
+        assert_eq!(with(crossed.clone(), &[]).verdict, Verdict::Promote);
         assert_eq!(with(crossed, &["parsing"]).verdict, Verdict::Reject);
         let flat = evidence_outcome(&gate, &allocation, &ties, 1.0).unwrap();
         assert_eq!((flat.crossed_at, flat.observed), (None, 12));
         assert_eq!(with(flat, &[]).verdict, Verdict::Inconclusive);
         assert_eq!(
-            decide(&evidence(&[], 5, 0.001, 12), &rule).verdict,
+            decide(&evidence(&[], Some((0.2, 0.6)), 12), &rule, &pair()).verdict,
             Verdict::Inconclusive,
             "no e-process, no promotion"
         );
@@ -343,7 +456,7 @@ mod tests {
 
     #[test]
     fn utility_is_the_candidates_share_and_absent_without_pairs() {
-        assert_eq!(evidence(&[], 0, 1.0, 0).utility(), 0.0);
-        assert!((evidence(&[], 0, 1.0, 10).utility() - 0.5).abs() < 1e-12);
+        assert_eq!(evidence(&[], None, 0).utility(), 0.0);
+        assert!((evidence(&[], None, 10).utility() - 0.5).abs() < 1e-12);
     }
 }

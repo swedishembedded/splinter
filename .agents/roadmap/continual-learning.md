@@ -20,8 +20,16 @@ forgotten or rolled back. sven records and retrieves; brain computes.
 
 - Evidence: verdict strength ordering, claim rulings (admitted with supersession,
   reinforced, forgotten, refused), the agent's words never counting as evidence.
-- Gate: paired one-sided sign test, per-release retention bound, frozen anchor bound, serve
-  check; consolidation gate that asks for no gain but loses nothing retained.
+- Gate: the release gate's improvement and retention are decided by the one promotion rule
+  (`splinter_eval::promotion`, 2026-11-18): dev gain (two-sided 95% family-resampled interval
+  above 0) and retention (one-sided 95% bound above -0.05 over every earlier release's suite and
+  the anchor suite), on the examiner's signed verdicts when the caller holds them, else not
+  exam-verified (`ReleaseRequest::examined`, `promotion` in the release manifest). Refusals beside
+  it: every assigned task counted, frozen anchor floor, serve check, canaries. The sign test and
+  each release's drop are reported only; `--alpha-spending` is gone (the rule decides at its fixed
+  level). `harness optimise` decides on the same rule (not exam-verified), with the family veto,
+  `--min-paired` and the optional evidence gate as refusals. Consolidation gate that asks for no
+  gain but loses nothing retained.
 - Generations: `absorb` retrains an adapter on the live claims, `consolidate` takes them into
   the weights, `plan_rebuild` is the only honest forgetting for a consolidated claim.
 - Curriculum: mastery per concept per release, queue, quotas.

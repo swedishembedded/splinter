@@ -55,6 +55,7 @@ pub(crate) mod agentic;
 pub mod anchor;
 mod canary;
 pub mod continual;
+mod decision;
 pub mod exams;
 mod gating;
 pub mod leakage;
@@ -65,6 +66,7 @@ pub mod probe;
 pub mod serve;
 mod statistics;
 
+pub use decision::{ExaminerVerdicts, NOT_EXAM_VERIFIED};
 pub(crate) use gating::{grade_arm, Asked, Graded};
 use gating::{run_gate, GateRun};
 pub use listing::{list, rollback, ReleaseLine, ReleaseList, RolledBack};
@@ -89,6 +91,7 @@ use crate::train::{load_candidate, Candidate};
 use splinter_core::model_ref::{is_alias_name, ModelRef, POLICY_DEFAULT};
 use splinter_core::training::{TrainingCurve, TrainingSummary};
 use splinter_eval::gate::{GateConfig, GateReport};
+use splinter_eval::promotion::{Pair, Promotion};
 use splinter_orchestrator::config::Config;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -119,6 +122,12 @@ pub struct ReleaseRequest {
     /// canary check.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub canaries: Vec<splinter_core::experience::Task>,
+    /// The examiner's signed verdicts on the candidate against the champion
+    /// it would replace. With them the promotion is decided on the verdicts
+    /// and is exam-verified; without, it is decided on the gate's own suites
+    /// and recorded as not exam-verified ([`NOT_EXAM_VERIFIED`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub examined: Option<ExaminerVerdicts>,
 }
 
 impl ReleaseRequest {
@@ -132,6 +141,7 @@ impl ReleaseRequest {
             distribution: Distribution::default(),
             interval_seed: None,
             canaries: Vec::new(),
+            examined: None,
         }
     }
 }
@@ -148,6 +158,10 @@ pub struct Released {
     pub champion: Option<ReleaseId>,
     /// The gate, with every number.
     pub gate: GateReport,
+    /// The promotion decision the gate's improvement and retention checks
+    /// carry: which rule decided, whether it is exam-verified, and its typed
+    /// reasons. `None` only for a release made before it was recorded.
+    pub promotion: Option<Promotion>,
     /// The concepts the candidate forgot on a retention suite that failed,
     /// queued for new tasks.
     pub requeued: Vec<Concept>,
@@ -203,6 +217,21 @@ pub fn release_recorded(
     release(ctx, &seeded, &run.cancel_token())
 }
 
+/// Refuses a gate asked to spend its level across the lineage: the promotion
+/// rule decides at its fixed level (the two-sided interval of the dev
+/// gain above 0), and the sign test the level was spent on is reported, not
+/// decided on. A run that ends in a release asks this before it trains.
+pub(crate) fn decided_at_fixed_level(alpha_spending: bool) -> Result<(), OrchestratorError> {
+    if alpha_spending {
+        return Err(OrchestratorError::Refused(
+            "the release gate cannot spend its level across the lineage: the promotion rule \
+             decides at its fixed level, a two-sided 95% interval of the dev gain above 0"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Runs the gate on `request.candidate` and releases it if it passes.
 pub fn release(
     ctx: &Context,
@@ -236,6 +265,7 @@ pub fn release(
             request.alias
         )));
     }
+    decided_at_fixed_level(request.gate.alpha_spending)?;
     let config = ctx.config();
     if candidate.base != config.policy_base {
         return Err(OrchestratorError::Refused(format!(
@@ -268,7 +298,11 @@ pub fn release(
         );
         seed
     });
-    let gate = run_gate(
+    let pair = Pair {
+        candidate: Some(candidate.candidate.clone()),
+        predecessor: champion_id.as_ref().map(ToString::to_string),
+    };
+    let (gate, promotion) = run_gate(
         ctx,
         &candidate,
         champion.as_ref(),
@@ -277,6 +311,8 @@ pub fn release(
             config: &request.gate,
             canaries: &request.canaries,
             interval_seed,
+            pair: &pair,
+            examined: request.examined.as_ref(),
         },
         cancel,
     )?;
@@ -286,16 +322,21 @@ pub fn release(
         alias: request.alias.clone(),
         champion: champion_id.clone(),
         gate,
+        promotion: Some(promotion.clone()),
         requeued,
         warnings: candidate.warnings(),
         release: None,
         adapter: None,
     };
-    if !released.gate.passed {
+    // The promotion's own rejections are in the improvement and retention
+    // checks; the report passes only when it promotes and every other check
+    // holds.
+    if !(released.gate.passed && promotion.promoted) {
         return Ok(released);
     }
     let gate = ReleaseGate::Llm {
         report: Box::new(released.gate.clone()),
+        promotion: Some(Box::new(promotion)),
     };
     let manifest = manifest(ctx, &candidate, gate, terms, request.distribution)?;
     // The release is made official first, with its place in the lineage, in
@@ -358,6 +399,7 @@ fn resume(
         alias: request.alias.clone(),
         champion: made.manifest.parent.clone(),
         gate: gate.clone(),
+        promotion: made.manifest.gate.promotion().cloned(),
         requeued: Vec::new(),
         warnings: made
             .manifest

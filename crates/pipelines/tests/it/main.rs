@@ -75,6 +75,7 @@ mod release_canary;
 mod release_matrix;
 mod release_predictive;
 mod release_terms;
+mod release_variants;
 mod release_workspace;
 mod rerank;
 mod reserve;

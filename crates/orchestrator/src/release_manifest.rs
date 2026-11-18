@@ -31,6 +31,7 @@ use splinter_eval::claim_gate::ClaimGate;
 use splinter_eval::gate::GateReport;
 use splinter_eval::metric_gate::Evidence;
 use splinter_eval::predictive_gate::PredictiveReport;
+use splinter_eval::promotion::Promotion;
 use splinter_eval::timeline_metrics::CalibrationBasis;
 
 use crate::generation::GenerationMark;
@@ -128,6 +129,12 @@ pub enum ReleaseGate {
     Llm {
         /// The report, boxed so the variants stay small.
         report: Box<GateReport>,
+        /// The promotion decision its improvement and retention checks
+        /// carry: the rule that decided (on the examiner's signed verdicts, or
+        /// not exam-verified, with why), with its typed reasons. `None` in a
+        /// release made before the decision was recorded.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        promotion: Option<Box<Promotion>>,
     },
     /// The gate over the facts a person taught, decided on counts.
     Claims {
@@ -148,7 +155,17 @@ impl ReleaseGate {
     #[must_use]
     pub fn llm(&self) -> Option<&GateReport> {
         match self {
-            Self::Llm { report } => Some(report.as_ref()),
+            Self::Llm { report, .. } => Some(report.as_ref()),
+            Self::Predictive { .. } | Self::Claims { .. } => None,
+        }
+    }
+
+    /// The promotion decision of the graded-answer gate, when that is the
+    /// gate the release passed and the decision was recorded.
+    #[must_use]
+    pub fn promotion(&self) -> Option<&Promotion> {
+        match self {
+            Self::Llm { promotion, .. } => promotion.as_deref(),
             Self::Predictive { .. } | Self::Claims { .. } => None,
         }
     }
@@ -365,6 +382,7 @@ impl ManifestV3 {
             training: self.training,
             gate: ReleaseGate::Llm {
                 report: Box::new(self.gate),
+                promotion: None,
             },
             metrics: None,
             terms: self.terms,

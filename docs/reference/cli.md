@@ -316,8 +316,7 @@ Options:
 - `--exam-resamples <N>`: Answers per task per arm in the reserved exam: the greedy one and the rest sampled [default: 3]
 - `--exam-seed <N>`: The seed the exam's families are reserved with: the same seed over the same sources reserves the same families, and exams are comparable across runs only when they share one [default: drawn and printed]
 - `--interval-seed <N>`: The seed the exam's bootstrap intervals are resampled with [default: drawn and printed]
-- `--alpha-spending`: Spend the significance level across the releases of a lineage by a fixed schedule, so that a long run of candidates no better than their champions releases one with probability below the level.
-- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a miss on an exam too small to see it is reported inconclusive, not as a failure.
+- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a gain not shown on an exam too small to see it is reported inconclusive, not as a failure (either way nothing is released)
 - `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
 - `--steps <N>`: The step budget of the training: the most steps it may take [default: 3 passes over the examples, within bounds]
 - `--rank <N>`: LoRA rank of the adapter [default: 8]
@@ -378,8 +377,7 @@ Options:
 - `--lp-window <N>`: Releases in each of the two windows learning progress compares. Default: `2`.
 - `--lp-novelty <X>`: The novelty bonus of a family nothing has attempted, in pass-rate units; it shrinks with attempts. Default: `0.1`.
 - `--lp-explore <X>`: The share of the draw that is uniform over families, in [0, 1]: no family gets less than this share divided by the number of families. Default: `0.1`.
-- `--alpha-spending`: Spend the significance level across the releases of a lineage by a fixed schedule, so that a long run of candidates no better than their champions releases one with probability below the level.
-- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a miss on an exam too small to see it is reported inconclusive, not as a failure.
+- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a gain not shown on an exam too small to see it is reported inconclusive, not as a failure (either way nothing is released)
 - `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
 - `--steps <N>`: The step budget of the training: the most steps it may take.
 - `--rank <N>`: LoRA rank of the adapter [default: 8]
@@ -860,8 +858,7 @@ Options:
 - `--lp-window <N>`: Releases in each of the two windows learning progress compares. Default: `2`.
 - `--lp-novelty <X>`: The novelty bonus of a family nothing has attempted, in pass-rate units; it shrinks with attempts. Default: `0.1`.
 - `--lp-explore <X>`: The share of the draw that is uniform over families, in [0, 1]: no family gets less than this share divided by the number of families. Default: `0.1`.
-- `--alpha-spending`: Spend the significance level across the releases of a lineage by a fixed schedule, so that a long run of candidates no better than their champions releases one with probability below the level.
-- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a miss on an exam too small to see it is reported inconclusive, not as a failure.
+- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a gain not shown on an exam too small to see it is reported inconclusive, not as a failure (either way nothing is released)
 - `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
 - `--steps <N>`: The step budget of the training: the most steps it may take.
 - `--rank <N>`: LoRA rank of the adapter [default: 8]
@@ -1419,7 +1416,7 @@ Subcommands:
 
 #### splinter harness optimise
 
-Search a space of variants of a baseline harness for one that verifiably beats it: each candidate is run on the task set through sven, its attempts verified by the tasks' own verifiers and compared with the baseline's (a family counted once). A candidate is promoted only when no family got worse and the sign test over families finds it better (or, with `--gate evidence`, the evidence gate's e-process crosses its level); the promotion moves the `harness/champion` pointer
+Search a space of variants of a baseline harness for one that verifiably beats it: each candidate is run on the task set through sven, its attempts verified by the tasks' own verifiers and compared with the baseline's (a family counted once). A candidate is promoted only when the promotion rule finds a gain (its two-sided interval resampling families above zero, recorded as not exam-verified), no family got worse and, with `--gate evidence`, the evidence gate's e-process crosses its level too; the promotion moves the `harness/champion` pointer
 
 ```text
 splinter harness optimise [OPTIONS] --baseline <FILE> --evaluations <N> --search-seed <N> <TASKSET-ID>
@@ -1442,8 +1439,7 @@ Options:
 - `--strategy <STRATEGY>`: How candidates are searched. Default: `annealing`. Values: `best-of-n`, `annealing`.
 - `--evaluations <N>` (required): Harnesses to evaluate, the baseline's replicate (the first) included.
 - `--attempts <K>`: Solves per task and harness. Default: `1`.
-- `--gate <GATE>`: The test a candidate must pass to be promoted. Default: `sign-test`. Values: `sign-test`, `evidence`.
-- `--alpha <P>`: A candidate's sign test must have a p-value below this to be promoted. Default: `0.05`.
+- `--gate <GATE>`: What a candidate must pass to be promoted. Default: `promotion`. Values: `promotion`, `evidence`.
 - `--gate-eps <EPS>`: With `--gate evidence`: the tolerated loss, on the paired difference scale [-1, 1]; a candidate worse by this much is a false evolution.
 - `--gate-q <Q>`: With `--gate evidence`: the false evolution rate budget over the search's evaluations.
 - `--gate-beta <BETA>`: With `--gate evidence`: the overlap correction, the optimism allowed on a task an earlier evaluation was graded on (every task after the first evaluation)
@@ -1913,8 +1909,7 @@ Options:
 - `--unrestricted`: Release for distribution and commercial use: refused unless the terms of everything the candidate was made from allow both. Without it the release is restricted: it records the terms and stays local.
 - `--interval-seed <N>`: The seed the gate's bootstrap intervals are resampled with (drawn and printed when not given; the same outcomes and seed give the same intervals)
 - `--canaries <TASKSET-ID>`: A task set of canaries (`tasks canaries`) the candidate attempts beside the exam: a pass on any one refuses it, whatever else it passed.
-- `--alpha-spending`: Spend the significance level across the releases of a lineage by a fixed schedule, so that a long run of candidates no better than their champions releases one with probability below the level.
-- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a miss on an exam too small to see it is reported inconclusive, not as a failure.
+- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a gain not shown on an exam too small to see it is reported inconclusive, not as a failure (either way nothing is released)
 - `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
 
 Subcommands:

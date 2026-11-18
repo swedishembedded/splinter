@@ -12,8 +12,10 @@
 //! attempts are verified by the tasks' own verifiers, and it is compared with
 //! the baseline harness's attempts by the paired family-clustered comparison
 //! the release gate uses. Only a candidate the promotion rule
-//! ([`gate::decide`]) accepts - a verified improvement with no regressed
-//! family - is promoted; the search itself is sven's, best-of-N or simulated
+//! ([`gate::decide`], the one promotion gate's rule for a decision no sealed
+//! slice applies to, recorded as not exam-verified) accepts - a gain whose
+//! family-clustered interval at the rule's level is above zero, with no regressed family - is
+//! promoted; the search itself is sven's, best-of-N or simulated
 //! annealing, and follows the dense share of tasks the candidate got right,
 //! which guides and never decides.
 //!
@@ -25,7 +27,7 @@
 //! baseline's own arm: a replicate that shows how much two identical runs
 //! differ, and the search's starting point.
 //!
-//! Under [`gate::PromotionTest::Evidence`] every evaluation is a round of one
+//! Under [`gate::PromotionRule::evidence`] every evaluation is a round of one
 //! false evolution budget planned over `evaluations`: its level is taken from
 //! the budget when it starts, before its arm runs, and its paired tasks are
 //! read by the e-process in an order drawn from the search seed. Every task
@@ -59,12 +61,10 @@ use splinter_store::tasks::TaskSetId;
 use crate::compare::compare;
 use crate::solving::{harness_protocol, solve_tasks, SamplingChoice, SolveRequest};
 use crate::verify::{verify_set, Grading};
-use gate::{
-    decide, differences, evidence_outcome, Decision, Evidence, PromotionRule, PromotionTest,
-    Verdict,
-};
+use gate::{decide, differences, evidence_outcome, Decision, Evidence, PromotionRule, Verdict};
 use llm::{Feedback, LlmProposer, ProposalStats};
 use space::{MutationProposer, MutationSpace};
+use splinter_eval::promotion::Pair;
 
 /// Mixed into the search seed so the order the e-process reads an
 /// evaluation's tasks in is a stream of its own.
@@ -181,6 +181,7 @@ struct Champion<'a> {
     candidate_set: &'a SetId,
     evidence: &'a Evidence,
     reason: &'a str,
+    promotion: &'a splinter_eval::promotion::Promotion,
 }
 
 fn document_digest(document: &str) -> Digest {
@@ -247,7 +248,7 @@ impl HarnessEnvironment<'_, '_> {
     /// Under the evidence gate, the level of the evaluation about to start,
     /// taken from the budget before its arm runs.
     fn reserve(&self) -> Result<Option<Allocation>, SearchError> {
-        let PromotionTest::Evidence(gate) = self.request.rule.test else {
+        let Some(gate) = self.request.rule.evidence else {
             return Ok(None);
         };
         let horizon = u32::try_from(self.request.evaluations).unwrap_or(u32::MAX);
@@ -283,7 +284,7 @@ impl CandidateEnvironment<String> for HarnessEnvironment<'_, '_> {
             .map_err(|_| SearchError::environment("the evaluation thread panicked"))?
             .map_err(SearchError::environment)?;
         let mut evidence = Evidence::of(&comparison);
-        if let (PromotionTest::Evidence(gate), Some(allocation)) = (self.request.rule.test, round) {
+        if let (Some(gate), Some(allocation)) = (self.request.rule.evidence, round) {
             let mut order = differences(&comparison);
             SplitMix64::new(
                 self.request.search_seed
@@ -297,7 +298,11 @@ impl CandidateEnvironment<String> for HarnessEnvironment<'_, '_> {
                     .map_err(|e| SearchError::environment(e.to_string()))?,
             );
         }
-        let decision = decide(&evidence, &self.request.rule);
+        let pair = Pair {
+            candidate: Some(document_digest(candidate).to_string()),
+            predecessor: Some(document_digest(self.request.baseline).to_string()),
+        };
+        let decision = decide(&evidence, &self.request.rule, &pair);
         if decision.verdict == Verdict::Promote {
             if let Some(budget) = self.lock_budget()?.as_mut() {
                 budget.accept();
@@ -365,7 +370,7 @@ pub fn optimise(
     if matches!(request.proposer, ProposerChoice::Mutation) && request.space.is_none() {
         return refuse("the mutation proposer needs a mutation space");
     }
-    if let PromotionTest::Evidence(gate) = request.rule.test {
+    if let Some(gate) = request.rule.evidence {
         if let Err(e) = gate.validate() {
             return refuse(&e.to_string());
         }
@@ -464,6 +469,7 @@ pub fn optimise(
                 candidate_set: &line.experience_set,
                 evidence: &line.evidence,
                 reason: &line.decision.reason,
+                promotion: &line.decision.promotion,
             };
             let document = ctx.workspace().put_document(CHAMPION, &champion)?;
             let previous = ctx

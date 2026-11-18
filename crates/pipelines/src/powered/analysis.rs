@@ -435,31 +435,61 @@ pub(crate) fn interval_of(
     resamples: usize,
     seed: Seed,
 ) -> Option<Interval> {
-    if families.len() < 2 {
-        return None;
-    }
-    let (total, tasks) = families
-        .iter()
-        .fold((0.0, 0), |(s, n), (fs, fnn)| (s + fs, n + fnn));
-    let mut rng = splinter_core::rng::SplitMix64::new(seed.value());
-    let mut means: Vec<f64> = (0..resamples)
-        .map(|_| {
-            let (sum, count) = (0..families.len()).fold((0.0, 0usize), |(s, n), _| {
-                let (fs, fnn) = families[rng.below(families.len())];
-                (s + fs, n + fnn)
-            });
-            sum / count as f64
-        })
-        .collect();
-    means.sort_by(f64::total_cmp);
-    let at = |share: f64| {
-        means[((share * (means.len() - 1) as f64).round() as usize).min(means.len() - 1)]
-    };
+    let resampled = Resampled::of(&families, resamples, seed)?;
     Some(Interval {
-        mean: total / tasks as f64,
-        low: at((1.0 - LEVEL) / 2.0),
-        high: at(1.0 - (1.0 - LEVEL) / 2.0),
+        mean: resampled.mean,
+        low: resampled.quantile((1.0 - LEVEL) / 2.0),
+        high: resampled.quantile(1.0 - (1.0 - LEVEL) / 2.0),
     })
+}
+
+/// The means of whole-family resamples, sorted, beside the observed mean:
+/// what a family-clustered percentile bound is read from.
+pub(crate) struct Resampled {
+    /// The mean difference over every task of every family.
+    pub(crate) mean: f64,
+    means: Vec<f64>,
+}
+
+impl Resampled {
+    /// `resamples` draws of as many families as there are, with replacement,
+    /// from the generator that starts at `seed`; `None` with fewer than two
+    /// families (no interval) or no task.
+    pub(crate) fn of(families: &[(f64, usize)], resamples: usize, seed: Seed) -> Option<Self> {
+        let (total, tasks) = families
+            .iter()
+            .fold((0.0, 0), |(s, n), (fs, fnn)| (s + fs, n + fnn));
+        if families.len() < 2 || tasks == 0 || resamples == 0 {
+            return None;
+        }
+        let mut rng = splinter_core::rng::SplitMix64::new(seed.value());
+        let mut means: Vec<f64> = (0..resamples)
+            .map(|_| {
+                let (sum, count) = (0..families.len()).fold((0.0, 0usize), |(s, n), _| {
+                    let (fs, fnn) = families[rng.below(families.len())];
+                    (s + fs, n + fnn)
+                });
+                // A draw of only empty families has no mean of its own; it
+                // carries the observed one.
+                if count == 0 {
+                    total / tasks as f64
+                } else {
+                    sum / count as f64
+                }
+            })
+            .collect();
+        means.sort_by(f64::total_cmp);
+        Some(Self {
+            mean: total / tasks as f64,
+            means,
+        })
+    }
+
+    /// The resampled mean below which `share` of the draws fall.
+    pub(crate) fn quantile(&self, share: f64) -> f64 {
+        let last = self.means.len() - 1;
+        self.means[((share * last as f64).round() as usize).min(last)]
+    }
 }
 
 #[cfg(test)]

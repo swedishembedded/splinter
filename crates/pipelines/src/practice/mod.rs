@@ -312,6 +312,7 @@ pub fn practice(
     request: &PracticeRequest,
     trainer: &dyn Trainer,
 ) -> Result<Recorded<PracticeReport>, OrchestratorError> {
+    crate::release::decided_at_fixed_level(request.gate.alpha_spending)?;
     stages::validate(request)?;
     let practice = stages::Practice {
         request,
