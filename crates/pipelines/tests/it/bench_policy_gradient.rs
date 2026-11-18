@@ -110,6 +110,35 @@ fn attempts_are_rewarded_by_their_grade_and_every_action_carries_its_advantage()
 }
 
 #[test]
+fn packed_every_attempt_is_one_record_with_its_reward_group_and_rollout() {
+    let (scratch, ctx) = context("pg-packed");
+    let (train, _) = ingest_attempts(&ctx, &scratch.0.join("export"));
+    let built = build(
+        &ctx,
+        &BuildRequest {
+            pack: true,
+            ..request(train, shaped())
+        },
+    )
+    .unwrap();
+    // Three attempts, one record each, both actions of each supervised.
+    assert_eq!(built.records, 3);
+    let lines = lines(&built.path);
+    assert!(lines
+        .iter()
+        .all(|l| l["reward"].is_f64() && l["group"].is_string() && l["rollout"].is_string()));
+    for line in &lines {
+        let trained = line["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|m| m["train"] == true)
+            .count();
+        assert_eq!(trained, 2, "{line}");
+    }
+}
+
+#[test]
 fn building_again_gives_the_same_dataset() {
     let (scratch, ctx) = context("pg-deterministic");
     let (train, _) = ingest_attempts(&ctx, &scratch.0.join("export"));

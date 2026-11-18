@@ -290,7 +290,6 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
                 sequence_advantage_cap: Some(40.0),
                 advantage_norm: None,
                 advantage_floor: None,
-                algorithm: None,
             },
             ..Tuning::default()
         },

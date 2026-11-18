@@ -209,7 +209,7 @@ fn project_without(
             view.as_str()
         )));
     }
-    if request.pack && view != ViewName::SftStep {
+    if request.pack && !matches!(view, ViewName::SftStep | ViewName::PolicyGradient) {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no packed form, so --pack does not apply",
             view.as_str()
