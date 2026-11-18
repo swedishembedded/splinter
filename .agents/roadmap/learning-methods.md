@@ -29,6 +29,26 @@ See the table `make test/methods` prints; the figures of the last full run are i
 
 ## Findings that changed the code
 
+- 2026-11-18, preference and feedback views from verified attempts (plan training-regimes L5 for the preference
+  family and KTO; lane P): `preference` pairs a verified pass with a verified fail of one group (task version x
+  policy x role x strength) from where their rendered conversations part (shared prefix = prompt, never trained;
+  each side's continuation to its last action = candidate, assistant turns trained, tool results context), and a
+  repair (a passed continuation of copied steps) with the failed attempt whose own conversation the copied prefix
+  is; `--pairs-per-group N` (default 4) by `--pair-seed` (else derived from the experiences), recorded as
+  `pairing` in the manifest. `feedback` judges each verified attempt's continuation (`desirable` = passed), the
+  smaller class weighed up by the count ratio (`feedback` in the manifest; `train` sends those weights). Typed
+  exclusions: `infrastructure_failure` (score status environment/model/agent error: never rejected or
+  undesirable), `unverified_pass`, `no_counterpart`, `different_prompt`, `no_divergence`, `prefix_mismatch`,
+  `repository_history` (the sft-step curation, both sides), `mixed_tokenizer_digest` (a pair's sides); a build
+  whose records name two tokenizers is refused. `train --loss dpo|ipo|simpo|orpo --gamma --nll-weight` and
+  `--desirable-weight/--undesirable-weight` reach brain's job API; a setting of the other objective is refused.
+  brain 15f6f67ee (pushed as b9a26a566) lets a candidate or completion be a multi-turn continuation (the trainers
+  were already mask-generic). L5: lines held to brain's v2 `preference.jsonl` and `feedback.jsonl`
+  (`data/tests/it/attempt_pairs.rs`), E2E from a bench-format export through ingest, build and the train
+  dispatch (`pipelines/tests/it/bench_pairs.rs`). Open: the corrections stage copies the student's whole
+  transcript, so its repairs leave the student no failed suffix and make no pair (`no_divergence`); a repair
+  pair needs a correction forked at an earlier step. Not yet run on real grouped rollouts or on a GPU.
+
 - 2026-11-18, positive-only keeps its meaning and unrendered attempts keep the baseline (lane 3, item 4; brain
   b3d890b0d `advantage_floor`, 42d283331 `baseline_only`): `AdvantageKind::Positive` writes every attempt of an
   informative group and `train` (and the campaign) send `advantage_floor: zero` with z-score, so the failures set the

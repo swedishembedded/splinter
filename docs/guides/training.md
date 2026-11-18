@@ -41,8 +41,12 @@ loss stops improving.
 ## Regimes, held-out records and what a candidate continues
 
 `train` trains the regime its datasets' objective names - chat datasets
-by supervised fine-tuning, preference datasets by DPO against the model
-the run starts from (`--beta`, the DPO temperature, defaults to brain's);
+by supervised fine-tuning, preference datasets by a pair loss against the model
+the run starts from (`--loss dpo|ipo|simpo|orpo`, default `dpo`; `--beta`, the loss's
+temperature, defaults to brain's; `--gamma`, SimPO's target margin; `--nll-weight`, an anchor
+on the chosen continuation's own likelihood), feedback datasets by KTO on every judged
+completion, nothing held out (`--desirable-weight` and `--undesirable-weight` default to the
+balanced weights the dataset's manifest records; a setting of the other objective is refused);
 a dataset of rollouts (the `policy-gradient` view, whose records carry a
 `reward` and a `group`) by brain's clipped policy gradient, below; one run's datasets are all of one
 regime. It concatenates them in

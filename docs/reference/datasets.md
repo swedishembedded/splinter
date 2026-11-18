@@ -11,7 +11,9 @@ it with its manifest into a directory, and `train` reads it. The guide to using 
 ## Views
 
 
-`dataset build` views: `sft-final`, `sft-step`, `critic`, `preference`,
+`dataset build` views: `sft-final`, `sft-step`, `critic`, `preference` (a prompt and two
+continuations of it, a verified pass preferred over a verified fail; see below), `feedback`
+(each verified attempt's continuation, desirable when it passed, for KTO; see below),
 `verifier`, `decision`, `retrieval`, `outcome`, `denoise`, `cpt`, `voice`
 (the writer's own text as answers, from every text part of the sources the
 experience sets cite; see [Learn how a person thinks](../guides/personas.md)), `rehearsal` (a model's own answers as it
@@ -33,8 +35,9 @@ model trained on it is asked under it. A solve whose recorded prompt this
 build holds no text of is left out; runs under two different prompts do not
 make one dataset until `--system-prompt` writes them all under one. Chat views are written as
 brain's `generic-messages-v2`, `preference` as brain's
-`generic-preference-v1` (one pair per line: the student's prompt, the
-chosen and the rejected answer), each checked by brain's own parser.
+`generic-preference-v1` (one pair per line: the shared prompt, the
+chosen and the rejected continuation) and `feedback` as brain's `generic-feedback-v1` (one
+judged completion per line).
 The `cpt` view (continued pretraining on the text of sources) is written as
 `generic-messages-v2` too: each text is one assistant turn with nothing before
 it, supervised whole, so training minimises the next-token loss over all of its
@@ -148,6 +151,62 @@ parser then checks every record, with the same pairing rule, before a dataset
 is stored, so a dataset with a repeated call id, a call answered twice or a
 result before its call cannot be stored.
 
+### Preference and feedback
+
+The `preference` and `feedback` views learn from graded attempts by comparison and by judgement,
+for brain's `preference` objective (the pair losses DPO, IPO, SimPO and ORPO) and its `feedback`
+objective (KTO).
+
+- An attempt counts only when it is verified: decided pass or fail at `--min-strength` or above.
+  A trial the infrastructure failed (the examiner's score status `environment_error`,
+  `model_error` or `agent_error`; the intake gives it no verdict) is counted as
+  `infrastructure_failure` and is never a rejected or undesirable sample. A pass decided below
+  the minimum strength is `unverified_pass` and is never chosen or desirable; such a fail is
+  `too_weak`; an attempt with no decision is `undecided`.
+- A group is one task version attempted by one policy, as for the policy-gradient view. A
+  verified pass and a verified fail of one group, answered by the same model role (`--roles`
+  keeps only some) and decided at the same strength, are a pair. Their conversations are
+  rendered as the model was shown them; where they first differ (call ids aside), the messages
+  before are the shared prompt, never trained on, and each side's continuation from there to
+  its last action is a candidate: its assistant turns are trained on, the tool results between
+  them are context. A candidate is written as one turn, or as an array of the turns of the run
+  from the point the two parted. Two attempts shown different prompts (the messages before the
+  first action, or the tool list) are `different_prompt`; one that is the other's beginning is
+  `no_divergence`; an attempt whose group holds no verified attempt of the other verdict is
+  `no_counterpart`.
+- A repair is a conversation whose first steps are copied from a failed attempt (a teacher's
+  continuation of the student's own transcript) and that verified as passed. It is paired with
+  a verified fail of its task whose own conversation that prefix is: the copied prefix is the
+  prompt, and only the two runs from where they part are candidates. A repair whose prefix is
+  not the failed attempt's is `prefix_mismatch`. A continuation that copies the student's whole
+  transcript leaves the student no suffix of its own and makes no pair (`no_divergence`).
+- `--pairs-per-group N` (default 4) bounds the pairs of one group or one repaired task: the
+  candidate pairs are ordered by a hash of `--pair-seed` (without it, a seed derived from the
+  experiences, so building again pairs the same) and the two experiences, the first that make a
+  record are kept and the rest counted as `over_limit`.
+- `feedback` makes one record of each verified attempt: the messages before its first own
+  action are the prompt (a repair's copied prefix included), the rest to its last action is the
+  completion, `desirable` when it passed.
+- A candidate or completion whose tool calls read the repository's history is left out as
+  `repository_history` under the default `--repository-history drop-step` (and `truncate`): a
+  pair can neither drop an action nor end one side early; `keep` keeps it. The manifest names
+  the policy.
+- Every line carries the attempts it comes from in `metadata.rollout`: the group's key, the
+  rollouts (the chosen, then the rejected one; a completion's own), the tokenizer the policy's
+  server encoded them with (`tokenizer_digest`, from each step's policy trace) and, for a pair,
+  its source (`attempts` or `repair`). Two sides of a pair naming different tokenizers are
+  `mixed_tokenizer_digest`; a build whose records name two tokenizers is refused: build one
+  dataset per policy.
+- The manifest records `pairing` (`{"rule": "verified-pass-over-verified-fail/shared-prefix",
+  "per_group": N, "seed": S, "attempts": n, "repairs": n, "recorded": n}`) for `preference`, and
+  `feedback` (`{"desirable": n, "undesirable": n, "desirable_weight": w, "undesirable_weight":
+  w}`) for `feedback`: the smaller class is weighed up by the ratio of the counts, so both weigh
+  the same, and `train` sends those weights unless `--desirable-weight` or
+  `--undesirable-weight` names others.
+
+A pair recorded as a preference (a `preferred_over` relation between two experiences) is still
+made from the two final answers, before the derived pairs.
+
 ## Benchmark trials
 
 An experience of a benchmark trial (`experiences ingest-bench`, see
@@ -185,10 +244,12 @@ bytes it learned from.
 ## Checking a stored dataset
 
 `splinter dataset check DATASET-ID --from REF [--max-block TOKENS]` has the trainer read a stored dataset before any
-device is claimed: brain's `check_dataset` over every record, rendered for the base `--from` names (the policy's
+device is claimed: brain's `check_dataset` over every record, read as chat records, preference pairs or judged
+completions as its format is, rendered for the base `--from` names (the policy's
 without it) and in the mode a supervised run reads it (reasoning when the records carry it, one example per record
 when the dataset was built `--pack`). It reports the records and examples, the tokens and the supervised tokens per
 example (total, min, mean, p50, p90, p99, max), the examples that supervise nothing, the examples longer than
-`--max-block`, the longest records by line and every record the trainer refuses with why; it exits 1 when it refuses
-any. It asks a brain service started with `--training --artifact-store DIR`, with that directory given as
+`--max-block`, the longest records by line and every record the trainer refuses with why; for a preference or feedback dataset also the
+pairing policy or class weights its manifest records and the tokenizers its records name. It exits 1 when the trainer
+refuses any record or the records name more than one tokenizer. It asks a brain service started with `--training --artifact-store DIR`, with that directory given as
 `--brain-artifact-store`.
