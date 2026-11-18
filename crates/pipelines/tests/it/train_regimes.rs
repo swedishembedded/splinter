@@ -138,7 +138,10 @@ fn a_run_trains_one_regime_and_beta_only_for_preferences() {
     let mixed = refusal(&ctx, &request(&[&chat, &pairs], None), &trainer);
     assert!(mixed.contains("one run trains one regime"), "{mixed}");
     let beta = refusal(&ctx, &request(&[&chat], Some(0.2)), &trainer);
-    assert!(beta.contains("preference datasets only"), "{beta}");
+    assert!(
+        beta.contains("preference and feedback datasets only"),
+        "{beta}"
+    );
     assert!(trainer.called.lock().unwrap().is_empty());
 
     let sft = train(
@@ -347,7 +350,10 @@ fn a_setting_a_run_cannot_honour_is_refused_not_dropped() {
     let mixed = refusal(&ctx, &request(&[&chat, &rollouts], None), &trainer);
     assert!(mixed.contains("one run trains one regime"), "{mixed}");
     let beta = refusal(&ctx, &request(&[&rollouts], Some(0.2)), &trainer);
-    assert!(beta.contains("preference datasets only"), "{beta}");
+    assert!(
+        beta.contains("preference and feedback datasets only"),
+        "{beta}"
+    );
     let monitored = refusal(
         &ctx,
         &with(
