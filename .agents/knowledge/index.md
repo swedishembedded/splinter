@@ -158,3 +158,4 @@ in the same commit.
 | [170](170-a-student-learned-to-dig-through-git-history-from-seven-teacher-log-reads.md) | A student learned to dig through git history from seven teacher log reads |
 | [171](171-ctrl-c-on-splinter-train-left-the-brain-job-holding-its-card.md) | Ctrl-C on splinter train left the brain job holding its card |
 | [172](172-recorded-behaviour-logprobs-of-agent-rollouts-do-not-round-trip-through-the-chat-template.md) | Recorded behaviour log-probabilities of agent rollouts do not round-trip through the chat template |
+| [173](173-a-bench-trajectory-records-the-raw-tool-output-not-what-the-model-was-shown.md) | A bench trial's trajectory records the raw tool output, not what the model was shown |

@@ -137,6 +137,7 @@ Every command takes these.
   - [splinter experiences ingest-harbor](#splinter-experiences-ingest-harbor) - Read the trials Harbor left for imported tasks (each a trial directory with result.json and agent/trajectory.json in ATIF) as experiences carrying Harbor's own verdict
   - [splinter experiences ingest-bench](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
   - [splinter experiences diagnose](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
+  - [splinter experiences repair](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
@@ -1483,6 +1484,7 @@ Subcommands:
 - [`ingest-harbor`](#splinter-experiences-ingest-harbor) - Read the trials Harbor left for imported tasks (each a trial directory with result.json and agent/trajectory.json in ATIF) as experiences carrying Harbor's own verdict
 - [`ingest-bench`](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
 - [`diagnose`](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
+- [`repair`](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 
 #### splinter experiences list
@@ -1561,6 +1563,26 @@ splinter experiences diagnose [OPTIONS] <DIR>...
 Arguments:
 
 - `<DIR>...` (required): The export directories (each holds index.jsonl; skipped.jsonl when the export skipped trials), or practice run directories (each holds report.json and export/)
+
+#### splinter experiences repair
+
+A teacher continues the failed attempts of practice runs from their last good step; the task's own verifier keeps a repair only on a pass
+
+```text
+splinter experiences repair [OPTIONS] --teacher <REF> --bench <DIR> <RUN>...
+```
+
+Arguments:
+
+- `<RUN>...` (required): The practice run directories (each holds report.json, export/ and staged/), as `tasks harbor practice` leaves them under the state root.
+
+Options:
+
+- `--teacher <REF>` (required): The model that continues the attempts (`remote:`/`local:`)
+- `--bench <DIR>` (required): The examiner's checkout, which lays out and grades the workspaces.
+- `--max <N>`: The most repairs this run makes [default: 32]
+- `--jobs <N>`: Repairs run at once [default: 8]
+- `--class <CLASS>...`: Only failures of this class (repeatable; `wrong_content`, `tool`, ...)
 
 #### splinter experiences compare
 

@@ -257,10 +257,22 @@ pub async fn continue_attempt(
 ///
 /// [`CorrectionError::Trajectory`] naming the step.
 pub fn transcript_of(student: &Experience, system: &str) -> Result<Vec<Turn>, CorrectionError> {
+    trajectory_transcript(&student.trajectory, system)
+}
+
+/// [`transcript_of`] for a recorded trajectory alone.
+///
+/// # Errors
+///
+/// [`CorrectionError::Trajectory`] naming the step.
+pub fn trajectory_transcript(
+    trajectory: &Trajectory,
+    system: &str,
+) -> Result<Vec<Turn>, CorrectionError> {
     let mut turns = vec![Turn::System {
         text: system.to_string(),
     }];
-    for step in &student.trajectory.steps {
+    for step in &trajectory.steps {
         let text = step
             .message
             .as_text()

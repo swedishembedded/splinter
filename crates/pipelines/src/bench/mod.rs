@@ -39,6 +39,7 @@ pub mod artifact;
 pub mod diagnose;
 pub mod examine;
 pub mod practice;
+pub mod repair;
 pub mod score;
 pub mod split;
 

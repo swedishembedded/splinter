@@ -133,6 +133,28 @@ whose last calls failed is `tool`, a run a time, turn or token limit ended is `r
 step, or the record field, and the excerpt). The report counts the classes per domain and per attribution (`model`,
 `infrastructure`, `task`). Only a trial of an export is read, and an export of sealed material is refused.
 
+## Repairing a failed attempt
+
+```sh
+splinter experiences repair STATE/practice/splinter-0d53... --teacher local:Qwen/Qwen3.8-27B-FP8 --bench ~/bench
+```
+
+Every failed trial of the practice runs is diagnosed (above) and routed by its class: a model failure whose decisive
+step the diagnosis placed is forked after its last good step; an infrastructure or task failure, a history probe
+and a failure with no decisive step are not repaired, and the report says why. The fork lays out the task's pristine
+workspace through the examiner (`bench task workspace`), keeps the student's steps through the last good one, has
+sven's fork replay them (every replayed observation held to the recorded one; a fork whose replay differs is refused
+and counted) and the teacher continue the same tool loop under the profile the student ran, its commands confined to
+the tree. The examiner then grades the workspace and the composed trajectory with the task's own verifier, outside
+any agent (`bench task grade`). Only a pass is kept: as an experience of the student's task whose first steps are
+the student's stored steps (marked as copied context, never supervised), with the verifier's pass and a
+`revision_of` relation to the student's attempt, and its lineage in `extra.correction` (the
+student, the diagnosis, the kept step, the shared prefix, the teacher, the grade). The accepted repairs form one
+experience set, which `dataset build --view sft-step` trains on the teacher's suffix alone. A fail is counted and
+recorded, never stored. A repair is keyed by the student's attempt, the teacher and the intervention: a rerun finds
+the record and does nothing. `--jobs` repairs run at once (the teacher's decode slots), `--max` bounds a run and
+`--class` picks the classes.
+
 ## Harness trials: one experience per conversation
 
 A benchmark run through a sven harness is several conversations, each answered by a

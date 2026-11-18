@@ -7,11 +7,12 @@
 // them, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! How `experiences diagnose` reads to a person.
+//! How `experiences diagnose` and `experiences repair` read to a person.
 
 use std::fmt::Write as _;
 
 use splinter_sdk::bench::diagnose::DiagnosisReport;
+use splinter_sdk::bench::repair::RepairReport;
 
 use crate::output::Report;
 
@@ -55,6 +56,32 @@ impl Report for DiagnosisReport {
                 refused.export.display(),
                 refused.reason
             );
+        }
+        out
+    }
+}
+
+impl Report for RepairReport {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        let _ = writeln!(out, "repairs continued by {}", self.teacher);
+        for (class, y) in &self.by_class {
+            let _ = writeln!(
+                out,
+                "  {class}: failed {}, routed {}, accepted {}, rejected {}, refused {}, held {}",
+                y.failed, y.routed, y.accepted, y.rejected, y.refused, y.held
+            );
+        }
+        for record in &self.repairs {
+            let why = record.reason.as_deref().unwrap_or("");
+            let _ = writeln!(
+                out,
+                "  {} {} after step {}: {:?} {why}",
+                record.domain, record.trial, record.keep_through, record.outcome
+            );
+        }
+        if let Some(set) = &self.repair_set {
+            let _ = writeln!(out, "accepted repairs: experience set {set}");
         }
         out
     }

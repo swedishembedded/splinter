@@ -445,6 +445,32 @@ impl Session {
                     return Ok(Exit::Failed);
                 }
             }
+            Command::Experiences(ExperiencesCommand::Repair(args)) => {
+                use splinter_sdk::bench::repair::{
+                    repair, RepairRequest, DEFAULT_MAX_REPAIRS, DEFAULT_REPAIR_DEADLINE,
+                    DEFAULT_REPAIR_JOBS,
+                };
+                let checkout =
+                    splinter_sdk::bench::practice::BenchCheckout::new(args.bench.clone());
+                let arguments = json!({ "runs": args.runs, "teacher": args.teacher.to_string(),
+                    "classes": args.classes.iter().map(|c| c.as_str()).collect::<Vec<_>>() });
+                let report = record(ctx, "experiences repair", &arguments, |run| {
+                    repair(
+                        ctx,
+                        &RepairRequest {
+                            runs: &args.runs,
+                            checkout: &checkout,
+                            teacher: &args.teacher,
+                            max: args.max.unwrap_or(DEFAULT_MAX_REPAIRS),
+                            jobs: args.jobs.unwrap_or(DEFAULT_REPAIR_JOBS),
+                            deadline: DEFAULT_REPAIR_DEADLINE,
+                            classes: &args.classes,
+                            cancel: run.cancel_token(),
+                        },
+                    )
+                })?;
+                emit(json, &report);
+            }
             Command::Experiences(ExperiencesCommand::Compare {
                 candidate,
                 baseline,

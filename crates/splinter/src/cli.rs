@@ -529,6 +529,9 @@ pub enum ExperiencesCommand {
     /// Why each failed trial of bench exports failed: one failure class per
     /// trial, from its evidence, with the step and excerpt that decided it.
     Diagnose(DiagnoseArgs),
+    /// A teacher continues the failed attempts of practice runs from their
+    /// last good step; the task's own verifier keeps a repair only on a pass.
+    Repair(RepairArgs),
     /// Compare two experience sets of the same tasks: the candidate's against
     /// the baseline's, paired by task, a family counted once. Exposed and
     /// harness-failed attempts are left out and counted.
@@ -752,7 +755,7 @@ pub use corrections::CorrectionsArgs;
 pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
-pub use experiences::{DiagnoseArgs, StrataArgs};
+pub use experiences::{DiagnoseArgs, RepairArgs, StrataArgs};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
 pub use global::Global;
