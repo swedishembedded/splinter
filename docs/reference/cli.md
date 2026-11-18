@@ -95,6 +95,10 @@ Every command takes these.
 - [splinter generation](#splinter-generation) - Generations of a coding policy, each held to what the ones before it had
   - [splinter generation run](#splinter-generation-run) - Run one generation of a coding policy
   - [splinter generation matrix](#splinter-generation-matrix) - The ledger of an experiment and the full retention matrix of the lineage `policy:<alias>` points at
+- [splinter campaign](#splinter-campaign) - A resumable multi-generation learning campaign with one promotion gate
+  - [splinter campaign run](#splinter-campaign-run) - Run a campaign's generations
+  - [splinter campaign status](#splinter-campaign-status) - What a campaign has done
+  - [splinter campaign rollback](#splinter-campaign-rollback) - Move the champion back to the one a generation made (0
 - [splinter session](#splinter-session) - Take in recorded agent sessions, secrets removed
   - [splinter session add](#splinter-session-add) - Take recorded agent sessions in as sources
   - [splinter session list](#splinter-session-list) - List the stored sessions
@@ -214,6 +218,7 @@ Subcommands:
 - [`consolidate`](#splinter-consolidate) - Take the generation the policy is in into the weights
 - [`improve`](#splinter-improve) - Choose how to improve an agent on a target capability from what each way was measured to do, net of what it costs
 - [`generation`](#splinter-generation) - Generations of a coding policy, each held to what the ones before it had
+- [`campaign`](#splinter-campaign) - A resumable multi-generation learning campaign with one promotion gate
 - [`session`](#splinter-session) - Take in recorded agent sessions, secrets removed
 - [`claims`](#splinter-claims) - What a person taught in sessions
 - [`tasks`](#splinter-tasks) - Generate and inspect task sets
@@ -896,6 +901,65 @@ Options:
 
 - `--experiment <NAME>` (required): The experiment whose ledger is shown.
 - `--alias <ALIAS>`: The alias whose lineage is measured. Default: `default`.
+
+### splinter campaign
+
+A resumable multi-generation learning campaign with one promotion gate: run its generations, show what it has done, or roll its champion back
+
+```text
+splinter campaign [OPTIONS] <COMMAND>
+```
+
+Subcommands:
+
+- [`run`](#splinter-campaign-run) - Run a campaign's generations
+- [`status`](#splinter-campaign-status) - What a campaign has done
+- [`rollback`](#splinter-campaign-rollback) - Move the champion back to the one a generation made (0
+
+#### splinter campaign run
+
+Run a campaign's generations: the champion practises on the examiner's train-split practice tasks it has not mastered, the graded trials are ingested, a dataset is curated over every generation's experience, a candidate is trained from the base as a served brain job, the examiner's signed verdicts on it are gated by the one promotion gate, and the champion is promoted or kept. Every stage is recorded before the next starts; run it again after a kill and it resumes at the first stage without a record, reusing brain's job by its resume key. Ctrl-C cancels the stage in progress
+
+```text
+splinter campaign run [OPTIONS] <FILE>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file (TOML): its name, base, generations, stage settings, budget, `[practice]` and `[examine]`.
+
+Options:
+
+- `--gpus <N>`: Cards a training run holds, to count its GPU-hours. Default: `1`.
+
+#### splinter campaign status
+
+What a campaign has done: every generation's candidate and decision, the champion, its history and what was spent. Nothing runs
+
+```text
+splinter campaign status [OPTIONS] <FILE>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file.
+
+#### splinter campaign rollback
+
+Move the champion back to the one a generation made (0: the base), recorded with its reason as one more entry of the champion's history
+
+```text
+splinter campaign rollback [OPTIONS] --to <GENERATION> --reason <TEXT> <FILE>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file.
+
+Options:
+
+- `--to <GENERATION>` (required): The generation whose champion to move back to; 0 is the base.
+- `--reason <TEXT>` (required): Why, as the history records it.
 
 ### splinter session
 

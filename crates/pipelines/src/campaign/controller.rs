@@ -2,597 +2,689 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
 // Swedish Embedded AB implements solutions that run model learning as one
-// continuous, resumable campaign with dynamic sampling, replay and a
-// validation gate with rollback, for its clients. If your team needs expertise
-// in on-policy training loops for language-model agents you can procure our
-// services by sending an email to info@swedishembedded.com.
+// resumable, multi-generation campaign with a single promotion gate, for its
+// clients. If your team needs expertise in self-improving training loops you
+// can procure our services by sending an email to info@swedishembedded.com.
 
-//! The campaign controller: one arm per call, every step that cost something
-//! saved before the next begins. See the module documentation for the arm.
+//! The campaign controller: generations of rollout, ingest, curate, train,
+//! evaluate, gate and promote, each stage a unit of the campaign's stage
+//! ledger. See the module documentation for the stages and the ledger.
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::time::Instant;
+use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 
-use serde::Serialize;
-use serde_json::json;
-use splinter_core::clock::Clock;
-use splinter_core::digest::digest_of;
-use splinter_core::rng::SplitMix64;
-use splinter_eval::campaign::gate::Decision;
-use splinter_eval::campaign::pass_rate::PassRates;
-use splinter_eval::campaign::plan::{plan_arm, ArmGoal, ArmRefused, ExamShape, PlannedArm};
-use splinter_eval::campaign::sampling::AllFailStrategy;
-use splinter_eval::campaign::signals::{sampled_entropy, Finding, StepSignals};
-use splinter_eval::significance::Significance;
-use splinter_store::campaign::{CampaignStore, Cost, LedgerEntry, Loaded, Verdict};
-use splinter_store::StateRoot;
-
-use super::config::{CampaignConfig, LearningStrategy};
-use super::environments::EnvironmentLabels;
-use super::gc::Checkpoint;
-use super::records::RecordCounts;
-use super::replay::ReplayBuffer;
-use super::state::{CampaignState, PendingCandidate, STATE_SCHEMA};
-use super::types::{
-    AllFailHandler, CampaignError, RolloutCollector, RolloutGroup, TrainRequest, Trainer, Validator,
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use splinter_agent::CancelToken;
+use splinter_core::digest::{digest_of, Digest};
+use splinter_eval::campaign::pass_rate::Band;
+use splinter_eval::promotion::{decide, Promotion, Submitted};
+use splinter_orchestrator::context::Context;
+use splinter_orchestrator::error::OrchestratorError;
+use splinter_store::experiences::SetId;
+use splinter_store::stage_ledger::{
+    Commit, KeyParts, LedgerError, OnCorrupt, StageLedger, StageWork, Standing,
 };
-use crate::preflight;
 
-/// Seconds elapsed on whatever clock measures GPU-hours: wall time in a run, a
-/// pinned value in a test.
-pub trait Stopwatch {
-    /// Seconds since the clock started.
-    fn seconds(&self) -> f64;
-}
+use super::account::{
+    base_of, latest_per_generation, next_generation, rates, report, spent, CampaignReport,
+    CurateRecord, IngestRecord, RolloutRecord, TrainRecord,
+};
+use super::champion::{self, Move};
+use super::spec::CampaignSpec;
+use super::types::CampaignError;
+use super::work::{ExamRequest, Examiner, Model, RolloutRequest, Rollouts};
+use super::Stopwatch;
+use crate::bench::{ingest_bench_trials, IngestOptions};
+use crate::datasets::{self, BuildRequest};
+use crate::train::{self, TrainRequest, Trainer, Tuning};
 
-/// The wall clock as a [`Stopwatch`].
-pub struct WallClock(Instant);
+/// The ledger unit that holds the campaign's identity and seed.
+pub const CAMPAIGN_UNIT: &str = "campaign";
 
-impl WallClock {
-    /// A stopwatch started now.
-    #[must_use]
-    pub fn start() -> Self {
-        Self(Instant::now())
-    }
-}
-
-impl Stopwatch for WallClock {
-    fn seconds(&self) -> f64 {
-        self.0.elapsed().as_secs_f64()
-    }
-}
+/// The stages of a generation, in order.
+pub const STAGES: [&str; 7] = [
+    "rollout", "ingest", "curate", "train", "evaluate", "gate", "promote",
+];
 
 /// What the controller is made of.
 pub struct Parts<'p> {
-    /// Where rollouts come from.
-    pub collector: &'p mut dyn RolloutCollector,
+    /// Where the champion practises.
+    pub rollouts: &'p mut dyn Rollouts,
+    /// Who examines candidates.
+    pub examiner: &'p mut dyn Examiner,
     /// The call into brain.
-    pub trainer: &'p mut dyn Trainer,
-    /// The dev exam.
-    pub validator: &'p mut dyn Validator,
-    /// Teacher and decomposition, for the strategies that need them.
-    pub handler: Option<&'p mut dyn AllFailHandler>,
-    /// The paired test the gates rest on.
-    pub significance: &'p dyn Significance,
-    /// Timestamps for the ledger.
-    pub clock: &'p dyn Clock,
-    /// GPU-hours.
+    pub trainer: &'p dyn Trainer,
+    /// The clock training's GPU time is read from.
     pub stopwatch: &'p dyn Stopwatch,
-    /// Which environment each task belongs to, when the tasks come from the
-    /// environment factory: enables reward provenance in the ledger and the
-    /// divergence alarm.
-    pub environments: Option<&'p dyn EnvironmentLabels>,
-    /// Where a one-line account of each stage goes while an arm runs, for a
-    /// person watching a multi-hour campaign; `None` stays silent.
+    /// Cards a training run holds, to turn its wall time into GPU-hours.
+    pub gpus: u32,
+    /// Stops the campaign between stages and the stage in progress (a
+    /// training job is cancelled on the server).
+    pub cancel: CancelToken,
+    /// Where a one-line account of each stage goes; `None` stays silent.
     pub progress: Option<&'p dyn Fn(&str)>,
 }
 
-/// What one arm did.
-#[derive(Clone, Debug, Serialize)]
-pub struct ArmReport {
-    /// The arm.
-    pub arm: String,
-    /// Its place in the campaign, from 1.
-    pub generation: u32,
-    /// The strategy it ran.
-    pub strategy: &'static str,
-    /// How it ended.
-    pub verdict: Verdict,
-    /// The step's signals; absent for an arm that never trained.
-    pub signals: Option<StepSignals>,
-    /// The gate's numbers; absent for an arm that never reached it.
-    pub decision: Option<Decision>,
-    /// What records the batch became.
-    pub records: RecordCounts,
-    /// Findings of the signal bounds.
-    pub findings: Vec<Finding>,
-    /// GPU-hours the arm used.
-    pub gpu_hours: f64,
-    /// Whether the campaign should not continue.
-    pub stop: bool,
+/// Why a campaign stopped.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "stopped", rename_all = "snake_case")]
+pub enum Stopped {
+    /// It ran every generation it was given.
+    Done,
+    /// The next stage would exceed a budget, and did not start.
+    Budget {
+        /// Which: `rollouts`, `gpu_hours` or `tokens`.
+        limit: String,
+        /// What was spent of it.
+        spent: f64,
+        /// The limit.
+        allowed: f64,
+    },
 }
 
-/// What a call to [`CampaignController::run`] did.
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct CampaignReport {
-    /// The arms run, in order.
-    pub arms: Vec<ArmReport>,
-}
-
-/// A running campaign.
+/// A campaign, held by this process: its ledger is locked while it lives.
 pub struct CampaignController<'p> {
-    pub(super) store: CampaignStore,
-    pub(super) config: CampaignConfig,
-    pub(super) parts: Parts<'p>,
-    pub(super) adapters: PathBuf,
-    pub(super) loaded: Loaded<CampaignState>,
+    ctx: &'p Context,
+    spec: CampaignSpec,
+    seed: u64,
+    base: Model,
+    ledger: StageLedger,
+    parts: Parts<'p>,
 }
 
-/// Which arm an entry or a report is about.
-pub(super) struct ArmId {
-    pub(super) name: String,
-    pub(super) generation: u32,
-    pub(super) strategy: LearningStrategy,
+/// The ledger directory of campaign `name` under the state root.
+#[must_use]
+pub fn campaign_dir(ctx: &Context, name: &str) -> PathBuf {
+    ctx.root().path().join("campaigns").join(name)
 }
 
-/// What an arm ends with, as the ledger records it.
-pub(super) struct Outcome {
-    pub(super) verdict: Verdict,
-    pub(super) cost: Cost,
-    pub(super) discoveries: Option<f64>,
-    pub(super) measurements: BTreeMap<String, f64>,
+fn padded(generation: u32) -> String {
+    format!("g{generation:04}")
 }
 
-/// What an arm that never reached a candidate had used.
-pub(super) struct Spent {
-    pub(super) informative_fraction: Option<f64>,
-    pub(super) gpu_hours: f64,
-    pub(super) rollouts: u64,
-    pub(super) counts: RecordCounts,
+/// The ledger unit of `stage` of `generation`.
+#[must_use]
+pub fn unit(generation: u32, stage: &str) -> String {
+    format!("{}/{stage}", padded(generation))
 }
 
-/// The discordance below which an observed value is not trusted to plan with.
-const DISCORDANCE_FLOOR: f64 = 0.02;
+/// The generation and stage a unit name is of.
+pub(super) fn parse_unit(name: &str) -> Option<(u32, &str)> {
+    let (generation, stage) = name.split_once('/')?;
+    Some((generation.strip_prefix('g')?.parse().ok()?, stage))
+}
 
-/// Everything a batch produced before training.
-pub(super) struct Collected {
-    pub(super) groups: Vec<RolloutGroup>,
-    pub(super) informative: Vec<usize>,
-    pub(super) all_fail: Vec<usize>,
-    pub(super) informative_fraction: Option<f64>,
-    pub(super) rollouts: u64,
-    pub(super) shortfall: usize,
+pub(super) fn record<T: for<'de> Deserialize<'de>>(commit: &Commit) -> Result<T, CampaignError> {
+    serde_json::from_value(commit.summary.clone()).map_err(|e| {
+        CampaignError::Config(format!(
+            "the ledger's {} record is not of this build: {e}",
+            commit.unit
+        ))
+    })
+}
+
+fn to_value<T: Serialize>(value: &T) -> Result<Value, CampaignError> {
+    serde_json::to_value(value).map_err(|e| CampaignError::Config(format!("a stage record: {e}")))
+}
+
+/// Runs `work` as ledger unit `name` under `key` unless a sound commit of it
+/// exists; the work's own error comes back as it was.
+fn stage(
+    ledger: &StageLedger,
+    cancel: &CancelToken,
+    name: &str,
+    key: &KeyParts,
+    work: impl FnOnce(&Path) -> Result<StageWork, CampaignError>,
+) -> Result<(Commit, bool), CampaignError> {
+    if cancel.is_cancelled() {
+        return Err(CampaignError::Cancelled);
+    }
+    let failed: RefCell<Option<CampaignError>> = RefCell::new(None);
+    let dir = ledger.dir().to_path_buf();
+    let ran = ledger
+        .run(name, &key.key(), OnCorrupt::Refuse, |_| {
+            work(&dir).map_err(|e| {
+                let text = e.to_string();
+                *failed.borrow_mut() = Some(e);
+                text
+            })
+        })
+        .map_err(|e| match (failed.borrow_mut().take(), e) {
+            (Some(own), LedgerError::Stage { .. }) => own,
+            (_, other) => other.into(),
+        })?;
+    Ok((ran.commit, !ran.reused))
+}
+
+/// `path` relative to `root`, as a ledger output names it.
+fn relative(root: &Path, path: &Path) -> Result<String, CampaignError> {
+    path.strip_prefix(root)
+        .map(|p| p.to_string_lossy().into_owned())
+        .map_err(|_| {
+            CampaignError::Config(format!(
+                "{} is outside the campaign's directory {}",
+                path.display(),
+                root.display()
+            ))
+        })
+}
+
+fn stage_dir(root: &Path, generation: u32, stage: &str) -> Result<PathBuf, CampaignError> {
+    let dir = root.join(padded(generation)).join(stage);
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| CampaignError::Config(format!("cannot create {}: {e}", dir.display())))?;
+    Ok(dir)
+}
+
+fn output<'c>(commit: &'c Commit, name: &str) -> Result<&'c Digest, CampaignError> {
+    commit.output(name).ok_or_else(|| {
+        CampaignError::Config(format!("the ledger's {} names no {name}", commit.unit))
+    })
+}
+
+fn orchestrated(e: OrchestratorError) -> CampaignError {
+    match e {
+        OrchestratorError::Cancelled | OrchestratorError::JobCancelled(_) => {
+            CampaignError::Cancelled
+        }
+        other => CampaignError::Orchestrator(Box::new(other)),
+    }
 }
 
 impl<'p> CampaignController<'p> {
-    /// Opens campaign `config.name` under the state `root`, creating it at `seed`
-    /// when it does not exist and resuming it when it does. Adapters live
-    /// under `adapters`.
+    /// Opens campaign `spec.name` under the state root, beginning it when its
+    /// ledger is empty and continuing it otherwise.
     ///
     /// # Errors
-    /// An invalid configuration; a strategy that needs a handler none was
-    /// given; a campaign begun under another configuration or layout; a store
-    /// failure; a policy the collector cannot serve.
+    /// An invalid specification; a campaign begun under another
+    /// specification, other rollouts or another examiner, or with another
+    /// seed; fewer sealed slices than generations; another process holding
+    /// the campaign; the ledger.
     pub fn open(
-        root: &StateRoot,
-        config: CampaignConfig,
-        seed: u64,
+        ctx: &'p Context,
+        spec: CampaignSpec,
         parts: Parts<'p>,
-        adapters: PathBuf,
     ) -> Result<Self, CampaignError> {
-        config.validate()?;
-        let needs_handler = matches!(
-            config.all_fail,
-            AllFailStrategy::Teacher | AllFailStrategy::Decompose
-        );
-        if needs_handler && parts.handler.is_none() {
+        spec.validate()?;
+        let slices = parts.examiner.slices().len();
+        if slices < spec.generations as usize {
             return Err(CampaignError::Config(format!(
-                "all_fail is {:?}, which needs a teacher or decomposition handler, and none was given",
-                config.all_fail
+                "{} generations need as many fresh sealed slices; the examiner has {slices}",
+                spec.generations
             )));
         }
-        let store = CampaignStore::new(root, &config.name)?;
-        let digest = digest_of(&json!({
-            "config": config,
-            "collector": parts.collector.describe(),
-            "trainer": parts.trainer.describe(),
-            "validator": parts.validator.describe(),
-        }));
-        let loaded = match store.load::<CampaignState>()? {
-            Some(loaded) => {
-                if loaded.state.schema != STATE_SCHEMA {
-                    return Err(CampaignError::Config(format!(
-                        "campaign {} was saved with layout {}, this build reads {STATE_SCHEMA}",
-                        config.name, loaded.state.schema
-                    )));
-                }
-                if loaded.state.config_digest != digest {
-                    return Err(CampaignError::Config(format!(
-                        "campaign {} began under another configuration ({} against {digest}); \
-                         a campaign is continued as it began, start a new one to change it",
-                        config.name, loaded.state.config_digest
-                    )));
-                }
-                loaded
-            }
-            None => {
-                let rates = PassRates::new(config.retire_at, config.calibration_k)
-                    .map_err(|e| CampaignError::Config(e.to_string()))?;
-                let state = CampaignState::new(
-                    &config.name,
-                    digest,
-                    seed,
-                    rates,
-                    ReplayBuffer::new(config.replay.capacity),
-                );
-                let saved = store.save(None, &state, &parts.clock.utc_now())?;
-                Loaded {
-                    state,
-                    digest: saved,
-                    version: 1,
-                }
-            }
-        };
-        parts.collector.set_policy(&loaded.state.policy)?;
-        std::fs::create_dir_all(&adapters).map_err(|e| {
-            CampaignError::Config(format!("cannot create {}: {e}", adapters.display()))
+        let dir = campaign_dir(ctx, &spec.name);
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| CampaignError::Config(format!("cannot create {}: {e}", dir.display())))?;
+        let ledger = StageLedger::open(&dir)?;
+        let identity = json!({
+            "spec": spec.identity(),
+            "rollouts": parts.rollouts.identity(),
+            "examiner": parts.examiner.identity(),
+        });
+        let key = KeyParts::new(CAMPAIGN_UNIT).config(&identity);
+        if ledger
+            .commits()?
+            .iter()
+            .any(|c| c.unit == CAMPAIGN_UNIT && c.key != key.key())
+        {
+            return Err(CampaignError::Config(format!(
+                "campaign {} began under another specification, other rollouts or another \
+                 examiner; a campaign is continued as it began: start a new one to change it",
+                spec.name
+            )));
+        }
+        let given = spec.seed;
+        let (begun, _) = stage(&ledger, &parts.cancel, CAMPAIGN_UNIT, &key, |_| {
+            let seed = given.unwrap_or_else(|| splinter_model::seed::draw().value());
+            Ok(StageWork::new(json!({"identity": identity, "seed": seed})))
         })?;
+        let seed = begun.summary["seed"]
+            .as_u64()
+            .ok_or_else(|| CampaignError::Config("the ledger records no seed".into()))?;
+        if given.is_some_and(|given| given != seed) {
+            return Err(CampaignError::Config(format!(
+                "campaign {} began with seed {seed}, and is continued with it",
+                spec.name
+            )));
+        }
+        let base = base_of(&spec)?;
         Ok(Self {
-            store,
-            config,
+            ctx,
+            spec,
+            seed,
+            base,
+            ledger,
             parts,
-            adapters,
-            loaded,
         })
     }
 
-    /// The campaign as of its last save.
+    /// The campaign's seed: given, or drawn when it began.
     #[must_use]
-    pub fn state(&self) -> &CampaignState {
-        &self.loaded.state
+    pub fn seed(&self) -> u64 {
+        self.seed
     }
 
-    /// The campaign's ledger.
-    ///
-    /// # Errors
-    /// A store failure.
-    pub fn ledger(&self) -> Result<Vec<LedgerEntry>, CampaignError> {
-        Ok(self.store.ledger()?)
+    /// The ledger, held by this controller.
+    #[must_use]
+    pub fn ledger(&self) -> &StageLedger {
+        &self.ledger
     }
 
-    /// Reports one stage to the progress sink.
-    pub(super) fn say(&self, line: &str) {
+    fn say(&self, line: &str) {
         if let Some(progress) = self.parts.progress {
-            progress(line);
+            progress(&format!("{}: {line}", self.spec.name));
         }
     }
 
-    pub(super) fn save(&mut self) -> Result<(), CampaignError> {
-        let at = self.parts.clock.utc_now();
-        let digest = self
-            .store
-            .save(Some(&self.loaded.digest), &self.loaded.state, &at)?;
-        self.loaded.digest = digest;
-        self.loaded.version += 1;
-        Ok(())
+    /// Draw `salt` of `generation`, from the campaign's seed.
+    fn seed_of(&self, generation: u32, salt: u64) -> u64 {
+        splinter_core::rng::SplitMix64::new(
+            self.seed
+                ^ u64::from(generation).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                ^ salt.wrapping_mul(0xBF58_476D_1CE4_E5B9),
+        )
+        .next_u64()
     }
 
-    pub(super) fn strategy(&self) -> LearningStrategy {
-        let ladder = &self.config.ladder;
-        ladder[self.loaded.state.strategy_index.min(ladder.len() - 1)]
-    }
-
-    pub(super) fn pool(&self) -> Vec<String> {
-        let mut pool = self.parts.collector.tasks();
-        pool.extend(self.loaded.state.extra_tasks.iter().cloned());
-        pool.sort();
-        pool.dedup();
-        // A quarantined environment is never drawn from again.
-        if let Some(labels) = self.parts.environments {
-            pool.retain(|task| {
-                labels
-                    .environment_of(task)
-                    .is_none_or(|env| !self.loaded.state.quarantined.contains(&env))
-            });
-        }
-        pool
-    }
-
-    pub(super) fn rng(&self, generation: u32, salt: u64) -> SplitMix64 {
-        let mixed = self.loaded.state.seed
-            ^ u64::from(generation).wrapping_mul(0x9E37_79B9_7F4A_7C15)
-            ^ salt.wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        SplitMix64::new(mixed)
-    }
-
-    pub(super) fn entry(&self, id: &ArmId, outcome: Outcome) -> LedgerEntry {
-        let sources = self
-            .parts
-            .environments
-            .map(EnvironmentLabels::sources)
-            .unwrap_or_default();
-        LedgerEntry {
-            campaign: self.config.name.clone(),
-            arm: id.name.clone(),
-            generation: id.generation,
-            strategy: id.strategy.name().to_string(),
-            hypothesis: format!("{}: {}", id.strategy.name(), self.config.hypothesis),
-            config_digest: self.loaded.state.config_digest.clone(),
-            at: self.parts.clock.utc_now(),
-            cost: outcome.cost,
-            discoveries: outcome.discoveries,
-            verdict: outcome.verdict,
-            reward_sources: sources.clone(),
-            verdict_label: splinter_core::verifiability::verdict_label(
-                sources.iter().map(|source| source.class),
-            )
-            .map(str::to_string),
-            measurements: outcome.measurements,
-        }
-    }
-
-    /// Runs up to `arms` arms, stopping early when an arm says the campaign
-    /// should not continue.
+    /// Moves the champion back to the model generation `to` made (0: the
+    /// base) for `reason`, recorded as one more entry of its history.
     ///
     /// # Errors
-    /// The first failure of an arm; arms already finished stay saved.
-    pub fn run(&mut self, arms: u32) -> Result<CampaignReport, CampaignError> {
-        let mut report = CampaignReport::default();
-        for _ in 0..arms {
-            let arm = self.arm()?;
-            let stop = arm.stop;
-            report.arms.push(arm);
-            if stop {
+    /// `to` was never a champion or is the champion now, the reason is
+    /// empty, or the ledger.
+    pub fn rollback(&self, to: u32, reason: &str) -> Result<Move, CampaignError> {
+        champion::rollback(&self.ledger, &self.base, to, reason)
+    }
+
+    /// What the campaign has done, read from its ledger.
+    ///
+    /// # Errors
+    /// The ledger cannot be read, or holds a record of another build.
+    pub fn report(&self) -> Result<CampaignReport, CampaignError> {
+        report(
+            &self.spec.name,
+            self.seed,
+            &self.base,
+            &self.ledger.commits()?,
+        )
+    }
+
+    /// Runs generations until the campaign has run `spec.generations` of
+    /// them or a budget stops it. A generation interrupted before resumes at
+    /// its first stage without a record; every stage with one is reused.
+    ///
+    /// # Errors
+    /// The first stage that failed (its attempt stays open in the ledger and
+    /// the next run resumes it), or [`CampaignError::Cancelled`].
+    pub fn run(&mut self) -> Result<CampaignReport, CampaignError> {
+        let mut stopped = Stopped::Done;
+        loop {
+            let generation = next_generation(&self.ledger.commits()?);
+            if generation > self.spec.generations {
+                break;
+            }
+            if let Some(stop) = self.generation(generation)? {
+                stopped = stop;
                 break;
             }
         }
+        let mut report = self.report()?;
+        report.stopped = Some(stopped);
         Ok(report)
     }
 
-    fn plan(&self, generation: u32) -> Result<PlannedArm, ArmRefused> {
-        let kept = self.parts.validator.retention_units();
-        if kept > 0 && self.config.retention_loss_to_detect > 0.0 {
-            let alpha = splinter_eval::campaign::plan::spent_alpha(
-                self.config.gate.total_alpha,
-                generation,
-            );
-            let needed = splinter_eval::campaign::plan::retention_units_needed(
-                self.config.retention_loss_to_detect,
-                alpha,
-                2000,
-                self.parts.significance,
-            );
-            if needed.is_none_or(|n| kept < n) {
-                return Err(ArmRefused::Invalid(format!(
-                    "the retention set has {kept} tasks, too few to detect a loss of {} of them at level {alpha:.4} (needs {})",
-                    self.config.retention_loss_to_detect,
-                    needed.map_or("more than 2000".to_string(), |n| n.to_string())
-                )));
-            }
-        }
-        let prior = self.config.expected_discordance;
-        let discordance = match self.loaded.state.last_discordance {
-            Some(seen) if seen >= self.config.target_effect.max(DISCORDANCE_FLOOR) => seen,
-            _ => prior,
+    /// The limit a stage that spends `rollouts` more, or trains, would break.
+    fn over_budget(&self, rollouts: u64, trains: bool) -> Result<Option<Stopped>, CampaignError> {
+        let budget = &self.spec.budget;
+        let spent = spent(&self.ledger.commits()?)?;
+        let over = |limit: &str, spent: f64, allowed: f64| {
+            Some(Stopped::Budget {
+                limit: limit.into(),
+                spent,
+                allowed,
+            })
         };
-        plan_arm(
-            &ExamShape {
-                units: self.parts.validator.units(),
-                discordance,
-            },
-            &ArmGoal {
-                total_alpha: self.config.gate.total_alpha,
-                ..ArmGoal::new(self.config.target_effect, generation)
-            },
-            self.parts.significance,
-        )
+        if let Some(allowed) = budget.rollouts.filter(|a| spent.rollouts + rollouts > *a) {
+            return Ok(over("rollouts", spent.rollouts as f64, allowed as f64));
+        }
+        if let Some(allowed) = budget.tokens.filter(|a| spent.tokens >= *a) {
+            return Ok(over("tokens", spent.tokens as f64, allowed as f64));
+        }
+        if let Some(allowed) = budget.gpu_hours.filter(|a| trains && spent.gpu_hours >= *a) {
+            return Ok(over("gpu_hours", spent.gpu_hours, allowed));
+        }
+        Ok(None)
     }
 
-    fn arm(&mut self) -> Result<ArmReport, CampaignError> {
-        if self.loaded.state.pending.is_some() {
-            return self.gate_pending();
-        }
-        let generation = self.loaded.state.arms + 1;
-        let strategy = self.strategy();
-        let id = ArmId {
-            name: format!("arm-{generation:04}-{}", strategy.name()),
-            generation,
-            strategy,
-        };
-        let started_at = self.parts.clock.utc_now();
-        let began = self.parts.stopwatch.seconds();
-        preflight::check(&self.config.preflight)?;
-        let planned = match self.plan(generation) {
-            Ok(planned) => planned,
-            Err(refused) => {
-                let entry = self.entry(
-                    &id,
-                    Outcome {
-                        verdict: Verdict::Refused {
-                            reason: refused.to_string(),
-                        },
-                        cost: Cost::default(),
-                        discoveries: None,
-                        measurements: BTreeMap::new(),
-                    },
-                );
-                self.store.record(&entry)?;
-                return Err(refused.into());
+    fn committed(&self, name: &str, key: &KeyParts) -> Result<bool, CampaignError> {
+        Ok(matches!(
+            self.ledger.standing(name, &key.key())?,
+            Standing::Committed(_)
+        ))
+    }
+
+    /// Runs the stages of `generation` that have no record; `Some` when a
+    /// budget stopped it before a stage.
+    fn generation(&mut self, generation: u32) -> Result<Option<Stopped>, CampaignError> {
+        let commits = self.ledger.commits()?;
+        let (champion, _) = champion::history(&self.base, &commits)?;
+        // The tasks of a generation follow from the rollouts before it alone, so
+        // a resumed generation draws the tasks it drew the first time.
+        let rates = rates(&self.spec, &commits, generation)?;
+        let tasks: Vec<String> = self
+            .parts
+            .rollouts
+            .tasks()?
+            .into_iter()
+            .filter(|task| rates.band(task) != Band::Retired)
+            .collect();
+
+        // Rollout: the champion on every practice task it has not mastered.
+        let attempts = self.spec.rollout.attempts;
+        let rollout_seed = self.seed_of(generation, 1);
+        let key = KeyParts::new("rollout")
+            .config(&json!({"attempts": attempts, "seed": rollout_seed, "tasks": tasks}))
+            .input("champion", &digest_of(&champion))
+            .input("rollouts", &digest_of(&self.parts.rollouts.identity()));
+        let name = unit(generation, "rollout");
+        let planned = u64::from(attempts) * tasks.len() as u64;
+        if !self.committed(&name, &key)? {
+            if let Some(stop) = self.over_budget(planned, false)? {
+                return Ok(Some(stop));
             }
-        };
-        self.say(&format!(
-            "{}: planned (exam detects a lead of {:.3} at level {:.4})",
-            id.name, planned.minimum_detectable_effect, planned.alpha
-        ));
-        let running = self.entry(
-            &id,
-            Outcome {
-                verdict: Verdict::Running,
-                cost: Cost::default(),
-                discoveries: None,
-                measurements: BTreeMap::from([(
-                    "planned_mde".to_string(),
-                    planned.minimum_detectable_effect,
-                )]),
-            },
-        );
-        self.store.record(&running)?;
+        }
+        let ctx = self.ctx;
+        let rollouts = &mut *self.parts.rollouts;
+        let cancel = self.parts.cancel.clone();
+        let (rolled, _) = stage(&self.ledger, &cancel, &name, &key, |root| {
+            let dir = stage_dir(root, generation, "rollout")?;
+            let rolled = rollouts.rollout(
+                ctx,
+                &RolloutRequest {
+                    generation,
+                    champion: &champion,
+                    tasks: &tasks,
+                    attempts,
+                    seed: rollout_seed,
+                    dir: &dir,
+                },
+                &cancel,
+            )?;
+            let export = relative(root, &rolled.export)?;
+            let record = RolloutRecord {
+                champion: champion.clone(),
+                tasks: tasks.clone(),
+                rollouts: rolled.trials.len() as u64,
+                trials: rolled.trials,
+                tokens: rolled.tokens,
+            };
+            Ok(StageWork::new(to_value(&record)?).output("export", &export))
+        })?;
+        self.say(&format!("{name}: recorded"));
 
-        self.calibrate(generation)?;
-        let collected = self.collect(generation)?;
-        let mut measurements = BTreeMap::from([
-            ("planned_mde".to_string(), planned.minimum_detectable_effect),
-            ("planned_power".to_string(), planned.power_at_target),
-            ("planned_alpha".to_string(), planned.alpha),
-            ("shortfall_groups".to_string(), collected.shortfall as f64),
-        ]);
-        let retired = self.loaded.state.rates.counts(&self.pool()).retired;
-        measurements.insert("retired_tasks".into(), retired as f64);
+        // Ingest: the graded trials admitted as experience, idempotently.
+        let key = KeyParts::new("ingest").input("export", output(&rolled, "export")?);
+        let export = self.ledger.dir().join(padded(generation)).join("rollout");
+        let export = rolled
+            .outputs
+            .iter()
+            .find(|o| o.name == "export")
+            .map_or(export, |o| self.ledger.dir().join(&o.path));
+        let name = unit(generation, "ingest");
+        stage(&self.ledger, &cancel, &name, &key, |_| {
+            let ingested =
+                ingest_bench_trials(ctx, std::slice::from_ref(&export), IngestOptions::default())
+                    .map_err(orchestrated)?;
+            let record = IngestRecord {
+                train_set: ingested.train_set.clone(),
+                experiences: ingested.admitted.values().sum::<usize>() + ingested.already_held,
+                refused: ingested.refused.len(),
+            };
+            Ok(StageWork::new(to_value(&record)?))
+        })?;
 
-        self.say(&format!(
-            "{}: {} groups, {} informative ({} short of the batch), {} rollouts",
-            id.name,
-            collected.groups.len(),
-            collected.informative.len(),
-            collected.shortfall,
-            collected.rollouts
-        ));
-        let records = self.records(generation, strategy, &collected)?;
-        let trainable = records.counts.fresh_signal() > 0;
-        let rollouts = collected.rollouts;
-        let spent = |this: &Self| (this.parts.stopwatch.seconds() - began).max(0.0);
-        if !trainable {
+        // Curate: one dataset over every generation's experience so far.
+        let commits = self.ledger.commits()?;
+        let sets: Vec<SetId> = latest_per_generation(&commits, "ingest", generation)
+            .into_iter()
+            .map(record::<IngestRecord>)
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter_map(|r| r.train_set)
+            .collect();
+        let split_seed = self.seed_of(generation, 2);
+        let key = KeyParts::new("curate")
+            .config(&json!({"curate": self.spec.curate, "split_seed": split_seed, "sets": sets}));
+        let name = unit(generation, "curate");
+        let curate = &self.spec.curate;
+        let base_ref = self.base.reference()?;
+        let (curated, _) = stage(&self.ledger, &cancel, &name, &key, |_| {
+            let record = if sets.is_empty() {
+                CurateRecord {
+                    dataset: None,
+                    records: 0,
+                    sets: Vec::new(),
+                }
+            } else {
+                let mut request = BuildRequest::new(sets.clone(), curate.view);
+                request.max_block = curate.max_block;
+                request.pack = curate.pack;
+                request.split_seed = Some(split_seed);
+                request.base = Some(base_ref.clone());
+                curated(ctx, &request, &sets)?
+            };
+            Ok(StageWork::new(to_value(&record)?))
+        })?;
+        let curated: CurateRecord = record(&curated)?;
+        let Some(dataset) = curated.dataset.filter(|_| curated.records > 0) else {
             let reason = format!(
-                "no group among {} carried a reward spread or a teacher signal",
-                collected.groups.len()
+                "generation {generation}'s experience held no training material; the champion stays"
             );
-            let used = Spent {
-                informative_fraction: collected.informative_fraction,
-                gpu_hours: spent(self) * f64::from(self.config.gpus) / 3600.0,
-                rollouts,
-                counts: records.counts,
-            };
-            return self.close_without_candidate(
-                &id,
-                Verdict::RolledBack { reason },
-                used,
-                measurements,
-            );
-        }
+            champion::keep(&self.ledger, generation, &champion, &reason, &Value::Null)?;
+            self.say(&reason);
+            return Ok(None);
+        };
 
-        let train = TrainRequest {
-            records: records.records,
-            continue_from: self.loaded.state.policy.adapter.clone(),
-            out_dir: self.adapters.join(&id.name),
-            seed: self.rng(generation, 1).next_u64(),
-            advantage: records.advantage,
-        };
-        self.say(&format!(
-            "{}: training on {} records",
-            id.name,
-            train.records.len()
-        ));
-        let trained = self.parts.trainer.train(&train)?;
-        let mean_reward = mean(
-            collected
-                .informative
-                .iter()
-                .flat_map(|&i| &collected.groups[i].rollouts)
-                .map(|r| r.reward),
-        );
-        // The sampler's own log-probabilities when the rollouts carry them,
-        // else the trainer's estimate over the same on-policy tokens.
-        let entropy = sampled_entropy(
-            collected
-                .informative
-                .iter()
-                .flat_map(|&i| &collected.groups[i].rollouts)
-                .filter_map(|r| r.trace.as_ref())
-                .flat_map(|t| &t.sequences)
-                .flat_map(|s| s.generation_log_probs.iter().map(|&lp| f64::from(lp))),
-        )
-        .or(trained.report.entropy);
-        let signals = StepSignals {
-            step: generation,
-            policy_version: self.loaded.state.policy.version,
-            informative_fraction: collected.informative_fraction,
-            kl: trained.report.kl,
-            clip_fraction: trained.report.clip_fraction,
-            entropy,
-            mean_reward,
-        };
-        let findings = self.config.bounds.assess(&signals);
-        let checkpoint = Checkpoint {
-            digest: trained.digest.clone(),
-            path: trained.dir.clone(),
-            generation,
-            bytes: trained.bytes,
-        };
-        self.loaded.state.checkpoints.push(checkpoint);
-        self.loaded.state.signals.push(signals);
-        let gpu_seconds = spent(self) * f64::from(self.config.gpus);
-        if findings.iter().any(Finding::halts) {
-            let reason = format!("signals out of bounds: {findings:?}");
-            let used = Spent {
-                informative_fraction: collected.informative_fraction,
-                gpu_hours: gpu_seconds / 3600.0,
-                rollouts,
-                counts: records.counts,
-            };
-            let report =
-                self.close_without_candidate(&id, Verdict::Halted { reason }, used, measurements)?;
-            return Ok(ArmReport {
-                signals: Some(signals),
-                findings,
-                stop: true,
-                ..report
-            });
+        // Train: a candidate from the base on the cumulative dataset, as a
+        // served brain job brain resumes or reuses by its key.
+        let train_seed = self.seed_of(generation, 3);
+        let key = KeyParts::new("train")
+            .config(&json!({"train": self.spec.train, "seed": train_seed, "dataset": dataset}))
+            .input("base", &digest_of(&self.base));
+        let name = unit(generation, "train");
+        if !self.committed(&name, &key)? {
+            if let Some(stop) = self.over_budget(0, true)? {
+                return Ok(Some(stop));
+            }
         }
-        measurements.extend(signal_measurements(&signals));
-        measurements.insert(
-            "steps_skipped_guard".into(),
-            trained.report.skipped_guard as f64,
+        let resume_key = format!(
+            "{}-{}-{}",
+            self.spec.name,
+            padded(generation),
+            &key.key().as_str().rsplit(':').next().unwrap_or_default()[..16]
         );
-        self.loaded.state.pending = Some(PendingCandidate {
-            arm: id.name.clone(),
-            adapter: trained.adapter,
-            dir: trained.dir,
-            digest: trained.digest,
-            bytes: trained.bytes,
-            report: trained.report,
-            signals,
-            gpu_seconds,
-            rollouts,
-            generated_tokens: None,
-            started_at,
-            replay: self.passing(&collected),
-            measurements,
-            env_rewards: self.env_rewards(&collected),
-        });
-        self.save()?;
-        let mut report = self.gate_pending()?;
-        report.records = records.counts;
-        report.findings = findings;
-        Ok(report)
+        let (trainer, stopwatch, gpus) =
+            (self.parts.trainer, self.parts.stopwatch, self.parts.gpus);
+        let spec_train = self.spec.train.clone();
+        let from = self.base.reference()?;
+        let (trained, _) = stage(&self.ledger, &cancel, &name, &key, |_| {
+            let started = stopwatch.seconds();
+            let request = TrainRequest {
+                datasets: vec![dataset.clone()],
+                rehearsal: None,
+                from: from.clone(),
+                replay_fraction: 0.0,
+                replay_policy: Default::default(),
+                steps: spec_train.steps,
+                rank: spec_train.rank,
+                beta: None,
+                tuning: Tuning {
+                    learning_rate: spec_train.learning_rate,
+                    records_per_step: spec_train.records_per_step,
+                    max_block: spec_train.max_block,
+                    seed: Some(train_seed),
+                    ..Tuning::default()
+                },
+            };
+            let candidate = train::train_identified(ctx, &request, &resume_key, trainer, &cancel)
+                .map_err(orchestrated)?;
+            let seconds = (stopwatch.seconds() - started).max(0.0);
+            let record = TrainRecord {
+                candidate: Model {
+                    generation,
+                    model: splinter_core::model_ref::ModelRef::Local {
+                        checkpoint: candidate.base.display().to_string(),
+                        adapter: Some(candidate.adapter.display().to_string()),
+                        context_tokens: None,
+                    }
+                    .to_string(),
+                    candidate: Some(candidate.candidate.clone()),
+                    adapter: Some(candidate.adapter_digest.clone()),
+                },
+                resume_key: resume_key.clone(),
+                steps: candidate.steps,
+                gpu_hours: seconds * f64::from(gpus) / 3600.0,
+            };
+            Ok(StageWork::new(to_value(&record)?))
+        })?;
+        let trained: TrainRecord = record(&trained)?;
+        let candidate = trained.candidate;
+
+        // Evaluate: the examiner's verdicts on the candidate against the
+        // champion, over this generation's own sealed slice.
+        let slices = self.parts.examiner.slices();
+        let slice = slices
+            .get(generation as usize - 1)
+            .cloned()
+            .ok_or_else(|| {
+                CampaignError::Config(format!(
+                    "no sealed slice is left for generation {generation}"
+                ))
+            })?;
+        let key = KeyParts::new("evaluate")
+            .config(&json!({"slice": slice}))
+            .input("candidate", &digest_of(&candidate))
+            .input("champion", &digest_of(&champion))
+            .input("examiner", &digest_of(&self.parts.examiner.identity()));
+        let name = unit(generation, "evaluate");
+        let training = self
+            .ctx
+            .datasets()
+            .get(&splinter_core::dataset::DatasetId(
+                Digest::parse(&dataset).map_err(|e| CampaignError::Config(e.to_string()))?,
+            ))
+            .map_err(|e| CampaignError::Config(format!("dataset {dataset}: {e}")))?
+            .path;
+        let examiner = &mut *self.parts.examiner;
+        let campaign_name = self.spec.name.clone();
+        let (examined, _) = stage(&self.ledger, &cancel, &name, &key, |root| {
+            let dir = stage_dir(root, generation, "evaluate")?;
+            let examined = examiner.examine(
+                ctx,
+                &ExamRequest {
+                    campaign: &campaign_name,
+                    generation,
+                    candidate: &candidate,
+                    predecessor: &champion,
+                    slice: &slice,
+                    training: &training,
+                    dir: &dir,
+                },
+                &cancel,
+            )?;
+            Ok(StageWork::new(json!({"slice": slice}))
+                .output("dev", &relative(root, &examined.dev)?)
+                .output("retention", &relative(root, &examined.retention)?)
+                .output("sealed", &relative(root, &examined.sealed)?))
+        })?;
+
+        // Gate: the one promotion gate, on the verdicts' signed aggregates.
+        let pair = candidate.against(&champion);
+        let key = KeyParts::new("gate")
+            .config(&pair)
+            .input("dev", output(&examined, "dev")?)
+            .input("retention", output(&examined, "retention")?)
+            .input("sealed", output(&examined, "sealed")?);
+        let name = unit(generation, "gate");
+        let root = self.ledger.dir().to_path_buf();
+        let read = |name: &str| -> Result<Value, CampaignError> {
+            let path = examined
+                .outputs
+                .iter()
+                .find(|o| o.name == name)
+                .map(|o| root.join(&o.path))
+                .ok_or_else(|| CampaignError::Config(format!("no {name} verdict")))?;
+            let text = std::fs::read_to_string(&path)
+                .map_err(|e| CampaignError::Config(format!("{}: {e}", path.display())))?;
+            serde_json::from_str(&text)
+                .map_err(|e| CampaignError::Config(format!("{}: {e}", path.display())))
+        };
+        let verdict_key = self.parts.examiner.key().clone();
+        let (gated, _) = stage(&self.ledger, &cancel, &name, &key, |_| {
+            let (dev, retention, sealed) = (read("dev")?, read("retention")?, read("sealed")?);
+            let promotion = decide(
+                &verdict_key,
+                &pair,
+                Submitted {
+                    dev: &dev,
+                    retention: &retention,
+                    sealed: &sealed,
+                },
+            );
+            Ok(StageWork::new(to_value(&promotion)?))
+        })?;
+        let promotion: Promotion = record(&gated)?;
+
+        // Promote or keep: the champion's move, the last record of the
+        // generation.
+        if promotion.promoted {
+            champion::promote(
+                &self.ledger,
+                generation,
+                &champion,
+                &candidate,
+                &gated.summary,
+            )?;
+            self.say(&format!(
+                "generation {generation}: the candidate is the champion"
+            ));
+        } else {
+            let reason = promotion
+                .reasons
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ");
+            champion::keep(&self.ledger, generation, &champion, &reason, &gated.summary)?;
+            self.say(&format!(
+                "generation {generation}: the champion stays ({reason})"
+            ));
+        }
+        Ok(None)
     }
 }
 
-fn mean(values: impl Iterator<Item = f64>) -> Option<f64> {
-    let (sum, n) = values.fold((0.0, 0usize), |(s, n), v| (s + v, n + 1));
-    (n > 0).then(|| sum / n as f64)
-}
-
-/// The step's signals as ledger measurements; an absent signal stays absent.
-fn signal_measurements(signals: &StepSignals) -> BTreeMap<String, f64> {
-    [
-        ("informative_fraction", signals.informative_fraction),
-        ("kl", signals.kl),
-        ("clip_fraction", signals.clip_fraction),
-        ("entropy", signals.entropy),
-        ("mean_reward", signals.mean_reward),
-    ]
-    .into_iter()
-    .filter_map(|(name, value)| value.map(|v| (name.to_string(), v)))
-    .collect()
+/// The dataset `request` builds over `sets`, recorded; an empty projection
+/// is no dataset.
+fn curated(
+    ctx: &Context,
+    request: &BuildRequest,
+    sets: &[SetId],
+) -> Result<CurateRecord, CampaignError> {
+    let (projection, _) = datasets::project_with(ctx, request, None).map_err(orchestrated)?;
+    if projection.records.is_empty() {
+        return Ok(CurateRecord {
+            dataset: None,
+            records: 0,
+            sets: sets.to_vec(),
+        });
+    }
+    let stored = datasets::store_dataset(ctx, &projection, false).map_err(orchestrated)?;
+    Ok(CurateRecord {
+        dataset: Some(stored.id.0.to_string()),
+        records: projection.records.len(),
+        sets: sets.to_vec(),
+    })
 }

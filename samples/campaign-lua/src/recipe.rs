@@ -14,22 +14,12 @@
 use anyhow::Result;
 use clap::Args;
 use splinter_sdk::campaign::brain::{ModelSettings, TrainerSettings};
-use splinter_sdk::campaign::{CampaignConfig, LearningStrategy};
 use splinter_sdk::model::policy_gradient::{Behaviour, PolicyGradientOptions, Reference};
 use splinter_sdk::model::precision::BasePrecision;
 
 /// The settings of an arm.
 #[derive(Args, Clone, Debug)]
 pub struct Recipe {
-    /// Attempts per task of the calibration, 8 to 16.
-    #[arg(long, default_value_t = 8)]
-    pub calibration_k: usize,
-    /// Attempts per task of a training group.
-    #[arg(long, default_value_t = 8)]
-    pub attempts: usize,
-    /// Informative groups per batch.
-    #[arg(long, default_value_t = 24)]
-    pub batch_groups: usize,
     /// Optimiser steps per arm.
     #[arg(long, default_value_t = 16)]
     pub steps: u32,
@@ -54,28 +44,6 @@ pub struct Recipe {
     /// Tokens a completion may take.
     #[arg(long, default_value_t = 24)]
     pub max_tokens: u32,
-    /// Cards held, for the GPU-hours recorded.
-    #[arg(long, default_value_t = 1)]
-    pub gpus: u32,
-    /// Strategies in order (`policy-gradient`, `positive-only`, `repair`,
-    /// `distill`); a plateau moves to the next.
-    #[arg(long, value_delimiter = ',', default_value = "policy-gradient")]
-    pub ladder: Vec<String>,
-    /// What to do with a group that all failed (`skip`, `cliff-distill`).
-    #[arg(long, default_value = "skip")]
-    pub all_fail: String,
-    /// Largest mean KL to the reference a step may show before the campaign
-    /// halts.
-    #[arg(long, default_value_t = 0.5)]
-    pub max_kl: f64,
-    /// Fewest informative groups, as a share of those collected, before a
-    /// step is reported starved.
-    #[arg(long, default_value_t = 0.25)]
-    pub min_informative: f64,
-    /// Retention passes a candidate may lose against the champion; zero rolls
-    /// back any arm that forgets a retention task.
-    #[arg(long, default_value_t = 0)]
-    pub max_retention_loss: usize,
     /// Retention loss, as a share of the retention set, a candidate may show
     /// (a non-inferiority margin); also the loss the retention set must be
     /// large enough to detect.
@@ -84,13 +52,6 @@ pub struct Recipe {
     /// Precision of the frozen base during training: `bf16` or `fp32`.
     #[arg(long, default_value = "bf16")]
     pub base_precision: String,
-    /// Fraction of the batch's records replayed from earlier arms.
-    #[arg(long, default_value_t = 0.25)]
-    pub replay: f64,
-    /// Files the disks must have free before an arm (a quota on their number
-    /// is as binding as one on bytes).
-    #[arg(long, default_value_t = 20_000)]
-    pub min_free_inodes: u64,
     /// Half-width of the clip band of the importance ratio.
     #[arg(long)]
     pub clip_eps: Option<f32>,
@@ -150,57 +111,6 @@ impl Recipe {
             },
         })
     }
-
-    /// The controller's configuration for campaign `name`.
-    ///
-    /// # Errors
-    /// A strategy or the all-failed rule is not one of the named.
-    pub fn campaign_config(
-        &self,
-        name: &str,
-        hypothesis: &str,
-        out: &std::path::Path,
-    ) -> Result<CampaignConfig> {
-        let mut config = CampaignConfig::new(name, hypothesis);
-        config.calibration_k = self.calibration_k;
-        config.attempts_per_group = self.attempts;
-        config.batch.target_groups = self.batch_groups;
-        config.batch.max_request = self.batch_groups * 4;
-        config.target_effect = self.target_effect;
-        config.expected_discordance = self.discordance;
-        config.gpus = self.gpus;
-        config.replay.per_batch_record = self.replay;
-        config.bounds.max_kl = Some(self.max_kl);
-        config.gate.max_retention_loss = self.max_retention_loss;
-        config.gate.max_retention_loss_rate = self.retention_margin;
-        config.retention_loss_to_detect = self.retention_margin;
-        config.bounds.min_informative_fraction = Some(self.min_informative);
-        config.ladder = self
-            .ladder
-            .iter()
-            .map(|s| strategy(s))
-            .collect::<Result<_>>()?;
-        config.all_fail = self
-            .all_fail
-            .parse()
-            .map_err(|e: String| anyhow::anyhow!(e))?;
-        config.preflight = vec![splinter_sdk::preflight::Requirement {
-            path: out.to_path_buf(),
-            min_free_bytes: 5 << 30,
-            min_free_inodes: self.min_free_inodes,
-        }];
-        Ok(config)
-    }
-}
-
-fn strategy(name: &str) -> Result<LearningStrategy> {
-    Ok(match name {
-        "policy-gradient" => LearningStrategy::PolicyGradient,
-        "positive-only" => LearningStrategy::PositiveOnly,
-        "repair" => LearningStrategy::Repair,
-        "distill" => LearningStrategy::Distill,
-        other => anyhow::bail!("{other:?} is not a strategy"),
-    })
 }
 
 #[cfg(test)]
@@ -246,12 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_strategy_or_precision_is_refused() {
-        let cli = Cli::parse_from(["x", "--ladder", "magic"]);
-        assert!(cli
-            .recipe
-            .campaign_config("c", "h", std::path::Path::new("."))
-            .is_err());
+    fn an_unknown_precision_is_refused() {
         let cli = Cli::parse_from(["x", "--base-precision", "int3"]);
         assert!(cli
             .recipe

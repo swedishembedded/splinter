@@ -9,7 +9,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{ArgGroup, Args, Parser, Subcommand};
-use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{
     parse_advantage, parse_reward_metric, parse_strength, parse_strip, AdvantageKind, StripPolicy,
@@ -125,6 +124,11 @@ pub enum Command {
     /// had: run one, or show the ledger and the full retention matrix.
     #[command(subcommand)]
     Generation(GenerationCommand),
+    /// A resumable multi-generation learning campaign with one promotion
+    /// gate: run its generations, show what it has done, or roll its
+    /// champion back.
+    #[command(subcommand)]
+    Campaign(CampaignCommand),
     /// Take in recorded agent sessions, secrets removed.
     #[command(subcommand)]
     Session(SessionCommand),
@@ -414,31 +418,6 @@ pub struct SolveArgs {
     pub no_compaction: bool,
 }
 
-/// `verify`.
-#[derive(Debug, Args)]
-pub struct VerifyArgs {
-    /// The experience set, by id or unique prefix.
-    #[arg(value_name = "EXPERIENCE-SET")]
-    pub experience_set: String,
-    /// A calibrated judge for the kinds a judge grades.
-    #[arg(long, value_parser = model_ref, value_name = "REF")]
-    pub judge: Option<ModelRef>,
-}
-
-/// `critique`.
-#[derive(Debug, Args)]
-pub struct CritiqueArgs {
-    /// The experience set, by id or unique prefix.
-    #[arg(value_name = "EXPERIENCE-SET")]
-    pub experience_set: String,
-    /// The model that critiques.
-    #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
-    pub critic: ModelRef,
-    /// Retries per failed experience.
-    #[arg(long, default_value_t = DEFAULT_RETRIES, value_name = "N")]
-    pub retry: usize,
-}
-
 /// `judge ...`.
 #[derive(Debug, Subcommand)]
 pub enum JudgeCommand {
@@ -723,6 +702,7 @@ impl LineageArgs {
 mod absorb;
 mod baseline;
 mod bench;
+mod campaign;
 mod consolidate;
 mod control;
 mod corrections;
@@ -743,12 +723,14 @@ mod learn;
 mod objects;
 mod practice;
 pub mod reference;
+mod review;
 mod state;
 mod tasks;
 mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use baseline::BaselineArgs;
 pub use bench::BenchSplit;
+pub use campaign::CampaignCommand;
 pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;
@@ -768,6 +750,7 @@ pub use learn::{LearnArgs, TaskHarnessArgs};
 pub use objects::ObjectsCommand;
 pub use practice::{PracticeArgs, ReplayArg};
 pub use reference::CliReferenceArgs;
+pub use review::{CritiqueArgs, VerifyArgs};
 pub use state::{RunsCommand, StateCommand};
 pub use tasks::TasksCommand;
 use train::positive_count;

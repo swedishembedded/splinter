@@ -2,79 +2,89 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
 // Swedish Embedded AB implements solutions that run model learning as one
-// continuous, resumable campaign with dynamic sampling, replay and a
-// validation gate with rollback, for its clients. If your team needs expertise
-// in on-policy training loops for language-model agents you can procure our
-// services by sending an email to info@swedishembedded.com.
+// resumable, multi-generation campaign with a single promotion gate and
+// rollback, for its clients. If your team needs expertise in self-improving
+// training loops you can procure our services by sending an email to
+// info@swedishembedded.com.
 
-//! The campaign controller: learning as a continuous, resumable campaign
-//! instead of rounds glued together by scripts.
+//! The campaign: learning as generations of one resumable run, each ending
+//! in one promotion decision, instead of rounds glued together by scripts.
 //!
-//! A campaign is a sequence of arms. Each arm is one cycle of the loop:
+//! A generation is seven stages, in order, each a unit of the campaign's
+//! stage ledger (`<state>/campaigns/<name>/ledger.jsonl`,
+//! [`splinter_store::stage_ledger`]):
 //!
-//! 1. **preflight** - the disks have the bytes and the files the arm needs
-//!    ([`crate::preflight`]);
-//! 2. **plan** - the exam that will judge the arm can detect the effect it
-//!    targets, at the level this gate may spend, or the arm is refused before
-//!    it costs anything ([`splinter_eval::campaign::plan`]);
-//! 3. **calibrate** - every task not yet measured is attempted k = 8 to 16
-//!    times by the current policy; the per-task pass rate is the controller's
-//!    state, and tasks at or above 0.9 are dropped for good
-//!    ([`splinter_eval::campaign::pass_rate`]);
-//! 4. **collect** - a [`RolloutCollector`] rolls out groups of attempts on
-//!    prompts drawn from the frontier; only groups with a reward spread enter
-//!    the batch, over-provisioned and refilled until the batch is full
-//!    ([`splinter_eval::campaign::sampling`]); groups that all failed go to
-//!    the configured [`splinter_eval::campaign::sampling::AllFailStrategy`];
-//! 5. **train** - the batch's records, beside a bounded replay of earlier
-//!    arms' verified data, go to a [`Trainer`] (brain), which returns an
-//!    adapter and the KL and clip fraction of its steps;
-//! 6. **gate** - the signals of the step are read against their bounds, and a
-//!    [`Validator`] runs the candidate and the champion on dev tasks the
-//!    campaign never trains on; the candidate becomes the champion or is rolled
-//!    back ([`splinter_eval::campaign::gate`]);
-//! 7. **account** - the arm's hypothesis, configuration digest, GPU-hours,
-//!    cost and verdict are appended to the ledger, the state is saved by
-//!    compare-and-swap, superseded checkpoints are collected keeping their
-//!    digests ([`gc`]), and the discovery rate per GPU-hour is read for a
-//!    plateau ([`splinter_eval::campaign::plateau`]); a plateau moves the
-//!    campaign to the next strategy of its ladder.
+//! 1. **rollout** (`gNNNN/rollout`) - the champion attempts every
+//!    train-split practice task it has not mastered (the frontier: a task
+//!    whose pass rate over the earlier rollouts reached `retire_at` on
+//!    enough graded attempts is retired, [`splinter_eval::campaign::pass_rate`]);
+//!    the graded trials come back as the examiner's export ([`Rollouts`]);
+//! 2. **ingest** - the export admitted as experience through the one intake
+//!    every benchmark trial takes ([`crate::bench::ingest_bench_trials`]),
+//!    idempotently;
+//! 3. **curate** - one dataset over the experience of every generation so
+//!    far, recorded by its id, the digest of its manifest;
+//! 4. **train** - a candidate trained from the base on that dataset as a
+//!    served brain job under a `resume_key` derived from the stage's
+//!    identity ([`crate::train::train_identified`]): asked again after a
+//!    crash, brain continues the run or answers with the result it recorded;
+//! 5. **evaluate** - the examiner's three signed verdicts on the candidate
+//!    against the champion: the development split, the retention suite and
+//!    the generation's own fresh sealed slice ([`Examiner`]);
+//! 6. **gate** - the one promotion gate on those verdicts' signed aggregates,
+//!    verified in this process ([`splinter_eval::promotion`]);
+//! 7. **promote** - the champion's move: promoted, or kept with the gate's
+//!    typed reasons ([`champion`]).
 //!
-//! Where rollouts come from is a trait. [`served`] holds the path over a
-//! brain server (a served model sampled at temperature 1 against a verifier,
-//! and brain's training job), with the family and settings of [`brain`];
-//! [`endpoint`] holds the path over an agent
-//! executor that runs tasks in sandboxes and returns, per model call, the
-//! token ids and log-probabilities the policy sampled with.
+//! **Durable and idempotent.** A stage's record is committed to the ledger
+//! before the next stage starts. Its key is the digest of everything its
+//! result depends on (its settings, its draw of the campaign's seed, and the
+//! records of the stages before it), never a time or a path, so a stage
+//! delivered again under the same key is reused and runs nothing. A run
+//! killed anywhere resumes at the first stage without a record; a stage it
+//! interrupted runs again, its brain job reused by its `resume_key`.
+//! Ctrl-C cancels the stage in progress, a training job on the server
+//! included. Budgets (rollouts, GPU-hours, tokens) stop the campaign before
+//! a stage that would exceed one.
 //!
-//! The state is a value in the store ([`splinter_store::campaign`]): a crash
-//! leaves the last saved state, an unfinished arm is redone from its start
-//! (or, when training had finished, from its gate), and a second controller
-//! on the same campaign loses the compare-and-swap instead of corrupting it.
+//! **Rollback.** The champion's history is append-only:
+//! [`CampaignController::rollback`] appends a record moving the champion
+//! back to an earlier one, with its reason.
+//!
+//! The in-memory rollout machinery over a served policy ([`served`],
+//! [`endpoint`], [`brain`], [`factory`]) is what samples and the episode
+//! executors are built on; the campaign controller itself practises through
+//! [`Rollouts`].
 
+mod account;
 pub mod brain;
-mod closing;
-mod config;
+pub mod champion;
 mod controller;
 pub mod endpoint;
 mod environments;
+pub mod examiner;
 pub mod factory;
-pub mod gc;
-mod records;
-mod replay;
+pub mod practice;
 pub mod served;
-mod stages;
-mod state;
+mod spec;
 mod types;
+mod work;
 
-pub use config::{Acceptance, AdvantageMode, CampaignConfig, LearningStrategy, ReplayConfig};
-pub use controller::{ArmReport, CampaignController, CampaignReport, Parts, Stopwatch, WallClock};
+pub use account::{
+    campaign_rollback, campaign_status, report, CampaignReport, GenerationReport, Spent,
+};
+pub use champion::{Move, MoveKind};
+pub use controller::{
+    campaign_dir, unit, CampaignController, Parts, Stopped, CAMPAIGN_UNIT, STAGES,
+};
 pub use environments::EnvironmentLabels;
-pub use records::{BatchRecords, RecordCounts};
-pub use replay::ReplayBuffer;
-pub use state::{CampaignState, EvidenceSpent, PendingCandidate};
+pub use spec::{Budget, CampaignSpec, CurateSpec, RolloutSpec, TrainSpec, DEFAULT_RETIRE_AT};
 pub use types::{
     AllFailHandler, CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector,
     RolloutGroup, RolloutTrace, TraceSequence, TrainReport, TrainRequest, Trained, Trainer,
     Validator,
+};
+pub use work::{
+    ExamRequest, Examined, Examiner, Model, Rolled, RolloutRequest, Rollouts, Stopwatch, Trial,
+    WallClock,
 };

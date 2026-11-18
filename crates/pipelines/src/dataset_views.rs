@@ -25,7 +25,7 @@ use splinter_orchestrator::error::OrchestratorError;
 pub const DEFAULT_MIN_STRENGTH: Strength = Strength::Consistency;
 
 /// The views a dataset can be built through.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ViewName {
     /// A passed experience's instruction and final answer.

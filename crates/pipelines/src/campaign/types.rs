@@ -7,8 +7,12 @@
 // agents you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! The seams of the campaign controller: what a collector, a trainer and a
-//! validator are, and the plain data that crosses them.
+//! The seams of in-memory rollout collection over a served policy: what a
+//! collector, a trainer and a validator are, and the plain data that crosses
+//! them (rollout groups with the sampler's own token ids and
+//! log-probabilities). Samples and the episode executors are built on them;
+//! the campaign controller's own seams are [`super::work`]. The campaign's
+//! error, [`CampaignError`], is shared by both.
 
 use std::path::PathBuf;
 
@@ -20,20 +24,12 @@ use splinter_data::Record;
 use splinter_eval::campaign::gate::DevResult;
 use splinter_eval::campaign::sampling::{Attempt, Group};
 
-use crate::preflight::PreflightError;
-
 /// Why a campaign operation failed.
 #[derive(Debug, thiserror::Error)]
 pub enum CampaignError {
     /// The configuration cannot run a campaign.
     #[error("invalid campaign configuration: {0}")]
     Config(String),
-    /// The arm was refused before it ran: its exam cannot detect the target.
-    #[error(transparent)]
-    Refused(#[from] splinter_eval::campaign::plan::ArmRefused),
-    /// A disk cannot hold the arm.
-    #[error(transparent)]
-    Preflight(#[from] PreflightError),
     /// The collector failed.
     #[error("rollout collection failed: {0}")]
     Collector(String),
@@ -43,13 +39,16 @@ pub enum CampaignError {
     /// The validator failed.
     #[error("dev validation failed: {0}")]
     Validator(String),
-    /// The durable state or ledger failed, or another controller advanced the
-    /// campaign.
+    /// The campaign was cancelled; a training job in progress was cancelled
+    /// on the server.
+    #[error("cancelled")]
+    Cancelled,
+    /// A stage that runs Splinter's own pipelines failed.
     #[error(transparent)]
-    Store(#[from] splinter_store::campaign::CampaignError),
-    /// Checkpoint collection failed.
+    Orchestrator(Box<splinter_orchestrator::error::OrchestratorError>),
+    /// The campaign's stage ledger failed, or another process holds it.
     #[error(transparent)]
-    Gc(#[from] super::gc::GcError),
+    Ledger(#[from] splinter_store::stage_ledger::LedgerError),
 }
 
 /// The policy rollouts are drawn from: the base model and, after the first

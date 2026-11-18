@@ -73,11 +73,9 @@ cargo run --release -p splinter-campaign-lua --bin lineage -- --help
 Only drawn dev programs are graded, and the proposer is steered by the champion's results on spent programs alone.
 The rounds journal records each round's e-value, level, budget left, exposure and the programs it spent.
 
-**The campaign controller** (`splinter_sdk::campaign`): `CampaignConfig::acceptance` is `Acceptance::Greedy` or
-`Acceptance::Evidence { gate, draw, horizon }`, the horizon in arms. The campaign state keeps the budget and the used
-dev tasks, and each arm's ledger entry carries `evidence_e_value`, `evidence_threshold`, `evidence_budget_left`,
-`evidence_charge`, `evidence_zeta_mean`, `dev_drawn`, `dev_spent`, `dev_observed` and `dev_reused` beside the usual
-`gate_alpha`. A greedy configuration's digest is what it was before the choice existed.
+**Campaigns** (`splinter campaign`) do not use the evidence gate: a campaign decides each generation with the one
+promotion gate on the examiner's signed verdicts, over a sealed slice spent by that decision alone
+([Campaigns](campaigns.md)).
 
 **Harness optimisation** (`splinter harness optimise`): `--gate evidence --gate-eps EPS --gate-q Q --gate-beta BETA`
 replaces the sign test over families with the evidence gate over the paired tasks; every evaluation is a round of one
