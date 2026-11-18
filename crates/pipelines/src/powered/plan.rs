@@ -26,7 +26,7 @@ use splinter_core::rng::Seed;
 use super::analysis::interval_of;
 use splinter_eval::gate::DEFAULT_ALPHA;
 use splinter_eval::power::{self, SignPlan, DEFAULT_POWER};
-use splinter_model::stats::BrainSignificance;
+use splinter_model::stats::ExactSignTest;
 
 /// What is assumed of the exam and the arms.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -103,18 +103,18 @@ pub fn sign_planned(plan: &Plan) -> SignPlanned {
         effect: plan.effect,
         alpha: DEFAULT_ALPHA,
     };
-    let reached = power::power(&sign, &BrainSignificance);
+    let reached = power::power(&sign, &ExactSignTest);
     let expected = (plan.families as f64 * plan.discordance).round() as usize;
     SignPlanned {
         alpha: DEFAULT_ALPHA,
-        critical_wins: power::critical_wins(expected, DEFAULT_ALPHA, &BrainSignificance),
+        critical_wins: power::critical_wins(expected, DEFAULT_ALPHA, &ExactSignTest),
         power: reached,
         minimum_detectable_effect: power::minimum_detectable_effect(
             plan.families,
             plan.discordance,
             DEFAULT_ALPHA,
             DEFAULT_POWER,
-            &BrainSignificance,
+            &ExactSignTest,
         ),
         wanted_power: DEFAULT_POWER,
         adequate: reached >= DEFAULT_POWER,

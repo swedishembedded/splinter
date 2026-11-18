@@ -28,7 +28,7 @@ use splinter_eval::campaign::gate::DevResult;
 use splinter_eval::campaign::pass_rate::Band;
 use splinter_eval::campaign::plateau::PlateauRule;
 use splinter_eval::campaign::sampling::AllFailStrategy;
-use splinter_model::stats::BrainSignificance;
+use splinter_model::stats::ExactSignTest;
 use splinter_pipelines::campaign::{
     AllFailHandler, CampaignConfig, CampaignController, CampaignError, CollectRequest,
     LearningStrategy, Parts, PolicyRef, Rollout, RolloutCollector, RolloutGroup, Stopwatch,
@@ -292,7 +292,7 @@ impl<'w> Rig<'w> {
             trainer: &mut self.learner,
             validator: &mut self.exam,
             handler: None,
-            significance: &BrainSignificance,
+            significance: &ExactSignTest,
             clock,
             stopwatch: watch,
             environments: None,

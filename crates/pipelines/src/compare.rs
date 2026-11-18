@@ -42,7 +42,7 @@ use splinter_eval::competence::{competence, outcome_of, Attempt, Competence};
 use splinter_eval::paired::{by_cluster, PairedOutcome};
 use splinter_eval::significance::{SignTest, Significance};
 use splinter_eval::strata::{Strata, StratumCutoffs, TaskSize};
-use splinter_model::stats::BrainSignificance;
+use splinter_model::stats::ExactSignTest;
 use splinter_store::decision::decide;
 use splinter_store::experiences::SetId;
 
@@ -203,7 +203,7 @@ pub fn compare(
         losses: units.iter().filter(|u| **u == (false, true)).count(),
         ties: units.iter().filter(|u| u.0 == u.1).count(),
     };
-    let sign_test = BrainSignificance.sign_test(&units);
+    let sign_test = ExactSignTest.sign_test(&units);
     let strata = strata.map(|cutoffs| {
         Strata::of(
             cutoffs,

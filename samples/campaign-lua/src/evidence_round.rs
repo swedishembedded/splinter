@@ -33,7 +33,7 @@ use splinter_sdk::measure::campaign::dev_pool::DevPool;
 use splinter_sdk::measure::campaign::evidence::Budget;
 use splinter_sdk::measure::campaign::gate::{decide_evidence, Decision, DevResult, EvidenceStatus};
 use splinter_sdk::measure::campaign::plan::retention_units_needed;
-use splinter_sdk::model::stats::BrainSignificance;
+use splinter_sdk::model::stats::ExactSignTest;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::lineage::{fail, policy_key, DevRecord, Lineage, RoundRecord};
@@ -189,7 +189,7 @@ impl Lineage<'_> {
             self.plan.retention_margin,
             first.alpha,
             5000,
-            &BrainSignificance,
+            &ExactSignTest,
         );
         anyhow::ensure!(
             needed.is_some_and(|n| retention_units >= n),
@@ -235,7 +235,7 @@ impl Lineage<'_> {
                 (&drawn, graded),
                 champion,
                 candidate,
-                &BrainSignificance,
+                &ExactSignTest,
             )
             .map_err(fail)
         };
@@ -337,7 +337,7 @@ mod tests {
             (&drawn, drawn.len()),
             &outcomes(false),
             &outcomes(win),
-            &BrainSignificance,
+            &ExactSignTest,
         )
         .unwrap()
     }
@@ -372,13 +372,7 @@ mod tests {
         let p = plan(0.3);
         let evidence = evidence_decision(&p, &Budget::start(&p.gate), &["a"], true);
         let champion = DevResult::default();
-        let greedy = decide(
-            &DevGate::default(),
-            1,
-            &champion,
-            &champion,
-            &BrainSignificance,
-        );
+        let greedy = decide(&DevGate::default(), 1, &champion, &champion, &ExactSignTest);
         let under_evidence = [record(1, Some(evidence), true)];
         let under_greedy = [record(1, Some(greedy), false)];
         assert!(check_journal(&Acceptance::Greedy, &under_evidence).is_err());

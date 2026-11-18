@@ -21,7 +21,7 @@ use splinter_core::rng::Seed;
 use splinter_eval::gate::{self, Check, GateConfig, GateReport, SuitePrompts, SuiteSummary};
 use splinter_eval::paired::PairedOutcome;
 use splinter_eval::power;
-use splinter_model::stats::BrainSignificance;
+use splinter_model::stats::ExactSignTest;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::releases::StoredRelease;
@@ -439,7 +439,7 @@ pub(super) fn run_gate(
                     suites.variants.clone(),
                     &outcomes,
                     rule,
-                    &BrainSignificance,
+                    &ExactSignTest,
                 );
                 if let Some(measured) = check.measured.as_mut() {
                     measured.task_level = task_level(&outcomes, interval_seed);
@@ -454,13 +454,13 @@ pub(super) fn run_gate(
                     measured.generalisation = gate::part_result(
                         parts.generalisation.clone(),
                         &generalisation,
-                        &BrainSignificance,
+                        &ExactSignTest,
                     )
                     .map(|part| with_task_level(part, &generalisation, interval_seed));
                     measured.recall = parts
                         .recall
                         .clone()
-                        .and_then(|summary| gate::part_result(summary, &recall, &BrainSignificance))
+                        .and_then(|summary| gate::part_result(summary, &recall, &ExactSignTest))
                         .map(|part| with_task_level(part, &recall, interval_seed));
                 }
                 in_process = Some(c);

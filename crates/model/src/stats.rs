@@ -6,9 +6,9 @@
 // expertise in evaluation statistics for model releases, you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! The statistic a release decision rests on: brain's exact one-sided
-//! paired sign test (`brain::promote::stats::sign_test`), over pass/fail
-//! outcomes of two models on the same items.
+//! The statistic a release decision rests on: the exact one-sided paired sign
+//! test over pass/fail outcomes of two models on the same items, computed
+//! here as plain arithmetic (it needs no model).
 //!
 //! Only discordant pairs carry evidence: an item both models got right, or
 //! both got wrong, says nothing about which is better and is excluded from
@@ -18,11 +18,11 @@
 
 use splinter_eval::significance::{SignTest, Significance};
 
-/// brain's sign test as the gate's [`Significance`].
+/// The exact sign test as the gate's [`Significance`].
 #[derive(Clone, Copy, Debug, Default)]
-pub struct BrainSignificance;
+pub struct ExactSignTest;
 
-impl Significance for BrainSignificance {
+impl Significance for ExactSignTest {
     fn sign_test(&self, pairs: &[(bool, bool)]) -> SignTest {
         sign_test(pairs)
     }
@@ -33,15 +33,35 @@ impl Significance for BrainSignificance {
 /// unrepresentable.
 #[must_use]
 pub fn sign_test(pairs: &[(bool, bool)]) -> SignTest {
-    let score = |right: bool| if right { 1.0 } else { 0.0 };
-    let candidate: Vec<f64> = pairs.iter().map(|(c, _)| score(*c)).collect();
-    let baseline: Vec<f64> = pairs.iter().map(|(_, b)| score(*b)).collect();
-    let test = brain::promote::stats::sign_test(&candidate, &baseline);
+    let discordant = pairs.iter().filter(|(c, b)| c != b).count();
+    let candidate_wins = pairs.iter().filter(|(c, b)| *c && !*b).count();
     SignTest {
-        discordant: test.n,
-        candidate_wins: test.k,
-        p_value: test.p_value,
+        discordant,
+        candidate_wins,
+        p_value: binomial_upper_tail(discordant, candidate_wins),
     }
+}
+
+/// `P(Binomial(n, 1/2) >= k)`, summed in log space so a large `n` neither
+/// overflows nor underflows a term that matters: `ln C(n, i)` is carried from
+/// one `i` to the next by `ln((n - i) / (i + 1))`, and the terms are added
+/// relative to the largest.
+fn binomial_upper_tail(n: usize, k: usize) -> f64 {
+    if k == 0 {
+        return 1.0;
+    }
+    if k > n {
+        return 0.0;
+    }
+    let mut log_choose = vec![0.0f64; n + 1];
+    for i in 0..n {
+        log_choose[i + 1] = log_choose[i] + ((n - i) as f64 / (i + 1) as f64).ln();
+    }
+    let half = n as f64 * std::f64::consts::LN_2;
+    let tail = &log_choose[k..];
+    let top = tail.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let sum: f64 = tail.iter().map(|l| (l - top).exp()).sum();
+    (top + sum.ln() - half).exp().min(1.0)
 }
 
 /// A mean and the interval a bootstrap puts around it.
@@ -124,6 +144,29 @@ mod tests {
         let none = sign_test(&[(true, true), (false, false)]);
         assert_eq!(none.discordant, 0);
         assert!((none.p_value - 1.0).abs() < 1e-12);
+    }
+
+    /// The tail against a direct sum for small `n`, and its symmetry at the
+    /// middle for a large one.
+    #[test]
+    fn the_tail_is_the_binomial_sum() {
+        let direct = |n: u32, k: u32| -> f64 {
+            let choose = |n: u32, i: u32| -> f64 {
+                (0..i)
+                    .map(|j| f64::from(n - j) / f64::from(j + 1))
+                    .product()
+            };
+            (k..=n).map(|i| choose(n, i)).sum::<f64>() / 2f64.powi(n as i32)
+        };
+        for n in 0..=20u32 {
+            for k in 0..=n {
+                let got = binomial_upper_tail(n as usize, k as usize);
+                assert!((got - direct(n, k)).abs() < 1e-12, "n {n} k {k}: {got}");
+            }
+        }
+        // P(X >= 501) is half of 1 - P(X = 500): just under a half.
+        let upper = binomial_upper_tail(1000, 501);
+        assert!(upper > 0.48 && upper < 0.5, "{upper}");
     }
 
     #[test]

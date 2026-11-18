@@ -50,7 +50,7 @@ use splinter_sdk::measure::campaign::plan::{
     plan_arm, retention_units_needed, ArmGoal, ExamShape, PlannedArm,
 };
 use splinter_sdk::model::served_train::fine_tune_served;
-use splinter_sdk::model::stats::BrainSignificance;
+use splinter_sdk::model::stats::ExactSignTest;
 use splinter_sdk::model::train::FineTune;
 use splinter_sdk::served_host::ServedHost;
 use splinter_sdk::vocabulary::digest::Digest;
@@ -123,14 +123,14 @@ impl Lineage<'_> {
                 discordance: self.plan.discordance,
             },
             &ArmGoal::new(self.plan.target_effect, gates),
-            &BrainSignificance,
+            &ExactSignTest,
         )
         .map_err(fail)?;
         let needed = retention_units_needed(
             self.plan.retention_margin,
             planned.alpha,
             5000,
-            &BrainSignificance,
+            &ExactSignTest,
         );
         anyhow::ensure!(
             needed.is_some_and(|n| retention_units >= n),
@@ -740,7 +740,7 @@ impl Lineage<'_> {
                     gate_number,
                     champion_dev,
                     &candidate_dev,
-                    &BrainSignificance,
+                    &ExactSignTest,
                 )
             }
             Acceptance::Evidence(plan) => {
