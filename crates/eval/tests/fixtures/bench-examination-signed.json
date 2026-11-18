@@ -1,0 +1,102 @@
+{
+  "alpha": 0.05,
+  "burn": {
+    "burned_at": "2026-11-18T15:29:56+00:00",
+    "candidate": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "exam_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "predecessor": null
+  },
+  "candidate": {
+    "adapter_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "base": "Qwen/Qwen3-4B",
+    "base_digest": "sha256:base",
+    "brain_commit": "b",
+    "proposer_commit": "p"
+  },
+  "collection": {
+    "exam_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "items": 60,
+    "name": "slice-g1",
+    "sealed": true,
+    "selection": {}
+  },
+  "completeness": {
+    "candidate": {
+      "changed": 0,
+      "duplicates": 0,
+      "extra": 0,
+      "missing": 0
+    },
+    "expected_items": 60,
+    "predecessor": {
+      "changed": 0,
+      "duplicates": 0,
+      "extra": 0,
+      "missing": 0
+    }
+  },
+  "examined_at": "2026-11-18T15:29:56+00:00",
+  "exclusion": null,
+  "failures": {
+    "candidate": {},
+    "excluded": 0,
+    "predecessor": {},
+    "tolerated_rate": 0.0
+  },
+  "integrity_flags": [
+    "no_training_material_to_audit"
+  ],
+  "invalid_reasons": [],
+  "items_right": 29,
+  "kept_predecessor": false,
+  "losses": 0,
+  "overlap": null,
+  "p_one_sided": 0.0000152587890625,
+  "paired_gain": {
+    "families": 7,
+    "interval": [
+      0.20192746428440383,
+      0.3314058690489295
+    ],
+    "items": 60,
+    "mean": 0.26666666666666666,
+    "one_sided_lower": 0.2152549489185845,
+    "standard_error": 0.026457513110645908
+  },
+  "predecessor": {
+    "adapter_digest": null,
+    "kind": "baseline"
+  },
+  "predecessor_items_right": 13,
+  "protocol": {
+    "answer": "last fenced block, else the whole reply",
+    "compare": "the collection's own check",
+    "completions_per_item": 1,
+    "max_tokens": 2048,
+    "name": "direct-completion",
+    "system_prompt": "none",
+    "temperature": 0.0,
+    "thinking": "off",
+    "truncated": "graded"
+  },
+  "role": "candidate",
+  "schema": "bench.examination/1",
+  "series": "fixture",
+  "serving": {
+    "base_digest": "sha256:base",
+    "candidate_adapter_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "kv_cache": "f32"
+  },
+  "serving_build": {
+    "brain_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "signature": {
+    "alg": "hmac-sha256",
+    "key_id": "630dcd2966c4",
+    "value": "a3cb3caeb66f3b67e3819a9a6de5b29e4157545f7d1871872d6f8304387d4e1b"
+  },
+  "step": 1,
+  "step_holds": true,
+  "valid": true,
+  "wins": 16
+}

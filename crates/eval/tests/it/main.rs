@@ -25,6 +25,7 @@ mod gate;
 mod grounding_verifier;
 mod mutation_oracle;
 mod overlap;
+mod promotion_gate;
 mod quotation_verifier;
 mod short_answer_grading;
 mod speech_verifier;

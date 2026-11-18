@@ -37,6 +37,9 @@
 //!   the model backend.
 //! * [`paired`] - two models graded on the same items, compared only where
 //!   both have a verdict.
+//! * [`promotion`] - the one promotion gate: a candidate replaces its
+//!   predecessor only on the examiner's signed aggregates, verified in this
+//!   process (a dev gain, retention non-inferior, a fresh sealed slice).
 //! * [`campaign`] - the pure decisions of a continuous learning campaign:
 //!   per-task pass rates, dynamic sampling, step signals, power-first arm
 //!   planning and the plateau switch.
@@ -89,6 +92,7 @@ pub mod paired;
 pub mod pilot;
 pub mod power;
 pub mod predictive_gate;
+pub mod promotion;
 pub mod significance;
 pub mod speech_features;
 pub mod speech_judge;

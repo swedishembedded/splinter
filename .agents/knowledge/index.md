@@ -159,3 +159,4 @@ in the same commit.
 | [171](171-ctrl-c-on-splinter-train-left-the-brain-job-holding-its-card.md) | Ctrl-C on splinter train left the brain job holding its card |
 | [172](172-recorded-behaviour-logprobs-of-agent-rollouts-do-not-round-trip-through-the-chat-template.md) | Recorded behaviour log-probabilities of agent rollouts do not round-trip through the chat template |
 | [173](173-a-bench-trajectory-records-the-raw-tool-output-not-what-the-model-was-shown.md) | A bench trial's trajectory records the raw tool output, not what the model was shown |
+| [174](174-an-examiners-signature-verifies-only-over-its-own-float-spelling.md) | An examiner's signature verifies only over its own float spelling |
