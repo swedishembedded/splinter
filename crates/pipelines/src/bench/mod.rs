@@ -36,6 +36,7 @@
 //! only a verified Promote promotes.
 
 pub mod artifact;
+pub mod diagnose;
 pub mod examine;
 pub mod practice;
 pub mod score;

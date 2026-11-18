@@ -91,6 +91,9 @@ pub struct ScoreIdentity {
     /// The attempt: its place among the task's trials by start time.
     #[serde(default)]
     pub attempt: Option<u64>,
+    /// The collection the task is of (its domain).
+    #[serde(default)]
+    pub collection: Option<String>,
     /// The model of each role.
     #[serde(default)]
     pub models: BTreeMap<String, String>,

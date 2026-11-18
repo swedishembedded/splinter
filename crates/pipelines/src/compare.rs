@@ -290,9 +290,9 @@ fn classify(
         return Ok((Ending::Exposed, None));
     }
     let outcome = outcome_of(experience, notes)?;
-    // The competence report counts an environment failure by itself, so the
-    // attempt stays in it.
-    if outcome.failure == Some(FailureClass::Environment) {
+    // The competence report counts an infrastructure or task failure by
+    // itself, so the attempt stays in it.
+    if outcome.failure.is_some_and(FailureClass::exonerates_agent) {
         return Ok((Ending::HarnessFailed, Some(outcome)));
     }
     Ok(match decide(notes) {

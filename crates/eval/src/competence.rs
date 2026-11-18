@@ -17,8 +17,9 @@
 //!   tokens, tool calls), so the raw totals stay visible;
 //! * autonomy `A` = verified without a person / attempted.
 //!
-//! An attempt that failed for the environment ([`FailureClass::Environment`])
-//! says nothing about the agent: it leaves every denominator and is counted.
+//! An attempt that failed for the infrastructure or the task (a class that
+//! [`FailureClass::exonerates_agent`]: the environment, the gateway, the
+//! model server, the verifier, an unsound task) says nothing about the agent: it leaves every denominator and is counted.
 //! A cost that one attempt did not record has no total, and the attempts
 //! missing it are counted, so an absent measurement never reads as zero.
 //! Each estimate carries a percentile interval from a bootstrap that
@@ -214,7 +215,7 @@ fn without_human(o: &TaskOutcome) -> bool {
 }
 
 fn counted(o: &TaskOutcome) -> bool {
-    o.failure != Some(FailureClass::Environment)
+    !o.failure.is_some_and(FailureClass::exonerates_agent)
 }
 
 /// The shares and per-verified costs over `pool`, the outcomes counted.

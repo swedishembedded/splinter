@@ -112,6 +112,27 @@ that supervise nothing, the longest records and every record the trainer refuses
 refuses any). It needs a brain service started with `--training --artifact-store DIR` and that directory as
 `--brain-artifact-store`, as `train` does.
 
+## Why a trial failed
+
+```sh
+splinter experiences diagnose ~/practice/export-support         # an export, or a practice run directory
+splinter --json experiences diagnose STATE/practice/splinter-0d53...  # report.json and export/ of a practice run
+```
+
+Every failed trial gets one failure class from the evidence it left, by deterministic rules in order, strongest
+evidence first: the examiner's score status (`bench.score/1`) and its cause, the verifier's own reason
+(`verification.json`), whether a worktree change was exported, and the ATIF trajectory. A status the infrastructure
+decided is never a model failure: `environment_error` and `agent_error` are `environment`, a failed model request is
+`gateway` (HTTP 502 or 504, or the endpoint unreachable) or `model_server` (any other 5xx), `verifier_error` is
+`verification`, `invalid_task` is `unclear_task` and `unsupported` is `unsupported`. The examiner's security veto is
+`history_probing`, decided at the first call that reads the repository's history. Of the rest, an answer the
+verifier read and found wrong is `wrong_content` and one it could not read is `malformed_artifact` (both decided at
+the last step that wrote a file); without an answer, a call repeated unchanged three times is `repetition`, a run
+whose last calls failed is `tool`, a run a time, turn or token limit ended is `resource`, and a run that stopped is
+`no_answer`. Each result names its rule, the decisive step when there is one, and the evidence spans it read (the
+step, or the record field, and the excerpt). The report counts the classes per domain and per attribution (`model`,
+`infrastructure`, `task`). Only a trial of an export is read, and an export of sealed material is refused.
+
 ## Harness trials: one experience per conversation
 
 A benchmark run through a sven harness is several conversations, each answered by a

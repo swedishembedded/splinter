@@ -51,7 +51,7 @@ impl BenchCheckout {
         }
     }
 
-    fn bench(&self) -> Command {
+    pub(crate) fn bench(&self) -> Command {
         let mut command = Command::new(self.dir.join("bench"));
         command.current_dir(&self.dir);
         if let Some(build) = &self.sven_build {

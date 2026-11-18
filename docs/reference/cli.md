@@ -136,6 +136,7 @@ Every command takes these.
   - [splinter experiences replay](#splinter-experiences-replay) - Run an experience's code calls again in the environment it records (or every experience of a set) and compare each result with the one it observed
   - [splinter experiences ingest-harbor](#splinter-experiences-ingest-harbor) - Read the trials Harbor left for imported tasks (each a trial directory with result.json and agent/trajectory.json in ATIF) as experiences carrying Harbor's own verdict
   - [splinter experiences ingest-bench](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
+  - [splinter experiences diagnose](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
@@ -1481,6 +1482,7 @@ Subcommands:
 - [`replay`](#splinter-experiences-replay) - Run an experience's code calls again in the environment it records (or every experience of a set) and compare each result with the one it observed
 - [`ingest-harbor`](#splinter-experiences-ingest-harbor) - Read the trials Harbor left for imported tasks (each a trial directory with result.json and agent/trajectory.json in ATIF) as experiences carrying Harbor's own verdict
 - [`ingest-bench`](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
+- [`diagnose`](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 
 #### splinter experiences list
@@ -1547,6 +1549,18 @@ Arguments:
 Options:
 
 - `--assume-set <SPLIT>`: The split of trials whose export names none (exports made before the benchmark recorded splits). Without it such a trial is refused: a split is never guessed. The register records that the operator stated it, and a trial that names its split must agree. Values: `train`, `eval`.
+
+#### splinter experiences diagnose
+
+Why each failed trial of bench exports failed: one failure class per trial, from its evidence, with the step and excerpt that decided it
+
+```text
+splinter experiences diagnose [OPTIONS] <DIR>...
+```
+
+Arguments:
+
+- `<DIR>...` (required): The export directories (each holds index.jsonl; skipped.jsonl when the export skipped trials), or practice run directories (each holds report.json and export/)
 
 #### splinter experiences compare
 

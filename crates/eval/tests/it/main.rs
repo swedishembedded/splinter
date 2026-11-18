@@ -16,6 +16,7 @@ mod claim_gate;
 mod competence;
 mod consolidation_gate;
 mod denoise_verifier;
+mod diagnosis;
 mod evidence_gate;
 mod executable_verifier;
 mod exposure_audit;

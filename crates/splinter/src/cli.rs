@@ -18,7 +18,6 @@ use splinter_sdk::datasets::{
 use splinter_sdk::eval::SuiteChoice;
 use splinter_sdk::learn::parse_budget;
 use splinter_sdk::lineage::Direction;
-use splinter_sdk::measure::strata::StratumCutoffs;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::{ModelRef, POLICY_DEFAULT};
@@ -527,6 +526,9 @@ pub enum ExperiencesCommand {
         #[arg(long, value_enum, value_name = "SPLIT")]
         assume_set: Option<BenchSplit>,
     },
+    /// Why each failed trial of bench exports failed: one failure class per
+    /// trial, from its evidence, with the step and excerpt that decided it.
+    Diagnose(DiagnoseArgs),
     /// Compare two experience sets of the same tasks: the candidate's against
     /// the baseline's, paired by task, a family counted once. Exposed and
     /// harness-failed attempts are left out and counted.
@@ -549,32 +551,6 @@ pub enum ExperiencesCommand {
         #[command(flatten)]
         strata: StrataArgs,
     },
-}
-
-/// The cutoffs of the difficulty strata, all or none.
-#[derive(Debug, Clone, Copy, Args)]
-pub struct StrataArgs {
-    /// Tests a task's fail-to-pass commands run: more is above.
-    #[arg(long, value_name = "N", requires_all = ["stratum_footprint", "stratum_instruction_chars"])]
-    pub stratum_checkers: Option<usize>,
-    /// Files a task's reference patch changes: more is above.
-    #[arg(long, value_name = "N", requires_all = ["stratum_checkers", "stratum_instruction_chars"])]
-    pub stratum_footprint: Option<usize>,
-    /// Characters of a task's instruction: more is above.
-    #[arg(long, value_name = "N", requires_all = ["stratum_checkers", "stratum_footprint"])]
-    pub stratum_instruction_chars: Option<usize>,
-}
-
-impl StrataArgs {
-    /// The cutoffs, when given.
-    #[must_use]
-    pub fn cutoffs(&self) -> Option<StratumCutoffs> {
-        Some(StratumCutoffs {
-            checkers: self.stratum_checkers?,
-            footprint: self.stratum_footprint?,
-            instruction_chars: self.stratum_instruction_chars?,
-        })
-    }
 }
 
 /// `dataset ...`.
@@ -750,6 +726,7 @@ mod corrections;
 mod dataset;
 mod env;
 mod exam;
+mod experiences;
 mod gate;
 mod generation;
 mod global;
@@ -775,6 +752,7 @@ pub use corrections::CorrectionsArgs;
 pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
+pub use experiences::{DiagnoseArgs, StrataArgs};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
 pub use global::Global;

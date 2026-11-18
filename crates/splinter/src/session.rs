@@ -438,6 +438,13 @@ impl Session {
                     return Ok(Exit::Failed);
                 }
             }
+            Command::Experiences(ExperiencesCommand::Diagnose(args)) => {
+                let report = splinter_sdk::bench::diagnose::diagnose_dirs(&args.dirs);
+                emit(json, &report);
+                if !report.refused.is_empty() {
+                    return Ok(Exit::Failed);
+                }
+            }
             Command::Experiences(ExperiencesCommand::Compare {
                 candidate,
                 baseline,

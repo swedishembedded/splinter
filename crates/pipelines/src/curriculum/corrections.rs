@@ -180,10 +180,10 @@ fn stuck_attempts(
         });
         if report
             .as_ref()
-            .is_some_and(|r| r.failure == Some(FailureClass::Environment))
+            .is_some_and(|r| r.failure.is_some_and(FailureClass::exonerates_agent))
         {
-            // An environment failure says nothing about the student, so
-            // there is no state of its own to correct.
+            // An infrastructure or task failure says nothing about the
+            // student, so there is no state of its own to correct.
             continue;
         }
         let stalled = report

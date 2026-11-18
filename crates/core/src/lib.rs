@@ -35,6 +35,10 @@
 //! * [`chat`] and [`prompt`] - the shapes a conversation is written in, and the
 //!   one system turn every model run on a task is sent.
 //! * [`evidence`] - how an executable verdict's evidence reads back.
+//! * [`repository_history`] - whether a tool call reads the repository's
+//!   history, the rule demonstration curation and failure diagnosis share.
+//! * [`outcome`] and [`diagnosis`] - what an attempt came to, and why a failed
+//!   one failed: its class, who it is about, and the evidence that decided it.
 //! * [`model_ref`] and [`role`] - how a command names a model, and which
 //!   model plays which role in a run.
 //! * [`dataset`], [`release`] and [`training`] - what names a dataset and a
@@ -79,6 +83,7 @@ pub mod claim;
 pub mod clock;
 pub mod concurrency;
 pub mod dataset;
+pub mod diagnosis;
 pub mod digest;
 pub mod evidence;
 pub mod experience;
@@ -92,6 +97,7 @@ pub mod model_ref;
 pub mod outcome;
 pub mod prompt;
 pub mod release;
+pub mod repository_history;
 pub mod rng;
 pub mod role;
 pub mod selfcontained;

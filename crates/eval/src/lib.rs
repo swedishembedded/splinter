@@ -56,6 +56,10 @@
 //!   a teacher's demonstrations with training and no change, by each one's
 //!   measured gain, its uncertainty and its cost, over paired results per
 //!   family.
+//! * [`diagnosis`] - why a failed attempt failed: a deterministic class from
+//!   the evidence its run left (the examiner's score status, the verifier's
+//!   output, the trajectory, the gateway's statuses), with the step and the
+//!   excerpt that decided it; infrastructure is never a model failure.
 //! * [`overlap`] - texts that print one passage form a group, so a held-out
 //!   split can keep a group whole.
 //!
@@ -72,6 +76,7 @@ pub mod claim_gate;
 pub mod competence;
 pub mod continual;
 pub mod denoise;
+pub mod diagnosis;
 pub mod exposure;
 mod exposure_paths;
 pub mod frontier;
