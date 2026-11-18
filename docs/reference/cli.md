@@ -19,6 +19,7 @@ Every command takes these.
 - `--brain-bin <BRAIN_BIN>`: The `brain` binary a server is started from (default: the first on `PATH`)
 - `--state <DIR>`: The state root (default: ~/.splinter)
 - `--job-owner <NAME>`: The controller name recorded with each job this process submits and the claim it takes on one (default: this machine's host name)
+- `--detach-on-interrupt`: On Ctrl-C (or SIGTERM), exit at once and leave the brain training jobs of the command running, instead of cancelling them through brain's API (`DELETE /v1/jobs/{id}`) first; running the same command again continues each job from its last saved state. A second Ctrl-C always exits at once.
 - `--job-attempt-root <DIR>`: Where a submitted job's attempt directories are written (default: `jobs` under the state root)
 - `--job-launcher <KIND>`: How each submitted job's workers are started: `local` runs them on this machine, `slurm` submits the job to Slurm's batch system (default: `local`)
 - `--slurm-sbatch <PATH>`: The `sbatch` program a `slurm` job is submitted with; required when `--job-launcher slurm` is given.

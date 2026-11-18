@@ -135,6 +135,7 @@ pub fn record<R: Serialize>(
         ctx.clock(),
     )?;
     let run = log.id().to_string();
+    let _in_progress = crate::interrupt::InProgress::enter();
     let cancel = CancelToken::new();
     let done = Arc::new(AtomicBool::new(false));
     let watcher = watch_for_cancel(
@@ -165,7 +166,11 @@ pub fn record<R: Serialize>(
             Ok(Recorded { run, report })
         }
         Err(e) => {
-            let status = if cancel.is_cancelled() || matches!(e, OrchestratorError::Cancelled) {
+            let status = if cancel.is_cancelled()
+                || matches!(
+                    e,
+                    OrchestratorError::Cancelled | OrchestratorError::JobCancelled(_)
+                ) {
                 RunStatus::Cancelled
             } else {
                 RunStatus::Failed
@@ -178,8 +183,9 @@ pub fn record<R: Serialize>(
     }
 }
 
-/// A thread that fires `cancel` once a cancel request for `run` appears,
-/// until `done`.
+/// A thread that fires `cancel` once a cancel request for `run` appears, or
+/// an interrupt asked the runs in progress to stop
+/// ([`crate::interrupt::interrupted`]), until `done`.
 fn watch_for_cancel(
     workspace: Workspace,
     run: String,
@@ -189,7 +195,7 @@ fn watch_for_cancel(
     std::thread::spawn(move || {
         let mut last = std::time::Instant::now();
         while !done.load(Ordering::Relaxed) {
-            if runs::cancel_requested(&workspace, &run) {
+            if runs::cancel_requested(&workspace, &run) || crate::interrupt::interrupted() {
                 cancel.cancel();
                 return;
             }

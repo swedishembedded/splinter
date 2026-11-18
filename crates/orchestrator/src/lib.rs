@@ -20,6 +20,7 @@
 //! * [`roles`] and [`model_ref`] - who plays each role, and what a model
 //!   reference resolves to under the configuration.
 //! * [`runs`] - the recorded run and its cross-process cancel.
+//! * [`interrupt`] - Ctrl-C and SIGTERM as a cancel of the runs in progress.
 //! * [`jobs`] - the controller that submits, observes and reconciles jobs.
 //! * [`launcher`] - the launcher the job settings select.
 //! * [`pipeline`] - stages run in order over one state, each recorded.
@@ -45,6 +46,7 @@ pub mod environments;
 pub mod error;
 pub mod generation;
 pub mod ids;
+pub mod interrupt;
 pub mod jobs;
 pub mod launcher;
 mod local_sampling;

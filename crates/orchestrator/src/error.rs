@@ -82,6 +82,10 @@ pub enum OrchestratorError {
     /// The run was cancelled.
     #[error("cancelled")]
     Cancelled,
+    /// The run was cancelled while a model service ran a job of it: what
+    /// asking the service to stop the job came to.
+    #[error("cancelled: {0}")]
+    JobCancelled(String),
     /// A store failed.
     #[error(transparent)]
     Store(#[from] StoreError),

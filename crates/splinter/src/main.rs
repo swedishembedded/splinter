@@ -164,6 +164,36 @@ fn apply_brain_flags(config: &mut Config, global: &cli::Global) -> Result<(), St
     Ok(())
 }
 
+/// Ctrl-C and SIGTERM cancel the runs in progress and their brain jobs, or,
+/// with `detach`, leave the jobs running; each says what it did on stderr.
+fn handle_interrupts(detach: bool) {
+    use splinter_sdk::interrupt::{self, Interrupted, Interrupts};
+    let interrupts = if detach {
+        Interrupts::Detach
+    } else {
+        Interrupts::Cancel
+    };
+    let installed = interrupt::handle_interrupts(interrupts, |what| {
+        eprintln!(
+            "{}",
+            match what {
+                Interrupted::Cancelling => {
+                    "interrupted: cancelling the run and its brain jobs (interrupt again to exit \
+                     at once and leave them running)"
+                }
+                Interrupted::Detaching => {
+                    "interrupted: exiting and leaving the brain jobs running; the same command \
+                     continues them"
+                }
+                Interrupted::Exiting => "interrupted",
+            }
+        );
+    });
+    if let Err(e) = installed {
+        eprintln!("Ctrl-C will not cancel brain jobs: the signal handlers failed to install: {e}");
+    }
+}
+
 fn main() -> ExitCode {
     // A worker launched through the local job launcher starts this binary as
     // its supervisor, which runs the worker and records its exit.
@@ -218,6 +248,7 @@ fn main() -> ExitCode {
         .runtime_dirs
         .clone_from(&cli.global.runtime_dir);
     config.build = build_info::current(cli.global.gpu_contexts);
+    handle_interrupts(cli.global.detach_on_interrupt);
     let session = match Session::new(config, cli.global.clone()) {
         Ok(session) => session,
         Err(e) => {

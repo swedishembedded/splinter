@@ -156,3 +156,4 @@ in the same commit.
 | [168](168-a-managed-brain-over-a-store-of-several-bases-refused-the-adapters-of-the-base-the-run-trained.md) | A managed brain over a store of several bases refused the adapters of the base the run trained |
 | [169](169-a-dataset-in-ingest-order-held-out-and-monitored-one-domain.md) | A dataset in ingest order held out and monitored one domain |
 | [170](170-a-student-learned-to-dig-through-git-history-from-seven-teacher-log-reads.md) | A student learned to dig through git history from seven teacher log reads |
+| [171](171-ctrl-c-on-splinter-train-left-the-brain-job-holding-its-card.md) | Ctrl-C on splinter train left the brain job holding its card |

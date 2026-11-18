@@ -29,6 +29,11 @@ See the table `make test/methods` prints; the figures of the last full run are i
 
 ## Findings that changed the code
 
+- 2026-11-18, Ctrl-C cancels brain jobs (lane 3, item 5; pilot A2 defect 2, knowledge 171): SIGINT/SIGTERM fire the
+  cancel token of every recorded run in progress (`splinter_orchestrator::interrupt`), so the served job client sends
+  `DELETE /v1/jobs/{id}` and reports whether brain confirmed it (`cancelled: brain job ... was cancelled`); a second
+  signal exits at once; `--detach-on-interrupt` exits and leaves the jobs to resume by their resume key.
+
 - 2026-11-18, curation against learned history probing (lane 3, item 2; knowledge 170): the sft-step view drops
   (default), truncates at or keeps an action whose tool call reads the repository's history or git's storage
   (`splinter_data::curation`, policy `no-repository-history`, `--repository-history`), counted as

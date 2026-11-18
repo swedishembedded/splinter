@@ -412,7 +412,8 @@ impl Trainer for BrainTrainer {
 
 fn trainer_error(e: PolicyError) -> OrchestratorError {
     match e {
-        PolicyError::Cancelled { .. } => OrchestratorError::Cancelled,
+        PolicyError::Cancelled { job: None, .. } => OrchestratorError::Cancelled,
+        PolicyError::Cancelled { job: Some(job), .. } => OrchestratorError::JobCancelled(job),
         other => OrchestratorError::Train(other.to_string()),
     }
 }

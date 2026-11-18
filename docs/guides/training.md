@@ -170,6 +170,17 @@ chosen evaluation a candidate of its own (its held-out score is not carried
 over: it was measured of another adapter) to release; `learn --select-on-dev`
 does both in the run, between training and the exam.
 
+## Interrupting a run
+
+A brain training job keeps running when the client that submitted it exits, and keeps its card.
+So Ctrl-C (or SIGTERM) on `splinter train`, or on any command whose run submits a training job,
+cancels the job through brain's API (`DELETE /v1/jobs/{id}`, which stops it at its next optimiser
+step) before the command exits, and the error it ends with says which job was cancelled and
+whether brain confirmed it; one brain did not confirm is named with how to find it
+(`GET /v1/jobs`) and stop it. The run is recorded as cancelled. A second Ctrl-C exits at once.
+With `--detach-on-interrupt` the command exits on the first Ctrl-C and leaves its jobs running:
+running the same command again continues each from its last saved state (its resume key).
+
 ## Replay and rehearsal
 
 From `policy:<alias>` (the default) it continues the adapter of the

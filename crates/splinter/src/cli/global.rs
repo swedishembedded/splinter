@@ -23,6 +23,13 @@ pub struct Global {
     /// the claim it takes on one (default: this machine's host name).
     #[arg(long, global = true, value_name = "NAME")]
     pub job_owner: Option<String>,
+    /// On Ctrl-C (or SIGTERM), exit at once and leave the brain training jobs
+    /// of the command running, instead of cancelling them through brain's API
+    /// (`DELETE /v1/jobs/{id}`) first; running the same command again
+    /// continues each job from its last saved state. A second Ctrl-C always
+    /// exits at once.
+    #[arg(long, global = true)]
+    pub detach_on_interrupt: bool,
     /// Where a submitted job's attempt directories are written (default:
     /// `jobs` under the state root).
     #[arg(long, global = true, value_name = "DIR")]

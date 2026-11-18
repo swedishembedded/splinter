@@ -105,7 +105,7 @@ pub fn score_chat(
             super::job::JobError::Failed(reason) => {
                 unreadable(format!("scoring under {model}: {reason}"))
             }
-            super::job::JobError::Cancelled => {
+            super::job::JobError::Cancelled(_) => {
                 unreadable(format!("scoring under {model} was cancelled"))
             }
         })?;

@@ -133,10 +133,14 @@ pub enum PolicyError {
         reason: String,
     },
     /// A fine-tune was cancelled; it exported no adapter.
-    #[error("fine-tune in {dir} was cancelled; it exported no adapter")]
+    #[error("fine-tune in {dir} was cancelled{}; it exported no adapter", job.as_deref().map(|j| format!(" ({j})")).unwrap_or_default())]
     Cancelled {
         /// The fine-tune's directory.
         dir: PathBuf,
+        /// What became of the service's job when the caller cancelled it
+        /// (whether brain confirmed it stopped); `None` when there was no job
+        /// to stop or the service ended it.
+        job: Option<String>,
     },
     /// A file operation failed.
     #[error("{path}: {source}")]

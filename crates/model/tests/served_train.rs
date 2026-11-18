@@ -379,6 +379,14 @@ fn cancelling_stops_the_job_on_the_service() {
         service.jobs().was_cancelled(),
         "the DELETE reached the service"
     );
+    // The caller is told which job was stopped and that brain confirmed it.
+    let PolicyError::Cancelled { job: Some(job), .. } = &error else {
+        panic!("the cancel names the job it stopped: {error}");
+    };
+    assert!(
+        job.contains("was cancelled") && job.contains("brain job"),
+        "{job}"
+    );
     assert!(stepped.get() >= 1);
 }
 

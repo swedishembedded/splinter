@@ -53,8 +53,10 @@ const SHORT_CALL: Duration = Duration::from_secs(60);
 /// Why a job did not produce a result.
 #[derive(Debug, PartialEq, Eq)]
 pub enum JobError {
-    /// The caller's cancel fired, or the server cancelled the job.
-    Cancelled,
+    /// The caller's cancel fired, or the server cancelled the job. When the
+    /// caller's did after the job was placed, what asking brain to stop it
+    /// came to: the job, where, and whether brain confirmed it.
+    Cancelled(Option<String>),
     /// The job ran or was refused for a reason brain gave.
     Failed(String),
     /// An endpoint could not be reached or answered something else than the
@@ -268,9 +270,8 @@ fn drive(
             .await?;
         match api.follow(&url, &id, frames).await {
             Ok(()) => api.result(&url, &id).await,
-            Err(JobError::Cancelled) if cancel.is_some_and(Cancel::cancelled) => {
-                api.cancel(&url, &id).await;
-                Err(JobError::Cancelled)
+            Err(JobError::Cancelled(_)) if cancel.is_some_and(Cancel::cancelled) => {
+                Err(JobError::Cancelled(Some(api.cancel(&url, &id).await)))
             }
             Err(other) => Err(other),
         }
@@ -300,7 +301,7 @@ impl Api<'_> {
                 value = &mut future => return Ok(value),
                 () = tokio::time::sleep(POLL) => {
                     if self.cancelled() {
-                        return Err(JobError::Cancelled);
+                        return Err(JobError::Cancelled(None));
                     }
                 }
             }
@@ -386,7 +387,7 @@ impl Api<'_> {
                 .await?
             {
                 Step::Ended(Ended::Succeeded) => return Ok(()),
-                Step::Ended(Ended::Cancelled) => return Err(JobError::Cancelled),
+                Step::Ended(Ended::Cancelled) => return Err(JobError::Cancelled(None)),
                 Step::Ended(Ended::Failed(why)) => return Err(JobError::Failed(why)),
                 Step::Forgotten => {
                     return Err(JobError::Failed(format!(
@@ -476,15 +477,32 @@ impl Api<'_> {
         Ok(result["outputs"].take())
     }
 
-    /// Asks brain to stop the job; it stops at its next optimiser step.
-    async fn cancel(&self, url: &str, id: &str) {
-        let _ = self
+    /// Asks brain to stop the job (`DELETE /v1/jobs/{id}`; it stops at its
+    /// next optimiser step) and says what came of it: a job brain did not
+    /// confirm stopping keeps its card, so the statement says how to find and
+    /// stop it.
+    async fn cancel(&self, url: &str, id: &str) -> String {
+        let answer = self
             .client
             .delete(format!("{url}/jobs/{id}"))
             .bearer_auth(self.key)
             .timeout(SHORT_CALL)
             .send()
             .await;
+        match answer {
+            Ok(response) if response.status().is_success() => {
+                format!("brain job {id} at {url} was cancelled")
+            }
+            Ok(response) => format!(
+                "brain job {id} at {url} may still be running: cancelling it answered HTTP {} \
+                 (GET {url}/jobs lists it, DELETE {url}/jobs/{id} stops it)",
+                response.status().as_u16()
+            ),
+            Err(e) => format!(
+                "brain job {id} at {url} may still be running: cancelling it failed: {e} \
+                 (GET {url}/jobs lists it, DELETE {url}/jobs/{id} stops it)"
+            ),
+        }
     }
 }
 

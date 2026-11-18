@@ -239,8 +239,9 @@ pub fn run_action(
         on_frame,
     )
     .map_err(|e| match e {
-        job::JobError::Cancelled => PolicyError::Cancelled {
+        job::JobError::Cancelled(job) => PolicyError::Cancelled {
             dir: attempt_dir.to_path_buf(),
+            job,
         },
         job::JobError::Failed(reason) => PolicyError::Train {
             dir: attempt_dir.to_path_buf(),
