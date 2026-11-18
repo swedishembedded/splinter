@@ -33,6 +33,7 @@ mod converse_learn;
 mod coverage;
 mod curriculum;
 mod curriculum_quotas;
+mod dataset_curation;
 mod dataset_seal;
 mod dataset_split;
 mod dataset_strata;

@@ -21,6 +21,7 @@ mod session_dialogue;
 mod sft_admission;
 mod sft_final;
 mod sft_step_controls;
+mod sft_step_curation;
 mod sft_step_packed;
 mod sft_step_reasoning;
 mod sft_step_requests;

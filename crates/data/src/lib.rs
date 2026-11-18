@@ -71,6 +71,7 @@
 mod block_split;
 pub mod conversation_pg;
 mod corpus;
+pub mod curation;
 mod dataset;
 pub mod frozen;
 pub mod holdout;
@@ -295,6 +296,13 @@ pub enum Exclusion {
     /// closed-book: its final answer is not a record of the view that
     /// trains final answers.
     WorkspaceEpisode,
+    /// An action whose tool call reads the repository's history or git's
+    /// raw storage ([`curation`]): a student imitating it learns to dig for
+    /// what the checked-out tree does not show.
+    RepositoryHistory,
+    /// An action after one that read the repository's history, in a
+    /// demonstration the curation truncates there ([`curation`]).
+    AfterRepositoryHistory,
 }
 
 /// Which of items of `sizes` to keep so that they hold at most `budget`
@@ -380,6 +388,10 @@ pub struct Projection {
     /// whether the bound is the trainer's own count.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub block_measure: Option<BlockMeasure>,
+    /// The curation policy the view applied to its demonstrations
+    /// ([`curation`]); `None` when it applied none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curation: Option<curation::Curation>,
 }
 
 /// What a record's size was counted by when a projection was bounded to a
@@ -435,6 +447,7 @@ impl Projection {
             outcome_verified_only: false,
             terms: None,
             block_measure: None,
+            curation: None,
         }
     }
 

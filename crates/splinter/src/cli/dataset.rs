@@ -8,7 +8,7 @@
 
 //! The grammar of `dataset build` and `dataset check`.
 
-use splinter_sdk::datasets::{AdvantageKind, StripPolicy, ViewName};
+use splinter_sdk::datasets::{AdvantageKind, HistoryCuration, StripPolicy, ViewName};
 use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -145,6 +145,16 @@ pub struct BuildArgs {
     /// given).
     #[arg(long, value_name = "N", requires = "control")]
     pub control_seed: Option<Seed>,
+    /// For the sft-step view: what becomes of an action whose tool call reads
+    /// the repository's history (`git log`, `git show`, `git reflog`,
+    /// `git cat-file`, a commit before `HEAD`) or git's storage (`.git/refs`,
+    /// `.git/objects`, `.git/HEAD`): `drop-step` (the default) does not
+    /// supervise it and keeps it as context, counted as `repository_history`;
+    /// `truncate` ends the demonstration before it (what follows is counted as
+    /// `after_repository_history`); `keep` learns it. A student imitating such
+    /// reads learns to dig through the history. The manifest names the policy.
+    #[arg(long, value_parser = history, value_name = "keep|drop-step|truncate")]
+    pub repository_history: Option<HistoryCuration>,
     /// The seed the dataset's held-out and monitoring sets are drawn by:
     /// within each stratum (the domain a record's task exercises) its groups
     /// are ordered by a hash of the seed, so every stratum is held out at its
@@ -247,4 +257,8 @@ pub struct CheckArgs {
     /// counted. Without it, the widest row brain takes.
     #[arg(long, value_name = "TOKENS")]
     pub max_block: Option<u32>,
+}
+
+fn history(text: &str) -> Result<HistoryCuration, String> {
+    HistoryCuration::parse(text)
 }

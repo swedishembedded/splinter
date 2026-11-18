@@ -19,6 +19,7 @@ use splinter_core::experience::{Environment, ExperienceId};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::source::SourceId;
 use splinter_core::terms::{combine_stated, Terms};
+pub use splinter_data::curation::{Curation, HistoryCuration};
 pub use splinter_data::holdout::SplitPolicy;
 use splinter_data::{
     manifest_path, Corpus, Cpt, Critic, DecisionView, DenoiseView, Distill, Exclusion, Format,
@@ -92,6 +93,10 @@ pub struct Built {
     /// the records of each stratum, as its manifest records them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub split: Option<SplitPolicy>,
+    /// The curation policy the records were built under, as the manifest
+    /// records it; what it left out is counted in `excluded`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub curation: Option<Curation>,
 }
 
 impl From<StoredDataset> for Built {
@@ -109,6 +114,7 @@ impl From<StoredDataset> for Built {
             groups: stored.manifest.groups,
             block_measure: None,
             split: stored.manifest.split,
+            curation: stored.manifest.curation,
         }
     }
 }
@@ -209,6 +215,12 @@ fn project_without(
             view.as_str()
         )));
     }
+    if request.history != HistoryCuration::default() && view != ViewName::SftStep {
+        return Err(OrchestratorError::Refused(format!(
+            "view {} imitates no demonstration, so --repository-history does not apply",
+            view.as_str()
+        )));
+    }
     if request.control != Control::Verified && view != ViewName::SftStep {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no negative controls, so --control does not apply",
@@ -294,6 +306,7 @@ fn project_without(
             .only_actions(request.only_actions.clone().unwrap_or_default())
             .only_roles(request.roles.clone().unwrap_or_default())
             .images(request.images)
+            .history(request.history)
             .project(&corpus),
         ViewName::PolicyGradient | ViewName::SelfDistill => PolicyGradient::new(strength)
             .distilling(match (view, request.rl.cliff_distill) {

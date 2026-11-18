@@ -52,6 +52,7 @@ pub fn sft_request(set: SetId) -> BuildRequest {
         images: false,
         rl: Default::default(),
         split_seed: None,
+        history: Default::default(),
         base: None,
     }
 }
@@ -80,6 +81,8 @@ pub struct Trial {
     /// The capability its task exercises, `<domain>.<task>` as the benchmark
     /// declares it.
     pub dimension: &'static str,
+    /// The shell command its one tool call runs.
+    pub command: &'static str,
 }
 
 impl Trial {
@@ -100,6 +103,7 @@ impl Trial {
             score: None,
             confidential: false,
             dimension: "firmware.x",
+            command: "ls",
         }
     }
 
@@ -155,6 +159,11 @@ impl Trial {
         Self { dimension, ..self }
     }
 
+    /// The same trial with its one tool call running `command`.
+    pub fn command(self, command: &'static str) -> Self {
+        Self { command, ..self }
+    }
+
     /// The same trial with `metrics` as the verifier's measurements.
     pub fn metrics(self, metrics: Value) -> Self {
         Self { metrics, ..self }
@@ -163,7 +172,7 @@ impl Trial {
 
 /// An ATIF trajectory of one tool call answered by its result, then a final
 /// answer; `note` distinguishes the trials.
-fn trajectory(note: &str, picture: bool) -> String {
+fn trajectory(note: &str, picture: bool, command: &str) -> String {
     let instruction = format!("Repair the firmware ({note}).");
     let opening = if picture {
         json!([{"type": "text", "text": instruction},
@@ -180,7 +189,7 @@ fn trajectory(note: &str, picture: bool) -> String {
             {"step_id": 2, "source": "agent", "model_name": "m", "message": "\n",
              "reasoning_content": "look first",
              "tool_calls": [{"tool_call_id": "c0", "function_name": "shell",
-                             "arguments": {"command": "ls"}}],
+                             "arguments": {"command": command}}],
              "observation": {"results": [{"source_call_id": "c0", "content": "main.c"}]}},
             {"step_id": 3, "source": "agent", "model_name": "m", "message": "Fixed."}
         ]
@@ -220,7 +229,7 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         let mut files: Vec<(String, Vec<u8>)> = vec![
             (
                 "trajectory.atif.json".into(),
-                trajectory(t.name, t.picture).into_bytes(),
+                trajectory(t.name, t.picture, t.command).into_bytes(),
             ),
             ("model-requests.jsonl".into(), requests(t.name).into_bytes()),
             (

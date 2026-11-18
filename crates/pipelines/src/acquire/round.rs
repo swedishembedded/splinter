@@ -462,6 +462,7 @@ impl Acquisition<'_> {
                 images: false,
                 rl: Default::default(),
                 split_seed: None,
+                history: Default::default(),
                 base: None,
             },
         ) {

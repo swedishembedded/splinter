@@ -44,6 +44,7 @@ fn projection_of(record: Record) -> Projection {
         outcome_verified_only: false,
         block_measure: None,
         terms: None,
+        curation: None,
     }
 }
 

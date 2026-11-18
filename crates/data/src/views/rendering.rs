@@ -13,6 +13,7 @@
 use splinter_core::chat::WireMessage;
 use splinter_core::harness::{HarnessConversation, RecordedCalls};
 
+use crate::curation::{reads_repository_history, HistoryCuration};
 use crate::images::MAX_IMAGES_PER_RECORD;
 use crate::render::student_turn;
 use crate::requests::conversation_of_requests;
@@ -39,6 +40,9 @@ pub(crate) struct Rendering {
     pub(crate) only_actions: Option<Vec<String>>,
     pub(crate) only_roles: Option<Vec<String>>,
     pub(crate) images: bool,
+    /// What becomes of an action that reads the repository's history
+    /// ([`crate::curation`]).
+    pub(crate) history: HistoryCuration,
 }
 
 impl Rendering {
@@ -79,7 +83,10 @@ impl Rendering {
     /// The records of the actions of `conversation` the view `judge`s
     /// admissible: one each, or one for all of them when packed. Every action
     /// that cannot be a record is counted in `projection` under why, whatever
-    /// the judge thinks of it: never one ATIF marks as copied context, never a
+    /// the judge thinks of it: never one ATIF marks as copied context, never
+    /// one that reads the repository's history when the curation drops it
+    /// ([`Exclusion::RepositoryHistory`]), nor one after it when the curation
+    /// truncates there ([`Exclusion::AfterRepositoryHistory`]), never a
     /// repeat of a call whose result was the same, never one the view was
     /// asked to leave out ([`Exclusion::ActionNotWanted`]), never one whose
     /// context holds more images than a record may.
@@ -100,11 +107,26 @@ impl Rendering {
                         .all(|c| names.iter().any(|n| n == &c.function.name))
             }
         };
+        let reads_history = |action: &Action| {
+            self.history != HistoryCuration::Keep
+                && conversation.messages[action.index]
+                    .tool_calls
+                    .iter()
+                    .any(|call| reads_repository_history(&call.function.arguments))
+        };
         let mut admitted = Vec::new();
+        let mut truncated = false;
         for action in conversation.actions.iter().filter(|a| !a.copied) {
             let judgement = judge(action);
+            let after_cut = truncated;
+            let flagged = reads_history(action);
+            truncated |= flagged && self.history == HistoryCuration::Truncate;
             if judgement == Judgement::Bad {
                 projection.exclude(Exclusion::BadStep);
+            } else if after_cut {
+                projection.exclude(Exclusion::AfterRepositoryHistory);
+            } else if flagged {
+                projection.exclude(Exclusion::RepositoryHistory);
             } else if action.repeated {
                 projection.exclude(Exclusion::RepeatedAction);
             } else if !wanted(action) {

@@ -312,6 +312,7 @@ pub fn rehearse_on(
             images: false,
             rl: Default::default(),
             split_seed: None,
+            history: Default::default(),
             base: None,
         },
     )?;

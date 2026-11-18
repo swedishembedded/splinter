@@ -152,6 +152,7 @@ fn reward_options_belong_to_the_policy_gradient_view_alone() {
     let wrong_view = BuildRequest {
         rl: shaped(),
         split_seed: None,
+        history: Default::default(),
         base: None,
         ..sft_request(train.clone())
     };

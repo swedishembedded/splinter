@@ -115,6 +115,17 @@ an earlier call of its trajectory with the same result is context and not an
 action to learn (counted as `repeated_action`), so the tail of a loop is
 shown to what follows and never trained.
 
+The sft-step view does not teach reading the repository's history. An action whose tool call
+walks or shows commits (`git log`, `rev-list`, `reflog`, `show`, `blame`, `cat-file`, `fsck`, a
+commit before `HEAD` such as `HEAD~1`) or reads git's storage (`.git/objects`, `.git/refs`,
+`.git/logs`, `.git/HEAD`) is, by default, not supervised and stays in the context of what follows
+(`repository_history`). `--repository-history truncate` ends the demonstration before it (each
+action after it counted as `after_repository_history`); `keep` learns it. The working tree and its
+state against `HEAD` (`git status`, `git diff`, `git diff HEAD`) stay readable. The manifest and
+the report record the policy as `curation: {"policy": "no-repository-history", "mode": ...}`.
+A student trained on a teacher's `git log --oneline -20` learns to run `git log --all` and
+`git reflog`, which a benchmark's leak audit fails.
+
 A trajectory is projected only when its source survives the projection whole.
 Results are paired to calls by id within their step; a step whose calls share
 an id is left out and counted under `duplicate_call_id` in the manifest's

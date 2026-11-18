@@ -29,6 +29,13 @@ See the table `make test/methods` prints; the figures of the last full run are i
 
 ## Findings that changed the code
 
+- 2026-11-18, curation against learned history probing (lane 3, item 2; knowledge 170): the sft-step view drops
+  (default), truncates at or keeps an action whose tool call reads the repository's history or git's storage
+  (`splinter_data::curation`, policy `no-repository-history`, `--repository-history`), counted as
+  `repository_history` / `after_repository_history` and named in the manifest. On pilot A2's store (550 trials, 445
+  packed trajectories) it drops 14 of 3522 supervised actions in 14 trajectories (truncate: 14 and 72 after them);
+  the pilot's trained 420-record dataset supervised 7 such actions, all `git log --oneline -N` / `git show --stat HEAD`.
+
 - 2026-11-18, held-out split by seed and stratum (plan training-regimes lane 3, item 1; knowledge 169): pilot A2's
   held-out and monitoring sets were the newest tenth of a dataset in ingest order, all one domain. `dataset build`
   now writes `metadata.split_draw` (seed, stratum = a bench task's domain, else the task kind) on every record and

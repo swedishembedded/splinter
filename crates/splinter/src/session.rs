@@ -11,14 +11,9 @@ use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
-use splinter_sdk::agent::CancelToken;
 use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::canaries;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
-use splinter_sdk::datasets::{
-    build, build_dropping_leaks, BuildRequest, Control, RlBuild, VoiceBuild,
-};
-use splinter_sdk::describe::DescribeRequest;
 use splinter_sdk::doctor::doctor;
 use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::{examine, ExamineRequest};
@@ -47,9 +42,8 @@ use splinter_sdk::{Config, Context, Error, Splinter};
 use crate::absorb_session;
 use crate::baseline_report;
 use crate::cli::{
-    BuildArgs, Cli, Command, ControlKind, DatasetCommand, EvalArgs, EvalCommand,
-    ExperiencesCommand, ExperimentCommand, Global, JudgeCommand, ReleaseCommand, RetrieveArgs,
-    RunsCommand, SourceCommand, StateCommand,
+    Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand,
+    Global, JudgeCommand, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
 };
 use crate::compare_session;
 use crate::conversation_dataset;
@@ -458,105 +452,7 @@ impl Session {
                 strata.cutoffs(),
             )?,
             Command::Dataset(DatasetCommand::Build(args)) => {
-                let BuildArgs {
-                    sets,
-                    view,
-                    strip,
-                    mix_seed,
-                    min_strength,
-                    system_prompt,
-                    export_only,
-                    limit,
-                    max_block,
-                    from,
-                    split_over_block,
-                    pack,
-                    control,
-                    control_seed,
-                    split_seed,
-                    drop_leaking,
-                    serialise_calls,
-                    only_actions,
-                    roles,
-                    images,
-                    writer,
-                    token_limit,
-                    max_family_share,
-                    describe_with,
-                    reward_metrics,
-                    fail_ceiling,
-                    advantage,
-                    cliff_distill,
-                } = *args;
-                let request = BuildRequest {
-                    sets: sets
-                        .iter()
-                        .map(|id| resolve_set(ctx, id))
-                        .collect::<Result<_, _>>()?,
-                    view,
-                    strip: None,
-                    min_strength,
-                    system_prompt,
-                    export_only,
-                    limit,
-                    voice: VoiceBuild {
-                        writer,
-                        token_budget: token_limit,
-                        max_family_share,
-                        describe: describe_with.map(|generator| DescribeRequest {
-                            generator,
-                            deadline: None,
-                            cancel: CancelToken::new(),
-                        }),
-                    },
-                    max_block,
-                    split_over_block,
-                    pack,
-                    control: Control::Verified,
-                    serialise_calls,
-                    only_actions,
-                    roles,
-                    images,
-                    rl: RlBuild {
-                        reward_metrics,
-                        fail_ceiling,
-                        advantage: advantage.unwrap_or_default(),
-                        cliff_distill,
-                    },
-                    split_seed: split_seed.map(splinter_sdk::seed::Seed::value),
-                    base: from,
-                };
-                // The strip is settled inside the run, which states the seed
-                // `mix:F` picks its subjects by.
-                let arguments = json!({
-                    "request": &request, "strip": &strip, "control": &control, "control_seed": &control_seed,
-                });
-                emit(
-                    json,
-                    &record(ctx, "dataset build", &arguments, |run| {
-                        let strip = strip
-                            .map(|policy| policy.with_seed(|| run.seed("mix-seed", mix_seed)))
-                            .transpose()?;
-                        let control = match control {
-                            None => Control::Verified,
-                            Some(ControlKind::OutcomeVerified) => Control::OutcomeVerified,
-                            Some(ControlKind::Unverified) => Control::Unverified,
-                            Some(ControlKind::Shuffled) => Control::ShuffledInstructions {
-                                seed: run.seed("control-seed", control_seed)?.value(),
-                            },
-                        };
-                        let request = BuildRequest {
-                            strip,
-                            control,
-                            ..request.clone()
-                        };
-                        if drop_leaking {
-                            build_dropping_leaks(ctx, &request)
-                        } else {
-                            build(ctx, &request)
-                        }
-                    })?,
-                );
+                crate::dataset_build::run(ctx, json, *args)?;
             }
             Command::Dataset(command) => {
                 if !conversation_dataset::dispatch(ctx, json, command)? {

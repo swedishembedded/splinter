@@ -277,6 +277,7 @@ fn a_variant_never_enters_a_training_dataset() {
             images: false,
             rl: Default::default(),
             split_seed: None,
+            history: Default::default(),
             base: None,
         },
     )
@@ -485,6 +486,7 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
             images: false,
             rl: Default::default(),
             split_seed: None,
+            history: Default::default(),
             base: None,
         },
     )

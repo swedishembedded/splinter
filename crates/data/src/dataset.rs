@@ -185,6 +185,11 @@ pub struct Manifest {
     /// keeps its address).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub split: Option<crate::holdout::SplitPolicy>,
+    /// The curation policy the records were built under and what it did with
+    /// what it flagged ([`crate::curation`]); its counts are in `counts`. `None`
+    /// for a dataset no policy curated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curation: Option<crate::curation::Curation>,
 }
 
 /// How many records a projection yielded and how many candidates it left
@@ -530,6 +535,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         outcome_verified_only: projection.outcome_verified_only,
         terms: projection.terms.clone(),
         split: projection.split_policy(),
+        curation: projection.curation.clone(),
     }
 }
 

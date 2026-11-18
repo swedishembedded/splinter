@@ -33,7 +33,11 @@
 //! * never a step ATIF marks as copied context;
 //! * never an action that repeats a call of the trajectory whose result was
 //!   the same ([`Exclusion::RepeatedAction`]): the tail of a loop stays in the
-//!   context of what follows and is not learned.
+//!   context of what follows and is not learned;
+//! * never an action that reads the repository's history or its raw storage
+//!   ([`crate::curation`]): by default it is dropped and stays in the context
+//!   of what follows ([`Exclusion::RepositoryHistory`]); [`SftStep::history`]
+//!   can truncate the demonstration there instead, or keep it.
 //!
 //! A harness trial is one experience per conversation ([`splinter_core::harness`]).
 //! [`SftStep::only_roles`] keeps the conversations a model role answered
@@ -60,6 +64,7 @@ use splinter_core::harness::HarnessConversation;
 use splinter_core::rng::SplitMix64;
 
 use super::rendering::{Judgement, Rendering};
+use crate::curation::HistoryCuration;
 use crate::{
     require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
     View, ViewError,
@@ -174,6 +179,14 @@ impl SftStep {
         self
     }
 
+    /// The same view doing `history` with an action that reads the
+    /// repository's history ([`crate::curation`]); by default it is dropped.
+    #[must_use]
+    pub fn history(mut self, history: HistoryCuration) -> Self {
+        self.rendering.history = history;
+        self
+    }
+
     /// The same view under a negative `control`.
     #[must_use]
     pub fn control(self, control: Control) -> Self {
@@ -255,6 +268,7 @@ impl View for SftStep {
         );
         projection.packed = self.rendering.packed;
         projection.outcome_verified_only = self.control == Control::OutcomeVerified;
+        projection.curation = self.rendering.history.recorded();
         for entry in corpus.entries() {
             self.project_entry(entry, &mut projection);
         }

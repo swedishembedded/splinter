@@ -123,6 +123,7 @@ fn request(set: SetId) -> BuildRequest {
         images: false,
         rl: Default::default(),
         split_seed: None,
+        history: Default::default(),
         base: None,
     }
 }

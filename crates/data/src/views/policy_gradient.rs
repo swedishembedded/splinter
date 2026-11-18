@@ -66,6 +66,7 @@ use splinter_store::decision::decide;
 use super::privileged::teacher_context;
 use super::rendering::{Judgement, Rendering};
 use super::rewards::{AdvantageKind, GroupKind, GroupReport, RewardShape, TrialReport};
+use crate::curation::HistoryCuration;
 use crate::RolloutOutcome;
 use crate::{Corpus, Entry, Exclusion, Objective, Projection, Provenance, Strip, View, ViewError};
 
@@ -149,7 +150,11 @@ impl PolicyGradient {
     pub fn new(min_strength: Strength) -> Self {
         Self {
             min_strength,
-            rendering: Rendering::default(),
+            // The reward judges an attempt here, history reads and all.
+            rendering: Rendering {
+                history: HistoryCuration::Keep,
+                ..Rendering::default()
+            },
             reward: RewardShape::unshaped(),
             advantage: AdvantageKind::default(),
             distill: Distill::Off,

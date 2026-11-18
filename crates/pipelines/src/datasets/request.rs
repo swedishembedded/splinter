@@ -11,6 +11,7 @@
 use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::model_ref::ModelRef;
+use splinter_data::curation::HistoryCuration;
 use splinter_store::experiences::SetId;
 
 use super::{Control, RlBuild, Strip, ViewName};
@@ -75,6 +76,10 @@ pub struct BuildRequest {
     /// For the policy-gradient view: how an attempt's reward and its advantage
     /// are made.
     pub rl: RlBuild,
+    /// For the sft-step view: what becomes of an action that reads the
+    /// repository's history or git's raw storage
+    /// (`splinter_data::curation`): by default it is not supervised.
+    pub history: HistoryCuration,
     /// The seed the held-out and monitoring sets of the dataset are drawn by
     /// (every record carries it, with its stratum: `splinter_data::holdout`).
     /// `None` derives it from the experiences the records come from, so a
@@ -92,8 +97,9 @@ pub struct BuildRequest {
 impl BuildRequest {
     /// A build of `sets` through `view` with every other option at its
     /// default: the view's own strip and strength, the default system prompt,
-    /// nothing exported, thinned, bounded or packed, the verified records, the
-    /// split seed derived from the experiences, the policy as the base.
+    /// nothing exported, thinned, bounded or packed, the verified records, an
+    /// action reading the repository's history dropped, the split seed derived
+    /// from the experiences, the policy as the base.
     #[must_use]
     pub fn new(sets: Vec<SetId>, view: ViewName) -> Self {
         Self {
@@ -114,6 +120,7 @@ impl BuildRequest {
             roles: None,
             images: false,
             rl: RlBuild::default(),
+            history: HistoryCuration::default(),
             split_seed: None,
             base: None,
         }

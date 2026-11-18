@@ -170,16 +170,7 @@ pub fn rollout_dataset(ctx: &Context, topic: &str, rewards: &[f64]) -> DatasetId
                 outcome: Some(RolloutOutcome::of(*reward, &[topic], &i.to_string())),
                 teacher_context: Vec::new(),
             },
-            metadata: RecordMetadata {
-                group: None,
-                split: None,
-                split_draw: None,
-                experiences: Vec::new(),
-                task: None,
-                sources: Vec::new(),
-                view: "policy-gradient".into(),
-                objective: Objective::PolicyGradient,
-            },
+            metadata: RecordMetadata::of("policy-gradient", Objective::PolicyGradient),
         })
         .collect();
     let projection = Projection {
@@ -275,6 +266,7 @@ fn dataset_made(
         outcome_verified_only: false,
         block_measure: None,
         terms,
+        curation: None,
     };
     let projection = match prompt {
         Some(prompt) => projection.with_system_prompt(prompt),
@@ -310,14 +302,8 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
                 rejected: Box::new(message("assistant", "I do not know.".into(), true)),
             },
             metadata: RecordMetadata {
-                group: None,
-                split: None,
-                split_draw: None,
-                experiences: Vec::new(),
                 task: Some(task.task.id.clone()),
-                sources: Vec::new(),
-                view: "preference".into(),
-                objective: Objective::Dpo,
+                ..RecordMetadata::of("preference", Objective::Dpo)
             },
         });
     }
@@ -335,6 +321,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         outcome_verified_only: false,
         block_measure: None,
         terms: None,
+        curation: None,
     };
     store_dataset(ctx, &projection, false).unwrap().id
 }

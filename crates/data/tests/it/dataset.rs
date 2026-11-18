@@ -236,6 +236,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
             outcome_verified_only: false,
             block_measure: None,
             terms: None,
+            curation: None,
         };
         assert_eq!(objective.line_format(), Format::SplinterExportV1);
         let path = scratch.0.join(format!("{objective:?}.jsonl"));
@@ -287,6 +288,7 @@ fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised
         outcome_verified_only: false,
         block_measure: None,
         terms: None,
+        curation: None,
     };
     assert_eq!(Objective::Cpt.line_format(), Format::GenericMessagesV2);
     let scratch = Scratch::new("cpt-text-lines");

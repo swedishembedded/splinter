@@ -142,6 +142,7 @@ fn projection(records: Vec<Record>) -> Projection {
         outcome_verified_only: false,
         block_measure: None,
         terms: None,
+        curation: None,
     }
 }
 
@@ -494,6 +495,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         images: false,
         rl: Default::default(),
         split_seed: None,
+        history: Default::default(),
         base: None,
     };
     let retrieval = Retrieval {

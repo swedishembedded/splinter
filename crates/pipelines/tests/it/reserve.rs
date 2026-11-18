@@ -311,6 +311,7 @@ fn reserving_twice_over_a_lineage_with_fresh_seeds_never_examines_what_was_train
             outcome_verified_only: false,
             block_measure: None,
             terms: None,
+            curation: None,
         },
         true,
     )
