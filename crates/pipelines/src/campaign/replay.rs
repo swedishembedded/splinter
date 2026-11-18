@@ -108,6 +108,7 @@ mod tests {
                 sources: Vec::new(),
                 group: None,
                 split: None,
+                split_draw: None,
                 view: tag.into(),
                 objective: Objective::Cpt,
             },

@@ -311,6 +311,7 @@ pub fn rehearse_on(
             roles: None,
             images: false,
             rl: Default::default(),
+            split_seed: None,
             base: None,
         },
     )?;

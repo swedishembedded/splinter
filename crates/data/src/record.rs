@@ -232,6 +232,37 @@ pub enum Side {
     HeldOut,
 }
 
+impl RecordMetadata {
+    /// The metadata of a record `view` made for `objective` from nothing it
+    /// names: no experience, task or source, no group, side or draw.
+    #[must_use]
+    pub fn of(view: &str, objective: Objective) -> Self {
+        Self {
+            experiences: Vec::new(),
+            task: None,
+            sources: Vec::new(),
+            group: None,
+            split: None,
+            split_draw: None,
+            view: view.into(),
+            objective,
+        }
+    }
+}
+
+/// What the holdout rule draws a record by: the seed of its dataset's split
+/// and the stratum the record is drawn in, so held-out and monitoring sets
+/// hold every stratum at its share.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SplitDraw {
+    /// The seed of the split, the same for every record of a dataset.
+    pub seed: u64,
+    /// The stratum: the domain the record's task exercises, as its
+    /// provenance records it; `None` is a stratum of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stratum: Option<String>,
+}
+
 /// Where a record came from.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecordMetadata {
@@ -257,6 +288,11 @@ pub struct RecordMetadata {
     /// `crate::holdout::Membership`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub split: Option<Side>,
+    /// The seed and stratum the holdout rule draws it by (see
+    /// `crate::holdout`); `None` for a record written before the split drew
+    /// by seed, or by a producer that leaves the split to the newest end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split_draw: Option<SplitDraw>,
     /// The view that projected it.
     pub view: String,
     /// The objective it serves.

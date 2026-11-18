@@ -625,15 +625,10 @@ impl AllFailHandler for Teacher {
                         turn("user", &g.task, false),
                         turn("assistant", "the verified answer", true),
                     ]),
-                    metadata: splinter_data::RecordMetadata {
-                        experiences: Vec::new(),
-                        task: None,
-                        sources: Vec::new(),
-                        group: None,
-                        split: None,
-                        view: "campaign-taught".into(),
-                        objective: splinter_data::Objective::Sft,
-                    },
+                    metadata: splinter_data::RecordMetadata::of(
+                        "campaign-taught",
+                        splinter_data::Objective::Sft,
+                    ),
                 }
             })
             .collect())

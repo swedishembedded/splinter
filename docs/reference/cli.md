@@ -1615,6 +1615,7 @@ Options:
 - `--images`: For the sft-step view: the training base reads images (a vision-language base such as Qwen3.8), so a harness conversation whose model was shown images is built from the requests it was sent, the pictures in the turns that carried them and only the answers supervised. Without it such a conversation is left out and counted as `ShownImages`, never trained on as text alone. A conversation ingested before requests were kept is counted as `RequestsNotRecorded` (ingest the trial again into a fresh store), and an action whose context holds more than 8 images as `TooManyImages`.
 - `--control <CONTROL>`: For the sft-step view: build another dataset than the default. `outcome-verified` admits only experiences an independent verdict passed (the default also admits an action labelled good from one that was not verified or failed; the manifest records `outcome-verified`). The negative controls: `unverified` keeps trajectories whatever their verdict (never an exposed one); `shuffled` gives each verified trajectory the instruction of another task. Values: `outcome-verified`, `unverified`, `shuffled`.
 - `--control-seed <N>`: The seed of the `shuffled` pairing (drawn and printed when not given)
+- `--split-seed <N>`: The seed the dataset's held-out and monitoring sets are drawn by: within each stratum (the domain a record's task exercises) its groups are ordered by a hash of the seed, so every stratum is held out at its share. Every record carries it and the manifest records it. Without it, the seed is derived from the experiences the records come from, so building again from them splits the same; another seed draws another split.
 - `--drop-leaking`: Leave out, and list in the report, every experience that would carry an exam family's attempt or file into the dataset, instead of refusing the build. What remains is sealed as usual.
 - `--serialise-calls`: For the sft-step view: a trajectory exported as one agent step that holds a whole run's tool calls is read as one call per turn, each followed by its result, then the final reply.
 - `--writer <NAME>`: For the voice view: who the writer is. Requests are written as theirs and half the records open with their persona prompt, half with the line that says who the model is; refused with --system-prompt.
@@ -1730,7 +1731,7 @@ splinter train [OPTIONS] <DATASET-ID>...
 
 Arguments:
 
-- `<DATASET-ID>...` (required): The datasets, by id or unique prefix, all chat, all preference pairs or all rollouts; the newest records of the last are held out for scoring (rollouts hold nothing out)
+- `<DATASET-ID>...` (required): The datasets, by id or unique prefix, all chat, all preference pairs or all rollouts; a tenth of their records is held out for scoring, drawn by the seed and stratum each record carries (records built before they carried one: the newest; rollouts hold nothing out)
 
 Options:
 

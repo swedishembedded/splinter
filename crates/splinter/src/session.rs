@@ -473,6 +473,7 @@ impl Session {
                     pack,
                     control,
                     control_seed,
+                    split_seed,
                     drop_leaking,
                     serialise_calls,
                     only_actions,
@@ -522,6 +523,7 @@ impl Session {
                         advantage: advantage.unwrap_or_default(),
                         cliff_distill,
                     },
+                    split_seed: split_seed.map(splinter_sdk::seed::Seed::value),
                     base: from,
                 };
                 // The strip is settled inside the run, which states the seed

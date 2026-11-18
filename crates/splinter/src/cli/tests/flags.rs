@@ -3,9 +3,10 @@
 
 //! The grammar's specs for the flags that reach the models: the remote
 //! request width, the served temperature, the solve deadline and the training
-//! row's bound, and the tier the frozen base is held at.
+//! row's bound, the tier the frozen base is held at, and the seed a dataset's
+//! held-out split is drawn by.
 
-use super::{command, parse, Command};
+use super::{command, parse, Command, DatasetCommand};
 
 #[test]
 fn the_remote_knobs_are_global_flags_and_bounded() {
@@ -265,4 +266,22 @@ fn brain_endpoints_are_global_flags_and_repeat() {
         none.global.device.brain_endpoint.is_empty() && none.global.attempt_concurrency.is_none()
     );
     assert!(parse(&["--attempt-concurrency", "0", "status"]).is_err());
+}
+
+#[test]
+fn a_dataset_build_takes_the_seed_its_split_is_drawn_by() {
+    let seed_of = |extra: &[&str]| {
+        let mut args = vec!["dataset", "build", "ab12", "--view", "sft-step"];
+        args.extend_from_slice(extra);
+        let Command::Dataset(DatasetCommand::Build(build)) = command(&args) else {
+            panic!("dataset build");
+        };
+        build.split_seed.map(splinter_sdk::seed::Seed::value)
+    };
+    assert_eq!(seed_of(&["--split-seed", "9"]), Some(9));
+    assert_eq!(
+        seed_of(&[]),
+        None,
+        "derived from the experiences when not given"
+    );
 }

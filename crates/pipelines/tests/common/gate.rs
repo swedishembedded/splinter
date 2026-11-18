@@ -173,6 +173,7 @@ pub fn rollout_dataset(ctx: &Context, topic: &str, rewards: &[f64]) -> DatasetId
             metadata: RecordMetadata {
                 group: None,
                 split: None,
+                split_draw: None,
                 experiences: Vec::new(),
                 task: None,
                 sources: Vec::new(),
@@ -251,6 +252,7 @@ fn dataset_made(
             metadata: RecordMetadata {
                 group: None,
                 split: None,
+                split_draw: None,
                 experiences: Vec::new(),
                 task: Some(task.task.id.clone()),
                 sources: sources.to_vec(),
@@ -310,6 +312,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
             metadata: RecordMetadata {
                 group: None,
                 split: None,
+                split_draw: None,
                 experiences: Vec::new(),
                 task: Some(task.task.id.clone()),
                 sources: Vec::new(),

@@ -26,8 +26,8 @@ is printed with its numbers, and a check that could not be measured fails:
 ### The improvement check
 
 The improvement check measures whether the candidate learned the facts it
-was trained on, on questions it was not trained on: the held-out records (the
-newest tenth of the new data, grown to eight families of source text where
+was trained on, on questions it was not trained on: the held-out records (a
+tenth of the new data drawn by seed and stratum, grown to eight families of source text where
 the data has them, within a quarter of it, so that a sign test over families
 can reach significance) are few, and questions about other facts cannot
 improve for a campaign that teaches facts. So the suite is completed with the stored

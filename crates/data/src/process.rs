@@ -75,6 +75,7 @@ fn record(messages: Vec<WireMessage>, group: &str) -> Record {
             sources: Vec::new(),
             group: Some(group.into()),
             split: None,
+            split_draw: None,
             view: VIEW.into(),
             objective: Objective::Sft,
         },

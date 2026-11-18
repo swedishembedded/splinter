@@ -154,6 +154,7 @@ mod tests {
                 sources: Vec::new(),
                 group: None,
                 split: None,
+                split_draw: None,
                 view: "policy-gradient".into(),
                 objective: Objective::PolicyGradient,
             },

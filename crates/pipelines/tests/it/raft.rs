@@ -117,6 +117,7 @@ fn record_with_experience(
         metadata: RecordMetadata {
             group: None,
             split: None,
+            split_draw: None,
             experiences: vec![id],
             task: None,
             sources: Vec::new(),
@@ -492,6 +493,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         roles: None,
         images: false,
         rl: Default::default(),
+        split_seed: None,
         base: None,
     };
     let retrieval = Retrieval {

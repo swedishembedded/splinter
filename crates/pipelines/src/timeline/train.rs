@@ -257,7 +257,7 @@ pub fn divide_validation(
     let membership = |s: &Subject| Membership {
         group: s.group_id.clone(),
         examinable: true,
-        side: None,
+        ..Membership::default()
     };
     let mut sizes: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     for s in held {

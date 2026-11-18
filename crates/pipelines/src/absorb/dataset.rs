@@ -101,6 +101,7 @@ fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> R
             sources: Vec::new(),
             group: None,
             split: Some(Side::HeldOut),
+            split_draw: None,
             view: VIEW.into(),
             objective: Objective::Sft,
         },

@@ -229,8 +229,9 @@ impl PolicyGradientArgs {
 #[derive(Debug, Args)]
 pub struct TrainArgs {
     /// The datasets, by id or unique prefix, all chat, all preference pairs
-    /// or all rollouts; the newest records of the last are held out for
-    /// scoring (rollouts hold nothing out).
+    /// or all rollouts; a tenth of their records is held out for scoring,
+    /// drawn by the seed and stratum each record carries (records built
+    /// before they carried one: the newest; rollouts hold nothing out).
     #[arg(required = true, value_name = "DATASET-ID")]
     pub datasets: Vec<String>,
     /// The base to train, and an adapter on it to continue; for a run on

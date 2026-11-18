@@ -136,6 +136,15 @@ impl Digest {
     pub fn hex(&self) -> &str {
         &self.0[self.0.find(':').map_or(0, |colon| colon + 1)..]
     }
+
+    /// The first eight bytes of the hash as a number: a uniform draw keyed
+    /// by what was hashed, for an order or a seed that is a function of
+    /// content.
+    #[must_use]
+    pub fn leading_u64(&self) -> u64 {
+        // Validated to be 64 hex digits, so the first 16 always parse.
+        u64::from_str_radix(&self.hex()[..16], 16).unwrap_or_default()
+    }
 }
 
 impl std::fmt::Display for Digest {

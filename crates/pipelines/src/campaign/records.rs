@@ -87,6 +87,7 @@ fn record(view: &str, body: RecordBody) -> Record {
             sources: Vec::new(),
             group: None,
             split: None,
+            split_draw: None,
             view: view.to_string(),
             objective: Objective::PolicyGradient,
         },

@@ -29,6 +29,13 @@ See the table `make test/methods` prints; the figures of the last full run are i
 
 ## Findings that changed the code
 
+- 2026-11-18, held-out split by seed and stratum (plan training-regimes lane 3, item 1; knowledge 169): pilot A2's
+  held-out and monitoring sets were the newest tenth of a dataset in ingest order, all one domain. `dataset build`
+  now writes `metadata.split_draw` (seed, stratum = a bench task's domain, else the task kind) on every record and
+  `split` in the manifest and report; the holdout rule orders groups by a hash of the seed within each stratum and
+  interleaves the strata by share (`--split-seed`, else derived from the experiences). A bench trial's records are
+  grouped by its task. Records without a draw keep the newest-end rule.
+
 - 2026-11-18, brain's training-record contract v2 (plan training-regimes D1, Phase 0 step 3): the policy-gradient
   view, the conversation view and the campaign write each rollout's `reward`, `group` (a digest of the task, version
   and policy) and `rollout` (the trial) instead of an advantage; brain computes the advantages per group. The

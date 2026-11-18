@@ -88,6 +88,7 @@ pub(super) fn dataset_stage(
         roles: None,
         images: false,
         rl: Default::default(),
+        split_seed: None,
         base: None,
     };
     // Passages of the run's own sources, when a share of the records is to

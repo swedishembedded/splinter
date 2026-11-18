@@ -71,6 +71,7 @@ fn record(pair: &Pair) -> Record {
                 rank(pair.kind, &pair.identity)
             )),
             split: None,
+            split_draw: None,
             view: VIEW.into(),
             objective: Objective::Dpo,
         },

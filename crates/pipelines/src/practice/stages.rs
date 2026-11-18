@@ -43,7 +43,7 @@ use crate::curriculum::frontier::select_frontier;
 use crate::curriculum::repository_teacher::{teach_repository, TeachRepositoryRequest};
 use crate::curriculum::schedule::{schedule, yield_of, Strategy};
 use crate::curriculum::teacher::{untaught, Taught};
-use crate::datasets::{build, BuildRequest, ViewName, VoiceBuild};
+use crate::datasets::{build, BuildRequest, ViewName};
 use crate::learn::PolicyUsed;
 use crate::release::exams::{self, ExamRecord};
 use crate::release::{release_recorded, ReleaseRequest};
@@ -632,26 +632,12 @@ fn dataset_stage(ctx: &Context, _: &mut Recorder<'_>, st: &mut PracticeState<'_>
     let built = match build(
         ctx,
         &BuildRequest {
-            sets,
-            view,
-            strip: None,
             // The workspace verifier's executable verdict, which no weaker
             // check can stand in for.
             min_strength: Some(Strength::Executable),
-            system_prompt: None,
-            export_only: false,
-            limit: None,
             max_block: request.tuning.max_block.map(|b| b as usize),
-            pack: false,
-            split_over_block: false,
-            control: Default::default(),
-            serialise_calls: false,
-            only_actions: None,
-            roles: None,
-            images: false,
             rl,
-            base: None,
-            voice: VoiceBuild::default(),
+            ..BuildRequest::new(sets, view)
         },
     ) {
         Ok(built) => built,

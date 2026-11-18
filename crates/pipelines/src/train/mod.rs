@@ -18,8 +18,8 @@
 //! it.
 //!
 //! The datasets are concatenated in the order given into the candidate's
-//! own directory, and the newest records of that file are held out
-//! (`splinter_data::holdout`). A supervised run then sets a share of the
+//! own directory, and a tenth of the records of that file is held out, drawn
+//! by the seed and stratum each record carries (`splinter_data::holdout`). A supervised run then sets a share of the
 //! training families aside as its monitoring set ([`sizing`]), scores it
 //! every few steps as it trains, exports the adapter of the evaluation with
 //! the lowest monitoring loss and stops once that loss has gone a patience of

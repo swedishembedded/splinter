@@ -52,6 +52,7 @@ fn record(user: &str, assistant: &str) -> Record {
             sources: Vec::new(),
             group: None,
             split: None,
+            split_draw: None,
             view: "session-claims".into(),
             objective: Objective::Sft,
         },

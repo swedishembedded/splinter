@@ -290,6 +290,7 @@ fn reserving_twice_over_a_lineage_with_fresh_seeds_never_examines_what_was_train
             sources: vec![content.clone()],
             group: None,
             split: None,
+            split_draw: None,
             view: "cpt".into(),
             objective: Objective::Cpt,
         },

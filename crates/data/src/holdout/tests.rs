@@ -475,6 +475,7 @@ fn a_free_record_follows_the_fixed_side_of_its_group() {
             group: Some(group.clone()),
             examinable: true,
             side: *side,
+            ..Membership::default()
         },
         &SplitRule::HELD_OUT,
     )
@@ -487,4 +488,111 @@ fn a_free_record_follows_the_fixed_side_of_its_group() {
     for (_, group, _) in &held {
         assert!(train.iter().all(|(_, g, _)| g != group), "{group}");
     }
+}
+
+/// A dataset record of `domain`, numbered `n`, drawn under `seed` when it
+/// carries one (as `dataset build` writes it).
+fn drawn(domain: &str, n: u32, seed: Option<u64>) -> String {
+    let draw = seed.map_or(String::new(), |seed| {
+        format!(r#","split_draw":{{"seed":{seed},"stratum":"{domain}"}}"#)
+    });
+    format!(r#"{{"messages":[],"metadata":{{"experiences":["blake3:{n:064x}"]{draw}}}}}"#)
+}
+
+/// Four domains ingested one after the other, as a bench export lists its
+/// trials: 179, 83, 82 and 76 records (the pilot's sft-step dataset).
+fn ingest_ordered(seed: Option<u64>) -> Vec<String> {
+    let mut records = Vec::new();
+    let mut n = 0;
+    for (domain, count) in [
+        ("support", 179),
+        ("compiled", 82),
+        ("legal", 76),
+        ("accounting", 83),
+    ] {
+        for _ in 0..count {
+            records.push(drawn(domain, n, seed));
+            n += 1;
+        }
+    }
+    records
+}
+
+fn domains(records: &[&String]) -> std::collections::BTreeMap<&'static str, usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    for record in records {
+        for domain in ["support", "compiled", "legal", "accounting"] {
+            if record.contains(&format!(r#""stratum":"{domain}""#)) {
+                *counts.entry(domain).or_default() += 1;
+            }
+        }
+    }
+    counts
+}
+
+/// The trap the pilot hit: with the records in ingest order, the newest
+/// tenth of the file is one domain, so held-out and monitoring scored one
+/// domain and the training kept almost none of it. Records drawn under a
+/// seed are split by stratum instead: every domain is held out, and at its
+/// share of the set (within one record), and so is every domain monitored.
+#[test]
+fn a_seeded_split_holds_out_every_stratum_at_its_share_of_the_set() {
+    // seed: the regression is about the layout; any seed must pass, and this
+    // one is printed when it does not.
+    for seed in [20_261_118_u64, 7, u64::MAX] {
+        let records = ingest_ordered(Some(seed));
+        let (train, held) = holdout_split_records(&records).unwrap();
+        assert_eq!(held.len(), 42, "seed {seed}: a tenth of 420");
+        let held_by = domains(&held);
+        for (domain, total) in [
+            ("support", 179.0),
+            ("compiled", 82.0),
+            ("legal", 76.0),
+            ("accounting", 83.0),
+        ] {
+            let expected: f64 = total * 42.0 / 420.0;
+            let got = held_by.get(domain).copied().unwrap_or(0) as f64;
+            assert!(
+                (got - expected).abs() <= 1.0,
+                "seed {seed}: {domain} held out {got}, its share is {expected}: {held_by:?}"
+            );
+        }
+        // The monitoring set carved from what is trained on mirrors the mix
+        // too.
+        let train: Vec<String> = train.into_iter().cloned().collect();
+        let (_, monitor) =
+            split_by_rule(&train, record_membership, &SplitRule::monitor(0.1)).unwrap();
+        let monitored = domains(&monitor);
+        assert_eq!(monitored.len(), 4, "seed {seed}: {monitored:?}");
+    }
+}
+
+/// The split is a function of the records and their seed: the same records
+/// split the same, and another seed holds out another set.
+#[test]
+fn a_seeded_split_is_reproducible_and_the_seed_chooses_it() {
+    let held = |records: &[String]| -> std::collections::BTreeSet<String> {
+        holdout_split_records(records)
+            .unwrap()
+            .1
+            .into_iter()
+            .cloned()
+            .collect()
+    };
+    // seed: two fixed seeds, to compare the sets they choose.
+    let records = ingest_ordered(Some(1));
+    assert!(held(&records) == held(&ingest_ordered(Some(1))));
+    assert!(held(&records) != held(&ingest_ordered(Some(2))));
+}
+
+/// Records written before the split drew by seed (no `split_draw`) keep
+/// the rule they were trained under, so a candidate trained on them is
+/// scored by the gate on what it held out.
+#[test]
+fn records_without_a_draw_keep_the_newest_end() {
+    let records = ingest_ordered(None);
+    let (_, held) = holdout_split_records(&records).unwrap();
+    assert_eq!(held.len(), 42);
+    let newest: Vec<&String> = records[records.len() - 42..].iter().collect();
+    assert_eq!(held, newest);
 }

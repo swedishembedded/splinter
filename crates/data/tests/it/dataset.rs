@@ -193,6 +193,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
     let metadata = |objective| RecordMetadata {
         group: None,
         split: None,
+        split_draw: None,
         experiences: Vec::new(),
         task: None,
         sources: Vec::new(),
@@ -270,6 +271,7 @@ fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised
             metadata: RecordMetadata {
                 group: None,
                 split: None,
+                split_draw: None,
                 experiences: Vec::new(),
                 task: None,
                 sources: Vec::new(),
@@ -328,4 +330,33 @@ fn a_check_that_refuses_a_file_leaves_nothing_at_the_path() {
     );
     assert!(!path.exists() && !manifest_path(&path).exists());
     assert!(!path.with_extension("pending").exists());
+}
+
+/// A projection drawn by a seed carries the draw on every line, so the
+/// holdout rule splits the file by it, and its manifest records the rule,
+/// the seed and the records of each stratum; one with no draw records no
+/// split and keeps the manifest it had.
+#[test]
+fn a_drawn_dataset_records_its_split_in_the_manifest() {
+    let (corpus, _) = graded_corpus();
+    let scratch = Scratch::new("split-policy");
+    let plain = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
+    let path = scratch.0.join("plain.jsonl");
+    write_dataset(&path, &plain, &Unchecked).unwrap();
+    assert!(manifest(&path).0.get("split").is_none());
+
+    // seed: any value; the test reads back the one it wrote.
+    let drawn = plain.drawn_by(41, &|_| Some("arithmetic".into()));
+    let path = scratch.0.join("drawn.jsonl");
+    write_dataset(&path, &drawn, &Unchecked).unwrap();
+    assert_eq!(
+        manifest(&path).0["split"],
+        json!({"rule": "seeded-stratified", "seed": 41, "strata": {"arithmetic": 1}})
+    );
+    let line: serde_json::Value =
+        serde_json::from_str(std::fs::read_to_string(&path).unwrap().trim_end()).unwrap();
+    assert_eq!(
+        line["metadata"]["split_draw"],
+        json!({"seed": 41, "stratum": "arithmetic"})
+    );
 }

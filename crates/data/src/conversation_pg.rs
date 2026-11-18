@@ -133,6 +133,7 @@ pub fn project(
                         sources: Vec::new(),
                         group: Some(case.to_string()),
                         split: None,
+                        split_draw: None,
                         view: VIEW.to_string(),
                         objective: Objective::PolicyGradient,
                     },

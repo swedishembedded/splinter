@@ -51,6 +51,7 @@ pub fn sft_request(set: SetId) -> BuildRequest {
         roles: None,
         images: false,
         rl: Default::default(),
+        split_seed: None,
         base: None,
     }
 }
@@ -76,6 +77,9 @@ pub struct Trial {
     pub score: Option<Value>,
     /// Whether the trial ran a released harness package.
     pub confidential: bool,
+    /// The capability its task exercises, `<domain>.<task>` as the benchmark
+    /// declares it.
+    pub dimension: &'static str,
 }
 
 impl Trial {
@@ -95,6 +99,7 @@ impl Trial {
             reason: None,
             score: None,
             confidential: false,
+            dimension: "firmware.x",
         }
     }
 
@@ -143,6 +148,11 @@ impl Trial {
             picture: true,
             ..self
         }
+    }
+
+    /// The same trial of a task that declares `dimension`.
+    pub fn dimension(self, dimension: &'static str) -> Self {
+        Self { dimension, ..self }
     }
 
     /// The same trial with `metrics` as the verifier's measurements.
@@ -235,7 +245,7 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         let reward = if t.pass { 1.0 } else { 0.0 };
         let verdict = if t.pass { "pass" } else { "fail" };
         let mut task = json!({"id": t.task, "version": "2", "digest": "d1",
-                              "dimension": "firmware.x", "path": "tasks/x"});
+                              "dimension": t.dimension, "path": "tasks/x"});
         if let Some(set) = t.set {
             task["set"] = json!(set);
         }

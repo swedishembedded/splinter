@@ -4,11 +4,26 @@
 //! The rule that decides which records of a training set are held out for
 //! scoring, and the split of a dataset file by it.
 //!
-//! A tenth of the samples (at least one) is held out, the newest, because a
-//! single record's 20-odd token positions cannot carry a verdict on a set of
+//! A tenth of the samples (at least one) is held out, because a single
+//! record's 20-odd token positions cannot carry a verdict on a set of
 //! hundreds: its noise would masquerade as improvement or regression. One
 //! held-out sample is the minimum honest evaluation; scoring on the training
 //! set would read training loss as generalisation.
+//!
+//! Which tenth is drawn, by stratum. A record built by `dataset build`
+//! carries the seed of its dataset's split and the stratum it was drawn in
+//! (`metadata.split_draw`: the domain its task exercises, as its provenance
+//! records it). Within each stratum the groups are put in the order of a
+//! hash of the seed and the group, and the strata are interleaved in
+//! proportion to their units, so any share taken from the front of that
+//! order mirrors the mix of the set: held-out and monitoring sets hold every
+//! stratum at its share, wherever the records sit in the file. The split is
+//! a function of the records alone - training and the release gate draw the
+//! same - and another seed draws another split. A file whose records were
+//! written in the order they were ingested, one domain after another, would
+//! otherwise hold out only its last domain. Records that carry no draw
+//! (written before the split drew by seed) are taken from the newest end, as
+//! they were when a candidate was trained on them.
 //!
 //! What is held out is also what a release is decided on, by a paired sign
 //! test in which records about one family of source text count once. A tenth
@@ -16,7 +31,7 @@
 //! three letters: two or three units of evidence, on which no test can reach
 //! significance. So the held-out set also runs to [`MIN_HELD_OUT_UNITS`]
 //! units - groups, or ungrouped samples - where the data has them, taking
-//! whole groups from the newest end as long as it stays within
+//! whole groups in the split's order as long as it stays within
 //! [`MAX_HELD_OUT_SHARE`] of the samples.
 //!
 //! The samples the split chooses from are the records that can be examined:
@@ -67,7 +82,37 @@ pub struct Membership {
     /// (a wording of it no record trains). The rule never moves it, and
     /// does not count it among the units it chooses from.
     pub side: Option<Side>,
+    /// The stratum the split draws the sample in (see the module
+    /// documentation); `None` is a stratum of its own.
+    pub stratum: Option<String>,
+    /// The seed the split draws the sample's group by; `None` for a sample
+    /// with no draw, which the rule takes from the newest end when no sample
+    /// of the set has one.
+    pub seed: Option<u64>,
 }
+
+/// The name of the rule a dataset whose records carry a [`SplitDraw`] is
+/// split by, as its manifest records it ([`SplitPolicy::rule`]).
+///
+/// [`SplitDraw`]: crate::SplitDraw
+pub const SEEDED_STRATIFIED: &str = "seeded-stratified";
+
+/// How a dataset's held-out and monitoring sets are drawn, as its manifest
+/// records it: the rule, the seed every record carries, and how many records
+/// each stratum holds.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SplitPolicy {
+    /// The rule: [`SEEDED_STRATIFIED`].
+    pub rule: String,
+    /// The seed of the split.
+    pub seed: u64,
+    /// Records per stratum; a record with no stratum is counted under
+    /// [`NO_STRATUM`].
+    pub strata: std::collections::BTreeMap<String, usize>,
+}
+
+/// The name [`SplitPolicy::strata`] counts records with no stratum under.
+pub const NO_STRATUM: &str = "unknown";
 
 /// The fewest samples [`holdout_split_grouped`] splits: one to train on, one to
 /// hold out.
@@ -91,7 +136,8 @@ pub const MIN_MONITOR_FAMILIES: usize = 3;
 /// never divided: the samples `group` puts under one name (two prints of one
 /// letter, the tasks written from them) are all held out or all trained on,
 /// so nothing trained on is a near-copy of what is held out. A sample with no
-/// group is its own. Groups are taken from the end, whole, until a tenth of
+/// group is its own. Groups are taken whole, in the split's order (see the
+/// module documentation; from the end for samples with no draw), until a tenth of
 /// the samples (at least one) are held out and [`MIN_HELD_OUT_UNITS`] groups
 /// with them; a group that would take the held out past half the samples is
 /// skipped, and one taken only for the units past
@@ -106,7 +152,7 @@ pub fn holdout_split_grouped<T>(
     holdout_split_by(samples, |sample| Membership {
         group: group(sample),
         examinable: true,
-        side: None,
+        ..Membership::default()
     })
 }
 
@@ -244,13 +290,9 @@ fn choose_held_out(mut memberships: Vec<Membership>, rule: &SplitRule) -> Vec<bo
     let most = of_units(rule.most);
     let mut held: std::collections::HashSet<&str> = std::collections::HashSet::new();
     let mut count = 0;
-    for &n in units.iter().rev() {
+    for key in draw_order(&memberships, &keys, &units) {
         if count >= wanted && held.len() >= rule.min_units {
             break;
-        }
-        let key = keys[n].as_str();
-        if held.contains(key) {
-            continue;
         }
         let size = sizes[key];
         let for_the_tenth = count < wanted && count + size <= half;
@@ -266,20 +308,95 @@ fn choose_held_out(mut memberships: Vec<Membership>, rule: &SplitRule) -> Vec<bo
     keys.iter().map(|key| held.contains(key.as_str())).collect()
 }
 
+/// The groups of the `units` (indices into `memberships` and `keys`), each
+/// once, in the order the split takes them. When any unit carries a seed:
+/// within each stratum the groups in the order of a hash of their seed and
+/// key, the strata interleaved by the middle of each group's run of the
+/// stratum's units, so the front of the order holds every stratum at its
+/// share of the units. When none does: from the newest unit back.
+fn draw_order<'a>(
+    memberships: &'a [Membership],
+    keys: &'a [String],
+    units: &[usize],
+) -> Vec<&'a str> {
+    let Some(fallback_seed) = units.iter().filter_map(|&n| memberships[n].seed).min() else {
+        let mut seen = std::collections::HashSet::new();
+        return units
+            .iter()
+            .rev()
+            .map(|&n| keys[n].as_str())
+            .filter(|key| seen.insert(*key))
+            .collect();
+    };
+    /// A group as the draw sees it: its stratum and seed are those of its
+    /// first unit that has one.
+    struct Group<'a> {
+        key: &'a str,
+        stratum: Option<&'a str>,
+        seed: Option<u64>,
+        size: usize,
+    }
+    let mut groups: Vec<Group<'a>> = Vec::new();
+    let mut at: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for &n in units {
+        let key = keys[n].as_str();
+        let index = *at.entry(key).or_insert_with(|| {
+            groups.push(Group {
+                key,
+                stratum: None,
+                seed: None,
+                size: 0,
+            });
+            groups.len() - 1
+        });
+        let group = &mut groups[index];
+        group.size += 1;
+        group.stratum = group.stratum.or(memberships[n].stratum.as_deref());
+        group.seed = group.seed.or(memberships[n].seed);
+    }
+    let rank = |group: &Group<'_>| -> u64 {
+        let mut bytes = group.seed.unwrap_or(fallback_seed).to_le_bytes().to_vec();
+        bytes.extend_from_slice(group.key.as_bytes());
+        splinter_core::digest::Digest::of(&bytes).leading_u64()
+    };
+    let mut by_stratum: std::collections::BTreeMap<Option<&str>, Vec<(u64, &Group<'a>)>> =
+        std::collections::BTreeMap::new();
+    for group in &groups {
+        by_stratum
+            .entry(group.stratum)
+            .or_default()
+            .push((rank(group), group));
+    }
+    let mut order: Vec<(f64, u64, &'a str)> = Vec::with_capacity(groups.len());
+    for members in by_stratum.values_mut() {
+        members.sort_by(|a, b| (a.0, a.1.key).cmp(&(b.0, b.1.key)));
+        let total = members.iter().map(|(_, g)| g.size).sum::<usize>() as f64;
+        let mut before = 0usize;
+        for (rank, group) in members.iter() {
+            let middle = (before as f64 + group.size as f64 / 2.0) / total;
+            order.push((middle, *rank, group.key));
+            before += group.size;
+        }
+    }
+    order.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(b.2)));
+    order.into_iter().map(|(_, _, key)| key).collect()
+}
+
 /// How a dataset record stands to the split, from its metadata: the group
 /// it names in `metadata.group`, whether it was projected from a task
 /// or an experience (`metadata.task`, `metadata.experiences`), which is
-/// what makes it examinable, and the side it fixes in `metadata.split`. A record that is not JSON is its own group and
-/// examinable.
+/// what makes it examinable, the side it fixes in `metadata.split`, and the
+/// seed and stratum it is drawn by in `metadata.split_draw`. A record that is
+/// not JSON is its own group and examinable.
 fn record_membership<S: AsRef<str>>(record: &S) -> Membership {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(record.as_ref()) else {
         return Membership {
-            group: None,
             examinable: true,
-            side: None,
+            ..Membership::default()
         };
     };
     let metadata = &value["metadata"];
+    let draw = &metadata["split_draw"];
     Membership {
         group: metadata["group"].as_str().map(str::to_string),
         examinable: metadata["task"].is_string()
@@ -287,6 +404,8 @@ fn record_membership<S: AsRef<str>>(record: &S) -> Membership {
                 .as_array()
                 .is_some_and(|experiences| !experiences.is_empty()),
         side: serde_json::from_value(metadata["split"].clone()).ok(),
+        stratum: draw["stratum"].as_str().map(str::to_string),
+        seed: draw["seed"].as_u64(),
     }
 }
 

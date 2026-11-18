@@ -46,9 +46,11 @@ the run starts from (`--beta`, the DPO temperature, defaults to brain's);
 a dataset of rollouts (the `policy-gradient` view, whose records carry a
 `reward` and a `group`) by brain's clipped policy gradient, below; one run's datasets are all of one
 regime. It concatenates them in
-order and holds the newest records out for scoring (a record of the writer's
-own text, which has no question to examine, is held out with its family and
-scored by nobody): a supervised candidate
+order and holds a tenth of the records out for scoring, drawn by the seed and
+stratum each record of a built dataset carries so that every domain is held out
+at its share ([the held-out split](../reference/datasets.md#held-out-and-monitoring-split);
+a record of the writer's own text, which has no question to examine, is held
+out with its family and scored by nobody): a supervised candidate
 reports the held-out loss of base and candidate, a preference candidate
 brain's preference score on the held-out pairs (how often, and by how
 many nats, it prefers the chosen answer more than its reference does).

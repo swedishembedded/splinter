@@ -221,6 +221,7 @@ fn sft_of(ctx: &Context, experience: &Experience) -> Result<(), String> {
             roles: None,
             images: false,
             rl: Default::default(),
+            split_seed: None,
             base: None,
         },
     )

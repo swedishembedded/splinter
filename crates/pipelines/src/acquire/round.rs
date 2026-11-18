@@ -461,6 +461,7 @@ impl Acquisition<'_> {
                 roles: None,
                 images: false,
                 rl: Default::default(),
+                split_seed: None,
                 base: None,
             },
         ) {

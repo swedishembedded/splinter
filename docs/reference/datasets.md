@@ -134,6 +134,22 @@ when its task is in the benchmark's `train` split. A build refuses an experience
 `eval` task, or of a task the register holds as `eval`; `--drop-leaking` leaves it out
 and lists it instead.
 
+## Held-out and monitoring split
+
+`train` holds a tenth of a dataset's records out for scoring and carves its monitoring set from
+the rest; the release gate draws the same held-out set from the same records. A dataset built by
+`dataset build` decides both by seed and stratum: every record carries `metadata.split_draw`,
+the seed of the dataset's split and its stratum - the domain its task exercises, the first part
+of a benchmark task's `dimension` (`support` of `support.missing-info-defect-photo`), else the
+task's kind. Within a stratum the groups (a benchmark task, a family of source text) are taken in
+the order of a hash of the seed and the group, and the strata are interleaved in proportion to
+their records, so held-out and monitoring sets hold every stratum at its share wherever the
+records sit in the file. Without `--split-seed N` the seed is derived from the experiences the
+records come from, so building again from them splits the same; another seed draws another
+split. The manifest and the build report record it as `split`: `{"rule": "seeded-stratified",
+"seed": N, "strata": {"<stratum>": records, ...}}`. Records written before datasets carried a
+draw are held out from the newest end of the file, as they were when they were trained on.
+
 ## Manifest
 
 Every dataset is stored under the state root by content address, beside a manifest that

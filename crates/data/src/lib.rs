@@ -112,7 +112,9 @@ pub use dataset::{
     dataset_line, manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest,
     Unchecked, EXPORT_FORMAT,
 };
-pub use record::{Record, RecordBody, RecordMetadata, RolloutOutcome, Side, TeacherMessage};
+pub use record::{
+    Record, RecordBody, RecordMetadata, RolloutOutcome, Side, SplitDraw, TeacherMessage,
+};
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
@@ -565,6 +567,46 @@ impl Projection {
         self
     }
 
+    /// The same projection with every record drawn by `seed` in the stratum
+    /// `stratum_of` gives it (`metadata.split_draw`), so that the holdout rule
+    /// splits it by seed and stratum ([`holdout`]) and its manifest records
+    /// how ([`holdout::SplitPolicy`]).
+    #[must_use]
+    pub fn drawn_by(mut self, seed: u64, stratum_of: &dyn Fn(&Record) -> Option<String>) -> Self {
+        for record in &mut self.records {
+            record.metadata.split_draw = Some(SplitDraw {
+                seed,
+                stratum: stratum_of(record),
+            });
+        }
+        self
+    }
+
+    /// How the records' split is drawn, when they carry a draw: the seed of
+    /// the first that does, and the records of each stratum.
+    #[must_use]
+    pub fn split_policy(&self) -> Option<holdout::SplitPolicy> {
+        let seed = self
+            .records
+            .iter()
+            .find_map(|r| r.metadata.split_draw.as_ref())?
+            .seed;
+        let mut strata = BTreeMap::new();
+        for draw in self
+            .records
+            .iter()
+            .filter_map(|r| r.metadata.split_draw.as_ref())
+        {
+            let name = draw.stratum.as_deref().unwrap_or(holdout::NO_STRATUM);
+            *strata.entry(name.to_string()).or_insert(0) += 1;
+        }
+        Some(holdout::SplitPolicy {
+            rule: holdout::SEEDED_STRATIFIED.into(),
+            seed,
+            strata,
+        })
+    }
+
     /// Candidates excluded for `reason`.
     #[must_use]
     pub fn count(&self, reason: Exclusion) -> usize {
@@ -587,6 +629,7 @@ impl Projection {
                 sources: provenance.sources,
                 group: None,
                 split: None,
+                split_draw: None,
                 view: self.view.clone(),
                 objective: self.objective,
             },

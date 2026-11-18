@@ -145,6 +145,15 @@ pub struct BuildArgs {
     /// given).
     #[arg(long, value_name = "N", requires = "control")]
     pub control_seed: Option<Seed>,
+    /// The seed the dataset's held-out and monitoring sets are drawn by:
+    /// within each stratum (the domain a record's task exercises) its groups
+    /// are ordered by a hash of the seed, so every stratum is held out at its
+    /// share. Every record carries it and the manifest records it. Without
+    /// it, the seed is derived from the experiences the records come from, so
+    /// building again from them splits the same; another seed draws another
+    /// split.
+    #[arg(long, value_name = "N")]
+    pub split_seed: Option<Seed>,
     /// Leave out, and list in the report, every experience that would
     /// carry an exam family's attempt or file into the dataset, instead
     /// of refusing the build. What remains is sealed as usual.

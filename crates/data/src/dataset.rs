@@ -179,6 +179,12 @@ pub struct Manifest {
     /// unknown (a manifest written before terms existed keeps its address).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terms: Option<splinter_core::terms::Terms>,
+    /// How the held-out and monitoring sets of the records are drawn, when
+    /// they carry a draw ([`crate::holdout`]); `None` for records taken from
+    /// the newest end (a manifest written before the split drew by seed
+    /// keeps its address).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split: Option<crate::holdout::SplitPolicy>,
 }
 
 /// How many records a projection yielded and how many candidates it left
@@ -523,6 +529,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         packed: projection.packed,
         outcome_verified_only: projection.outcome_verified_only,
         terms: projection.terms.clone(),
+        split: projection.split_policy(),
     }
 }
 

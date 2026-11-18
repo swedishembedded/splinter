@@ -151,6 +151,7 @@ fn reward_options_belong_to_the_policy_gradient_view_alone() {
     let (train, _) = ingest_attempts(&ctx, &scratch.0.join("export"));
     let wrong_view = BuildRequest {
         rl: shaped(),
+        split_seed: None,
         base: None,
         ..sft_request(train.clone())
     };

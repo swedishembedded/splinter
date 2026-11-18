@@ -190,8 +190,9 @@ share eight distinct eight-word runs anywhere in either, a run held by more
 than six texts counting for nothing - and a group is held out or trained on
 whole. Records about one group are one unit of evidence to the
 gate's and the exam's paired tests, and a tenth of a set generated letter by
-letter is two or three of them, so whole groups are held out, newest first,
-until there are eight, as long as that stays within a quarter of the records.
+letter is two or three of them, so whole groups are held out, in the order the
+dataset's split seed draws them, until there are eight, as long as that stays
+within a quarter of the records.
 A group is named by the least content digest of the texts in it, found over
 every text part of the sources, so two datasets built from the same sources
 name a family the same and are split together as one.

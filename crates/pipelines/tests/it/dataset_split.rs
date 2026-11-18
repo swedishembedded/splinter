@@ -134,6 +134,7 @@ fn request(set: SetId, max_block: Option<usize>, split_over_block: bool) -> Buil
         roles: None,
         images: false,
         rl: Default::default(),
+        split_seed: None,
         base: None,
         split_over_block,
     }
