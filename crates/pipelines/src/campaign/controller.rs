@@ -486,6 +486,7 @@ impl<'p> CampaignController<'p> {
             continue_from: self.loaded.state.policy.adapter.clone(),
             out_dir: self.adapters.join(&id.name),
             seed: self.rng(generation, 1).next_u64(),
+            advantage: records.advantage,
         };
         self.say(&format!(
             "{}: training on {} records",

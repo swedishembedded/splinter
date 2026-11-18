@@ -16,6 +16,7 @@
 #![allow(clippy::unwrap_used)]
 
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -342,15 +343,18 @@ fn an_arm_trains_only_on_informative_groups_and_the_gate_adopts_a_better_policy(
         attempts.unmeasured, 0,
         "calibration measured every task: {attempts:?}"
     );
-    // Every record trained on carries an advantage: no zero-spread group got in.
+    // Every record carries a reward and a group; no group's rewards are all alike.
     let records = world.log.last_records.borrow();
-    assert!(!records.is_empty());
-    for record in records.iter() {
-        let RecordBody::Chat { advantage, .. } = &record.body else {
-            panic!()
-        };
-        assert!(advantage.is_some_and(|a| a != 0.0));
+    let mut groups: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
+    for o in records.iter().map(|r| match &r.body {
+        RecordBody::Chat {
+            outcome: Some(o), ..
+        } => o,
+        _ => panic!("a rollout record"),
+    }) {
+        groups.entry(&o.group).or_default().push(o.reward);
     }
+    assert!(!groups.is_empty() && groups.values().all(|r| r.iter().any(|x| x != &r[0])));
     assert!(arm.signals.unwrap().informative_fraction.is_some());
     assert_eq!(controller.state().policy.version, 1);
     assert_eq!(world.log.collected_versions.borrow().last(), Some(&0));
@@ -752,14 +756,12 @@ fn the_repair_strategy_adds_wrong_attempt_feedback_fix_records_to_the_batch() {
     assert!(!repairs.is_empty());
     for repair in repairs {
         let RecordBody::Chat {
-            messages,
-            advantage,
-            ..
+            messages, outcome, ..
         } = &repair.body
         else {
             panic!()
         };
-        assert_eq!(*advantage, None);
+        assert_eq!(*outcome, None);
         assert_eq!(
             messages.iter().filter(|m| m.train).count(),
             1,

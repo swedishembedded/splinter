@@ -86,12 +86,15 @@ pub struct BuildArgs {
     /// outranks any failure.
     #[arg(long, value_name = "F", requires = "reward_metrics")]
     pub fail_ceiling: Option<f64>,
-    /// For the policy-gradient view: how an attempt's advantage is read from
-    /// the rewards of the attempts at its task: `standardised` (GRPO's: the
-    /// reward less the group mean over its standard deviation, the default) or
-    /// `mean-centred` (the reward less the group mean) or `positive` (the
-    /// standardised advantage of the attempts that beat their group, and no
-    /// record for the rest: nothing is pushed down).
+    /// For the policy-gradient view: how brain is to read an attempt's
+    /// advantage from the rewards of the attempts at its task (the records
+    /// carry rewards; the dataset's manifest names this for the trainer):
+    /// `standardised` (GRPO's: the reward less the group mean over its
+    /// standard deviation, the default), `mean-centred` (the reward less the
+    /// group mean), `leave-one-out` (the reward less the mean of the others)
+    /// or `positive` (only the attempts above their group's mean reward are
+    /// written, standardised among themselves: nothing is pushed down, and a
+    /// group with fewer than two such attempts that differ yields nothing).
     #[arg(long, value_parser = advantage, value_name = "KIND")]
     pub advantage: Option<AdvantageKind>,
     /// For the policy-gradient view: distil the groups whose attempts all
@@ -184,7 +187,8 @@ pub struct ConversationsArgs {
     /// The role prompt the learner played under, which opens every record.
     #[arg(long, required = true, value_name = "TEXT")]
     pub system_prompt: String,
-    /// How an attempt's advantage is read from the rewards of its case.
+    /// How brain is to read an attempt's advantage from the rewards of its
+    /// case (`--advantage` of `dataset build`).
     #[arg(long, value_parser = advantage, value_name = "KIND")]
     pub advantage: Option<AdvantageKind>,
 }

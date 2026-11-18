@@ -37,6 +37,7 @@ fn projection_of(record: Record) -> Projection {
         min_strength: None,
         records: vec![record],
         groups: Vec::new(),
+        advantage: None,
         excluded: Default::default(),
         system_prompt: None,
         packed: false,

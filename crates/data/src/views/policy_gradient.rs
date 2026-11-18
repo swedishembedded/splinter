@@ -25,12 +25,16 @@
 //!   failure what the configured metrics earn below the ceiling.
 //! * A group is the trials of one task version made by one policy (the model
 //!   recorded on the verdict). Each trial counts once, however many
-//!   conversations (roles) it had; its advantage is read from the rewards of
-//!   its group ([`AdvantageKind`]). A group of one trial, or whose trials all
+//!   conversations (roles) it had. A group of one trial, or whose trials all
 //!   earned the same, says nothing: its experiences are counted as
-//!   [`Exclusion::NoGroupSignal`].
-//! * Each action of each conversation of a trial with advantage is a record
-//!   carrying the trial's advantage, rendered exactly as `sft-step` renders it
+//!   [`Exclusion::NoGroupSignal`], and so are those of a trial
+//!   [`AdvantageKind::Positive`] leaves out.
+//! * Each action of each conversation of a written trial is a record carrying
+//!   the trial's reward, its group's key and the trial's name (brain's
+//!   training-record contract, version 2: the trainer computes each trial's
+//!   advantage from its group's rewards by the normalisation
+//!   [`AdvantageKind::norm`] names, counting a trial once however many records
+//!   it has), rendered exactly as `sft-step` renders it
 //!   (the requests the model was sent, `images`, `only_roles`; see
 //!   [`Rendering`]), and the records are in the corpus's order. Step labels
 //!   judge nothing here: the reward is the only judge.
@@ -62,6 +66,7 @@ use splinter_store::decision::decide;
 use super::privileged::teacher_context;
 use super::rendering::{Judgement, Rendering};
 use super::rewards::{AdvantageKind, GroupKind, GroupReport, RewardShape, TrialReport};
+use crate::RolloutOutcome;
 use crate::{Corpus, Entry, Exclusion, Objective, Projection, Provenance, Strip, View, ViewError};
 
 /// The name every policy-gradient record carries.
@@ -74,12 +79,13 @@ const SELF_DISTILL: &str = "self-distill";
 /// which carry the group's scalar advantage.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Distill {
-    /// None: every attempt of a group with advantages carries its scalar
-    /// advantage, any other group yields nothing.
+    /// None: every attempt of a group with a spread of rewards carries its
+    /// reward (the trainer's scalar advantage), any other group yields nothing.
     #[default]
     Off,
     /// The attempts of a group that all failed alike (the cliff) are
-    /// distilled; the groups with advantages keep GRPO's scalar advantage.
+    /// distilled; the groups with a spread of rewards keep GRPO's scalar
+    /// advantage, computed by the trainer from their rewards.
     /// What the campaign runs.
     Cliff,
     /// Every attempt of every group is distilled, passed or failed, and none
@@ -115,8 +121,8 @@ struct TrialSeen {
 
 /// What an attempt becomes in the dataset.
 enum Treatment {
-    /// A record carrying the attempt's scalar advantage.
-    Advantage(f64),
+    /// A record carrying the attempt's reward and group.
+    Reward(RolloutOutcome),
     /// A record with a teacher context.
     Teacher,
     /// Nothing: its group says nothing.
@@ -124,7 +130,7 @@ enum Treatment {
 }
 
 /// Reinforcement learning from verified rewards: every action of every graded
-/// attempt, with the attempt's advantage over the others of its group.
+/// attempt, with the attempt's reward and the group it is compared with.
 #[derive(Clone, Debug)]
 pub struct PolicyGradient {
     min_strength: Strength,
@@ -137,7 +143,8 @@ pub struct PolicyGradient {
 impl PolicyGradient {
     /// The view, accepting verdicts decided at `min_strength` or stronger,
     /// showing the student only the instruction, rewarding a pass with one
-    /// and a failure with nothing, standardising the advantages of a group.
+    /// and a failure with nothing, the trainer standardising the rewards of a
+    /// group.
     #[must_use]
     pub fn new(min_strength: Strength) -> Self {
         Self {
@@ -161,7 +168,8 @@ impl PolicyGradient {
         Self { reward, ..self }
     }
 
-    /// The same view reading advantages as `advantage` says.
+    /// The same view writing the attempts `advantage` keeps, for the trainer
+    /// to normalise as it names.
     #[must_use]
     pub fn advantage(self, advantage: AdvantageKind) -> Self {
         Self { advantage, ..self }
@@ -297,7 +305,7 @@ impl View for PolicyGradient {
             Some(self.min_strength),
         );
         // First every experience is placed in the group of its attempt: an
-        // advantage is read from the whole group, so no record can be made
+        // group's rewards decide what is written, so no record can be made
         // before all of the group is known.
         let mut placed: Vec<(&Entry, Option<HarnessConversation>, Rollout)> = Vec::new();
         let mut groups: BTreeMap<GroupKey, BTreeMap<String, TrialSeen>> = BTreeMap::new();
@@ -337,21 +345,13 @@ impl View for PolicyGradient {
             seen.conversations += 1;
             placed.push((entry, harness, rollout));
         }
+        projection.advantage = Some(self.advantage);
         let mut treatment_of: BTreeMap<(&GroupKey, &str), Treatment> = BTreeMap::new();
         for (key, trials) in &groups {
             let rewards: Vec<f64> = trials.values().map(|t| t.reward).collect();
-            let advantages = self.advantage.advantages(&rewards);
-            let reports = trials
-                .iter()
-                .enumerate()
-                .map(|(at, (trial, seen))| TrialReport {
-                    trial: trial.clone(),
-                    reward: seen.reward,
-                    advantage: advantages.as_ref().map_or(0.0, |a| a[at]),
-                    conversations: seen.conversations,
-                })
-                .collect();
-            let kind = if advantages.is_some() {
+            let signal = super::rewards::signals(&rewards);
+            let written = self.advantage.keeps(&rewards);
+            let kind = if signal {
                 GroupKind::Graded
             } else if trials.values().any(|t| t.passed) {
                 GroupKind::AllPass
@@ -363,15 +363,24 @@ impl View for PolicyGradient {
                 Distill::Cliff => kind == GroupKind::AllFail,
                 Distill::Every => true,
             };
-            for (at, trial) in trials.keys().enumerate() {
-                let treatment = match (&advantages, distilled) {
-                    (_, true) => Treatment::Teacher,
-                    (Some(advantages), false) if self.advantage.drops(advantages[at]) => {
-                        Treatment::Nothing
-                    }
-                    (Some(advantages), false) => Treatment::Advantage(advantages[at]),
-                    (None, false) => Treatment::Nothing,
+            let mut reports = Vec::with_capacity(trials.len());
+            for (at, (trial, seen)) in trials.iter().enumerate() {
+                let kept = written.as_ref().is_some_and(|w| w[at]);
+                let treatment = match (distilled, kept) {
+                    (true, _) => Treatment::Teacher,
+                    (false, true) => Treatment::Reward(RolloutOutcome::of(
+                        seen.reward,
+                        &[&key.task, &key.version, &key.policy],
+                        trial,
+                    )),
+                    (false, false) => Treatment::Nothing,
                 };
+                reports.push(TrialReport {
+                    trial: trial.clone(),
+                    reward: seen.reward,
+                    written: !matches!(treatment, Treatment::Nothing),
+                    conversations: seen.conversations,
+                });
                 treatment_of.insert((key, trial), treatment);
             }
             projection.groups.push(GroupReport {
@@ -379,14 +388,14 @@ impl View for PolicyGradient {
                 version: key.version.clone(),
                 policy: key.policy.clone(),
                 trials: reports,
-                signal: advantages.is_some(),
+                signal,
                 kind,
                 distilled,
             });
         }
         for (entry, harness, rollout) in &placed {
             let treatment = treatment_of.get(&(&rollout.group, rollout.trial.as_str()));
-            let Some(treatment @ (Treatment::Advantage(_) | Treatment::Teacher)) = treatment else {
+            let Some(treatment @ (Treatment::Reward(_) | Treatment::Teacher)) = treatment else {
                 projection.exclude(Exclusion::NoGroupSignal);
                 continue;
             };
@@ -418,7 +427,7 @@ impl View for PolicyGradient {
                 .records(&conversation, &mut projection, |_| Judgement::Admit)
             {
                 let record = match (treatment, &teacher) {
-                    (Treatment::Advantage(advantage), _) => record.with_advantage(*advantage),
+                    (Treatment::Reward(outcome), _) => record.with_outcome(outcome.clone()),
                     (_, Some(context)) => record.with_teacher_context(context.clone()),
                     _ => record,
                 };

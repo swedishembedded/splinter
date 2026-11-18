@@ -610,8 +610,10 @@ impl Report for Built {
             for trial in &group.trials {
                 let _ = writeln!(
                     out,
-                    "    {}: reward {:.3}, advantage {:+.3}",
-                    trial.trial, trial.reward, trial.advantage
+                    "    {}: reward {:.3}{}",
+                    trial.trial,
+                    trial.reward,
+                    if trial.written { "" } else { ", not written" }
                 );
             }
         }

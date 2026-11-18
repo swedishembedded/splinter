@@ -92,7 +92,7 @@ fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> R
                 message("assistant", statement, true),
             ],
             tools: Vec::new(),
-            advantage: None,
+            outcome: None,
             teacher_context: Vec::new(),
         },
         metadata: RecordMetadata {

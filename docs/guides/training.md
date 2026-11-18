@@ -43,8 +43,8 @@ loss stops improving.
 `train` trains the regime its datasets' objective names - chat datasets
 by supervised fine-tuning, preference datasets by DPO against the model
 the run starts from (`--beta`, the DPO temperature, defaults to brain's);
-a dataset of rollouts (the `policy-gradient` view, whose records carry an
-`advantage`) by brain's clipped policy gradient, below; one run's datasets are all of one
+a dataset of rollouts (the `policy-gradient` view, whose records carry a
+`reward` and a `group`) by brain's clipped policy gradient, below; one run's datasets are all of one
 regime. It concatenates them in
 order and holds the newest records out for scoring (a record of the writer's
 own text, which has no question to examine, is held out with its family and
@@ -56,10 +56,12 @@ many nats, it prefers the chosen answer more than its reference does).
 ## Training on rollouts
 
 A `policy-gradient` dataset trains with a clipped policy gradient, the way GRPO and PPO do:
-a record with a negative advantage lowers the probability of its action, one with a positive
-advantage raises it, and a KL penalty keeps the adapter near a reference policy. Nothing is
-imitated. Brain trains it on `qwen35` bases only and refuses any other, and refuses a
-dataset with advantages under supervised training, so neither can silently drop them. The
+brain turns each group's rewards into advantages by the normalisation the dataset was built
+for (its `--advantage`, which its manifest records; datasets built for two are refused
+together), a record with a negative advantage lowers the probability of its action, one with a
+positive advantage raises it, and a KL penalty keeps the adapter near a reference policy.
+Nothing is imitated. Brain trains it on `qwen35` bases only and refuses any other, and refuses
+a dataset with rewards under supervised training, so neither can silently drop them. The
 run holds nothing out and monitors nothing - the exam is its judge - and replays and
 rehearses nothing; `--eval-every`, `--patience`, `--monitor-share`, `--keep-evaluations`,
 `--rehearsal` and `--beta` are refused with it. `--from local:<checkpoint>+<adapter>` (or a

@@ -276,8 +276,9 @@ splinter train DATASET-ID --from local:/models/qwen3.8-27b+round-3.safetensors \
 
 A pass earns 1; a failure earns at most `--fail-ceiling` by the metrics the verifier measured,
 so a close miss ranks above a far one and any pass above both. `--advantage` defaults to
-`standardised` (GRPO's) and may be `mean-centred`. The report lists each group's trials with
-their reward and advantage; a group of one trial, or whose trials all earned the same, yields
+`standardised` (GRPO's) and may be `mean-centred`, `leave-one-out` or `positive`; brain computes
+the advantages from the rewards the records carry. The report lists each group's trials with
+their reward and whether each was written; a group of one trial, or whose trials all earned the same, yields
 no record (`no_group_signal`). `--from` names the adapter whose policy ran the trials, so the
 rollouts are close to on-policy. Add `--cliff-distill` to give the groups whose attempts all
 failed (where the advantage is zero) dense per-token credit from a teacher that is shown what

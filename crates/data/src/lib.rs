@@ -26,7 +26,7 @@
 //! | [`DecisionView`] | SFT | the passing action where a passing and a failed attempt part |
 //! | [`Retrieval`] | contrastive | an instruction and the source span it is grounded in |
 //! | [`OutcomeView`] | reward | a whole trajectory and its derived reward |
-//! | [`PolicyGradient`] | policy gradient | each action of every graded attempt, with the attempt's advantage over the other attempts of its task |
+//! | [`PolicyGradient`] | policy gradient | each action of every graded attempt, with the attempt's reward and the group of attempts of its task it is compared with |
 //! | [`DenoiseView`] | SFT | a denoise task's corrupted passage and its original |
 //! | [`Cpt`] | continued pretraining | the raw text of source parts |
 //! | [`Voice`] | SFT | the writer's own text, a stretch of whole sections at a time, as the answer |
@@ -112,7 +112,7 @@ pub use dataset::{
     dataset_line, manifest_path, write_dataset, Counts, Dataset, DatasetCheck, Format, Manifest,
     Unchecked, EXPORT_FORMAT,
 };
-pub use record::{Record, RecordBody, RecordMetadata, Side, TeacherMessage};
+pub use record::{Record, RecordBody, RecordMetadata, RolloutOutcome, Side, TeacherMessage};
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
@@ -123,7 +123,9 @@ pub use views::{
     OutcomeView, PolicyGradient, Preference, Rehearsal, Retrieval, Sectioner, SftFinal, SftStep,
     VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
 };
-pub use views::{AdvantageKind, Distill, GroupKind, GroupReport, RewardShape, TrialReport};
+pub use views::{
+    AdvantageKind, AdvantageNorm, Distill, GroupKind, GroupReport, RewardShape, TrialReport,
+};
 
 /// The training objective a view's records serve.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -142,8 +144,8 @@ pub enum Objective {
     /// A whole trajectory with a scalar reward.
     Reward,
     /// Reinforcement learning from rollouts: chat records that each carry the
-    /// advantage of the attempt they come from, trained with a clipped
-    /// policy gradient.
+    /// reward of the attempt they come from and its group, trained with a
+    /// clipped policy gradient on the advantages the trainer computes.
     PolicyGradient,
     /// Continued pretraining on raw text.
     Cpt,
@@ -221,8 +223,9 @@ pub enum Exclusion {
     /// No reward could be derived.
     NoReward,
     /// An attempt in a group with nothing to compare it with: the only one of
-    /// its task, or all of the group earned the same reward, so no attempt did
-    /// better or worse than another and the advantage of each is zero.
+    /// its task, or all of the group earned the same reward (or, keeping only
+    /// the attempts above the group's mean, fewer than two that differ), so
+    /// no attempt did better or worse than another.
     NoGroupSignal,
     /// The verdict does not record which attempt (trial) of which task it
     /// grades, so the experience belongs to no group.
@@ -338,9 +341,15 @@ pub struct Projection {
     /// The records, in the corpus's order.
     pub records: Vec<Record>,
     /// The groups of attempts a policy-gradient view compared, with the
-    /// reward and advantage of each attempt; empty for any other view.
+    /// reward of each attempt and whether it was written; empty for any
+    /// other view.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub groups: Vec<GroupReport>,
+    /// How the records' rewards become advantages, for records that carry a
+    /// reward and a group: the normalisation the trainer is asked for
+    /// ([`AdvantageKind::norm`]). `None` for a view that writes no reward.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advantage: Option<AdvantageKind>,
     /// Candidates left out, by reason.
     pub excluded: BTreeMap<Exclusion, usize>,
     /// The system prompt every conversation opens with when it is not the
@@ -417,6 +426,7 @@ impl Projection {
             min_strength,
             records: Vec::new(),
             groups: Vec::new(),
+            advantage: None,
             excluded: BTreeMap::new(),
             system_prompt: None,
             packed: false,

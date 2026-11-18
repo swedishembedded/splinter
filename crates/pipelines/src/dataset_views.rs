@@ -240,14 +240,17 @@ pub fn parse_reward_metric(text: &str) -> Result<(String, f64), OrchestratorErro
     Ok((name.to_string(), weight))
 }
 
-/// An `--advantage`: `standardised`, `mean-centred` or `positive`.
+/// An `--advantage`: `standardised`, `mean-centred`, `leave-one-out` or
+/// `positive`.
 pub fn parse_advantage(text: &str) -> Result<AdvantageKind, OrchestratorError> {
     match text {
         "standardised" => Ok(AdvantageKind::Standardised),
         "mean-centred" => Ok(AdvantageKind::MeanCentred),
+        "leave-one-out" => Ok(AdvantageKind::LeaveOneOut),
         "positive" => Ok(AdvantageKind::Positive),
         _ => Err(OrchestratorError::Refused(format!(
-            "{text:?} is not an advantage: standardised (GRPO's, the default), mean-centred or positive"
+            "{text:?} is not an advantage: standardised (GRPO's, the default), mean-centred, \
+             leave-one-out or positive"
         ))),
     }
 }
@@ -295,6 +298,10 @@ mod tests {
         assert_eq!(
             parse_advantage("positive").ok(),
             Some(AdvantageKind::Positive)
+        );
+        assert_eq!(
+            parse_advantage("leave-one-out").ok(),
+            Some(AdvantageKind::LeaveOneOut)
         );
         assert!(parse_advantage("raw").is_err());
         assert_eq!(parse_strength("formal").ok(), Some(Strength::Formal));

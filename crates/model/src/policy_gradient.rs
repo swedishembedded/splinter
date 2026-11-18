@@ -11,10 +11,13 @@
 //! ([`crate::served_train::train_policy_gradient_served`]).
 //!
 //! Each record of the dataset is one model call of an agent whose supervised
-//! assistant turn is the action, carrying the `"advantage"` of the rollout it
-//! belongs to (see `splinter-data`'s policy-gradient view). A record with a
-//! negative advantage lowers the probability of its action, one with a
-//! positive advantage raises it. A run holds nothing out and monitors
+//! assistant turn is the action, carrying the `"reward"` of the rollout it
+//! belongs to and the `"group"` of rollouts it is compared with (brain's
+//! training-record contract v2; see `splinter-data`'s policy-gradient view).
+//! brain turns each group's rewards into advantages by the normalisation
+//! [`PolicyGradientOptions::advantage_norm`] names. A record whose advantage
+//! is negative lowers the probability of its action, a positive one raises
+//! it. A run holds nothing out and monitors
 //! nothing - brain refuses both beside this objective - so what the adapter
 //! earned is judged by the exam, not by this call. brain trains it on
 //! `qwen35` bases only and refuses any other before it claims a device.
@@ -24,6 +27,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use splinter_core::training::PolicyGradientSummary;
+use splinter_data::AdvantageNorm;
 
 use crate::precision::BasePrecision;
 
@@ -140,6 +144,10 @@ pub struct PolicyGradientOptions {
     /// sequence's token advantages may sum to; a sequence over it is scaled
     /// down, so a few pivot tokens cannot dominate a step.
     pub sequence_advantage_cap: Option<f32>,
+    /// How brain turns each group's rewards into advantages: the
+    /// normalisation the dataset was built for (its manifest names it), never
+    /// a train flag. Unset: brain's default.
+    pub advantage_norm: Option<AdvantageNorm>,
 }
 
 impl PolicyGradientOptions {
@@ -176,7 +184,7 @@ impl PolicyGradientOptions {
 pub struct PolicyGradientTune<'a> {
     /// Base checkpoint directory (the model the agent serves).
     pub model_dir: &'a Path,
-    /// Chat-format JSONL rollout records, each carrying an advantage.
+    /// Chat-format JSONL rollout records, each carrying a reward and a group.
     pub train: &'a Path,
     /// This attempt's own directory: the adapter and its training record
     /// land here.

@@ -29,6 +29,21 @@ See the table `make test/methods` prints; the figures of the last full run are i
 
 ## Findings that changed the code
 
+- 2026-11-18, brain's training-record contract v2 (plan training-regimes D1, Phase 0 step 3): the policy-gradient
+  view, the conversation view and the campaign write each rollout's `reward`, `group` (a digest of the task, version
+  and policy) and `rollout` (the trial) instead of an advantage; brain computes the advantages per group. The
+  `AdvantageKind` a dataset is built with only selects brain's `advantage_norm` (recorded in the manifest, sent by
+  `train`; two datasets built for two normalisations are refused together) and, for `positive`, filters the records
+  to the attempts above their group's mean reward; `leave-one-out` (RLOO) is new. `NoGroupSignal` still keeps every
+  group brain would refuse (one attempt, all alike) out of the dataset. Producer-side test (L5): the view's lines
+  against brain's own v2 fixtures (`crates/data/tests/fixtures/training-records/v2`), and brain's `check_dataset`
+  accepted the view's datasets once by hand (12 of 12 records under the Qwen3-4B tokenizer, each normalisation).
+  Two consequences are open: brain now standardises `positive`'s kept attempts among themselves (their baseline
+  is no longer the whole group, and pass/fail rewards leave one attempt above the mean, so `positive` writes nothing
+  for them: the campaign's positive-only arm needs a brain-side option, such as a non-negative clamp of the
+  group-relative advantage, to keep its meaning); and an attempt that is not written (an unprovable trace, a
+  conversation the view cannot render) no longer counts in its group's baseline.
+
 - GRPO with the default two-sided advantage first failed to move the held-out score (0.39 -> 0.38..0.44, or collapse
   at higher rates) and the cause was measured, not guessed. Step 0 of every run has importance ratio 1.000 (the
   start-of-run proxy is exact for on-policy rollouts) and brain's gradcheck covers the objective, so the loss and

@@ -1607,7 +1607,7 @@ Options:
 - `--split-over-block`: Split a record longer than `--max-block` into consecutive windows that each fit, keeping every supervised action, instead of leaving it out; every window repeats the task instruction. A window with no supervised turn is left out and counted as `NothingSupervised`.
 - `--reward-metric <NAME=WEIGHT>...`: For the policy-gradient view: a metric the verifier measured, in [0, 1], and its weight, that earns a failed attempt part of the reward (`--reward-metric iou=0.5 --reward-metric feature_match=0.5`); repeat it per metric, the weights summing to one. A pass always earns 1. Without any, a failed attempt earns nothing. A failed attempt that did not record a named metric is an error.
 - `--fail-ceiling <F>`: For the policy-gradient view: the most a failed attempt earns from the reward metrics, below a pass's 1 (default 0.5), so that any pass outranks any failure.
-- `--advantage <KIND>`: For the policy-gradient view: how an attempt's advantage is read from the rewards of the attempts at its task: `standardised` (GRPO's: the reward less the group mean over its standard deviation, the default) or `mean-centred` (the reward less the group mean) or `positive` (the standardised advantage of the attempts that beat their group, and no record for the rest: nothing is pushed down)
+- `--advantage <KIND>`: For the policy-gradient view: how brain is to read an attempt's advantage from the rewards of the attempts at its task (the records carry rewards; the dataset's manifest names this for the trainer): `standardised` (GRPO's: the reward less the group mean over its standard deviation, the default), `mean-centred` (the reward less the group mean), `leave-one-out` (the reward less the mean of the others) or `positive` (only the attempts above their group's mean reward are written, standardised among themselves: nothing is pushed down, and a group with fewer than two such attempts that differ yields nothing)
 - `--cliff-distill`: For the policy-gradient view: distil the groups whose attempts all failed alike (the cliff, where GRPO's advantage is zero and teaches nothing) with a teacher context built from what the verifier knows, and keep the scalar advantage for every group with a spread of rewards. One build then holds both kinds of records, and the report counts the groups by kind. The `self-distill` view distils every attempt instead.
 - `--pack`: For the sft-step view: one record per trajectory with every admitted action supervised, not one record per action.
 - `--only-actions <TOOLS>...`: For the sft-step view: keep only the actions whose tool calls are all named here (comma separated), plus the final answer; the rest become context and are counted as `ActionNotWanted`. Names the decisive actions - the edits and the conclusion - instead of the exploration.
@@ -1637,7 +1637,7 @@ Arguments:
 Options:
 
 - `--system-prompt <TEXT>` (required): The role prompt the learner played under, which opens every record.
-- `--advantage <KIND>`: How an attempt's advantage is read from the rewards of its case.
+- `--advantage <KIND>`: How brain is to read an attempt's advantage from the rewards of its case (`--advantage` of `dataset build`)
 
 #### splinter dataset decision-fixtures
 

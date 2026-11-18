@@ -50,11 +50,12 @@ is the default and is what the stages above describe.
 - `policy-gradient` makes the `--k` attempts the solve stage made at a task a group, through
   the canonical `policy-gradient` dataset view (the view `splinter dataset build` has): the
   reward of an attempt is 1 for a verified pass and 0 otherwise, every action of every attempt
-  is weighed by its attempt's advantage over the others, and brain's clipped policy gradient
+  carries its attempt's reward and group and is weighed by the advantage brain computes over
+  the others of the group, and brain's clipped policy gradient
   continues the champion's adapter with a KL penalty. It uses every graded attempt of the solve
   stage, not the frontier's selection of tasks, so a task every attempt passed or every attempt
   failed is a group of its own kind, counted and shown in the report's `rollouts` (graded,
-  all-pass, all-fail) and not dropped unseen; it carries no advantage, so it trains nothing
+  all-pass, all-fail) and not dropped unseen; its rewards are all alike, so it trains nothing
   under this objective. An attempt the exposure audit failed is left out whole, because its
   conversation quotes what only the grader holds, and counted; a solve that the model server or
   the environment cut short left no experience and is counted as not completed. The attempts

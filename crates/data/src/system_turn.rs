@@ -24,14 +24,14 @@ pub(crate) fn under_system_prompt(body: RecordBody) -> RecordBody {
         RecordBody::Chat {
             mut messages,
             tools,
-            advantage,
+            outcome,
             teacher_context,
         } => {
             open_with_system(&mut messages, system);
             RecordBody::Chat {
                 messages,
                 tools,
-                advantage,
+                outcome,
                 teacher_context,
             }
         }

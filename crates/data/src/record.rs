@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 use splinter_core::chat::WireMessage;
-use splinter_core::digest::Digest;
+use splinter_core::digest::{digest_of, Digest};
 use splinter_core::experience::ExperienceId;
 
 use crate::Objective;
@@ -24,6 +24,49 @@ pub struct TeacherMessage {
     pub role: String,
     /// The text.
     pub content: String,
+}
+
+/// The outcome of the rollout a chat record is one model call of, as brain's
+/// training-record contract (version 2) takes it: the reward, the group of
+/// rollouts it is compared with, and which rollout of the group it is.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RolloutOutcome {
+    /// The verifier's reward for the rollout.
+    pub reward: f64,
+    /// The key of the group of rollouts the reward is compared within (the
+    /// attempts at one task by one policy).
+    pub group: String,
+    /// Which rollout of the group: the records of one rollout share its
+    /// reward and count once in the group. `None`: the record is a rollout
+    /// of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rollout: Option<String>,
+}
+
+/// The longest `group` or `rollout` key brain accepts, in bytes.
+const MAX_KEY_BYTES: usize = 512;
+
+impl RolloutOutcome {
+    /// The outcome `reward` of rollout `rollout` in the group named by
+    /// `group`'s parts (the task, its version, the policy, ...). The group's
+    /// key is a digest of the parts, so two groups never share one whatever
+    /// their names hold; the rollout's is its name when brain accepts it as
+    /// a key (1 to 512 bytes, no control characters), else its digest.
+    #[must_use]
+    pub fn of(reward: f64, group: &[&str], rollout: &str) -> Self {
+        let fits = !rollout.is_empty()
+            && rollout.len() <= MAX_KEY_BYTES
+            && !rollout.chars().any(char::is_control);
+        Self {
+            reward,
+            group: digest_of(group).to_string(),
+            rollout: Some(if fits {
+                rollout.to_string()
+            } else {
+                digest_of(rollout).to_string()
+            }),
+        }
+    }
 }
 
 /// What a record holds; each [`Objective`] has one shape.
@@ -42,12 +85,13 @@ pub enum RecordBody {
         /// then written as it was before records had this field.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         tools: Vec<serde_json::Value>,
-        /// The advantage of the attempt the conversation is an action of:
-        /// how much better it did than the other attempts of its task, which
-        /// weights every supervised token of the record in a policy-gradient
-        /// run. `None` for a record that is imitated.
+        /// The outcome of the attempt the conversation is an action of: its
+        /// reward and the group of attempts it is compared with, from which
+        /// brain computes the advantage that weights every supervised token
+        /// of the record in a policy-gradient run. `None` for a record that
+        /// is imitated.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        advantage: Option<f64>,
+        outcome: Option<RolloutOutcome>,
         /// What only the teacher of a self-distillation run is shown, as
         /// extra turns right after the conversation's first user turn: the
         /// student's own conversation is [`Self::Chat::messages`] and never
@@ -94,15 +138,15 @@ impl RecordBody {
         Self::Chat {
             messages,
             tools: Vec::new(),
-            advantage: None,
+            outcome: None,
             teacher_context: Vec::new(),
         }
     }
 
-    /// This record carrying `advantage`, when it is a chat record; any other
-    /// shape has no advantage to carry and is returned as it is.
+    /// This record carrying `outcome`, when it is a chat record; any other
+    /// shape has no rollout to carry and is returned as it is.
     #[must_use]
-    pub fn with_advantage(self, advantage: f64) -> Self {
+    pub fn with_outcome(self, outcome: RolloutOutcome) -> Self {
         match self {
             Self::Chat {
                 messages,
@@ -112,7 +156,7 @@ impl RecordBody {
             } => Self::Chat {
                 messages,
                 tools,
-                advantage: Some(advantage),
+                outcome: Some(outcome),
                 teacher_context,
             },
             other => other,
@@ -127,12 +171,12 @@ impl RecordBody {
             Self::Chat {
                 messages,
                 tools,
-                advantage,
+                outcome,
                 ..
             } => Self::Chat {
                 messages,
                 tools,
-                advantage,
+                outcome,
                 teacher_context: context,
             },
             other => other,

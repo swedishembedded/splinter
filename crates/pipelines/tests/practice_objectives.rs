@@ -126,8 +126,10 @@ fn policy_gradient_makes_the_attempts_at_a_task_a_group_and_trains_the_clipped_o
     let lines = records(&report);
     assert!(!lines.is_empty());
     assert!(
-        lines.iter().all(|l| l["advantage"].is_f64()),
-        "every record carries its attempt's advantage"
+        lines.iter().all(|l| l["reward"].is_f64()
+            && l["group"].is_string()
+            && l.get("advantage").is_none()),
+        "every record carries its attempt's reward and group"
     );
     assert!(lines.iter().all(|l| l.get("teacher_context").is_none()));
 
@@ -258,7 +260,10 @@ fn self_distill_distils_the_tasks_every_attempt_failed_with_what_the_verifier_kn
     let lines = records(&report);
     assert!(!lines.is_empty());
     for line in &lines {
-        assert!(line.get("advantage").is_none(), "{line}");
+        assert!(
+            line.get("advantage").is_none() && line.get("reward").is_none(),
+            "{line}"
+        );
         let context = line["teacher_context"]["messages"][0]["content"]
             .as_str()
             .unwrap_or_else(|| panic!("no teacher context: {line}"));
@@ -290,7 +295,9 @@ fn self_distill_keeps_the_scalar_advantage_where_the_attempts_differ() {
         .iter()
         .partition(|l| l.get("teacher_context").is_some());
     assert!(!scored.is_empty());
-    assert!(scored.iter().all(|l| l["advantage"].is_f64()));
+    assert!(scored
+        .iter()
+        .all(|l| l["reward"].is_f64() && l["group"].is_string()));
     assert_eq!(distilled.is_empty(), groups.all_fail == 0, "{groups:?}");
 }
 

@@ -62,8 +62,10 @@ pub enum Regime {
     /// Direct preference optimisation on chosen/rejected pairs
     /// (`generic-preference-v1`).
     Dpo,
-    /// A clipped policy gradient on chat records that each carry the advantage
-    /// of the attempt they come from (`generic-messages-v2` with `advantage`):
+    /// A clipped policy gradient on chat records that each carry the reward
+    /// of the attempt they come from and its group (`generic-messages-v2` with
+    /// `reward` and `group`, brain's training-record contract v2), on the
+    /// advantages brain computes from each group's rewards:
     /// reinforcement learning from rollouts collected outside the trainer.
     PolicyGradient,
     /// An objective brain owns that Splinter does not name: the regime of a

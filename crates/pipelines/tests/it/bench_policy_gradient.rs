@@ -93,10 +93,9 @@ fn attempts_are_rewarded_by_their_grade_and_every_action_carries_its_advantage()
     // 0.5 * (0.75 * 0.8 + 0.25 * 0.0)
     assert!((by_trial("b-near").reward - 0.3).abs() < 1e-12);
     assert!(by_trial("c-far").reward.abs() < 1e-12);
-    assert!(by_trial("a-pass").advantage > 0.0 && by_trial("c-far").advantage < 0.0);
     assert!(
-        by_trial("a-pass").advantage > by_trial("b-near").advantage
-            && by_trial("b-near").advantage > by_trial("c-far").advantage
+        group.trials.iter().all(|t| t.written),
+        "every attempt of a graded group is written"
     );
 
     let text = std::fs::read_to_string(&built.path).unwrap();
@@ -105,7 +104,9 @@ fn attempts_are_rewarded_by_their_grade_and_every_action_carries_its_advantage()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
     assert_eq!(lines.len(), 6);
-    assert!(lines.iter().all(|l| l["advantage"].is_f64()));
+    assert!(lines
+        .iter()
+        .all(|l| l["reward"].is_f64() && l["group"].is_string() && l["rollout"].is_string()));
 }
 
 #[test]
@@ -229,9 +230,11 @@ fn the_cliff_group_is_distilled_with_the_verifiers_reason_and_the_graded_group_k
         all.iter().partition(|l| l.get("teacher_context").is_some());
     // Two actions in each of the two cliff attempts; two in each of the graded two.
     assert_eq!((taught.len(), scored.len()), (4, 4));
-    assert!(scored.iter().all(|l| l["advantage"].is_f64()));
+    assert!(scored
+        .iter()
+        .all(|l| l["reward"].is_f64() && l["group"].is_string()));
     for line in taught {
-        assert!(line.get("advantage").is_none());
+        assert!(line.get("reward").is_none());
         let text = line["teacher_context"]["messages"][0]["content"]
             .as_str()
             .unwrap();
@@ -262,7 +265,7 @@ fn the_self_distill_view_takes_every_attempt_and_keeps_the_exam_sealed() {
     );
     assert!(lines(&built.path)
         .iter()
-        .all(|l| l.get("teacher_context").is_some() && l.get("advantage").is_none()));
+        .all(|l| l.get("teacher_context").is_some() && l.get("reward").is_none()));
 
     let refused = build(&ctx, &request(mixed.clone())).unwrap_err();
     assert!(refused.to_string().contains("leakage"), "{refused}");

@@ -12,7 +12,9 @@
 
 use splinter_core::chat::WireMessage;
 
-use crate::{Exclusion, Projection, Record, RecordBody, RecordMetadata, TeacherMessage};
+use crate::{
+    Exclusion, Projection, Record, RecordBody, RecordMetadata, RolloutOutcome, TeacherMessage,
+};
 
 impl Projection {
     /// The same projection with each chat record longer than `max_block`
@@ -51,7 +53,7 @@ impl Projection {
             let RecordBody::Chat {
                 messages,
                 tools,
-                advantage,
+                outcome,
                 teacher_context,
             } = body
             else {
@@ -61,7 +63,7 @@ impl Projection {
             let (windows, dropped) = split_chat(
                 &messages,
                 &tools,
-                advantage,
+                outcome.as_ref(),
                 &teacher_context,
                 &metadata,
                 max_block,
@@ -100,7 +102,7 @@ fn is_supervised(record: &Record) -> bool {
 fn split_chat(
     messages: &[WireMessage],
     tools: &[serde_json::Value],
-    advantage: Option<f64>,
+    outcome: Option<&RolloutOutcome>,
     teacher_context: &[TeacherMessage],
     metadata: &RecordMetadata,
     max_block: usize,
@@ -149,7 +151,7 @@ fn split_chat(
             body: RecordBody::Chat {
                 messages: repeated,
                 tools: tools.to_vec(),
-                advantage,
+                outcome: outcome.cloned(),
                 teacher_context: teacher_context.to_vec(),
             },
             metadata: metadata.clone(),

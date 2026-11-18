@@ -150,10 +150,15 @@ pub struct Manifest {
     pub sources: Vec<Digest>,
     /// Records and exclusions.
     pub counts: Counts,
-    /// The groups of attempts whose rewards the records' advantages were made
-    /// from (a policy-gradient dataset); empty for any other.
+    /// The groups of attempts whose rewards the records carry (a
+    /// policy-gradient dataset); empty for any other.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub groups: Vec<crate::GroupReport>,
+    /// How the trainer is to turn the records' rewards into advantages
+    /// ([`crate::Projection::advantage`]); `None` for a dataset whose records
+    /// carry no reward.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advantage: Option<crate::AdvantageKind>,
     /// The system prompt the records open with when it is not the default;
     /// `None` when it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -201,7 +206,11 @@ struct ChatLine<'a> {
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
     tools: &'a [serde_json::Value],
     #[serde(skip_serializing_if = "Option::is_none")]
-    advantage: Option<f64>,
+    reward: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    group: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rollout: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     teacher_context: Option<TeacherContextLine<'a>>,
     metadata: &'a RecordMetadata,
@@ -412,13 +421,15 @@ fn line(
             RecordBody::Chat {
                 messages,
                 tools,
-                advantage,
+                outcome,
                 teacher_context,
             },
         ) => serde_json::to_string(&ChatLine {
             messages,
             tools,
-            advantage: *advantage,
+            reward: outcome.as_ref().map(|o| o.reward),
+            group: outcome.as_ref().map(|o| o.group.as_str()),
+            rollout: outcome.as_ref().and_then(|o| o.rollout.as_deref()),
             teacher_context: teacher_line(index, messages, teacher_context)?,
             metadata: &record.metadata,
         })?,
@@ -452,7 +463,9 @@ fn line(
             serde_json::to_string(&ChatLine {
                 messages: std::slice::from_ref(&message),
                 tools: &[],
-                advantage: None,
+                reward: None,
+                group: None,
+                rollout: None,
                 teacher_context: None,
                 metadata: &record.metadata,
             })?
@@ -505,6 +518,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
             excluded: projection.excluded.clone(),
         },
         groups: projection.groups.clone(),
+        advantage: projection.advantage,
         system_prompt: projection.system_prompt.clone(),
         packed: projection.packed,
         outcome_verified_only: projection.outcome_verified_only,

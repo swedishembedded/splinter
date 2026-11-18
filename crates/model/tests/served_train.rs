@@ -58,7 +58,7 @@ fn rig() -> Rig {
     }
 }
 
-fn records(path: &Path, advantage: bool) {
+fn records(path: &Path, rollouts: bool) {
     let lines: Vec<String> = ["cab", "fed", "ace"]
         .iter()
         .enumerate()
@@ -70,8 +70,9 @@ fn records(path: &Path, advantage: bool) {
                 ],
                 "tools": []
             });
-            if advantage {
-                record["advantage"] = serde_json::json!(if i == 0 { 1.0 } else { -1.0 });
+            if rollouts {
+                record["reward"] = serde_json::json!(if i == 0 { 1.0 } else { 0.0 });
+                record["group"] = serde_json::json!("g");
             }
             record.to_string()
         })

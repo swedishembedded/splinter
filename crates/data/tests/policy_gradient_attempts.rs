@@ -104,12 +104,12 @@ fn corpus(attempts: Vec<(Experience, Annotation)>) -> Corpus {
     corpus
 }
 
-fn advantages(projection: &splinter_data::Projection) -> Vec<f64> {
+fn rewards(projection: &splinter_data::Projection) -> Vec<f64> {
     projection
         .records
         .iter()
         .filter_map(|r| match &r.body {
-            RecordBody::Chat { advantage, .. } => *advantage,
+            RecordBody::Chat { outcome, .. } => outcome.as_ref().map(|o| o.reward),
             _ => None,
         })
         .collect()
@@ -128,11 +128,10 @@ fn attempts_of_one_task_by_one_policy_are_a_group_without_a_trial_name() {
     assert_eq!(projection.groups[0].kind, GroupKind::Graded);
     assert_eq!(projection.groups[0].task, task.task.id.to_string());
     assert_eq!(projection.groups[0].trials.len(), 2);
-    let mut seen = advantages(&projection);
+    let mut seen = rewards(&projection);
     seen.sort_by(f64::total_cmp);
     // Two actions of each attempt: the call and the answer.
-    assert_eq!(seen.len(), 4);
-    assert!(seen[0] < 0.0 && seen[3] > 0.0, "{seen:?}");
+    assert_eq!(seen, [0.0, 0.0, 1.0, 1.0]);
 }
 
 #[test]

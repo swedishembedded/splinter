@@ -10,8 +10,9 @@
 //! The training records a batch becomes.
 //!
 //! One batch of rollouts yields several views of the same facts, and the
-//! strategy decides which: the group-relative advantage of every attempt
-//! (two-sided or positive-only), the repair that turns a wrong attempt and the
+//! strategy decides which: every attempt with its reward and group, for the
+//! trainer to compute group-relative advantages from (two-sided or
+//! positive-only), the repair that turns a wrong attempt and the
 //! verifier's feedback into the fix a later attempt found, the per-token
 //! distillation target of an attempt in a group that all failed, and the
 //! passing completions kept for replay. A rollout whose policy trace is
@@ -20,7 +21,9 @@
 
 use serde::Serialize;
 use splinter_core::chat::WireMessage;
-use splinter_data::{Objective, Record, RecordBody, RecordMetadata, TeacherMessage};
+use splinter_data::{
+    AdvantageKind, Objective, Record, RecordBody, RecordMetadata, RolloutOutcome, TeacherMessage,
+};
 
 use super::config::AdvantageMode;
 use super::types::{Rollout, RolloutGroup};
@@ -31,7 +34,7 @@ const GENERIC_FEEDBACK: &str = "That answer is wrong. Try again.";
 /// What was built, and what was left out and why.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct RecordCounts {
-    /// Rollout records carrying an advantage.
+    /// Rollout records carrying a reward and a group.
     pub policy_gradient: usize,
     /// Repair records.
     pub repair: usize,
@@ -66,6 +69,9 @@ pub struct BatchRecords {
     pub records: Vec<Record>,
     /// How many of each kind.
     pub counts: RecordCounts,
+    /// How the trainer turns the rollout records' rewards into advantages,
+    /// once [`Self::add_advantages`] wrote some.
+    pub advantage: Option<AdvantageKind>,
 }
 
 fn provable(rollout: &Rollout) -> bool {
@@ -116,24 +122,33 @@ fn conversation(rollout: &Rollout) -> Vec<WireMessage> {
 }
 
 impl BatchRecords {
-    /// Every attempt of every informative group, carrying its group-relative
-    /// advantage; under [`AdvantageMode::PositiveOnly`] the attempts that did
-    /// no better than their group are left out.
+    /// Every provable attempt of every informative group, carrying its reward,
+    /// its group (the task) and its place in the group, for the trainer to
+    /// compute the group-relative advantages; under
+    /// [`AdvantageMode::PositiveOnly`] only the attempts above their group's
+    /// mean reward. A group whose written attempts would not differ in reward
+    /// gives the trainer nothing to compare and is left out.
     pub fn add_advantages(&mut self, groups: &[&RolloutGroup], mode: AdvantageMode) {
+        let kind = mode.kind();
+        self.advantage = Some(kind);
         for group in groups {
-            let rewards: Vec<f64> = group.rollouts.iter().map(|r| r.reward).collect();
-            let Some(advantages) = mode.kind().advantages(&rewards) else {
+            let provable: Vec<(usize, &Rollout)> = group
+                .rollouts
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| provable(r))
+                .collect();
+            self.counts.dropped_unprovable += group.rollouts.len() - provable.len();
+            let rewards: Vec<f64> = provable.iter().map(|(_, r)| r.reward).collect();
+            let Some(written) = kind.keeps(&rewards) else {
                 continue;
             };
-            for (rollout, advantage) in group.rollouts.iter().zip(advantages) {
-                if !provable(rollout) {
-                    self.counts.dropped_unprovable += 1;
+            for ((at, rollout), keep) in provable.into_iter().zip(written) {
+                if !keep {
                     continue;
                 }
-                if mode.kind().drops(advantage) {
-                    continue;
-                }
-                let body = RecordBody::chat(conversation(rollout)).with_advantage(advantage);
+                let outcome = RolloutOutcome::of(rollout.reward, &[&group.task], &at.to_string());
+                let body = RecordBody::chat(conversation(rollout)).with_outcome(outcome);
                 self.records.push(record("campaign-policy-gradient", body));
                 self.counts.policy_gradient += 1;
             }
@@ -265,15 +280,15 @@ mod tests {
         }
     }
 
-    fn advantage_of(record: &Record) -> Option<f64> {
+    fn outcome_of(record: &Record) -> Option<RolloutOutcome> {
         match &record.body {
-            RecordBody::Chat { advantage, .. } => *advantage,
+            RecordBody::Chat { outcome, .. } => outcome.clone(),
             other => panic!("{other:?}"),
         }
     }
 
     #[test]
-    fn two_sided_advantages_push_the_wrong_attempts_down_and_positive_only_leaves_them_out() {
+    fn two_sided_writes_every_attempt_with_its_reward_and_positive_only_those_above_the_mean() {
         let g = group(vec![
             rollout(1.0, true, "4"),
             rollout(0.0, false, "5"),
@@ -282,13 +297,34 @@ mod tests {
         let mut two_sided = BatchRecords::default();
         two_sided.add_advantages(&[&g], AdvantageMode::TwoSided);
         assert_eq!(two_sided.counts.policy_gradient, 3);
-        let advantages: Vec<f64> = two_sided.records.iter().filter_map(advantage_of).collect();
-        assert!(advantages[0] > 0.0 && advantages[1] < 0.0 && advantages[2] < 0.0);
+        assert_eq!(two_sided.advantage, Some(AdvantageKind::Standardised));
+        let outcomes: Vec<RolloutOutcome> =
+            two_sided.records.iter().filter_map(outcome_of).collect();
+        let rewards: Vec<f64> = outcomes.iter().map(|o| o.reward).collect();
+        assert_eq!(rewards, [1.0, 0.0, 0.0]);
+        assert!(outcomes.iter().all(|o| o.group == outcomes[0].group));
+        let rollouts: Vec<Option<&str>> = outcomes.iter().map(|o| o.rollout.as_deref()).collect();
+        assert_eq!(rollouts, [Some("0"), Some("1"), Some("2")]);
 
+        // Above the mean of 0.4: the two better attempts, whose rewards still differ.
+        let graded = group(vec![
+            rollout(1.0, true, "4"),
+            rollout(0.6, false, "4.0"),
+            rollout(0.0, false, "5"),
+            rollout(0.0, false, "6"),
+        ]);
         let mut positive = BatchRecords::default();
-        positive.add_advantages(&[&g], AdvantageMode::PositiveOnly);
-        assert_eq!(positive.counts.policy_gradient, 1);
-        assert!(advantage_of(&positive.records[0]).unwrap() > 0.0);
+        positive.add_advantages(&[&graded], AdvantageMode::PositiveOnly);
+        assert_eq!(positive.counts.policy_gradient, 2);
+        assert_eq!(positive.advantage, Some(AdvantageKind::Positive));
+        assert!(positive
+            .records
+            .iter()
+            .all(|r| outcome_of(r).unwrap().reward > 0.4));
+        // One attempt above the mean leaves the trainer nothing to compare.
+        let mut lone = BatchRecords::default();
+        lone.add_advantages(&[&g], AdvantageMode::PositiveOnly);
+        assert!(lone.records.is_empty());
     }
 
     #[test]
@@ -315,21 +351,43 @@ mod tests {
 
     #[test]
     fn an_unprovable_trace_is_never_trained_on() {
-        let mut bad = rollout(0.0, false, "x");
-        bad.trace = Some(RolloutTrace {
-            sequences: vec![TraceSequence {
-                prompt_token_ids: vec![1],
-                generation_token_ids: vec![2],
-                generation_log_probs: vec![-0.1],
-                truncated: false,
-            }],
-            provable: false,
-        });
-        let g = group(vec![rollout(1.0, true, "4"), bad]);
+        let unprovable = || {
+            let mut bad = rollout(0.0, false, "x");
+            bad.trace = Some(RolloutTrace {
+                sequences: vec![TraceSequence {
+                    prompt_token_ids: vec![1],
+                    generation_token_ids: vec![2],
+                    generation_log_probs: vec![-0.1],
+                    truncated: false,
+                }],
+                provable: false,
+            });
+            bad
+        };
+        let g = group(vec![
+            rollout(1.0, true, "4"),
+            unprovable(),
+            rollout(0.0, false, "6"),
+        ]);
         let mut batch = BatchRecords::default();
         batch.add_advantages(&[&g], AdvantageMode::TwoSided);
         assert_eq!(batch.counts.dropped_unprovable, 1);
-        assert_eq!(batch.counts.policy_gradient, 1);
+        assert_eq!(batch.counts.policy_gradient, 2);
+        let rollouts: Vec<Option<String>> = batch
+            .records
+            .iter()
+            .map(|r| outcome_of(r).unwrap().rollout)
+            .collect();
+        assert_eq!(
+            rollouts,
+            [Some("0".into()), Some("2".into())],
+            "each keeps its place in the group"
+        );
+        // Without it the group would be one attempt: nothing to compare.
+        let alone = group(vec![rollout(1.0, true, "4"), unprovable()]);
+        let mut batch = BatchRecords::default();
+        batch.add_advantages(&[&alone], AdvantageMode::TwoSided);
+        assert!(batch.records.is_empty());
     }
 
     #[test]
@@ -345,14 +403,12 @@ mod tests {
         batch.add_repairs(&[&g], 2);
         assert_eq!(batch.counts.repair, 1);
         let RecordBody::Chat {
-            messages,
-            advantage,
-            ..
+            messages, outcome, ..
         } = &batch.records[0].body
         else {
             panic!()
         };
-        assert_eq!(*advantage, None, "a repair is imitated");
+        assert_eq!(*outcome, None, "a repair is imitated");
         let shown: Vec<(&str, &str, bool)> = messages
             .iter()
             .map(|m| (m.role.as_str(), m.content.as_str(), m.train))
@@ -418,14 +474,12 @@ mod tests {
         let records = passing_records(&[&a, &b]);
         assert_eq!(records.len(), 1);
         let RecordBody::Chat {
-            messages,
-            advantage,
-            ..
+            messages, outcome, ..
         } = &records[0].body
         else {
             panic!()
         };
         assert_eq!(messages.last().unwrap().content, "4");
-        assert_eq!(*advantage, None);
+        assert_eq!(*outcome, None);
     }
 }

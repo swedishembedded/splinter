@@ -111,7 +111,7 @@ fn record_with_experience(
                 turn("assistant", answer, true),
             ],
             tools: Vec::new(),
-            advantage: None,
+            outcome: None,
             teacher_context: Vec::new(),
         },
         metadata: RecordMetadata {
@@ -134,6 +134,7 @@ fn projection(records: Vec<Record>) -> Projection {
         min_strength: None,
         records,
         groups: Vec::new(),
+        advantage: None,
         excluded: Default::default(),
         system_prompt: None,
         packed: false,

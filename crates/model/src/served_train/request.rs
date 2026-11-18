@@ -206,6 +206,9 @@ fn options(params: &mut Map<String, Value>, options: &PolicyGradientOptions) {
     if let Some(v) = options.sequence_advantage_cap {
         set(params, "sequence_advantage_cap", v);
     }
+    if let Some(v) = options.advantage_norm {
+        set(params, "advantage_norm", v.name());
+    }
 }
 
 #[cfg(test)]
@@ -232,13 +235,15 @@ mod tests {
                 teacher: Some(Reference::Base),
                 advantage_bound: Some(4.0),
                 sequence_advantage_cap: Some(30.0),
+                advantage_norm: Some(splinter_data::AdvantageNorm::LeaveOneOut),
             },
         );
         assert_eq!(params["reference"], "start");
         assert_eq!(params["loss_agg"], "token-sum");
         assert_eq!(params["behaviour"], "start_of_run_proxy");
         assert_eq!(params["teacher"], "base");
-        assert_eq!(params.len(), 12);
+        assert_eq!(params["advantage_norm"], "leave-one-out");
+        assert_eq!(params.len(), 13);
         assert_eq!(
             params["clip_eps_high"]
                 .as_f64()

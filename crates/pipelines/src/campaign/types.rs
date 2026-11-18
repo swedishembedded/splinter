@@ -183,8 +183,8 @@ pub trait RolloutCollector {
 /// What the trainer is asked for.
 #[derive(Debug)]
 pub struct TrainRequest {
-    /// The records to train on: rollouts with advantages, imitation records
-    /// and replay.
+    /// The records to train on: rollouts with their rewards and groups,
+    /// imitation records and replay.
     pub records: Vec<Record>,
     /// The adapter to continue; `None` trains a fresh one on the base.
     pub continue_from: Option<PathBuf>,
@@ -192,6 +192,9 @@ pub struct TrainRequest {
     pub out_dir: PathBuf,
     /// The seed of the optimiser's batches; recorded by the campaign.
     pub seed: u64,
+    /// How the trainer turns the rollout records' rewards into advantages;
+    /// `None` when no record carries a reward.
+    pub advantage: Option<splinter_data::AdvantageKind>,
 }
 
 /// What a training call measured, each absent when not measured.

@@ -6,14 +6,17 @@
 // training agents against verifiers that do not trust them, you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! Rewards and advantages: the numbers a policy-gradient run learns from.
+//! Rewards: the numbers a policy-gradient run learns from.
 //!
 //! An attempt (trial) earns a scalar [`RewardShape::reward`] from the verdict
 //! of an independent verifier and the metrics it measured. Attempts of one
-//! task by one policy form a group, and each attempt's advantage is how much
-//! better it did than the group ([`AdvantageKind`]). Splinter's core knows no
-//! domain: which metrics shape a failed attempt's reward, and how, is the
-//! caller's configuration.
+//! task by one policy form a group. The records carry each attempt's reward
+//! and its group; brain turns a group's rewards into the attempts' advantages
+//! (its `advantage_norm`), so how much better an attempt did is computed in
+//! one place. [`AdvantageKind`] selects that normalisation and, for
+//! [`AdvantageKind::Positive`], which attempts are written at all. Splinter's
+//! core knows no domain: which metrics shape a failed attempt's reward, and
+//! how, is the caller's configuration.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -23,9 +26,6 @@ use crate::ViewError;
 /// How far apart the best and the worst reward of a group must be for the
 /// group to say anything: closer, they are the same reward.
 const MIN_SPREAD: f64 = 1e-12;
-/// Added to the spread before dividing by it, so a nearly flat group does not
-/// blow its advantages up.
-const SPREAD_EPSILON: f64 = 1e-6;
 /// How far the weights of a reward shape may be from summing to one.
 const WEIGHT_SUM_TOLERANCE: f64 = 1e-9;
 
@@ -144,58 +144,97 @@ impl RewardShape {
     }
 }
 
-/// How the advantage of an attempt is read from the rewards of its group.
+/// How brain turns the rewards of a group into advantages: the training
+/// job's `advantage_norm`, by its spelling on the wire.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AdvantageNorm {
+    /// The reward less the group mean.
+    MeanCentred,
+    /// The reward less the group mean, over the group's standard deviation
+    /// (population, plus a small constant): GRPO's.
+    ZScore,
+    /// The reward less the mean of the group's other rewards (RLOO).
+    LeaveOneOut,
+}
+
+impl AdvantageNorm {
+    /// The normalisation's name as brain's training job takes it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::MeanCentred => "mean-centred",
+            Self::ZScore => "z-score",
+            Self::LeaveOneOut => "leave-one-out",
+        }
+    }
+}
+
+/// Which attempts of a group are written, and how brain reads their
+/// advantages from the group's rewards.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AdvantageKind {
-    /// The reward less the group mean, over the group's standard deviation
-    /// (population, plus a small constant): GRPO's.
+    /// Every attempt; brain standardises the group's rewards (GRPO's).
     #[default]
     Standardised,
-    /// The reward less the group mean.
+    /// Every attempt; brain subtracts the group mean.
     MeanCentred,
-    /// [`Self::Standardised`] for the attempts that beat their group's mean,
-    /// and no record at all for the rest: only what did better than the
-    /// group is reinforced, and nothing is pushed down. Wrong answers share
-    /// most of their tokens with right ones, so pushing a wrong answer down
-    /// also pushes down the tokens that were right in it; this keeps the
-    /// group-relative signal without that damage, and loses the signal
-    /// of what to avoid.
+    /// Every attempt; brain subtracts the mean of the others (RLOO).
+    LeaveOneOut,
+    /// Only the attempts whose reward is above their group's mean, and no
+    /// record at all for the rest: nothing is pushed down. Wrong answers
+    /// share most of their tokens with right ones, so pushing a wrong answer
+    /// down also pushes down the tokens that were right in it; this keeps
+    /// the better attempts without that damage, and loses the signal of what
+    /// to avoid. brain standardises the rewards of the attempts written, so
+    /// the kept ones of a group still need rewards that differ.
     Positive,
 }
 
 impl AdvantageKind {
-    /// The advantage of each reward of a group, in order; `None` when the
-    /// group says nothing: a single attempt, or all rewards the same.
-    pub fn advantages(self, rewards: &[f64]) -> Option<Vec<f64>> {
-        if rewards.len() < 2 {
-            return None;
+    /// The normalisation brain applies to the records this kind writes.
+    #[must_use]
+    pub fn norm(self) -> AdvantageNorm {
+        match self {
+            Self::Standardised | Self::Positive => AdvantageNorm::ZScore,
+            Self::MeanCentred => AdvantageNorm::MeanCentred,
+            Self::LeaveOneOut => AdvantageNorm::LeaveOneOut,
         }
-        let (min, max) = rewards
-            .iter()
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), r| {
-                (lo.min(*r), hi.max(*r))
-            });
-        if max - min < MIN_SPREAD {
-            return None;
-        }
-        let n = rewards.len() as f64;
-        let mean = rewards.iter().sum::<f64>() / n;
-        let spread = match self {
-            Self::Standardised | Self::Positive => {
-                (rewards.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / n).sqrt()
-                    + SPREAD_EPSILON
-            }
-            Self::MeanCentred => 1.0,
-        };
-        Some(rewards.iter().map(|r| (r - mean) / spread).collect())
     }
 
-    /// Whether an attempt with `advantage` is left out of the dataset: under
-    /// [`Self::Positive`], one that did no better than its group.
-    pub fn drops(self, advantage: f64) -> bool {
-        self == Self::Positive && advantage <= 0.0
+    /// Which attempts of a group with `rewards` are written, in order; `None`
+    /// when the group says nothing to brain: a single attempt, all rewards
+    /// the same, or (under [`Self::Positive`]) fewer than two kept attempts
+    /// whose rewards differ.
+    #[must_use]
+    pub fn keeps(self, rewards: &[f64]) -> Option<Vec<bool>> {
+        if !signals(rewards) {
+            return None;
+        }
+        if self != Self::Positive {
+            return Some(vec![true; rewards.len()]);
+        }
+        let mean = rewards.iter().sum::<f64>() / rewards.len() as f64;
+        let kept: Vec<bool> = rewards.iter().map(|r| *r > mean).collect();
+        let survivors: Vec<f64> = rewards
+            .iter()
+            .zip(&kept)
+            .filter_map(|(r, k)| k.then_some(*r))
+            .collect();
+        signals(&survivors).then_some(kept)
     }
+}
+
+/// Whether a group's rewards say anything: more than one, and not all alike.
+#[must_use]
+pub fn signals(rewards: &[f64]) -> bool {
+    let (min, max) = rewards
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), r| {
+            (lo.min(*r), hi.max(*r))
+        });
+    rewards.len() >= 2 && max - min >= MIN_SPREAD
 }
 
 /// One attempt of a group.
@@ -205,8 +244,11 @@ pub struct TrialReport {
     pub trial: String,
     /// The reward the attempt earned.
     pub reward: f64,
-    /// Its advantage over the group; zero for a group that says nothing.
-    pub advantage: f64,
+    /// Whether its records were written (with its reward and group): its
+    /// group says something, and [`AdvantageKind::Positive`] kept it. A
+    /// report written before records carried rewards reads as not written.
+    #[serde(default)]
+    pub written: bool,
     /// How many of its conversations (experiences) the view saw.
     pub conversations: usize,
 }
@@ -222,8 +264,8 @@ pub struct GroupReport {
     pub policy: String,
     /// The attempts, by trial name.
     pub trials: Vec<TrialReport>,
-    /// Whether the group has advantages to train on: more than one attempt,
-    /// and not all of them alike.
+    /// Whether the group has rewards to compare: more than one attempt, and
+    /// not all of them alike.
     pub signal: bool,
     /// What kind of group it is: the campaign counts groups by kind.
     #[serde(default)]

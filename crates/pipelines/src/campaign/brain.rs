@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde_json::Value;
 use splinter_core::digest::Digest;
-use splinter_data::{write_dataset, Objective, Projection};
+use splinter_data::{write_dataset, AdvantageKind, Objective, Projection};
 use splinter_model::policy_gradient::{PolicyGradientOptions, PolicyGradientTune};
 use splinter_model::precision::BasePrecision;
 
@@ -159,6 +159,7 @@ pub(super) fn write_records(request: &TrainRequest) -> Result<PathBuf, CampaignE
         .map_err(|e| fail(format!("creating {}: {e}", request.out_dir.display())))?;
     let mut projection = Projection::new("campaign", Objective::PolicyGradient, None, None);
     projection.records.clone_from(&request.records);
+    projection.advantage = request.advantage;
     let records_path = request.out_dir.join("records.jsonl");
     write_dataset(&records_path, &projection, &splinter_data::Unchecked)
         .map_err(|e| fail(format!("writing the training records: {e}")))?;
@@ -189,7 +190,10 @@ pub(super) fn tune<'a>(
         seed: request.seed,
         max_block: s.max_block,
         thinking: false,
-        options: s.options,
+        options: PolicyGradientOptions {
+            advantage_norm: request.advantage.map(AdvantageKind::norm),
+            ..s.options
+        },
     }
 }
 
@@ -227,6 +231,7 @@ mod tests {
             continue_from: None,
             out_dir: PathBuf::from(out_dir),
             seed: u64::from(std::process::id()),
+            advantage: None,
         }
     }
 

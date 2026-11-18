@@ -10,21 +10,21 @@
 //!
 //! An attempt is one conversation of the learner with a counterpart at one case
 //! (a client to take on, a student to teach); its reward is the grade of the
-//! case. A group is the attempts at one case by one policy; each attempt's
-//! advantage is read from the rewards of its group exactly as in
-//! [`views::PolicyGradient`](crate::views::PolicyGradient). The learner's turns
-//! are the actions: each becomes one record whose context is the role prompt and
-//! the conversation so far (the counterpart's words as `user`, the learner's own
-//! as `assistant`) and whose only supervised message is that turn, carrying the
-//! attempt's advantage. A group of one attempt, or whose attempts all earned the
-//! same, says nothing and yields no record.
+//! case. A group is the attempts at one case by one policy, written as in
+//! [`views::PolicyGradient`](crate::views::PolicyGradient): each record carries
+//! its attempt's reward, the group's key and the attempt's name, and the
+//! trainer computes the advantages. The learner's turns are the actions: each
+//! becomes one record whose context is the role prompt and the conversation so
+//! far (the counterpart's words as `user`, the learner's own as `assistant`)
+//! and whose only supervised message is that turn. A group of one attempt, or
+//! whose attempts all earned the same, says nothing and yields no record.
 
 use std::collections::BTreeMap;
 
 use serde_json::Value;
 use splinter_core::chat::WireMessage;
 
-use crate::record::{Record, RecordBody, RecordMetadata};
+use crate::record::{Record, RecordBody, RecordMetadata, RolloutOutcome};
 use crate::render::message;
 use crate::views::{AdvantageKind, GroupKind, GroupReport, TrialReport};
 use crate::{Exclusion, Objective, Projection};
@@ -77,6 +77,7 @@ pub fn project(
 ) -> Projection {
     let mut projection = Projection::new(VIEW, Objective::PolicyGradient, None, None);
     projection.system_prompt = Some(system_prompt.to_string());
+    projection.advantage = Some(advantage_kind);
     let mut groups: BTreeMap<(&str, &str), Vec<&Attempt>> = BTreeMap::new();
     for attempt in attempts {
         groups
@@ -86,14 +87,16 @@ pub fn project(
     }
     for ((case, policy), members) in groups {
         let rewards: Vec<f64> = members.iter().map(|a| a.reward).collect();
-        let advantages = advantage_kind.advantages(&rewards);
+        let signal = crate::views::signals(&rewards);
+        let written = advantage_kind.keeps(&rewards);
         let kind = if rewards.iter().all(|r| *r >= 1.0) {
             GroupKind::AllPass
-        } else if advantages.is_none() && rewards.iter().all(|r| *r <= 0.0) {
+        } else if !signal && rewards.iter().all(|r| *r <= 0.0) {
             GroupKind::AllFail
         } else {
             GroupKind::Graded
         };
+        let kept = |i: usize| written.as_ref().is_some_and(|w| w[i]);
         projection.groups.push(GroupReport {
             task: case.to_string(),
             version: String::new(),
@@ -104,28 +107,26 @@ pub fn project(
                 .map(|(i, a)| TrialReport {
                     trial: a.trial.clone(),
                     reward: a.reward,
-                    advantage: advantages.as_ref().map_or(0.0, |v| v[i]),
+                    written: kept(i),
                     conversations: 1,
                 })
                 .collect(),
-            signal: advantages.is_some(),
+            signal,
             kind,
             distilled: false,
         });
-        let Some(advantages) = advantages else {
-            *projection
-                .excluded
-                .entry(Exclusion::NoGroupSignal)
-                .or_insert(0) += members.len();
-            continue;
-        };
-        for (attempt, advantage) in members.iter().zip(advantages) {
-            if advantage_kind.drops(advantage) {
+        for (i, attempt) in members.iter().enumerate() {
+            if !kept(i) {
+                *projection
+                    .excluded
+                    .entry(Exclusion::NoGroupSignal)
+                    .or_insert(0) += 1;
                 continue;
             }
+            let outcome = RolloutOutcome::of(attempt.reward, &[case, policy], &attempt.trial);
             for messages in actions(system_prompt, &attempt.record) {
                 projection.records.push(Record {
-                    body: RecordBody::chat(messages).with_advantage(advantage),
+                    body: RecordBody::chat(messages).with_outcome(outcome.clone()),
                     metadata: RecordMetadata {
                         experiences: Vec::new(),
                         task: None,
@@ -166,19 +167,20 @@ mod tests {
     ];
 
     #[test]
-    fn every_learner_turn_of_a_group_with_a_spread_is_an_action_with_its_attempts_advantage() {
+    fn every_learner_turn_of_a_group_with_a_spread_is_an_action_with_its_attempts_reward_and_group()
+    {
         let attempts = [
             attempt("c1", "a", 1.0, &TALK),
             attempt("c1", "b", 0.0, &TALK),
         ];
         let projection = project("You are a lawyer.", &attempts, AdvantageKind::Standardised);
         assert_eq!(projection.records.len(), 4, "2 attempts x 2 learner turns");
-        let RecordBody::Chat {
-            messages,
-            advantage,
-            ..
-        } = &projection.records[1].body
-        else {
+        assert_eq!(projection.advantage, Some(AdvantageKind::Standardised));
+        let outcome = |at: usize| match &projection.records[at].body {
+            RecordBody::Chat { outcome, .. } => outcome.clone().expect("a rollout record"),
+            _ => panic!("a chat record"),
+        };
+        let RecordBody::Chat { messages, .. } = &projection.records[1].body else {
             panic!("a chat record")
         };
         let roles: Vec<&str> = messages.iter().map(|m| m.role.as_str()).collect();
@@ -186,37 +188,55 @@ mod tests {
         let trained: Vec<bool> = messages.iter().map(|m| m.train).collect();
         assert_eq!(trained, [false, false, false, false, true]);
         assert_eq!(messages[4].content, "Did you give notice?");
-        assert!(advantage.unwrap() > 0.9, "the better attempt is reinforced");
-        let RecordBody::Chat {
-            advantage: worse, ..
-        } = &projection.records[3].body
-        else {
-            panic!("a chat record")
-        };
-        assert!(worse.unwrap() < -0.9);
+        let (better, worse) = (outcome(1), outcome(3));
+        assert_eq!((better.reward, worse.reward), (1.0, 0.0));
+        assert_eq!(
+            better.group, worse.group,
+            "one group: the attempts at one case by one policy"
+        );
+        assert_eq!(
+            (better.rollout.as_deref(), worse.rollout.as_deref()),
+            (Some("a"), Some("b")),
+            "each attempt is one rollout of the group, whatever its number of turns"
+        );
+        assert_eq!(outcome(0), better);
         assert!(projection.groups[0].signal);
     }
 
     #[test]
-    fn positive_advantages_leave_out_the_conversations_that_did_not_beat_their_group() {
+    fn positive_leaves_out_the_conversations_at_or_below_their_groups_mean_reward() {
         let attempts = [
             attempt("c1", "a", 1.0, &TALK),
-            attempt("c1", "b", 0.0, &TALK),
+            attempt("c1", "b", 0.75, &TALK),
+            attempt("c1", "c", 0.0, &TALK),
         ];
         let projection = project("You are a lawyer.", &attempts, AdvantageKind::Positive);
         assert_eq!(
             projection.records.len(),
-            2,
-            "only the better attempt's turns"
+            4,
+            "the two attempts above the mean"
         );
         assert!(projection.records.iter().all(|r| matches!(
             &r.body,
-            RecordBody::Chat { advantage: Some(a), .. } if *a > 0.9
+            RecordBody::Chat { outcome: Some(o), .. } if o.reward > 0.5
         )));
-        assert!(
-            projection.groups[0].trials[1].advantage < 0.0,
-            "still reported"
-        );
+        let written: Vec<bool> = projection.groups[0]
+            .trials
+            .iter()
+            .map(|t| t.written)
+            .collect();
+        assert_eq!(written, [true, true, false], "every attempt still reported");
+        assert_eq!(projection.excluded[&Exclusion::NoGroupSignal], 1);
+
+        // One attempt above the mean leaves the trainer nothing to compare.
+        let lone = [
+            attempt("c1", "a", 1.0, &TALK),
+            attempt("c1", "b", 0.0, &TALK),
+            attempt("c1", "c", 0.0, &TALK),
+        ];
+        let lone = project("p", &lone, AdvantageKind::Positive);
+        assert!(lone.records.is_empty());
+        assert_eq!(lone.excluded[&Exclusion::NoGroupSignal], 3);
     }
 
     #[test]

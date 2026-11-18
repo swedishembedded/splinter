@@ -7,10 +7,12 @@
 // our services by sending an email to info@swedishembedded.com.
 
 //! Spec: the policy-gradient view turns several attempts (trials) of one task
-//! by one policy into training records that carry a group-relative advantage.
-//! Every validly graded trial is admitted whatever its verdict; each of its
-//! model actions becomes a record with the trial's advantage, so a failed
-//! attempt pushes its actions down and a better one pulls its actions up.
+//! by one policy into training records that carry the trial's reward, the
+//! group's key and the trial's name (brain's training-record contract v2), so
+//! the trainer computes each trial's group-relative advantage. Every validly
+//! graded trial is admitted whatever its verdict; each of its model actions
+//! becomes a record of the trial, so a failed attempt pushes its actions down
+//! and a better one pulls its actions up.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -23,8 +25,8 @@ use serde_json::{json, Value};
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::experience::{Environment, Task};
 use splinter_data::{
-    write_dataset, AdvantageKind, Corpus, Exclusion, Objective, PolicyGradient, Projection,
-    RecordBody, RewardShape, Unchecked, View, ViewError,
+    write_dataset, AdvantageKind, AdvantageNorm, Corpus, Exclusion, Objective, PolicyGradient,
+    Projection, RecordBody, RewardShape, RolloutOutcome, Unchecked, View, ViewError,
 };
 
 const PERFECT: &[(&str, f64)] = &[("iou", 1.0), ("feature_match", 1.0)];
@@ -153,15 +155,19 @@ fn view() -> PolicyGradient {
     PolicyGradient::new(Strength::Executable)
 }
 
-fn advantages(projection: &Projection) -> Vec<f64> {
+fn outcomes(projection: &Projection) -> Vec<RolloutOutcome> {
     projection
         .records
         .iter()
         .map(|r| match &r.body {
-            RecordBody::Chat { advantage, .. } => advantage.unwrap(),
+            RecordBody::Chat { outcome, .. } => outcome.clone().unwrap(),
             other => panic!("a chat record, got {other:?}"),
         })
         .collect()
+}
+
+fn rewards(projection: &Projection) -> Vec<f64> {
+    outcomes(projection).iter().map(|o| o.reward).collect()
 }
 
 fn close(a: f64, b: f64) -> bool {
@@ -169,8 +175,8 @@ fn close(a: f64, b: f64) -> bool {
 }
 
 #[test]
-fn every_action_of_every_graded_trial_carries_its_trials_advantage() {
-    // Two passes and two fails: rewards 1, 1, 0, 0; mean 0.5, std 0.5.
+fn every_action_of_every_graded_trial_carries_its_trials_reward_group_and_name() {
+    // Two passes and two fails: rewards 1, 1, 0, 0.
     let corpus = corpus(&[
         Trial::pass("t1"),
         Trial::pass("t2"),
@@ -181,12 +187,22 @@ fn every_action_of_every_graded_trial_carries_its_trials_advantage() {
     assert_eq!(projection.objective, Objective::PolicyGradient);
     // Two actions per trial (the tool call and the final answer), failed
     // trials included.
-    let got = advantages(&projection);
-    assert_eq!(got.len(), 8);
-    let expected = [1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0];
-    for (g, e) in got.iter().zip(expected) {
-        assert!(close(*g, e * 0.5 / (0.5 + 1e-6)), "{got:?}");
-    }
+    let got = outcomes(&projection);
+    assert_eq!(
+        rewards(&projection),
+        [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+    );
+    assert!(
+        got.iter().all(|o| o.group == got[0].group),
+        "one group: {got:?}"
+    );
+    let rollouts: Vec<&str> = got.iter().map(|o| o.rollout.as_deref().unwrap()).collect();
+    assert_eq!(rollouts, ["t1", "t1", "t2", "t2", "t3", "t3", "t4", "t4"]);
+    // The trainer is told to standardise the rewards, as GRPO does.
+    assert_eq!(
+        projection.advantage.map(AdvantageKind::norm),
+        Some(AdvantageNorm::ZScore)
+    );
     // Only the action is supervised in each record.
     for record in &projection.records {
         let RecordBody::Chat { messages, .. } = &record.body else {
@@ -197,7 +213,7 @@ fn every_action_of_every_graded_trial_carries_its_trials_advantage() {
 }
 
 #[test]
-fn the_conversations_of_one_trial_share_its_advantage() {
+fn the_conversations_of_one_trial_are_one_rollout_of_its_group() {
     // One trial answered by two roles of one model: its two conversations are
     // one rollout, so the trial counts once in its group.
     let corpus = corpus(&[
@@ -208,12 +224,15 @@ fn the_conversations_of_one_trial_share_its_advantage() {
     let projection = view().project(&corpus).unwrap();
     let group = &projection.groups[0];
     assert_eq!(group.trials.len(), 2);
-    let got = advantages(&projection);
-    // 4 actions of t1 (+), 2 of t2 (-).
+    let got = outcomes(&projection);
+    // 4 actions of t1 (rewarded), 2 of t2: two rollouts of one group.
     assert_eq!(got.len(), 6);
-    assert!(got[..4].iter().all(|a| *a > 0.0));
-    assert!(got[4..].iter().all(|a| *a < 0.0));
-    assert!(close(got[0], got[3]));
+    assert!(got[..4]
+        .iter()
+        .all(|o| o.reward == 1.0 && o.rollout.as_deref() == Some("t1")));
+    assert!(got[4..]
+        .iter()
+        .all(|o| o.reward == 0.0 && o.rollout.as_deref() == Some("t2")));
 }
 
 #[test]
@@ -308,53 +327,83 @@ fn reward_shapes_that_could_not_rank_a_pass_first_are_refused() {
 }
 
 #[test]
-fn mean_centred_advantages_are_not_divided_by_the_spread() {
+fn the_advantage_kind_names_the_trainers_normalisation_and_writes_every_attempt() {
     let corpus = corpus(&[
         Trial::pass("t1"),
         Trial::fail("t2", &[]),
         Trial::fail("t3", &[]),
     ]);
-    let projection = view()
-        .advantage(AdvantageKind::MeanCentred)
-        .project(&corpus)
-        .unwrap();
-    let trials = &projection.groups[0].trials;
-    assert!(close(trials[0].advantage, 2.0 / 3.0));
-    assert!(close(trials[1].advantage, -1.0 / 3.0));
-    // The default divides by the spread (population standard deviation).
-    let standardised = view().project(&corpus).unwrap();
-    let std = (2.0f64 / 9.0).sqrt();
-    assert!(close(
-        standardised.groups[0].trials[0].advantage,
-        (2.0 / 3.0) / (std + 1e-6)
-    ));
+    for (kind, norm) in [
+        (AdvantageKind::Standardised, AdvantageNorm::ZScore),
+        (AdvantageKind::MeanCentred, AdvantageNorm::MeanCentred),
+        (AdvantageKind::LeaveOneOut, AdvantageNorm::LeaveOneOut),
+    ] {
+        let projection = view().advantage(kind).project(&corpus).unwrap();
+        assert_eq!(projection.advantage.map(AdvantageKind::norm), Some(norm));
+        assert_eq!(
+            rewards(&projection),
+            [1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+            "{kind:?}"
+        );
+    }
+    assert_eq!(
+        ["z-score", "mean-centred", "leave-one-out"],
+        [
+            AdvantageNorm::ZScore,
+            AdvantageNorm::MeanCentred,
+            AdvantageNorm::LeaveOneOut
+        ]
+        .map(AdvantageNorm::name),
+        "brain's spellings"
+    );
 }
 
 #[test]
-fn positive_advantages_reinforce_only_the_attempts_that_beat_their_group() {
-    let corpus = corpus(&[
+fn positive_writes_only_the_attempts_above_their_groups_mean_reward() {
+    // Shaped rewards 1, 0.4 and 0: mean 0.467, so only t1 is above it and the
+    // trainer would have nothing to compare it with.
+    let shape = RewardShape::shaped(0.5, vec![("iou".into(), 1.0)]).unwrap();
+    let lone = corpus(&[
         Trial::pass("t1"),
-        Trial::fail("t2", &[]),
-        Trial::fail("t3", &[]),
+        Trial::fail("t2", &[("iou", 0.8)]),
+        Trial::fail("t3", &[("iou", 0.0)]),
     ]);
     let projection = view()
+        .rewards(shape.clone())
         .advantage(AdvantageKind::Positive)
-        .project(&corpus)
+        .project(&lone)
         .unwrap();
-    // Each trial of the fixture is two actions: three trials, six records, of which the winner's two remain.
-    let everything = view().project(&corpus).unwrap();
-    assert_eq!(
-        (everything.records.len(), projection.records.len()),
-        (6, 2),
-        "the failures are left out"
+    assert!(
+        projection.records.is_empty(),
+        "one attempt above the mean says nothing"
     );
-    let RecordBody::Chat { advantage, .. } = &projection.records[0].body else {
-        panic!("a rollout record, got {:?}", projection.records[0]);
-    };
-    let std = (2.0f64 / 9.0).sqrt();
-    assert!(close(advantage.unwrap(), (2.0 / 3.0) / (std + 1e-6)));
-    // The group's report still shows every attempt's own advantage.
-    assert!(projection.groups[0].trials[1].advantage < 0.0);
+    assert_eq!(projection.count(Exclusion::NoGroupSignal), 3);
+
+    // Rewards 1, 1 x 0.5 = 0.5, 0.45, 0: mean 0.4875, so t1 and t2 remain.
+    let two = corpus(&[
+        Trial::pass("t1"),
+        Trial::fail("t2", &[("iou", 1.0)]),
+        Trial::fail("t3", &[("iou", 0.9)]),
+        Trial::fail("t4", &[("iou", 0.0)]),
+    ]);
+    let projection = view()
+        .rewards(shape)
+        .advantage(AdvantageKind::Positive)
+        .project(&two)
+        .unwrap();
+    let kept: Vec<String> = outcomes(&projection)
+        .into_iter()
+        .map(|o| o.rollout.unwrap())
+        .collect();
+    assert_eq!(kept, ["t1", "t1", "t2", "t2"]);
+    // The group's report still shows every attempt, written or not.
+    let written: Vec<bool> = projection.groups[0]
+        .trials
+        .iter()
+        .map(|t| t.written)
+        .collect();
+    assert_eq!(written, [true, true, false, false]);
+    assert_eq!(projection.count(Exclusion::NoGroupSignal), 2);
 }
 
 #[test]
@@ -397,14 +446,15 @@ fn trials_of_another_task_version_or_another_model_are_other_groups() {
     let projection = view().project(&corpus).unwrap();
     assert_eq!(projection.groups.len(), 3);
     assert!(projection.groups.iter().all(|g| g.trials.len() == 2));
-    // Each group is standardised on its own.
-    let got = advantages(&projection);
+    // Each group has its own key.
+    let got = outcomes(&projection);
     assert_eq!(got.len(), 12);
-    assert!(got.iter().all(|a| close(a.abs(), 0.5 / (0.5 + 1e-6))));
+    let keys: std::collections::BTreeSet<&str> = got.iter().map(|o| o.group.as_str()).collect();
+    assert_eq!(keys.len(), 3);
 }
 
 #[test]
-fn the_report_names_the_task_the_policy_the_rewards_and_the_advantages() {
+fn the_report_names_the_task_the_policy_the_rewards_and_what_was_written() {
     let corpus = corpus(&[Trial::pass("t1"), Trial::fail("t2", &[])]);
     let group = &view().project(&corpus).unwrap().groups[0];
     assert_eq!(group.task, "cad/bracket");
@@ -412,7 +462,9 @@ fn the_report_names_the_task_the_policy_the_rewards_and_the_advantages() {
     assert_eq!(group.policy, "m1");
     let names: Vec<_> = group.trials.iter().map(|t| t.trial.as_str()).collect();
     assert_eq!(names, ["t1", "t2"]);
-    assert!(close(group.trials[0].advantage, -group.trials[1].advantage));
+    let rewards: Vec<f64> = group.trials.iter().map(|t| t.reward).collect();
+    assert_eq!(rewards, [1.0, 0.0]);
+    assert!(group.trials.iter().all(|t| t.written));
 }
 
 #[test]
@@ -474,7 +526,7 @@ fn the_same_corpus_projects_to_the_same_bytes() {
 }
 
 #[test]
-fn the_dataset_line_carries_the_advantage_for_brain() {
+fn the_dataset_line_carries_the_reward_group_and_rollout_for_brain() {
     let corpus = corpus(&[Trial::pass("t1"), Trial::fail("t2", &[])]);
     let projection = view().project(&corpus).unwrap();
     let dir = std::env::temp_dir().join(format!("pg-line-{}", std::process::id()));
@@ -487,12 +539,137 @@ fn the_dataset_line_carries_the_advantage_for_brain() {
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
     assert_eq!(lines.len(), 4);
-    assert!(lines.iter().all(|l| l["advantage"].is_f64()));
-    assert!(lines[0]["advantage"].as_f64().unwrap() > 0.0);
-    assert!(lines[2]["advantage"].as_f64().unwrap() < 0.0);
-    // The group report is part of the manifest, so a dataset says how its
-    // advantages were made.
+    assert!(
+        lines.iter().all(|l| l.get("advantage").is_none()),
+        "contract v2 has no precomputed advantage"
+    );
+    assert_eq!(lines[0]["reward"], 1.0);
+    assert_eq!(lines[2]["reward"], 0.0);
+    assert!(lines
+        .iter()
+        .all(|l| l["group"] == lines[0]["group"] && l["group"].is_string()));
+    assert_eq!(
+        (lines[0]["rollout"].as_str(), lines[2]["rollout"].as_str()),
+        (Some("t1"), Some("t2"))
+    );
+    // The group report and the normalisation are part of the manifest, so a
+    // dataset says how its advantages are to be made.
     let manifest = std::fs::read_to_string(splinter_data::manifest_path(&path)).unwrap();
-    assert!(manifest.contains("\"groups\""), "{manifest}");
+    assert!(
+        manifest.contains("\"groups\"") && manifest.contains("\"advantage\":\"standardised\""),
+        "{manifest}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// L5, the producer's side of brain's training-record contract (version 2),
+/// held to brain's own fixtures (`tests/fixtures/training-records/v2`): every
+/// line the view writes uses only the fields brain's valid rollout records
+/// use, never the removed `advantage`, with keys brain accepts, and keeps the
+/// rules brain checks between records: the records of one rollout agree on
+/// its reward, and every group holds at least two rollouts.
+#[test]
+fn the_records_the_view_writes_keep_brains_training_record_contract() {
+    // doc-reference: the fixtures are brain's contract, copied unchanged.
+    let fixtures =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/training-records/v2");
+    let manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(fixtures.join("manifest.json")).unwrap())
+            .unwrap();
+    assert_eq!(manifest["contract"], "training-records-v2");
+    let fixture_lines = |name: &str| -> Vec<Value> {
+        std::fs::read_to_string(fixtures.join(name))
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    };
+    // The fields a rollout record may carry: those of brain's valid rollout
+    // records, and the `tools` and `metadata` every chat record may carry.
+    let mut allowed: std::collections::BTreeSet<String> =
+        ["tools", "metadata"].map(String::from).into();
+    for line in fixture_lines("chat_rollout.jsonl")
+        .iter()
+        .chain(&fixture_lines("chat.jsonl"))
+    {
+        allowed.extend(line.as_object().unwrap().keys().cloned());
+    }
+    assert!(allowed.contains("reward") && allowed.contains("group") && allowed.contains("rollout"));
+    let refused = fixture_lines("invalid/advantage_removed.jsonl");
+    assert!(
+        refused[0].get("advantage").is_some(),
+        "the removed field the contract refuses"
+    );
+
+    // Graded groups of several trials, one trial answered by two roles (two
+    // conversations of one rollout), and a group of one that must not be written.
+    let corpus = corpus(&[
+        Trial::pass("t1").role("designer"),
+        Trial::pass("t1").role("critic"),
+        Trial::fail("t2", &[]),
+        Trial::fail("t3", &[]),
+        Trial::pass("b1").version("2"),
+        Trial::fail("b2", &[]).version("2"),
+        Trial::pass("alone").model("m2"),
+    ]);
+    // (Positive keeps nothing of pass/fail rewards: one attempt above the mean, or several alike.)
+    for kind in [
+        AdvantageKind::Standardised,
+        AdvantageKind::MeanCentred,
+        AdvantageKind::LeaveOneOut,
+    ] {
+        let projection = view().advantage(kind).project(&corpus).unwrap();
+        let dir = std::env::temp_dir().join(format!("pg-contract-{}-{kind:?}", std::process::id()));
+        let path = dir.join("d.jsonl");
+        write_dataset(&path, &projection, &Unchecked).unwrap();
+        let lines: Vec<Value> = std::fs::read_to_string(&path)
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut rollouts: std::collections::BTreeMap<(String, String), f64> =
+            std::collections::BTreeMap::new();
+        for line in &lines {
+            let keys: Vec<&String> = line.as_object().unwrap().keys().collect();
+            assert!(
+                keys.iter().all(|k| allowed.contains(*k)),
+                "{kind:?}: {keys:?} beyond {allowed:?}"
+            );
+            let (group, rollout) = (
+                line["group"].as_str().unwrap(),
+                line["rollout"].as_str().unwrap(),
+            );
+            for key in [group, rollout] {
+                assert!(
+                    !key.is_empty() && key.len() <= 512 && !key.chars().any(char::is_control),
+                    "{key:?}"
+                );
+            }
+            let reward = line["reward"].as_f64().unwrap();
+            assert!(reward.is_finite());
+            let seen = rollouts
+                .entry((group.to_string(), rollout.to_string()))
+                .or_insert(reward);
+            assert_eq!(
+                *seen, reward,
+                "{kind:?}: the records of one rollout agree on its reward"
+            );
+        }
+        let mut per_group: std::collections::BTreeMap<&str, usize> =
+            std::collections::BTreeMap::new();
+        for (group, _) in rollouts.keys() {
+            *per_group.entry(group.as_str()).or_insert(0) += 1;
+        }
+        assert!(!per_group.is_empty(), "{kind:?}: something is written");
+        assert!(
+            per_group.values().all(|n| *n >= 2),
+            "{kind:?}: no group of one: {per_group:?}"
+        );
+        assert_eq!(
+            serde_json::to_value(projection.advantage.unwrap().norm()).unwrap(),
+            Value::from(projection.advantage.unwrap().norm().name()),
+            "the manifest names brain's advantage_norm by its own spelling"
+        );
+    }
 }

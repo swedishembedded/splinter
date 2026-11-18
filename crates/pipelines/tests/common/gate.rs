@@ -36,7 +36,9 @@ use splinter_core::release::ReleaseId;
 use splinter_core::terms::Terms;
 use splinter_core::training::{HeldOutScore, Regime, TrainingCurve};
 use splinter_data::holdout::holdout_split_grouped;
-use splinter_data::{Objective, Projection, Record, RecordBody, RecordMetadata, Strip};
+use splinter_data::{
+    AdvantageKind, Objective, Projection, Record, RecordBody, RecordMetadata, RolloutOutcome, Strip,
+};
 use splinter_eval::gate::GateConfig;
 use splinter_model::policy_gradient::TrainedPolicyGradient;
 use splinter_model::train::Trained;
@@ -143,8 +145,9 @@ pub fn dataset_under(
 }
 
 /// Stores a policy-gradient dataset of rollout records: one action about
-/// `topic` per advantage in `advantages`, each carrying its advantage.
-pub fn rollout_dataset(ctx: &Context, topic: &str, advantages: &[f64]) -> DatasetId {
+/// `topic` per reward in `rewards`, each a rollout of its own in one group
+/// (the topic), carrying its reward.
+pub fn rollout_dataset(ctx: &Context, topic: &str, rewards: &[f64]) -> DatasetId {
     let message = |role: &str, content: String, train: bool| WireMessage {
         images: Vec::new(),
         role: role.into(),
@@ -154,17 +157,17 @@ pub fn rollout_dataset(ctx: &Context, topic: &str, advantages: &[f64]) -> Datase
         reasoning_content: None,
         train,
     };
-    let records = advantages
+    let records = rewards
         .iter()
         .enumerate()
-        .map(|(i, advantage)| Record {
+        .map(|(i, reward)| Record {
             body: RecordBody::Chat {
                 messages: vec![
                     message("user", question(topic, i), false),
                     message("assistant", answer(topic, i), true),
                 ],
                 tools: Vec::new(),
-                advantage: Some(*advantage),
+                outcome: Some(RolloutOutcome::of(*reward, &[topic], &i.to_string())),
                 teacher_context: Vec::new(),
             },
             metadata: RecordMetadata {
@@ -180,6 +183,7 @@ pub fn rollout_dataset(ctx: &Context, topic: &str, advantages: &[f64]) -> Datase
         .collect();
     let projection = Projection {
         records,
+        advantage: Some(AdvantageKind::Standardised),
         ..Projection::new(
             "policy-gradient",
             Objective::PolicyGradient,
@@ -241,7 +245,7 @@ fn dataset_made(
                     message("assistant", answer(topic, i), true),
                 ],
                 tools: Vec::new(),
-                advantage: None,
+                outcome: None,
                 teacher_context: Vec::new(),
             },
             metadata: RecordMetadata {
@@ -262,6 +266,7 @@ fn dataset_made(
         min_strength: Some(Strength::Formal),
         records,
         groups: Vec::new(),
+        advantage: None,
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,
@@ -320,6 +325,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         min_strength: Some(Strength::Formal),
         records,
         groups: Vec::new(),
+        advantage: None,
         excluded: BTreeMap::new(),
         system_prompt: None,
         packed: false,

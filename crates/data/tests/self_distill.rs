@@ -139,10 +139,14 @@ fn chat(
     match &record.body {
         RecordBody::Chat {
             messages,
-            advantage,
+            outcome,
             teacher_context,
             ..
-        } => (messages, *advantage, teacher_context),
+        } => (
+            messages,
+            outcome.as_ref().map(|o| o.reward),
+            teacher_context,
+        ),
         other => panic!("a chat record, got {other:?}"),
     }
 }
@@ -294,6 +298,6 @@ fn the_dataset_line_places_the_teacher_context_after_the_first_user_turn_for_bra
         let first_user = messages.iter().position(|m| m["role"] == "user").unwrap();
         assert_eq!(line["teacher_context"]["at"], first_user + 1, "{line}");
         assert_eq!(line["teacher_context"]["messages"][0]["role"], "user");
-        assert!(line.get("advantage").is_none());
+        assert!(line.get("advantage").is_none() && line.get("reward").is_none());
     }
 }
