@@ -113,7 +113,7 @@ pub(super) fn policy_gradient_params(
         request.model_dir,
         &[request.train],
         1,
-        (request.thinking, false),
+        (request.thinking, request.pack_answers),
         request.max_block,
     )?;
     let (records, block) = (checked.records, checked.block);
@@ -135,6 +135,7 @@ pub(super) fn policy_gradient_params(
     set(&mut params, "seed", request.seed);
     set(&mut params, "max_block", block);
     set(&mut params, "thinking", request.thinking);
+    set(&mut params, "pack_answers", request.pack_answers);
     set(
         &mut params,
         "adapter_id",

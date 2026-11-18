@@ -55,6 +55,7 @@ pub(super) fn train(
         seed: plan.seed,
         max_block: plan.tuning.max_block,
         thinking: carries_reasoning(&train)?,
+        pack_answers: plan.datasets.iter().all(|d| d.manifest.packed),
         options: PolicyGradientOptions {
             advantage_norm: advantage.map(|(norm, _)| norm),
             advantage_floor: advantage.map(|(_, floor)| floor),

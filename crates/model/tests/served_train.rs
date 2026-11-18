@@ -234,6 +234,7 @@ fn a_policy_gradient_run_sends_only_the_settings_named_and_reads_its_series_from
         seed: 11,
         max_block: Some(256),
         thinking: true,
+        pack_answers: true,
         options: PolicyGradientOptions {
             kl_beta: Some(0.1),
             reference: Some(Reference::StartOfRun),
@@ -257,6 +258,10 @@ fn a_policy_gradient_run_sends_only_the_settings_named_and_reads_its_series_from
         "brain's defaults are brain's to apply: {params}"
     );
     assert_eq!(params["max_block"], 256);
+    assert_eq!(
+        params["pack_answers"], true,
+        "a packed dataset trains as one sequence"
+    );
     assert_eq!(trained.records, 3);
     let kls: Vec<Option<f32>> = trained.statistics.steps.iter().map(|s| s.kl).collect();
     assert_eq!(kls.len(), 3, "every step of the record");

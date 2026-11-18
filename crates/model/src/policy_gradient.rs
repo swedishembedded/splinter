@@ -266,6 +266,9 @@ pub struct PolicyGradientTune<'a> {
     pub max_block: Option<u32>,
     /// Whether the model is trained to reason before it acts.
     pub thinking: bool,
+    /// Whether a record supervising several answers (a packed dataset) is
+    /// trained as one sequence instead of one example per answer.
+    pub pack_answers: bool,
     /// The objective's settings.
     pub options: PolicyGradientOptions,
 }

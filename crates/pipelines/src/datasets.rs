@@ -325,6 +325,7 @@ fn project_without(
             .with_strip(strip)
             .rewards(request.rl.shape()?)
             .advantage(request.rl.advantage)
+            .packed(request.pack)
             .serialise_calls(request.serialise_calls)
             .only_actions(request.only_actions.clone().unwrap_or_default())
             .only_roles(request.roles.clone().unwrap_or_default())

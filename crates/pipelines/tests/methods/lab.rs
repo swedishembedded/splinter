@@ -287,6 +287,7 @@ impl Lab {
                 seed: 1,
                 max_block: None,
                 thinking: false,
+                pack_answers: false,
                 options,
             },
         )

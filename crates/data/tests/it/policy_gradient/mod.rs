@@ -219,6 +219,29 @@ fn every_action_of_every_graded_trial_carries_its_trials_reward_group_and_name()
 }
 
 #[test]
+fn packed_each_trial_is_one_record_supervising_every_action_with_its_reward_and_group() {
+    let corpus = corpus(&[Trial::pass("t1"), Trial::pass("t2"), Trial::fail("t3", &[])]);
+    let projection = view().packed(true).project(&corpus).unwrap();
+    assert!(
+        projection.packed,
+        "the manifest says the records are packed"
+    );
+    let got = outcomes(&projection);
+    let rollouts: Vec<&str> = got.iter().map(|o| o.rollout.as_deref().unwrap()).collect();
+    assert_eq!(rollouts, ["t1", "t2", "t3"]);
+    assert_eq!(rewards(&projection), [1.0, 1.0, 0.0]);
+    assert!(got.iter().all(|o| o.group == got[0].group));
+    // Both actions of a trial (the tool call and the final answer) are
+    // supervised in its one record, as the per-action records supervise them.
+    for record in &projection.records {
+        let RecordBody::Chat { messages, .. } = &record.body else {
+            panic!("chat");
+        };
+        assert_eq!(messages.iter().filter(|m| m.train).count(), 2);
+    }
+}
+
+#[test]
 fn the_conversations_of_one_trial_are_one_rollout_of_its_group() {
     // One trial answered by two roles of one model: its two conversations are
     // one rollout, so the trial counts once in its group.

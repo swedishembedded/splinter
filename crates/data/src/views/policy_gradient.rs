@@ -221,6 +221,17 @@ impl PolicyGradient {
         self
     }
 
+    /// The same view writing one record per conversation of a trial instead of
+    /// one per action ([`SftStep::packed`](super::SftStep::packed)): every
+    /// action supervised, the context once. Each record still carries its
+    /// trial's reward, group and rollout, so the trainer counts the trial once
+    /// in its group either way.
+    #[must_use]
+    pub fn packed(mut self, packed: bool) -> Self {
+        self.rendering.packed = packed;
+        self
+    }
+
     /// The same view reading a run exported as one agent step as one call per
     /// turn ([`SftStep::serialise_calls`](super::SftStep::serialise_calls)).
     #[must_use]
@@ -390,6 +401,7 @@ impl View for PolicyGradient {
             placed.push((entry, harness, rollout));
         }
         projection.advantage = Some(self.advantage);
+        projection.packed = self.rendering.packed;
         projection.overlong = self.reward.overlong();
         let mut treatment_of: BTreeMap<(&GroupKey, &str), Treatment> = BTreeMap::new();
         for (key, trials) in &groups {

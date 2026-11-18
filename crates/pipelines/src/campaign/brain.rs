@@ -190,6 +190,7 @@ pub(super) fn tune<'a>(
         seed: request.seed,
         max_block: s.max_block,
         thinking: false,
+        pack_answers: false,
         options: PolicyGradientOptions {
             advantage_norm: request.advantage.map(AdvantageKind::norm),
             advantage_floor: request.advantage.map(AdvantageKind::floor),

@@ -131,8 +131,9 @@ pub struct BuildArgs {
     /// from them pairs the same.
     #[arg(long, value_name = "N")]
     pub pair_seed: Option<Seed>,
-    /// For the sft-step view: one record per trajectory with every
-    /// admitted action supervised, not one record per action.
+    /// For the sft-step and policy-gradient views: one record per
+    /// trajectory with every admitted action supervised, not one record per
+    /// action; a policy-gradient record keeps its trial's reward and group.
     #[arg(long)]
     pub pack: bool,
     /// For the sft-step view: keep only the actions whose tool calls are all

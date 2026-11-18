@@ -38,7 +38,7 @@ use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
 use splinter_core::training::Regime;
 use splinter_model::policy_gradient::{
-    Behaviour, LossAggregation, PolicyGradientOptions, Reference,
+    Algorithm, Behaviour, LossAggregation, PolicyGradientOptions, Reference,
 };
 use splinter_model::train::BasePrecision;
 use splinter_orchestrator::Context;
@@ -275,6 +275,7 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
     let named = TrainRequest {
         tuning: Tuning {
             policy_gradient: PolicyGradientOptions {
+                algorithm: Some(Algorithm::Grpo),
                 clip_eps: Some(0.1),
                 clip_eps_high: Some(0.2),
                 max_step_kl: Some(0.5),
@@ -315,6 +316,11 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
         ),
         (Some(0.2), Some(0.5), Some(8.0)),
         "clip-higher and the step guard reach the plan as named"
+    );
+    assert_eq!(
+        used.algorithm,
+        Some(Algorithm::Grpo),
+        "the named algorithm reaches the plan"
     );
     // The self-distillation guards reach the plan as named.
     assert_eq!(
