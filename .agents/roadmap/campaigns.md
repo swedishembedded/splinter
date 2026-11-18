@@ -48,16 +48,20 @@ Scope: `splinter campaign` (resumable multi-generation learning over the stage l
 
 ## Open
 
-- `release` and `harness_opt` still decide with their own gates (release: sign test, retention bound, anchor, serve,
-  canary over Splinter's in-process probes; harness_opt: family sign test or evidence gate). Moving them onto
-  `promotion::decide` needs bench verdicts for their candidates (a release from `learn` has none today) or a reviewed
-  rule for when the sealed slice does not apply. Not done.
+- Done 2026-11-18 (splinter baa35b8fe, lane G landed it): `release` and `harness optimise` decide on the one
+  promotion rule, `promotion::decide` on the examiner's verdicts when the caller hands them in, else
+  `decide_unexamined`, recorded not exam-verified with why; the sign test and per-suite drop are reported only.
+  Small-sample fix (24709ee31, knowledge 177): a dev gain counts only over at least `MIN_GAIN_FAMILIES = 6` families
+  (`too_few_families`), on bench's verdicts too (the section's `families`). Open: a release from `learn` still has no
+  sealed slice (bench has no exam of the learner's material); retention's bound has no family minimum.
 - The agent protocol's evaluate stage has not run against a real bench and brain (no GPUs in lane C2); its contract is
   covered by the scripted double only. Bench's `served_model` check needs brain's `brain` object on every reply.
 - The agent examiner passes `--min-gain` and `--alpha` itself; bench's pre-registered exam plans (`bench verdict --plan FILE
   --slice NAME`, bench 8aeafd63) are not yet named by `[examine.agent]`. Name the plan and slice per generation there.
 - A minimind sitting's checkpoint is named by its sitting, not by a content digest (identity none, like a base): its
   burns name the pair (none, none). It decides on bench's Promote, not on the gate.
-- `generation run` (`pipelines::generations`) is a second multi-generation driver over `practice`; retire it onto
-  the campaign once its consumers move.
+- `generation run` (`pipelines::generations`) is a second multi-generation driver over `practice`; its release already
+  goes through the one promotion rule (baa35b8fe). Not retired yet: retiring it needs repository rollouts and an
+  in-process examiner for the campaign and a campaign gate stage on `decide_unexamined`; acquisition.md's
+  "Generations on the coding path" entry lists what is missing and the consumers to move.
 - No real-model campaign has run (no GPUs in this lane).
