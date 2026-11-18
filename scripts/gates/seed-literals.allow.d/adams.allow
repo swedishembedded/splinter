@@ -1,3 +1,2 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-samples/adams/src/grpo.rs	GATE_SEED_BASE	world: seeds from this base select the gate pool, a partition boundary
 samples/adams/src/split.rs	LEGACY_SEED	frozen: the seed of every freeze made before seed manifests, read back for those only

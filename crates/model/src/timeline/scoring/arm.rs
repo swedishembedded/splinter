@@ -18,13 +18,13 @@
 
 use std::collections::BTreeMap;
 
-use brain::survival::auc;
-use brain::survival::brier::{brier, brier_terms};
-use brain::survival::calibration::at_horizon;
-use brain::survival::concordance::uno;
-use brain::survival::estimate::{censoring, Step};
-use brain::survival::Obs;
 use brain::timeline::{Evaluation, EvaluationSpec};
+use survival::auc;
+use survival::brier::{brier, brier_terms};
+use survival::calibration::at_horizon;
+use survival::concordance::uno;
+use survival::estimate::{censoring, Step};
+use survival::Obs;
 
 use super::{
     ArmScores, Calibration, CalibrationBasis, HorizonEvents, HorizonScores, ScoreSpec, ViewScores,
@@ -316,7 +316,7 @@ pub(super) fn weighted_mean(
     (den > 0.0).then(|| num / den)
 }
 
-fn calibration_of(cal: &brain::survival::calibration::HorizonCalibration) -> Option<Calibration> {
+fn calibration_of(cal: &survival::calibration::HorizonCalibration) -> Option<Calibration> {
     let finite = |x: f64| x.is_finite().then_some(x);
     Some(Calibration {
         slope: finite(cal.slope)?,

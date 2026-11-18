@@ -664,3 +664,19 @@ fn a_model_is_scored_on_records_through_the_servers_score_action() {
         "the action measures no accuracy"
     );
 }
+
+#[test]
+fn the_cards_are_the_ones_the_server_lists_in_index_order() {
+    let rig = rig();
+    let service = ScriptedEndpoint::start(vec![]);
+    let cards = splinter_model::device::devices(&endpoints(&service, &rig)).unwrap();
+    let gib = 1u64 << 30;
+    assert_eq!(
+        cards
+            .iter()
+            .map(|c| (c.index, c.total_bytes / gib, c.free_bytes / gib))
+            .collect::<Vec<_>>(),
+        vec![(0, 80, 50), (1, 80, 80)],
+        "the CPU is not a card, and the cards come in index order"
+    );
+}

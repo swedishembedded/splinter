@@ -88,6 +88,11 @@ package = "splinter-model"
 crate = "brain-data"
 why = "the dataset parsers behind BrainDatasetCheck; the check_dataset job replaces them"
 
+[[brain.exception]]
+package = "splinter-model"
+crate = "brain-survival"
+why = "survival evaluation arithmetic (Uno's concordance, time-dependent AUC, IPCW Brier score, calibration at a horizon, clustered bootstrap): pure host arithmetic with no dependency and no model, the reviewed exception that stays"
+
 [sven]
 # Only the agent runs sven and only the model adapter serves it a provider.
 # A caller that drives sven's engine itself does so through the agent module

@@ -13,29 +13,28 @@
 //! voice-loop speak     --text T --out a.wav      speak a sentence in the persona's synthetic voice
 //! voice-loop speak-set  --sentences FILE          record sentences, keeping those heard back well enough
 //! voice-loop spoken-set --questions FILE         record questions in several voices into a pinned set
-//! voice-loop spoken-set --questions FILE         record questions in several voices into a pinned set
-//! voice-loop ingress-train --set DIR ...        teach a frozen language model to listen
-//! voice-loop listen-turns --recordings DIR ...  answer recorded questions without a transcript
 //! voice-loop roundtrip --sentences FILE          speak sentences, hear them again, score what was lost
 //! voice-loop turn      --in q.wav --out a.wav    hear a question, answer as the persona, speak the answer
-//! voice-loop turns     --recordings DIR ...      the same for a directory of questions, loading models once
+//! voice-loop turns     --recordings DIR ...      the same for a directory of questions
 //! ```
 //!
 //! Every command prints a JSON report on stdout. The voice is a synthetic
-//! theatrical portrayal and every report says so.
+//! theatrical portrayal and every report says so. Recognition and synthesis
+//! are requests to a brain server (`--brain-endpoint`, or one started from
+//! `--brain-bin`), which serves the models `--asr` and `--tts` name.
 
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use splinter_sdk::model::speech::{
-    round_trip, take_turn, BrainRecognizer, BrainSynthesizer, ListenerOptions, Sentences,
+    round_trip, take_turn, BrainRecognizer, BrainSynthesizer, Recognizer, Sentences, Synthesizer,
     DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
-use splinter_sdk::vocabulary::prompt::persona_prompt;
-use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
+use splinter_sdk::model::BrainEndpoints;
+use splinter_sdk::vocabulary::speech::SpeakerProfile;
 use voice_loop::batch::{
-    emit, listen_turns, read_clip, streamed_turns, turns, Batch, Names, Persona, SPOKEN_PIECE_WORDS,
+    emit, read_clip, streamed_turns, turns, Batch, Names, Persona, SPOKEN_PIECE_WORDS,
 };
 use voice_loop::voice::VoiceSeed;
 use voice_loop::{read_sentences, RoundTripReport, TurnReport};
@@ -51,17 +50,18 @@ struct Cli {
 
 #[derive(Args)]
 struct Models {
-    /// The recognition model, in brain's model store.
+    /// The recognition model, as the brain server lists it.
     #[arg(long, default_value = DEFAULT_RECOGNIZER)]
     asr: String,
-    /// The synthesis model, in brain's model store.
+    /// The synthesis model, as the brain server lists it.
     #[arg(long, default_value = DEFAULT_SYNTHESIZER)]
     tts: String,
 }
 
 impl Models {
-    fn names(&self, speaker: SpeakerProfile) -> Names<'_> {
+    fn names<'a>(&'a self, endpoints: &'a BrainEndpoints, speaker: SpeakerProfile) -> Names<'a> {
         Names {
+            endpoints,
             asr: &self.asr,
             tts: &self.tts,
             speaker,
@@ -71,10 +71,6 @@ impl Models {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Train the synthesizer from scores of its own takes.
-    SpeechRl(voice_loop::rl::RlArgs),
-    /// Render several takes of each sentence in one voice and have two recognisers hear each.
-    Takes(voice_loop::takes::TakesArgs),
     /// Talk to a sven agent that answers as the persona: its words are spoken as they are written.
     Agent(voice_loop::agent::AgentArgs),
     /// Fit the naturalness judge to a listener's blind choices and report what it predicts.
@@ -151,43 +147,9 @@ enum Command {
         #[arg(long, default_value_t = 0.2)]
         max_wer: f32,
     },
-    /// Name the parts of a speaking persona by content address, refusing parts
-    /// attached to something they were not made for.
-    Bundle {
-        /// The seed of the voice the parts speak in: the bundle names a voice
-        /// that exists, so it is never drawn.
-        #[arg(long)]
-        seed: u64,
-        /// The person.
-        #[arg(long)]
-        persona: String,
-        /// The language model's checkpoint directory.
-        #[arg(long)]
-        thinker: PathBuf,
-        /// The persona adapter, if the persona has one.
-        #[arg(long)]
-        adapter: Option<PathBuf>,
-        /// The checkpoint directory the adapter was trained on; the thinker when absent.
-        #[arg(long)]
-        adapter_base: Option<PathBuf>,
-        /// The trained projector.
-        #[arg(long)]
-        projector: PathBuf,
-        /// The checkpoint directory the projector was trained against; the thinker when absent.
-        #[arg(long)]
-        projector_thinker: Option<PathBuf>,
-        /// The recogniser whose features the projector reads.
-        #[arg(long)]
-        features_dir: PathBuf,
-        /// The synthesizer's checkpoint directory.
-        #[arg(long)]
-        synthesizer_dir: PathBuf,
-        /// Where to write `bundle.json`.
-        #[arg(long)]
-        out: PathBuf,
-    },
-    /// The text path's loss on the chat records `ingress-train` kept of its
-    /// held-out questions: what the model does with the words themselves.
+    /// The text path's loss on chat records (such as the held-out questions an
+    /// earlier `ingress-train` run kept): what the model does with the words
+    /// themselves.
     TextScore {
         /// The language model's checkpoint directory.
         #[arg(long)]
@@ -195,7 +157,7 @@ enum Command {
         /// A persona adapter folded into it.
         #[arg(long)]
         adapter: Option<PathBuf>,
-        /// The `test-chat.jsonl` an `ingress-train` run wrote.
+        /// A chat-records file (`test-chat.jsonl`).
         #[arg(long)]
         records: PathBuf,
     },
@@ -204,98 +166,6 @@ enum Command {
         /// The directory the shards wrote `set-N.json` into.
         #[arg(long)]
         dir: PathBuf,
-    },
-    /// Teach a frozen language model to listen: train a projector on a spoken set.
-    IngressTrain {
-        /// Seed of the projector and of the order examples are drawn in. Without
-        /// it one is drawn and printed; the report states it.
-        #[arg(long)]
-        seed: Option<u64>,
-        /// The directory `spoken-set` wrote.
-        #[arg(long)]
-        set: PathBuf,
-        /// A JSON-lines file of `{"id", "system", "answer"}`: the text path's answers.
-        #[arg(long)]
-        answers: PathBuf,
-        /// The language model's checkpoint directory.
-        #[arg(long)]
-        base: PathBuf,
-        /// A persona adapter held frozen on it.
-        #[arg(long)]
-        adapter: Option<PathBuf>,
-        /// Where to write the projector, the held-out chat records and the report.
-        #[arg(long)]
-        out: PathBuf,
-        /// The recogniser whose encoder gives the features.
-        #[arg(long, default_value = "Qwen/Qwen3-ASR-1.7B")]
-        features_model: String,
-        /// Seconds every clip is padded to.
-        #[arg(long, default_value_t = 8.0)]
-        window: f32,
-        /// Optimiser steps.
-        #[arg(long, default_value_t = 300)]
-        steps: u32,
-        /// Examples per step.
-        #[arg(long, default_value_t = 8)]
-        batch: usize,
-        /// Peak projector learning rate.
-        #[arg(long, default_value_t = 1e-3)]
-        lr: f32,
-        /// Every this-many-th question group is held out.
-        #[arg(long, default_value_t = 6)]
-        test_every: usize,
-        /// Held-out voices: comma-separated seeds.
-        #[arg(long, value_delimiter = ',', required = true)]
-        test_voices: Vec<u64>,
-        /// Share of recordings that also train a transcription example.
-        #[arg(long, default_value_t = 1.0)]
-        transcribe_share: f32,
-        /// Longest example, in tokens.
-        #[arg(long, default_value_t = 480)]
-        block: u32,
-        /// Start from this projector; with `--steps 0`, only evaluate it.
-        #[arg(long)]
-        init_projector: Option<PathBuf>,
-    },
-    /// Answer a directory of recorded questions with a model that listens: no transcript in between.
-    ListenTurns {
-        #[command(flatten)]
-        models: Models,
-        #[command(flatten)]
-        voice: VoiceSeed,
-        /// The recogniser whose encoder gives the features the projector reads.
-        #[arg(long, default_value = "Qwen/Qwen3-ASR-1.7B")]
-        features_model: String,
-        /// The trained projector.
-        #[arg(long)]
-        projector: PathBuf,
-        /// A directory of WAV recordings, taken in file-name order.
-        #[arg(long)]
-        recordings: PathBuf,
-        /// The questions the recordings were made from, one per line in order.
-        #[arg(long)]
-        questions: Option<PathBuf>,
-        /// Where to write each spoken answer.
-        #[arg(long)]
-        out_dir: PathBuf,
-        /// The person the persona answers as.
-        #[arg(long, default_value = "Samuel Adams")]
-        persona: String,
-        /// The system turn the persona answers under; the persona prompt when absent.
-        #[arg(long)]
-        system: Option<String>,
-        /// The text model's checkpoint directory.
-        #[arg(long)]
-        base: PathBuf,
-        /// A persona adapter to attach to it.
-        #[arg(long)]
-        adapter: Option<PathBuf>,
-        /// Seconds every clip is padded to; the projector was trained on this.
-        #[arg(long, default_value_t = 8.0)]
-        window: f32,
-        /// Also keep the report here.
-        #[arg(long)]
-        report: Option<PathBuf>,
     },
     /// Speak sentences, hear them again, and score what was lost.
     Roundtrip {
@@ -376,13 +246,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     cli.device.apply()?;
     match cli.command {
-        Command::SpeechRl(args) => voice_loop::rl::run(&args),
-        Command::Takes(args) => voice_loop::takes::run(&args),
         Command::Agent(args) => voice_loop::agent::run(&cli.device, &args),
         Command::TeachEval(args) => voice_loop::teach_eval::run(&cli.device, &args),
         Command::TeachRead(args) => voice_loop::teach_eval::read(&cli.device, &args),
         Command::Judge(args) => voice_loop::judge::run(&args),
-        Command::Teach(args) => voice_loop::teach::teach(&args),
+        Command::Teach(args) => voice_loop::teach::teach(&cli.device, &args),
         Command::Speak {
             models,
             voice,
@@ -390,6 +258,7 @@ fn main() -> Result<()> {
             text,
             out,
         } => voice_loop::teach::speak(
+            cli.device.brain()?.endpoints(),
             &models.tts,
             &voice.speaker(&voice_loop::voice::manifest_beside(&out))?,
             lessons.as_deref(),
@@ -404,9 +273,10 @@ fn main() -> Result<()> {
             max_wer,
             attempts,
         } => voice_loop::speakset::speak_set(
-            &models.tts,
-            &models.asr,
-            voice.speaker(&voice_loop::voice::manifest_in(&out_dir))?,
+            &models.names(
+                cli.device.brain()?.endpoints(),
+                voice.speaker(&voice_loop::voice::manifest_in(&out_dir))?,
+            ),
             &sentences,
             &out_dir,
             max_wer,
@@ -436,52 +306,6 @@ fn main() -> Result<()> {
             );
             Ok(())
         }
-        Command::Bundle {
-            seed,
-            persona,
-            thinker,
-            adapter,
-            adapter_base,
-            projector,
-            projector_thinker,
-            features_dir,
-            synthesizer_dir,
-            out,
-        } => {
-            use splinter_sdk::vocabulary::speech_bundle::{MadeFor, SpeechBundle};
-            let base_digest = |dir: &Option<PathBuf>| {
-                voice_loop::bundle::digest_dir(dir.as_deref().unwrap_or(&thinker))
-            };
-            let recogniser = voice_loop::bundle::dir_part("qwen3-asr", &features_dir)?;
-            let reads = recogniser.digest.clone();
-            let bundle = SpeechBundle::new(
-                persona,
-                voice_loop::bundle::dir_part("thinker", &thinker)?,
-                adapter
-                    .as_ref()
-                    .map(|path| {
-                        Ok::<_, anyhow::Error>(MadeFor {
-                            part: voice_loop::bundle::file_part("persona-adapter", path)?,
-                            made_for: base_digest(&adapter_base)?,
-                        })
-                    })
-                    .transpose()?,
-                MadeFor {
-                    part: voice_loop::bundle::file_part("speech-projector", &projector)?,
-                    made_for: base_digest(&projector_thinker)?,
-                },
-                &reads,
-                recogniser,
-                voice_loop::bundle::dir_part("synthesizer", &synthesizer_dir)?,
-                SpeakerProfile::new(seed, Portrayal::synthetic_theatrical()),
-            )?;
-            std::fs::write(&out, serde_json::to_string_pretty(&bundle)?)?;
-            println!(
-                "{}",
-                serde_json::json!({"bundle": out, "digest": bundle.digest()?, "persona": bundle.persona(), "portrayal": bundle.voice().portrayal().label()})
-            );
-            Ok(())
-        }
         Command::SpokenSet {
             models,
             questions,
@@ -492,93 +316,28 @@ fn main() -> Result<()> {
             name,
             out_dir,
             max_wer,
-        } => spoken_set(
-            &models,
-            &questions,
-            (&voices, &test_voices, test_every),
-            &shard,
-            &name,
-            &out_dir,
-            max_wer,
-        ),
-        Command::IngressTrain {
-            seed,
-            set,
-            answers,
-            base,
-            adapter,
-            out,
-            features_model,
-            window,
-            steps,
-            batch,
-            lr,
-            test_every,
-            test_voices,
-            transcribe_share,
-            block,
-            init_projector,
         } => {
-            let plan = voice_loop::ingress::Plan {
-                set_dir: set,
-                recognizer: features_model,
-                base,
-                adapter,
-                window_seconds: window,
-                steps,
-                batch,
-                lr,
-                test_every,
-                test_voices: test_voices.into_iter().collect(),
-                transcribe_share,
-                seed: splinter_sdk::seed::resolve("seed", seed),
-                block,
-                init_projector,
-            };
-            let answers = voice_loop::ingress::read_answers(&std::fs::read_to_string(&answers)?)?;
-            let report = voice_loop::ingress::train(&plan, &answers, &out)?;
-            println!("{}", serde_json::to_string_pretty(&report)?);
-            Ok(())
+            let brain = cli.device.brain()?;
+            spoken_set(
+                (
+                    &BrainSynthesizer::new(brain.endpoints(), &models.tts),
+                    &BrainRecognizer::new(brain.endpoints(), &models.asr),
+                ),
+                &questions,
+                (&voices, &test_voices, test_every),
+                &shard,
+                &name,
+                &out_dir,
+                max_wer,
+            )
         }
-        Command::ListenTurns {
-            models,
-            voice,
-            features_model,
-            projector,
-            recordings,
-            questions,
-            out_dir,
-            persona,
-            system,
-            base,
-            adapter,
-            window,
-            report,
-        } => listen_turns(
-            &models.names(voice.speaker(&voice_loop::voice::manifest_in(&out_dir))?),
-            &Batch {
-                recordings: &recordings,
-                questions: questions.as_deref(),
-                out_dir: &out_dir,
-            },
-            &persona,
-            &ListenerOptions {
-                recognizer: features_model,
-                projector,
-                base,
-                adapter,
-                system: system.unwrap_or_else(|| persona_prompt(&persona)),
-                window_seconds: window,
-                max_new: 300,
-            },
-            report.as_deref(),
-        ),
         Command::Roundtrip {
             models,
             voice,
             sentences,
             report,
         } => roundtrip(
+            cli.device.brain()?.endpoints(),
             &models,
             voice.unrecorded_speaker(),
             &sentences,
@@ -596,6 +355,7 @@ fn main() -> Result<()> {
         } => {
             let brain = cli.device.brain()?;
             turn(
+                brain.endpoints(),
                 &models,
                 voice.speaker(&voice_loop::voice::manifest_beside(&out))?,
                 (&input, &out),
@@ -616,14 +376,17 @@ fn main() -> Result<()> {
             system,
             report,
         } => {
-            let names = models.names(voice.speaker(&voice_loop::voice::manifest_in(&out_dir))?);
+            let brain = cli.device.brain()?;
+            let names = models.names(
+                brain.endpoints(),
+                voice.speaker(&voice_loop::voice::manifest_in(&out_dir))?,
+            );
             let batch = Batch {
                 recordings: &recordings,
                 questions: questions.as_deref(),
                 out_dir: &out_dir,
             };
             let persona = {
-                let brain = cli.device.brain()?;
                 let loaded = Persona::load(brain.endpoints(), &persona, &base, adapter.as_deref())?;
                 match system {
                     Some(system) => loaded.under(system),
@@ -640,7 +403,7 @@ fn main() -> Result<()> {
 }
 
 fn spoken_set(
-    models: &Models,
+    voices_of: (&dyn Synthesizer, &dyn Recognizer),
     file: &std::path::Path,
     split: (&[u64], &[u64], usize),
     shard: &str,
@@ -673,26 +436,10 @@ fn spoken_set(
         .filter(|(i, _)| i % count == index)
         .map(|(_, q)| q)
         .partition(|q| held.contains(&group_of(q)));
-    let (synthesizer, recognizer) = (
-        BrainSynthesizer::load(&models.tts)?,
-        BrainRecognizer::load(&models.asr)?,
-    );
-    let (train_set, mut rejected) = voice_loop::spoken::record_set(
-        name,
-        &train_q,
-        voices,
-        max_wer,
-        (&synthesizer, &recognizer),
-        out_dir,
-    )?;
-    let (test_set, rejected_test) = voice_loop::spoken::record_set(
-        name,
-        &test_q,
-        test_voices,
-        max_wer,
-        (&synthesizer, &recognizer),
-        out_dir,
-    )?;
+    let (train_set, mut rejected) =
+        voice_loop::spoken::record_set(name, &train_q, voices, max_wer, voices_of, out_dir)?;
+    let (test_set, rejected_test) =
+        voice_loop::spoken::record_set(name, &test_q, test_voices, max_wer, voices_of, out_dir)?;
     rejected.extend(rejected_test);
     let items: Vec<_> = train_set
         .items()
@@ -734,6 +481,7 @@ fn spoken_set(
 }
 
 fn roundtrip(
+    endpoints: &BrainEndpoints,
     models: &Models,
     speaker: SpeakerProfile,
     file: &std::path::Path,
@@ -746,8 +494,8 @@ fn roundtrip(
         bail!("{} holds no sentences", file.display());
     }
     let result = round_trip(
-        &BrainSynthesizer::load(&models.tts)?,
-        &BrainRecognizer::load(&models.asr)?,
+        &BrainSynthesizer::new(endpoints, &models.tts),
+        &BrainRecognizer::new(endpoints, &models.asr),
         &speaker,
         &sentences,
     )?;
@@ -758,6 +506,7 @@ fn roundtrip(
 }
 
 fn turn(
+    endpoints: &BrainEndpoints,
     models: &Models,
     speaker: SpeakerProfile,
     (input, out): (&std::path::Path, &std::path::Path),
@@ -766,9 +515,12 @@ fn turn(
 ) -> Result<()> {
     let heard = read_clip(input)?;
     let turn = take_turn(
-        &BrainRecognizer::load(&models.asr)?,
+        &BrainRecognizer::new(endpoints, &models.asr),
         &mut |question: &str| persona.answer(question),
-        &Sentences::new(BrainSynthesizer::load(&models.tts)?, SPOKEN_PIECE_WORDS),
+        &Sentences::new(
+            BrainSynthesizer::new(endpoints, &models.tts),
+            SPOKEN_PIECE_WORDS,
+        ),
         &speaker,
         &heard,
     )?;

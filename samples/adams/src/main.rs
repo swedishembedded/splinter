@@ -30,7 +30,6 @@
 //! build-data build the supervised records, preference pairs and frozen benchmark from the checked answers
 //! train-dpo  preference-optimise an adapter on the pairs
 //! transfer-exam  ask a model every benchmark question, graded by the rules
-//! grpo       train an adapter by GRPO, rewarded by the rules, and gate it on unseen situations
 //! anchor-exam  ask a model general questions under no persona: a retention check
 //! briefings  brief each held-out letter of his: the situation it answered, and what the real letter does
 //! reconstruct-replies  have one model write the reply to every briefing
@@ -48,7 +47,6 @@ mod datasets;
 mod document;
 mod domains;
 mod grounding;
-mod grpo;
 mod helper;
 mod judge;
 mod materials;
@@ -89,14 +87,13 @@ fn main() -> anyhow::Result<()> {
         Some("constant-baseline") => constant_baseline_command(&args[1..]),
         Some("build-onpolicy") => build_onpolicy_command(&args[1..]),
         Some("pin") => run::pin_command(std::path::Path::new(&need(&args[1..], "--file")?)),
-        Some("grpo") => grpo_command(&args[1..]),
         Some("anchor-exam") => anchor_exam_command(&flags, &args[1..]),
         Some("briefings") => briefings_command(&args[1..]),
         Some("reconstruct-replies") => reconstruct_replies_command(&flags, &args[1..]),
         Some("judge") => judge_command(&args[1..]),
         Some("reconstruct-report") => reconstruct_report_command(&args[1..]),
         _ => anyhow::bail!(
-            "usage: splinter-adams <identify|corpus|freeze|materials|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|grpo|anchor-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
+            "usage: splinter-adams <identify|corpus|freeze|materials|tasks|train|exam|report|principles|transfer|build-data|train-dpo|transfer-exam|anchor-exam|briefings|reconstruct-replies|judge|reconstruct-report> ..."
         ),
     }
 }
@@ -731,28 +728,6 @@ fn anchor_exam_command(
             limit: flag(args, "--limit").map(|v| v.parse()).transpose()?,
             max_tokens: number(args, "--max-tokens", 400)?,
             decoding: decoding_flag(args)?,
-        },
-    )
-}
-
-fn grpo_command(args: &[String]) -> anyhow::Result<()> {
-    let resources = std::path::PathBuf::from(need(args, "--resources")?);
-    let documents = read_documents(&resources)?;
-    run::grpo_command(
-        &resources,
-        &documents,
-        &run::Grpo {
-            base: need(args, "--base")?.into(),
-            checkpoint: need(args, "--checkpoint")?.into(),
-            out: need(args, "--out")?.into(),
-            steps: number(args, "--steps", 60)?,
-            group_size: number(args, "--group", 4)?,
-            max_new: number(args, "--max-new", 600)?,
-            learning_rate: number(args, "--lr", 5e-5)?,
-            temperature: number(args, "--temperature", 0.8)?,
-            rank: number(args, "--rank", 16)?,
-            gate_one_in: number(args, "--gate-one-in", 5)?,
-            seed: train_seed(args)?,
         },
     )
 }

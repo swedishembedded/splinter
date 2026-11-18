@@ -5,6 +5,14 @@
 //! evaluation arithmetic it is judged with, as the rest of Splinter reaches
 //! them (this crate is the only one that touches brain).
 //!
+//! The arithmetic ([`survival`]) is brain's dependency-free `brain-survival`
+//! crate, the reviewed exception that stays linked: pure statistics, no model.
+//! The model itself is still trained, calibrated and asked in this process:
+//! brain's served `timeline_train` and the served model's `calibrate` do not
+//! yet take everything a run here is told (the additive baseline, the
+//! learning rate, the mask rate, the token budget, the backbone, the forecast
+//! weight) nor install a calibration for serving.
+//!
 //! A campaign builds `timeline-v1` records from its sources, partitions them
 //! (`splinter_data::partition`), trains [`TimelineModel`]s on the folds and
 //! scores them with [`survival`] on the outcomes [`observed`] extracts; the
@@ -28,7 +36,7 @@ pub mod scoring;
 pub mod serving;
 pub mod training;
 
-pub use brain::survival;
+pub use ::survival;
 pub use brain::timeline::{
     observed, read_jsonl, synthetic, AtRisk, Backbone, Calibration, CalibrationKind, Event,
     ForecastRequest, Gap, Mixer, Observation, PatientHistory, Prediction, RiskForecast,

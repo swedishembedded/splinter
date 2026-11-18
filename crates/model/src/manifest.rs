@@ -9,9 +9,9 @@
 
 //! The release manifest `brain serve --adapter-manifest` follows.
 //!
-//! The manifest is brain's own type, [`brain::AdapterManifest`]: the file the
-//! server reads is written with the type the server reads it with, so the two
-//! cannot disagree about its shape. The server verifies, when the manifest
+//! The manifest is brain's documented file: one JSON object with exactly
+//! `adapter` (the adapter file's path) and `digest` (its `sha256:<hex>`); the
+//! server refuses any other field. The server verifies, when the manifest
 //! changes, that the file it names hashes to the digest the manifest states
 //! and binds to the base it serves; a manifest that fails either check is
 //! reported and the server keeps the adapter it had.
@@ -19,7 +19,6 @@
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 
-use brain::AdapterManifest;
 use splinter_core::digest::Digest;
 
 /// The algorithm prefix brain's manifest names an adapter's digest by.
@@ -57,11 +56,31 @@ pub fn write_adapter_manifest(manifest: &Path, adapter: &Path, digest: &Digest) 
     if let Some(dir) = manifest.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    AdapterManifest {
-        adapter: adapter.to_path_buf(),
-        digest: digest.to_string(),
+    let adapter = adapter.to_str().ok_or_else(|| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            format!("adapter path {} is not UTF-8", adapter.display()),
+        )
+    })?;
+    let mut body = serde_json::json!({"adapter": adapter, "digest": digest.as_str()}).to_string();
+    body.push('\n');
+    // Written beside the manifest and renamed over it: a server polling it
+    // sees the old manifest or the new one, never a torn one.
+    let name = manifest.file_name().ok_or_else(|| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            format!("manifest path {} has no file name", manifest.display()),
+        )
+    })?;
+    let mut beside = std::ffi::OsString::from(".");
+    beside.push(name);
+    beside.push(format!(".{}.tmp", std::process::id()));
+    let beside = manifest.with_file_name(beside);
+    let written = std::fs::write(&beside, body).and_then(|()| std::fs::rename(&beside, manifest));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&beside);
     }
-    .write_atomically(manifest)
+    written
 }
 
 /// Withdraws the manifest at `manifest`: a server following it then keeps

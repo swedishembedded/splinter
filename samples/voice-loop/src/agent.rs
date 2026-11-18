@@ -88,7 +88,7 @@ pub fn run(flags: &splinter_sdk::device::DeviceFlags, args: &AgentArgs) -> Resul
     let brain = flags.brain()?;
     std::fs::create_dir_all(&args.out_dir)?;
     let speaker = crate::voice::speaker(&crate::voice::manifest_in(&args.out_dir), args.seed)?;
-    BrainSynthesizer::load(&args.tts)?
+    BrainSynthesizer::new(brain.endpoints(), &args.tts)
         .speak(&spoken_disclosure(&args.persona, &speaker), &speaker)?
         .save(args.out_dir.join("disclosure.wav"))
         .context("writing the spoken disclosure")?;
@@ -124,7 +124,7 @@ pub fn run(flags: &splinter_sdk::device::DeviceFlags, args: &AgentArgs) -> Resul
     let desk_spoke = std::cell::Cell::new(false);
     let teaching_last = std::cell::Cell::new(false);
     let listener = CascadeListener::new(
-        BrainRecognizer::load(&args.asr)?,
+        BrainRecognizer::new(brain.endpoints(), &args.asr),
         |question: &str, on_text: &mut dyn FnMut(&str)| {
             // "Forget that" takes back whichever kind of lesson was taught last.
             let to_ledger = parse_retraction(question)
@@ -175,6 +175,7 @@ pub fn run(flags: &splinter_sdk::device::DeviceFlags, args: &AgentArgs) -> Resul
     );
     spoken_turns(
         &Names {
+            endpoints: brain.endpoints(),
             asr: &args.asr,
             tts: &args.tts,
             speaker,

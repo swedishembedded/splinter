@@ -17,7 +17,9 @@
 //! answer, so requests asked together overlap and the peak shows it. An
 //! endpoint may follow a release manifest, listing the adapter the manifest
 //! names, as `brain serve --adapter-manifest` does, or serve the adapters in
-//! a directory, as `--serve-adapters` does.
+//! a directory, as `--serve-adapters` does. It speaks and hears as the speech
+//! doubles do (`speech::scripted`): `/v1/audio/speech` writes the text into
+//! the samples of a 16-bit WAV, and `/v1/audio/transcriptions` reads it back.
 
 // Test support: a listener that cannot be bound is the failure report.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -90,6 +92,7 @@ struct Shared {
     adapters_dir: Mutex<Option<PathBuf>>,
     embeddings: Mutex<Vec<serde_json::Value>>,
     runs: Mutex<Vec<serde_json::Value>>,
+    speech: Mutex<Vec<(String, serde_json::Value)>>,
     delay: Mutex<Duration>,
     reply: Mutex<Arc<Reply>>,
     jobs: crate::scripted_jobs::Jobs,
@@ -118,6 +121,7 @@ impl ScriptedEndpoint {
             adapters_dir: Mutex::new(None),
             embeddings: Mutex::new(Vec::new()),
             runs: Mutex::new(Vec::new()),
+            speech: Mutex::new(Vec::new()),
             delay: Mutex::new(Duration::ZERO),
             reply: Mutex::new(Arc::new(|_: &Seen| "an answer".to_string())),
             jobs: crate::scripted_jobs::Jobs::default(),
@@ -215,6 +219,13 @@ impl ScriptedEndpoint {
     #[must_use]
     pub fn runs_asked(&self) -> Vec<serde_json::Value> {
         self.shared.runs.lock().unwrap().clone()
+    }
+
+    /// Every speech request so far, in arrival order: the route
+    /// (`transcriptions` or `speech`) and the body it carried.
+    #[must_use]
+    pub fn speech_asked(&self) -> Vec<(String, serde_json::Value)> {
+        self.shared.speech.lock().unwrap().clone()
     }
 
     /// Every chat request answered or refused so far, in arrival order.
@@ -330,6 +341,17 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
             .collect();
         let list = serde_json::json!({ "object": "list", "data": data }).to_string();
         let _ = respond(&mut stream, "200 OK", "application/json", &list);
+    } else if request_line.starts_with("GET /v1/devices") {
+        // Two cards of 80 GiB, the first with 30 GiB held.
+        let gib = 1u64 << 30;
+        let card = |i: u64, used: u64| {
+            serde_json::json!({"id": format!("gpu{i}"), "kind": "gpu", "memory": {
+                "total_bytes": 80 * gib, "reserved_bytes": 0, "used_bytes": used * gib,
+                "free_bytes": (80 - used) * gib}})
+        };
+        let list = serde_json::json!({"object": "list", "host": {"backend": "cuda"},
+            "data": [{"id": "cpu", "kind": "cpu"}, card(1, 0), card(0, 30)]});
+        let _ = respond(&mut stream, "200 OK", "application/json", &list.to_string());
     } else if request_line.starts_with("POST /v1/run ") {
         let call: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
         shared.runs.lock().unwrap().push(call.clone());
@@ -376,6 +398,10 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
         data.reverse();
         let reply = serde_json::json!({"object": "list", "data": data}).to_string();
         let _ = respond(&mut stream, "200 OK", "application/json", &reply);
+    } else if request_line.starts_with("POST /v1/audio/transcriptions ") {
+        transcription(&mut stream, shared, &body);
+    } else if request_line.starts_with("POST /v1/audio/speech ") {
+        speech(&mut stream, shared, &body);
     } else if request_line.starts_with("POST /v1/chat/completions") {
         chat(&mut stream, shared, &body, bearer);
     } else {
@@ -437,6 +463,82 @@ fn chat(stream: &mut TcpStream, shared: &Shared, body: &[u8], bearer: String) {
         );
     }
     shared.in_flight.fetch_sub(1, Ordering::SeqCst);
+}
+
+/// A refusal as brain words it: `{"error": {"message"}}` under `status`.
+fn refuse(stream: &mut TcpStream, status: &str, message: &str) {
+    let body = serde_json::json!({"error": {"message": message}}).to_string();
+    let _ = respond(stream, status, "application/json", &body);
+}
+
+/// `POST /v1/audio/transcriptions` with OpenRouter's JSON body: the text a
+/// scripted clip holds, for a model the endpoint lists.
+fn transcription(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
+    let request: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+    shared
+        .speech
+        .lock()
+        .unwrap()
+        .push(("transcriptions".into(), request.clone()));
+    let model = request["model"].as_str().unwrap_or_default();
+    if !listed(shared).iter().any(|card| card.id == model) {
+        return refuse(stream, "404 Not Found", &format!("unknown model {model}"));
+    }
+    let clip = request["input_audio"]["data"]
+        .as_str()
+        .and_then(|b| base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b).ok())
+        .and_then(|bytes| crate::speech::Clip::from_wav(&bytes).ok());
+    let Some(clip) = clip else {
+        return refuse(
+            stream,
+            "400 Bad Request",
+            "input_audio is not a WAV recording",
+        );
+    };
+    let reply = serde_json::json!({
+        "text": crate::speech::scripted::text_of(&clip),
+        "usage": {"type": "duration", "seconds": clip.seconds()},
+    });
+    let _ = respond(stream, "200 OK", "application/json", &reply.to_string());
+}
+
+/// `POST /v1/audio/speech`: a scripted clip of `input` as a WAV, for a model
+/// the endpoint lists. Like brain it takes `model`, `input` and
+/// `response_format` and refuses any other field by name.
+fn speech(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
+    let request: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+    shared
+        .speech
+        .lock()
+        .unwrap()
+        .push(("speech".into(), request.clone()));
+    if let Some(field) = request.as_object().and_then(|o| {
+        o.keys()
+            .find(|k| !matches!(k.as_str(), "model" | "input" | "response_format"))
+    }) {
+        return refuse(
+            stream,
+            "400 Bad Request",
+            &format!("'{field}' is not supported"),
+        );
+    }
+    if !matches!(request["response_format"].as_str(), None | Some("wav")) {
+        return refuse(stream, "400 Bad Request", "only wav is scripted");
+    }
+    let model = request["model"].as_str().unwrap_or_default();
+    if !listed(shared).iter().any(|card| card.id == model) {
+        return refuse(stream, "404 Not Found", &format!("unknown model {model}"));
+    }
+    let clip = crate::speech::scripted::clip_of(request["input"].as_str().unwrap_or_default());
+    let wav = clip.to_wav();
+    let _ = write!(
+        stream,
+        "HTTP/1.1 200 OK\r\ncontent-type: audio/wav\r\nx-sample-rate: {}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        clip.sample_rate(),
+        wav.len()
+    )
+    .and_then(|()| stream.write_all(&wav))
+    .and_then(|()| stream.flush());
 }
 
 pub(crate) fn respond(

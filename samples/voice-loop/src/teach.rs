@@ -20,6 +20,7 @@ use clap::Args;
 use splinter_sdk::model::speech::{
     BrainRecognizer, BrainSynthesizer, Lexical, Recognizer, Synthesizer, DEFAULT_RECOGNIZER,
 };
+use splinter_sdk::model::BrainEndpoints;
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::speech::{Portrayal, SpeakerProfile};
 use splinter_sdk::vocabulary::speech_lesson::{
@@ -98,14 +99,16 @@ fn classify(path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// Hear the directive, make its lessons and keep them.
-pub fn teach(args: &TeachArgs) -> Result<()> {
+/// Hear the directive, make its lessons and keep them. Only a recorded
+/// directive needs a brain: it is heard on the one `device` names.
+pub fn teach(device: &splinter_sdk::device::DeviceFlags, args: &TeachArgs) -> Result<()> {
     if let Some(path) = &args.classify {
         return classify(path);
     }
     let heard = match (&args.directive, &args.said) {
         (Some(wav), _) => {
-            BrainRecognizer::load(&args.asr)?
+            let brain = device.brain()?;
+            BrainRecognizer::new(brain.endpoints(), &args.asr)
                 .transcribe(&read_clip(wav)?)?
                 .text
         }
@@ -160,8 +163,9 @@ pub fn read_lessons(path: &std::path::Path) -> Result<Vec<Lesson>> {
 }
 
 /// Speak `text` in `speaker`'s voice, with the words `lessons` teach said as
-/// taught, and write the clip to `out`.
+/// taught, and write the clip to `out`; `tts` is served by `endpoints`.
 pub fn speak(
+    endpoints: &BrainEndpoints,
     tts: &str,
     speaker: &SpeakerProfile,
     lessons: Option<&std::path::Path>,
@@ -172,7 +176,7 @@ pub fn speak(
         Some(path) => Lexicon::from_lessons(&read_lessons(path)?),
         None => Lexicon::new(),
     };
-    let clip = Lexical::new(BrainSynthesizer::load(tts)?, lexicon).speak(text, speaker)?;
+    let clip = Lexical::new(BrainSynthesizer::new(endpoints, tts), lexicon).speak(text, speaker)?;
     clip.save(out)
         .with_context(|| format!("writing {}", out.display()))?;
     println!(

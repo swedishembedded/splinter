@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Role, RoleOverrides};
-use splinter_model::device::{gpu_cards, GpuCard};
+use splinter_model::device::{devices, GpuCard};
 use splinter_model::ModelSelection;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::roles;
@@ -287,7 +287,7 @@ pub fn gpu_fit(cards: &[GpuCard], weights_bytes: u64) -> Check {
             Verdict::Warn,
             name,
             "the free memory of the GPUs could not be read, so whether the weights fit is unknown",
-            "install the driver's management tool (nvidia-smi) so free memory can be measured",
+            "check the brain server's device list (GET /v1/devices)",
         );
     }
     let listing = cards
@@ -337,5 +337,24 @@ fn gpu_check(ctx: &Context) -> Option<Check> {
         .filter(|meta| meta.is_file())
         .map(|meta| meta.len())
         .sum();
-    (bytes > 0).then(|| gpu_fit(&gpu_cards(), bytes))
+    if bytes == 0 {
+        return None;
+    }
+    // The cards are the brain server's to report: the run's own, started now
+    // if it is not running yet.
+    let cards =
+        match ctx
+            .brain()
+            .map_err(|e| e.to_string())
+            .and_then(|brain| devices(&brain).map_err(|e| e.to_string()))
+        {
+            Ok(cards) => cards,
+            Err(reason) => return Some(Check::problem(
+                Verdict::Warn,
+                "gpu",
+                format!("the brain server could not be asked for its cards: {reason}"),
+                "name a running server with --brain-endpoint, or a `brain` binary with --brain-bin",
+            )),
+        };
+    Some(gpu_fit(&cards, bytes))
 }

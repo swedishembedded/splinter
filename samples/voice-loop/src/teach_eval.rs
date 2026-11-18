@@ -355,8 +355,8 @@ pub fn run(flags: &splinter_sdk::device::DeviceFlags, args: &TeachEvalArgs) -> R
         (None, None)
     } else {
         (
-            Some(BrainSynthesizer::load(&args.tts)?),
-            Some(BrainRecognizer::load(&args.asr)?),
+            Some(BrainSynthesizer::new(brain.endpoints(), &args.tts)),
+            Some(BrainRecognizer::new(brain.endpoints(), &args.asr)),
         )
     };
     let mut results = Vec::new();

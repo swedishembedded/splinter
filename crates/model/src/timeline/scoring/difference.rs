@@ -12,12 +12,12 @@
 
 use std::collections::BTreeMap;
 
-use brain::survival::auc;
-use brain::survival::brier::brier_terms;
-use brain::survival::compare::{cluster_bootstrap, cluster_bootstrap_by, Interval as Boot};
-use brain::survival::concordance::uno;
-use brain::survival::estimate::Step;
-use brain::survival::Obs;
+use survival::auc;
+use survival::brier::brier_terms;
+use survival::compare::{cluster_bootstrap, cluster_bootstrap_by, Interval as Boot};
+use survival::concordance::uno;
+use survival::estimate::Step;
+use survival::Obs;
 
 use super::arm::{ibs_terms, score_arm, weighted_mean, Outcomes, Predicted};
 use super::{

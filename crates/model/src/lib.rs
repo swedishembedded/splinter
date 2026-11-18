@@ -64,7 +64,6 @@ pub mod policy_gradient;
 pub mod precision;
 mod progress;
 pub mod report;
-pub mod rl;
 pub mod scratch;
 #[cfg(feature = "scripted")]
 pub mod scripted_endpoint;
@@ -77,7 +76,6 @@ pub mod server;
 pub mod service;
 pub mod speech;
 pub mod stats;
-pub mod store;
 pub mod timeline;
 pub mod train;
 mod train_checks;

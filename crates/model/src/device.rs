@@ -1,170 +1,82 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements learning systems that schedule their work on
+// a model service's cards and ask it what it has, for its clients. If your
+// team needs expertise in GPU capacity planning around a shared model server,
+// you can procure our services by sending an email to
+// info@swedishembedded.com.
 
-//! Which hardware a process may use, chosen by the caller.
+//! The hardware a run's brain server schedules on, as the server reports it.
 //!
-//! A program takes `--device` and `--backend` as flags and passes them here
-//! before loading anything; nothing is read from the environment. `--device`
-//! is read once, by brain's own grammar (`gpu0`, `gpu0,gpu1`, `cpu0-7`, ...),
-//! into the [`Devices`] every model built afterwards is scheduled on.
+//! `--device` and `--backend` are brain's grammar and are handed to the
+//! server a run starts, never read here. What the cards hold is asked of the
+//! server (`GET /v1/devices`, [`devices`]); the VRAM a process was granted
+//! (`--vram-budget`) bounds every server it starts ([`set_vram_budget`]).
 
 use std::sync::OnceLock;
 
-use gpu_core::devices::{ComputeSet, Inventory};
 use serde::Serialize;
 
+use crate::endpoint::BrainEndpoints;
 use crate::error::PolicyError;
 
-/// Drive the hardware with `backend` (`wgpu | vulkan | cuda | cpu`) in every
-/// model built after this call. A program takes it as a flag and passes it
-/// here before loading anything; nothing is read from the environment.
-///
-/// # Errors
-/// `backend` is not a backend name.
-pub fn select_backend(backend: &str) -> Result<(), PolicyError> {
-    brain::select_backend(backend).map_err(|e| PolicyError::Load {
-        path: backend.into(),
-        reason: e.to_string(),
-    })
-}
+/// The grant [`set_vram_budget`] fixed, in GiB.
+static VRAM_BUDGET: OnceLock<f64> = OnceLock::new();
 
-/// Cap every card this process budgets from at `gib` GiB, the VRAM it was
-/// granted (`--vram-budget`). A program passes it before loading anything;
-/// every model built afterwards, and every server it starts with
-/// [`vram_budget_gib`], sizes to the grant rather than to the card.
+/// Cap every server this process starts at `gib` GiB per card, the VRAM it
+/// was granted (`--vram-budget`). The first grant stands.
 pub fn set_vram_budget(gib: f64) {
-    gpu_core::capacity::set_vram_budget((gib * (1u64 << 30) as f64) as u64);
+    let _ = VRAM_BUDGET.set(gib);
 }
 
 /// The grant [`set_vram_budget`] fixed, in GiB; `None` when none was set.
 #[must_use]
 pub fn vram_budget_gib() -> Option<f64> {
-    gpu_core::capacity::vram_budget().map(|bytes| bytes as f64 / (1u64 << 30) as f64)
+    VRAM_BUDGET.get().copied()
 }
 
-/// One GPU's memory right now, as the driver reports it.
+/// One GPU's memory right now, as the server accounts it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct GpuCard {
     /// The card's index, the `i` of `--device gpu<i>`.
     pub index: u32,
-    /// The card's size in bytes.
+    /// Its memory in all.
     pub total_bytes: u64,
-    /// Bytes free right now, other processes' allocations included.
+    /// What no resident model, run or operator reserve holds.
     pub free_bytes: u64,
-    /// False when the free figure could not be read and was assumed, so it
-    /// is never presented as a measurement.
+    /// Whether the server measured the free memory (it always does; kept so
+    /// a report can say when it did not).
     pub measured: bool,
 }
 
-/// Every GPU in this machine with the memory it has free, empty when there is
-/// none. Reads the driver; loads no model and allocates nothing on a card.
-#[must_use]
-pub fn gpu_cards() -> Vec<GpuCard> {
-    gpu_core::capacity::probe_gpus()
-        .into_iter()
-        .map(|card| GpuCard {
-            index: card.index,
-            total_bytes: card.total,
-            free_bytes: card.free,
-            measured: card.measured,
-        })
-        .collect()
-}
-
-/// The devices a process may schedule work on: what `--device` asked for,
-/// resolved against what the machine has.
-#[derive(Clone, Debug)]
-pub struct Devices {
-    spec: brain::Device,
-    set: ComputeSet,
-}
-
-impl Devices {
-    /// `text`, brain's `--device` grammar (empty for everything), resolved
-    /// against `inventory`.
-    ///
-    /// # Errors
-    /// `text` is not in the grammar, or names a device `inventory` lacks.
-    pub fn resolve(text: &str, inventory: &Inventory) -> Result<Self, PolicyError> {
-        let refuse = |reason: String| PolicyError::Device {
-            text: text.to_string(),
-            reason,
-        };
-        let spec = brain::Device::parse(text).map_err(refuse)?;
-        let set = spec.resolve(inventory).map_err(refuse)?;
-        Ok(Self { spec, set })
-    }
-
-    /// The GPUs work may run on, by index.
-    #[must_use]
-    pub fn gpus(&self) -> &[u32] {
-        &self.set.gpus
-    }
-
-    /// The CPU cores work may run on.
-    #[must_use]
-    pub fn cpu_cores(&self) -> &[usize] {
-        &self.set.cpu_cores
-    }
-
-    /// The value as given, or `all`.
-    #[must_use]
-    pub fn source(&self) -> &str {
-        &self.set.source
-    }
-
-    /// The selection as brain's builders take it.
-    #[must_use]
-    pub fn spec(&self) -> brain::Device {
-        self.spec.clone()
-    }
-}
-
-static SELECTED: OnceLock<Devices> = OnceLock::new();
-
-/// Fixes the devices this process schedules on to what `text` names, for
-/// every model built after this call. The same text may be given again; a
-/// different one is refused, as the first has already placed models.
+/// The cards the first endpoint of `brain` schedules on (`GET /v1/devices`),
+/// in index order; the CPU and NPUs are left out.
 ///
 /// # Errors
-/// `text` names no schedulable device, or differs from the one selected.
-pub fn select(text: &str) -> Result<&'static Devices, PolicyError> {
-    if let Some(chosen) = SELECTED.get() {
-        return same_selection(chosen, text);
-    }
-    let devices = Devices::resolve(text, &Inventory::probe())?;
-    gpu_core::devices::publish_compute_set(devices.set.clone());
-    devices
-        .set
-        .apply_backend()
-        .map_err(|reason| PolicyError::Device {
-            text: text.to_string(),
-            reason,
+/// The endpoint could not be reached or answered no device list.
+pub fn devices(brain: &BrainEndpoints) -> Result<Vec<GpuCard>, PolicyError> {
+    let url = brain.urls().first().cloned().unwrap_or_default();
+    let list = brain.get(0, "devices")?;
+    let entries = list["data"]
+        .as_array()
+        .ok_or_else(|| PolicyError::Endpoint {
+            url: url.clone(),
+            reason: "its device list has no \"data\" array".into(),
         })?;
-    Ok(SELECTED.get_or_init(|| devices))
-}
-
-/// The devices this process schedules on: what [`select`] fixed, else
-/// everything the machine has.
-#[must_use]
-pub fn selected() -> &'static Devices {
-    SELECTED.get().unwrap_or_else(|| {
-        select("").unwrap_or_else(|e| unreachable!("the empty selection always resolves: {e}"))
-    })
-}
-
-fn same_selection(chosen: &'static Devices, text: &str) -> Result<&'static Devices, PolicyError> {
-    let asked = if text.trim().is_empty() {
-        "all"
-    } else {
-        text.trim()
-    };
-    if chosen.source() == asked {
-        Ok(chosen)
-    } else {
-        Err(PolicyError::Device {
-            text: text.to_string(),
-            reason: format!("the process already schedules on {}", chosen.source()),
+    let mut cards: Vec<GpuCard> = entries
+        .iter()
+        .filter_map(|entry| {
+            let index = entry["id"].as_str()?.strip_prefix("gpu")?.parse().ok()?;
+            let memory = &entry["memory"];
+            Some(GpuCard {
+                index,
+                total_bytes: memory["total_bytes"].as_u64()?,
+                free_bytes: memory["free_bytes"].as_u64()?,
+                measured: true,
+            })
         })
-    }
+        .collect();
+    cards.sort_by_key(|card| card.index);
+    Ok(cards)
 }

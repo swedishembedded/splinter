@@ -153,8 +153,7 @@ fn config(cli: &Cli) -> Result<Config> {
     let model_store = cli
         .models_dir
         .clone()
-        .or_else(splinter_sdk::model::store::default_dir)
-        .unwrap_or_else(|| home.join(".local/share/brain/models"));
+        .unwrap_or_else(|| Config::from_env().model_store);
     Ok(Config {
         state_root: StateRoot::under_home(&home),
         jobs: splinter_sdk::config::JobSettings::default(),

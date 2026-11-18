@@ -10,10 +10,10 @@
 //! Spec: the manifest a release writes is the one `brain serve
 //! --adapter-manifest` reads.
 //!
-//! The judge is brain's public manifest type, [`brain::AdapterManifest`], the
-//! type the server parses the file with (it refuses unknown fields): a
-//! manifest written by [`write_adapter_manifest`] reads back as exactly the
-//! adapter and SHA-256 it was given; a later manifest replaces an earlier one
+//! The judge is the file brain documents: one JSON object with exactly
+//! `adapter` and `digest` (the server refuses any other field). A manifest
+//! written by [`write_adapter_manifest`] reads back as exactly the adapter and
+//! SHA-256 it was given; a later manifest replaces an earlier one
 //! whole; a withdrawn manifest is a missing one and nothing is left beside it.
 //! Splinter refuses, before writing, what the server would take for another
 //! file: a digest that is not a SHA-256, and an adapter path that is not
@@ -23,13 +23,20 @@
 
 use std::path::Path;
 
-use brain::AdapterManifest;
 use splinter_core::digest::Digest;
 use splinter_model::manifest::{withdraw_adapter_manifest, write_adapter_manifest};
 
+/// The manifest's two fields, refusing any other, as the server does.
+#[derive(Debug, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdapterManifest {
+    adapter: std::path::PathBuf,
+    digest: String,
+}
+
 fn read(manifest: &Path) -> AdapterManifest {
     serde_json::from_slice(&std::fs::read(manifest).unwrap())
-        .expect("the server's own type parses what a release wrote")
+        .expect("the documented manifest parses what a release wrote")
 }
 
 #[test]

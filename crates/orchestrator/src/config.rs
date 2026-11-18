@@ -69,8 +69,7 @@ pub struct Config {
     /// The model reference of a stronger model than the policy that plans a
     /// learning run, writes its tasks and teaches what the policy cannot
     /// answer, when the command names none of them. Parsed where it is used.
-    /// `None` takes the strongest chat model in the model store that fits a
-    /// card (see `roles::discovered_assistant`).
+    /// `None` leaves the policy to play the assistant's roles.
     pub assistant_model: Option<String>,
     /// A model reference that judges answers in place of the assistant: the
     /// judge is another model than the one that wrote what it grades.
@@ -394,8 +393,11 @@ impl Config {
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
         let home = PathBuf::from(var("HOME").unwrap_or_else(|| ".".into()));
-        let model_store = splinter_model::store::default_dir()
-            .unwrap_or_else(|| home.join(".local/share/brain/models"));
+        // Where `brain pull` puts a checkpoint when nothing names a store.
+        let model_store = var("XDG_DATA_HOME").map_or_else(
+            || home.join(".local/share/brain/models"),
+            |data| PathBuf::from(data).join("brain/models"),
+        );
         Self {
             state_root: StateRoot::under_home(&home),
             jobs: JobSettings::default(),

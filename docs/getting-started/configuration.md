@@ -43,7 +43,7 @@ before anything is submitted.
 | `--policy-base CHECKPOINT` | The policy's base checkpoint, a path or a name in the store (default `Qwen/Qwen3-0.6B`). |
 | `--brain-bin PATH` | The `brain` binary Splinter starts a server from, and a release is served on (default: the first `brain` on `PATH`). |
 | `--brain-endpoint URL`, `--brain-key-file FILE` | A running brain server to request every local model from, instead of starting one (see [Serving models from brain](#serving-models-from-brain)). |
-| `--assistant-model REF` | The stronger model that plans, writes tasks, teaches, judges and reads sentences when the command names none (default: discovered, see [Roles](#roles)). |
+| `--assistant-model REF` | The stronger model that plans, writes tasks, teaches, judges and reads sentences when the command names none (default: none, the policy plays its roles; see [Roles](#roles)). |
 | `--judge-model REF` | The model that judges what only a judge can decide (default: the assistant). |
 | `--front-door-model REF` | The model that reads sentences (default: the assistant). |
 | `--default-budget DURATION` | How long a `learn` may take when it names no `--budget` (a sentence names none); unbounded when not given. |
@@ -158,11 +158,10 @@ Stages ask for a model by role, never by name: `policy` (the model being trained
 (`--assistant-model`), the judge by `--judge-model` and the router by `--front-door-model` when they
 are named; the policy plays the critic, and every role the assistant would play when there is none.
 
-With no assistant named, Splinter picks one from the model store: the largest chat model that is
-larger than the policy and fits this machine's largest card, at the largest context that fits
-(for example `local:Qwen/Qwen3-14B@8192` beside a 0.6B policy on a 24 GiB card). A machine with no
-GPU gets none: a larger model on the CPU backend is too slow to help. `--assistant-model
-policy:default` keeps every role on the policy.
+With no assistant named, the policy plays the assistant's roles. Name a stronger model with
+`--assistant-model` (for example `local:Qwen/Qwen3-14B@8192` beside a 0.6B policy): Splinter does not
+pick one itself, because which stored model fits which card at which context is brain's to compute and
+its API does not answer it.
 
 `splinter doctor` checks that the model each role would get resolves to weights on disk, and warns
 when the policy is left to teach, judge, plan, write tasks or read sentences for itself: that run

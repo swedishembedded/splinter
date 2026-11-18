@@ -277,7 +277,7 @@ pub fn run(args: &StudyArgs, device: &splinter_sdk::device::DeviceFlags) -> anyh
         Stage::Corpus(corpus_args) => corpus_stage(corpus_args),
         Stage::Amend(amend_args) => amend_stage(amend_args),
         Stage::Train(train_args) => train_stage(train_args, device),
-        Stage::Exam(exam_args) => exam_stage(exam_args),
+        Stage::Exam(exam_args) => exam_stage(exam_args, device),
         Stage::Report(report_args) => report_stage(report_args),
     }
 }
@@ -484,19 +484,21 @@ fn train_stage(
     })
 }
 
-fn exam_stage(args: &ExamStageArgs) -> anyhow::Result<()> {
+fn exam_stage(
+    args: &ExamStageArgs,
+    flags: &splinter_sdk::device::DeviceFlags,
+) -> anyhow::Result<()> {
     let study = Study::open(&args.study)?;
     let authors = chosen_authors(&study, &args.only)?;
     let base = open_base(&args.base)?;
     let Some(brain) = &args.brain else {
         anyhow::bail!("the examination is served: name the `brain` binary with --brain");
     };
-    let device = splinter_sdk::model::device::selected().source().to_string();
     let served = ServedLoader {
         brain: brain.clone(),
         base: base.path().to_path_buf(),
         work: study.root().join("serve"),
-        device: (device != "all").then_some(device),
+        device: flags.device.clone(),
         slots: args.slots,
         kv_offload_gb: args.kv_offload_gb,
     };

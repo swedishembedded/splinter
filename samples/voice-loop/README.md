@@ -1,10 +1,11 @@
 # voice-loop: a persona you can talk to, and what each stage of the loop costs and loses
 
-Can a persona be talked to and talk back? The reference loop is a cascade:
-recognise the listener, let the persona answer in text, speak the answer. It
-is the baseline a speech-native model is later measured against, and it
-makes the spoken examples that model learns from. It is written on Splinter's
-SDK alone.
+Can a persona be talked to and talk back? The loop is a cascade: recognise
+the listener, let the persona answer in text, speak the answer. It is written
+on Splinter's SDK alone, and every model in it (recogniser, text model,
+synthesizer) is asked of a brain server through its HTTP API:
+`POST /v1/audio/transcriptions`, `POST /v1/chat/completions` and
+`POST /v1/audio/speech`.
 
 The voice is a synthetic theatrical portrayal. No recording of Samuel Adams
 or Thomas Jefferson exists, so no voice can be theirs. Every report carries
@@ -13,11 +14,12 @@ the portrayal the speaker declares, and a speaker cannot be built without one.
 ## Run it
 
 ```bash
-source ~/project/shared/containers/build-env.sh   # a GPU the build can see
 cargo build --release -p splinter-voice-loop
-V="target/release/voice-loop --backend cuda"
+# A running brain server (or leave the two flags out and pass --brain-bin to
+# have one started for the run, serving brain's model store):
+V="target/release/voice-loop --brain-endpoint $BRAIN_URL --brain-key-file $BRAIN_KEY_FILE"
 
-# Needs the models in brain's store:
+# The server must serve the models --asr and --tts name; the defaults are:
 #   brain pull Qwen/Qwen3-TTS-12Hz-0.6B-Base
 #   brain pull nvidia/nemotron-3.5-asr-streaming-0.6b
 $V speak --text "Good morning." --out question.wav
@@ -39,11 +41,11 @@ $V teach --said "Pronounce Jefferson as Jeff-er-son." --lessons lessons.jsonl
 $V speak --lessons lessons.jsonl --text "Jefferson wrote it." --out said.wav
 ```
 
-`--backend` says how the hardware is driven: `cuda`, `vulkan`, `wgpu` or
-`cpu`. Without it brain uses the backend its probe prefers, which on a CUDA
-host is not CUDA, and the run is several times slower. The `adapter:` line brain
-prints names the card whichever backend runs, so it does not tell you; the
-`first_audio_seconds` of a `turns --stream` report does.
+`--backend` and `--device` are handed to a server the run starts; a server
+given with `--brain-endpoint` runs on whatever it was started with. Without
+`--backend` brain uses the backend its probe prefers, which on a CUDA host is
+not CUDA, and the run is several times slower; the `first_audio_seconds` of a
+`turns --stream` report shows it.
 
 ## Teaching it to speak
 
@@ -79,18 +81,41 @@ Every lesson carries the portrayal of the voice it applies to.
   (`first_piece_seconds`) and until the voice first made a sound
   (`first_audio_seconds`), each with its spread.
 
-Synthesis is seeded (`--seed`), because the same sentence is spoken in very
-different lengths from different seeds and a short rendering can lose words
-before recognition hears them. The seed is the persona's voice, so it is an
-identity and not a default: a first command that writes to an output place
-without `--seed` draws one and prints it, and records it in `voice.json` in
-`--out-dir` (for `speak` and `turn`, `NAME.voice.json` beside `--out`); every
-later command that writes to the same place reads it back and refuses a
-different `--seed`, and the reports carry the speaker with its seed. `bundle`
-names a voice that exists and takes its `--seed` explicitly. A seed that only
-varies a run (`speech-rl --seed`, `takes --first-seed`, `ingress-train
---seed`) is drawn and printed when not given and is stated in the run's
-report; `takes` and `speech-rl` take the voice's seed as `--voice-seed`.
+A speaker carries a seed (`--seed`): a first command that writes to an output
+place without `--seed` draws one and prints it, and records it in `voice.json`
+in `--out-dir` (for `speak` and `turn`, `NAME.voice.json` beside `--out`);
+every later command that writes to the same place reads it back and refuses a
+different `--seed`, and the reports carry the speaker with its seed.
+
+**The seed does not choose the voice today.** brain's `/v1/audio/speech`
+takes the model and the text and nothing that steers the voice (no seed, no
+reference recording); the voice is the server's configuration and two takes
+of a sentence differ as the server samples them. The synthesizer says so on
+standard error when it is made. So `speak-set --attempts` and `spoken-set
+--voices` still draw several takes and keep those heard back within the
+bound, but different seeds are not different voices until brain's route
+takes a seed or a voice.
+
+## Retired
+
+These ran brain in this process and have no route in brain's API, so they
+were deleted rather than kept as a path that cannot run:
+
+* `ingress-train` and `listen-turns`: a projector that let a frozen language
+  model listen to a recogniser's audio-encoder features, and the listener that
+  answered through it. The API serves no audio features, trains no projector
+  and runs no chat over projected audio.
+* `speech-rl`: the reinforcement trainer that updated the synthesizer from
+  scored takes. The API has no synthesizer update.
+* `takes`: several takes per sentence in one voice pinned to a reference
+  recording, heard by two recognisers with a fixed decode window. The speech
+  route takes no reference voice or seed, and the transcription route no
+  window.
+* `bundle`: content addresses of the parts of a listening persona (its
+  projector among them); with the projector gone it named nothing that runs.
+
+`text-score` stays: it scores chat records through the server (`/v1/run`).
+`judge` stays: it reads a listening session that is already on disk.
 
 ## Layout
 
@@ -99,7 +124,9 @@ report; `takes` and `speech-rl` take the voice's seed as `--voice-seed`.
 | `src/lib.rs` | the reports and the sentence-file reader |
 | `src/main.rs` | the command line; `voice-loop --help` lists every command |
 | `src/agent.rs` | `agent`: the recordings as turns of one conversation with a sven agent |
-| `src/batch.rs` | `turns`, `turns --stream` and `listen-turns` |
+| `src/batch.rs` | `turns` and `turns --stream` |
 | `src/teach.rs` | `teach` and `speak` with a lexicon |
-| `src/ingress.rs`, `src/spoken.rs`, `src/bundle.rs` | the spoken sets, the listening projector and the bundle |
-| `crates/model/src/speech/` | the cascade itself: recognizer and synthesizer on brain, one turn, the round trip, the cascade listener |
+| `src/teach_eval.rs` | `teach-eval` and `teach-read` |
+| `src/speakset.rs`, `src/spoken.rs` | `speak-set`, and the pinned spoken sets of `spoken-set` |
+| `src/judge.rs` | `judge` |
+| `crates/model/src/speech/` | the cascade itself: recognizer and synthesizer over brain's API, the WAV clip, word error rate, one turn, the round trip, the cascade listener |

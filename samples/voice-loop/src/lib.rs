@@ -18,13 +18,9 @@ use std::time::Duration;
 
 pub mod agent;
 pub mod batch;
-pub mod bundle;
-pub mod ingress;
 pub mod judge;
-pub mod rl;
 pub mod speakset;
 pub mod spoken;
-pub mod takes;
 pub mod teach;
 pub mod teach_eval;
 pub mod voice;
@@ -270,7 +266,8 @@ pub struct SpeakSetReport<'a> {
     pub rejected: &'a [String],
 }
 
-/// One turn of a batch answered by a model that listens.
+/// One turn of a batch answered by a [`Listener`](splinter_sdk::model::speech::Listener)
+/// and spoken as it was written.
 #[derive(Debug, Serialize)]
 pub struct ListenItem {
     /// The recording.
@@ -289,7 +286,7 @@ pub struct ListenItem {
     pub first_text_seconds: f64,
     /// Seconds until the first piece was handed to be spoken.
     pub first_piece_seconds: f64,
-    /// Seconds the model spent listening and writing.
+    /// Seconds the listener spent hearing and writing.
     pub think_seconds: f64,
     /// Seconds speaking, summed over the sentences.
     pub synthesise_seconds: f64,
@@ -297,7 +294,8 @@ pub struct ListenItem {
     pub total_seconds: f64,
 }
 
-/// A batch of turns answered by a model that listens, as `listen-turns` keeps it.
+/// A batch of turns spoken as they were written, as `turns --stream` and
+/// `agent` keep it.
 #[derive(Debug, Serialize)]
 pub struct ListenReport<'a> {
     /// The persona that answered.
@@ -314,7 +312,7 @@ pub struct ListenReport<'a> {
     pub first_text_seconds: Option<Spread>,
     /// Seconds until the first piece was handed to be spoken.
     pub first_piece_seconds: Option<Spread>,
-    /// Seconds listening and writing.
+    /// Seconds hearing and writing.
     pub think_seconds: Option<Spread>,
     /// Seconds speaking.
     pub synthesise_seconds: Option<Spread>,

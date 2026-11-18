@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements spoken dialogue systems whose every stage is
+// measured on its own, for its clients. If your team needs expertise in
+// evaluating voice agents over recorded conversations, you can procure our
+// services by sending an email to info@swedishembedded.com.
 
-//! The batch commands: a directory of recorded questions answered, by the
-//! cascade (`turns`) or by a model that listens (`listen-turns`).
+//! The batch commands: a directory of recorded questions answered by the
+//! cascade (`turns`, and `turns --stream` speaking as the model writes).
 
 use std::path::PathBuf;
 
@@ -10,8 +15,8 @@ use anyhow::{bail, Context, Result};
 use splinter_sdk::model::answer::{Answerer, Decoding};
 use splinter_sdk::model::error::PolicyError;
 use splinter_sdk::model::speech::{
-    corpus_word_error_rate, take_turn, BrainRecognizer, BrainSynthesizer, Clip, ListenerOptions,
-    Recognizer, Sentences, Synthesizer,
+    corpus_word_error_rate, take_turn, BrainRecognizer, BrainSynthesizer, Clip, Recognizer,
+    Sentences, Synthesizer,
 };
 use splinter_sdk::model::{BrainEndpoints, LocalWeights};
 use splinter_sdk::vocabulary::prompt::persona_prompt;
@@ -28,8 +33,10 @@ pub const SPOKEN_PIECE_WORDS: usize = 30;
 /// The longest answer a turn generates, in tokens: a spoken answer is short.
 pub const ANSWER_TOKENS: u32 = 400;
 
-/// The models a batch speaks and listens with.
+/// The models a batch speaks and listens with, and the brain that serves them.
 pub struct Names<'a> {
+    /// The servers the models are asked of.
+    pub endpoints: &'a BrainEndpoints,
     /// The recognition model.
     pub asr: &'a str,
     /// The synthesis model.
@@ -123,6 +130,7 @@ impl Persona {
     }
 }
 
+/// The clip in the WAV file at `path`.
 pub fn read_clip(path: &std::path::Path) -> Result<Clip> {
     Clip::from_wav(&std::fs::read(path).with_context(|| format!("reading {}", path.display()))?)
         .with_context(|| format!("{} is not a WAV file", path.display()))
@@ -161,8 +169,11 @@ pub fn turns(
     std::fs::create_dir_all(batch.out_dir)?;
 
     let speaker = names.speaker.clone();
-    let recognizer = BrainRecognizer::load(names.asr)?;
-    let synthesizer = Sentences::new(BrainSynthesizer::load(names.tts)?, SPOKEN_PIECE_WORDS);
+    let recognizer = BrainRecognizer::new(names.endpoints, names.asr);
+    let synthesizer = Sentences::new(
+        BrainSynthesizer::new(names.endpoints, names.tts),
+        SPOKEN_PIECE_WORDS,
+    );
     let mut items = Vec::new();
     for (recording, question) in paired {
         let name = recording.display().to_string();
@@ -217,19 +228,6 @@ pub fn turns(
     emit(&report, keep)
 }
 
-/// Answer every recording of `batch` with a model that listens: no transcript
-/// between the question and the answer.
-pub fn listen_turns(
-    names: &Names<'_>,
-    batch: &Batch<'_>,
-    persona: &str,
-    opts: &ListenerOptions,
-    keep: Option<&std::path::Path>,
-) -> Result<()> {
-    let listener = splinter_sdk::model::speech::BrainListener::load(opts)?;
-    spoken_turns(names, batch, persona, &listener, None, keep)
-}
-
 /// What a conversation adds to a batch of turns: the lexicon its lessons
 /// grow, and what to do once a turn has been spoken. `after_turn` is given the
 /// words of the answer and the bytes of the reply recording, and returns a
@@ -250,7 +248,7 @@ pub fn streamed_turns(
     keep: Option<&std::path::Path>,
 ) -> Result<()> {
     let listener = splinter_sdk::model::speech::CascadeListener::new(
-        BrainRecognizer::load(names.asr)?,
+        BrainRecognizer::new(names.endpoints, names.asr),
         |question: &str, on_text: &mut dyn FnMut(&str)| persona.answer_streaming(question, on_text),
     );
     spoken_turns(names, batch, &persona.name, &listener, None, keep)
@@ -282,9 +280,9 @@ pub fn spoken_turns(
     std::fs::create_dir_all(batch.out_dir)?;
 
     let speaker = names.speaker.clone();
-    let judge = BrainRecognizer::load(names.asr)?;
+    let judge = BrainRecognizer::new(names.endpoints, names.asr);
     let synthesizer = splinter_sdk::model::speech::Lexical::shared(
-        BrainSynthesizer::load(names.tts)?,
+        BrainSynthesizer::new(names.endpoints, names.tts),
         conversation.map(|c| c.lexicon.clone()).unwrap_or_default(),
     );
     let mut items = Vec::new();

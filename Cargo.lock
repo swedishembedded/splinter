@@ -7178,6 +7178,7 @@ dependencies = [
  "brain",
  "brain-data",
  "brain-gpu-core",
+ "brain-survival",
  "futures",
  "libc",
  "reqwest",

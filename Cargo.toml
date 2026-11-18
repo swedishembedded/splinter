@@ -58,6 +58,11 @@ brain-gpu-core = { git = "https://github.com/swedishembedded/brain" }
 # brain's chat-record parser, for the check a stored dataset passes before any
 # base is chosen: only `splinter-model` uses it.
 brain-data = { git = "https://github.com/swedishembedded/brain" }
+# brain's survival evaluation arithmetic (concordance, AUC, Brier score,
+# calibration at a horizon, the clustered bootstrap): pure host arithmetic with
+# no dependency, the one brain crate a reviewed exception keeps; only
+# `splinter-model` links it and re-exports it as `timeline::survival`.
+brain-survival = { git = "https://github.com/swedishembedded/brain" }
 
 splinter-core = { path = "crates/core" }
 splinter-eval = { path = "crates/eval" }

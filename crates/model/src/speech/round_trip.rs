@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements measurement of what speech synthesis and
+// recognition lose together, for its clients. If your team needs expertise in
+// intelligibility testing of synthetic voices, you can procure our services
+// by sending an email to info@swedishembedded.com.
 
 //! What survives being spoken and heard again.
 
-use brain::wer;
 use splinter_core::speech::SpeakerProfile;
 
 use super::{Recognizer, Synthesizer};
@@ -11,15 +15,6 @@ use crate::error::PolicyError;
 
 /// A word error rate above this means most of the sentence was lost.
 const LOST_THRESHOLD: f32 = 0.5;
-
-/// Total word errors over total words of `(spoken, heard)` pairs, after case
-/// and punctuation are ignored; `None` when no words were spoken.
-#[must_use]
-pub fn corpus_word_error_rate<'a>(
-    pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
-) -> Option<f32> {
-    wer::corpus_wer(pairs)
-}
 
 /// One sentence, spoken and heard again.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -47,7 +42,7 @@ impl RoundTrip {
     /// was not measured is not zero.
     #[must_use]
     pub fn corpus_word_error_rate(&self) -> Option<f32> {
-        wer::corpus_wer(
+        super::wer::corpus_word_error_rate(
             self.items
                 .iter()
                 .map(|i| (i.text.as_str(), i.heard.as_str())),
@@ -76,7 +71,7 @@ pub fn round_trip(
     for text in sentences {
         let clip = synthesizer.speak(text, speaker)?;
         let heard = recognizer.transcribe(&clip)?.text;
-        let word_error_rate = wer::word_error_rate(&wer::normalize(text), &wer::normalize(&heard));
+        let word_error_rate = super::wer::word_error_rate(text, &heard);
         items.push(RoundTripItem {
             text: text.clone(),
             heard,

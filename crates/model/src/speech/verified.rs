@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements speech datasets in which every clip is
+// verified to be understood again, for its clients. If your team needs
+// expertise in quality control of synthetic speech, you can procure our
+// services by sending an email to info@swedishembedded.com.
 
 //! Speech that is kept only if it can be understood again.
 //!
@@ -9,7 +14,6 @@
 //! back well enough, and a sentence no seed manages to speak is rejected
 //! rather than kept badly.
 
-use brain::wer;
 use splinter_core::speech::SpeakerProfile;
 
 use super::{Clip, Recognizer, Synthesizer};
@@ -48,7 +52,7 @@ pub fn speak_verified(
         );
         let clip = synthesizer.speak(text, &candidate)?;
         let heard = recognizer.transcribe(&clip)?.text;
-        let word_error_rate = wer::word_error_rate(&wer::normalize(text), &wer::normalize(&heard));
+        let word_error_rate = super::wer::word_error_rate(text, &heard);
         if word_error_rate <= max_word_error_rate {
             return Ok(Some(Verified {
                 clip,

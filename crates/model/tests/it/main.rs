@@ -8,7 +8,6 @@
 //! others run beside it.
 
 mod adapter_manifest_is_brains;
-mod device_selection;
 mod timeline_dataset_is_trainable;
 mod timeline_scoring;
 mod timeline_serving;

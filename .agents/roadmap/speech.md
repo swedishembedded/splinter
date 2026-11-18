@@ -13,6 +13,10 @@ sounds) are separate adapters.
 The voice is a synthetic theatrical portrayal and is always labelled so; no
 recording of either man exists (`splinter_core::speech::Portrayal`).
 
+## Status 2026-11-17: speech goes through brain's API only
+
+Recognition is `POST /v1/audio/transcriptions` and synthesis `POST /v1/audio/speech`; the word error rate is Splinter's own arithmetic (`splinter_model::speech::wer`). Retired, because brain's API has no route for them: the speech ingress and projector (`ingress-train`), the speech-native listener (`listen-turns`), the TTS policy trainer (`speech-rl`), `takes` and `bundle` (with `splinter_core::speech_bundle`). The milestones below that name them are history. `/v1/audio/speech` takes no seed or reference voice (brain gap): a speaker profile's seed no longer chooses the voice.
+
 ## Rules for this effort
 
 - Every stage is measured on its own; a rate or latency that was not measured

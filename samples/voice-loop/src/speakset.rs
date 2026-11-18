@@ -11,15 +11,15 @@
 
 use anyhow::{bail, Context, Result};
 use splinter_sdk::model::speech::{speak_verified, BrainRecognizer, BrainSynthesizer};
-use splinter_sdk::vocabulary::speech::SpeakerProfile;
 
-use crate::batch::emit;
+use crate::batch::{emit, Names};
 use crate::{read_sentences, Recorded, SpeakSetReport};
 
+/// Speak every sentence of `file` with the models and voice of `names`, keep
+/// in `out_dir` each take heard back within `max_wer` (trying up to
+/// `attempts` takes), and report what was kept and rejected.
 pub fn speak_set(
-    tts: &str,
-    asr: &str,
-    speaker: SpeakerProfile,
+    names: &Names<'_>,
     file: &std::path::Path,
     out_dir: &std::path::Path,
     max_wer: f32,
@@ -32,13 +32,16 @@ pub fn speak_set(
         bail!("{} holds no sentences", file.display());
     }
     std::fs::create_dir_all(out_dir)?;
-    let (synthesizer, recognizer) = (BrainSynthesizer::load(tts)?, BrainRecognizer::load(asr)?);
+    let (synthesizer, recognizer) = (
+        BrainSynthesizer::new(names.endpoints, names.tts),
+        BrainRecognizer::new(names.endpoints, names.asr),
+    );
     let (mut kept, mut rejected) = (Vec::new(), Vec::new());
     for sentence in sentences {
         match speak_verified(
             &synthesizer,
             &recognizer,
-            &speaker,
+            &names.speaker,
             &sentence,
             max_wer,
             attempts,
@@ -62,9 +65,9 @@ pub fn speak_set(
     std::fs::write(out_dir.join("sentences.txt"), lines.join("\n") + "\n")?;
     emit(
         &SpeakSetReport {
-            recognizer: asr,
-            synthesizer: tts,
-            portrayal: speaker.portrayal().label(),
+            recognizer: names.asr,
+            synthesizer: names.tts,
+            portrayal: names.speaker.portrayal().label(),
             max_word_error_rate: max_wer,
             kept: &kept,
             rejected: &rejected,

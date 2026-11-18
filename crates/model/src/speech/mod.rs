@@ -10,29 +10,33 @@
 //!
 //! This is the cascade: a [`Recognizer`] turns the listener's speech into
 //! text, the persona answers in text, and a [`Synthesizer`] speaks the answer
-//! in a [`SpeakerProfile`]'s voice. It is the reference every later,
-//! speech-native stage is measured against, and the source of the spoken
-//! examples those stages learn from. Each stage is timed on its own, because
+//! in a [`SpeakerProfile`]'s voice. Each stage is timed on its own, because
 //! which one costs the time is what decides where to work next.
 //!
-//! brain does the recognition and the synthesis ([`BrainRecognizer`],
-//! [`BrainSynthesizer`]); this module decides nothing about when they are
-//! used. [`round_trip`] measures what survives being spoken and heard again,
-//! with the word error rate brain's own gates use.
+//! brain does the recognition and the synthesis, reached only through its
+//! HTTP API ([`BrainRecognizer`] over `/audio/transcriptions`,
+//! [`BrainSynthesizer`] over `/audio/speech`); this module decides nothing
+//! about when they are used. A [`Clip`] travels as a 16-bit PCM WAV file.
+//! [`round_trip`] measures what survives being spoken and heard again, by
+//! the word error rate of [`wer`].
+//!
+//! The speech-native stages that once ran in this process (a projector that
+//! let a language model listen to audio-encoder features, the listener built
+//! on it, and the reinforcement trainer of the synthesizer) were retired:
+//! brain's API has no route for audio features, for training a projector or
+//! for updating a synthesizer from scored takes.
 
 mod brain_backed;
 mod cascade;
+mod clip;
 mod desk;
-mod ingress;
 mod lexical;
-mod listener;
-mod policy;
 mod round_trip;
 mod sentences;
 mod spoken_turn;
 mod turn;
 mod verified;
-mod window;
+pub mod wer;
 
 #[cfg(test)]
 mod desk_tests;
@@ -41,25 +45,19 @@ pub mod scripted;
 #[cfg(test)]
 mod tests;
 
-pub use brain::Audio as Clip;
 pub use brain_backed::{
     BrainRecognizer, BrainSynthesizer, DEFAULT_RECOGNIZER, DEFAULT_SYNTHESIZER,
 };
 pub use cascade::CascadeListener;
+pub use clip::{Clip, WavError};
 pub use desk::{Heard, LessonDesk, SharedLexicon, Take};
-pub use ingress::{
-    AudioFeatures, Ingress, IngressExample, IngressOptions, StepSettings, FEATURE_WIDTH,
-};
 pub use lexical::Lexical;
-pub use listener::{BrainListener, ListenerOptions};
-pub use policy::{SpeechPolicy, SpeechTake, UpdateReport, UpdateRule};
-pub use round_trip::corpus_word_error_rate;
 pub use round_trip::{round_trip, RoundTrip, RoundTripItem};
 pub use sentences::{SentenceStream, Sentences, PAUSE_MILLIS};
 pub use spoken_turn::{take_spoken_turn, Listener, SpokenTimings, SpokenTurn};
 pub use turn::{take_turn, StageTimings, Turn};
 pub use verified::{speak_verified, Verified};
-pub use window::{padded_to, with_trailing_silence};
+pub use wer::corpus_word_error_rate;
 
 use splinter_core::speech::SpeakerProfile;
 
@@ -70,9 +68,6 @@ use crate::error::PolicyError;
 pub struct Transcription {
     /// The words heard.
     pub text: String,
-    /// Whether the recognizer dropped part of the clip because it was longer
-    /// than the recognizer can take at once.
-    pub truncated: bool,
 }
 
 /// Speech to text.
@@ -84,8 +79,9 @@ pub trait Recognizer {
 
 /// Text to speech.
 pub trait Synthesizer {
-    /// `text`, spoken by `speaker`. The same speaker and the same text give the
-    /// same voice.
+    /// `text`, spoken by `speaker`. A synthesizer that can be steered gives
+    /// the same voice for the same speaker; one whose voice is fixed where it
+    /// runs ([`BrainSynthesizer`]) says so when it is made.
     fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError>;
 
     /// [`Self::speak`], handing `on_audio` the samples as they are made, so

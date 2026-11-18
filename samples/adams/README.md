@@ -93,7 +93,6 @@ left as they are: the stored text is what the split and its digests rest on.
 | `--decoding greedy\|thinking\|sample[:T]\|sample-thinking[:T]`, `--few-shot N` | On `transfer-exam` and `reconstruct-replies`: let a reasoning model think or sample, and show it N training examples in its system message, so a base arm is not handicapped into a weak baseline. |
 | `--framing full\|identity\|plain` | On `transfer-exam` and `reconstruct-replies`: the system message the exam asks under. Training mixes all three (mostly the full instructions, some the bare identity, some no persona; the shares are constants in `persona.rs`), so an adapter can be asked without any persona prompt and the habit shown to be its own. |
 | `briefings`, `reconstruct-replies`, `judge`, `reconstruct-report` | The reconstruction benchmark: a held-out letter is briefed as the situation it answered, a model writes the reply, and a judge calibrated on controls scores it against what the real letter does. |
-| `grpo` | Builds a task family for brain's reinforcement-learning loop: present-day situations and the passages he may be shown, rewarded in named parts by the same rules (the layout, the verdict on whether his method applies, every other rule), with no model judging. The pool the loop trains on and the pool its own gate draws from are disjoint. It runs, but a two-step trial over the 1.5B model took 27 minutes, so no result is claimed for the 7B (the knowledge notes on measuring an RL loop's cost say why). The loop's seed is `--train-seed`, else a drawn one that is printed; it is written into `summary.json`, and passing it reproduces the run. The gate's held-out pool is a fixed partition of the seed space, not a draw. |
 | `anchor-exam` | Asks a model a frozen set of general questions under no persona, before and after training: a retention check. `anchor-skills.jsonl` adds what a persona fine-tune of a reasoning model can erode and trivia cannot show: arithmetic word problems graded by the last number stated and format-following graded by line count; it is in the format Splinter's own anchor suite freezes, so `splinter eval --suite anchor --freeze` takes it too. `anchor-leak.jsonl` holds the probes that must not carry any of his persona; only this sample asks them, under no persona (`--max-tokens`, `--decoding thinking` for the arithmetic). |
 
 The `exam` split is questions about documents the model never saw. The `seen`
@@ -120,9 +119,10 @@ The system message is the mode, and it is part of what the adapter is trained an
 ## What is not built
 
 Reinforcement training (GRPO) has no result and is replaced by rejection-sampling
-fine-tuning and on-policy preference pairs from the same verifier: the task family
-and reward are built and the loop runs, but too slowly here to teach the student
-anything within a session. Also still to do: a modern-fact researcher separate from the persona,
+fine-tuning and on-policy preference pairs from the same verifier. The `grpo` command,
+which ran brain's reinforcement loop in this process, is retired: brain's API has no route
+for that loop, and a policy-gradient run is a job of the service (`splinter train` on a
+policy-gradient dataset). Also still to do: a modern-fact researcher separate from the persona,
 a verifier model, a judge for anything the rules cannot grade beyond the
 reconstruction benchmark's, and the other primary collections (the manuscript
 papers, committee records, Founders Online, the delegates' letters). The

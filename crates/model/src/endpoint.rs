@@ -264,6 +264,16 @@ impl BrainEndpoints {
             .collect())
     }
 
+    /// `GET {url}/{route}` of the endpoint at `index`, as JSON.
+    ///
+    /// # Errors
+    /// The endpoint could not be reached, refused, or answered no JSON.
+    pub fn get(&self, index: usize, route: &str) -> Result<Value, PolicyError> {
+        let url = &self.urls[index];
+        get_json(&format!("{url}/{route}"), &self.key)
+            .map_err(|reason| refused(url, &format!("GET /{route}: {reason}")))
+    }
+
     /// The id each endpoint serves `weights` under, in the order of
     /// [`Self::urls`]: refused by name when an endpoint does not serve it.
     /// An adapter an endpoint does not list is offered through the manifest
@@ -467,12 +477,43 @@ pub(crate) fn post_json(
     request_json(url, key, Some(body), timeout)
 }
 
+/// `body` posted to `url` as JSON, asked with `key`, and the reply as it
+/// came: its bytes and the headers it carried. A reply that is not a success
+/// is the reason, with brain's message when it gave one. Run as [`get_json`]
+/// runs.
+pub(crate) fn post_for_bytes(
+    url: &str,
+    key: &str,
+    body: &Value,
+    timeout: Duration,
+) -> Result<RawReply, String> {
+    request(url, key, Some(body), timeout)
+}
+
+/// A successful reply's bytes and headers.
+pub(crate) struct RawReply {
+    /// The body.
+    pub body: Vec<u8>,
+    /// The headers.
+    pub headers: reqwest::header::HeaderMap,
+}
+
 fn request_json(
     url: &str,
     key: &str,
     body: Option<&Value>,
     timeout: Duration,
 ) -> Result<Value, String> {
+    let reply = request(url, key, body, timeout)?;
+    serde_json::from_slice(&reply.body).map_err(|e| format!("not JSON: {e}"))
+}
+
+fn request(
+    url: &str,
+    key: &str,
+    body: Option<&Value>,
+    timeout: Duration,
+) -> Result<RawReply, String> {
     std::thread::scope(|scope| {
         scope
             .spawn(|| {
@@ -499,9 +540,10 @@ fn request_json(
                         .await
                         .map_err(|e| e.to_string())?;
                     let status = response.status();
-                    let text = response.text().await.map_err(|e| e.to_string())?;
+                    let headers = response.headers().clone();
+                    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
                     if !status.is_success() {
-                        let detail = serde_json::from_str::<Value>(&text)
+                        let detail = serde_json::from_slice::<Value>(&bytes)
                             .ok()
                             .and_then(|v| v["error"]["message"].as_str().map(str::to_string));
                         return Err(match detail {
@@ -509,7 +551,10 @@ fn request_json(
                             None => format!("answered HTTP {}", status.as_u16()),
                         });
                     }
-                    serde_json::from_str(&text).map_err(|e| format!("not JSON: {e}"))
+                    Ok(RawReply {
+                        body: bytes.to_vec(),
+                        headers,
+                    })
                 })
             })
             .join()
