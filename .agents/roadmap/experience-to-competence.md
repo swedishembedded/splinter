@@ -233,6 +233,9 @@ carry no advantage.
    - Optional A/B: per-check z-scored advantages, once bench exports `checks`.
    - Zero-GPU validation: on the existing 1,280 rollouts, count groups with a nonzero `functional_correctness` spread,
      against the 82 with a pass spread.
+   - Measured 2026-11-19 on lane R's practice exports (1,306 trials; 160 groups of 6-8 attempts, 31 single trials
+     skipped): 81/160 groups have a strict-pass spread, 110/160 a `functional_correctness` spread (every pass-spread
+     group is among them). Shaped reward would make 29 more groups informative (51% to 69%).
 2. **Variance-per-cost selection (first package).**
    - Metric: `LS_i = Var_j(r_ij) / mean cost_ij`, with cost = completion plus uncached prompt tokens (or GPU-seconds).
      Shrink the variance by a Beta posterior.
