@@ -163,3 +163,4 @@ in the same commit.
 | [175](175-a-resume-key-reuses-a-brain-job-only-when-every-other-param-is-the-same.md) | A resume key reuses a brain job only when every other param is the same |
 | [176](176-a-campaign-token-budget-never-bound-because-its-rollouts-counted-no-tokens.md) | A campaign's token budget never bound, because its rollouts counted no tokens |
 | [177](177-a-family-resampled-interval-of-a-few-unanimous-families-has-no-width.md) | A family-resampled interval of a few unanimous families has no width |
+| [178](178-a-store-that-writes-a-file-per-object-runs-out-of-inodes-not-bytes.md) | A store that writes a file per object runs out of inodes, not bytes |

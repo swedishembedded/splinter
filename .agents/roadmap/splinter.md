@@ -126,7 +126,17 @@ the released adapter answers the same questions from plain `brain serve`.
    only by its tests, was removed 2026-11-18). Releases, datasets, suites,
    answers, calibrations and the queue are documents and pointers in the
    database too; only adapters and dataset files stay plain files, tracked as
-   artifacts, because brain needs a path to them. The database and its files pack
+   artifacts, because brain needs a path to them. Since 2026-11-19 a new
+   database is in the packed layout (`splinter-expdb 3`): its immutable objects
+   are appended to 1 GiB pack files indexed by an append-only journal under one
+   `flock`, so a state holds a handful of files at any experience count (the
+   loose layout held 3-4 per experience; lane states reached 20-52k files for
+   ~1.9k experiences against a 500k-file project quota). Loose states are still
+   read and written; `splinter state pack` rewrites one, digest-checked, and
+   compacts a packed one (knowledge 178). Open: the bytes of collected objects
+   stay in their pack until the next `state pack`; a practice run's bench export
+   (`practice/<run>/export`, a directory per trial) is outside the database and
+   still costs files per trial. The database and its files pack
    into one archive and recover from copies. The
    read model is in memory, so opening a very large database costs time
    proportional to its size; `splinter state maintain` keeps it down.
