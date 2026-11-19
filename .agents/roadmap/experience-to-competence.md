@@ -123,6 +123,7 @@ SimPO, ORPO, KTO and a rejection-sampling SFT floor, with fresh prompts per roun
 | 16 | Real runs for KTO, IPO, SimPO, ORPO | after brain efficiency work (reference pass 55 min, 170 s/step) | one seed each on the frontier data |
 | 17 | Two load-sensitive test flakes found by the clean re-verification at dfb62e12f (3619 passed, 2 failed, each passes alone) | `solve_concurrency::a_remote_model_is_asked_up_to_the_configured_width_at_once` (timing) and `distributed_plan::a_retry_writes_its_own_plan_naming_the_same_job` (ETXTBSY, a spawn racing a just-written executable): make both deterministic | 20 consecutive parallel workspace runs without either failing |
 | 18 | Campaign demo evidence incomplete at hand-over: generation-2 evaluate and rollback outcomes were not recorded when this ledger was written | record both in `campaigns.md` from the campaign lane's final report | rollback shown moving the champion back on real models |
+| 19 | First-package arm not run | one fresh on-policy round from A2s1: `curriculum = "signal"`, `reward = "shaped-partial"` (with bench's `naive_floor` once L2 lands), `recipe = "on-policy-rl"`; rank-correlate `LS_i` with each task's pass change | KL within 0.02-0.05, informative share and sum Var(r) per M completion tokens above the zero-GPU uniform rows, strict pass on 48 paired held-out tasks |
 
 Verification at the time of writing (clean force-rebuilt gates, no GPU): splinter `make check` exit 0; sven tests 5300 passed, clippy
 and doc clean (the wasm target is not installed on the node); brain clippy clean, `ci/static` clean, per-crate suites data 376,
@@ -236,6 +237,11 @@ carry no advantage.
    - Measured 2026-11-19 on lane R's practice exports (1,306 trials; 160 groups of 6-8 attempts, 31 single trials
      skipped): 81/160 groups have a strict-pass spread, 110/160 a `functional_correctness` spread (every pass-spread
      group is among them). Shaped reward would make 29 more groups informative (51% to 69%).
+   - **Landed 2026-11-19 (6ac02f92d):** `dataset build --reward shaped-partial [--fail-ceiling C] --practice DIR`, a named arm
+     (never the default). Floors come from `practice.json` `tasks[].naive_floor`, matched by the task's content digest; a
+     task without one is measured from 0. The manifest's `partial_credit` records the credit, the floors, their
+     `practice.json` sha256s and `groups_without_floor`. Campaigns: `[curate] reward = "shaped-partial"` (floors from
+     `[practice]`). Bench does not export `naive_floor` yet (lane L2), so every number below is at `f_naive = 0`.
 2. **Variance-per-cost selection (first package).**
    - Metric: `LS_i = Var_j(r_ij) / mean cost_ij`, with cost = completion plus uncached prompt tokens (or GPU-seconds).
      Shrink the variance by a Beta posterior.
@@ -243,6 +249,25 @@ carry no advantage.
    - Sample in proportion to `sqrt(Var)/cost`; drop zero-variance groups. This replaces the band factor in
      `curriculum/capability.rs`.
    - Validation: rank-correlate `LS_i` with the pass change after one round.
+   - **Landed 2026-11-19 (6ac02f92d):** the metric in `splinter-eval` (`campaign::learning_signal`): `V = (n s2 + 2 v0) / (n + 2)`,
+     `v0` the Beta(1, 1) posterior's expected `p(1-p)` with rewards as fractional successes; cost from the score's usage
+     (`TokenUsage::cost`). Reported per task and per family (lineage from `task.toml` `bench_defect_lineage`) in the
+     dataset build report (`signal`) and in `experiences capabilities` (strict and shaped-partial side by side).
+     Selection: `[rollout] curriculum = "signal"` beside `capability` (the capability curriculum is unchanged); it
+     drops measured uninformative groups, mastered tasks and infrastructure-only tasks, and records every weight.
+   - **Zero-GPU check (2026-11-19)** on lane R's practice exports (9 runs, 1,312 trials, one policy A2s1, 160 task
+     groups of 2+ graded attempts, 47 lineages; `splinter experiences capabilities <runs>`; the grouping is by staged
+     task across runs and counts graded trials only, so the strict share is 83/160, not lane L1's 81/160 per run):
+
+     | Reward | Draw | Informative groups | Informative lineages | sum Var(r) per M completion tokens |
+     |---|---|---|---|---|
+     | strict pass | uniform | 83/160 (0.519) | 37/47 | 1.155 |
+     | shaped-partial (`f_naive` = 0, `c` = 0.5) | uniform | 110/160 (0.688) | 42/47 | 0.903 |
+     | strict pass | variance per cost | 1.000 | 37/47 | 3.333 |
+     | shaped-partial | variance per cost | 1.000 | 42/47 | 2.290 |
+
+     Partial credit adds groups but compresses the pass/fail gap, so the absolute variance per token falls 22%
+     (knowledge 186); the selection is an in-sample estimate (the next round's variance regresses towards the mean).
 3. **Start-from-state forks at the decisive step.**
    - Replay the prefix through `bench task session-exec`, then roll G suffixes with sven fork.
    - Group by (task, prefix digest); train on the suffix only; check the state digest before forking.
@@ -253,6 +278,12 @@ carry no advantage.
 5. **Potential-based shaping from bench milestone progress**, `F = gamma*Phi(s') - Phi(s)`, if bench exports progress.
 6. **Cost.** Tighten the practice step cap to about the p90 of passing trajectories; stop early on repetition or no answer
    file; keep DAPO's over-length penalty.
+
+**RL recipe (landed 2026-11-19, 6ac02f92d):** `splinter train --recipe on-policy-rl` (campaign `[train] recipe`), splinter-side
+because brain's preset table (`--algorithm`) shapes only the objective: `behaviour: recorded`, `loss_agg: token-sum`, lr
+1e-4, 4 passes over the rollouts (steps sized to them; brain's sampler reshuffles each epoch over the records, so several
+passes over one batch need no brain change), named flags win. The candidate records `recipe` with the mean KL against
+0.02-0.05 and the clip fraction against 0.10-0.20 (`below`/`within`/`above`). Not yet run on a GPU.
 
 **First package (3-4 days):** items 1 and 2 here, plus bench items 1 and 2 (`naive_floor` and three dials).
 Measure on the same rollouts plus one fresh round:
