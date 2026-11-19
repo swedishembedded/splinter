@@ -154,3 +154,65 @@ The first real `splinter campaign` ran against real brain and bench, with the A2
   - candidates always train from the base;
   - evaluate runs serially on one card;
   - status is blocked while a run holds the lock.
+
+## Why teacher-free learning showed no gain (diagnosis 2026-11-19, expert review against the literature)
+
+**Status: open; the next experiment below decides it.** The verdict: the approach is NOT refuted, because the
+teacher-free arms never truly tested it.
+
+**Evidence from our own runs**
+
+- **GRPO never moved the policy.** From `train-a6-s1.err`: ratio about 1.002, KL about 0.002 per step, clip fraction
+  about 1%. That is 67 steps at lr 2e-5, roughly 270 informative trajectories seen once each, and half the records come
+  from zero-variance tasks.
+- **A2 had unharvested headroom**, from its own 1,280 rollouts on train tasks:
+
+  | Domain | pass@1 | pass@8 |
+  |---|---|---|
+  | all | 0.572 | 0.781 |
+  | legal | 0.40 | 0.70 |
+  | accounting | 0.29 | 0.63 |
+
+  So about 0.21 of in-support headroom was left. 35 of 160 tasks were never solved (out of support).
+
+**Literature**
+
+- RLVR mostly sharpens within the base's support: Yue et al. 2025 (arXiv 2504.13837); "The Invisible Leash" 2025. A
+  counter-claim exists (arXiv 2506.14245), on math only.
+- For small models, distillation beats RL (DeepSeek-R1 2025).
+- Teacher-free agentic gains exist only at larger scale, with thousands of tasks and many iterations: Golubev et al.
+  2025 (arXiv 2508.03501, 72B, RFT then DAPO, 20% to 39% on SWE-bench Verified); DeepSWE; SkyRL-Agent.
+- RLVR needs hundreds to thousands of updates (one-example RLVR, arXiv 2504.20571).
+- Learnability filtering: variance of pass rates (arXiv 2504.03380).
+
+**Ranked causes**
+
+1. Under-optimised GRPO (signal/compute).
+2. Too few tasks for transfer, and an eval MDE above the plausible 3-5 point effect.
+3. No information on out-of-support tasks (approach limit: teacher, repair or hint).
+4. gen1 diluted (about 1.2 epochs vs 2).
+5. Outcome-only credit over about 11 turns.
+6. Off-context behaviour logprobs and the train/serve prompt mismatch (fixed in brain 1bdd5400c and splinter 5a0c7cd43/6e0ea27a1).
+7. DPO pairs without a shared prefix.
+8. LoRA capacity: unlikely.
+
+**Next experiment (about 18 GPU-h, after the brain efficiency fixes, on brain >= 1bdd5400c with exact tokens)**
+
+1. **Ceiling.** A2 pass@1..16 on 48 fresh held-out practice tasks (12 per domain). Stop if H = pass@16 - pass@1 < 0.08.
+2. **Two on-policy GRPO rounds.** 80 tasks × G=8, sampled by p(1-p), zero-variance groups dropped; round 2 re-rolls 40 of
+   round 1's frontier tasks.
+   - Recorded behaviour logprobs, token-sum loss (Dr. GRPO), lr 1e-4, 3-4 epochs per batch.
+   - Target KL 0.02-0.05 and a clip fraction of 10-20%.
+   - Probing is rewarded negatively.
+3. **Control.** Rejection fine-tuning on the same rollouts, continued from A2 with teacher rehearsal.
+4. **Eval.** 48 held-out tasks × 8, paired by task.
+
+**Reading the outcome**
+
+| Outcome | Meaning |
+|---|---|
+| KL near zero | defect |
+| KL moves, train tasks flat | credit assignment (try turn-level rewards) |
+| Train tasks gain >= 0.10, held-out flat | memorisation (more tasks needed) |
+| Held-out gain >= 0.05 with CI above 0 | first teacher-free gain |
+| Never-solved tasks still at 0 at k=16-32 | teacher or repair lane |
