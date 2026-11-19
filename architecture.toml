@@ -46,6 +46,7 @@ splinter-core = "foundation"
 splinter-expdb = "foundation"
 splinter-store = "storage"
 splinter-sandbox = "storage"
+splinter-hub = "storage"
 splinter-eval = "measurement"
 splinter-model = "adapters"
 splinter-agent = "adapters"
@@ -139,6 +140,16 @@ why = "The experience database is a generic store; it knows neither an agent run
 from = "splinter-store"
 to = "brain"
 why = "Persistence has no model computation in it."
+
+[[forbidden]]
+from = "splinter-hub"
+to = "brain"
+why = "The hub client moves files and names; it has no model computation in it."
+
+[[forbidden]]
+from = "splinter-hub"
+to = "sven-sdk"
+why = "The hub client moves files and names; it knows nothing of an agent runtime."
 
 [[forbidden]]
 from = "splinter-sandbox"

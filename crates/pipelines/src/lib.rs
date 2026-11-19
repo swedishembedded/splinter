@@ -111,6 +111,7 @@ pub mod grouping;
 pub mod harbor;
 pub mod harness_opt;
 pub mod history;
+pub mod hub;
 pub mod improve;
 pub mod index;
 pub mod judge;

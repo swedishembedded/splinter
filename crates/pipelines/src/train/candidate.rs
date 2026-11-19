@@ -324,6 +324,55 @@ pub fn candidate_count(ctx: &Context) -> Result<usize, OrchestratorError> {
     Ok(candidate_ids(ctx)?.len())
 }
 
+/// The candidate `id` names, as its stored record: the document a state
+/// root keeps, which [`adopt_candidate`] records again in another one. It
+/// names its adapters by artifact; the file paths of [`Candidate`] are this
+/// root's and are not in it.
+pub fn candidate_record(ctx: &Context, id: &str) -> Result<serde_json::Value, OrchestratorError> {
+    let candidate = load_candidate(ctx, id)?;
+    serde_json::to_value(candidate.stored()).map_err(|source| OrchestratorError::Json {
+        what: format!("candidate {}", candidate.candidate),
+        source,
+    })
+}
+
+/// Records in this state root the candidate another one kept as `record`
+/// ([`candidate_record`]): every artifact it names (its adapter, the adapter
+/// of each evaluation kept, the rehearsal it mixed in) must already be here
+/// and sound, and every dataset it was trained on recorded. Recording the
+/// same candidate again changes nothing.
+///
+/// # Errors
+/// The record is not a candidate's, an artifact it names is missing or
+/// altered, a dataset was never recorded, or the store fails.
+pub fn adopt_candidate(
+    ctx: &Context,
+    record: &serde_json::Value,
+) -> Result<Candidate, OrchestratorError> {
+    let stored: StoredCandidate =
+        serde_json::from_value(record.clone()).map_err(|source| OrchestratorError::Json {
+            what: "a candidate record".into(),
+            source,
+        })?;
+    let mut named = vec![&stored.adapter_artifact];
+    named.extend(stored.checkpoints.iter().map(|c| &c.adapter_artifact));
+    named.extend(stored.rehearsal.iter().filter_map(|r| r.digest.as_ref()));
+    for digest in named {
+        match ctx.artifacts().check(digest, true)? {
+            splinter_store::artifacts::ArtifactState::Sound => {}
+            state => {
+                return Err(OrchestratorError::Refused(format!(
+                    "candidate {} names artifact {digest}, which is {state:?} here",
+                    stored.candidate
+                )))
+            }
+        }
+    }
+    let candidate = Candidate::from_stored(ctx, stored)?;
+    record_candidate(ctx, &candidate, candidate.regime)?;
+    Ok(candidate)
+}
+
 /// The candidate that is `candidate` with the adapter of the evaluation at
 /// `step` instead of the one it carries: a step chosen on something other than
 /// the monitoring loss ([`crate::checkpoints`]). It is a candidate of its

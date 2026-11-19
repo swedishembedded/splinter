@@ -4980,6 +4980,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-hub"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "splinter-jefferson"
 version = "0.2.0"
 dependencies = [
@@ -5090,6 +5104,7 @@ dependencies = [
  "splinter-core",
  "splinter-data",
  "splinter-eval",
+ "splinter-hub",
  "splinter-knowledge",
  "splinter-model",
  "splinter-sandbox",
@@ -5121,6 +5136,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "atif",
+ "base64 0.22.1",
  "ed25519-dalek",
  "futures",
  "regex",
@@ -5133,6 +5149,7 @@ dependencies = [
  "splinter-data",
  "splinter-eval",
  "splinter-expdb",
+ "splinter-hub",
  "splinter-knowledge",
  "splinter-model",
  "splinter-orchestrator",

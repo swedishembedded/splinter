@@ -62,7 +62,7 @@ application       splinter-orchestrator: what a run is carried out with
 adapters          splinter-agent (sven) and splinter-model (brain and sven's provider)
 domain            splinter-knowledge: intake and task construction
 measurement       splinter-eval and splinter-data: what is measured, what is trained on
-storage           splinter-store and splinter-sandbox: state on disk, processes
+storage           splinter-store, splinter-sandbox and splinter-hub: state on disk, processes, the model hub
 foundation        splinter-core (the vocabulary) and splinter-expdb (the database)
 ```
 
@@ -73,6 +73,7 @@ foundation        splinter-core (the vocabulary) and splinter-expdb (the databas
 | A new noun, an id, or an invariant of one | `splinter-core` |
 | A new kind of durable state, or a way to read it | `splinter-store` (or the crate whose types it embeds, when it cannot sit below them) |
 | A new place code runs | `splinter-sandbox` |
+| A call to the Hugging Face Hub (what a bundle holds and when it is published is `splinter-pipelines`' `hub`) | `splinter-hub` |
 | A new verifier, a measurement, a release-gate check | `splinter-eval` |
 | A new training projection, or a change to the dataset format | `splinter-data` |
 | A new source parser, chunker, or task-construction rule | `splinter-knowledge` |

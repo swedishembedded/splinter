@@ -45,6 +45,7 @@ mod experiment_output;
 mod goal_session;
 mod harness_output;
 mod harness_session;
+mod hub_session;
 mod improve_session;
 mod jobs_session;
 mod learn_output;

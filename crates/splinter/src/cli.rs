@@ -210,6 +210,10 @@ pub enum Command {
     /// Trace any artifact up to where it came from (down to source bytes)
     /// and down to everything that came from it.
     Lineage(LineageArgs),
+    /// Publish experience sets, datasets, candidates and signed aggregate
+    /// verdicts as one tagged, immutable revision of a private Hugging Face
+    /// dataset repository; sealed and item-level material is refused.
+    Publish(PublishArgs),
     /// Print the command reference as Markdown, generated from this grammar;
     /// with --check FILE, fail when a committed copy of it is stale; with
     /// --check-invocations FILE..., fail on a command a manual shows that
@@ -519,6 +523,10 @@ pub enum ExperiencesCommand {
     /// Import experience sets, with their experiences' annotations and trial
     /// register, from another state root.
     Import(ImportArgs),
+    /// Ingest a bundle `publish` wrote, at a pinned revision of its Hugging
+    /// Face dataset repository: every file checked against the manifest's
+    /// digest, everything stored under its own content address.
+    IngestHf(IngestHfArgs),
     /// Compare two experience sets of the same tasks: the candidate's against
     /// the baseline's, paired by task, a family counted once. Exposed and
     /// harness-failed attempts are left out and counted.
@@ -724,6 +732,7 @@ mod global;
 mod goal;
 mod harbor;
 mod harness;
+mod hub;
 mod improve;
 mod invocations;
 mod jobs;
@@ -752,6 +761,7 @@ pub use global::Global;
 pub use goal::GoalCommand;
 pub use harbor::{HarborCommand, OracleArg};
 pub use harness::{HarnessCommand, PromotionGateArg, ProposerArg, StrategyArg};
+pub use hub::{HubArgs, IngestHfArgs, PublishArgs};
 pub use improve::ImproveArgs;
 pub use jobs::{help as jobs_help, JobsArgs, JobsCommand};
 pub use learn::{LearnArgs, TaskHarnessArgs};

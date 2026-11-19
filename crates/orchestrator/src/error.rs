@@ -116,6 +116,9 @@ pub enum OrchestratorError {
     /// A task or experience is not valid.
     #[error(transparent)]
     Experience(#[from] ExperienceError),
+    /// The model hub could not be reached, or refused a call.
+    #[error(transparent)]
+    Hub(#[from] splinter_hub::HubError),
     /// A file operation failed.
     #[error("{path}: {source}")]
     Io {

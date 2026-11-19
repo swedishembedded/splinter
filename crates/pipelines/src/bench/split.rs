@@ -114,7 +114,16 @@ pub fn trials_in(
 /// Registers an admitted experience of a trial; registering the same one again changes
 /// nothing.
 pub fn register(ctx: &Context, record: &TrialRecord) -> Result<(), OrchestratorError> {
-    ctx.workspace().put_document(TRIAL, record)?;
+    register_in(ctx.workspace(), record)
+}
+
+/// [`register`] in the database `workspace`, which need not be the run's own
+/// (an import writes a staging root's).
+pub fn register_in(
+    workspace: &splinter_store::workspace::Workspace,
+    record: &TrialRecord,
+) -> Result<(), OrchestratorError> {
+    workspace.put_document(TRIAL, record)?;
     Ok(())
 }
 

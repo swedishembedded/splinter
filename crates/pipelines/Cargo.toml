@@ -15,6 +15,7 @@ splinter-orchestrator = { workspace = true }
 splinter-agent = { workspace = true }
 splinter-knowledge = { workspace = true }
 splinter-eval = { workspace = true }
+splinter-hub = { workspace = true }
 splinter-model = { workspace = true }
 splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
@@ -40,6 +41,8 @@ sven-sdk = { workspace = true }
 # The scripted base loader: the residency specs run without weights.
 splinter-model = { workspace = true, features = ["scripted"] }
 regex = { workspace = true }
+# The hub emulator decodes the commit's base64 file contents.
+base64 = { workspace = true }
 # The specs play the examiner: they sign its verdicts with a test key.
 ed25519-dalek = { workspace = true }
 # The layout spec makes a state in the former loose layout to compare with.

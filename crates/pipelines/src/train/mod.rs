@@ -68,7 +68,8 @@ pub mod sizing;
 mod tuning;
 
 pub use candidate::{
-    adopt_checkpoint, candidate_count, candidate_ids, load_candidate, Candidate, Checkpoint,
+    adopt_candidate, adopt_checkpoint, candidate_count, candidate_ids, candidate_record,
+    load_candidate, Candidate, Checkpoint,
 };
 pub use full::{
     train_full_candidate, train_full_recorded_as, FullCandidate, FullRequest,

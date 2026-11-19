@@ -142,10 +142,65 @@ withdraws damaged database files and writes lost artifacts off in a ledger that
 `state status` lists; a lost artifact is from then on refused with its digest
 wherever it would have been used.
 
+## Bundles on the Hugging Face Hub
+
+`publish` writes what a state root holds as one immutable, tagged revision of a **private** Hugging Face dataset
+repository, and `experiences ingest-hf` reads one back into another state root:
+
+```sh
+splinter publish --repo OWNER/NAME --token-file ~/.cache/huggingface/token \
+    --set SET --dataset DATASET --candidate CANDIDATE \
+    --verdict verdict.json --examiner-key verdict.key.pub
+splinter experiences ingest-hf OWNER/NAME@REVISION --token-file ~/.cache/huggingface/token
+```
+
+A revision holds one bundle:
+
+| Path | What it is |
+|---|---|
+| `manifest.json` | the bundle's manifest (`splinter.bundle/1`): its contents by content address, every other file with its SHA-256 and size, and its provenance |
+| `experiences.tar.zst` | a `state archive` of a fresh packed state holding the sets, the experiences the datasets were built from (and those their relations name), their annotations and the examiner's trial register for them |
+| `datasets/<id>.jsonl`, `datasets/<id>.manifest.json` | each dataset's records and its manifest in canonical form |
+| `candidates/<id>.json` | each candidate's record, with the training record brain wrote |
+| `artifacts/<address><ext>` | the files a candidate names: its adapter, the adapter of every evaluation it kept, its rehearsal |
+| `verdicts/<sha256>.json`, `verdicts/examiner.pub` | the examiner's signed aggregate verdicts and its public key |
+
+The bundle's identity is the SHA-256 of its contents (the ids of its sets, experiences, datasets and candidates and
+the digests of its verdicts), never of a file that packs them. Its revision is tagged `splinter-<first 20 hex digits
+of it>`; publishing the same contents again finds the tag (or the same manifest on `main`) and commits nothing.
+A candidate's datasets come along; a candidate that continues a release is refused, since a bundle does not carry a
+release's lineage yet.
+
+Before anything is staged or sent, everything asked for is screened and one refusal (`withheld: ...`) refuses the
+publish: a file under the examiner's private directory (`bench-private`, judged by its path and the path its links
+resolve to, never opened), a file whose name says it holds items, a file beside a `sealed-export.json`, an experience
+of a bench task outside the `train` split or registered as an eval task anywhere, an experience of a sealed
+final-exam family, and a verdict that does not verify under the examiner's key, is not of a schema the gate reads
+(`bench.examination/2`, `bench.verdict/3`), or carries item-level records (`items`, `trials`, `answers`, `per_item`,
+`responses`). The repository is created private when it is missing and its `private` flag read back; anything but
+`true` refuses the publish before a single byte is uploaded. The commit is made on the head of `main` that was read,
+so a commit made in between is refused rather than overwritten, and it replaces the previous revision's files: every
+earlier revision stays reachable by its commit and tag.
+
+`ingest-hf` takes `REPO@REVISION`. A branch or a tag can move, so it is resolved to the commit it names first, and
+everything is read at that commit and recorded as it. The manifest's identity must be the SHA-256 of its contents,
+and every file must be listed in the commit at the size (and, for an LFS file, the SHA-256) the manifest states; each
+file is hashed as it is downloaded, and one that differs refuses the whole ingest before anything is stored. The
+archive is restored into a scratch root (which verifies it) and its sets and experiences copied in as `experiences
+import` copies them; the artifacts, datasets (under their own ids, their records byte for byte, their lineage
+recorded) and candidates are stored through the stores' APIs, each checked against its content address; the verdicts
+are verified under the bundled key and kept as artifacts. A record of the ingest (endpoint, repository, commit,
+every file's SHA-256) is kept under `hub_ingest`. Ingesting the same bundle again stores nothing new.
+
+The token is read from `--token-file` and sent only to `--hub-endpoint` (default `https://huggingface.co`), never
+to an upload URL the Hub hands out. The tests run against a local emulator of the Hub's endpoints and reach no
+public service.
+
 ## Related
 
 - The commands are `state status`, `state maintain`, `state unpin`, `state verify`, `state repair`,
-  `state archive`, `state restore` and `state pack` in the [command reference](cli.md#splinter-state).
+  `state archive`, `state restore` and `state pack` in the [command reference](cli.md#splinter-state), and
+  [`publish`](cli.md#splinter-publish) and [`experiences ingest-hf`](cli.md#splinter-experiences-ingest-hf).
 - The JSON each prints is in [Output and exit status](output.md).
 - The experience database is the `splinter-expdb` crate; its specification is in the repository under
   `crates/expdb`.

@@ -502,6 +502,9 @@ impl Session {
                 })?;
                 emit(json, &imported);
             }
+            Command::Experiences(ExperiencesCommand::IngestHf(args)) => {
+                crate::hub_session::ingest_bundle(ctx, json, args)?;
+            }
             Command::Experiences(ExperiencesCommand::Compare {
                 candidate,
                 baseline,
@@ -735,6 +738,7 @@ impl Session {
             Command::Runs(RunsCommand::Cancel { id }) => emit(json, &runs::cancel(ctx, &id)?),
             Command::Jobs(args) => return crate::jobs_session::jobs(&self.splinter, json, args),
             Command::CliReference(args) => return Ok(crate::cli::reference::run(&args)),
+            Command::Publish(args) => crate::hub_session::publish_bundle(ctx, json, args)?,
             Command::Lineage(args) => {
                 let request = LineageRequest {
                     direction: args.direction(),

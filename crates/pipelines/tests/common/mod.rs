@@ -15,6 +15,7 @@ pub mod bench;
 pub mod fake_brain;
 pub mod fake_sven;
 pub mod gate;
+pub mod hub;
 pub mod manual;
 pub mod policy_gradient;
 pub mod repo;

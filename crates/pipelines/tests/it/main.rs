@@ -54,6 +54,7 @@ mod graded_items;
 mod guided_tasks;
 mod harbor_interop;
 mod harness_opt;
+mod hub_bundle;
 mod improve;
 mod judging;
 mod learn;

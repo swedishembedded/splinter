@@ -144,6 +144,7 @@ Every command takes these.
   - [splinter experiences capabilities](#splinter-experiences-capabilities) - A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs
   - [splinter experiences repair](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
   - [splinter experiences import](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
+  - [splinter experiences ingest-hf](#splinter-experiences-ingest-hf) - Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
@@ -191,6 +192,7 @@ Every command takes these.
   - [splinter state pack](#splinter-state-pack) - Rewrite the experience database into the packed layout
   - [splinter state restore](#splinter-state-restore) - Unpack an archive (and the archives an incremental one was made after) into an empty state root, verifying everything first
 - [splinter lineage](#splinter-lineage) - Trace any artifact up to where it came from (down to source bytes) and down to everything that came from it
+- [splinter publish](#splinter-publish) - Publish experience sets, datasets, candidates and signed aggregate verdicts as one tagged, immutable revision of a private Hugging Face dataset repository
 
 ## splinter
 
@@ -246,6 +248,7 @@ Subcommands:
 - [`jobs`](#splinter-jobs) - Submit work that runs outside this process, list it, reconcile it after a restart, retry a failed attempt, show one job or cancel one
 - [`state`](#splinter-state) - Show, maintain, verify, repair, archive and restore the state
 - [`lineage`](#splinter-lineage) - Trace any artifact up to where it came from (down to source bytes) and down to everything that came from it
+- [`publish`](#splinter-publish) - Publish experience sets, datasets, candidates and signed aggregate verdicts as one tagged, immutable revision of a private Hugging Face dataset repository
 
 ### splinter learn
 
@@ -1550,6 +1553,7 @@ Subcommands:
 - [`capabilities`](#splinter-experiences-capabilities) - A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs
 - [`repair`](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
 - [`import`](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
+- [`ingest-hf`](#splinter-experiences-ingest-hf) - Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 
 #### splinter experiences list
@@ -1684,6 +1688,23 @@ Arguments:
 Options:
 
 - `--from <DIR>` (required): The state root to read the sets from (only read; import from a copy of a root another process writes)
+
+#### splinter experiences ingest-hf
+
+Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository: every file checked against the manifest's digest, everything stored under its own content address
+
+```text
+splinter experiences ingest-hf [OPTIONS] <REPO@REVISION>
+```
+
+Arguments:
+
+- `<REPO@REVISION>` (required): The bundle, `OWNER/NAME@REVISION`: a commit, or a branch or tag, which is resolved to the commit it names and recorded as that commit.
+
+Options:
+
+- `--hub-endpoint <URL>`: The Hub to talk to (a local emulator's `http://127.0.0.1:PORT` in a test) Default: `https://huggingface.co`.
+- `--token-file <FILE>`: A file holding the access token (the `hf` CLI keeps one at `~/.cache/huggingface/token`); without it, calls are anonymous.
 
 #### splinter experiences compare
 
@@ -2453,3 +2474,22 @@ Options:
 - `--down`: Only what came from it.
 - `--both`: Both ways (the default)
 - `--depth <N>`: The most edges walked from it (default: all the way)
+
+### splinter publish
+
+Publish experience sets, datasets, candidates and signed aggregate verdicts as one tagged, immutable revision of a private Hugging Face dataset repository; sealed and item-level material is refused
+
+```text
+splinter publish [OPTIONS] --repo <OWNER/NAME>
+```
+
+Options:
+
+- `--repo <OWNER/NAME>` (required): The dataset repository, `owner/name`; created private when missing, and refused unless the Hub states it private.
+- `--set <SET>...`: An experience set, by id or unique prefix (repeatable)
+- `--dataset <DATASET>...`: A dataset, by id or unique prefix (repeatable)
+- `--candidate <CANDIDATE>...`: A trained candidate, by id or unique prefix (repeatable); its adapter, training record and the datasets it was trained on come along.
+- `--verdict <FILE>...`: A signed aggregate verdict of the examiner (repeatable)
+- `--examiner-key <FILE>`: The examiner's public key the verdicts verify under.
+- `--hub-endpoint <URL>`: The Hub to talk to (a local emulator's `http://127.0.0.1:PORT` in a test) Default: `https://huggingface.co`.
+- `--token-file <FILE>`: A file holding the access token (the `hf` CLI keeps one at `~/.cache/huggingface/token`); without it, calls are anonymous.

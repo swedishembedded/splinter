@@ -20,6 +20,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use splinter_core::dataset::DatasetId;
+use splinter_core::digest::{canonical_json, Digest};
 use splinter_store::artifacts::{ArtifactSpec, ArtifactState, ArtifactStore};
 use splinter_store::experiences::StoreError;
 use splinter_store::workspace::Workspace;
@@ -114,6 +115,41 @@ impl DatasetStore {
             }));
         }
         self.get(&DatasetId(stored))
+    }
+
+    /// Stores a dataset another state root built: its records file at
+    /// `records` and its `manifest`, under the id `id` they had there. The
+    /// records must hash to the digest the manifest names and the manifest to
+    /// `id`; a dataset already stored under `id` is kept and returned.
+    ///
+    /// # Errors
+    /// [`StoreError::Altered`] when either does not match, or a store fails.
+    pub fn adopt(
+        &self,
+        id: &DatasetId,
+        records: &Path,
+        manifest: &Manifest,
+    ) -> Result<StoredDataset, ViewError> {
+        // Checked before anything is written: a manifest that is not the one
+        // `id` names leaves nothing behind.
+        let address = Digest::of(&canonical_json(manifest)?);
+        if address != id.0 {
+            return Err(ViewError::Store(StoreError::Altered {
+                what: format!("the manifest of dataset {id}"),
+                expected: id.0.clone(),
+                found: address,
+            }));
+        }
+        let artifact = self.artifacts.put_file(records, &Self::spec())?;
+        if artifact.digest != manifest.dataset {
+            return Err(ViewError::Store(StoreError::Altered {
+                what: format!("the records of dataset {id}"),
+                expected: manifest.dataset.clone(),
+                found: artifact.digest,
+            }));
+        }
+        self.workspace.put_document(MANIFEST, manifest)?;
+        self.get(id)
     }
 
     /// The dataset stored under `id`, verified: the manifest hashes to `id`,

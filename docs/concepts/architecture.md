@@ -59,7 +59,7 @@ application       splinter-orchestrator: what a run is carried out with
 adapters          splinter-agent (sven) and splinter-model (brain)
 domain            splinter-knowledge: intake and task construction
 measurement       splinter-eval, splinter-data: what is measured, what is trained on
-storage           splinter-store, splinter-sandbox: state on disk, processes
+storage           splinter-store, splinter-sandbox, splinter-hub: state on disk, processes, the model hub
 foundation        splinter-core (the vocabulary), splinter-expdb (the database)
 ```
 
