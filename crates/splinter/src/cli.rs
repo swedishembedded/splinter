@@ -519,7 +519,7 @@ pub enum ExperiencesCommand {
     Capabilities(CapabilitiesArgs),
     /// A teacher continues the failed attempts of practice runs from their
     /// last good step; the task's own verifier keeps a repair only on a pass.
-    Repair(RepairArgs),
+    Repair(Box<RepairArgs>),
     /// Import experience sets, with their experiences' annotations and trial
     /// register, from another state root.
     Import(ImportArgs),

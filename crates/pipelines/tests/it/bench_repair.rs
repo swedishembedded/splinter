@@ -41,7 +41,8 @@ use splinter_orchestrator::Context;
 use splinter_pipelines::bench::artifact::sha256_hex;
 use splinter_pipelines::bench::practice::BenchCheckout;
 use splinter_pipelines::bench::repair::{
-    repair, route, RepairOutcome, RepairRequest, Route, DEFAULT_REPAIR_DEADLINE,
+    repair, route, Proposer, RepairOutcome, RepairRequest, Route, DEFAULT_BUDGET,
+    DEFAULT_REPAIR_DEADLINE,
 };
 use splinter_pipelines::bench::{ingest_bench_trials, IngestOptions};
 use sven_sdk::config::{compact_profile, Config, RunProfile};
@@ -53,14 +54,14 @@ use sven_sdk::{ApprovalPolicy, Engine, Toolset};
 /// A model that answers the n-th request of a conversation with the n-th
 /// step of its script, counted by the tool results it has been shown, and
 /// keeps what it was shown.
-struct Steps {
-    name: &'static str,
-    script: Vec<Step>,
-    seen: Mutex<Vec<String>>,
+pub(crate) struct Steps {
+    pub(crate) name: &'static str,
+    pub(crate) script: Vec<Step>,
+    pub(crate) seen: Mutex<Vec<String>>,
 }
 
 #[derive(Clone)]
-enum Step {
+pub(crate) enum Step {
     Call(&'static str, serde_json::Value),
     Say(&'static str),
 }
@@ -114,7 +115,7 @@ impl ModelProvider for Steps {
     }
 }
 
-fn steps(name: &'static str, script: Vec<Step>) -> Arc<Steps> {
+pub(crate) fn steps(name: &'static str, script: Vec<Step>) -> Arc<Steps> {
     Arc::new(Steps {
         name,
         script,
@@ -122,11 +123,12 @@ fn steps(name: &'static str, script: Vec<Step>) -> Arc<Steps> {
     })
 }
 
-const INPUT: &str = "alpha,6\nbeta,7\n";
-const INSTRUCTION: &str = "Add the numbers in input.csv and write the sum to answer.json.";
+pub(crate) const INPUT: &str = "alpha,6\nbeta,7\n";
+pub(crate) const INSTRUCTION: &str =
+    "Add the numbers in input.csv and write the sum to answer.json.";
 
 /// The student's real sven run, compact profile, in a tree of the input.
-async fn student_trajectory(tree: &Path) -> atif::Trajectory {
+pub(crate) async fn student_trajectory(tree: &Path) -> atif::Trajectory {
     fs::write(tree.join("input.csv"), INPUT).unwrap();
     let student = steps(
         "student",
@@ -153,7 +155,7 @@ async fn student_trajectory(tree: &Path) -> atif::Trajectory {
 
 /// A practice run directory: its staged material, its export of the one
 /// failed trial, and the report naming the trial's experience.
-fn practice_run(ctx: &Context, root: &Path, trajectory: &atif::Trajectory) -> PathBuf {
+pub(crate) fn practice_run(ctx: &Context, root: &Path, trajectory: &atif::Trajectory) -> PathBuf {
     let run = root.join("run");
     let staged = run.join("staged").join("sums");
     fs::create_dir_all(&staged).unwrap();
@@ -221,7 +223,7 @@ fn practice_run(ctx: &Context, root: &Path, trajectory: &atif::Trajectory) -> Pa
 }
 
 /// The examiner: a workspace holds the input; a grade passes an answer of 42.
-fn examiner(root: &Path) -> BenchCheckout {
+pub(crate) fn examiner(root: &Path) -> BenchCheckout {
     let dir = root.join("bench");
     fs::create_dir_all(&dir).unwrap();
     let script = format!(
@@ -251,11 +253,11 @@ esac
     BenchCheckout::new(dir)
 }
 
-fn teacher_ref() -> ModelRef {
+pub(crate) fn teacher_ref() -> ModelRef {
     "remote:scripted/teacher".parse().unwrap()
 }
 
-fn request<'a>(
+pub(crate) fn request<'a>(
     runs: &'a [PathBuf],
     checkout: &'a BenchCheckout,
     teacher: &'a ModelRef,
@@ -264,6 +266,11 @@ fn request<'a>(
         runs,
         checkout,
         teacher,
+        student: None,
+        proposer: Proposer::Teacher,
+        knowledge: &[],
+        interventions: &[],
+        budget: DEFAULT_BUDGET,
         max: 8,
         jobs: 2,
         deadline: DEFAULT_REPAIR_DEADLINE,

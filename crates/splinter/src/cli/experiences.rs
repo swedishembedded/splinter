@@ -13,7 +13,9 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use splinter_sdk::bench::repair::{DEFAULT_MAX_REPAIRS, DEFAULT_REPAIR_JOBS};
+use splinter_sdk::bench::repair::{
+    InterventionKind, Proposer, DEFAULT_BUDGET, DEFAULT_MAX_REPAIRS, DEFAULT_REPAIR_JOBS,
+};
 use splinter_sdk::measure::strata::StratumCutoffs;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -63,16 +65,42 @@ pub struct RepairArgs {
     /// The model that continues the attempts (`remote:`/`local:`).
     #[arg(long, value_parser = super::model_ref, value_name = "REF")]
     pub teacher: ModelRef,
+    /// The student's own model (`remote:`/`local:`): a retry samples it
+    /// again from the last good step, and a decomposition's subgoals are
+    /// worked by it. Without it neither runs.
+    #[arg(long, value_parser = super::model_ref, value_name = "REF")]
+    pub student: Option<ModelRef>,
+    /// Who proposes a decomposition's subgoals: `teacher` or `student`.
+    #[arg(long, value_name = "WHO", default_value = "teacher")]
+    pub proposer: Proposer,
+    /// A public reference document, or a directory of them (`.md`, `.txt`,
+    /// `.rst`), a knowledge-assisted correction retrieves from (repeatable).
+    /// Sealed material (a verifier's `tests`, a `solution`, an `oracle`,
+    /// `truth.json`, run data) is refused when named and left out of a
+    /// directory. Without it the knowledge-assisted correction does not run.
+    #[arg(long = "knowledge", value_name = "PATH")]
+    pub knowledge: Vec<PathBuf>,
+    /// Only this intervention (repeatable: `retry`, `fork_correction`,
+    /// `knowledge_correction`, `decompose`); without it every one the
+    /// models and knowledge given allow, in the order each failure class's
+    /// chain tries them.
+    #[arg(long = "intervention", value_name = "NAME")]
+    pub interventions: Vec<InterventionKind>,
+    /// Attempts one failure may cost, every intervention of its chain and
+    /// every sample counted.
+    #[arg(long, value_name = "N", value_parser = super::positive_count,
+          help = format!("Attempts one failure may cost, every intervention and sample counted [default: {DEFAULT_BUDGET}]"))]
+    pub budget: Option<usize>,
     /// The examiner's checkout, which lays out and grades the workspaces.
     #[arg(long, value_name = "DIR")]
     pub bench: PathBuf,
-    /// The most repairs this run makes.
+    /// The most failures this run repairs.
     #[arg(long, value_name = "N", value_parser = super::positive_count,
-          help = format!("The most repairs this run makes [default: {DEFAULT_MAX_REPAIRS}]"))]
+          help = format!("The most failures this run repairs [default: {DEFAULT_MAX_REPAIRS}]"))]
     pub max: Option<usize>,
-    /// Repairs run at once: the teacher server's decode slots.
+    /// Failures repaired at once: the teacher server's decode slots.
     #[arg(long, value_name = "N", value_parser = super::positive_count,
-          help = format!("Repairs run at once [default: {DEFAULT_REPAIR_JOBS}]"))]
+          help = format!("Failures repaired at once [default: {DEFAULT_REPAIR_JOBS}]"))]
     pub jobs: Option<usize>,
     /// The most repairs of one task, the ones a run already graded counted:
     /// spreads a run across task families.
@@ -82,8 +110,8 @@ pub struct RepairArgs {
     /// printed when not given).
     #[arg(long, value_name = "N")]
     pub seed: Option<Seed>,
-    /// Teacher continuations of each selected failure, each a repair of its
-    /// own (default 1).
+    /// Samples of each intervention of a failure's chain, each a repair of
+    /// its own (default 1).
     #[arg(long, value_name = "K", value_parser = super::positive_count)]
     pub samples: Option<usize>,
     /// Only failures of this class (repeatable; `wrong_content`, `tool`, ...).

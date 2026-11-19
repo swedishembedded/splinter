@@ -134,6 +134,20 @@ impl Report for RepairReport {
     fn human(&self) -> String {
         let mut out = String::new();
         let _ = writeln!(out, "repairs continued by {}", self.teacher);
+        let names: Vec<&str> = self.interventions.iter().map(|k| k.as_str()).collect();
+        let _ = writeln!(
+            out,
+            "interventions: {} (budget {} per failure)",
+            names.join(", "),
+            self.routing.budget
+        );
+        for (name, y) in &self.by_intervention {
+            let _ = writeln!(
+                out,
+                "  {name}: attempts {}, accepted {}, rejected {}, refused {}",
+                y.routed, y.accepted, y.rejected, y.refused
+            );
+        }
         for (class, y) in &self.by_class {
             let _ = writeln!(
                 out,
@@ -145,8 +159,12 @@ impl Report for RepairReport {
             let why = record.reason.as_deref().unwrap_or("");
             let _ = writeln!(
                 out,
-                "  {} {} after step {}: {:?} {why}",
-                record.domain, record.trial, record.keep_through, record.outcome
+                "  {} {} {} after step {}: {:?} {why}",
+                record.domain,
+                record.trial,
+                record.intervention,
+                record.keep_through,
+                record.outcome
             );
         }
         if let Some(set) = &self.repair_set {

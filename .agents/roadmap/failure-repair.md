@@ -68,6 +68,21 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
   vs A2 0.550 (-0.384 [-0.464, -0.309]); support collapsed 0.871 -> 0.029, compiled 0.812 -> 0.312. Repairs alone
   from A2 forget what A2 knew; an A3 that keeps A2's data (replay, or cumulative like gen 1) is the next run.
 
+- 2026-11-19 Interventions and routing (lane Q). Four interventions behind `Intervention` (name, acting model, key
+  variant, attempt), all on one fork-and-grade path in the examiner's session (`repair/fork.rs`): `fork_correction`
+  (teacher), `knowledge_correction` (teacher, with the passages of a `KnowledgeBase` retrieved by word from Splinter's
+  knowledge store beside the student's system prompt; sealed paths refused or withheld; snapshot, sources, query and
+  passages recorded; keyed by the snapshot), `retry` (the student's model under the practice run's sampling and a
+  seed derived from the key) and `decompose` (a teacher or student proposer's typed plan of at most 6 subgoals with
+  `file_exists`/`file_contains` checks; the student works them one user turn each through sven's fork,
+  `fork_at::continue_in_turns`; outcomes reached/missed/unchecked/not_run). `Routing` maps each model class to a
+  chain, tried in order until accepted or the per-failure budget (default 3) is spent; infrastructure, task,
+  unattributed and history-probing classes cannot be named. Guided user turns are marked `guidance`, a policy's own
+  steps `policy`; sft-step trains the student's steps of an accepted decomposition. A fork correction's key is
+  unchanged (lane D's records are still held). Spec: `crates/pipelines/tests/it/bench_interventions.rs` (decompose
+  passes where the direct repair is rejected, rejected decomposition never stored, retry seed and sampling,
+  knowledge provenance and sealed negatives), `repair/route.rs` and `repair/decompose.rs` unit tests.
+
 ## Open
 
 - Real infrastructure, repetition and history-probing failures in practice exports for the fixture set: the pilot's
@@ -79,6 +94,8 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
   repair reads the request log instead, a fix belongs in sven's runner.
 - A tool's error text differs between sven builds (the student's a0235c71 against the fork's main): such a fork is
   refused; replaying with the student's own sven build (or the examiner's sandbox) would remove that.
-- Retry and decomposition interventions for practice tasks do not exist; only the fork correction is behind the
-  `Intervention` interface.
+- No real-model measurement yet of retry, knowledge-assisted correction or decomposition (GPU smoke prepared in the
+  campaign's lane Q scratch, not run). A preference pair from a decomposition would put guidance turns in the chosen
+  side's context: the preference view does not tell guided repairs apart yet.
+- The knowledge retrieves by word (sven's lexical index); no vectors.
 - An A3 with replay of A2's training data, and seeds 2-3, before any claim about repairs.

@@ -29,7 +29,7 @@ use splinter_core::outcome::{MemoryUse, RetrievedUnit};
 use sven_sdk::atif::{MemoryRecord, Trajectory};
 use sven_sdk::memory::{
     AccessContext, IngestRequest, MemoryError, MemoryStore, Origin, Permission, Provenance,
-    SourceId, SpaceId, TrainingUse,
+    RetrievalRequest, SourceId, SpaceId, TrainingUse,
 };
 use sven_sdk::sources::{segment, SourceKind};
 use sven_sdk::MemoryScope;
@@ -101,12 +101,53 @@ impl Knowledge {
             .len())
     }
 
+    /// The `limit` units of the space that match `query` best, by word, in
+    /// rank order, each with the source and revision it was cut from: what
+    /// a caller that puts them in front of a model records as having shown.
+    ///
+    /// # Errors
+    /// The store's refusal.
+    pub async fn retrieve(&self, query: &str, limit: usize) -> Result<Vec<Passage>, MemoryError> {
+        let mut request = RetrievalRequest::new(query, limit);
+        request.spaces = Some(BTreeSet::from([SpaceId::new(&self.space)]));
+        let response = self.store.retrieve(&self.reader(), request).await?;
+        Ok(response
+            .hits
+            .into_iter()
+            .map(|hit| Passage {
+                source: hit.unit.source_id.as_str().to_string(),
+                unit: hit.unit.unit_id.as_str().to_string(),
+                revision: hit.unit.revision.as_str().to_string(),
+                score: hit.score,
+                rank: hit.rank,
+                text: hit.unit.text,
+            })
+            .collect())
+    }
+
     /// A read-only scope frozen on the content the space has now.
     pub(crate) async fn frozen_scope(&self) -> Result<MemoryScope, MemoryError> {
         MemoryScope::new(Arc::clone(&self.store), self.reader(), &self.space)
             .frozen()
             .await
     }
+}
+
+/// One unit a retrieval returned, and where it was cut from.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Passage {
+    /// The source document, as it was added.
+    pub source: String,
+    /// The unit's id in the store.
+    pub unit: String,
+    /// The revision of the source the unit was cut from.
+    pub revision: String,
+    /// Its relevance to the query; higher is better.
+    pub score: f32,
+    /// Its position in the answer, from 1.
+    pub rank: usize,
+    /// Its text.
+    pub text: String,
 }
 
 /// The memory `trajectory` read: the snapshot and the distinct units its

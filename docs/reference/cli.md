@@ -1665,12 +1665,17 @@ Arguments:
 Options:
 
 - `--teacher <REF>` (required): The model that continues the attempts (`remote:`/`local:`)
+- `--student <REF>`: The student's own model (`remote:`/`local:`): a retry samples it again from the last good step, and a decomposition's subgoals are worked by it. Without it neither runs.
+- `--proposer <WHO>`: Who proposes a decomposition's subgoals: `teacher` or `student`. Default: `teacher`.
+- `--knowledge <PATH>...`: A public reference document, or a directory of them (`.md`, `.txt`, `.rst`), a knowledge-assisted correction retrieves from (repeatable). Sealed material (a verifier's `tests`, a `solution`, an `oracle`, `truth.json`, run data) is refused when named and left out of a directory. Without it the knowledge-assisted correction does not run.
+- `--intervention <NAME>...`: Only this intervention (repeatable: `retry`, `fork_correction`, `knowledge_correction`, `decompose`); without it every one the models and knowledge given allow, in the order each failure class's chain tries them.
+- `--budget <N>`: Attempts one failure may cost, every intervention and sample counted [default: 3]
 - `--bench <DIR>` (required): The examiner's checkout, which lays out and grades the workspaces.
-- `--max <N>`: The most repairs this run makes [default: 32]
-- `--jobs <N>`: Repairs run at once [default: 8]
+- `--max <N>`: The most failures this run repairs [default: 32]
+- `--jobs <N>`: Failures repaired at once [default: 8]
 - `--per-task <N>`: The most repairs of one task, the ones a run already graded counted: spreads a run across task families.
 - `--seed <N>`: The seed that orders the tasks and the attempts of each (drawn and printed when not given)
-- `--samples <K>`: Teacher continuations of each selected failure, each a repair of its own (default 1)
+- `--samples <K>`: Samples of each intervention of a failure's chain, each a repair of its own (default 1)
 - `--class <CLASS>...`: Only failures of this class (repeatable; `wrong_content`, `tool`, ...)
 
 #### splinter experiences import

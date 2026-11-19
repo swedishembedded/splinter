@@ -37,7 +37,7 @@ pub(super) struct Lineage<'a> {
     pub keep_through: u64,
     /// The leading steps shared with the student's stored trajectory.
     pub prefix_steps: usize,
-    /// The teacher.
+    /// The model that continued: the teacher, or the student's own.
     pub teacher: &'a str,
     /// The intervention.
     pub intervention: &'a str,
@@ -46,6 +46,9 @@ pub(super) struct Lineage<'a> {
     pub workspace_check: &'a str,
     /// The verifier's grade.
     pub grade: &'a Grade,
+    /// What the intervention records besides.
+    #[serde(flatten)]
+    pub notes: &'a super::Notes,
 }
 
 /// `composed` (the fork's student steps through `keep_through`, then the

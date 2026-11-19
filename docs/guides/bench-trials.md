@@ -175,12 +175,56 @@ the student's stored steps (marked as copied context, never supervised), with th
 `revision_of` relation to the student's attempt, and its lineage in `extra.correction` (the
 student, the diagnosis, the kept step, the shared prefix, the teacher, the grade). The accepted repairs form one
 experience set, which `dataset build --view sft-step` trains on the teacher's suffix alone. A fail is counted and
-recorded, never stored. A repair is keyed by the student's attempt, the teacher and the intervention: a rerun finds
-the record and does nothing. `--jobs` repairs run at once (the teacher's decode slots), `--max` bounds a run and
+recorded, never stored. A repair is keyed by the student's attempt, the acting model and the intervention: a rerun finds
+the record and does nothing. `--jobs` failures are repaired at once (the teacher's decode slots), `--max` bounds a run and
 `--class` picks the classes. `--per-task N` spreads a run across task families: the tasks are taken in turn, in an
 order `--seed` fixes (drawn and printed when not given), at most N repairs of a task, the ones an earlier run
-already graded counted. `--samples K` has the teacher continue each selected failure K times, each a repair of
-its own (keyed by its sample index), since one sample of a hard task is often wrong.
+already graded counted. `--samples K` has each intervention continue each selected failure K times, each a repair
+of its own (keyed by its sample index), since one sample of a hard task is often wrong.
+
+### Interventions and routing
+
+```sh
+splinter experiences repair RUN... --teacher local:Qwen/Qwen3.8-27B-FP8 --bench ~/bench \
+  --student local:Qwen/Qwen3-4B+A2s1 --knowledge ~/bench/environments/legal/README.md --budget 3
+```
+
+Four interventions share the fork and the grade above; which run depends on what the command is given:
+
+| Intervention | Needs | Who continues |
+|---|---|---|
+| `fork_correction` | `--teacher` | the teacher, after the last good step |
+| `knowledge_correction` | `--knowledge PATH` | the teacher, with the passages of the knowledge that match the task's instruction and the diagnosis shown beside the student's system prompt |
+| `retry` | `--student` | the student's own model, sampled again under the practice run's sampling (its report's `sampling`) and a seed derived from the repair's key |
+| `decompose` | `--student` | a proposer (`--proposer teacher`, the default, or `student`) splits the task into at most six ordered subgoals, each with a check of a state the task allows (`file_exists`, `file_contains`) or none; the student's model works them one user turn each, and a missed check ends the run |
+
+Each failure goes to its class's chain, tried in order until the verifier accepts one or the failure's `--budget`
+attempts (default 3, every intervention and sample counted) are spent; an intervention the run does not have is
+left out of the chain, and `--intervention NAME` (repeatable) keeps only the ones named (one the command cannot run
+is refused):
+
+| Class | Chain |
+|---|---|
+| `tool`, `malformed_artifact` | retry, fork correction |
+| `repetition` | retry, decompose, fork correction |
+| `no_answer`, `resource`, `planning`, `strategy` | decompose, fork correction |
+| `information_missing`, `retrieval` | knowledge correction, fork correction |
+| `wrong_content`, `implementation`, `model_competence` | fork correction, knowledge correction, decompose |
+| infrastructure and task classes, `history_probing`, `unclassified` | never routed |
+
+Every attempt is graded by the task's own verifier; only a pass is kept. The record of every attempt names its
+intervention and the model that acted, and keeps what the intervention adds: a retry's sampling and seed; a
+decomposition's subgoals, its proposer and each subgoal's outcome (`reached`, `missed`, `unchecked`, `not_run`); a
+knowledge-assisted correction's knowledge snapshot (the digest of every document), the documents, the files left out
+as sealed, the query and each passage shown (source, unit, revision, rank, score, SHA-256 of its text). The same is
+in the kept experience's `extra.correction`. A knowledge-assisted correction is keyed by its snapshot, apart from the
+plain correction by the same teacher, so the two can be compared on the same failures: the knowledge's effect with
+the teacher held fixed. Its passages are in no kept step, so a student trained on the repair learns the teacher's
+steps without them. The knowledge never holds sealed material: a path under a verifier's `tests`, a `solution`, an
+`oracle`, a `truth.json`, `.bench-data`, `jobs` or the examiner's private store is refused when named and left out
+(and listed) when a named directory holds it. A decomposition kept is the subgoal-guided trajectory: the student's
+kept prefix (copied, never supervised), the subgoal turns (marked `guidance`) and the student's own steps (marked
+`policy`), which `sft-step` trains on; a retry's steps are the student's own.
 
 ## Moving experience between state roots
 

@@ -11,12 +11,24 @@
 //!
 //! The failed trials of practice runs (`tasks harbor practice` directories,
 //! each with `report.json`, `export/` and `staged/`) are diagnosed
-//! ([`super::diagnose`]) and routed by their class ([`route`]): a model
-//! failure whose decisive step the diagnosis placed goes to the fork
-//! correction ([`ForkCorrection`]); an infrastructure or task failure, and a
-//! model failure with no decisive step, are not repaired, and the report says
-//! why. Every intervention is an [`Intervention`]; fork correction is the one
-//! there is for an examiner's tasks.
+//! ([`super::diagnose`]) and routed by their class ([`Routing`]): a model
+//! failure whose decisive step the diagnosis placed goes to a chain of
+//! interventions, tried in order until the verifier accepts one or the
+//! failure's budget of attempts is spent; an infrastructure or task failure,
+//! and a model failure with no decisive step, are not repaired, and the
+//! report says why. Every intervention is an [`Intervention`], and all of
+//! them fork the student's attempt at its last good step in the examiner's
+//! session and are graded there:
+//!
+//! * [`ForkCorrection`]: a teacher continues;
+//! * [`KnowledgeCorrection`]: a teacher continues with task-relevant public
+//!   reference material in front of it, retrieved from a knowledge base that
+//!   never holds sealed material, the retrieval recorded;
+//! * [`Retry`]: the student's own model samples again under another seed;
+//! * [`Decompose`]: a proposer (the teacher or the student's own model)
+//!   splits the task into ordered subgoals with checkable intermediate
+//!   states, and the student works them turn by turn, each subgoal's state
+//!   checked and recorded.
 //!
 //! A fork correction opens the examiner's sandbox session for the task
 //! (`bench task session`: the pristine workspace bound where a trial's agent
@@ -45,8 +57,11 @@
 //! Each repair is kept as soon as it is graded, so a stopped run keeps every
 //! repair it finished.
 //!
-//! **Idempotent.** A repair is keyed by the student's experience, the teacher
-//! and the intervention, and its record is stored under the state root; a
+//! **Idempotent.** A repair is keyed by the student's experience, the model
+//! that acts (the teacher, or the student's for a retry or a
+//! decomposition), the intervention, the sample and what else makes the
+//! intervention what it is (the knowledge's snapshot, the proposer), and
+//! its record is stored under the state root; a
 //! rerun finds a graded record (accepted or rejected) and does nothing. A
 //! refused one (the fork did not replay, the teacher or the examiner failed)
 //! decided nothing about the attempt and is tried again; it stores nothing. A
@@ -55,35 +70,44 @@
 
 mod commands;
 mod compose;
+mod decompose;
 mod fork;
+mod keep;
+mod knowledge;
+mod retry;
+mod route;
 mod select;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use splinter_agent::CancelToken;
-use splinter_core::annotation::{
-    Annotation, AnnotationBody, Outcome, Producer, RelationKind, Strength,
-};
 use splinter_core::diagnosis::DiagnosticResult;
 use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{Experience, ExperienceId};
 use splinter_core::model_ref::ModelRef;
-use splinter_core::outcome::{AttemptReport, FailureClass};
+use splinter_core::outcome::FailureClass;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::experiences::{ExperienceSet, SetId};
 
 pub use commands::{Grade, GRADE_SCHEMA};
+pub use decompose::{
+    Check, Decompose, Decomposition, Proposer, Subgoal, SubgoalOutcome, SubgoalState, MAX_SUBGOALS,
+};
 pub use fork::ForkCorrection;
+pub use knowledge::{KnowledgeBase, KnowledgeCorrection, KnowledgeUse, KNOWLEDGE_PASSAGES};
+pub use retry::Retry;
+pub use route::{route, InterventionKind, Route, Routing, DEFAULT_BUDGET};
 pub use select::{spread, Spread};
+
+use keep::{held_records, keep};
 
 use super::diagnose::{diagnose_dirs, DiagnosedTrial, DiagnosisReport};
 use super::practice::BenchCheckout;
-use super::VERIFIER_PRODUCER;
 
 /// The format tag of a [`RepairReport`] and of the records it keeps.
 pub const REPAIR_FORMAT: &str = "splinter.bench-repair.v1";
@@ -91,11 +115,11 @@ pub const REPAIR_FORMAT: &str = "splinter.bench-repair.v1";
 /// The producer of the relations and reports a repair records.
 pub const PRODUCER: &str = "splinter/repair";
 
-/// The most repairs one run makes when the request does not say.
+/// The most failures one run repairs when the request does not say.
 pub const DEFAULT_MAX_REPAIRS: usize = 32;
 
-/// Repairs run at once when the request does not say: enough to keep a
-/// served teacher's decode slots busy.
+/// Failures repaired at once when the request does not say: enough to keep
+/// a served teacher's decode slots busy.
 pub const DEFAULT_REPAIR_JOBS: usize = 8;
 
 /// The wall-clock time one continuation may take when the request does not
@@ -113,9 +137,22 @@ pub struct RepairRequest<'a> {
     pub checkout: &'a BenchCheckout,
     /// The model that continues the attempts.
     pub teacher: &'a ModelRef,
-    /// The most repairs this run makes.
+    /// The student's own model, which a retry samples again and a
+    /// decomposition's subgoals are worked by; `None`: neither runs.
+    pub student: Option<&'a ModelRef>,
+    /// Who proposes a decomposition's subgoals.
+    pub proposer: Proposer,
+    /// Public reference documents a knowledge-assisted correction retrieves
+    /// from; empty: none runs.
+    pub knowledge: &'a [PathBuf],
+    /// The interventions the run may use; empty for every one it has the
+    /// models and material for. Naming one it cannot run is refused.
+    pub interventions: &'a [InterventionKind],
+    /// Attempts one failure may cost, every intervention and sample counted.
+    pub budget: usize,
+    /// The most failures this run repairs.
     pub max: usize,
-    /// Repairs run at once.
+    /// Failures repaired at once (each one's chain runs in order).
     pub jobs: usize,
     /// The time one continuation may take.
     pub deadline: Duration,
@@ -128,40 +165,12 @@ pub struct RepairRequest<'a> {
     /// The seed that orders the tasks and the attempts of each task
     /// ([`spread`]).
     pub seed: u64,
-    /// Teacher continuations of each selected failure, each its own repair
-    /// (keyed by its sample index): the teacher samples, and one sample of a
-    /// hard task is often wrong.
+    /// Samples of each intervention of a failure's chain, each its own
+    /// repair (keyed by its sample index): a model samples, and one sample
+    /// of a hard task is often wrong.
     pub samples: usize,
     /// Stops the run between repairs.
     pub cancel: CancelToken,
-}
-
-/// Where a diagnosed failure goes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "route", content = "why", rename_all = "snake_case")]
-pub enum Route {
-    /// To the fork correction, after the last good step.
-    ForkCorrection,
-    /// Not repaired.
-    Skip(&'static str),
-}
-
-/// The route of a diagnosis: a model failure with a last good step to fork
-/// after is corrected; nothing else is.
-#[must_use]
-pub fn route(diagnosis: &DiagnosticResult) -> Route {
-    if !diagnosis.class.is_model() {
-        return Route::Skip("not a model failure: the infrastructure or the task decided it");
-    }
-    if diagnosis.class == FailureClass::HistoryProbing {
-        return Route::Skip(
-            "the attempt read material it must never have seen; its prefix is not replayed",
-        );
-    }
-    if diagnosis.last_good_step().is_none() {
-        return Route::Skip("the diagnosis places no decisive step after a good one");
-    }
-    Route::ForkCorrection
 }
 
 /// How one repair ended.
@@ -202,7 +211,8 @@ pub struct RepairRecord {
     pub sample: usize,
     /// The last student step kept, in the exported trajectory's numbering.
     pub keep_through: u64,
-    /// The teacher.
+    /// The model that acted: the teacher, or the student's own for a retry
+    /// or a decomposition.
     pub teacher: String,
     /// How it ended.
     pub outcome: RepairOutcome,
@@ -219,9 +229,30 @@ pub struct RepairRecord {
     /// trajectory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prefix_steps: Option<usize>,
-    /// The teacher's agent steps.
+    /// The acting model's agent steps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub teacher_actions: Option<u32>,
+    /// What the intervention records besides: a retry's seed, a
+    /// decomposition's subgoals and their outcomes, the knowledge retrieved.
+    #[serde(flatten)]
+    pub notes: Notes,
+}
+
+/// What an intervention records about how it made its attempt, in the
+/// record and in the repaired experience's lineage.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Notes {
+    /// The sampling a retry asked for: the practice run's, under its own
+    /// seed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sampling: Option<serde_json::Value>,
+    /// A decomposition: the subgoals, who proposed them, and how each
+    /// ended.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decomposition: Option<Decomposition>,
+    /// The knowledge a correction was shown, and where it came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub knowledge: Option<KnowledgeUse>,
 }
 
 /// Repairs of one class, counted.
@@ -248,6 +279,12 @@ pub struct RepairReport {
     pub format: &'static str,
     /// The teacher.
     pub teacher: String,
+    /// The routing table the run followed.
+    pub routing: Routing,
+    /// The interventions the run had.
+    pub interventions: Vec<InterventionKind>,
+    /// Per intervention: attempts made (`routed`) and how they ended.
+    pub by_intervention: BTreeMap<String, ClassYield>,
     /// The seed that ordered the selection.
     pub seed: u64,
     /// The bound on repairs of one task, when there was one.
@@ -285,6 +322,8 @@ pub struct Case<'a> {
 /// What an intervention made of a case: the grade, and the experience to
 /// keep when the grade is a pass.
 pub struct Attempted {
+    /// What the intervention records besides.
+    pub notes: Notes,
     /// The last student step kept.
     pub keep_through: u64,
     /// The verifier's grade.
@@ -293,7 +332,7 @@ pub struct Attempted {
     pub experience: Experience,
     /// The leading steps shared with the student's stored trajectory.
     pub prefix_steps: usize,
-    /// The teacher's agent steps.
+    /// The acting model's agent steps.
     pub teacher_actions: u32,
 }
 
@@ -301,6 +340,16 @@ pub struct Attempted {
 pub trait Intervention: Sync {
     /// The name its records carry.
     fn name(&self) -> &'static str;
+
+    /// The model that acts, as the record names it.
+    fn actor(&self) -> &str;
+
+    /// What else distinguishes its repairs of one attempt by one actor (the
+    /// knowledge's snapshot, the proposer), part of the key; `None` for
+    /// nothing.
+    fn variant(&self) -> Option<String> {
+        None
+    }
 
     /// Makes a repaired attempt of `case` and has it graded.
     ///
@@ -312,8 +361,7 @@ pub trait Intervention: Sync {
 /// The key of a repair.
 fn key_of(
     student: &ExperienceId,
-    teacher: &str,
-    intervention: &str,
+    intervention: &dyn Intervention,
     sample: usize,
 ) -> Result<String, OrchestratorError> {
     #[derive(Serialize)]
@@ -325,13 +373,17 @@ fn key_of(
         // The first sample's key is the one a repair had before samples.
         #[serde(skip_serializing_if = "is_zero")]
         sample: usize,
+        // A fork correction's key is the one it had before variants.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        variant: Option<String>,
     }
     let bytes = canonical_json(&Key {
         format: REPAIR_FORMAT,
         student,
-        teacher,
-        intervention,
+        teacher: intervention.actor(),
+        intervention: intervention.name(),
         sample,
+        variant: intervention.variant(),
     })
     .map_err(|e| OrchestratorError::Refused(format!("a repair key: {e}")))?;
     Ok(Digest::of(&bytes).hex().to_string())
@@ -342,54 +394,120 @@ fn is_zero(n: &usize) -> bool {
     *n == 0
 }
 
-/// Every repair record the state root holds, by key.
-fn held_records(ctx: &Context) -> Result<BTreeMap<String, RepairRecord>, OrchestratorError> {
-    let mut held = BTreeMap::new();
-    for id in ctx.workspace().document_ids(RECORD)? {
-        if let Some(record) = ctx.workspace().get_document::<RepairRecord>(RECORD, &id)? {
-            // A graded record decides; a refused one only stands in for none.
-            let graded = held
-                .get(&record.key)
-                .is_some_and(|r: &RepairRecord| r.outcome != RepairOutcome::Refused);
-            if !graded {
-                held.insert(record.key.clone(), record);
-            }
-        }
-    }
-    Ok(held)
-}
-
 /// Diagnoses the failed trials of `request`'s runs, routes them, repairs the
-/// routed ones with the teacher and keeps the accepted repairs; see the
-/// module documentation.
+/// routed ones with the interventions the request has the models and
+/// material for, and keeps the accepted repairs; see the module
+/// documentation.
 ///
 /// # Errors
-/// [`OrchestratorError`] when the store cannot be read or written, the
-/// teacher cannot be resolved, or the run is cancelled.
+/// [`OrchestratorError`] when the store cannot be read or written, a model
+/// cannot be resolved, the knowledge cannot be read (or names sealed
+/// material), an intervention is named the request cannot run, or the run
+/// is cancelled.
 pub fn repair(
     ctx: &Context,
     request: &RepairRequest<'_>,
 ) -> Result<RepairReport, OrchestratorError> {
     let teacher = ctx.model(request.teacher)?;
-    let intervention = ForkCorrection {
+    let student = request.student.map(|s| ctx.model(s)).transpose()?;
+    let wanted = |kind| request.interventions.is_empty() || request.interventions.contains(&kind);
+    let refuse = |kind: InterventionKind, why: &str| {
+        Err(OrchestratorError::Refused(format!(
+            "the intervention {kind} cannot run: {why}"
+        )))
+    };
+    let fork = ForkCorrection {
         checkout: request.checkout,
-        teacher,
+        teacher: teacher.clone(),
         deadline: request.deadline,
         cancel: request.cancel.clone(),
     };
-    repair_with(ctx, request, &intervention)
+    let knowledge = if request.knowledge.is_empty() {
+        if !request.interventions.is_empty() && wanted(InterventionKind::KnowledgeCorrection) {
+            return refuse(
+                InterventionKind::KnowledgeCorrection,
+                "no knowledge was given",
+            );
+        }
+        None
+    } else {
+        Some(KnowledgeBase::load(ctx, request.knowledge)?)
+    };
+    let knowledge_correction = knowledge.as_ref().map(|base| KnowledgeCorrection {
+        fork: &fork,
+        knowledge: base,
+    });
+    if student.is_none() && !request.interventions.is_empty() {
+        for kind in [InterventionKind::Retry, InterventionKind::Decompose] {
+            if wanted(kind) {
+                return refuse(kind, "no student model was given");
+            }
+        }
+    }
+    let retry = student.as_ref().map(|student| Retry {
+        checkout: request.checkout,
+        student: student.clone(),
+        deadline: request.deadline,
+        cancel: request.cancel.clone(),
+    });
+    let decompose = student.as_ref().map(|student| Decompose {
+        checkout: request.checkout,
+        student: student.clone(),
+        proposer: match request.proposer {
+            Proposer::Teacher => teacher.clone(),
+            Proposer::Student => student.clone(),
+        },
+        proposer_role: request.proposer,
+        deadline: request.deadline,
+        cancel: request.cancel.clone(),
+    });
+    let made: [(InterventionKind, Option<&dyn Intervention>); 4] = [
+        (InterventionKind::ForkCorrection, Some(&fork)),
+        (
+            InterventionKind::KnowledgeCorrection,
+            knowledge_correction
+                .as_ref()
+                .map(|k| k as &dyn Intervention),
+        ),
+        (
+            InterventionKind::Retry,
+            retry.as_ref().map(|r| r as &dyn Intervention),
+        ),
+        (
+            InterventionKind::Decompose,
+            decompose.as_ref().map(|d| d as &dyn Intervention),
+        ),
+    ];
+    let interventions: BTreeMap<InterventionKind, &dyn Intervention> = made
+        .into_iter()
+        .filter(|(kind, _)| wanted(*kind))
+        .filter_map(|(kind, intervention)| Some((kind, intervention?)))
+        .collect();
+    let routing = Routing::standard(request.budget).map_err(OrchestratorError::Refused)?;
+    repair_with(ctx, request, &routing, &interventions)
 }
 
-/// [`repair`] with the intervention given.
+/// One failure the run repairs: its trial, diagnosis and student, and the
+/// attempts its chain still owes, in order.
+struct Pending<'a> {
+    trial: &'a DiagnosedTrial,
+    result: &'a DiagnosticResult,
+    student: ExperienceId,
+    steps: Vec<(InterventionKind, usize, String)>,
+}
+
+/// [`repair`] under `routing`, with `interventions` the ones available.
 ///
 /// # Errors
 /// As [`repair`].
 pub fn repair_with(
     ctx: &Context,
     request: &RepairRequest<'_>,
-    intervention: &(dyn Intervention + '_),
+    routing: &Routing,
+    interventions: &BTreeMap<InterventionKind, &dyn Intervention>,
 ) -> Result<RepairReport, OrchestratorError> {
     let teacher_identity = ctx.model(request.teacher)?.identity;
+    let available: BTreeSet<InterventionKind> = interventions.keys().copied().collect();
     let diagnosis = diagnose_dirs(request.runs);
     let held = held_records(ctx)?;
     // The student's experience in this state root: the intake's register of
@@ -403,6 +521,7 @@ pub fn repair_with(
     }
     let store = ctx.experiences();
     let mut by_class: BTreeMap<String, ClassYield> = BTreeMap::new();
+    let mut by_intervention: BTreeMap<String, ClassYield> = BTreeMap::new();
     let mut skipped = Vec::new();
     let mut repairs = Vec::new();
     let mut cases = Vec::new();
@@ -419,36 +538,51 @@ pub fn repair_with(
             .or_default();
         tally.failed += 1;
         let experiences = admitted.get(&trial.trial).unwrap_or(&trial.experiences);
-        let why = match (route(result), experiences.as_slice(), trial.exported) {
+        let why = match (
+            routing.route(result, &available),
+            experiences.as_slice(),
+            trial.exported,
+        ) {
             (Route::Skip(why), _, _) => Some(why.to_string()),
             (_, _, false) => Some("the export skipped the trial: no trajectory".to_string()),
-            (Route::ForkCorrection, [student], true) => {
-                let mut pending = Vec::new();
-                let mut graded = 0;
-                for sample in 0..request.samples.max(1) {
-                    let key = key_of(student, &teacher_identity, intervention.name(), sample)?;
-                    match held
-                        .get(&key)
-                        .filter(|r| r.outcome != RepairOutcome::Refused)
-                    {
-                        Some(record) => {
-                            graded += 1;
-                            repairs.push(record.clone());
-                        }
-                        None => pending.push((sample, key)),
+            (Route::To(chain), [student], true) => {
+                // The failure's attempts in the order its chain tries them,
+                // as many as its budget allows.
+                let mut steps = Vec::new();
+                for kind in chain {
+                    for sample in 0..request.samples.max(1) {
+                        let key = key_of(student, interventions[&kind], sample)?;
+                        steps.push((kind, sample, key));
                     }
                 }
-                if graded > 0 {
+                steps.truncate(routing.budget);
+                let graded: Vec<&RepairRecord> = steps
+                    .iter()
+                    .filter_map(|(_, _, key)| held.get(key))
+                    .filter(|r| r.outcome != RepairOutcome::Refused)
+                    .collect();
+                if !graded.is_empty() {
                     tally.held += 1;
                     *held_per_task.entry(trial.task.as_str()).or_default() += 1;
+                    repairs.extend(graded.iter().map(|r| (*r).clone()));
                 }
-                if pending.is_empty() {
+                let repaired = graded.iter().any(|r| r.outcome == RepairOutcome::Accepted);
+                steps.retain(|(_, _, key)| {
+                    held.get(key)
+                        .is_none_or(|r| r.outcome == RepairOutcome::Refused)
+                });
+                if repaired || steps.is_empty() {
                     continue;
                 }
-                cases.push((trial, result, student.clone(), pending));
+                cases.push(Pending {
+                    trial,
+                    result,
+                    student: student.clone(),
+                    steps,
+                });
                 None
             }
-            (Route::ForkCorrection, _, true) => {
+            (Route::To(_), _, true) => {
                 Some("the trial is not one experience of the store".to_string())
             }
         };
@@ -458,8 +592,8 @@ pub fn repair_with(
     }
     let (cases, unselected) = spread(
         cases,
-        |case| case.0.task.as_str(),
-        |case| case.0.trial.as_str(),
+        |case| case.trial.task.as_str(),
+        |case| case.trial.trial.as_str(),
         &Spread {
             per_task: request.per_task,
             max: request.max,
@@ -467,15 +601,15 @@ pub fn repair_with(
             held: &held_per_task,
         },
     );
-    for (trial, _, _, _) in unselected {
+    for case in unselected {
         skipped.push((
-            trial.trial.clone(),
+            case.trial.trial.clone(),
             "not selected: the run's bound on repairs, or of one task, is reached".to_string(),
         ));
     }
-    for (_, result, _, _) in &cases {
+    for case in &cases {
         by_class
-            .entry(result.class.as_str().to_string())
+            .entry(case.result.class.as_str().to_string())
             .or_default()
             .routed += 1;
     }
@@ -484,57 +618,57 @@ pub fn repair_with(
         .iter()
         .map(|run| (run.join("export"), run.as_path()))
         .collect();
-    let jobs: Vec<_> = cases
-        .into_iter()
-        .flat_map(|(trial, result, student, pending)| {
-            pending
-                .into_iter()
-                .map(move |(sample, key)| (trial, result, student.clone(), key, sample))
-        })
-        .collect();
-    let next = Mutex::new(jobs.into_iter());
+    let next = Mutex::new(cases.into_iter());
     // Each repair is kept as soon as it is graded, under one lock: a run that
     // is stopped keeps every repair it finished, and a rerun holds them.
     let done: Mutex<(Vec<RepairRecord>, Vec<ExperienceId>)> = Mutex::new((Vec::new(), Vec::new()));
     let failed: Mutex<Option<OrchestratorError>> = Mutex::new(None);
+    let stopped = || request.cancel.is_cancelled() || failed.lock().is_ok_and(|f| f.is_some());
     std::thread::scope(|scope| {
         for _ in 0..request.jobs.max(1) {
             scope.spawn(|| loop {
-                if request.cancel.is_cancelled() || failed.lock().is_ok_and(|f| f.is_some()) {
+                if stopped() {
                     return;
                 }
-                let Some((trial, result, student_id, key, sample)) =
-                    next.lock().ok().and_then(|mut n| n.next())
-                else {
+                let Some(case) = next.lock().ok().and_then(|mut n| n.next()) else {
                     return;
                 };
-                let Some(run) = run_of.get(trial.export.as_path()) else {
+                let Some(run) = run_of.get(case.trial.export.as_path()) else {
                     continue;
                 };
-                let (record, experience) = attempt_case(
-                    ctx,
-                    intervention,
-                    trial,
-                    result,
-                    run,
-                    &student_id,
-                    &key,
-                    sample,
-                    &teacher_identity,
-                );
-                let Ok(mut done) = done.lock() else {
-                    return;
-                };
-                match keep(ctx, record, experience.as_ref()) {
-                    Ok((record, id)) => {
-                        done.0.push(record);
-                        done.1.extend(id);
-                    }
-                    Err(error) => {
-                        if let Ok(mut failed) = failed.lock() {
-                            failed.get_or_insert(error);
-                        }
+                // The chain in order: the first accepted attempt ends it.
+                for (kind, sample, key) in &case.steps {
+                    if stopped() {
                         return;
+                    }
+                    let (record, experience) = attempt_case(
+                        ctx,
+                        interventions[kind],
+                        case.trial,
+                        case.result,
+                        run,
+                        &case.student,
+                        key,
+                        *sample,
+                    );
+                    let accepted = record.outcome == RepairOutcome::Accepted;
+                    let Ok(mut done) = done.lock() else {
+                        return;
+                    };
+                    match keep(ctx, record, experience.as_ref()) {
+                        Ok((record, id)) => {
+                            done.0.push(record);
+                            done.1.extend(id);
+                        }
+                        Err(error) => {
+                            if let Ok(mut failed) = failed.lock() {
+                                failed.get_or_insert(error);
+                            }
+                            return;
+                        }
+                    }
+                    if accepted {
+                        break;
                     }
                 }
             });
@@ -547,16 +681,26 @@ pub fn repair_with(
         return Err(OrchestratorError::Cancelled);
     }
     let (mut made, accepted) = done.into_inner().unwrap_or_default();
-    made.sort_by(|a, b| a.trial.cmp(&b.trial));
+    made.sort_by(|a, b| (&a.trial, &a.key).cmp(&(&b.trial, &b.key)));
     for record in made {
-        let tally = by_class
-            .entry(record.diagnosis.class.as_str().to_string())
-            .or_default();
-        match record.outcome {
-            RepairOutcome::Accepted => tally.accepted += 1,
-            RepairOutcome::Rejected => tally.rejected += 1,
-            RepairOutcome::Refused => tally.refused += 1,
+        for tally in [
+            by_class
+                .entry(record.diagnosis.class.as_str().to_string())
+                .or_default(),
+            by_intervention
+                .entry(record.intervention.clone())
+                .or_default(),
+        ] {
+            match record.outcome {
+                RepairOutcome::Accepted => tally.accepted += 1,
+                RepairOutcome::Rejected => tally.rejected += 1,
+                RepairOutcome::Refused => tally.refused += 1,
+            }
         }
+        by_intervention
+            .entry(record.intervention.clone())
+            .or_default()
+            .routed += 1;
         repairs.push(record);
     }
     let repair_set = if accepted.is_empty() {
@@ -570,6 +714,9 @@ pub fn repair_with(
     Ok(RepairReport {
         format: REPAIR_FORMAT,
         teacher: teacher_identity,
+        routing: routing.clone(),
+        interventions: available.into_iter().collect(),
+        by_intervention,
         seed: request.seed,
         per_task: request.per_task,
         by_class,
@@ -584,14 +731,13 @@ pub fn repair_with(
 #[allow(clippy::too_many_arguments)]
 fn attempt_case(
     ctx: &Context,
-    intervention: &(dyn Intervention + '_),
+    intervention: &dyn Intervention,
     trial: &DiagnosedTrial,
     result: &DiagnosticResult,
     run: &Path,
     student_id: &ExperienceId,
     key: &str,
     sample: usize,
-    teacher: &str,
 ) -> (RepairRecord, Option<Experience>) {
     let mut record = RepairRecord {
         format: REPAIR_FORMAT.into(),
@@ -604,13 +750,14 @@ fn attempt_case(
         intervention: intervention.name().into(),
         sample,
         keep_through: result.last_good_step().unwrap_or_default(),
-        teacher: teacher.into(),
+        teacher: intervention.actor().into(),
         outcome: RepairOutcome::Refused,
         reason: None,
         grade: None,
         experience: None,
         prefix_steps: None,
         teacher_actions: None,
+        notes: Notes::default(),
     };
     let student = match ctx.experiences().get(student_id) {
         Ok(student) => student,
@@ -636,6 +783,7 @@ fn attempt_case(
             record.keep_through = attempted.keep_through;
             record.prefix_steps = Some(attempted.prefix_steps);
             record.teacher_actions = Some(attempted.teacher_actions);
+            record.notes = attempted.notes;
             let passed = attempted.grade.passed();
             record.outcome = if passed {
                 RepairOutcome::Accepted
@@ -646,101 +794,4 @@ fn attempt_case(
             (record, passed.then_some(attempted.experience))
         }
     }
-}
-
-/// Keeps one graded repair: the accepted experience with its annotations,
-/// the class on the student's attempt, and the record; the record and the
-/// experience's id.
-fn keep(
-    ctx: &Context,
-    mut record: RepairRecord,
-    experience: Option<&Experience>,
-) -> Result<(RepairRecord, Option<ExperienceId>), OrchestratorError> {
-    let id = match experience {
-        Some(experience) => {
-            let id = keep_accepted(ctx, &record, experience)?;
-            record.experience = Some(id.clone());
-            Some(id)
-        }
-        None => None,
-    };
-    annotate_failure(ctx, &record)?;
-    ctx.workspace().put_document(RECORD, &record)?;
-    Ok((record, id))
-}
-
-/// Stores an accepted repair with the verifier's pass and its relation to
-/// the student's attempt.
-fn keep_accepted(
-    ctx: &Context,
-    record: &RepairRecord,
-    experience: &Experience,
-) -> Result<ExperienceId, OrchestratorError> {
-    let store = ctx.experiences();
-    let id = store.put(experience)?;
-    let verifier = store
-        .annotations(&record.student)?
-        .annotations
-        .into_iter()
-        .find(|a| a.producer.name == VERIFIER_PRODUCER)
-        .map(|a| a.producer)
-        .unwrap_or_else(|| Producer {
-            name: VERIFIER_PRODUCER.into(),
-            version: record
-                .grade
-                .as_ref()
-                .map(|g| g.digest.clone())
-                .unwrap_or_default(),
-        });
-    store.annotate(&Annotation {
-        experience: id.clone(),
-        producer: verifier,
-        body: AnnotationBody::Verdict {
-            outcome: Outcome::Pass,
-            strength: Strength::Executable,
-            evidence: serde_json::json!({ "grade": record.grade, "repair": record.key }),
-        },
-    })?;
-    let producer = Producer {
-        name: PRODUCER.into(),
-        version: splinter_eval::diagnosis::RULES_VERSION.into(),
-    };
-    // `RevisionOf` and not `PreferredOver`: the preference view finds a
-    // repair by its copied prefix and pairs it with the failed attempt that
-    // prefix is, and reads `PreferredOver` as a pair of final answers, which an
-    // agent's trial does not have.
-    store.annotate(&Annotation {
-        experience: id.clone(),
-        producer,
-        body: AnnotationBody::Relation {
-            kind: RelationKind::RevisionOf,
-            other: record.student.clone(),
-        },
-    })?;
-    Ok(id)
-}
-
-/// Records the diagnosed class on the student's attempt, once.
-fn annotate_failure(ctx: &Context, record: &RepairRecord) -> Result<(), OrchestratorError> {
-    let store = ctx.experiences();
-    let producer = Producer {
-        name: splinter_eval::diagnosis::PRODUCER.into(),
-        version: splinter_eval::diagnosis::RULES_VERSION.into(),
-    };
-    let annotated = store
-        .annotations(&record.student)?
-        .annotations
-        .iter()
-        .any(|a| a.producer == producer);
-    if !annotated {
-        store.annotate(&Annotation {
-            experience: record.student.clone(),
-            producer,
-            body: AnnotationBody::AttemptReport(AttemptReport {
-                failure: Some(record.diagnosis.class),
-                ..AttemptReport::default()
-            }),
-        })?;
-    }
-    Ok(())
 }

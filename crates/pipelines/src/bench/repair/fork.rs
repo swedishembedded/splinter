@@ -6,15 +6,17 @@
 // turning agent failures into training data you can procure our services by
 // sending an email to info@swedishembedded.com.
 
-//! The fork correction: the examiner lays out the task's workspace, sven's
-//! fork replays the student's steps through the last good one, the teacher
-//! continues, and the examiner grades the result.
+//! The fork every intervention runs on: the examiner lays out the task's
+//! workspace, sven's fork replays the student's steps through the last good
+//! one, a model continues (led by user turns when the intervention gives
+//! some), and the examiner grades the result; and the fork correction, the
+//! teacher's continuation.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use splinter_agent::fork_at::{continue_from_step, ForkAt, Profile};
+use splinter_agent::fork_at::{continue_in_turns, ForkAt, Profile, TEACHER};
 use splinter_agent::solve::{Model, SolveOptions};
 use splinter_agent::CancelToken;
 use splinter_core::experience::{Experience, Provenance};
@@ -22,7 +24,8 @@ use splinter_orchestrator::context::Context;
 
 use super::super::artifact::{read_index, read_trial, UnitKind};
 use super::super::practice::{BenchCheckout, PRACTICE_FILE};
-use super::{commands, compose, Attempted, Case, Intervention};
+use super::commands::Grade;
+use super::{commands, compose, Attempted, Case, Intervention, InterventionKind, Notes};
 
 /// The fork correction: the teacher continues after the last good step.
 pub struct ForkCorrection<'a> {
@@ -69,120 +72,233 @@ fn practice_dir(run: &Path) -> Result<PathBuf, String> {
 
 impl Intervention for ForkCorrection<'_> {
     fn name(&self) -> &'static str {
-        "fork_correction"
+        InterventionKind::ForkCorrection.as_str()
+    }
+
+    fn actor(&self) -> &str {
+        &self.teacher.identity
     }
 
     fn attempt(&self, ctx: &Context, case: &Case<'_>) -> Result<Attempted, String> {
-        let keep_through = case
-            .diagnosis
-            .last_good_step()
-            .ok_or("the diagnosis places no last good step")?;
-        let folder = case
-            .trial
-            .staged_task
-            .as_deref()
-            .ok_or("the practice report names no staged task for the trial")?;
-        let practice = practice_dir(case.run)?;
-        let export = &case.trial.export;
-        let row = read_index(export)?
-            .into_iter()
-            .filter_map(Result::ok)
-            .find(|r| r.trial == case.trial.trial)
-            .ok_or_else(|| format!("{} does not list the trial", export.display()))?;
-        let artifact = read_trial(export, &row)?;
-        let [unit] = artifact.units.as_slice() else {
-            return Err("a harness trial has several conversations; none is forked".into());
+        self.attempt_briefed(ctx, case, None, self.name(), Notes::default())
+    }
+}
+
+impl ForkCorrection<'_> {
+    /// The teacher's continuation of `case`, shown `briefing` beside the
+    /// student's system prompt, recorded as `name`'s with `notes`.
+    pub(super) fn attempt_briefed(
+        &self,
+        ctx: &Context,
+        case: &Case<'_>,
+        briefing: Option<&str>,
+        name: &'static str,
+        notes: Notes,
+    ) -> Result<Attempted, String> {
+        let mut options = SolveOptions::new(self.deadline);
+        options.cancel = Some(self.cancel.clone());
+        let forked = fork_and_grade(
+            ctx,
+            self.checkout,
+            case,
+            Continuation {
+                model: &self.teacher,
+                role: TEACHER,
+                options: self.teacher.solving(options),
+                briefing,
+                turns: &[],
+                after_turn: &mut |_, _| true,
+            },
+        )?;
+        let provenance = Provenance {
+            teacher: true,
+            ..Provenance::new(self.teacher.identity.clone(), ctx.clock())
         };
-        let UnitKind::Single(context) = &unit.kind else {
-            return Err("a harness conversation is not forked".into());
-        };
-        // The practice run is read only; the repair works under this run's
-        // own state root.
-        let shown = shown_observations(&export.join(&row.path))?;
-        let work = ctx
-            .config()
+        finish(case, name, forked, notes, provenance)
+    }
+}
+
+/// How a fork continues: who, under which bounds, shown what.
+pub(super) struct Continuation<'a> {
+    /// The model that continues.
+    pub model: &'a Model,
+    /// Its role in the composed trajectory.
+    pub role: &'static str,
+    /// The continuation's bounds.
+    pub options: SolveOptions,
+    /// What the model is shown beside the student's system prompt.
+    pub briefing: Option<&'a str>,
+    /// The user turns that lead the continuation; none to continue where
+    /// the recording stopped.
+    pub turns: &'a [String],
+    /// Asked after each turn, with its index and the session's workspace:
+    /// whether the next is sent.
+    pub after_turn: &'a mut (dyn FnMut(usize, &Path) -> bool + Send),
+}
+
+/// A continuation the examiner graded.
+pub(super) struct Forked {
+    keep_through: u64,
+    trajectory: atif::Trajectory,
+    prefix_steps: usize,
+    grade: Grade,
+    actions: u32,
+    actor: String,
+}
+
+/// Forks `case` at its last good step in the examiner's session for its
+/// task, continues it as `continuation` says, and has the session grade
+/// the state the commands left.
+pub(super) fn fork_and_grade(
+    ctx: &Context,
+    checkout: &BenchCheckout,
+    case: &Case<'_>,
+    continuation: Continuation<'_>,
+) -> Result<Forked, String> {
+    let keep_through = case
+        .diagnosis
+        .last_good_step()
+        .ok_or("the diagnosis places no last good step")?;
+    let folder = case
+        .trial
+        .staged_task
+        .as_deref()
+        .ok_or("the practice report names no staged task for the trial")?;
+    let practice = practice_dir(case.run)?;
+    let export = &case.trial.export;
+    let row = read_index(export)?
+        .into_iter()
+        .filter_map(Result::ok)
+        .find(|r| r.trial == case.trial.trial)
+        .ok_or_else(|| format!("{} does not list the trial", export.display()))?;
+    let artifact = read_trial(export, &row)?;
+    let [unit] = artifact.units.as_slice() else {
+        return Err("a harness trial has several conversations; none is forked".into());
+    };
+    let UnitKind::Single(context) = &unit.kind else {
+        return Err("a harness conversation is not forked".into());
+    };
+    // The practice run is read only; the repair works under this run's own
+    // state root.
+    let shown = shown_observations(&export.join(&row.path))?;
+    // Absolute: the agent's tools resolve the tree as their project root,
+    // and a state root given relative to the working directory is not one.
+    let work = std::path::absolute(
+        ctx.config()
             .state_root
             .path()
             .join("repairs")
-            .join(&case.key[..16.min(case.key.len())]);
-        if work.exists() {
-            std::fs::remove_dir_all(&work).map_err(|e| format!("{}: {e}", work.display()))?;
-        }
-        let tree = work.join("tree");
-        let scratch = work.join("scratch");
-        std::fs::create_dir_all(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
-        let result = (|| {
-            // The task's own trial sandbox: the student's commands are
-            // replayed, and the teacher's run, where a trial's agent runs them.
-            let mut session = commands::Session::open(
-                self.checkout,
-                &practice,
-                folder,
-                &tree,
-                &ctx.config().state_root.path().join("s"),
-            )?;
-            without_inherited_setgid(&work)?;
-            let fork = ForkAt {
-                tree: &tree,
-                scratch: &scratch,
-                student: &unit.trajectory,
-                student_model: &case.student.provenance.solver,
-                system: &context.system,
-                keep_through,
-                workspace: None,
-                profile: Profile::Compact,
-                shown: Some(&shown),
-                read_exec: toolchain_dirs(ctx.config().command_env.get("PATH")),
-                launcher: Some(session.launcher(self.checkout)),
-            };
-            let mut options = SolveOptions::new(self.deadline);
-            options.cancel = Some(self.cancel.clone());
-            let options = self.teacher.solving(options);
-            let correction = ctx
-                .handle()
-                .block_on(continue_from_step(&fork, &self.teacher, options))
-                .map_err(|e| format!("the fork correction: {e}"))?;
-            let (trajectory, prefix_steps) = compose::onto_stored(
-                &case.student.trajectory,
-                correction.solution.trajectory,
-                keep_through,
-            )?;
-            let file = work.join("trajectory.json");
-            let text = serde_json::to_vec(&trajectory).map_err(|e| e.to_string())?;
-            std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
-            let grade = session.grade(&file)?;
-            drop(session);
-            let lineage = compose::Lineage {
-                student: case.student_id,
-                trial: &case.trial.trial,
-                diagnosis: case.diagnosis,
-                keep_through,
-                prefix_steps,
-                teacher: &self.teacher.identity,
-                intervention: self.name(),
-                workspace_check: "observations",
-                grade: &grade,
-            };
-            let trajectory = compose::with_lineage(trajectory, &lineage)?;
-            let provenance = Provenance {
-                teacher: true,
-                ..Provenance::new(self.teacher.identity.clone(), ctx.clock())
-            };
-            let experience = Experience::new(case.student.to_task(), trajectory, None, provenance)
-                .map_err(|e| e.to_string())?;
-            Ok(Attempted {
-                keep_through,
-                grade,
-                experience,
-                prefix_steps,
-                teacher_actions: correction.teacher_actions,
-            })
-        })();
-        // The tree is the examiner's copy of the task; what is kept is the
-        // experience and the record.
-        let _ = std::fs::remove_dir_all(&work);
-        result
+            .join(&case.key[..16.min(case.key.len())]),
+    )
+    .map_err(|e| format!("the repair's working directory: {e}"))?;
+    if work.exists() {
+        std::fs::remove_dir_all(&work).map_err(|e| format!("{}: {e}", work.display()))?;
     }
+    let tree = work.join("tree");
+    let scratch = work.join("scratch");
+    std::fs::create_dir_all(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
+    let Continuation {
+        model,
+        role,
+        options,
+        briefing,
+        turns,
+        after_turn,
+    } = continuation;
+    let result = (|| {
+        // The task's own trial sandbox: the student's commands are replayed,
+        // and the continuation's run, where a trial's agent runs them.
+        let mut session = commands::Session::open(
+            checkout,
+            &practice,
+            folder,
+            &tree,
+            &std::path::absolute(ctx.config().state_root.path().join("s"))
+                .map_err(|e| format!("the session's directory: {e}"))?,
+        )?;
+        without_inherited_setgid(&work)?;
+        let fork = ForkAt {
+            tree: &tree,
+            scratch: &scratch,
+            student: &unit.trajectory,
+            student_model: &case.student.provenance.solver,
+            system: &context.system,
+            keep_through,
+            workspace: None,
+            profile: Profile::Compact,
+            shown: Some(&shown),
+            read_exec: toolchain_dirs(ctx.config().command_env.get("PATH")),
+            launcher: Some(session.launcher(checkout)),
+            briefing,
+            role,
+        };
+        let correction = ctx
+            .handle()
+            .block_on(continue_in_turns(
+                &fork,
+                model,
+                options,
+                turns,
+                &mut |turn| after_turn(turn, &tree),
+            ))
+            .map_err(|e| format!("the continuation: {e}"))?;
+        let (trajectory, prefix_steps) = compose::onto_stored(
+            &case.student.trajectory,
+            correction.solution.trajectory,
+            keep_through,
+        )?;
+        let file = work.join("trajectory.json");
+        let text = serde_json::to_vec(&trajectory).map_err(|e| e.to_string())?;
+        std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
+        let grade = session.grade(&file)?;
+        drop(session);
+        Ok(Forked {
+            keep_through,
+            trajectory,
+            prefix_steps,
+            grade,
+            actions: correction.teacher_actions,
+            actor: model.identity.clone(),
+        })
+    })();
+    // The tree is the examiner's copy of the task; what is kept is the
+    // experience and the record.
+    let _ = std::fs::remove_dir_all(&work);
+    result
+}
+
+/// The repaired experience of a graded continuation, its lineage (the
+/// intervention `name`, `notes` and the grade) in its trajectory.
+pub(super) fn finish(
+    case: &Case<'_>,
+    name: &'static str,
+    forked: Forked,
+    notes: Notes,
+    provenance: Provenance,
+) -> Result<Attempted, String> {
+    let lineage = compose::Lineage {
+        student: case.student_id,
+        trial: &case.trial.trial,
+        diagnosis: case.diagnosis,
+        keep_through: forked.keep_through,
+        prefix_steps: forked.prefix_steps,
+        teacher: &forked.actor,
+        intervention: name,
+        workspace_check: "observations",
+        grade: &forked.grade,
+        notes: &notes,
+    };
+    let trajectory = compose::with_lineage(forked.trajectory, &lineage)?;
+    let experience = Experience::new(case.student.to_task(), trajectory, None, provenance)
+        .map_err(|e| e.to_string())?;
+    Ok(Attempted {
+        notes,
+        keep_through: forked.keep_through,
+        grade: forked.grade,
+        experience,
+        prefix_steps: forked.prefix_steps,
+        teacher_actions: forked.actions,
+    })
 }
 
 /// The observations the student's model was shown, by call id, from the

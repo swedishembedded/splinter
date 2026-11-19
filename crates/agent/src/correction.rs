@@ -48,6 +48,9 @@ use crate::workspace_shell::SandboxShell;
 /// The extra key on each composed step naming who produced it.
 pub const CORRECTION_KEY: &str = "correction";
 
+/// The role a user turn that led a continuation is marked with.
+pub const GUIDANCE: &str = "guidance";
+
 /// One student attempt, to be continued by `model`.
 pub struct CorrectionRequest<'a> {
     /// The task the student attempted.
@@ -379,6 +382,30 @@ pub fn compose(
     student_model: &str,
     teacher_model: &str,
 ) -> Result<Trajectory, CorrectionError> {
+    compose_as(
+        student,
+        continuation,
+        student_model,
+        teacher_model,
+        crate::fork_at::TEACHER,
+    )
+}
+
+/// [`compose`], the continuation's steps marked as `role`'s
+/// (`crate::fork_at::TEACHER` or `crate::fork_at::POLICY`) by `model`, and
+/// a user turn the continuation was led by (a subgoal) as `guidance`: it is
+/// context the continuation was given, which no model produced.
+///
+/// # Errors
+///
+/// As [`compose`].
+pub fn compose_as(
+    student: &Trajectory,
+    continuation: &Trajectory,
+    student_model: &str,
+    teacher_model: &str,
+    role: &str,
+) -> Result<Trajectory, CorrectionError> {
     let prefix_steps = student.steps.len();
     if continuation.steps.len() < prefix_steps {
         return Err(CorrectionError::Provenance {
@@ -431,8 +458,12 @@ pub fn compose(
         step.step_id = id;
         id += 1;
         step.is_copied_context = None;
-        step.model_name = Some(teacher_model.to_string());
-        step.extra = marked(step.extra, "teacher", teacher_model);
+        if step.source == StepOrigin::User {
+            step.extra = marked(step.extra, GUIDANCE, teacher_model);
+        } else {
+            step.model_name = Some(teacher_model.to_string());
+            step.extra = marked(step.extra, role, teacher_model);
+        }
         composed.steps.push(step);
     }
     Ok(composed)

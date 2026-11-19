@@ -21,6 +21,7 @@ mod batched_probing;
 mod bench_exact_contexts;
 mod bench_harness;
 mod bench_ingest;
+mod bench_interventions;
 mod bench_pairs;
 mod bench_policy_gradient;
 mod bench_practice;

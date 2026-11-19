@@ -37,9 +37,9 @@ use sven_sdk::atif::{StepOrigin, Trajectory};
 use sven_sdk::config::{CommandConfinement, RunProfile};
 use sven_sdk::fork::{transcript_digest, Fork, RecordedState};
 use sven_sdk::model::time_notice::without_time_notice;
-use sven_sdk::{ApprovalPolicy, Engine, Toolset, Turn};
+use sven_sdk::{ApprovalPolicy, Engine, RunConclusion, Toolset, Turn};
 
-use crate::correction::{compose, trajectory_transcript, Correction, CorrectionError};
+use crate::correction::{compose_as, trajectory_transcript, Correction, CorrectionError};
 use crate::solve::{Model, Solution, SolveOptions};
 use crate::work::WITHHELD_TOOLS;
 
@@ -87,7 +87,22 @@ pub struct ForkAt<'a> {
     /// the commands then see what the student's saw, and are not confined
     /// here, the sandbox confines them.
     pub launcher: Option<Vec<String>>,
+    /// Text the continuing model is shown after the system prompt the
+    /// student ran under, and that no step of the trajectory records:
+    /// reference material a teacher may read where the student may not.
+    /// The kept prefix and its replay are the same with or without it.
+    pub briefing: Option<&'a str>,
+    /// Who continues, as the composed trajectory marks the continuation's
+    /// steps: [`TEACHER`] for another model's correction, [`POLICY`] for
+    /// the student's own model sampled again.
+    pub role: &'a str,
 }
+
+/// The role of a continuation by a model other than the student's.
+pub const TEACHER: &str = "teacher";
+
+/// The role of a continuation by the student's own model.
+pub const POLICY: &str = "policy";
 
 /// The student's steps through `keep_through`, as their own trajectory.
 ///
@@ -141,6 +156,28 @@ pub async fn continue_from_step(
     model: &Model,
     options: SolveOptions,
 ) -> Result<Correction, CorrectionError> {
+    continue_in_turns(request, model, options, &[], &mut |_| true).await
+}
+
+/// [`continue_from_step`], with the continuation led by `turns`: each is
+/// sent as a user turn after the kept step (the first) or after the turn
+/// before it ended, and `after_turn` is asked, with the turn's index, once
+/// the model's turn on it has ended; it returns whether the next is sent. A
+/// turn that ends without success (a deadline, the budget, a cancel, an
+/// error) is the last. Every turn shares the one deadline of `options`.
+/// With no turns the model continues where the recording stopped, with no
+/// user turn added.
+///
+/// # Errors
+///
+/// As [`continue_from_step`].
+pub async fn continue_in_turns(
+    request: &ForkAt<'_>,
+    model: &Model,
+    options: SolveOptions,
+    turns: &[String],
+    after_turn: &mut (dyn FnMut(usize) -> bool + Send),
+) -> Result<Correction, CorrectionError> {
     let prefix = kept_prefix(request.student, request.keep_through)?;
     let mut transcript = trajectory_transcript(&prefix, request.system)?;
     if let Some(shown) = request.shown {
@@ -163,13 +200,35 @@ pub async fn continue_from_step(
     let mut agent = engine
         .fork(&Fork::new(transcript, request.tree, recorded))
         .await?;
-    let outcome = agent.continue_with(options.run_options()).await?;
+    let outcome = if turns.is_empty() {
+        agent.continue_with(options.run_options()).await?
+    } else {
+        let started = std::time::Instant::now();
+        let mut last = None;
+        for (index, text) in turns.iter().enumerate() {
+            let mut bounds = options.clone();
+            bounds.deadline = options.deadline.saturating_sub(started.elapsed());
+            if bounds.deadline.is_zero() {
+                break;
+            }
+            let outcome = agent.send_with(text, bounds.run_options()).await?;
+            let ended = outcome.conclusion != RunConclusion::Success;
+            last = Some(outcome);
+            if ended || !after_turn(index) {
+                break;
+            }
+        }
+        last.ok_or_else(|| {
+            CorrectionError::Trajectory("the deadline passed before the first turn".into())
+        })?
+    };
     let continuation = agent.trajectory();
-    let trajectory = compose(
+    let trajectory = compose_as(
         &prefix,
         &continuation,
         request.student_model,
         &model.identity,
+        request.role,
     )?;
     let prefix_actions = count_agent(&prefix.steps);
     let teacher_actions = count_agent(&trajectory.steps[prefix.steps.len()..]);
@@ -221,11 +280,15 @@ fn fork_engine(
         });
     }
     let provider = Arc::clone(&model.provider);
+    let system = match request.briefing {
+        Some(briefing) => format!("{}\n\n{}", request.system.trim_end(), briefing.trim()),
+        None => request.system.to_string(),
+    };
     let engine = Engine::builder()
         .config(config)
         .model_provider(crate::system_prompt::UnderSystemPrompt::wrap(
             options.provider(provider),
-            request.system,
+            &system,
         ))
         .toolset(Toolset::coding())
         .project_root(request.tree)
