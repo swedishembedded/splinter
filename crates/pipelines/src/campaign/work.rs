@@ -12,12 +12,14 @@
 //! examiner and over a stand-in; ingesting, curating, training, the gate and
 //! the champion's moves are Splinter's own and are not seams.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
+use splinter_core::outcome::FailureClass;
 use splinter_eval::promotion::{Pair, PublicKey};
 use splinter_orchestrator::context::Context;
 
@@ -73,10 +75,25 @@ pub struct RolloutRequest<'a> {
     pub attempts: u32,
     /// The generation's rollout seed.
     pub seed: u64,
+    /// Fresh transfer exercises to draw and practise beside `tasks`, when
+    /// the capability curriculum asks for them.
+    pub transfer: Option<TransferRequest<'a>>,
     /// The stage's own directory, inside the campaign's: everything the
     /// rollout writes goes here. It may hold what an interrupted attempt
     /// left; a rollout either continues it or starts over.
     pub dir: &'a Path,
+}
+
+/// Fresh exercises for the weakest capabilities, drawn from the examiner's
+/// practice generator.
+#[derive(Clone, Copy, Debug)]
+pub struct TransferRequest<'a> {
+    /// The capability ids, as the examiner names them.
+    pub capabilities: &'a [String],
+    /// Tasks drawn, of which those that exercise one of them are kept.
+    pub count: usize,
+    /// The draw's seed.
+    pub seed: u64,
 }
 
 /// One trial of a rollout, as it ended.
@@ -89,6 +106,13 @@ pub struct Trial {
     pub reward: Option<f64>,
     /// Whether it passed, when graded.
     pub passed: Option<bool>,
+    /// Why it failed, when it failed and was diagnosed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class: Option<FailureClass>,
+    /// The capability ids the examiner labels its task with; empty when it
+    /// names none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
 }
 
 /// What a rollout produced.
@@ -116,6 +140,15 @@ pub trait Rollouts {
     /// # Errors
     /// The material cannot be read.
     fn tasks(&self) -> Result<Vec<String>, CampaignError>;
+
+    /// The capability ids of each practice task, by name, as the examiner
+    /// labels them; a task it labels with none is absent. None by default.
+    ///
+    /// # Errors
+    /// The material cannot be read.
+    fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, CampaignError> {
+        Ok(BTreeMap::new())
+    }
 
     /// Runs `request`; stops when `cancel` fires.
     ///

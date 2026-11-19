@@ -29,6 +29,7 @@ mod budget;
 mod campaign;
 mod campaign_factory;
 mod canary_sets;
+mod capability_curriculum;
 mod clusters;
 mod compare_sets;
 mod converse_learn;

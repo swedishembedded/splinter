@@ -211,30 +211,41 @@ pub fn weights(histories: &BTreeMap<String, History>, params: &Params) -> BTreeM
         .collect()
 }
 
-/// A uniform number in `(0, 1)` that depends on `seed` and `family` alone.
-fn unit(seed: Seed, family: &str) -> f64 {
+/// A uniform number in `(0, 1)` that depends on `seed` and `name` alone.
+fn unit(seed: Seed, name: &str) -> f64 {
     let mut input = seed.value().to_le_bytes().to_vec();
-    input.extend_from_slice(family.as_bytes());
+    input.extend_from_slice(name.as_bytes());
     let digest = Digest::of(&input);
     // A digest is hex; 16 digits are 64 bits, of which a float keeps 53.
     let bits = u64::from_str_radix(&digest.hex()[..16], 16).unwrap_or(0);
     ((bits >> 11) as f64 + 0.5) / (1u64 << 53) as f64
 }
 
-/// Every family once, drawn without replacement in proportion to its weight
-/// (each is given the key `ln(u) / weight`, the largest first), by a draw
-/// that depends on `seed` and the family names alone.
+/// Every named item once, drawn without replacement in proportion to its
+/// weight (each is given the key `ln(u) / weight`, the largest first), by a
+/// draw that depends on `seed` and the names alone; an item of weight zero
+/// comes after every other, by name.
 #[must_use]
-pub fn order(scores: &BTreeMap<String, Score>, seed: Seed) -> Vec<String> {
-    let mut keyed: Vec<(f64, &String)> = scores
-        .iter()
-        .map(|(family, score)| (unit(seed, family).ln() / score.weight, family))
+pub fn weighted_order<'a>(
+    weights: impl IntoIterator<Item = (&'a String, f64)>,
+    seed: Seed,
+) -> Vec<String> {
+    let mut keyed: Vec<(f64, &String)> = weights
+        .into_iter()
+        .map(|(name, weight)| (unit(seed, name).ln() / weight, name))
         .collect();
     keyed.sort_by(|a, b| b.0.total_cmp(&a.0).then_with(|| a.1.cmp(b.1)));
-    keyed
-        .into_iter()
-        .map(|(_, family)| family.clone())
-        .collect()
+    keyed.into_iter().map(|(_, name)| name.clone()).collect()
+}
+
+/// Every family once, drawn without replacement in proportion to its weight
+/// ([`weighted_order`]).
+#[must_use]
+pub fn order(scores: &BTreeMap<String, Score>, seed: Seed) -> Vec<String> {
+    weighted_order(
+        scores.iter().map(|(family, score)| (family, score.weight)),
+        seed,
+    )
 }
 
 /// Every family, heaviest weight first, ties by name.

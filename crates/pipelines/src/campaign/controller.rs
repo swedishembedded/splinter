@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use splinter_agent::CancelToken;
 use splinter_core::digest::{digest_of, Digest};
-use splinter_eval::campaign::pass_rate::Band;
 use splinter_eval::promotion::{decide, Promotion, Submitted};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -31,9 +30,10 @@ use super::account::{
     CurateRecord, IngestRecord, RolloutRecord, TrainRecord,
 };
 use super::champion::{self, Move};
+use super::curriculum::{self, Planned};
 use super::spec::CampaignSpec;
 use super::types::CampaignError;
-use super::work::{ExamRequest, Examiner, Model, RolloutRequest, Rollouts};
+use super::work::{ExamRequest, Examiner, Model, RolloutRequest, Rollouts, TransferRequest};
 use super::Stopwatch;
 use crate::bench::{ingest_bench_trials, IngestOptions};
 use crate::datasets::{self, BuildRequest};
@@ -373,23 +373,41 @@ impl<'p> CampaignController<'p> {
         // The tasks of a generation follow from the rollouts before it alone, so
         // a resumed generation draws the tasks it drew the first time.
         let rates = rates(&self.spec, &commits, generation)?;
-        let tasks: Vec<String> = self
-            .parts
-            .rollouts
-            .tasks()?
-            .into_iter()
-            .filter(|task| rates.band(task) != Band::Retired)
-            .collect();
+        let Planned { tasks, selection } = curriculum::plan(
+            &self.spec,
+            &commits,
+            &rates,
+            generation,
+            &*self.parts.rollouts,
+            self.seed_of(generation, 3),
+        )?;
+        let transfer_seed = self.seed_of(generation, 4);
+        let transfer = self
+            .spec
+            .rollout
+            .transfer
+            .zip(selection.as_ref())
+            .filter(|(_, s)| !s.transfer.is_empty())
+            .map(|(spec, s)| (spec.count, s.transfer.clone()));
 
-        // Rollout: the champion on every practice task it has not mastered.
+        // Rollout: the champion on the practice tasks of the generation (every
+        // one it has not mastered, or the capability curriculum's draw).
         let attempts = self.spec.rollout.attempts;
         let rollout_seed = self.seed_of(generation, 1);
+        let mut config = json!({"attempts": attempts, "seed": rollout_seed, "tasks": tasks});
+        if selection.is_some() {
+            config["curriculum"] = json!("capability");
+            config["transfer"] = json!(transfer.as_ref().map(
+                |(count, ids)| json!({"capabilities": ids, "count": count, "seed": transfer_seed})
+            ));
+        }
         let key = KeyParts::new("rollout")
-            .config(&json!({"attempts": attempts, "seed": rollout_seed, "tasks": tasks}))
+            .config(&config)
             .input("champion", &digest_of(&champion))
             .input("rollouts", &digest_of(&self.parts.rollouts.identity()));
         let name = unit(generation, "rollout");
-        let planned = u64::from(attempts) * tasks.len() as u64;
+        let drawn = transfer.as_ref().map_or(0, |(count, _)| *count) as u64;
+        let planned = u64::from(attempts) * (tasks.len() as u64 + drawn);
         if !self.committed(&name, &key)? {
             if let Some(stop) = self.over_budget(planned, false)? {
                 return Ok(Some(stop));
@@ -408,6 +426,11 @@ impl<'p> CampaignController<'p> {
                     tasks: &tasks,
                     attempts,
                     seed: rollout_seed,
+                    transfer: transfer.as_ref().map(|(count, ids)| TransferRequest {
+                        capabilities: ids,
+                        count: *count,
+                        seed: transfer_seed,
+                    }),
                     dir: &dir,
                 },
                 &cancel,
@@ -419,6 +442,7 @@ impl<'p> CampaignController<'p> {
                 rollouts: rolled.trials.len() as u64,
                 trials: rolled.trials,
                 tokens: rolled.tokens,
+                selection: selection.clone(),
             };
             Ok(StageWork::new(to_value(&record)?).output("export", &export))
         })?;

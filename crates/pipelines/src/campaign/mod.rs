@@ -60,6 +60,7 @@ mod account;
 pub mod brain;
 pub mod champion;
 mod controller;
+mod curriculum;
 pub mod endpoint;
 mod environments;
 pub mod examiner;
@@ -78,13 +79,16 @@ pub use controller::{
     campaign_dir, unit, CampaignController, Parts, Stopped, CAMPAIGN_UNIT, STAGES,
 };
 pub use environments::EnvironmentLabels;
-pub use spec::{Budget, CampaignSpec, CurateSpec, RolloutSpec, TrainSpec, DEFAULT_RETIRE_AT};
+pub use spec::{
+    Budget, CampaignSpec, CurateSpec, RolloutCurriculum, RolloutSpec, TrainSpec, TransferSpec,
+    DEFAULT_RETIRE_AT,
+};
 pub use types::{
     AllFailHandler, CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector,
     RolloutGroup, RolloutTrace, TraceSequence, TrainReport, TrainRequest, Trained, Trainer,
     Validator,
 };
 pub use work::{
-    ExamRequest, Examined, Examiner, Model, Rolled, RolloutRequest, Rollouts, Stopwatch, Trial,
-    WallClock,
+    ExamRequest, Examined, Examiner, Model, Rolled, RolloutRequest, Rollouts, Stopwatch,
+    TransferRequest, Trial, WallClock,
 };

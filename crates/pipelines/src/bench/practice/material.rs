@@ -10,6 +10,7 @@
 //! directory holding `practice.json`, the staged task folders and the Harbor
 //! job that runs them, read and held to what the learner may practise on.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,22 @@ pub struct StagedTask {
     pub digest: String,
     /// The sha256 of the task as drawn or as the collection holds it.
     pub source_digest: String,
+    /// The capability ids the examiner's taxonomy labels the task with;
+    /// empty in material staged before the examiner named them. Data: the
+    /// ids are the examiner's, never a list this reader knows.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+    /// The reporting track the taxonomy puts the task in, when it does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track: Option<String>,
+}
+
+impl StagedTask {
+    /// What identifies the staged task: its name and digests, never its
+    /// labels (a relabelled taxonomy stages the same material).
+    fn identity(&self) -> (&str, &str, &str) {
+        (&self.name, &self.digest, &self.source_digest)
+    }
 }
 
 /// The fields of `practice.json` this reader uses; what identifies the
@@ -70,6 +87,14 @@ pub struct PracticeManifest {
     pub draw: Option<Value>,
     /// The staged tasks.
     pub tasks: Vec<StagedTask>,
+    /// The taxonomy the tasks' capabilities were labelled by (`schema`,
+    /// `sha256`); absent in material staged before the examiner named it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taxonomy: Option<Value>,
+    /// What a selection by capability kept (`capabilities`, `offered`);
+    /// absent or null for material staged whole.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection: Option<Value>,
 }
 
 /// The draw of a practice manifest made with `--count N --seed S`.
@@ -179,6 +204,38 @@ impl Practice {
         }))
     }
 
+    /// The capability ids the material was selected by (`bench task
+    /// practice --capability`); empty for material staged whole.
+    ///
+    /// # Errors
+    /// A selection that names its capabilities as anything but strings.
+    pub fn selected_capabilities(&self) -> Result<Vec<String>, EpisodeError> {
+        let Some(selection) = self.manifest.selection.as_ref().filter(|s| !s.is_null()) else {
+            return Ok(Vec::new());
+        };
+        selection
+            .get("capabilities")
+            .and_then(Value::as_array)
+            .and_then(|ids| {
+                ids.iter()
+                    .map(|id| id.as_str().map(str::to_string))
+                    .collect::<Option<Vec<_>>>()
+            })
+            .ok_or_else(|| malformed(&self.dir, "the selection names no capabilities"))
+    }
+
+    /// The capability ids of each staged task, by folder name; a task the
+    /// examiner labelled with none is absent.
+    #[must_use]
+    pub fn capabilities(&self) -> BTreeMap<String, Vec<String>> {
+        self.manifest
+            .tasks
+            .iter()
+            .filter(|t| !t.capabilities.is_empty())
+            .map(|t| (t.name.clone(), t.capabilities.clone()))
+            .collect()
+    }
+
     /// The staged task folders' directory, relative to the practice
     /// directory (`tasks` unless the manifest names another).
     #[must_use]
@@ -206,6 +263,8 @@ impl Practice {
             || ours.manifest_sha256 != other.manifest_sha256
             || ours.content_sha256 != other.content_sha256
             || ours.draw != other.draw
+            || ours.selection.as_ref().filter(|s| !s.is_null())
+                != other.selection.as_ref().filter(|s| !s.is_null())
         {
             return Some(format!(
                 "the collection was staged as {} (manifest {:?}, content {:?}), not as {} \
@@ -218,11 +277,17 @@ impl Practice {
                 ours.content_sha256
             ));
         }
-        if ours.tasks != other.tasks {
+        let theirs: Vec<_> = other.tasks.iter().map(StagedTask::identity).collect();
+        if ours
+            .tasks
+            .iter()
+            .map(StagedTask::identity)
+            .ne(theirs.iter().copied())
+        {
             let differs = ours
                 .tasks
                 .iter()
-                .find(|t| !other.tasks.contains(t))
+                .find(|t| !theirs.contains(&t.identity()))
                 .map_or_else(
                     || format!("{} tasks, not {}", other.tasks.len(), ours.tasks.len()),
                     |t| format!("task {} is not staged with digest {}", t.name, t.digest),

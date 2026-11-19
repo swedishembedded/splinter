@@ -34,6 +34,9 @@ seed = "12126459309185286876"  # optional; drawn, printed and recorded when left
 attempts = 4                   # attempts of each task
 retire_at = 0.9                # a task the champion passes this often is mastered and not practised again
 retire_after = 4               # ... on at least this many graded attempts
+# curriculum = "capability"    # optional: draw the tasks by capability gap (below); default "all"
+# tasks = 64                   # with "capability": the most tasks a generation practises
+# transfer = { capabilities = 2, count = 40 }   # with "capability": fresh exercises for the weakest capabilities
 
 [curate]
 view = "sft-step"              # the dataset view (dataset build --view)
@@ -104,6 +107,18 @@ exam generated with `make <domain>/exam/generate SEED_FILE=...`).
    `splinter tasks harbor practice` runs it. A task is mastered once its pass rate over the earlier rollouts reaches
    `retire_at` on at least `retire_after` graded attempts. Older generations' attempts count half each time the champion
    changes. The graded export is linked into the stage's directory.
+   Under `curriculum = "capability"` the tasks are chosen by capability gap instead. Bench labels each practice task
+   with the capability ids of its taxonomy; the earlier rollouts are counted per capability (graded passes and fails,
+   each failure's diagnosed class; an attempt the infrastructure stopped is in no denominator). A capability weighs
+   `(1 - r)(1/2 + f/2)(1/2 + m/2)`: `r` its smoothed pass rate, `f` the share of its measured tasks in the frontier band,
+   `m` the share of its graded failures that were the model's own. A task weighs the heaviest of its capabilities, times
+   1 in the frontier band or unmeasured, 1/4 if never solved, 0 if mastered; a task the infrastructure stopped on every
+   attempt is never chosen. `tasks` of them are drawn without replacement in proportion to their weights, from a seed
+   of the campaign's. With `transfer`, the `capabilities` heaviest measured capabilities get fresh exercises: bench draws
+   `count` tasks from the collection's generator and keeps those that exercise one (`bench task practice --count --seed
+   --capability`, into the stage's `transfer/`), the champion practises them beside the chosen tasks, and their trials
+   join the same export. The rollout record keeps every task's weight, the tasks set aside for the infrastructure, and
+   the capabilities asked for. A campaign under `all` keeps its stage keys and records as before.
 2. **ingest.** The export is admitted as `splinter experiences ingest-bench` admits it. Admitting it again adds nothing.
 3. **curate.** One dataset over the experience of every generation so far, through `[curate]`. Its held-out split is
    drawn by the generation's own seed. The record names the dataset by its id, the digest of its manifest. A generation

@@ -10,8 +10,17 @@
 //! each generation's champion runs the material exactly as
 //! `tasks harbor practice` runs it ([`crate::bench::practice::run_practice`]),
 //! and the graded export is linked into the rollout stage's directory for
-//! the ingest stage to admit.
+//! the ingest stage to admit. Every trial carries its task's capability ids
+//! (the examiner's labels) and, when it failed, its diagnosed class
+//! ([`crate::bench::diagnose`]), for the capability curriculum.
+//!
+//! A rollout asked for transfer exercises first has the examiner draw them
+//! from the collection's generator (`bench task practice --count --seed
+//! --capability`, into the stage's `transfer/`, kept there across a resume),
+//! practises them the same way, and adds their trials to the same export.
 
+use std::collections::BTreeMap;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -20,9 +29,11 @@ use splinter_agent::CancelToken;
 use splinter_orchestrator::context::Context;
 
 use super::types::CampaignError;
-use super::work::{Rolled, RolloutRequest, Rollouts, Trial};
+use super::work::{Rolled, RolloutRequest, Rollouts, TransferRequest, Trial};
+use crate::bench::diagnose::diagnose_dirs;
 use crate::bench::practice::{
-    run_practice, BenchCheckout, Practice, PracticeRequest, PracticeSettings,
+    run_practice, BenchCheckout, Practice, PracticeDraw, PracticeReport, PracticeRequest,
+    PracticeSettings,
 };
 
 /// Where and how the champion practises, as a campaign file's `[practice]`
@@ -94,6 +105,31 @@ impl PracticeRollouts {
     }
 }
 
+/// The export's listings, which a second export into the same directory
+/// appends to instead of replacing.
+const LISTINGS: [&str; 2] = ["index.jsonl", "skipped.jsonl"];
+
+/// `from`'s export linked into `to` beside what `to` holds: its trial
+/// directories linked, its listings appended.
+fn merge_export(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if LISTINGS.iter().any(|l| name == *l) {
+            let lines = std::fs::read(entry.path())?;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(to.join(&name))?
+                .write_all(&lines)?;
+        } else if entry.file_type()?.is_dir() {
+            link_tree(&entry.path(), &to.join(&name))?;
+        }
+    }
+    Ok(())
+}
+
 /// `from`'s files linked (copied where a link cannot be made) under `to`.
 fn link_tree(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
@@ -135,17 +171,74 @@ impl Rollouts for PracticeRollouts {
             .collect())
     }
 
+    fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, CampaignError> {
+        Ok(self.practice.capabilities())
+    }
+
     fn rollout(
         &mut self,
         ctx: &Context,
         request: &RolloutRequest<'_>,
         cancel: &CancelToken,
     ) -> Result<Rolled, CampaignError> {
+        let export = request.dir.join("export");
+        // A rollout starts over: what an interrupted attempt linked is replaced.
+        let _ = std::fs::remove_dir_all(&export);
+        let mut runs =
+            vec![self.practise(ctx, request, &self.practice, Some(request.tasks), cancel)?];
+        if let Some(transfer) = &request.transfer {
+            let drawn = self.draw(transfer, request.dir)?;
+            runs.push(self.practise(ctx, request, &drawn, None, cancel)?);
+        }
+        let mut trials = Vec::new();
+        let mut counted = Vec::new();
+        for (report, labels) in &runs {
+            merge_export(&report.dir.join("export"), &export).map_err(|e| {
+                CampaignError::Collector(format!(
+                    "linking the export into {}: {e}",
+                    export.display()
+                ))
+            })?;
+            let classes: BTreeMap<String, _> = diagnose_dirs(std::slice::from_ref(&report.dir))
+                .attempts
+                .into_iter()
+                .filter_map(|a| a.diagnosis.map(|d| (a.trial, d.class)))
+                .collect();
+            trials.extend(report.trials.iter().map(|t| Trial {
+                task: t.task.clone(),
+                reward: t.reward,
+                passed: t.reward.map(|r| r >= 1.0),
+                class: classes.get(&t.trial).copied(),
+                capabilities: labels.get(&t.task).cloned().unwrap_or_default(),
+            }));
+            counted.extend(report.trials.iter().filter_map(|t| t.tokens));
+        }
+        // The budget's tokens: every trial's usage as its score record counts
+        // it; unmeasured when no trial's record counts any.
+        Ok(Rolled {
+            export,
+            trials,
+            tokens: (!counted.is_empty()).then(|| counted.iter().sum()),
+        })
+    }
+}
+
+impl PracticeRollouts {
+    /// The champion of `request` on `tasks` of `practice` (all of them when
+    /// `None`), with the material's capability labels.
+    fn practise(
+        &self,
+        ctx: &Context,
+        request: &RolloutRequest<'_>,
+        practice: &Practice,
+        tasks: Option<&[String]>,
+        cancel: &CancelToken,
+    ) -> Result<(PracticeReport, BTreeMap<String, Vec<String>>), CampaignError> {
         let policy = request.champion.reference()?;
         let report = run_practice(
             ctx,
             &PracticeRequest {
-                practice: &self.practice,
+                practice,
                 checkout: &self.checkout,
                 profile: self.profile.as_deref(),
                 policy: &policy,
@@ -155,7 +248,7 @@ impl Rollouts for PracticeRollouts {
                     seed: request.seed,
                     jobs: self.jobs,
                 },
-                tasks: Some(request.tasks),
+                tasks,
                 cancel: cancel.clone(),
             },
         )
@@ -163,26 +256,34 @@ impl Rollouts for PracticeRollouts {
             crate::episodes::EpisodeError::Cancelled => CampaignError::Cancelled,
             other => CampaignError::Collector(other.to_string()),
         })?;
-        let export = request.dir.join("export");
-        link_tree(&report.dir.join("export"), &export).map_err(|e| {
-            CampaignError::Collector(format!("linking the export into {}: {e}", export.display()))
-        })?;
-        let trials = report
-            .trials
-            .iter()
-            .map(|t| Trial {
-                task: t.task.clone(),
-                reward: t.reward,
-                passed: t.reward.map(|r| r >= 1.0),
-            })
-            .collect();
-        // The budget's tokens: every trial's usage as its score record counts
-        // it; unmeasured when no trial's record counts any.
-        let counted: Vec<u64> = report.trials.iter().filter_map(|t| t.tokens).collect();
-        Ok(Rolled {
-            export,
-            trials,
-            tokens: (!counted.is_empty()).then(|| counted.iter().sum()),
-        })
+        Ok((report, practice.capabilities()))
+    }
+
+    /// The transfer exercises of `transfer`, drawn from the material's
+    /// collection into `<dir>/transfer` (the draw already there when a
+    /// resumed rollout made it).
+    fn draw(&self, transfer: &TransferRequest<'_>, dir: &Path) -> Result<Practice, CampaignError> {
+        let out = dir.join("transfer");
+        let drawn = out.join(self.practice.staged_name());
+        if let Ok(practice) = Practice::read(&drawn) {
+            return Ok(practice);
+        }
+        let _ = std::fs::remove_dir_all(&out);
+        let manifest = &self.practice.manifest;
+        let written = self
+            .checkout
+            .draw_practice(
+                &PracticeDraw {
+                    collection: &manifest.collection,
+                    environment: &manifest.environment,
+                    count: transfer.count,
+                    seed: transfer.seed,
+                    capabilities: transfer.capabilities,
+                },
+                &out,
+                &dir.join("transfer.log"),
+            )
+            .map_err(CampaignError::Collector)?;
+        Practice::read(&written).map_err(|e| CampaignError::Collector(e.to_string()))
     }
 }

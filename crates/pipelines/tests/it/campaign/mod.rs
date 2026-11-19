@@ -11,6 +11,7 @@
 //! in-memory rollout machinery over a served policy.
 
 mod agentic;
+mod capabilities;
 mod generations;
 mod served;
 mod world;

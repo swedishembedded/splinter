@@ -165,3 +165,4 @@ in the same commit.
 | [177](177-a-family-resampled-interval-of-a-few-unanimous-families-has-no-width.md) | A family-resampled interval of a few unanimous families has no width |
 | [178](178-a-store-that-writes-a-file-per-object-runs-out-of-inodes-not-bytes.md) | A store that writes a file per object runs out of inodes, not bytes |
 | [179](179-dropping-supervised-history-reads-did-not-stop-a-student-probing-git-history.md) | Dropping supervised history reads did not stop a student probing git history |
+| [180](180-a2s1-practice-competence-is-weakest-on-review-procedure-and-arithmetic.md) | A2s1's practice competence is weakest on review, procedure and arithmetic, not on the domains |

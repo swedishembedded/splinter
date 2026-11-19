@@ -75,6 +75,10 @@ pub struct DiagnosedTrial {
     /// Why it failed; `None` for a passed trial.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnosis: Option<DiagnosticResult>,
+    /// The capability ids the export names for its task; `None` when the
+    /// export names none (made before the examiner labelled tasks).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<Vec<String>>,
 }
 
 /// A trial or an export that could not be read, and why.
@@ -118,6 +122,8 @@ struct SkippedRow {
     task: String,
     #[serde(default)]
     score: Option<ScoreRecord>,
+    #[serde(default)]
+    capabilities: Option<Vec<String>>,
 }
 
 /// The evidence of an exported trial.
@@ -313,6 +319,10 @@ fn diagnose_export(
                             experiences: Vec::new(),
                             staged_task: None,
                             diagnosis,
+                            capabilities: row
+                                .capabilities
+                                .clone()
+                                .or_else(|| artifact.manifest.task.capabilities.clone()),
                         });
                     }
                 }
@@ -358,6 +368,7 @@ fn diagnose_export(
             experiences: Vec::new(),
             staged_task: None,
             diagnosis,
+            capabilities: row.capabilities,
         });
     }
 }

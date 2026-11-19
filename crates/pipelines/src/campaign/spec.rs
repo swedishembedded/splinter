@@ -74,6 +74,17 @@ pub struct RolloutSpec {
     /// The fewest graded attempts a pass rate must rest on before a task is
     /// retired.
     pub retire_after: usize,
+    /// How a generation's tasks are chosen.
+    #[serde(default, skip_serializing_if = "RolloutCurriculum::is_all")]
+    pub curriculum: RolloutCurriculum,
+    /// With the capability curriculum: the most tasks a generation
+    /// practises; every task of positive weight when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tasks: Option<usize>,
+    /// With the capability curriculum: fresh transfer exercises drawn from
+    /// the examiner's practice generator for the weakest capabilities.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transfer: Option<TransferSpec>,
 }
 
 impl Default for RolloutSpec {
@@ -82,8 +93,43 @@ impl Default for RolloutSpec {
             attempts: 4,
             retire_at: DEFAULT_RETIRE_AT,
             retire_after: 4,
+            curriculum: RolloutCurriculum::All,
+            tasks: None,
+            transfer: None,
         }
     }
+}
+
+/// How a generation's practice tasks are chosen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RolloutCurriculum {
+    /// Every practice task the champion has not mastered.
+    #[default]
+    All,
+    /// Tasks drawn by capability gap: weighted by their capabilities'
+    /// failure rate, frontier-band membership and share of the model's own
+    /// failures; never a task the infrastructure stopped every time
+    /// ([`crate::curriculum::capability`]).
+    Capability,
+}
+
+impl RolloutCurriculum {
+    fn is_all(&self) -> bool {
+        *self == Self::All
+    }
+}
+
+/// Fresh transfer exercises for the weakest capabilities.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TransferSpec {
+    /// How many of the weakest measured capabilities exercises are drawn
+    /// for.
+    pub capabilities: usize,
+    /// Tasks the examiner draws from its generator per generation, of which
+    /// it keeps those that exercise one of them.
+    pub count: usize,
 }
 
 /// The curate stage: every generation's dataset is built from the
@@ -239,6 +285,22 @@ impl CampaignSpec {
                 "rollout.retire_at is {}, not in (0, 1]",
                 self.rollout.retire_at
             ));
+        }
+        let capability = self.rollout.curriculum == RolloutCurriculum::Capability;
+        if !capability && (self.rollout.tasks.is_some() || self.rollout.transfer.is_some()) {
+            return refuse(
+                "rollout.tasks and rollout.transfer apply to curriculum = \"capability\"".into(),
+            );
+        }
+        if self.rollout.tasks == Some(0) {
+            return refuse("rollout.tasks: at least one".into());
+        }
+        if self
+            .rollout
+            .transfer
+            .is_some_and(|t| t.capabilities == 0 || t.count == 0)
+        {
+            return refuse("rollout.transfer: at least one capability and one task".into());
         }
         if self.train.rank == 0 {
             return refuse("train.rank: at least one".into());

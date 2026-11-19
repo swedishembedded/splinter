@@ -66,7 +66,7 @@ use splinter_core::experience::ExperienceId;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 
-pub use commands::BenchCheckout;
+pub use commands::{BenchCheckout, PracticeDraw};
 pub use executor::BenchPractice;
 pub use material::{Practice, PRACTICE_FILE, PRACTICE_SCHEMA};
 

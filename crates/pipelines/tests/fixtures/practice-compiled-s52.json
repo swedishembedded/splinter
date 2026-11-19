@@ -1,0 +1,497 @@
+{
+ "bench": {
+  "commit": "56b6502cbd1a4b4aa63b7612347149517790cd85",
+  "version": "0.1.0"
+ },
+ "collection": "tasks/compiled",
+ "content_sha256": "b19d035fbf8d0479b2016be9302790282c03c85c8825c6afb1ea67ecc12a7dcf",
+ "draw": {
+  "admission": {
+   "gate_leakage_passed": 40,
+   "gate_nontriviality_passed": 40,
+   "gate_novelty_passed": 40,
+   "gate_reproducibility_passed": 40,
+   "gate_robustness_passed": 40,
+   "gate_solvability_passed": 40,
+   "gate_structural_passed": 40
+  },
+  "config": "environments/generators/compiled.toml",
+  "config_sha256": "2dec2baf473e6f2f1e98d1adf7157de8fbc15404272bd54f3df52b6a653561be",
+  "content_sha256": "6c7ff88fd905c49473a569d71958ea03e7aa8ce384c02e931a0387ea9a512a2b",
+  "count": 40,
+  "generator": "compiled",
+  "generator_sha256": "a520af4a995c11f1ed4ae319e69e18a74ef0b8973a7da09dd3c7982e00ed9082",
+  "seed": 52
+ },
+ "environment": "userns",
+ "job": "job.yaml",
+ "manifest_sha256": "e4277f157e972eb052d0034336e4f59e6490047f8b88da339fb77f1b1138cf24",
+ "schema": "bench.practice/2",
+ "selection": null,
+ "set": "train",
+ "tasks": [
+  {
+   "capabilities": [
+    "abstention",
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "14beb8834316ed1a3670a70ecd7460c3fb03f856e6aba64e9790893a8fb67989",
+   "name": "abstain-withheld-ekbygg-6200028",
+   "source_digest": "ce540c8d43b449ea52f7ab44f35f09942b12c4d0066e786e4a78a9535ce80780",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "abstention",
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "dba435a54e102642184dba3ec20f13304265368f01e8b86feccb753aa8d4e3c7",
+   "name": "abstain-withheld-hamnverkstad-6200030",
+   "source_digest": "19a538a6c8e6e252d873aff0a3faa6bbe37af6a6ccfe3682bf6f65fbaec75b2f",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "abstention",
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "c5998144172f57dfbfe6421d10e4654502018035dffe4378f3607b25e2372dbc",
+   "name": "abstain-withheld-ljunglogistik-6200033",
+   "source_digest": "91cb08526801c8824fc1ec2db63d3dfb21108e340e580f8e9c98b39d33e4d4c2",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "abstention",
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "7e496aebb1f857c42840a6c9df05821e2e94e2655462db216e30dbc84f3539cf",
+   "name": "abstain-withheld-markhandel-6200031",
+   "source_digest": "a56c734a911c483a3b38cd8238a7f7188165a7f2e308b6c3eb93f6547766fbaa",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "abstention",
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "b080c155701f5aa88b8e395e6625800592abb66520516927f988cede51f943c1",
+   "name": "abstain-withheld-marklivs-6200026",
+   "source_digest": "86c3a95af2b62433972538dd8304993a97358e79f659b6f943af016c0c9555c1",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "abstention",
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "e9ab377ac311a3a61c7def848b356c2910aea7b844901a40c39401179377e753",
+   "name": "abstain-withheld-soldata-6200027",
+   "source_digest": "f5fcf9039fb3dffd6523433d818cac2c884655a75a378aba9f37889e642a191e",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "abstention",
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "8f8ed57fb36438d3be1c5015ace73ddf85bd3d3f78c1f27612f1c51dd480191f",
+   "name": "abstain-withheld-soldesign-6200032",
+   "source_digest": "4aa99e8bc09cb278d0e6f57ad0e4c75f01de8d6d20ca81a286baf4c729abbea6",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "abstention",
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "d7572300a19a210eb118385893343393dfb12798b7ec6a622993acf6ef53319d",
+   "name": "abstain-withheld-vikdesign-6200029",
+   "source_digest": "f904e3add9cf9d36dec6ffe881394c9266d27b29f96312f10fb1dbafaa973fa4",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "c835153bff599f372502c33e0513fe3e51070ed1b5c457738306ae916e383ec7",
+   "name": "apply-amended-vasskonsult-6200039",
+   "source_digest": "ebfed69a72df7094ef99add0a3094b55f6b799cd70e6a4932b08de2c051ba366",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "b2e1e6af4caf963428eb0d9b3fccb2f2aa48d384fe2bf47143d3ebb8e99fbfd9",
+   "name": "apply-composed-angverkstad-6200010",
+   "source_digest": "0664387dfdaf2b052c38f81e615878fb2f574c759217342f300b2c201cb5d936",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "b73b9e093ee063702436a5bc8c2168f09bfcd90f9f00797690de24328cc130f6",
+   "name": "apply-composed-backdesign-6200012",
+   "source_digest": "6b6b86818b68e38c437193d78542694f919afc5e6e6f04dece6edf7b4b1ea4e5",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "090eeb716a53af6392abaee52aecd0ae78d92a45254c132c14ea7d269afe5a26",
+   "name": "apply-composed-bergkonsult-6200009",
+   "source_digest": "112f828ba90657623da3dcb11b5136dc269b2b030ae213f2996d86bcdba2a034",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "3ea091919dab20e0acf2881a949d1c1e075974fb45f5e7413fdefb4fdc087c8f",
+   "name": "apply-composed-lindverkstad-6200015",
+   "source_digest": "c3afa6bb3d5bad35c7ffb6104a5e71e77eb09957a812385a2c9119d77becdfb8",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "b183296f90c1044c8dfb77001191f282ca930fc7f2939a118f01fc32eb26764f",
+   "name": "apply-composed-markbygg-6200008",
+   "source_digest": "3b505b3229a0177d0bce46f864608e71ce910b5a8cd14436993911c64723e944",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "30b9d25cc5a7fc9d6f82b348e8003048e2860ccfbf7316fa4cb2d98d86b6d64b",
+   "name": "apply-composed-markdesign-6200013",
+   "source_digest": "0117f7acd80f026de6008ef67ec7555433ca7afef45c2f17ebcbbb356c495349",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "42005c9550337ab67c51f89656a72a9a958b13cc478b00694be5a39aea06a2ea",
+   "name": "apply-composed-skogkonsult-6200011",
+   "source_digest": "8934647df47118e71ec5b603b40ff7251ec3a5f8e1cd8c4274283057c960ecdb",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "ce154404a526eb0bc44850f2cd9bc60fc37cbf3be5a6c61d15e4e80a7b890acf",
+   "name": "apply-composed-torpbygg-6200014",
+   "source_digest": "c235c9a6bc9481a9d6f71fe6988d47fbec71433cebc38f02236922ac367f2c49",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "bb64212d8ba34b0d076424547b9f410f7c378abe91a1c59ccc838ecefad5cd32",
+   "name": "apply-plain-anglivs-6200002",
+   "source_digest": "59ed5bb78162596f64abf284d9bfaa138fc8b170e74117cde0cd8a088baf3d5e",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "f066699f084267837e4ef4ff18520ce4f97b4af66a1086b62312cacf1f5fa1e5",
+   "name": "apply-plain-backlogistik-6200003",
+   "source_digest": "1c10983bff5a39d41360506718e5342a8a4daeb9d7b3c711fc70b6206230abb3",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "a455b06fbd5882151f0cd5c13ed3a960b2ca02f7855f8d9c6c0776de88512055",
+   "name": "apply-plain-bjorkdata-6200004",
+   "source_digest": "82a2dc01b9be657738ae18b2084f7e5cdbf5eb00bc59c28df43425d9dec1e5bf",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "6a020161d21a6cf413f85fb91935a398287eebe89923e0c56a837ffb8c54476f",
+   "name": "apply-plain-granbygg-6200001",
+   "source_digest": "7c2dfdb6e3ccc7f797a678dc3d3c833bbcf8bd8b2b8bbd08d2feb28afde22eb7",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "a47562b7676993d01c05d1c4ccbac5c5ed9f5b81c20892c51ee3d231dcf90b76",
+   "name": "apply-plain-hamnlogistik-6200005",
+   "source_digest": "22eaa1be57c06d6a7917d4cb5a86070b1080c8b341eba96ad16bdf277b93dfd6",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "2ba9a029af689df9993be361ff25a2ba99d90d45e1f489ff81feaf2f4eed1a64",
+   "name": "apply-plain-linddata-6200007",
+   "source_digest": "08bb3bdc19267762e2f460ce4d00d70002efabbee4fbad6803e078932c1f2ce1",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "06959069c30455d2d6eb96d590d93420a68144fca2b94c1a5da235e81a7aac5e",
+   "name": "apply-plain-ljunglivs-6200006",
+   "source_digest": "4ef86bdf2da735c9cd2338e9ccdd7067cf186fe8aa63da16ce11171d9c533fd1",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "7c641a8b91d36356b29022c673d0f199d9049f5a2733c112ccde81a4b211e2ba",
+   "name": "apply-plain-markverkstad-6200000",
+   "source_digest": "5949e149d7d996eee6393de53d0fb905dd53c0745a82cfe8cab6c52343c54f11",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "exact-arithmetic",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "e61ec763181ecc4f3829ed4cef619d5cd23cf0cfc9a345ee9b1741942459afb8",
+   "name": "deadline-single-backdata-6200018",
+   "source_digest": "3aa2417c48a2f279fea3ce00a34264bc0cd2bd63f4f015b0d49b5fe4c4bced22",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "exact-arithmetic",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "7fda2400be0ddf6676c4770c312b48f6baa9d50b5e887f65614ee706fede2013",
+   "name": "deadline-single-bjorklogistik-6200021",
+   "source_digest": "9a23e9a15ac2db6d7b332f0af4f80af84dab9560f48551a729f59f1ca0ddc0d8",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "exact-arithmetic",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "df9fcb53a2835c94c57bf7cb409137496d28b41a7d8b66cfacdb7d8d112c03dd",
+   "name": "deadline-single-hamndata-6200016",
+   "source_digest": "54cd9f2909a2ccbf23c59552f4d6289a16801b5c09432790c55c1d1d66f7a4fe",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "exact-arithmetic",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "15b51f2ecf814af8459fa17a8ae6300983b212a949faf0ddeaae22fdb0d3e601",
+   "name": "deadline-single-lindkonsult-6200017",
+   "source_digest": "8251c3d586a8815860ffd43ac42ff586dd6ae027dc5c2b6aaf02d220bfa11ee1",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "exact-arithmetic",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "051253c78caa895a4779c11154ab6200876ea18aaa717055c41362a94c19e4dc",
+   "name": "deadline-single-nordlivs-6200020",
+   "source_digest": "00c044fff825b266a9b9b50fc36227743a55ef1e5b31fb2970c59b07226f87f5",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "exact-arithmetic",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "955e6342933a29fe74ac53d6df69a5a36fda498b1111e1822109abc5144ea862",
+   "name": "deadline-single-sollivs-6200019",
+   "source_digest": "9d5f76bc33b23cfe1486bff3b6b98c7c0e73fa4d3e4d65c33e62932ee158dac6",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "design-review",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "ffaccb4d09147c8022d27052e5c00c8d0ca2ebbc669e1cf19d72264bdfacc7b1",
+   "name": "defects-thresholds-grandesign-6200023",
+   "source_digest": "478b8f4797cf78e77cbad8d220c7206c2e2e0ab7501da065c89386c675c5072d",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "design-review",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "230881b4a87d261a33af0d7a6af5ff3aafb27ae6fd8a3c661346049c18486014",
+   "name": "defects-thresholds-ljungkonsult-6200022",
+   "source_digest": "2d4c5d35e37e6c0760825e5f6600e170b824c74e2a2f92dcfe592fe119eb7694",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "design-review",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "1d5cd0b64407dd91be364e2a3911a643e97ca9a3484ebb350c37267989dafebc",
+   "name": "defects-thresholds-skogdata-6200025",
+   "source_digest": "cab1a84b3f4e19b4f9733c1dbc79709267095c52ca143792160ee0fb5fc68673",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "design-review",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "f75b0241604e3d7ca174a729d5b4daab725e3643198d7cc9383800d278fd4fcc",
+   "name": "defects-thresholds-skogdesign-6200024",
+   "source_digest": "21293f6a013f027412a2a2ced4d2a35a968789b9c275329e802aafef8aff8fed",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "e75b856fc33f2afa4cfd495badd7294ee0ed36c98839ff70cfc18ae9ea77fe19",
+   "name": "lookup-amended-berglogistik-6200036",
+   "source_digest": "0bf05da9773252c9c53dea5f604ff5889032084b0de1b9d116b0e28b104ce75d",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "f9a9f7e3fadbf9f08c41ee255eb68e5e88b906a993d04ede53bdf2d994404afb",
+   "name": "lookup-amended-tegellivs-6200035",
+   "source_digest": "41214307f148ee8ee93633404ad57841151d1ef19a2f0d8f2dfcde5634547105",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "b27ba4c2836d05725dbc52a22482de75a6551aac1a7e8eb7e8addf69ad6061c5",
+   "name": "lookup-definition-bjorkdesign-6200037",
+   "source_digest": "e09133a12571091cc7c3dd69f511ebb129c962019b4bef1e1b4991adc4a6a232",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "861a6e0a805059099c60870125e07203145326481ec6989d1d4ef3c02a50a348",
+   "name": "lookup-fact-skoghandel-6200034",
+   "source_digest": "9a671be42dbe19468c1b6385b5f52fa7ef8f4a49c9939b1b2f95ffa4516859b1",
+   "track": "knowledge-reasoning"
+  },
+  {
+   "capabilities": [
+    "apply-rules",
+    "locate-in-workspace",
+    "structured-answer"
+   ],
+   "digest": "50db821416122cbcace9bfd1437cfe0dc3bdebd7db0c01285148b9728b121323",
+   "name": "lookup-table-vasslogistik-6200038",
+   "source_digest": "769972f5b0b65a0ece9cff8575d381a36404064dfee2981af712ea6ece4b10e2",
+   "track": "knowledge-reasoning"
+  }
+ ],
+ "tasks_dir": "tasks",
+ "taxonomy": {
+  "schema": "bench.capabilities/1",
+  "sha256": "4d59ff014f2060b2dfb4d56788d91bd615b97163b2944b215c335ac18dc7d2d8"
+ }
+}

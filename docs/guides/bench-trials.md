@@ -133,6 +133,29 @@ whose last calls failed is `tool`, a run a time, turn or token limit ended is `r
 step, or the record field, and the excerpt). The report counts the classes per domain and per attribution (`model`,
 `infrastructure`, `task`). Only a trial of an export is read, and an export of sealed material is refused.
 
+## Competence per capability
+
+```sh
+splinter experiences capabilities STATE/practice/splinter-cb58... STATE/practice/splinter-9e57...
+splinter experiences capabilities RUN... --labels ~/practice-relabelled/compiled   # material staged before bench named capabilities
+```
+
+Bench labels every task with the capability ids of its taxonomy (`config/capabilities.toml`): `bench task practice`
+writes them into `practice.json`, `bench export` into every manifest, index row and `skipped.jsonl` line. Splinter reads
+them as data, never a list of its own. A trial's ids come from its export; else from the practice run's own material
+(the `practice.json` its `report.json` names, held to the sha256 the run recorded), by the staged task's name; else from
+a `--labels` practice directory, only for a task whose `source_digest` is the same (the examiner staging the same draw
+again names the capabilities of the same bytes). A trial labelled by none counts as `unlabelled`.
+
+Every trial is diagnosed (above). A pass is a graded pass; a failure the diagnosis blames on the infrastructure or the
+task is ungraded and never a `0`; every other failure is a graded fail with its class. Per policy (a practice run's
+report names it: `<model>+<adapter>`; `--policy` names it for a bare export) and capability the report gives the tasks,
+graded attempts and passes, the pass rate with its 95% Wilson interval, the ungraded attempts, the tasks in each band
+(frontier, never solved, retired, unmeasured: the campaign's own bands over these trials, retired at 0.9 on 8 graded
+attempts), the failures by class, and the curriculum's weight (`[rollout] curriculum = "capability"`,
+`docs/guides/campaigns.md`). The report is kept in the state's store, by the digest of everything it counted and the
+`index.jsonl` and `practice.json` digests it came from, and printed with that address. A sealed export is refused whole.
+
 ## Repairing a failed attempt
 
 ```sh

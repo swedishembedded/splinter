@@ -448,6 +448,21 @@ impl Session {
                     return Ok(Exit::Failed);
                 }
             }
+            Command::Experiences(ExperiencesCommand::Capabilities(args)) => {
+                use splinter_sdk::bench::capabilities::{
+                    capability_report, CapabilityRequest, StoredCapabilities,
+                };
+                let report = capability_report(&CapabilityRequest {
+                    dirs: &args.dirs,
+                    labels: &args.labels,
+                    policy: args.policy.as_deref(),
+                });
+                let stored = StoredCapabilities::keep(ctx, report)?;
+                emit(json, &stored);
+                if !stored.report.refused.is_empty() {
+                    return Ok(Exit::Failed);
+                }
+            }
             Command::Experiences(ExperiencesCommand::Repair(args)) => {
                 use splinter_sdk::bench::repair::{
                     repair, RepairRequest, DEFAULT_MAX_REPAIRS, DEFAULT_REPAIR_DEADLINE,

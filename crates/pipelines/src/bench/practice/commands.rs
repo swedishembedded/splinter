@@ -182,10 +182,69 @@ pub(super) fn stage(
             .args(["--count", &draw.count.to_string()])
             .args(["--seed", &draw.seed.to_string()]);
     }
+    for capability in practice
+        .selected_capabilities()
+        .map_err(|e| e.to_string())?
+    {
+        command.args(["--capability", &capability]);
+    }
     for (name, path) in &practice.tools {
         command.arg("--tool").arg(format!("{name}={path}"));
     }
     logged(&mut command, "stage the practice material", log)
+}
+
+/// A fresh draw of practice material from a collection's generator, kept
+/// to the tasks that exercise one of the given capabilities.
+#[derive(Clone, Copy, Debug)]
+pub struct PracticeDraw<'a> {
+    /// The collection, as the examiner names it (`tasks/legal`).
+    pub collection: &'a str,
+    /// The sandbox the material is staged for (`userns`).
+    pub environment: &'a str,
+    /// Tasks drawn before the selection.
+    pub count: usize,
+    /// The draw's seed.
+    pub seed: u64,
+    /// The capability ids a kept task exercises one of; none keeps every
+    /// task drawn.
+    pub capabilities: &'a [String],
+}
+
+impl BenchCheckout {
+    /// Draws `draw` into `out` (`bench task practice --count --seed
+    /// --capability`), the examiner logging to `log`, and returns the
+    /// directory it wrote (`<out>/<collection's last part>`). The examiner
+    /// refuses sealed material, withheld lineages, an unknown capability and
+    /// a selection that keeps nothing.
+    ///
+    /// # Errors
+    /// The examiner refused or failed; the message names its log.
+    pub fn draw_practice(
+        &self,
+        draw: &PracticeDraw<'_>,
+        out: &Path,
+        log: &Path,
+    ) -> Result<PathBuf, String> {
+        let mut command = self.bench();
+        command
+            .args(["task", "practice", draw.collection])
+            .args(["--environment", draw.environment])
+            .args(["--count", &draw.count.to_string()])
+            .args(["--seed", &draw.seed.to_string()])
+            .arg("--out")
+            .arg(out);
+        for capability in draw.capabilities {
+            command.args(["--capability", capability]);
+        }
+        logged(&mut command, "draw practice material", log)?;
+        let name = draw
+            .collection
+            .rsplit('/')
+            .find(|part| !part.is_empty())
+            .unwrap_or(draw.collection);
+        Ok(out.join(name))
+    }
 }
 
 /// How a Harbor job is run: under which name, how many attempts of each

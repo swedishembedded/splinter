@@ -30,6 +30,10 @@
 //!   by a teacher from the state the student actually reached, verified with
 //!   the task's own hidden checks, and kept as training material in which
 //!   the student's prefix is context and the teacher's actions supervised.
+//! * [`capability`] - competence per capability of the examiner's taxonomy
+//!   (pass rates with intervals, failure classes), and the practice it
+//!   steers: tasks drawn by capability gap, transfer exercises requested for
+//!   the weakest capabilities.
 //! * [`mastery`] - each concept's rolling pass rate per release, from the
 //!   student's closed-book solves; `status` shows the weakest.
 //! * [`queue`] - concepts the release gate saw forgotten (a retention suite
@@ -49,6 +53,7 @@
 //! queue/<hex>.json          one concept queued for generation, named by the concept's digest
 //! ```
 
+pub mod capability;
 pub mod corrections;
 pub mod frontier;
 pub mod mastery;

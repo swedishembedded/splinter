@@ -193,6 +193,8 @@ impl Rollouts for Practice {
                     task,
                     reward: Some(if pass { 1.0 } else { 0.0 }),
                     passed: Some(pass),
+                    class: None,
+                    capabilities: Vec::new(),
                 })
                 .collect(),
             tokens: Some(15 * u64::from(request.attempts) * request.tasks.len() as u64),

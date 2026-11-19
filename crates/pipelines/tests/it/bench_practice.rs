@@ -42,7 +42,7 @@ use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::Context;
 use splinter_pipelines::bench::artifact::sha256_hex;
 use splinter_pipelines::bench::practice::{
-    run_practice, BenchCheckout, Practice, PracticeRequest, PracticeSettings,
+    run_practice, BenchCheckout, Practice, PracticeDraw, PracticeRequest, PracticeSettings,
 };
 use splinter_pipelines::episodes::{EpisodeError, EpisodeOutcome};
 
@@ -221,6 +221,69 @@ fn graded_export(root: &Path) -> PathBuf {
             Trial::new("beta__2", "org/beta", Some("train"), false).scored(),
         ],
     )
+}
+
+#[test]
+fn material_selected_by_capability_is_staged_again_with_its_selection_and_a_draw_asks_for_it() {
+    let (scratch, ctx, policy) = served("practice-capability");
+    let dir = practice_dir(&scratch.0, "train");
+    let mut manifest = practice_manifest("train");
+    manifest["selection"] = json!({"capabilities": ["exact-arithmetic"], "offered": 5});
+    for task in manifest["tasks"].as_array_mut().unwrap() {
+        task["capabilities"] = json!(["apply-rules", "exact-arithmetic"]);
+    }
+    fs::write(dir.join("practice.json"), manifest.to_string()).unwrap();
+    let checkout = checkout(
+        &scratch.0,
+        &graded_export(&scratch.0),
+        &dir.join("practice.json"),
+    );
+    let practice = Practice::read(&dir).unwrap();
+    assert_eq!(
+        practice.selected_capabilities().unwrap(),
+        ["exact-arithmetic"]
+    );
+    assert_eq!(
+        practice.capabilities()["beta"],
+        ["apply-rules", "exact-arithmetic"]
+    );
+    run_practice(&ctx, &request(&practice, &checkout, &policy)).unwrap();
+    let calls = fs::read_to_string(scratch.0.join("calls.log")).unwrap();
+    let staging = calls
+        .lines()
+        .find(|l| l.starts_with("bench task practice"))
+        .unwrap();
+    assert!(
+        staging.ends_with("--capability exact-arithmetic"),
+        "{staging}"
+    );
+
+    let seed = splinter_model::seed::draw().value();
+    let out = scratch.0.join("transfer");
+    let drawn = checkout
+        .draw_practice(
+            &PracticeDraw {
+                collection: "tasks/support",
+                environment: "userns",
+                count: 40,
+                seed,
+                capabilities: &["design-review".to_string(), "exact-arithmetic".to_string()],
+            },
+            &out,
+            &scratch.0.join("draw.log"),
+        )
+        .unwrap();
+    assert_eq!(drawn, out.join("support"));
+    let calls = fs::read_to_string(scratch.0.join("calls.log")).unwrap();
+    let draw = calls.lines().last().unwrap();
+    assert_eq!(
+        draw,
+        format!(
+            "bench task practice tasks/support --environment userns --count 40 --seed {seed} --out {} \
+             --capability design-review --capability exact-arithmetic",
+            out.display()
+        )
+    );
 }
 
 #[test]
@@ -437,6 +500,7 @@ fn as_a_campaigns_rollouts_the_tokens_are_summed_from_each_trials_usage_so_a_tok
                 attempts: 1,
                 // seed: the scripted examiner ignores it; any seed names a job.
                 seed: 3,
+                transfer: None,
                 dir: &stage,
             },
             &CancelToken::new(),

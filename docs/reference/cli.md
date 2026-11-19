@@ -141,6 +141,7 @@ Every command takes these.
   - [splinter experiences ingest-harbor](#splinter-experiences-ingest-harbor) - Read the trials Harbor left for imported tasks (each a trial directory with result.json and agent/trajectory.json in ATIF) as experiences carrying Harbor's own verdict
   - [splinter experiences ingest-bench](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
   - [splinter experiences diagnose](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
+  - [splinter experiences capabilities](#splinter-experiences-capabilities) - A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs
   - [splinter experiences repair](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
   - [splinter experiences import](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
@@ -1546,6 +1547,7 @@ Subcommands:
 - [`ingest-harbor`](#splinter-experiences-ingest-harbor) - Read the trials Harbor left for imported tasks (each a trial directory with result.json and agent/trajectory.json in ATIF) as experiences carrying Harbor's own verdict
 - [`ingest-bench`](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
 - [`diagnose`](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
+- [`capabilities`](#splinter-experiences-capabilities) - A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs
 - [`repair`](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
 - [`import`](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
@@ -1626,6 +1628,23 @@ splinter experiences diagnose [OPTIONS] <DIR>...
 Arguments:
 
 - `<DIR>...` (required): The export directories (each holds index.jsonl; skipped.jsonl when the export skipped trials), or practice run directories (each holds report.json and export/)
+
+#### splinter experiences capabilities
+
+A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs: pass rates with 95% intervals, failure classes, frontier bands and the curriculum's weight, kept in the store with where every number came from
+
+```text
+splinter experiences capabilities [OPTIONS] <DIR>...
+```
+
+Arguments:
+
+- `<DIR>...` (required): The export directories, or practice run directories (each holds report.json and export/; its material's practice.json labels its tasks)
+
+Options:
+
+- `--labels <PRACTICE_DIR>...`: A practice directory whose practice.json labels tasks the runs' material does not (staged before the examiner named capabilities); a task is labelled from it only when its source digest matches. Repeatable.
+- `--policy <NAME>`: The policy the trials of an export without a practice run's report count under.
 
 #### splinter experiences repair
 

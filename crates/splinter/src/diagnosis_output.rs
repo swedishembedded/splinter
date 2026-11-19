@@ -7,10 +7,12 @@
 // them, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! How `experiences diagnose` and `experiences repair` read to a person.
+//! How `experiences diagnose`, `experiences capabilities` and `experiences
+//! repair` read to a person.
 
 use std::fmt::Write as _;
 
+use splinter_sdk::bench::capabilities::StoredCapabilities;
 use splinter_sdk::bench::diagnose::DiagnosisReport;
 use splinter_sdk::bench::repair::RepairReport;
 use splinter_sdk::set_import::SetsImported;
@@ -55,6 +57,72 @@ impl Report for DiagnosisReport {
                 out,
                 "refused {} {trial}: {}",
                 refused.export.display(),
+                refused.reason
+            );
+        }
+        out
+    }
+}
+
+impl Report for StoredCapabilities {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        let report = &self.report;
+        let l = &report.labelled;
+        let _ = writeln!(
+            out,
+            "kept as {} (labels: {} from exports, {} from the material, {} by source digest, {} none)",
+            self.document, l.export, l.material, l.labels, l.none
+        );
+        for policy in &report.policies {
+            let _ = writeln!(out, "{}: {} trials", policy.policy, policy.trials);
+            let _ = writeln!(
+                out,
+                "  {:<28} {:>5} {:>6} {:>6}  {:<21} {:>5} {:>13}  {:>6}  failures",
+                "capability",
+                "tasks",
+                "graded",
+                "passed",
+                "rate [95% interval]",
+                "infra",
+                "F/C/R/U",
+                "weight"
+            );
+            for c in &policy.capabilities {
+                let rate = c.pass_rate.map_or_else(
+                    || "-".to_string(),
+                    |s| format!("{:.3} [{:.3}, {:.3}]", s.value, s.low, s.high),
+                );
+                let bands = format!(
+                    "{}/{}/{}/{}",
+                    c.bands.frontier, c.bands.cliff, c.bands.retired, c.bands.unmeasured
+                );
+                let failures: Vec<String> = c
+                    .failures
+                    .iter()
+                    .map(|(class, n)| format!("{class} {n}"))
+                    .collect();
+                let _ = writeln!(
+                    out,
+                    "  {:<28} {:>5} {:>6} {:>6}  {:<21} {:>5} {:>13}  {:>6.3}  {}",
+                    c.capability,
+                    c.tasks,
+                    c.graded,
+                    c.passes,
+                    rate,
+                    c.ungraded,
+                    bands,
+                    c.weight,
+                    failures.join(", ")
+                );
+            }
+        }
+        for refused in &report.refused {
+            let trial = refused.trial.as_deref().unwrap_or("-");
+            let _ = writeln!(
+                out,
+                "refused {} {trial}: {}",
+                refused.dir.display(),
                 refused.reason
             );
         }

@@ -7,7 +7,7 @@
 // them, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! The grammar of `experiences diagnose`, `experiences repair`, `experiences import` and the strata `experiences compare`
+//! The grammar of `experiences diagnose`, `experiences capabilities`, `experiences repair`, `experiences import` and the strata `experiences compare`
 //! reports by.
 
 use std::path::PathBuf;
@@ -28,6 +28,27 @@ pub struct DiagnoseArgs {
     /// report.json and export/).
     #[arg(required = true, value_name = "DIR")]
     pub dirs: Vec<PathBuf>,
+}
+
+/// `experiences capabilities`: competence per capability of the examiner's
+/// taxonomy, per policy, from bench exports or practice runs.
+#[derive(Debug, Args)]
+pub struct CapabilitiesArgs {
+    /// The export directories, or practice run directories (each holds
+    /// report.json and export/; its material's practice.json labels its
+    /// tasks).
+    #[arg(required = true, value_name = "DIR")]
+    pub dirs: Vec<PathBuf>,
+    /// A practice directory whose practice.json labels tasks the runs'
+    /// material does not (staged before the examiner named capabilities);
+    /// a task is labelled from it only when its source digest matches.
+    /// Repeatable.
+    #[arg(long = "labels", value_name = "PRACTICE_DIR")]
+    pub labels: Vec<PathBuf>,
+    /// The policy the trials of an export without a practice run's report
+    /// count under.
+    #[arg(long, value_name = "NAME")]
+    pub policy: Option<String>,
 }
 
 /// `experiences repair`: a teacher continues the failed attempts of practice

@@ -508,6 +508,11 @@ pub enum ExperiencesCommand {
     /// Why each failed trial of bench exports failed: one failure class per
     /// trial, from its evidence, with the step and excerpt that decided it.
     Diagnose(DiagnoseArgs),
+    /// A policy's competence per capability of the examiner's taxonomy, from
+    /// bench exports or practice runs: pass rates with 95% intervals,
+    /// failure classes, frontier bands and the curriculum's weight, kept in
+    /// the store with where every number came from.
+    Capabilities(CapabilitiesArgs),
     /// A teacher continues the failed attempts of practice runs from their
     /// last good step; the task's own verifier keeps a repair only on a pass.
     Repair(RepairArgs),
@@ -740,7 +745,7 @@ pub use corrections::CorrectionsArgs;
 pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
-pub use experiences::{DiagnoseArgs, ImportArgs, RepairArgs, StrataArgs};
+pub use experiences::{CapabilitiesArgs, DiagnoseArgs, ImportArgs, RepairArgs, StrataArgs};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
 pub use global::Global;

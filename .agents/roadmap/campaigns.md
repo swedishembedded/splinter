@@ -46,7 +46,34 @@ Scope: `splinter campaign` (resumable multi-generation learning over the stage l
 - `bench::examine::Bench` (the minimind sample's examiner) verifies verdicts in-process with the public key and names
   each sitting's checkpoint in a candidate file (the workspace-tools exam is sealed, so bench requires the pair).
 
+## Done (2026-11-19, lane K: capability tracking and the capability curriculum)
+
+- Bench's capability ids reach splinter as data: `practice.json` tasks (`capabilities`, `track`, `taxonomy`,
+  `selection`), export index rows, manifests and `skipped.jsonl` lines (bench, same day). `curriculum::capability`
+  counts competence per capability (graded passes and fails, 95% Wilson interval, ungraded infrastructure stops kept
+  out of every denominator, failure classes from the diagnosis, the campaign's bands) and the weight
+  `(1 - r)(1/2 + f/2)(1/2 + m/2)`. `splinter experiences capabilities DIR... [--labels PRACTICE_DIR]` reports it per
+  policy and keeps it in the store (`capability_competence`) with the index and practice digests it came from;
+  material staged before bench named capabilities is labelled only by matching `source_digest`.
+- `[rollout] curriculum = "capability"` (opt-in; `all` keeps keys and records unchanged): a generation's tasks are
+  drawn by weight from a seed of the campaign's, retired tasks and tasks the infrastructure stopped every time never;
+  `tasks` caps them; `transfer = { capabilities, count }` has bench draw fresh exercises for the heaviest measured
+  capabilities (`bench task practice --count --seed --capability`) beside them. Every trial records its class and
+  capability ids; the rollout record keeps the selection. Specs: `capability_curriculum` (real practice manifest
+  fixture, interval, frontier preference, infrastructure exclusion, seed, sealed and out-of-pool negatives) and
+  `campaign::capabilities` (E2E: generation 2 practises more on the capability generation 1 failed).
+- Real data (knowledge 180): A2s1's G=8 practice, 1280 trials over 160 tasks of four collections, labelled by
+  re-staged draws byte-identical to lane R's: design-review and professional-procedure 0.40 [0.33, 0.47],
+  exact-arithmetic 0.44, abstention 0.89, stateful-service 0.87; the curriculum would weigh design-review (0.49),
+  professional-procedure (0.47) and exact-arithmetic (0.44) first.
+
 ## Open
+
+- No campaign has run with `curriculum = "capability"` on real models (no GPU in lane K); the transfer draw's
+  bench call is covered by the argv it builds and bench's own tests, not by a live rollout.
+- A `--count` draw selects after admission (N drawn, fewer kept): a variant's labels exist only once its tasks do.
+- Three capabilities (apply-rules, locate-in-workspace, structured-answer) label nearly every task of the four
+  knowledge collections, so their weight follows the overall pass rate; the discriminating ids are the narrow ones.
 
 - Done 2026-11-18 (splinter baa35b8fe, lane G landed it): `release` and `harness optimise` decide on the one
   promotion rule, `promotion::decide` on the examiner's verdicts when the caller hands them in, else

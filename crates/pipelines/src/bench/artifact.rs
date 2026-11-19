@@ -80,6 +80,10 @@ pub struct IndexRow {
     pub manifest_sha256: String,
     /// The trial directory relative to the export.
     pub path: String,
+    /// The capability ids the examiner's taxonomy labels the task with;
+    /// `None` in exports made before the examiner named them.
+    #[serde(default)]
+    pub capabilities: Option<Vec<String>>,
 }
 
 /// The task a trial attempted, as the manifest names it.
@@ -97,6 +101,10 @@ pub struct ManifestTask {
     /// The split the task belongs to, when the export states it.
     #[serde(default)]
     pub set: Option<String>,
+    /// The capability ids the examiner's taxonomy labels the task with;
+    /// `None` in exports made before the examiner named them.
+    #[serde(default)]
+    pub capabilities: Option<Vec<String>>,
 }
 
 /// The agent that ran the trial.

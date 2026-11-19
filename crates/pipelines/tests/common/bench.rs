@@ -86,6 +86,10 @@ pub struct Trial {
     /// The commit its agent's system prompt and its instruction name; `None`
     /// is the trial's own name (each trial checked out a commit of its own).
     pub commit: Option<&'static str>,
+    /// The capability ids the export names for its task, as the examiner
+    /// writes them into the index row and the manifest; `None` writes none,
+    /// as an export made before the examiner labelled tasks.
+    pub capabilities: Option<&'static [&'static str]>,
 }
 
 impl Trial {
@@ -108,6 +112,15 @@ impl Trial {
             dimension: "firmware.x",
             command: "ls",
             commit: None,
+            capabilities: None,
+        }
+    }
+
+    /// The same trial of a task the examiner labels with `capabilities`.
+    pub fn capabilities(self, capabilities: &'static [&'static str]) -> Self {
+        Self {
+            capabilities: Some(capabilities),
+            ..self
         }
     }
 
@@ -274,6 +287,9 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         if let Some(set) = t.set {
             task["set"] = json!(set);
         }
+        if let Some(ids) = t.capabilities {
+            task["capabilities"] = json!(ids);
+        }
         let mut manifest = json!({
             "schema": "bench.trial-artifact/1",
             "trial": t.name,
@@ -303,6 +319,9 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
                              "path": t.name});
         if let Some(set) = t.set {
             row["set"] = json!(set);
+        }
+        if let Some(ids) = t.capabilities {
+            row["capabilities"] = json!(ids);
         }
         index.push_str(&format!("{row}\n"));
     }
