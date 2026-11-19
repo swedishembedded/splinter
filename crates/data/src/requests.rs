@@ -148,6 +148,8 @@ fn build(experience: &Experience, calls: &[ModelCall]) -> Result<Conversation, U
         messages: chain,
         actions,
         tool_sets,
+        scrubbed: scrub.changed_anything(),
+        as_sent: true,
     })
 }
 

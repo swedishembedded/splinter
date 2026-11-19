@@ -298,6 +298,7 @@ fn reserving_twice_over_a_lineage_with_fresh_seeds_never_examines_what_was_train
     let dataset = store_dataset(
         &ctx,
         &Projection {
+            tokens: Default::default(),
             view: "cpt".into(),
             objective: Objective::Cpt,
             strip: None,

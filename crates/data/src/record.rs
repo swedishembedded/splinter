@@ -14,6 +14,7 @@ use splinter_core::chat::WireMessage;
 use splinter_core::digest::{digest_of, Digest};
 use splinter_core::experience::ExperienceId;
 
+use crate::sampled::SampledTurns;
 use crate::Objective;
 
 /// One privileged turn of a record's teacher context: text the student never
@@ -46,6 +47,11 @@ pub struct RolloutOutcome {
     /// conversation supervises no message.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub baseline_only: bool,
+    /// The tokens the policy sampled for the record's supervised messages,
+    /// with the log-probabilities it sampled them under; `None` when the
+    /// trainer is to tokenise the text and use its start-of-run proxy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sampled: Option<SampledTurns>,
 }
 
 /// The longest `group` or `rollout` key brain accepts, in bytes.
@@ -71,7 +77,14 @@ impl RolloutOutcome {
                 digest_of(rollout).to_string()
             }),
             baseline_only: false,
+            sampled: None,
         }
+    }
+
+    /// The same outcome carrying the tokens the policy sampled.
+    #[must_use]
+    pub fn with_sampled(self, sampled: Option<SampledTurns>) -> Self {
+        Self { sampled, ..self }
     }
 
     /// The same outcome on a record that only sets its group's baseline.

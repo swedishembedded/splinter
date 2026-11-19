@@ -90,6 +90,18 @@ attempt did against the others at the same task:
   version and the policy) and the attempt's name in the record's top-level `reward`, `group`
   and `rollout` fields, the keys brain's policy-gradient trainer reads. Step labels judge
   nothing here.
+- An action whose agent step recorded what the policy sampled (sven's `prompt_token_ids`,
+  `completion_token_ids` and `logprobs`, with `logprob_kind: policy` and a tokenizer digest) is
+  written with exactly those, so nothing is re-rendered: its supervised assistant message carries
+  `prompt_token_ids`, `token_ids` and `behavior_logprobs`, and the record carries
+  `tokenizer_digest`. An action without a usable trace is still written, without any of these,
+  and brain trains it against its start-of-run proxy; the manifest's `tokens` report counts
+  `exact` actions and `proxy` ones by reason: `context_reconstructed` (the conversation was rebuilt
+  from the trajectory, not read from the requests the model was sent, so brain's check of the
+  prompt ids would refuse it), `no_trace`, `sampler_logprobs` (figures taken after
+  top-k/top-p), `count_mismatch`, `invalid_ids`, `scrubbed` (the scrub changed text of the
+  conversation, and ids decode to the unscrubbed text), `mixed_tokenizer` and `split_step`.
+  Fields are never attached in part.
 - The build report and the manifest list every group (task, version, policy) with each
   trial's reward and whether it was written, including groups that yielded no record. The exam seal is
   unchanged: a held-out trial is refused, or left out with `--drop-leaking`. The same

@@ -254,6 +254,7 @@ fn dataset_made(
         });
     }
     let projection = Projection {
+        tokens: Default::default(),
         view: "sft-final".into(),
         objective: Objective::Sft,
         strip: Some(Strip::All),
@@ -314,6 +315,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         });
     }
     let projection = Projection {
+        tokens: Default::default(),
         view: "preference".into(),
         objective: Objective::Preference,
         strip: Some(Strip::All),

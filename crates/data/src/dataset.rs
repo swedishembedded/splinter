@@ -260,7 +260,7 @@ pub fn manifest_path(dataset: &Path) -> PathBuf {
 /// One line of the chat format.
 #[derive(Serialize)]
 struct ChatLine<'a> {
-    messages: &'a [splinter_core::chat::WireMessage],
+    messages: Vec<ChatMessage<'a>>,
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
     tools: &'a [serde_json::Value],
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -273,7 +273,51 @@ struct ChatLine<'a> {
     baseline_only: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     teacher_context: Option<TeacherContextLine<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tokenizer_digest: Option<&'a str>,
     metadata: &'a RecordMetadata,
+}
+
+/// A message of a chat line: the message, and for a supervised one the tokens
+/// the policy sampled for it (brain's `token_ids`, `behavior_logprobs` and
+/// `prompt_token_ids`).
+#[derive(Serialize)]
+struct ChatMessage<'a> {
+    #[serde(flatten)]
+    message: &'a splinter_core::chat::WireMessage,
+    #[serde(flatten)]
+    sampled: Option<&'a crate::SampledTurn>,
+}
+
+/// The messages of a chat line, each supervised one with its sampled turn:
+/// `sampled` holds one entry per supervised message, in order.
+fn chat_messages<'a>(
+    index: usize,
+    messages: &'a [splinter_core::chat::WireMessage],
+    sampled: Option<&'a crate::SampledTurns>,
+) -> Result<Vec<ChatMessage<'a>>, ViewError> {
+    let supervised = messages.iter().filter(|m| m.train).count();
+    if let Some(sampled) = sampled.filter(|s| s.turns.len() != supervised) {
+        return Err(ViewError::Parameter {
+            name: "sampled",
+            reason: format!(
+                "record {index} supervises {supervised} messages and holds sampled tokens for {}",
+                sampled.turns.len()
+            ),
+        });
+    }
+    let mut turns = sampled.iter().flat_map(|s| s.turns.iter());
+    Ok(messages
+        .iter()
+        .map(|message| ChatMessage {
+            message,
+            sampled: if message.train {
+                turns.next().and_then(Option::as_ref)
+            } else {
+                None
+            },
+        })
+        .collect())
 }
 
 /// The teacher context of a chat line as brain reads it: the privileged
@@ -530,7 +574,15 @@ fn line(
                 teacher_context,
             },
         ) => serde_json::to_string(&ChatLine {
-            messages,
+            messages: chat_messages(
+                index,
+                messages,
+                outcome.as_ref().and_then(|o| o.sampled.as_ref()),
+            )?,
+            tokenizer_digest: outcome
+                .as_ref()
+                .and_then(|o| o.sampled.as_ref())
+                .map(|s| s.tokenizer_digest.as_str()),
             tools,
             reward: outcome.as_ref().map(|o| o.reward),
             group: outcome.as_ref().map(|o| o.group.as_str()),
@@ -592,7 +644,8 @@ fn line(
                 train: true,
             };
             serde_json::to_string(&ChatLine {
-                messages: std::slice::from_ref(&message),
+                messages: chat_messages(index, std::slice::from_ref(&message), None)?,
+                tokenizer_digest: None,
                 tools: &[],
                 reward: None,
                 group: None,

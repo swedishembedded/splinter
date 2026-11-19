@@ -61,6 +61,7 @@ fn record(user: &str, assistant: &str) -> Record {
 
 fn projection(records: Vec<Record>) -> Projection {
     Projection {
+        tokens: Default::default(),
         view: "session-claims".into(),
         objective: Objective::Sft,
         strip: None,

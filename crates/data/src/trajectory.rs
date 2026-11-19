@@ -150,6 +150,13 @@ pub(crate) struct Conversation {
     /// The tool schemas the agent was offered, in a chat record's form: one
     /// set for a trajectory, one per distinct set a request log shows.
     pub(crate) tool_sets: Vec<Vec<serde_json::Value>>,
+    /// Whether the scrub changed any text of the conversation, so that what a
+    /// model recorded of the run (token ids) no longer reads back as it.
+    pub(crate) scrubbed: bool,
+    /// Whether the messages are the requests the model was sent, rather than
+    /// a reconstruction from the trajectory (the task's instruction, the
+    /// strip policy), whose context the model never saw.
+    pub(crate) as_sent: bool,
 }
 
 impl Conversation {
@@ -390,6 +397,8 @@ fn try_conversation(
         messages,
         actions,
         tool_sets: vec![tools],
+        scrubbed: scrub.changed_anything(),
+        as_sent: false,
     })
 }
 

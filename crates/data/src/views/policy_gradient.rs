@@ -47,6 +47,15 @@
 //!   [`Rendering`]), and the records are in the corpus's order. Step labels
 //!   judge nothing here: the reward is the only judge.
 //!
+//! * An action whose agent step recorded the policy's own trace (the ids it
+//!   was given, the ids it generated, their log-probabilities, the tokenizer's
+//!   digest) is written with exactly those ([`SampledTurns`]), never
+//!   re-rendered; any other is written without per-token fields and counted
+//!   under why in [`Projection::tokens`] ([`ProxyReason`]). Only a conversation
+//!   read from the requests its model was sent carries them (brain checks the
+//!   context it renders against the prompt ids and refuses another), and not
+//!   one the scrub changed: ids decode to the unscrubbed text.
+//!
 //! Every group is reported ([`Projection::groups`]), including those that
 //! yielded no records, with its kind ([`GroupKind`]).
 //!
@@ -75,6 +84,8 @@ use super::privileged::teacher_context;
 use super::rendering::{Judgement, Rendering};
 use super::rewards::{AdvantageKind, GroupKind, GroupReport, RewardShape, TrialReport};
 use crate::curation::HistoryCuration;
+use crate::sampled::{agreeing, trace_of, turns_of, ProxyReason, SampledTurns, TokenReport};
+use crate::trajectory::{Action, Conversation};
 use crate::{render, RecordBody, RolloutOutcome};
 use crate::{Corpus, Entry, Exclusion, Objective, Projection, Provenance, Strip, View, ViewError};
 
@@ -339,6 +350,46 @@ fn completion_tokens(evidence: &Value, trajectory: &atif::Trajectory) -> Option<
         })
 }
 
+/// The tokens the policy sampled for the `actions` one rewarded record
+/// supervises, counted in `report`; `None` when no action has any. An action
+/// carries them only when its conversation is the requests the model was sent
+/// (a reconstruction from the trajectory is not the context the ids follow),
+/// its step recorded the policy's own trace, the step is that action alone,
+/// and the scrub left the conversation as the model saw it (the ids decode to
+/// the unscrubbed text).
+fn sampled_tokens(
+    trajectory: &atif::Trajectory,
+    conversation: &Conversation,
+    actions: &[Action],
+    report: &mut TokenReport,
+) -> Option<SampledTurns> {
+    let traces = actions
+        .iter()
+        .map(|action| {
+            if !conversation.as_sent {
+                Err(ProxyReason::ContextReconstructed)
+            } else if conversation.scrubbed {
+                Err(ProxyReason::Scrubbed)
+            } else if conversation
+                .actions
+                .iter()
+                .filter(|a| a.step == action.step)
+                .count()
+                > 1
+            {
+                Err(ProxyReason::SplitStep)
+            } else {
+                trace_of(trajectory, action.step)
+            }
+        })
+        .collect();
+    let traces = agreeing(traces);
+    for trace in &traces {
+        report.count(trace);
+    }
+    turns_of(traces)
+}
+
 impl View for PolicyGradient {
     fn name(&self) -> &str {
         if self.distill == Distill::Every {
@@ -486,12 +537,20 @@ impl View for PolicyGradient {
                 projection.exclude(Exclusion::NoAction);
                 continue;
             }
-            for record in self
-                .rendering
-                .records(&conversation, &mut projection, |_| Judgement::Admit)
+            for (record, actions) in
+                self.rendering
+                    .records_of_actions(&conversation, &mut projection, |_| Judgement::Admit)
             {
                 let record = match (treatment, &teacher) {
-                    (Treatment::Reward(outcome), _) => record.with_outcome(outcome.clone()),
+                    (Treatment::Reward(outcome), _) => {
+                        let sampled = sampled_tokens(
+                            &entry.experience.trajectory,
+                            &conversation,
+                            &actions,
+                            &mut projection.tokens,
+                        );
+                        record.with_outcome(outcome.clone().with_sampled(sampled))
+                    }
                     (_, Some(context)) => record.with_teacher_context(context.clone()),
                     _ => record,
                 };

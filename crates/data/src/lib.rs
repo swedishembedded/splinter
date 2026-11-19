@@ -87,6 +87,7 @@ mod record;
 mod render;
 mod replay;
 mod requests;
+mod sampled;
 mod scrub;
 pub mod split;
 mod store;
@@ -121,6 +122,7 @@ pub use record::{
     SplitDraw, TeacherMessage,
 };
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
+pub use sampled::{ProxyReason, SampledTurn, SampledTurns, TokenReport};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
 pub use trajectory::{projection_refusal, session_dialogue};
@@ -246,6 +248,11 @@ pub struct Projection {
     pub advantage: Option<AdvantageKind>,
     /// Candidates left out, by reason.
     pub excluded: BTreeMap<Exclusion, usize>,
+    /// How many rewarded actions carry the tokens the policy sampled, and why
+    /// the others are trained against brain's start-of-run proxy; empty for a
+    /// view that attaches none.
+    #[serde(default, skip_serializing_if = "TokenReport::is_empty")]
+    pub tokens: TokenReport,
     /// The system prompt every conversation opens with when it is not the
     /// default ([`SYSTEM_PROMPT`]): a person's, for a policy trained to be
     /// them. A dataset records it, so what a model was trained under is
@@ -338,6 +345,7 @@ impl Projection {
             groups: Vec::new(),
             advantage: None,
             excluded: BTreeMap::new(),
+            tokens: TokenReport::default(),
             system_prompt: None,
             packed: false,
             outcome_verified_only: false,

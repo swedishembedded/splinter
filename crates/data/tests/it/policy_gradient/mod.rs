@@ -130,19 +130,39 @@ fn add(corpus: &mut Corpus, trial: &Trial, evidence: Option<Value>) {
 
 /// [`add`], the conversation shown images when `shown_images`.
 fn add_shown(corpus: &mut Corpus, trial: &Trial, evidence: Option<Value>, shown_images: bool) {
+    add_with(corpus, trial, evidence, shown_images, None, |_| {});
+}
+
+/// [`add_shown`], with `tweak` free to change the trajectory's steps (the
+/// system step, the user step, the tool-call step and the answer, in order)
+/// and `calls` the requests the harness recorded the model was sent.
+fn add_with(
+    corpus: &mut Corpus,
+    trial: &Trial,
+    evidence: Option<Value>,
+    shown_images: bool,
+    calls: Option<&[splinter_core::harness::ModelCall]>,
+    tweak: impl FnOnce(&mut [TraceStep]),
+) {
     let mut call_step = call(3, "c0", "shell", json!({"command": "ls"}), "part.py");
     call_step.reasoning_content = Some("look".into());
-    let mut trajectory = trajectory(vec![
+    let mut steps = vec![
         TraceStep::new(1, StepOrigin::System, "You are a careful engineer."),
         user(2, "Design a bracket."),
         call_step,
         say(4, "Done."),
-    ]);
+    ];
+    tweak(&mut steps);
+    let mut trajectory = trajectory(steps);
     trajectory.agent.tool_definitions = Some(vec![json!({"type": "function", "function": {
         "name": "shell", "description": "Run a command.", "parameters": {"type": "object"}}})]);
     trajectory.extra = Some(json!({"splinter_harness": {
         "conversation": trial.role, "role": trial.role, "role_source": "export",
         "shown_images": shown_images}}));
+    if let (Some(calls), Some(extra)) = (calls, trajectory.extra.as_mut()) {
+        extra["splinter_harness_calls"] =
+            splinter_core::harness::RecordedCalls::record("abc", calls).to_value();
+    }
     let at = format!("2026-11-01T00:00:00.{:03}Z", corpus.entries().len());
     let experience = experience(&bench_task(trial.version), trajectory, Some("Done."), &at);
     let note = graded(&experience, trial, evidence);
@@ -691,4 +711,5 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
     }
 }
 
+mod exact_tokens;
 mod shaping;

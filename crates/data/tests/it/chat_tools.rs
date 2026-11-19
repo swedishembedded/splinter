@@ -39,6 +39,7 @@ fn projection_of(record: Record) -> Projection {
         groups: Vec::new(),
         advantage: None,
         excluded: Default::default(),
+        tokens: Default::default(),
         system_prompt: None,
         packed: false,
         outcome_verified_only: false,

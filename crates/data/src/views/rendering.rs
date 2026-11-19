@@ -96,6 +96,19 @@ impl Rendering {
         projection: &mut Projection,
         judge: impl Fn(&Action) -> Judgement,
     ) -> Vec<RecordBody> {
+        self.records_of_actions(conversation, projection, judge)
+            .into_iter()
+            .map(|(body, _)| body)
+            .collect()
+    }
+
+    /// [`Self::records`], each with the actions it supervises, in order.
+    pub(crate) fn records_of_actions(
+        &self,
+        conversation: &Conversation,
+        projection: &mut Projection,
+        judge: impl Fn(&Action) -> Judgement,
+    ) -> Vec<(RecordBody, Vec<Action>)> {
         let images_before = images_before_each_message(conversation);
         let wanted = |action: &Action| match &self.only_actions {
             None => true,
@@ -144,11 +157,15 @@ impl Rendering {
             return Vec::new();
         }
         if self.packed {
-            conversation.packed_record(&admitted).into_iter().collect()
+            conversation
+                .packed_record(&admitted)
+                .map(|body| (body, admitted.into_iter().copied().collect()))
+                .into_iter()
+                .collect()
         } else {
             admitted
                 .into_iter()
-                .map(|action| conversation.record(action))
+                .map(|action| (conversation.record(action), vec![*action]))
                 .collect()
         }
     }

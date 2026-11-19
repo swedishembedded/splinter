@@ -129,6 +129,7 @@ fn record_with_experience(
 
 fn projection(records: Vec<Record>) -> Projection {
     Projection {
+        tokens: Default::default(),
         view: "sft-final".into(),
         objective: Objective::Sft,
         strip: Some(Strip::All),

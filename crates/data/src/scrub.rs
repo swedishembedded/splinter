@@ -17,6 +17,8 @@
 //! long listing become `user`, unless they are `root`; so does the name of a
 //! home directory (`<home>/name`).
 
+use std::cell::Cell;
+
 use atif::Trajectory;
 use splinter_core::prompt::WORKSPACE_TREE_KEY;
 
@@ -24,6 +26,8 @@ use splinter_core::prompt::WORKSPACE_TREE_KEY;
 pub(crate) struct Scrub {
     /// The directory the episode recorded as its tree.
     tree: Option<String>,
+    /// Whether [`Self::text`] has replaced anything so far.
+    changed: Cell<bool>,
 }
 
 impl Scrub {
@@ -38,11 +42,29 @@ impl Scrub {
             .and_then(serde_json::Value::as_str)
             .map(|tree| tree.trim_end_matches('/').to_string())
             .filter(|tree| !tree.is_empty());
-        Self { tree }
+        Self {
+            tree,
+            changed: Cell::new(false),
+        }
+    }
+
+    /// Whether any text passed through [`Self::text`] so far came out
+    /// different: what the scrub shows a student is then not what the model
+    /// saw or said, so token ids recorded from the run no longer match it.
+    pub(crate) fn changed_anything(&self) -> bool {
+        self.changed.get()
     }
 
     /// `text` without the host's login name and scratch paths.
     pub(crate) fn text(&self, text: &str) -> String {
+        let cleaned = self.cleaned(text);
+        if cleaned != text {
+            self.changed.set(true);
+        }
+        cleaned
+    }
+
+    fn cleaned(&self, text: &str) -> String {
         let mut cleaned = text.to_string();
         if let Some(tree) = &self.tree {
             cleaned = relative_to(&cleaned, tree);
