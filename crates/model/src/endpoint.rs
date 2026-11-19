@@ -339,7 +339,8 @@ impl BrainEndpoints {
                 "the adapter was offered but it lists no such adapter".to_string()
             }
             Wanted::Adapter { .. } => "serve it with brain serve --adapter FILE, or name the \
-                manifest the endpoint follows with --brain-adapter-manifest FILE so it is offered"
+                manifest the endpoint follows with --brain-adapter-manifest FILE, or the \
+                directory it serves with --brain-adapter-dir DIR, so it is offered"
                 .to_string(),
         };
         PolicyError::NotServed {

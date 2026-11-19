@@ -140,6 +140,7 @@ fn apply_brain_flags(config: &mut Config, global: &cli::Global) -> Result<(), St
                 global.brain_adapter_manifest.is_some(),
                 "--brain-adapter-manifest",
             ),
+            (global.brain_adapter_dir.is_some(), "--brain-adapter-dir"),
             (
                 global.brain_artifact_store.is_some(),
                 "--brain-artifact-store",
@@ -155,6 +156,9 @@ fn apply_brain_flags(config: &mut Config, global: &cli::Global) -> Result<(), St
     let mut brain = brain;
     if let Some(manifest) = &global.brain_adapter_manifest {
         brain = brain.with_adapter_manifest(manifest.clone());
+    }
+    if let Some(directory) = &global.brain_adapter_dir {
+        brain = brain.with_adapter_directory(directory.clone());
     }
     if let Some(width) = global.attempt_concurrency {
         brain = brain.with_attempt_concurrency(width as usize);

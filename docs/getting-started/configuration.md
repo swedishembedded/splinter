@@ -120,7 +120,10 @@ the release manifest the endpoint follows (`brain serve --adapter-manifest FILE`
 does not list, a release candidate in the gate for example, is offered by publishing it there and waited
 for. A manifest offers one adapter at a time, so the gate's two arms are asked one after the other. With
 endpoints, the gate starts no `brain` of its own: its serve check is that each endpoint lists the candidate
-under the digest the release records.
+under the digest the release records. `--brain-adapter-dir DIR` instead names the directory the endpoint
+serves (`brain serve --serve-adapters DIR`): an adapter is offered by writing it there under its digest, and
+none is withdrawn, so a champion and its candidate are served at once, as a campaign's agent examination
+needs.
 
 ### Training on a brain endpoint
 

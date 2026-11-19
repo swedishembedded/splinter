@@ -144,6 +144,18 @@ pub struct Global {
     /// waited for. A manifest offers one adapter at a time.
     #[arg(long, global = true, value_name = "FILE")]
     pub brain_adapter_manifest: Option<PathBuf>,
+    /// The adapter directory the brain endpoints serve
+    /// (`brain serve --serve-adapters DIR`): an adapter they do not list is
+    /// offered by writing it there and waited for. Every adapter written there
+    /// is a model of its own, so a champion and its candidate are served at
+    /// once, as an examination of the pair needs.
+    #[arg(
+        long,
+        global = true,
+        value_name = "DIR",
+        conflicts_with = "brain_adapter_manifest"
+    )]
+    pub brain_adapter_dir: Option<PathBuf>,
     /// The artifact store the brain endpoints train through
     /// (`brain serve --training --artifact-store DIR`): a directory both
     /// they and this machine reach, in which datasets are published, named
