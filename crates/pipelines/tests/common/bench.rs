@@ -95,6 +95,10 @@ pub struct Trial {
     /// the model was sent, the harness's time line in the user turn, with the
     /// response it got; the manifest declares the log's schema.
     pub traced: bool,
+    /// A traced trial's model also answered one request with nothing (no
+    /// text, no call: the agent nudged it and asked again) and was sent one
+    /// more it never answered (the trial ended first); neither is an agent step.
+    pub cut_short: bool,
 }
 
 impl Trial {
@@ -119,6 +123,17 @@ impl Trial {
             commit: None,
             capabilities: None,
             traced: false,
+            cut_short: false,
+        }
+    }
+
+    /// The same traced trial with an empty answer and a last request left
+    /// unanswered in its request log.
+    pub fn cut_short(self) -> Self {
+        Self {
+            traced: true,
+            cut_short: true,
+            ..self
         }
     }
 
@@ -262,7 +277,7 @@ pub const TIME_LINE: &str = "Time: 0 of 18 min used, 18 min left.";
 /// The request log of a traced trial (sven's `--record-requests`): one
 /// request per agent step, each the whole conversation so far, and the
 /// response it got.
-fn requests_as_sent(note: &str, command: &str) -> String {
+fn requests_as_sent(note: &str, command: &str, cut_short: bool) -> String {
     let shell = json!({"name": "shell", "description": "Run a command.",
                        "parameters": {"type": "object", "properties": {"command": {"type": "string"}}}});
     let opening = vec![
@@ -276,18 +291,33 @@ fn requests_as_sent(note: &str, command: &str) -> String {
         json!({"role": "assistant", "content": {"tool_call_id": "c0", "function": {"name": "shell", "arguments": arguments}}}),
         json!({"role": "tool", "content": {"tool_call_id": "c0", "content": "main.c"}}),
     ]);
-    [
-        json!({"kind": "request", "seq": 1, "provider": "brain", "model": "main",
-               "request": {"messages": opening, "tools": [shell.clone()]}}),
+    let request = |seq: u64, messages: &[Value]| {
+        json!({"kind": "request", "seq": seq, "provider": "brain", "model": "main",
+               "request": {"messages": messages, "tools": [shell.clone()]}})
+    };
+    let mut lines = vec![
+        request(1, &opening),
         json!({"kind": "response", "seq": 1, "response": {"text": "", "reasoning": "look first",
                "tool_calls": [{"index": 0, "id": "c0", "name": "shell", "arguments": arguments}]}}),
-        json!({"kind": "request", "seq": 2, "provider": "brain", "model": "main",
-               "request": {"messages": later, "tools": [shell]}}),
-        json!({"kind": "response", "seq": 2, "response": {"text": "Fixed.", "reasoning": "", "tool_calls": []}}),
-    ]
-    .iter()
-    .map(|line| format!("{line}\n"))
-    .collect()
+    ];
+    let mut seq = 2;
+    if cut_short {
+        lines.push(request(seq, &later));
+        lines.push(json!({"kind": "response", "seq": seq, "response": {"text": "", "reasoning": "hmm", "tool_calls": []}}));
+        later.push(json!({"role": "user", "content": "Continue."}));
+        seq += 1;
+    }
+    lines.push(request(seq, &later));
+    lines.push(json!({"kind": "response", "seq": seq, "response": {"text": "Fixed.", "reasoning": "", "tool_calls": []}}));
+    if cut_short {
+        let mut after = later.clone();
+        after.extend([
+            json!({"role": "assistant", "content": "Fixed."}),
+            json!({"role": "user", "content": "Time is up."}),
+        ]);
+        lines.push(request(seq + 1, &after));
+    }
+    lines.iter().map(|line| format!("{line}\n")).collect()
 }
 
 /// The bytes of the picture a trial with a picture shows.
@@ -327,7 +357,7 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
             (
                 "model-requests.jsonl".into(),
                 if t.traced {
-                    requests_as_sent(t.commit.unwrap_or(t.name), t.command)
+                    requests_as_sent(t.commit.unwrap_or(t.name), t.command, t.cut_short)
                 } else {
                     requests(t.commit.unwrap_or(t.name))
                 }
@@ -385,8 +415,9 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
             manifest["confidential"] = json!(true);
         }
         if t.traced {
+            let (requests, answered) = if t.cut_short { (4, 3) } else { (2, 2) };
             manifest["requests"] = json!({"file": "model-requests.jsonl",
-                "schema": "sven.request-log/1", "requests": 2, "answered": 2});
+                "schema": "sven.request-log/1", "requests": requests, "answered": answered});
         }
         let manifest_text = serde_json::to_string_pretty(&manifest).unwrap();
         fs::write(trial_dir.join("manifest.json"), &manifest_text).unwrap();

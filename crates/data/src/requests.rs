@@ -32,8 +32,10 @@
 //! message per tool call, each content `{tool_call_id, function}`; a tool
 //! result as `{tool_call_id, content}` with content a string or parts. They
 //! become the same messages a trajectory renders ([`crate::trajectory`]):
-//! one assistant message per turn with all its calls, trimmed, scrubbed, calls
-//! named `s<step>-<id>`. The turn that made no call and said nothing is
+//! one assistant message per turn with all its calls, scrubbed, calls named
+//! `s<step>-<id>`, and otherwise as sent: the text around a call and the
+//! arguments as the model wrote them, which a chat template prints as given
+//! (so a record's context is the one its prompt ids name). The turn that made no call and said nothing is
 //! dropped, as an empty agent step is.
 
 use std::collections::{HashMap, HashSet};
@@ -195,10 +197,17 @@ fn scope_calls(
 /// Whether two assistant turns say the same: the text, the reasoning and the
 /// calls (with their ids, as the model and its history name them).
 fn same_turn(a: &WireMessage, b: &WireMessage) -> bool {
+    let arguments = |text: &str| serde_json::from_str::<Value>(text).ok();
     a.role == b.role
-        && a.content == b.content
-        && a.reasoning_content == b.reasoning_content
-        && a.tool_calls == b.tool_calls
+        && a.content.trim() == b.content.trim()
+        && a.reasoning_content.as_deref().map(str::trim)
+            == b.reasoning_content.as_deref().map(str::trim)
+        && a.tool_calls.len() == b.tool_calls.len()
+        && a.tool_calls.iter().zip(&b.tool_calls).all(|(x, y)| {
+            x.id == y.id
+                && x.function.name == y.function.name
+                && arguments(&x.function.arguments) == arguments(&y.function.arguments)
+        })
 }
 
 /// The request's messages as chat messages, none supervised, call ids as the
@@ -228,12 +237,11 @@ fn wire_messages(
             }
             "assistant" => match content {
                 Value::String(text) => {
-                    let mut turn = message("assistant", &scrub.text(text.trim()), false);
+                    let mut turn = message("assistant", &scrub.text(text), false);
                     turn.reasoning_content = raw
                         .get("reasoning")
                         .and_then(Value::as_str)
-                        .map(str::trim)
-                        .filter(|r| !r.is_empty())
+                        .filter(|r| !r.trim().is_empty())
                         .map(|r| scrub.text(r));
                     check_markup(&turn, step)?;
                     out.push(turn);
@@ -266,7 +274,9 @@ fn wire_messages(
             _ => return Err(unreadable),
         }
     }
-    out.retain(|m| m.role != "assistant" || !m.content.is_empty() || !m.tool_calls.is_empty());
+    out.retain(|m| {
+        m.role != "assistant" || !m.content.trim().is_empty() || !m.tool_calls.is_empty()
+    });
     Ok(out)
 }
 
@@ -335,17 +345,22 @@ fn wire_call(call: &Value, scrub: &Scrub, step: u64) -> Result<WireToolCall, Unp
     };
     let id = id.and_then(Value::as_str).ok_or(unreadable)?;
     let name = name.and_then(Value::as_str).ok_or(unreadable)?;
+    // Arguments the model wrote as text stay that text (a chat template
+    // prints them as given); they must still be JSON.
     let arguments = match arguments.ok_or(unreadable)? {
-        Value::String(text) => serde_json::from_str::<Value>(text)
-            .map_err(|_| Unprojectable::UnparsedArguments { step })?,
-        parsed => parsed.clone(),
+        Value::String(text) => {
+            serde_json::from_str::<Value>(text)
+                .map_err(|_| Unprojectable::UnparsedArguments { step })?;
+            text.clone()
+        }
+        parsed => parsed.to_string(),
     };
     Ok(WireToolCall {
         id: Some(id.to_string()),
         kind: "function".into(),
         function: WireFunction {
             name: name.to_string(),
-            arguments: scrub.text(&arguments.to_string()),
+            arguments: scrub.text(&arguments),
         },
     })
 }
@@ -357,12 +372,11 @@ fn answer_of(
     scrub: &Scrub,
     step: u64,
 ) -> Result<Option<WireMessage>, Unprojectable> {
-    let mut turn = message("assistant", &scrub.text(response.text.trim()), false);
+    let mut turn = message("assistant", &scrub.text(&response.text), false);
     turn.reasoning_content = response
         .reasoning
         .as_deref()
-        .map(str::trim)
-        .filter(|r| !r.is_empty())
+        .filter(|r| !r.trim().is_empty())
         .map(|r| scrub.text(r));
     for call in &response.tool_calls {
         let call = serde_json::json!({
@@ -371,5 +385,5 @@ fn answer_of(
         turn.tool_calls.push(wire_call(&call, scrub, step)?);
     }
     check_markup(&turn, step)?;
-    Ok((!turn.content.is_empty() || !turn.tool_calls.is_empty()).then_some(turn))
+    Ok((!turn.content.trim().is_empty() || !turn.tool_calls.is_empty()).then_some(turn))
 }

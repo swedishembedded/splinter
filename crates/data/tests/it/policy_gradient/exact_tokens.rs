@@ -304,3 +304,40 @@ fn a_conversation_rebuilt_from_its_trajectory_carries_no_ids() {
         Some(&4)
     );
 }
+
+#[test]
+fn a_context_read_from_requests_keeps_the_text_the_model_was_sent() {
+    // As sven sends an answer back: the whitespace the model wrote before its
+    // call, and the call's arguments as it wrote them. A chat template renders
+    // both as given (Qwen3's writes a newline before a call only after text),
+    // so the record's context holds them as sent, or its prompt ids would
+    // name another context.
+    let (call_step, answer) = good();
+    let mut corpus = Corpus::new();
+    for trial in [Trial::pass("t1"), Trial::fail("t2", &[])] {
+        let mut calls = requests("part.py");
+        let written = "{\"command\":  \"ls\"}";
+        calls[0].response.text = "\n\n".into();
+        calls[0].response.tool_calls[0].arguments = written.into();
+        calls[1].messages[2]["content"] = json!("\n\n");
+        calls[1].messages[3]["content"]["function"]["arguments"] = json!(written);
+        let (call_step, answer) = (call_step.clone(), answer.clone());
+        add_with(&mut corpus, &trial, None, false, Some(&calls), |steps| {
+            steps[2].metrics = Some(call_step);
+            steps[3].metrics = Some(answer);
+        });
+    }
+    let projection = view().project(&corpus).unwrap();
+    assert_eq!(projection.tokens.exact, 4, "{:?}", projection.tokens);
+    let written = lines(&projection);
+    let history = written
+        .iter()
+        .flat_map(|l| l["messages"].as_array().unwrap())
+        .find(|m| m["role"] == "assistant" && m["train"] == false)
+        .expect("the second action's context holds the first answer");
+    assert_eq!(history["content"], "\n\n");
+    assert_eq!(
+        history["tool_calls"][0]["function"]["arguments"],
+        "{\"command\":  \"ls\"}"
+    );
+}

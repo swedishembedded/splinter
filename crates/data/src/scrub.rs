@@ -14,7 +14,8 @@
 //! trained on them memorises a name and a random directory. The scratch tree
 //! becomes the working directory (its files are named relative to it, as they
 //! are to the solver whose commands run in it) and the owner and group of a
-//! long listing become `user`, unless they are `root`; so does the name of a
+//! long listing become `user`, unless they are `root` or a benchmark sandbox's
+//! `agent` (names every such machine shares); so does the name of a
 //! home directory (`<home>/name`).
 
 use std::cell::Cell;
@@ -150,10 +151,17 @@ fn anonymise_home(text: &str) -> String {
     out
 }
 
+/// The owners a listing keeps: names every machine of their kind shares, which
+/// say nothing about the host that ran a solve. `root`, and `agent`, the account
+/// a benchmark's sandbox runs an agent as (what the model sees again when it is
+/// examined, so renaming it would train a context it never meets and would
+/// unmatch the token ids the policy recorded).
+const SHARED_OWNERS: [&str; 2] = ["root", "agent"];
+
 /// `text` with the owner and group of every long listing line in it
 /// (`drwxr-xr-x 5 name group 87 Oct 20 08:02 .`) named `user`, unless they are
-/// `root`. A line is found by its columns wherever it stands: also inside the
-/// escaped text of a log the solver printed.
+/// [`SHARED_OWNERS`]. A line is found by its columns wherever it stands: also
+/// inside the escaped text of a log the solver printed.
 fn anonymise_listing(text: &str) -> String {
     let mut tokens: Vec<(usize, &str)> = Vec::new();
     let mut start = None;
@@ -184,7 +192,10 @@ fn anonymise_listing(text: &str) -> String {
     let mut replaced: Vec<(usize, usize)> = Vec::new();
     for window in tokens.windows(5) {
         if is_mode(window[0].1) && digits(window[1].1) && digits(window[4].1) {
-            for named in window[2..4].iter().filter(|n| n.1 != "root") {
+            for named in window[2..4]
+                .iter()
+                .filter(|n| !SHARED_OWNERS.contains(&n.1))
+            {
                 replaced.push((named.0, named.0 + named.1.len()));
             }
         }
@@ -231,6 +242,12 @@ mod tests {
         assert_eq!(
             anonymise_listing("-rw-r--r-- 1 root root 4365 Jan  1  1970 a\n"),
             "-rw-r--r-- 1 root root 4365 Jan  1  1970 a\n"
+        );
+        // The account a benchmark sandbox runs its agent as is every such
+        // machine's, what the model sees again when it is examined.
+        assert_eq!(
+            anonymise_listing("drwxr-xr-x 2 agent agent 4096 Nov 18 16:20 materials\n"),
+            "drwxr-xr-x 2 agent agent 4096 Nov 18 16:20 materials\n"
         );
         assert_eq!(
             anonymise_listing(

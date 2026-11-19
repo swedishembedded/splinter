@@ -24,8 +24,8 @@ pub(super) struct Attribution {
     /// The one model role all its requests name, if they do.
     pub(super) role: Option<String>,
     pub(super) images: bool,
-    /// Which requests of the log they are.
-    requests: std::ops::Range<usize>,
+    /// Which requests of the log they are, in order.
+    requests: Vec<usize>,
 }
 
 impl Attribution {
@@ -112,8 +112,11 @@ impl RequestLog {
 
     /// Divides the requests among `conversations`, in order, one request per
     /// agent step. Only an exact division counts: the request count must
-    /// equal the agent steps of all the conversations, or the requests cannot
-    /// be told apart and nothing is attributed.
+    /// equal the agent steps of all the conversations, or else the count of
+    /// the requests that made a step - those answered with text or a call; an
+    /// answer that said nothing, which the agent records no step for and asks
+    /// again after, and a request the trial ended before answering, made
+    /// none - or the requests cannot be told apart and nothing is attributed.
     pub(super) fn attribute(
         &self,
         conversations: &[&atif::Trajectory],
@@ -127,7 +130,15 @@ impl RequestLog {
                     .count()
             })
             .collect();
-        if steps.iter().sum::<usize>() != self.requests.len() {
+        let total = steps.iter().sum::<usize>();
+        let stepping: Vec<usize> = if self.requests.len() == total {
+            (0..total).collect()
+        } else {
+            (0..self.requests.len())
+                .filter(|&n| self.requests[n].call.as_ref().is_some_and(made_a_step))
+                .collect()
+        };
+        if stepping.len() != total {
             return None;
         }
         let mut start = 0;
@@ -135,16 +146,15 @@ impl RequestLog {
             steps
                 .into_iter()
                 .map(|n| {
-                    let own = &self.requests[start..start + n];
-                    let first = own.first().and_then(|r| r.role.clone());
-                    let one_role = own.iter().all(|r| r.role == first);
-                    let attribution = Attribution {
-                        role: first.filter(|_| one_role),
-                        images: own.iter().any(|r| r.media),
-                        requests: start..start + n,
-                    };
+                    let own = &stepping[start..start + n];
+                    let first = own.first().and_then(|&r| self.requests[r].role.clone());
+                    let one_role = own.iter().all(|&r| self.requests[r].role == first);
                     start += n;
-                    attribution
+                    Attribution {
+                        role: first.filter(|_| one_role),
+                        images: own.iter().any(|&r| self.requests[r].media),
+                        requests: own.to_vec(),
+                    }
                 })
                 .collect(),
         )
@@ -153,11 +163,18 @@ impl RequestLog {
     /// The calls of the requests attributed to a conversation; `None` unless
     /// the log holds a readable response to every one of them.
     pub(super) fn calls_of(&self, attribution: &Attribution) -> Option<Vec<ModelCall>> {
-        self.requests[attribution.requests.clone()]
+        attribution
+            .requests
             .iter()
-            .map(|r| r.call.clone())
+            .map(|&r| self.requests[r].call.clone())
             .collect()
     }
+}
+
+/// Whether the answer to `call` is one an agent records a step for: it said
+/// something or called a tool.
+fn made_a_step(call: &ModelCall) -> bool {
+    !call.response.text.trim().is_empty() || !call.response.tool_calls.is_empty()
 }
 
 /// The array under `key` of `request`, moved out of it; empty when absent.

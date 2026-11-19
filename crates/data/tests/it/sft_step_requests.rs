@@ -182,13 +182,32 @@ fn a_conversation_of_text_gives_the_records_its_trajectory_gives() {
         &conversation("designer", Some("Phase: design"), Some(&calls), false),
     );
     assert_eq!(from_trajectory.records.len(), 2);
-    let bodies = |p: &Projection| p.records.iter().map(|r| r.body.clone()).collect::<Vec<_>>();
-    assert_eq!(bodies(&from_requests), bodies(&from_trajectory));
+    // The same records, but for the whitespace the model wrote around its
+    // text and reasoning: the requests hold it as sent (a chat template
+    // prints it as given), the trajectory trimmed.
+    let trimmed = |p: &Projection| {
+        p.records
+            .iter()
+            .map(|r| {
+                let mut body = r.body.clone();
+                if let RecordBody::Chat { messages, .. } = &mut body {
+                    for m in messages {
+                        m.content = m.content.trim().to_string();
+                        m.reasoning_content =
+                            m.reasoning_content.as_deref().map(|r| r.trim().to_string());
+                    }
+                }
+                body
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(trimmed(&from_requests), trimmed(&from_trajectory));
     // The call is paired as the trajectory pairs it, and what the model
-    // emitted is one assistant message with its reasoning.
+    // emitted is one assistant message with its reasoning, as sent.
     let (messages, tools) = chat(&from_requests.records[1]);
     assert_eq!(tools.len(), 1);
-    assert_eq!(messages[2].reasoning_content.as_deref(), Some("look"));
+    assert_eq!(messages[2].reasoning_content.as_deref(), Some(" look "));
+    assert_eq!(messages[2].content, "\n\n\n");
     assert_eq!(messages[2].tool_calls[0].id.as_deref(), Some("s3-c0"));
     assert_eq!(messages[3].tool_call_id.as_deref(), Some("s3-c0"));
 }

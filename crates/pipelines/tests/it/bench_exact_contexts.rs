@@ -72,6 +72,26 @@ fn a_trial_whose_requests_were_recorded_trains_every_traced_action_exactly() {
     }
 }
 
+/// An answer that said nothing (the agent asked again) and a last request
+/// the trial ended before answering are no agent steps: the log still
+/// divides among the steps, and the context of the step after the empty
+/// answer is the request that step answered, the agent's nudge included.
+#[test]
+fn requests_that_made_no_step_leave_the_others_exact() {
+    let (scratch, ctx) = context("bench-exact-cut-short");
+    let trials = [
+        Trial::new("a-pass", "org/fw", Some("train"), true).cut_short(),
+        Trial::new("b-fail", "org/fw", Some("train"), false).cut_short(),
+    ];
+    let built = policy_gradient(&ctx, &trials, &scratch.0.join("export"));
+    assert_eq!(built.tokens.exact, 4, "{:?}", built.tokens);
+    let text = std::fs::read_to_string(&built.path).unwrap();
+    assert!(
+        text.contains("Continue."),
+        "the nudge is in the last step's context"
+    );
+}
+
 #[test]
 fn a_trial_without_its_requests_divided_among_its_steps_is_counted_as_reconstructed() {
     let (scratch, ctx) = context("bench-reconstructed-contexts");

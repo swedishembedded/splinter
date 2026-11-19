@@ -50,3 +50,29 @@ from the requests its model was sent (`context_reconstructed` otherwise); on lan
 records train as before against `--behaviour start`. Exact ratios need both: requests recorded as conversations, and
 a served prompt without the instruction (`reasoning_effort: medium`, or the serving default changed with a fresh
 baseline).
+
+## Update 2026-11-19 (lane T2): every traced action exact, once the server renders the template
+
+What kept the context inexact, each fixed at its source, measured on 8 of lane R's practice trials (support and
+compiled, a pass and a fail of 4 tasks; 48 policy-gradient records, 47 traced actions, one baseline-only record):
+
+- brain served a reasoning-effort instruction the Qwen3 template never writes (brain knowledge 531); brain 1bdd5400c
+  serves the template's own rendering (Qwen3-4B pinned token for token) and keeps tool schemas in the request's order.
+- a single agent's trial was never read from its request log (only harness conversations were); bench 0380a841
+  declares the log's schema in the export manifest, and splinter 6e0ea27a1 reads every single-agent trial whose log
+  divides among its agent steps from its requests (the harness's time line included).
+- the log does not divide when the model answered a request with nothing (reasoning only; sven records no step and
+  asks again) or the trial ended before an answer: now only requests that made a step are divided (2 of the 4
+  compiled trials).
+- the requests path trimmed the text around a call and re-serialised its arguments: Qwen3's template writes a newline
+  before a call only after text, so `"\n\n"` and `""` render different ids (every action after the first differed at
+  the first earlier answer). The context now keeps both as sent.
+- the scrub renamed bench's sandbox account `agent` in `ls -la` output to `user` (11 compiled actions counted
+  `scrubbed`); `agent` is now kept like `root`.
+
+Result: the policy-gradient view counts 47 of 47 traced actions `exact` (before: 0, every single-agent trial
+`context_reconstructed`). Through brain's trainer (`answers_as_asked` + `encode_rollout`, Qwen3-4B): 0 of 47 admitted
+as recorded, because these rollouts were served by a build that injected the instruction (refused at position 3,
+`prompt_token_ids_mismatch`); 47 of 47 admitted with that instruction's 37 ids taken out of the recorded prompt ids,
+which is what the fixed server sends. Rollouts collected on brain 1bdd5400c or later are exact as recorded; older ones
+are not, and train against `--behaviour start` as before.

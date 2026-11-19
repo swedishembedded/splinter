@@ -133,11 +133,15 @@ attempt with none of these is left out as `no_privileged_context`. The exam seal
 The reasoning an agent step recorded (ATIF `reasoning_content`) is the `reasoning_content`
 of the assistant message it becomes, trimmed. Brain's chat template renders it as the
 turn's think block, in either thinking mode; a step that recorded none carries none, and
-reasoning that holds think markup leaves the trajectory out as `reasoning_in_text`.
+reasoning that holds think markup leaves the trajectory out as `reasoning_in_text`. A
+conversation read from the requests its model was sent keeps what it was sent: the text and
+reasoning untrimmed and each call's arguments as the model wrote them, since a chat template
+prints them as given and the prompt ids a record carries name that context.
 
 A workspace trajectory is cleaned of the machine that ran it: the harness's
 scratch directory is named relative to itself, the owner and group of a long
-listing and the name of a home directory become `user`. An action that repeats
+listing and the name of a home directory become `user` (but `root` and `agent`, the
+account a benchmark sandbox runs its agent as, which every such machine shares). An action that repeats
 an earlier call of its trajectory with the same result is context and not an
 action to learn (counted as `repeated_action`), so the tail of a loop is
 shown to what follows and never trained.
