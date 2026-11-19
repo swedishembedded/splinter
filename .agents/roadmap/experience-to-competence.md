@@ -70,6 +70,8 @@ Public dev is not sealed generalisation evidence. Intervals are item-paired clus
 | Gen-1 sealed exam (plan generations-2026-11-r1, 505 tasks, 3 attempts, signed Ed25519) | A2s1 vs base **Promote**: tier c +0.383 [+0.298, +0.469] (MDE 0.117), retention +0.044 non-inferior at 0.10, leaks 0.99%. A6s1 (primary) vs A2s1 Reject +0.004 [-0.023, +0.032]; filtered BC +0.020 [-0.008, +0.049] Reject; DPO -0.029 Reject; A3s1 -0.308, retention failed, Reject |
 | Interventions on 1275 trials (543 failures) | 143 repairs accepted (legal 90, accounting 32, compiled 21, support 0), 495 rejected, 260 refused at replay. GPU smoke of 20 failures: decompose 1/16, knowledge 0/15 (plain teacher 0/8), fork 1/9, retry 0/4 |
 | Real `splinter campaign` run | two generations over real brain and bench, three SIGKILLs resumed (train attempt reused brain's job by `resume_key`), gate rejected a candidate trained from the base (-0.19 dev, -0.28 retention); see `campaigns.md` |
+| Brain 1bdd5400c release check (A2s1, 2026-11-19) | tier 3: only the removed 37-token instruction differs (old build without it is bit-identical; first-token agreement 98.8%); tier 4 paired dev, 48 tasks x 4: old 0.510, new 0.557, +0.047 [+0.000, +0.095], non-inferior at 0.05: **pass**, 1bdd5400c is the build for new A2 work (brain `generic-training-capabilities.md`) |
+| A2 ceiling (step 1, brain 1bdd5400c) | 48 fresh practice tasks x G=16 (768 graded trials): pass@1/2/4/8/16 0.600/0.699/0.767/0.827/0.875, never solved 12.5%, H = 0.275 (rule: stop below 0.08): **continue** to step 2; per domain in the section below |
 | Rollouts | 1280 on-policy trials, 6.5 GPU-h, 87% prefix-cache hit; training per run gen1 0.8, A6 2.8-3.0, DPO 1.9 GPU-h |
 
 Reading: distillation from verified teacher trajectories generalises to withheld lineages and keeps retention. Teacher-free
@@ -200,6 +202,21 @@ teacher-free arms never truly tested it.
 **Next experiment (about 18 GPU-h, after the brain efficiency fixes, on brain >= 1bdd5400c with exact tokens)**
 
 1. **Ceiling.** A2 pass@1..16 on 48 fresh held-out practice tasks (12 per domain). Stop if H = pass@16 - pass@1 < 0.08.
+   - **Done 2026-11-19: H = 0.275, continue.** A2s1 on brain 1bdd5400c (frozen, sha256 `ae65e6f1...`), splinter-bc8fd17de
+     `tasks harbor practice`, sven-a0235c71 compact/2, sampling 1.0/0.95/20 with per-trial seeds, policy traces recorded; 48
+     fresh train-side tasks (`bench task practice --count 12`, seeds 2026111901-04, bench 80efacd6, no overlap with earlier
+     draws), 768 graded trials, none ungraded. Unbiased pass@k:
+
+     | Domain | pass@1 | pass@2 | pass@4 | pass@8 | pass@16 | never solved | H |
+     |---|---|---|---|---|---|---|---|
+     | support | 0.875 | 0.958 | 0.985 | 0.999 | 1.000 | 0/12 | 0.125 |
+     | legal | 0.385 | 0.492 | 0.608 | 0.736 | 0.833 | 2/12 | 0.448 |
+     | accounting | 0.365 | 0.513 | 0.623 | 0.697 | 0.750 | 3/12 | 0.385 |
+     | compiled | 0.776 | 0.833 | 0.854 | 0.875 | 0.917 | 1/12 | 0.141 |
+     | all | 0.600 | 0.699 | 0.767 | 0.827 | 0.875 | 6/48 | 0.275 |
+
+     The headroom is in legal and accounting (H about 0.4); support is near saturated. The 6 never-solved tasks are the teacher
+     or repair lane's. Job dirs packed into `archive/lane-l4-ceiling-practice-2026-11-19.tar.zst`, the expdb packed.
 2. **Two on-policy GRPO rounds.** 80 tasks × G=8, sampled by p(1-p), zero-variance groups dropped; round 2 re-rolls 40 of
    round 1's frontier tasks.
    - Recorded behaviour logprobs, token-sum loss (Dr. GRPO), lr 1e-4, 3-4 epochs per batch.
