@@ -15,4 +15,4 @@ records), trained from base at three seeds. On the dev eval (129 items x 2) and 
 security_violation in 11 of 1320 gen-1 trials (0.8 %) against 2 of 440 for A2 seed 1 (0.5 %), trained on the same
 gen-0 data with the reads supervised: no reduction. Most flagged gen-1 calls are `git log --all`, `git reflog`,
 `git log --stat` and reads under `.git/refs`; the RL arms trained on the rollouts with history kept (the
-policy-gradient view does not curate) were flagged as often (A6 s1 6 of 440, DPO 4 of 440).
+policy-gradient view does not curate) were flagged as often or more (A6 s1 6 of 440, A6 s2 13 of 440, DPO 4 of 440): a policy gradient on rollouts that keep the reads reinforces them where they co-occur with a pass.
