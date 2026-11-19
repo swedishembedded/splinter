@@ -126,6 +126,43 @@ fn an_archive_restores_into_an_identical_verified_state() {
     assert!(same_bytes(&archive, &again));
 }
 
+/// More commits than the database writes between checkpoints: its history
+/// then passes a checkpoint, whose parents the snapshot no longer needs.
+const PAST_A_CHECKPOINT: usize = 70;
+
+#[test]
+fn a_state_whose_history_passed_a_checkpoint_restores_from_its_archive() {
+    let scratch = Scratch::new("checkpoint");
+    let source = scratch.root("a");
+    let ws = Workspace::at(&source);
+    let mut documents = Vec::new();
+    for i in 0..PAST_A_CHECKPOINT {
+        documents.push(
+            ws.put_document("note", &serde_json::json!({ "n": i }))
+                .unwrap(),
+        );
+        ws.commit().unwrap();
+    }
+    let archive = scratch.file("state.tar.zst");
+    ws.archive(&archive, &ArchiveOptions::default()).unwrap();
+
+    let target = scratch.root("b");
+    let restored = Workspace::restore(&target, std::slice::from_ref(&archive)).unwrap();
+    assert!(restored.verified);
+    let ws2 = Workspace::at(&target);
+    for document in &documents {
+        assert!(ws2
+            .get_document::<serde_json::Value>("note", document)
+            .unwrap()
+            .is_some());
+    }
+    // The restored state takes writes: its catalog folds new heads in.
+    ws2.put_document("note", &serde_json::json!({ "after": true }))
+        .unwrap();
+    ws2.commit().unwrap();
+    assert!(ws2.verify(true).unwrap().is_sound());
+}
+
 #[test]
 fn restoring_never_overwrites_a_state_or_accepts_a_tampered_archive() {
     let scratch = Scratch::new("refusals");

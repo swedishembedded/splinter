@@ -21,6 +21,8 @@
 //!   upload.
 //! * A branch (or tag) revision is resolved to the commit it names.
 //! * Ingesting again stores nothing new.
+//! * A set from a state in the former loose layout, large enough that the
+//!   staged database passes a checkpoint, round-trips too.
 
 #![allow(clippy::unwrap_used)]
 
@@ -395,6 +397,54 @@ fn a_repository_not_stated_private_is_refused_before_any_upload() {
         assert!(
             emulator.log().iter().any(|l| l == "POST /api/repos/create"),
             "the repository was created, asking for privacy"
+        );
+    }
+}
+
+/// Trials enough that the staged database's history passes a checkpoint.
+const MANY_TRIALS: usize = 80;
+
+#[test]
+fn a_large_set_from_a_loose_state_round_trips_past_a_checkpoint() {
+    use splinter_expdb::backend::Layout;
+    use splinter_expdb::{Config, Database};
+    let scratch = Scratch::new("hub-loose-src");
+    let root = scratch.state();
+    std::fs::create_dir_all(root.expdb()).unwrap();
+    drop(Database::open_as(root.expdb(), Layout::Loose, Config::default()).unwrap());
+    let src = Context::new(crate::common::config(&scratch), false).unwrap();
+    let trials: Vec<Trial> = (0..MANY_TRIALS)
+        .map(|i| {
+            // The fixture takes names for the life of the test binary.
+            let name: &'static str = Box::leak(format!("t-{i}").into_boxed_str());
+            let task: &'static str = Box::leak(format!("org/t{i}").into_boxed_str());
+            Trial::new(name, task, Some("train"), i % 2 == 0)
+        })
+        .collect();
+    let dir = export(&scratch.0.join("export"), &trials);
+    let train = ingest_bench_trials(&src, &[dir], NO_OPTIONS)
+        .unwrap()
+        .train_set
+        .unwrap();
+    assert_eq!(Layout::of_root(&root.expdb()).unwrap(), Some(Layout::Loose));
+
+    let emulator = Emulator::start(Quirks::default());
+    let request = PublishRequest {
+        repo: REPO.into(),
+        sets: vec![train.to_string()],
+        ..PublishRequest::default()
+    };
+    let published = publish(&src, &hub(&emulator), &request).unwrap();
+    let (_dst_scratch, dst) = context("hub-loose-dst");
+    let ingested = ingest(&dst, &hub(&emulator), &format!("{REPO}@{}", published.tag)).unwrap();
+    assert_eq!(ingested.experiences.sets, vec![train.clone()]);
+    let members = src.experiences().get_set(&train).unwrap().members;
+    assert_eq!(members.len(), MANY_TRIALS);
+    assert_eq!(dst.experiences().get_set(&train).unwrap().members, members);
+    for id in &members {
+        assert_eq!(
+            dst.experiences().get(id).unwrap(),
+            src.experiences().get(id).unwrap()
         );
     }
 }

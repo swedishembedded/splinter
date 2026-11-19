@@ -82,12 +82,27 @@ impl Database {
     /// well. [`resolve`](Database::resolve) stops at a checkpoint because it
     /// carries the whole state; this is for asking whether a manifest has
     /// been absorbed at all.
+    ///
+    /// The history below a checkpoint need not be here: a snapshot's files
+    /// (what an archive or a copy carries) end at its checkpoints, since
+    /// nothing below one is read. A manifest missing there ends its branch
+    /// of the walk, still counted as absorbed because the checkpoint names
+    /// it; a manifest missing above every checkpoint is an error.
     pub(crate) fn ancestry_all(&self, heads: &[ContentId]) -> Result<HashSet<ContentId>> {
-        let mut pending: Vec<ContentId> = heads.to_vec();
+        // Each manifest with whether a checkpoint lies above it.
+        let mut pending: Vec<(ContentId, bool)> = heads.iter().map(|h| (*h, false)).collect();
         let mut seen = HashSet::new();
-        while let Some(id) = pending.pop() {
-            if seen.insert(id) {
-                pending.extend(load_manifest(self, id)?.parents.iter().copied());
+        while let Some((id, below_checkpoint)) = pending.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+            match load_manifest(self, id) {
+                Ok(manifest) => {
+                    let below = below_checkpoint || manifest.squash;
+                    pending.extend(manifest.parents.iter().map(|p| (*p, below)));
+                }
+                Err(Error::NotFound { .. }) if below_checkpoint => {}
+                Err(other) => return Err(other),
             }
         }
         Ok(seen)

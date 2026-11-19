@@ -15,6 +15,7 @@ Scope: publishing experience sets, datasets, candidates and signed aggregate ver
 | D4 | Typed `Withheld` screen before staging: `bench-private` paths (never opened), item files, files beside `sealed-export.json`, exam-split or eval-registered experiences, sealed families, unsigned / foreign-schema / item-level verdicts | `hub_bundle::sealed_and_item_level_material_is_refused_before_anything_is_sent` (the emulator sees no request) |
 | D5 | `ingest-hf REPO@REVISION`: branch or tag resolved to its commit and recorded as it; manifest identity and tree sizes checked; every file hashed while downloaded; stores written only through their APIs, each under its content address (sets, experiences, datasets byte for byte, candidates, artifacts, verdicts re-verified); a `hub_ingest` provenance record; re-ingest stores nothing | `hub_bundle` round trip and `a_tampered_file_is_refused_and_nothing_of_the_bundle_is_stored` |
 | D6 | Mutation check: dropping the privacy check or the republish no-op turns the privacy and round-trip specs red | run 2026-11-19 |
+| D7 | A bundle whose staged database passed a checkpoint ingests (and any such `state archive` restores): `ancestry_all` no longer reads manifests below a checkpoint that a snapshot does not carry (knowledge 182) | `recovery::a_state_whose_history_passed_a_checkpoint_restores_from_its_archive`, `hub_bundle::a_large_set_from_a_loose_state_round_trips_past_a_checkpoint` |
 
 ## Open
 
