@@ -13,9 +13,10 @@ use splinter_sdk::model::policy_gradient::{
 use splinter_sdk::model::train::{BasePrecision, PairLoss};
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{
-    PairSettings, Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE, DEFAULT_LORA_ALPHA_PER_RANK,
-    DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, DEFAULT_REPLAY_FRACTION,
-    DEFAULT_WEIGHT_DECAY, EVALUATIONS_PER_BUDGET, MAX_MONITOR_SHARE, MAX_PASSES,
+    PairSettings, Recipe, Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE,
+    DEFAULT_LORA_ALPHA_PER_RANK, DEFAULT_LORA_RANK, DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE,
+    DEFAULT_REPLAY_FRACTION, DEFAULT_WEIGHT_DECAY, EVALUATIONS_PER_BUDGET, MAX_MONITOR_SHARE,
+    MAX_PASSES,
 };
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
@@ -283,6 +284,14 @@ pub struct TrainArgs {
     /// The clipped policy gradient's settings, for a dataset of rollouts.
     #[command(flatten)]
     pub policy_gradient: PolicyGradientArgs,
+    /// A named recipe whose defaults fill what is left unset.
+    #[arg(long, value_name = "on-policy-rl", value_parser = clap::value_parser!(Recipe), help =
+        "For a dataset of rollouts: a named recipe whose defaults fill every setting left unset; \
+         the candidate records it and where its run came out against the recipe's targets. \
+         `on-policy-rl`: recorded behaviour log-probabilities, token-sum loss, learning rate \
+         1e-4 and 4 passes over the rollouts, aiming for a mean KL to the reference of \
+         0.02-0.05 and a clip fraction of 0.10-0.20 [default: none]")]
+    pub recipe: Option<Recipe>,
     /// The temperature the rollouts of a dataset were sampled at.
     #[arg(long, value_name = "T", value_parser = positive_rate, help =
         "For a dataset of rollouts: the temperature they were sampled at [default: brain's, \

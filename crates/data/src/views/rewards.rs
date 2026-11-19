@@ -18,6 +18,8 @@
 //! core knows no domain: which metrics shape a failed attempt's reward, and
 //! how, is the caller's configuration.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -38,13 +40,63 @@ fn parameter(name: &'static str, reason: String) -> ViewError {
 /// A pass earns `1.0`. A failure earns `fail_ceiling * sum(w_i * m_i)` over
 /// the configured metrics, each in `[0, 1]`, the weights summing to one; as
 /// the ceiling is below one, a failure never earns as much as a pass. With no
-/// metrics configured a failure earns nothing. An [`Overlong`] penalty, when
-/// set, is added to either.
+/// metrics configured a failure earns nothing. Under [`RewardShape::partial`]
+/// a failure earns its credit above its task's naive floor instead
+/// ([`PartialCredit`]). An [`Overlong`] penalty, when set, is added to either.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RewardShape {
     fail_ceiling: f64,
     weights: Vec<(String, f64)>,
+    partial: Option<PartialCredit>,
     overlong: Option<Overlong>,
+}
+
+/// The `shaped-partial` reward: a failed attempt earns
+/// `credit * max(0, (f - f_naive) / (1 - f_naive))`, where `f` is the metric
+/// the verifier measured (the share of its weighted checks the attempt
+/// passed) and `f_naive` the best share a naive answer to the same task
+/// earns, as the examiner measured it when it admitted the task. Credit a
+/// naive answer would earn is no credit: an attempt has to do better than
+/// one to earn any. A task without a floor is measured from zero, and the
+/// projection counts the groups measured that way. The strict pass stays the
+/// gate: no failure earns `credit` or more, and `credit` is below a pass's 1.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PartialCredit {
+    /// The metric `f`, as the verifier names it.
+    pub metric: String,
+    /// `credit`: the most a failure earns, in `[0, 1)`.
+    pub credit: f64,
+    /// Each task's naive floor `f_naive`, in `[0, 1]`, by the task's content
+    /// digest (the verdict's `task.digest`).
+    pub floors: BTreeMap<String, f64>,
+    /// Where the floors came from (the sha256 of each examiner manifest
+    /// read); empty when none was read, so every task was measured from zero.
+    #[serde(default)]
+    pub sources: Vec<String>,
+    /// The groups whose task had no floor, so `f_naive` was zero; set by the
+    /// projection.
+    #[serde(default)]
+    pub groups_without_floor: usize,
+}
+
+impl PartialCredit {
+    /// The floor of the task whose content digest is `digest`, if it has one.
+    #[must_use]
+    pub fn floor(&self, digest: Option<&str>) -> Option<f64> {
+        digest.and_then(|d| self.floors.get(d)).copied()
+    }
+
+    /// What a failure measuring `f` on a task with `floor` (`None`: zero)
+    /// earns.
+    #[must_use]
+    pub fn earned(&self, f: f64, floor: Option<f64>) -> f64 {
+        let floor = floor.unwrap_or(0.0);
+        if floor >= 1.0 {
+            // A naive answer earns every check: no failure does better.
+            return 0.0;
+        }
+        self.credit * ((f - floor) / (1.0 - floor)).max(0.0)
+    }
 }
 
 /// DAPO's soft over-length penalty: an attempt that wrote more completion
@@ -151,8 +203,59 @@ impl RewardShape {
         Ok(Self {
             fail_ceiling,
             weights,
+            partial: None,
             overlong: None,
         })
+    }
+
+    /// The `shaped-partial` shape ([`PartialCredit`]): a failure earns up to
+    /// `credit` of `metric` above its task's naive floor in `floors` (by
+    /// task content digest; zero for a task without one), read from
+    /// `sources`.
+    ///
+    /// # Errors
+    /// The credit is not in `[0, 1)`, the metric has no name, or a floor is
+    /// not in `[0, 1]`.
+    pub fn partial(
+        credit: f64,
+        metric: &str,
+        floors: BTreeMap<String, f64>,
+        sources: Vec<String>,
+    ) -> Result<Self, ViewError> {
+        if !(credit.is_finite() && (0.0..1.0).contains(&credit)) {
+            return Err(parameter(
+                "partial credit",
+                format!("{credit} is not in [0, 1): a failure must never earn as much as a pass"),
+            ));
+        }
+        if metric.is_empty() {
+            return Err(parameter("partial credit", "the metric has no name".into()));
+        }
+        if let Some((task, floor)) = floors
+            .iter()
+            .find(|(_, f)| !(f.is_finite() && (0.0..=1.0).contains(*f)))
+        {
+            return Err(parameter(
+                "naive floor",
+                format!("task {task}'s floor {floor} is not in [0, 1]"),
+            ));
+        }
+        Ok(Self {
+            partial: Some(PartialCredit {
+                metric: metric.to_string(),
+                credit,
+                floors,
+                sources,
+                groups_without_floor: 0,
+            }),
+            ..Self::default()
+        })
+    }
+
+    /// The partial credit the shape gives a failure, under `shaped-partial`.
+    #[must_use]
+    pub fn partial_credit(&self) -> Option<&PartialCredit> {
+        self.partial.as_ref()
     }
 
     /// The same shape with `overlong`'s penalty added to every reward.
@@ -170,10 +273,11 @@ impl RewardShape {
         self.overlong
     }
 
-    /// The reward of the attempt `trial`: `1.0` if it `passed`, else the
-    /// shaped share of the ceiling its `metrics` (the verifier's object of
-    /// named measurements) earn; plus the over-length penalty of its
-    /// `completion_tokens` when the shape has one.
+    /// The reward of the attempt `trial` at the task whose content digest is
+    /// `task_digest`: `1.0` if it `passed`, else the shaped share of the
+    /// ceiling its `metrics` (the verifier's object of named measurements)
+    /// earn, or its partial credit above the task's floor; plus the
+    /// over-length penalty of its `completion_tokens` when the shape has one.
     ///
     /// # Errors
     /// A failed attempt lacks a configured metric, or one is not a number in
@@ -184,6 +288,7 @@ impl RewardShape {
         &self,
         passed: bool,
         metrics: Option<&Value>,
+        task_digest: Option<&str>,
         completion_tokens: Option<u64>,
         trial: &str,
     ) -> Result<f64, ViewError> {
@@ -196,7 +301,7 @@ impl RewardShape {
                 )
             })?),
         };
-        Ok(self.verdict_reward(passed, metrics, trial)? + penalty)
+        Ok(self.verdict_reward(passed, metrics, task_digest, trial)? + penalty)
     }
 
     /// [`RewardShape::reward`] before the over-length penalty.
@@ -204,33 +309,42 @@ impl RewardShape {
         &self,
         passed: bool,
         metrics: Option<&Value>,
+        task_digest: Option<&str>,
         trial: &str,
     ) -> Result<f64, ViewError> {
         if passed {
             return Ok(1.0);
         }
+        if let Some(partial) = &self.partial {
+            let f = metric(metrics, &partial.metric, trial)?;
+            return Ok(partial.earned(f, partial.floor(task_digest)));
+        }
         let mut shaped = 0.0;
         for (name, weight) in &self.weights {
-            let metric = metrics
-                .and_then(|m| m.get(name))
-                .ok_or_else(|| {
-                    parameter(
-                        "reward metric",
-                        format!("trial {trial} failed and records no metric {name}"),
-                    )
-                })?
-                .as_f64()
-                .filter(|m| m.is_finite() && (0.0..=1.0).contains(m))
-                .ok_or_else(|| {
-                    parameter(
-                        "reward metric",
-                        format!("metric {name} of trial {trial} is not a number in [0, 1]"),
-                    )
-                })?;
-            shaped += weight * metric;
+            shaped += weight * metric(metrics, name, trial)?;
         }
         Ok(self.fail_ceiling * shaped)
     }
+}
+
+/// The metric `name` of a failed attempt's `metrics`, in `[0, 1]`.
+fn metric(metrics: Option<&Value>, name: &str, trial: &str) -> Result<f64, ViewError> {
+    metrics
+        .and_then(|m| m.get(name))
+        .ok_or_else(|| {
+            parameter(
+                "reward metric",
+                format!("trial {trial} failed and records no metric {name}"),
+            )
+        })?
+        .as_f64()
+        .filter(|m| m.is_finite() && (0.0..=1.0).contains(m))
+        .ok_or_else(|| {
+            parameter(
+                "reward metric",
+                format!("metric {name} of trial {trial} is not a number in [0, 1]"),
+            )
+        })
 }
 
 /// How brain turns the rewards of a group into advantages: the training
@@ -355,6 +469,13 @@ pub struct TrialReport {
     pub baseline_only: bool,
     /// How many of its conversations (experiences) the view saw.
     pub conversations: usize,
+    /// What its model requests cost: completion plus uncached prompt tokens,
+    /// as its verdict's score usage counts them; `None` when it counts none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<u64>,
+    /// The completion tokens it generated, as counted; `None` when not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_tokens: Option<u64>,
 }
 
 /// The attempts of one task by one policy that were compared.
@@ -378,6 +499,14 @@ pub struct GroupReport {
     /// per-token advantage) and not scalar-advantage ones.
     #[serde(default)]
     pub distilled: bool,
+    /// The naive floor its failures' partial credit was measured above,
+    /// under `shaped-partial`; `None` under any other shape, or when its task
+    /// had none (measured from zero).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub naive_floor: Option<f64>,
+    /// The task's content digest, as its verdicts record it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest: Option<String>,
 }
 
 /// What a group of attempts at one task can teach.

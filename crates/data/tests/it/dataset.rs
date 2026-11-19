@@ -245,6 +245,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
             terms: None,
             curation: None,
             overlong: None,
+            partial_credit: None,
             pairing: None,
             feedback: None,
         };
@@ -301,6 +302,7 @@ fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised
         terms: None,
         curation: None,
         overlong: None,
+        partial_credit: None,
         pairing: None,
         feedback: None,
     };

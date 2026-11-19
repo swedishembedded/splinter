@@ -36,7 +36,7 @@ use super::types::CampaignError;
 use super::work::{ExamRequest, Examiner, Model, RolloutRequest, Rollouts, TransferRequest};
 use super::Stopwatch;
 use crate::bench::{ingest_bench_trials, IngestOptions};
-use crate::datasets::{self, BuildRequest};
+use crate::datasets::{self, BuildRequest, RewardPreset};
 use crate::train::{self, TrainRequest, Trainer, Tuning};
 
 /// The ledger unit that holds the campaign's identity and seed.
@@ -378,7 +378,11 @@ impl<'p> CampaignController<'p> {
         // The tasks of a generation follow from the rollouts before it alone, so
         // a resumed generation draws the tasks it drew the first time.
         let rates = rates(&self.spec, &commits, generation)?;
-        let Planned { tasks, selection } = curriculum::plan(
+        let Planned {
+            tasks,
+            selection,
+            signal,
+        } = curriculum::plan(
             &self.spec,
             &commits,
             &rates,
@@ -400,6 +404,10 @@ impl<'p> CampaignController<'p> {
         let attempts = self.spec.rollout.attempts;
         let rollout_seed = self.seed_of(generation, 1);
         let mut config = json!({"attempts": attempts, "seed": rollout_seed, "tasks": tasks});
+        if signal.is_some() {
+            config["curriculum"] = json!("signal");
+            config["reward"] = json!(self.spec.curate.reward);
+        }
         if selection.is_some() {
             config["curriculum"] = json!("capability");
             config["transfer"] = json!(transfer.as_ref().map(
@@ -448,6 +456,7 @@ impl<'p> CampaignController<'p> {
                 trials: rolled.trials,
                 tokens: rolled.tokens,
                 selection: selection.clone(),
+                signal: signal.clone(),
             };
             Ok(StageWork::new(to_value(&record)?).output("export", &export))
         })?;
@@ -488,6 +497,7 @@ impl<'p> CampaignController<'p> {
             .config(&json!({"curate": self.spec.curate, "split_seed": split_seed, "sets": sets}));
         let name = unit(generation, "curate");
         let curate = &self.spec.curate;
+        let material = self.parts.rollouts.material().map(Path::to_path_buf);
         let base_ref = self.base.reference()?;
         let (curated, _) = stage(&self.ledger, &cancel, &name, &key, |_| {
             let record = if sets.is_empty() {
@@ -500,6 +510,10 @@ impl<'p> CampaignController<'p> {
                 let mut request = BuildRequest::new(sets.clone(), curate.view);
                 request.max_block = curate.max_block;
                 request.pack = curate.pack;
+                request.rl.reward = curate.reward;
+                if curate.reward == RewardPreset::ShapedPartial {
+                    request.practice = material.iter().cloned().collect();
+                }
                 request.split_seed = Some(split_seed);
                 request.base = Some(base_ref.clone());
                 curated(ctx, &request, &sets)?
@@ -549,12 +563,18 @@ impl<'p> CampaignController<'p> {
                 steps: spec_train.steps,
                 rank: spec_train.rank,
                 beta: None,
-                tuning: Tuning {
-                    learning_rate: spec_train.learning_rate,
-                    records_per_step: spec_train.records_per_step,
-                    max_block: spec_train.max_block,
-                    seed: Some(train_seed),
-                    ..Tuning::default()
+                tuning: {
+                    let tuning = Tuning {
+                        learning_rate: spec_train.learning_rate,
+                        records_per_step: spec_train.records_per_step,
+                        max_block: spec_train.max_block,
+                        seed: Some(train_seed),
+                        ..Tuning::default()
+                    };
+                    match spec_train.recipe {
+                        Some(recipe) => recipe.apply(tuning),
+                        None => tuning,
+                    }
                 },
             };
             let candidate = train::train_identified(ctx, &request, &resume_key, trainer, &cancel)

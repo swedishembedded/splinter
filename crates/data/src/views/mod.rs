@@ -35,8 +35,8 @@ pub use rehearsal::Rehearsal;
 pub use retrieval::Retrieval;
 pub use rewards::signals;
 pub use rewards::{
-    AdvantageFloor, AdvantageKind, AdvantageNorm, GroupKind, GroupReport, Overlong, RewardShape,
-    TrialReport,
+    AdvantageFloor, AdvantageKind, AdvantageNorm, GroupKind, GroupReport, Overlong, PartialCredit,
+    RewardShape, TrialReport,
 };
 pub use sft_final::SftFinal;
 pub use sft_step::{Control, SftStep};

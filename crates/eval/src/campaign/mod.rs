@@ -14,6 +14,9 @@
 //! controller in `splinter-pipelines` feeds these functions measurements and
 //! acts on what they say.
 //!
+//! * [`learning_signal`] - how much a task's attempts can teach per token
+//!   they cost (`Var(r) / mean cost`, the variance shrunk by a Beta
+//!   posterior), per task and per family, and the variance-per-cost draw.
 //! * [`pass_rate`] - each task's pass rate under the current policy, from an
 //!   offline calibration at k = 8..16 and every group since, and the tasks the
 //!   campaign drops for good (rate at or above 0.9).
@@ -37,6 +40,7 @@
 pub mod dev_pool;
 pub mod evidence;
 pub mod gate;
+pub mod learning_signal;
 pub mod pass_rate;
 pub mod plan;
 pub mod plateau;

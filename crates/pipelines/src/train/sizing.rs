@@ -81,9 +81,17 @@ pub fn auto_steps(records: usize) -> u32 {
 /// `records_per_step` a step, within the same bounds.
 #[must_use]
 pub fn steps_for(records: usize, records_per_step: u32) -> u32 {
+    steps_for_passes(records, records_per_step, MAX_PASSES)
+}
+
+/// The step budget of `passes` passes over `records` records at
+/// `records_per_step` a step, never fewer than [`DEFAULT_STEPS`] and never
+/// more than [`MAX_AUTO_STEPS`].
+#[must_use]
+pub fn steps_for_passes(records: usize, records_per_step: u32, passes: u32) -> u32 {
     let reads = u32::try_from(records)
         .unwrap_or(u32::MAX)
-        .saturating_mul(MAX_PASSES);
+        .saturating_mul(passes.max(1));
     reads
         .div_ceil(records_per_step.max(1))
         .clamp(DEFAULT_STEPS, MAX_AUTO_STEPS)

@@ -205,6 +205,11 @@ pub struct Manifest {
     /// thresholds ([`crate::Overlong`]); `None` for rewards without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overlong: Option<crate::Overlong>,
+    /// The partial credit a `shaped-partial` dataset's failed attempts earned,
+    /// with the naive floors it was measured above and the groups that had
+    /// none ([`crate::PartialCredit`]); `None` for any other reward.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partial_credit: Option<crate::PartialCredit>,
     /// How the pairs of a preference dataset were chosen, the seed and the
     /// pairs from each source ([`crate::PairingPolicy`]); `None` for any
     /// other dataset.
@@ -716,6 +721,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         split: projection.split_policy(),
         curation: projection.curation.clone(),
         overlong: projection.overlong,
+        partial_credit: projection.partial_credit.clone(),
         pairing: projection.pairing.clone(),
         feedback: projection.feedback,
         tokens: projection.tokens.clone(),

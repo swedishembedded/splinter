@@ -11,6 +11,7 @@
 use std::fmt::Write as _;
 
 use splinter_sdk::datasets::{BlockMeasure, Built, GroupKind};
+use splinter_sdk::measure::campaign::learning_signal::SignalReport;
 
 use crate::output::{tally, word, Report};
 
@@ -70,6 +71,9 @@ impl Report for Built {
                 count(GroupKind::AllPass)
             );
         }
+        if let Some(signal) = &self.signal {
+            signal_lines(&mut out, "learning signal", signal);
+        }
         for group in &self.groups {
             let _ = writeln!(
                 out,
@@ -96,5 +100,43 @@ impl Report for Built {
             }
         }
         out
+    }
+}
+
+/// A number or `-` when unmeasured.
+fn or_dash(value: Option<f64>, digits: usize) -> String {
+    value.map_or_else(|| "-".to_string(), |v| format!("{v:.digits$}"))
+}
+
+/// The summary lines of a learning-signal report, under `label`: the
+/// informative share and the reward variance per million completion tokens,
+/// uniform and under the variance-per-cost draw, then each family.
+pub(crate) fn signal_lines(out: &mut String, label: &str, signal: &SignalReport) {
+    for (draw, summary) in [
+        ("uniform", &signal.uniform),
+        ("variance-per-cost", &signal.selected),
+    ] {
+        let _ = writeln!(
+            out,
+            "  {label} ({draw}): informative {} of groups, {} of {} families informative, \
+             sum Var(r) {} per million completion tokens",
+            or_dash(summary.informative_share, 3),
+            summary.informative_families,
+            summary.families,
+            or_dash(summary.variance_per_million_completion, 3),
+        );
+    }
+    for family in &signal.families {
+        let _ = writeln!(
+            out,
+            "    family {}: {} task(s), {} informative, {} attempt(s), mean LS {} per token",
+            family.family,
+            family.tasks,
+            family.informative_tasks,
+            family.attempts,
+            family
+                .mean_learning_signal
+                .map_or_else(|| "-".to_string(), |v| format!("{v:.3e}")),
+        );
     }
 }

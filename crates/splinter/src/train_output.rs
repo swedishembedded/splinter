@@ -116,6 +116,9 @@ impl Report for Candidate {
         if let Some(measured) = &self.policy_gradient {
             let _ = writeln!(out, "  policy gradient: {}", measured.line());
         }
+        if let Some(reading) = &self.recipe {
+            let _ = writeln!(out, "  {}", reading.line());
+        }
         if !self.binary.is_empty() {
             let _ = writeln!(
                 out,

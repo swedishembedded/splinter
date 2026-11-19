@@ -107,11 +107,15 @@ pub fn project(
                     written: signal,
                     baseline_only: false,
                     conversations: 1,
+                    cost: None,
+                    completion_tokens: None,
                 })
                 .collect(),
             signal,
             kind,
             distilled: false,
+            naive_floor: None,
+            digest: None,
         });
         for attempt in &members {
             if !signal {

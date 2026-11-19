@@ -34,6 +34,9 @@
 //!   (pass rates with intervals, failure classes), and the practice it
 //!   steers: tasks drawn by capability gap, transfer exercises requested for
 //!   the weakest capabilities.
+//! * [`signal`] - practice drawn by variance per cost: each task's shrunk
+//!   reward variance over the tokens an attempt costs, tasks whose attempts
+//!   all earn alike never drawn.
 //! * [`mastery`] - each concept's rolling pass rate per release, from the
 //!   student's closed-book solves; `status` shows the weakest.
 //! * [`queue`] - concepts the release gate saw forgotten (a retention suite
@@ -62,6 +65,7 @@ pub mod queue;
 pub mod quota;
 pub mod repository_teacher;
 pub mod schedule;
+pub mod signal;
 pub mod teacher;
 
 use splinter_core::digest::Digest;

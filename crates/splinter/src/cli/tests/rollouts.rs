@@ -47,9 +47,8 @@ fn a_policy_gradient_dataset_is_built_with_a_shaped_reward_and_a_chosen_advantag
         Some(splinter_sdk::datasets::AdvantageKind::MeanCentred)
     );
     for refused in [
-        // A ceiling bounds the metrics' reward; without metrics it means nothing.
-        &["--fail-ceiling", "0.4"][..],
-        &["--reward-metric", "iou"],
+        &["--reward-metric", "iou"][..],
+        &["--reward", "partial"],
         &["--reward-metric", "iou=2"],
         &["--advantage", "raw"],
     ] {
@@ -57,6 +56,33 @@ fn a_policy_gradient_dataset_is_built_with_a_shaped_reward_and_a_chosen_advantag
         argv.extend_from_slice(refused);
         assert!(parse(&argv).is_err(), "{refused:?}");
     }
+}
+
+#[test]
+fn the_shaped_partial_reward_is_named_with_its_credit_and_the_practice_its_floors_come_from() {
+    let Command::Dataset(DatasetCommand::Build(args)) = command(&[
+        "dataset",
+        "build",
+        "ab12",
+        "--view",
+        "policy-gradient",
+        "--reward",
+        "shaped-partial",
+        "--fail-ceiling",
+        "0.5",
+        "--practice",
+        "staged/legal",
+        "--practice",
+        "staged/support",
+    ]) else {
+        panic!("dataset build");
+    };
+    assert_eq!(
+        args.reward,
+        Some(splinter_sdk::datasets::RewardPreset::ShapedPartial)
+    );
+    assert_eq!(args.fail_ceiling, Some(0.5));
+    assert_eq!(args.practice.len(), 2);
 }
 
 #[test]
@@ -200,4 +226,13 @@ fn a_policy_gradient_dataset_takes_dapos_over_length_penalty() {
         "0"
     ])
     .is_err());
+}
+
+#[test]
+fn a_run_on_rollouts_names_its_recipe() {
+    let Command::Train(train) = command(&["train", "ab12", "--recipe", "on-policy-rl"]) else {
+        panic!("train");
+    };
+    assert_eq!(train.recipe, Some(splinter_sdk::train::Recipe::OnPolicyRl));
+    assert!(parse(&["train", "ab12", "--recipe", "grpo"]).is_err());
 }

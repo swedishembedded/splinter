@@ -461,6 +461,7 @@ impl Acquisition<'_> {
                 roles: None,
                 images: false,
                 rl: Default::default(),
+                practice: Vec::new(),
                 split_seed: None,
                 history: Default::default(),
                 base: None,

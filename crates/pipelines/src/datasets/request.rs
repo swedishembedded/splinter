@@ -76,6 +76,12 @@ pub struct BuildRequest {
     /// For the policy-gradient view: how an attempt's reward and its advantage
     /// are made.
     pub rl: RlBuild,
+    /// For the policy-gradient view: the examiner's practice directories
+    /// (each holding `practice.json`) the attempts' tasks were staged from:
+    /// their naive floors, for `shaped-partial`, and their lineages, which
+    /// the learning-signal report counts families by. Matched to a trial by
+    /// its task's content digest.
+    pub practice: Vec<std::path::PathBuf>,
     /// For the sft-step view: what becomes of an action that reads the
     /// repository's history or git's raw storage
     /// (`splinter_data::curation`): by default it is not supervised.
@@ -120,6 +126,7 @@ impl BuildRequest {
             roles: None,
             images: false,
             rl: RlBuild::default(),
+            practice: Vec::new(),
             history: HistoryCuration::default(),
             split_seed: None,
             base: None,

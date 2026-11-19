@@ -136,7 +136,7 @@ pub use views::{
 };
 pub use views::{
     AdvantageFloor, AdvantageKind, AdvantageNorm, Distill, GroupKind, GroupReport, Overlong,
-    RewardShape, TrialReport,
+    PartialCredit, RewardShape, TrialReport,
 };
 
 /// The training objective a view's records serve.
@@ -287,6 +287,11 @@ pub struct Projection {
     /// `None` when they carry none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overlong: Option<Overlong>,
+    /// The partial credit the records' failed attempts earned above their
+    /// tasks' naive floors, under `shaped-partial` ([`PartialCredit`]); `None`
+    /// under any other reward.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partial_credit: Option<PartialCredit>,
     /// How a preference view chose its pairs ([`PairingPolicy`]); `None` for
     /// any other view.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -353,6 +358,7 @@ impl Projection {
             block_measure: None,
             curation: None,
             overlong: None,
+            partial_credit: None,
             pairing: None,
             feedback: None,
         }

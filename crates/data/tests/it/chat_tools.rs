@@ -47,6 +47,7 @@ fn projection_of(record: Record) -> Projection {
         terms: None,
         curation: None,
         overlong: None,
+        partial_credit: None,
         pairing: None,
         feedback: None,
     }

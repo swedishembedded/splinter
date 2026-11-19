@@ -40,12 +40,16 @@ mod request;
 pub use check::{check, DatasetCheck};
 pub use request::{BuildRequest, VoiceBuild};
 
+use crate::bench::practice::PracticeFacts;
 use crate::describe::{describe, Described};
 use crate::exam_seal;
 use crate::grouping::{assign_draws, assign_groups, part_families};
 use crate::raft::{with_passages, Abstainer, PassageShare};
 use crate::retrieval::Retrieval as PassageSearch;
 use crate::variants::refuse_variants;
+use splinter_eval::campaign::learning_signal::{
+    Attempt as SignalAttempt, SignalReport, TaskSignal,
+};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::{io, OrchestratorError};
 use splinter_orchestrator::ids;
@@ -55,7 +59,9 @@ pub use crate::dataset_views::{
     parse_advantage, parse_reward_metric, parse_strength, parse_strip, StripPolicy, ViewName,
     DEFAULT_MIN_STRENGTH,
 };
-pub use crate::rl_build::{RlBuild, DEFAULT_FAIL_CEILING, DEFAULT_PAIRS_PER_GROUP};
+pub use crate::rl_build::{
+    RewardPreset, RlBuild, DEFAULT_FAIL_CEILING, DEFAULT_PAIRS_PER_GROUP, PARTIAL_METRIC,
+};
 
 /// What `dataset build` reports.
 #[derive(Clone, Debug, Serialize)]
@@ -84,6 +90,12 @@ pub struct Built {
     /// attempt's reward and advantage.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub groups: Vec<GroupReport>,
+    /// What the groups can teach per token: the learning signal per task and
+    /// per family (lineage, from the `--practice` material), and the
+    /// informative share and reward variance per completion token, uniform
+    /// and under the variance-per-cost draw; `None` without groups.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signal: Option<SignalReport>,
     /// What `--max-block` measured records by, when it was given: the
     /// trainer's own count, or the floor that stands in where that is
     /// unavailable, with the reason. Not stored with the dataset.
@@ -115,6 +127,7 @@ impl From<StoredDataset> for Built {
             path: stored.path,
             described: None,
             dropped: Vec::new(),
+            signal: None,
             groups: stored.manifest.groups,
             block_measure: None,
             split: stored.manifest.split,
@@ -147,11 +160,13 @@ pub fn build_with(
     request: &BuildRequest,
     passages: Option<&Passages<'_>>,
 ) -> Result<Built, OrchestratorError> {
-    let (projection, described) = project_with(ctx, request, passages)?;
+    let facts = practice_facts(request)?;
+    let (projection, described) = project_sealed(ctx, request, passages, &facts)?;
     let stored = store_dataset(ctx, &projection, request.export_only)?;
     Ok(Built {
         described,
         block_measure: projection.block_measure.clone(),
+        signal: group_signal(&projection.groups, &facts),
         ..Built::from(stored)
     })
 }
@@ -164,8 +179,18 @@ pub fn project_with(
     request: &BuildRequest,
     passages: Option<&Passages<'_>>,
 ) -> Result<(Projection, Option<Described>), OrchestratorError> {
+    project_sealed(ctx, request, passages, &practice_facts(request)?)
+}
+
+/// [`project_with`], with the facts of the request's practice material read.
+fn project_sealed(
+    ctx: &Context,
+    request: &BuildRequest,
+    passages: Option<&Passages<'_>>,
+    facts: &PracticeFacts,
+) -> Result<(Projection, Option<Described>), OrchestratorError> {
     let (projection, described, corpus) =
-        project_without(ctx, request, passages, &BTreeSet::new())?;
+        project_without(ctx, request, passages, &BTreeSet::new(), facts)?;
     crate::sealed::admit_corpus(ctx, &corpus)?;
     exam_seal::seal(ctx, &corpus, &projection)?;
     Ok((projection, described))
@@ -180,10 +205,12 @@ pub fn build_dropping_leaks(
     ctx: &Context,
     request: &BuildRequest,
 ) -> Result<Built, OrchestratorError> {
-    let (first, _, corpus) = project_without(ctx, request, None, &BTreeSet::new())?;
+    let facts = practice_facts(request)?;
+    let (first, _, corpus) = project_without(ctx, request, None, &BTreeSet::new(), &facts)?;
     let dropped = exam_seal::leaks(ctx, &corpus, &first)?;
     let leaving: BTreeSet<ExperienceId> = dropped.iter().map(|l| l.experience.clone()).collect();
-    let (mut projection, described, corpus) = project_without(ctx, request, None, &leaving)?;
+    let (mut projection, described, corpus) =
+        project_without(ctx, request, None, &leaving, &facts)?;
     if !leaving.is_empty() {
         projection
             .excluded
@@ -195,17 +222,20 @@ pub fn build_dropping_leaks(
         described,
         dropped,
         block_measure: projection.block_measure.clone(),
+        signal: group_signal(&projection.groups, &facts),
         ..Built::from(stored)
     })
 }
 
 /// [`project_with`] without the experiences in `left_out` and without the
-/// exam seal: the projection and the corpus it was made from.
+/// exam seal: the projection and the corpus it was made from; `facts` are
+/// the request's practice material's.
 fn project_without(
     ctx: &Context,
     request: &BuildRequest,
     passages: Option<&Passages<'_>>,
     left_out: &BTreeSet<ExperienceId>,
+    facts: &PracticeFacts,
 ) -> Result<(Projection, Option<Described>, Corpus), OrchestratorError> {
     let view = request.view;
     if request.strip.is_some() && !view.takes_strip() {
@@ -264,8 +294,14 @@ fn project_without(
     let rewards_attempts = matches!(view, ViewName::PolicyGradient | ViewName::SelfDistill);
     if !request.rl.rewards_are_default() && !rewards_attempts {
         return Err(OrchestratorError::Refused(format!(
-            "view {} has no rewards or advantages, so --reward-metric, --fail-ceiling, \
-             --advantage, --cliff-distill and --overlong-max-tokens do not apply",
+            "view {} has no rewards or advantages, so --reward, --reward-metric, \
+             --fail-ceiling, --advantage, --cliff-distill and --overlong-max-tokens do not apply",
+            view.as_str()
+        )));
+    }
+    if !request.practice.is_empty() && !rewards_attempts {
+        return Err(OrchestratorError::Refused(format!(
+            "view {} rewards no attempt, so --practice does not apply",
             view.as_str()
         )));
     }
@@ -328,7 +364,7 @@ fn project_without(
                 (_, false) => Distill::Off,
             })
             .with_strip(strip)
-            .rewards(request.rl.shape()?)
+            .rewards(request.rl.shape(facts)?)
             .advantage(request.rl.advantage)
             .packed(request.pack)
             .serialise_calls(request.serialise_calls)
@@ -497,6 +533,40 @@ fn project_without(
     assign_groups(ctx, &corpus, &mut projection)?;
     let projection = assign_draws(&corpus, projection, request.split_seed);
     Ok((projection, described, corpus))
+}
+
+/// The learning signal of `groups` ([`SignalReport`]), each group a task's
+/// attempts by one policy, its family the lineage `facts` names for its
+/// task's digest, else the task; `None` without groups.
+fn group_signal(groups: &[GroupReport], facts: &PracticeFacts) -> Option<SignalReport> {
+    (!groups.is_empty()).then(|| {
+        SignalReport::of(
+            groups
+                .iter()
+                .map(|group| {
+                    let attempts: Vec<SignalAttempt> = group
+                        .trials
+                        .iter()
+                        .map(|t| SignalAttempt {
+                            reward: t.reward,
+                            cost: t.cost,
+                            completion: t.completion_tokens,
+                        })
+                        .collect();
+                    let family = facts
+                        .lineage(group.digest.as_deref())
+                        .unwrap_or(&group.task);
+                    TaskSignal::of(&group.task, family, &attempts)
+                })
+                .collect(),
+        )
+    })
+}
+
+/// The facts of the practice material `request` names: none when it names
+/// none.
+fn practice_facts(request: &BuildRequest) -> Result<PracticeFacts, OrchestratorError> {
+    PracticeFacts::read(&request.practice).map_err(|e| OrchestratorError::Refused(e.to_string()))
 }
 
 /// A seed that is a function of the experiences of `corpus`, in no particular

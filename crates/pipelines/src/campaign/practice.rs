@@ -33,7 +33,7 @@ use super::work::{Rolled, RolloutRequest, Rollouts, TransferRequest, Trial};
 use crate::bench::diagnose::diagnose_dirs;
 use crate::bench::practice::{
     run_practice, BenchCheckout, Practice, PracticeDraw, PracticeReport, PracticeRequest,
-    PracticeSettings,
+    PracticeSettings, TaskFacts,
 };
 
 /// Where and how the champion practises, as a campaign file's `[practice]`
@@ -175,6 +175,19 @@ impl Rollouts for PracticeRollouts {
         Ok(self.practice.capabilities())
     }
 
+    fn facts(&self) -> Result<BTreeMap<String, TaskFacts>, CampaignError> {
+        Ok(self
+            .practice
+            .task_facts()
+            .into_values()
+            .map(|facts| (facts.name.clone(), facts))
+            .collect())
+    }
+
+    fn material(&self) -> Option<&Path> {
+        Some(&self.practice.dir)
+    }
+
     fn rollout(
         &mut self,
         ctx: &Context,
@@ -210,6 +223,9 @@ impl Rollouts for PracticeRollouts {
                 passed: t.reward.map(|r| r >= 1.0),
                 class: classes.get(&t.trial).copied(),
                 capabilities: labels.get(&t.task).cloned().unwrap_or_default(),
+                correctness: t.correctness,
+                cost: t.usage.map(|u| u.cost()),
+                completion_tokens: t.usage.map(|u| u.completion),
             }));
             counted.extend(report.trials.iter().filter_map(|t| t.tokens));
         }

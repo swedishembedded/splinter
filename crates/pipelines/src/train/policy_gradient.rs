@@ -104,6 +104,12 @@ fn datasets_advantage(
 pub(crate) fn check_settings(regime: Regime, tuning: &Tuning) -> Result<(), OrchestratorError> {
     let refused =
         |what: String, why: &str| Err(OrchestratorError::Refused(format!("{what} {why}")));
+    if let Some(recipe) = tuning.recipe.filter(|_| regime != Regime::PolicyGradient) {
+        return refused(
+            format!("--recipe {}", recipe.name()),
+            "is a recipe for a dataset of rollout records (the policy-gradient view)",
+        );
+    }
     if regime != Regime::PolicyGradient {
         let named = tuning.policy_gradient.named();
         if !named.is_empty() {

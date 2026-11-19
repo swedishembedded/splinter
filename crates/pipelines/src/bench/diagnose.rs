@@ -30,6 +30,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use splinter_core::diagnosis::DiagnosticResult;
 use splinter_core::experience::ExperienceId;
+use splinter_core::usage::TokenUsage;
 use splinter_eval::diagnosis::{diagnose, AttemptEvidence};
 
 use super::artifact::{read_index, read_trial, Artifact, UnitKind};
@@ -79,6 +80,15 @@ pub struct DiagnosedTrial {
     /// export names none (made before the examiner labelled tasks).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<Vec<String>>,
+    /// The task's content digest, for an exported trial.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_digest: Option<String>,
+    /// What the verifier measured, for an exported trial.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<serde_json::Value>,
+    /// What its model requests processed, when the export counts it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<TokenUsage>,
 }
 
 /// A trial or an export that could not be read, and why.
@@ -150,6 +160,24 @@ fn exported_evidence(artifact: &Artifact) -> (Option<DiagnosticResult>, bool) {
         trajectory,
     };
     (Some(diagnose(&evidence)), false)
+}
+
+/// What an exported trial's requests processed: its score record's usage,
+/// else its manifest's token counts.
+fn trial_usage(artifact: &Artifact) -> Option<TokenUsage> {
+    artifact
+        .manifest
+        .score
+        .as_ref()
+        .and_then(|s| s.usage.as_ref())
+        .and_then(TokenUsage::from_score_usage)
+        .or_else(|| {
+            artifact
+                .manifest
+                .tokens
+                .as_ref()
+                .and_then(TokenUsage::from_trial_tokens)
+        })
 }
 
 /// The domain of a trial: the score record's collection, else the part of
@@ -323,6 +351,9 @@ fn diagnose_export(
                                 .capabilities
                                 .clone()
                                 .or_else(|| artifact.manifest.task.capabilities.clone()),
+                            task_digest: Some(artifact.manifest.task.digest.clone()),
+                            metrics: artifact.manifest.grade.metrics.clone(),
+                            usage: trial_usage(&artifact),
                         });
                     }
                 }
@@ -369,6 +400,11 @@ fn diagnose_export(
             staged_task: None,
             diagnosis,
             capabilities: row.capabilities,
+            task_digest: None,
+            metrics: None,
+            usage: score
+                .and_then(|s| s.usage.as_ref())
+                .and_then(TokenUsage::from_score_usage),
         });
     }
 }

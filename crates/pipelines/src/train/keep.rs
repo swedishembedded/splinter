@@ -157,6 +157,10 @@ pub(super) fn keep_candidate(
         preference: trained.preference,
         feedback: trained.feedback,
         curve: trained.curve,
+        recipe: plan
+            .tuning
+            .recipe
+            .map(|recipe| recipe.read(trained.policy_gradient.as_ref())),
         policy_gradient: trained.policy_gradient,
         checkpoints,
         records: trained.records,

@@ -10,19 +10,68 @@
 //! policy-gradient and self-distill views), and how many pairs of attempts
 //! it makes (the preference view).
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use splinter_data::{AdvantageKind, Overlong, RewardShape};
 use splinter_orchestrator::error::OrchestratorError;
+
+use crate::bench::practice::PracticeFacts;
+
+/// A named reward: how a failed attempt earns part of a pass's reward.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RewardPreset {
+    /// A pass earns one, a failure what its `reward_metrics` earn under the
+    /// ceiling (nothing without any).
+    #[default]
+    Verdict,
+    /// A pass earns one, a failure `c * max(0, (f - f_naive) / (1 - f_naive))`
+    /// of its [`PARTIAL_METRIC`] `f` above its task's naive floor `f_naive`
+    /// (the examiner's, from the practice material; zero without one), `c`
+    /// the fail ceiling ([`splinter_data::PartialCredit`]). It changes what a
+    /// failure teaches, so it is named, never the default.
+    ShapedPartial,
+}
+
+impl RewardPreset {
+    /// The preset's name.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Verdict => "verdict",
+            Self::ShapedPartial => "shaped-partial",
+        }
+    }
+}
+
+impl std::str::FromStr for RewardPreset {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        [Self::Verdict, Self::ShapedPartial]
+            .into_iter()
+            .find(|p| p.name() == text)
+            .ok_or_else(|| format!("{text:?} is not a reward: verdict or shaped-partial"))
+    }
+}
+
+/// The metric `shaped-partial` gives partial credit for: the share of a
+/// task's weighted checks an attempt passed, as the examiner's verifiers
+/// measure it.
+pub const PARTIAL_METRIC: &str = "functional_correctness";
 
 /// How the policy-gradient view rewards an attempt and reads its advantage;
 /// the other views ignore it.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct RlBuild {
+    /// The named reward.
+    pub reward: RewardPreset,
     /// The metrics a failed attempt's reward is made of, with their weights
-    /// (non-negative, summing to one); none leaves a failure at zero.
+    /// (non-negative, summing to one); none leaves a failure at zero. Only
+    /// under [`RewardPreset::Verdict`].
     pub reward_metrics: Vec<(String, f64)>,
     /// The most a failed attempt can earn, below a pass's one; needs
-    /// `reward_metrics`. `None` is [`DEFAULT_FAIL_CEILING`].
+    /// `reward_metrics` or [`RewardPreset::ShapedPartial`]. `None` is
+    /// [`DEFAULT_FAIL_CEILING`].
     pub fail_ceiling: Option<f64>,
     /// How the advantage is read from the rewards of a group.
     pub advantage: AdvantageKind,
@@ -63,10 +112,11 @@ pub const DEFAULT_OVERLONG_BUFFER_DIVISOR: u64 = 4;
 pub const DEFAULT_FAIL_CEILING: f64 = 0.5;
 
 impl RlBuild {
-    /// The reward shape this asks for.
-    pub(crate) fn shape(&self) -> Result<RewardShape, OrchestratorError> {
+    /// The reward shape this asks for; `facts` holds the naive floors a
+    /// `shaped-partial` reward measures from.
+    pub(crate) fn shape(&self, facts: &PracticeFacts) -> Result<RewardShape, OrchestratorError> {
         let refused = |e: splinter_data::ViewError| OrchestratorError::Refused(e.to_string());
-        let shape = self.verdict_shape()?;
+        let shape = self.verdict_shape(facts)?;
         match (self.overlong_max_tokens, self.overlong_buffer) {
             (None, None) => Ok(shape),
             (None, Some(_)) => Err(OrchestratorError::Refused(
@@ -85,13 +135,28 @@ impl RlBuild {
     }
 
     /// The reward shape of the verdict and metrics, before any length penalty.
-    fn verdict_shape(&self) -> Result<RewardShape, OrchestratorError> {
+    fn verdict_shape(&self, facts: &PracticeFacts) -> Result<RewardShape, OrchestratorError> {
         let refused = |e: splinter_data::ViewError| OrchestratorError::Refused(e.to_string());
+        if self.reward == RewardPreset::ShapedPartial {
+            if !self.reward_metrics.is_empty() {
+                return Err(OrchestratorError::Refused(format!(
+                    "--reward shaped-partial credits {PARTIAL_METRIC} alone; it takes no \
+                     --reward-metric"
+                )));
+            }
+            return RewardShape::partial(
+                self.fail_ceiling.unwrap_or(DEFAULT_FAIL_CEILING),
+                PARTIAL_METRIC,
+                facts.naive_floors(),
+                facts.sources.clone(),
+            )
+            .map_err(refused);
+        }
         match (self.reward_metrics.is_empty(), self.fail_ceiling) {
             (true, None) => Ok(RewardShape::unshaped()),
             (true, Some(_)) => Err(OrchestratorError::Refused(
-                "--fail-ceiling bounds what the --reward-metric terms earn a failed attempt; \
-                 name at least one metric"
+                "--fail-ceiling bounds what the --reward-metric terms (or --reward \
+                 shaped-partial) earn a failed attempt; name at least one metric"
                     .into(),
             )),
             (false, ceiling) => RewardShape::shaped(
@@ -109,7 +174,8 @@ impl RlBuild {
 
     /// Whether no reward or advantage setting was named.
     pub(crate) fn rewards_are_default(&self) -> bool {
-        self.reward_metrics.is_empty()
+        self.reward == RewardPreset::Verdict
+            && self.reward_metrics.is_empty()
             && self.fail_ceiling.is_none()
             && self.advantage == AdvantageKind::default()
             && !self.cliff_distill

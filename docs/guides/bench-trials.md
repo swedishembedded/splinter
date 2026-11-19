@@ -156,6 +156,16 @@ attempts), the failures by class, and the curriculum's weight (`[rollout] curric
 `docs/guides/campaigns.md`). The report is kept in the state's store, by the digest of everything it counted and the
 `index.jsonl` and `practice.json` digests it came from, and printed with that address. A sealed export is refused whole.
 
+Each policy's graded attempts are also measured for what they can teach a group-relative policy gradient per token
+(`signal`): each task's attempts are one group, rewarded twice, by the strict pass and by `shaped-partial` (a failure
+earns `0.5 * max(0, (f - f_naive) / (1 - f_naive))` of its `functional_correctness` above its task's naive floor from the
+material, `0` without one; a failure that recorded no `functional_correctness` is left out and counted). For each the
+report gives the learning signal per task and per family (the lineage the staged `task.toml` names), the share of
+groups whose rewards differ, and `sum Var(r)` per million completion tokens, uniform and as the variance-per-cost draw
+(`[rollout] curriculum = "signal"`) would weigh the groups; see the learning signal in
+[Datasets](../reference/datasets.md). It is a zero-GPU estimate of what a reward or a selection buys on rollouts that
+already exist.
+
 ## Repairing a failed attempt
 
 ```sh

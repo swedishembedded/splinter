@@ -14,4 +14,5 @@ mod agentic;
 mod capabilities;
 mod generations;
 mod served;
+mod signal;
 mod world;

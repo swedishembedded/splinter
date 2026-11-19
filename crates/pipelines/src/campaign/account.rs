@@ -29,6 +29,7 @@ use super::spec::CampaignSpec;
 use super::types::CampaignError;
 use super::work::{Model, Trial};
 use crate::curriculum::capability::Selection;
+use crate::curriculum::signal::SignalSelection;
 
 /// What one generation came to.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -82,9 +83,12 @@ pub(super) struct RolloutRecord {
     pub(super) trials: Vec<Trial>,
     pub(super) rollouts: u64,
     pub(super) tokens: Option<u64>,
-    /// The capability curriculum's decision; absent under `all`.
+    /// The capability curriculum's decision; absent under any other.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) selection: Option<Selection>,
+    /// The signal curriculum's decision; absent under any other.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) signal: Option<SignalSelection>,
 }
 
 /// The ingest stage's record.

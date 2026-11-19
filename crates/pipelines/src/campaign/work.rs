@@ -24,6 +24,7 @@ use splinter_eval::promotion::{Pair, PublicKey};
 use splinter_orchestrator::context::Context;
 
 use super::types::CampaignError;
+use crate::bench::practice::TaskFacts;
 
 /// A model of the campaign's lineage: the base (generation 0) or a
 /// candidate trained in a generation.
@@ -113,6 +114,17 @@ pub struct Trial {
     /// names none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub capabilities: Vec<String>,
+    /// The share of its task's weighted checks it passed
+    /// (`functional_correctness`), when the verifier measured it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub correctness: Option<f64>,
+    /// What its requests cost: completion plus uncached prompt tokens, when
+    /// counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<u64>,
+    /// The completion tokens it generated, when counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_tokens: Option<u64>,
 }
 
 /// What a rollout produced.
@@ -148,6 +160,21 @@ pub trait Rollouts {
     /// The material cannot be read.
     fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, CampaignError> {
         Ok(BTreeMap::new())
+    }
+
+    /// What the material says of each practice task beyond its name, by
+    /// name: its naive floor and its lineage. None by default.
+    ///
+    /// # Errors
+    /// The material cannot be read.
+    fn facts(&self) -> Result<BTreeMap<String, TaskFacts>, CampaignError> {
+        Ok(BTreeMap::new())
+    }
+
+    /// The practice material's directory, when the rollouts run staged
+    /// material: what a `shaped-partial` dataset reads its floors from.
+    fn material(&self) -> Option<&Path> {
+        None
     }
 
     /// Runs `request`; stops when `cancel` fires.

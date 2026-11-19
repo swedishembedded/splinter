@@ -60,6 +60,17 @@ attempt did against the others at the same task:
   summing to one); with no `--reward-metric` a failure earns nothing. A failed attempt that
   recorded no such metric, or one outside [0, 1], stops the build naming the trial and the
   metric; it is never read as zero. Splinter's core knows no metric: the names are yours.
+- `--reward shaped-partial` (a named reward; `verdict`, the default, is the rule above) gives a
+  failure partial credit for the share of its task's weighted checks it passed,
+  `functional_correctness` (`f`), above the share a naive answer earns (`f_naive`):
+  `C * max(0, (f - f_naive) / (1 - f_naive))`, with `C` the `--fail-ceiling` (default `0.5`).
+  A pass still earns `1.0` and is still the only pass. `f_naive` is the task's `naive_floor` in
+  the `practice.json` of a `--practice DIR` (repeatable), matched to the trial by the task's
+  content digest; a task without one is measured from `0`. The manifest records the credit,
+  every floor, the `practice.json` sha256 of each directory read (`sources`, empty when none
+  was) and `groups_without_floor`; each group reports its `naive_floor` and `digest`. It takes
+  no `--reward-metric`. It changes what a failure teaches, so it is an arm of its own, never a
+  default.
 - `--overlong-max-tokens L` adds DAPO's soft over-length penalty to every reward, from the
   completion tokens the attempt recorded (the trial's `tokens.completion` on its verdict, else
   its score's usage, else sven's trajectory total, else the sum over its agent steps): nothing
@@ -79,6 +90,18 @@ attempt did against the others at the same task:
   Datasets built for kinds that differ in normalisation or floor are not trained together. A
   group of one attempt, or whose attempts all earned the same, teaches nothing and its
   experiences are counted as `no_group_signal`.
+- `dataset build` reports what the groups can teach per token (`signal`, printed as
+  `learning signal` lines). Each group's learning signal is `LS = V / mean cost`: `V` the
+  variance of its rewards shrunk towards a Beta posterior (`V = (n * s2 + 2 * v0) / (n + 2)`,
+  `s2` the population variance of the `n` rewards, `v0` the Beta(1, 1) posterior's expected
+  `p * (1 - p)` with the rewards as fractional successes), a cost the attempt's completion
+  plus uncached prompt tokens from its score's usage (else its manifest's token counts, all
+  uncached). It is reported per task and per family: the lineage the staged task's `task.toml`
+  names (`bench_defect_lineage`, from `--practice`), else the task itself, so seeds of one
+  template count once. The summary gives the informative-group share and `sum Var(r)` per
+  million completion tokens, both uniform and as the variance-per-cost draw would weigh the
+  groups (`sqrt(V) / mean cost`, uninformative groups dropped). Each trial in the group report
+  carries its `cost` and `completion_tokens`; an attempt that counted none has none.
 - An attempt of an informative group none of whose conversations the view can render (shown
   images without `--images`, a step a record cannot represent; each counted under its reason)
   still took part in its group: one record of its instruction, nothing supervised, carries its

@@ -8,7 +8,7 @@
 
 //! The grammar of `dataset build` and `dataset check`.
 
-use splinter_sdk::datasets::{AdvantageKind, HistoryCuration, StripPolicy, ViewName};
+use splinter_sdk::datasets::{AdvantageKind, HistoryCuration, RewardPreset, StripPolicy, ViewName};
 use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -74,6 +74,26 @@ pub struct BuildArgs {
     /// supervised turn is left out and counted as `NothingSupervised`.
     #[arg(long)]
     pub split_over_block: bool,
+    /// For the policy-gradient view: the named reward. `verdict` (the default)
+    /// gives a pass 1 and a failure what the `--reward-metric` terms earn
+    /// (nothing without any). `shaped-partial` gives a failure partial credit
+    /// for the share of its task's weighted checks it passed
+    /// (`functional_correctness`, f) above the share a naive answer earns
+    /// (f_naive, the examiner's `naive_floor` in the `--practice`
+    /// material): `C * max(0, (f - f_naive) / (1 - f_naive))`, C the
+    /// `--fail-ceiling`. A task without a floor is measured from 0, and the
+    /// manifest records the floors, where they came from and how many groups
+    /// had none. It changes what a failure teaches: a new arm, never the
+    /// default. A pass is still only a pass.
+    #[arg(long, value_parser = clap::value_parser!(RewardPreset), value_name = "verdict|shaped-partial")]
+    pub reward: Option<RewardPreset>,
+    /// For the policy-gradient view: an examiner practice directory (holding
+    /// `practice.json`) the attempts' tasks were staged from; repeat it per
+    /// directory. Its tasks' naive floors serve `--reward shaped-partial`, and
+    /// their lineages are the families the learning-signal report counts.
+    /// A trial is matched to its task by content digest.
+    #[arg(long, value_name = "DIR")]
+    pub practice: Vec<std::path::PathBuf>,
     /// For the policy-gradient view: a metric the verifier measured, in [0, 1],
     /// and its weight, that earns a failed attempt part of the reward
     /// (`--reward-metric iou=0.5 --reward-metric feature_match=0.5`); repeat it
@@ -83,9 +103,9 @@ pub struct BuildArgs {
     #[arg(long = "reward-metric", value_parser = reward_metric, value_name = "NAME=WEIGHT")]
     pub reward_metrics: Vec<(String, f64)>,
     /// For the policy-gradient view: the most a failed attempt earns from the
-    /// reward metrics, below a pass's 1 (default 0.5), so that any pass
-    /// outranks any failure.
-    #[arg(long, value_name = "F", requires = "reward_metrics")]
+    /// reward metrics or `--reward shaped-partial`, below a pass's 1 (default
+    /// 0.5), so that any pass outranks any failure.
+    #[arg(long, value_name = "F")]
     pub fail_ceiling: Option<f64>,
     /// For the policy-gradient view: how brain is to read an attempt's
     /// advantage from the rewards of the attempts at its task (the records

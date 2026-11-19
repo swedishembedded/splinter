@@ -270,6 +270,7 @@ fn dataset_made(
         terms,
         curation: None,
         overlong: None,
+        partial_credit: None,
         pairing: None,
         feedback: None,
     };
@@ -331,6 +332,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         terms: None,
         curation: None,
         overlong: None,
+        partial_credit: None,
         pairing: None,
         feedback: None,
     };

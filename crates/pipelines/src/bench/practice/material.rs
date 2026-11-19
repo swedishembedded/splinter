@@ -29,7 +29,7 @@ pub const PRACTICE_FILE: &str = "practice.json";
 const RUN_FILE: &str = "bench-run.json";
 
 /// One staged task, by digest.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StagedTask {
     /// The task folder's name.
     pub name: String,
@@ -45,6 +45,11 @@ pub struct StagedTask {
     /// The reporting track the taxonomy puts the task in, when it does.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub track: Option<String>,
+    /// The best share of the task's weighted checks a naive answer earns, in
+    /// `[0, 1]`, as the examiner measured it when it admitted the task; absent
+    /// in material staged before the examiner exported it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub naive_floor: Option<f64>,
 }
 
 impl StagedTask {
@@ -95,6 +100,65 @@ pub struct PracticeManifest {
     /// absent or null for material staged whole.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selection: Option<Value>,
+}
+
+/// The key of a staged task's `task.toml` `[metadata]` that names the
+/// lineage it was generated from (`breach/defective`): the family a seed of
+/// it belongs to.
+const LINEAGE_KEY: &str = "bench_defect_lineage";
+
+/// What practice material says of a task beyond its folder: its naive floor
+/// and its lineage.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct TaskFacts {
+    /// The staged folder's name.
+    pub name: String,
+    /// [`StagedTask::naive_floor`].
+    pub naive_floor: Option<f64>,
+    /// The lineage its `task.toml` names, when it names one.
+    pub lineage: Option<String>,
+}
+
+/// The facts of every task of some practice directories, by the task's
+/// source digest (the same task, byte for byte, as a trial's verdict names it
+/// by `task.digest`), with the `practice.json` sha256 of each directory read.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct PracticeFacts {
+    /// Per task, by source digest.
+    pub tasks: BTreeMap<String, TaskFacts>,
+    /// The sha256 of each `practice.json` read, in the order given.
+    pub sources: Vec<String>,
+}
+
+impl PracticeFacts {
+    /// The facts of the practice directories `dirs`; none for none.
+    ///
+    /// # Errors
+    /// A directory is not readable practice material ([`Practice::read`]).
+    pub fn read(dirs: &[PathBuf]) -> Result<Self, EpisodeError> {
+        let mut facts = Self::default();
+        for dir in dirs {
+            let practice = Practice::read(dir)?;
+            facts.tasks.extend(practice.task_facts());
+            facts.sources.push(practice.sha256);
+        }
+        Ok(facts)
+    }
+
+    /// Each task's naive floor, by source digest; a task without one is absent.
+    #[must_use]
+    pub fn naive_floors(&self) -> BTreeMap<String, f64> {
+        self.tasks
+            .iter()
+            .filter_map(|(digest, t)| Some((digest.clone(), t.naive_floor?)))
+            .collect()
+    }
+
+    /// The lineage of the task whose source digest is `digest`, when known.
+    #[must_use]
+    pub fn lineage(&self, digest: Option<&str>) -> Option<&str> {
+        self.tasks.get(digest?)?.lineage.as_deref()
+    }
 }
 
 /// The draw of a practice manifest made with `--count N --seed S`.
@@ -175,6 +239,15 @@ impl Practice {
         if manifest.tasks.is_empty() {
             return Err(malformed(dir, "it stages no task"));
         }
+        if let Some(task) = manifest.tasks.iter().find(|t| {
+            t.naive_floor
+                .is_some_and(|f| !(f.is_finite() && (0.0..=1.0).contains(&f)))
+        }) {
+            return Err(malformed(
+                dir,
+                format!("task {}'s naive floor is not a share in [0, 1]", task.name),
+            ));
+        }
         let (profile, tools) = staged_run(dir)?;
         Ok(Self {
             dir: dir.to_path_buf(),
@@ -233,6 +306,38 @@ impl Practice {
             .iter()
             .filter(|t| !t.capabilities.is_empty())
             .map(|t| (t.name.clone(), t.capabilities.clone()))
+            .collect()
+    }
+
+    /// The facts of every staged task, by source digest: its naive floor and
+    /// the lineage its `task.toml` names (none when the file or key is
+    /// absent or does not read).
+    #[must_use]
+    pub fn task_facts(&self) -> BTreeMap<String, TaskFacts> {
+        let tasks = self.dir.join(self.tasks_dir());
+        self.manifest
+            .tasks
+            .iter()
+            .map(|t| {
+                let lineage = std::fs::read_to_string(tasks.join(&t.name).join("task.toml"))
+                    .ok()
+                    .and_then(|text| text.parse::<toml::Table>().ok())
+                    .and_then(|table| {
+                        table
+                            .get("metadata")?
+                            .get(LINEAGE_KEY)?
+                            .as_str()
+                            .map(str::to_string)
+                    });
+                (
+                    t.source_digest.clone(),
+                    TaskFacts {
+                        name: t.name.clone(),
+                        naive_floor: t.naive_floor,
+                        lineage,
+                    },
+                )
+            })
             .collect()
     }
 

@@ -11,6 +11,7 @@
 
 use std::path::PathBuf;
 
+use super::RecipeReading;
 use serde::{Deserialize, Serialize};
 use splinter_core::build::BinaryIdentity;
 use splinter_core::dataset::DatasetId;
@@ -76,6 +77,8 @@ pub(super) struct StoredCandidate {
     curve: Option<TrainingCurve>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     policy_gradient: Option<PolicyGradientSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recipe: Option<RecipeReading>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     checkpoints: Vec<Checkpoint>,
     records: usize,
@@ -150,6 +153,10 @@ pub struct Candidate {
     /// for the other regimes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub policy_gradient: Option<PolicyGradientSummary>,
+    /// The recipe the run was trained by, against its targets (the KL to
+    /// the reference and the clip fraction it aims for); `None` without one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipe: Option<RecipeReading>,
     /// The adapter of every evaluation of the run, when it was asked to keep
     /// them: the one the candidate carries is among them.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -207,6 +214,7 @@ impl Candidate {
             feedback: self.feedback.clone(),
             curve: self.curve.clone(),
             policy_gradient: self.policy_gradient.clone(),
+            recipe: self.recipe.clone(),
             checkpoints: self.checkpoints.clone(),
             records: self.records,
             terms: self.terms.clone(),
@@ -238,6 +246,7 @@ impl Candidate {
             feedback: stored.feedback,
             curve: stored.curve,
             policy_gradient: stored.policy_gradient,
+            recipe: stored.recipe,
             checkpoints: stored.checkpoints,
             records: stored.records,
             terms: stored.terms,
@@ -437,6 +446,7 @@ mod tests {
             feedback: None,
             curve: None,
             policy_gradient: None,
+            recipe: None,
             checkpoints: Vec::new(),
             records: 0,
             terms: None,

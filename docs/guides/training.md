@@ -85,6 +85,18 @@ brain's own, left at brain's defaults unless named:
 | `--advantage-bound` | self-distillation: clip each token's advantage to `[-C, C]` (none) |
 | `--sequence-advantage-cap` | self-distillation: scale a sequence's token advantages down together when their magnitudes sum past this (none) |
 
+`--recipe on-policy-rl` fills what is left unset with the defaults an on-policy round of
+reinforcement learning on one batch of rollouts needs: `--behaviour recorded` (the sampler's
+own log-probabilities, exact on brain's served rollouts), `--loss-agg token-sum` (every token
+of a step weighed alike, as Dr. GRPO argues), `--lr 1e-4` and four passes over the rollouts
+(the step budget, when `--steps` is not named, is sized to them; brain draws every record once
+per pass, reshuffled). A run that took 67 steps at `2e-5` over its rollouts once moved the
+policy by a KL of 0.002 and clipped about 1% of its tokens, which teaches nothing; the recipe
+aims for a mean KL to the reference of 0.02-0.05 and a clip fraction of 0.10-0.20, and the
+candidate records where its run came out against both (`recipe`, printed as one line:
+`below`, `within` or `above`). Every flag named beside it wins. It is refused for any other
+regime. A campaign names it as `[train] recipe = "on-policy-rl"`.
+
 The plan records every setting, brain's training record keeps the loss, clip fraction, KL and
 importance ratio of each step, and the candidate is released through the same gate as any
 other. The candidate's report carries the same series under `policy_gradient`, with the first,

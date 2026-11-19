@@ -179,3 +179,113 @@ fn an_attempt_the_view_cannot_render_still_sets_its_groups_baseline() {
     assert_eq!(line["baseline_only"], true);
     assert_eq!(line["reward"], 0.0);
 }
+
+/// The evidence of a bench trial of the task whose content digest is
+/// `digest`, with its `functional_correctness` and its usage.
+fn partial_evidence(trial: &Trial, digest: &str, correctness: f64) -> Value {
+    json!({
+        "trial": trial.name,
+        "task": {"id": "cad/bracket", "version": trial.version, "digest": digest},
+        "model": trial.model,
+        "metrics": {"functional_correctness": correctness},
+        "score": {"usage": {"completion_tokens": 100, "prompt_tokens": 1000, "cached_tokens": 900}},
+    })
+}
+
+fn rewards_by_trial(projection: &Projection) -> Vec<(String, f64)> {
+    let mut by_trial: Vec<(String, f64)> = projection.groups[0]
+        .trials
+        .iter()
+        .map(|t| (t.trial.clone(), t.reward))
+        .collect();
+    by_trial.sort_by(|a, b| a.0.cmp(&b.0));
+    by_trial
+}
+
+/// Spec (`shaped-partial`): a pass earns 1; a failure earns
+/// `c * max(0, (f - f_naive) / (1 - f_naive))` of its `functional_correctness`
+/// `f`, above the naive answer's floor of its task (by content digest); the
+/// group and the projection record the floor it was measured against.
+#[test]
+fn a_failure_earns_partial_credit_above_its_tasks_naive_floor() {
+    let floors = [("d1".to_string(), 0.2)].into_iter().collect();
+    let shape =
+        RewardShape::partial(0.5, "functional_correctness", floors, vec!["p1".into()]).unwrap();
+    let mut corpus = Corpus::new();
+    for (trial, f) in [
+        (Trial::pass("pass"), 1.0),
+        (Trial::fail("above", &[]), 0.6),
+        (Trial::fail("below", &[]), 0.1),
+    ] {
+        let evidence = partial_evidence(&trial, "d1", f);
+        add(&mut corpus, &trial, Some(evidence));
+    }
+    let projection = view().rewards(shape).project(&corpus).unwrap();
+    for ((name, reward), (expected_name, expected)) in rewards_by_trial(&projection).iter().zip([
+        ("above", 0.5 * 0.4 / 0.8),
+        ("below", 0.0),
+        ("pass", 1.0),
+    ]) {
+        assert_eq!(name, expected_name);
+        assert!(close(*reward, expected), "{name}: {reward}");
+    }
+    assert_eq!(projection.groups[0].naive_floor, Some(0.2));
+    let credit = projection.partial_credit.as_ref().expect("recorded");
+    assert_eq!(credit.metric, "functional_correctness");
+    assert!(close(credit.credit, 0.5));
+    assert_eq!(credit.groups_without_floor, 0);
+    assert_eq!(credit.sources, ["p1"]);
+    // Each attempt's cost is its completion plus its uncached prompt tokens.
+    assert!(projection.groups[0]
+        .trials
+        .iter()
+        .all(|t| t.cost == Some(100 + 1000 - 900)));
+}
+
+/// Without a naive floor for a task, `f_naive` is zero, and the manifest's
+/// record counts the groups measured that way.
+#[test]
+fn a_task_without_a_naive_floor_is_measured_from_zero_and_counted() {
+    let shape = RewardShape::partial(
+        0.5,
+        "functional_correctness",
+        Default::default(),
+        Vec::new(),
+    )
+    .unwrap();
+    let mut corpus = Corpus::new();
+    for (trial, f) in [(Trial::pass("pass"), 1.0), (Trial::fail("half", &[]), 0.6)] {
+        let evidence = partial_evidence(&trial, "d9", f);
+        add(&mut corpus, &trial, Some(evidence));
+    }
+    let projection = view().rewards(shape).project(&corpus).unwrap();
+    let rewards = rewards_by_trial(&projection);
+    assert!(close(rewards[0].1, 0.3), "{rewards:?}");
+    assert_eq!(projection.groups[0].naive_floor, None);
+    assert_eq!(
+        projection
+            .partial_credit
+            .as_ref()
+            .map(|c| c.groups_without_floor),
+        Some(1)
+    );
+}
+
+#[test]
+fn partial_credit_is_refused_at_or_above_a_pass_and_a_floor_must_be_a_share() {
+    let none = std::collections::BTreeMap::new;
+    for credit in [1.0, -0.1, f64::NAN] {
+        assert!(
+            RewardShape::partial(credit, "f", none(), Vec::new()).is_err(),
+            "{credit}"
+        );
+    }
+    assert!(RewardShape::partial(0.5, "", none(), Vec::new()).is_err());
+    for floor in [1.5, -0.1, f64::NAN] {
+        let floors = [("d".to_string(), floor)].into_iter().collect();
+        assert!(
+            RewardShape::partial(0.5, "f", floors, Vec::new()).is_err(),
+            "{floor}"
+        );
+    }
+}

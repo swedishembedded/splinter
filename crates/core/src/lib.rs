@@ -63,6 +63,8 @@
 //!   over sources and carried to datasets and releases.
 //! * [`tool_calls`] - the calls of a trajectory, each with the output it
 //!   returned.
+//! * [`usage`] - the tokens an attempt's requests processed, and what they
+//!   cost: completion plus uncached prompt tokens.
 //! * [`verifiability`] - how a reward is established (objective check,
 //!   proxy, calibrated judge, human evidence), the provenance every reward
 //!   carries, the label a verdict resting on it must bear, and the splits
@@ -109,4 +111,5 @@ pub mod teaching;
 pub mod terms;
 pub mod tool_calls;
 pub mod training;
+pub mod usage;
 pub mod verifiability;

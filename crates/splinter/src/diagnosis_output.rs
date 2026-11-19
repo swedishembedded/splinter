@@ -116,6 +116,20 @@ impl Report for StoredCapabilities {
                     failures.join(", ")
                 );
             }
+            if let Some(signal) = &policy.signal {
+                crate::dataset_output::signal_lines(&mut out, "strict reward", &signal.verdict);
+                crate::dataset_output::signal_lines(
+                    &mut out,
+                    "shaped-partial",
+                    &signal.shaped_partial,
+                );
+                let _ = writeln!(
+                    out,
+                    "  shaped-partial: {} task(s) with a naive floor, {} failure(s) without \
+                     functional_correctness left out",
+                    signal.floored_tasks, signal.unmeasured_failures
+                );
+            }
         }
         for refused in &report.refused {
             let trial = refused.trial.as_deref().unwrap_or("-");

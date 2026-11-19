@@ -24,7 +24,7 @@ use splinter_data::Exclusion;
 use splinter_orchestrator::Context;
 use splinter_pipelines::bench::ingest_bench_trials;
 use splinter_pipelines::datasets::{
-    build, build_dropping_leaks, AdvantageKind, BuildRequest, RlBuild, ViewName,
+    build, build_dropping_leaks, AdvantageKind, BuildRequest, RewardPreset, RlBuild, ViewName,
 };
 use splinter_store::experiences::{ExperienceSet, SetId};
 
@@ -329,4 +329,112 @@ fn cliff_distillation_belongs_to_the_policy_gradient_view_alone() {
         .unwrap_err()
         .to_string()
         .contains("--cliff-distill"));
+}
+
+/// Practice material staging the fixture's task (content digest `d1`, as
+/// every fixture trial records it) with the naive floor `floor` and the
+/// lineage `breach/late`.
+fn practice_with_floor(dir: &std::path::Path, floor: f64) -> std::path::PathBuf {
+    let task = dir.join("tasks/cad-1");
+    std::fs::create_dir_all(&task).unwrap();
+    std::fs::write(
+        task.join("task.toml"),
+        "[metadata]\nbench_defect_lineage = \"breach/late\"\n",
+    )
+    .unwrap();
+    let practice = json!({
+        "schema": "bench.practice/2", "collection": "tasks/cad", "set": "train",
+        "environment": "userns",
+        "tasks": [{"name": "cad-1", "digest": "s1", "source_digest": "d1", "naive_floor": floor}],
+    });
+    std::fs::write(dir.join("practice.json"), practice.to_string()).unwrap();
+    dir.to_path_buf()
+}
+
+/// Spec (`--reward shaped-partial`): a failure earns `c * max(0, (f -
+/// f_naive) / (1 - f_naive))` of its `functional_correctness` above its
+/// task's naive floor from the practice material; the manifest records the
+/// floors and where they came from; without material every floor is zero and
+/// the manifest says so.
+#[test]
+fn shaped_partial_credits_a_failure_above_its_tasks_naive_floor() {
+    let (scratch, ctx) = context("pg-shaped-partial");
+    let f = |v: f64| json!({"functional_correctness": v});
+    let trials = [
+        Trial::new("a-pass", "org/cad", Some("train"), true).metrics(f(1.0)),
+        Trial::new("b-most", "org/cad", Some("train"), false).metrics(f(0.75)),
+        Trial::new("c-naive", "org/cad", Some("train"), false).metrics(f(0.2)),
+    ];
+    let done = ingest_bench_trials(
+        &ctx,
+        &[export(&scratch.0.join("export"), &trials)],
+        NO_OPTIONS,
+    )
+    .unwrap();
+    let train = done.train_set.unwrap();
+    let rl = RlBuild {
+        reward: RewardPreset::ShapedPartial,
+        ..RlBuild::default()
+    };
+    let floored = BuildRequest {
+        practice: vec![practice_with_floor(&scratch.0.join("practice"), 0.5)],
+        ..request(train.clone(), rl.clone())
+    };
+    let built = build(&ctx, &floored).unwrap();
+    let group = &built.groups[0];
+    let reward = |name: &str| {
+        group
+            .trials
+            .iter()
+            .find(|t| t.trial == name)
+            .unwrap()
+            .reward
+    };
+    assert!((reward("a-pass") - 1.0).abs() < 1e-12);
+    // 0.5 * (0.75 - 0.5) / (1 - 0.5)
+    assert!((reward("b-most") - 0.25).abs() < 1e-12);
+    assert!(
+        reward("c-naive").abs() < 1e-12,
+        "at the floor earns nothing"
+    );
+    assert_eq!(group.naive_floor, Some(0.5));
+    // The build reports what the group can teach per token, by its lineage.
+    let signal = built.signal.as_ref().expect("a signal report");
+    assert_eq!(signal.families[0].family, "breach/late");
+    assert_eq!(signal.uniform.informative_share, Some(1.0));
+    assert!(signal.tasks[0].learning_signal.is_some_and(|ls| ls > 0.0));
+    let manifest = splinter_pipelines::datasets::resolve_dataset(&ctx, &built.dataset.to_string())
+        .unwrap()
+        .manifest;
+    let credit = manifest.partial_credit.expect("the manifest records it");
+    assert_eq!(credit.metric, "functional_correctness");
+    assert_eq!(credit.sources.len(), 1);
+    assert_eq!(credit.groups_without_floor, 0);
+
+    let unfloored = build(&ctx, &request(train.clone(), rl)).unwrap();
+    let group = &unfloored.groups[0];
+    let reward = |name: &str| {
+        group
+            .trials
+            .iter()
+            .find(|t| t.trial == name)
+            .unwrap()
+            .reward
+    };
+    assert!((reward("b-most") - 0.375).abs() < 1e-12);
+    let manifest =
+        splinter_pipelines::datasets::resolve_dataset(&ctx, &unfloored.dataset.to_string())
+            .unwrap()
+            .manifest;
+    let credit = manifest.partial_credit.unwrap();
+    assert!(credit.sources.is_empty());
+    assert_eq!(credit.groups_without_floor, 1);
+
+    let mixed = RlBuild {
+        reward: RewardPreset::ShapedPartial,
+        reward_metrics: vec![("iou".into(), 1.0)],
+        ..RlBuild::default()
+    };
+    let error = build(&ctx, &request(train, mixed)).unwrap_err().to_string();
+    assert!(error.contains("shaped-partial"), "{error}");
 }

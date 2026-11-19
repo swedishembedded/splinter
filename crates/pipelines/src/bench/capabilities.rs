@@ -22,6 +22,13 @@
 //!    it again with a taxonomy that names its capabilities. A task matched
 //!    by name only is never labelled.
 //!
+//! Beside competence, each policy's graded attempts are measured for what
+//! they can teach a group-relative policy gradient per token
+//! ([`PolicySignal`]): the learning signal per task and per family (the
+//! lineage the staged task's `task.toml` names), the informative-group share
+//! and the reward variance per million completion tokens, uniform and under
+//! the variance-per-cost draw, for the strict reward and for `shaped-partial`.
+//!
 //! A task labelled by none of them counts as
 //! [`crate::curriculum::capability::UNLABELLED`]. A passed trial is a graded
 //! pass; a failed one whose diagnosis blames the infrastructure or the task
@@ -44,8 +51,14 @@ use splinter_orchestrator::error::OrchestratorError;
 
 use super::artifact::sha256_hex;
 use super::diagnose::{diagnose_dirs, DiagnosedTrial, DiagnosisRefused};
-use super::practice::Practice;
+use super::practice::{Practice, PracticeFacts};
 use crate::curriculum::capability::{competence, Attempt, CapabilityCompetence};
+use crate::rl_build::{DEFAULT_FAIL_CEILING, PARTIAL_METRIC};
+use splinter_core::usage::TokenUsage;
+use splinter_data::PartialCredit;
+use splinter_eval::campaign::learning_signal::{
+    Attempt as SignalAttempt, SignalReport, TaskSignal,
+};
 
 /// The format tag of a [`CapabilityReport`].
 pub const CAPABILITY_FORMAT: &str = "splinter.capability-competence.v1";
@@ -94,6 +107,28 @@ pub struct PolicyCompetence {
     pub trials: usize,
     /// Every capability its trials exercise, by id.
     pub capabilities: Vec<CapabilityCompetence>,
+    /// What its graded attempts can teach per token, per task and per
+    /// family, under the strict reward and under `shaped-partial`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal: Option<PolicySignal>,
+}
+
+/// The learning signal of a policy's graded attempts
+/// ([`splinter_eval::campaign::learning_signal`]), each task's attempts one
+/// group, its family the lineage its staged `task.toml` names (else the task).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PolicySignal {
+    /// Under the strict reward: a pass earns one, a failure nothing.
+    pub verdict: SignalReport,
+    /// Under `shaped-partial` at the default credit
+    /// ([`crate::datasets::DEFAULT_FAIL_CEILING`]), the floors from the
+    /// material.
+    pub shaped_partial: SignalReport,
+    /// Graded failures that recorded no `functional_correctness`, left out
+    /// of `shaped_partial` (an unmeasured failure is not a zero).
+    pub unmeasured_failures: usize,
+    /// Tasks whose naive floor the material states.
+    pub floored_tasks: usize,
 }
 
 /// What a capability report found: per policy, competence per capability,
@@ -221,16 +256,18 @@ fn read_run(dir: &Path) -> Result<Option<Run>, String> {
 }
 
 /// The capability ids of every task a labels directory stages, by source
-/// digest.
+/// digest; the directories' task facts are added to `facts`.
 fn read_labels(
     dirs: &[PathBuf],
     refused: &mut Vec<Refused>,
+    facts: &mut PracticeFacts,
 ) -> (BTreeMap<String, Vec<String>>, BTreeMap<PathBuf, String>) {
     let mut by_digest = BTreeMap::new();
     let mut read = BTreeMap::new();
     for dir in dirs {
         match Practice::read(dir) {
             Ok(practice) => {
+                facts.tasks.extend(practice.task_facts());
                 for task in &practice.manifest.tasks {
                     if !task.capabilities.is_empty() {
                         by_digest.insert(task.source_digest.clone(), task.capabilities.clone());
@@ -277,7 +314,9 @@ pub struct CapabilityRequest<'a> {
 #[must_use]
 pub fn capability_report(request: &CapabilityRequest<'_>) -> CapabilityReport {
     let mut refused = Vec::new();
-    let (by_digest, labels) = read_labels(request.labels, &mut refused);
+    let mut facts = PracticeFacts::default();
+    let (by_digest, labels) = read_labels(request.labels, &mut refused, &mut facts);
+    let mut signals: BTreeMap<String, Vec<SignalTrial>> = BTreeMap::new();
     let mut sources = Vec::new();
     let mut labelled = Labelled::default();
     let mut by_policy: BTreeMap<String, Vec<Attempt>> = BTreeMap::new();
@@ -339,6 +378,10 @@ pub fn capability_report(request: &CapabilityRequest<'_>) -> CapabilityReport {
             policy: policy.clone(),
             practice_sha256: run.as_ref().map(|r| r.practice_sha256.clone()),
         });
+        if let Some(practice) = material {
+            facts.tasks.extend(practice.task_facts());
+        }
+        let measured = signals.entry(policy.clone()).or_default();
         let attempts = by_policy.entry(policy).or_default();
         for trial in &diagnosed.attempts {
             let task = trial
@@ -359,6 +402,22 @@ pub fn capability_report(request: &CapabilityRequest<'_>) -> CapabilityReport {
                 labelled.none += 1;
                 Vec::new()
             };
+            if let Some(passed) = graded(trial) {
+                measured.push(SignalTrial {
+                    task: task.clone(),
+                    digest: trial
+                        .task_digest
+                        .clone()
+                        .or_else(|| own.map(|(digest, _)| (*digest).to_string())),
+                    passed,
+                    correctness: trial
+                        .metrics
+                        .as_ref()
+                        .and_then(|m| m.get(PARTIAL_METRIC))
+                        .and_then(serde_json::Value::as_f64),
+                    usage: trial.usage,
+                });
+            }
             attempts.push(Attempt {
                 task,
                 capabilities,
@@ -372,6 +431,10 @@ pub fn capability_report(request: &CapabilityRequest<'_>) -> CapabilityReport {
         .map(|(policy, attempts)| PolicyCompetence {
             trials: attempts.len(),
             capabilities: competence(&attempts, &rates_of(&attempts)),
+            signal: signals
+                .get(&policy)
+                .filter(|trials| !trials.is_empty())
+                .map(|trials| policy_signal(trials, &facts)),
             policy,
         })
         .collect();
@@ -383,6 +446,63 @@ pub fn capability_report(request: &CapabilityRequest<'_>) -> CapabilityReport {
         labelled,
         policies,
         refused,
+    }
+}
+
+/// A graded attempt, as the learning signal reads it.
+struct SignalTrial {
+    task: String,
+    digest: Option<String>,
+    passed: bool,
+    correctness: Option<f64>,
+    usage: Option<TokenUsage>,
+}
+
+/// The learning signal of a policy's graded `trials`, by task, under both
+/// rewards; `facts` gives each task's floor and lineage by content digest.
+fn policy_signal(trials: &[SignalTrial], facts: &PracticeFacts) -> PolicySignal {
+    let credit = PartialCredit {
+        metric: PARTIAL_METRIC.to_string(),
+        credit: DEFAULT_FAIL_CEILING,
+        floors: facts.naive_floors(),
+        sources: Vec::new(),
+        groups_without_floor: 0,
+    };
+    let mut by_task: BTreeMap<&str, Vec<&SignalTrial>> = BTreeMap::new();
+    for trial in trials {
+        by_task.entry(&trial.task).or_default().push(trial);
+    }
+    let mut unmeasured_failures = 0;
+    let (mut verdict, mut shaped) = (Vec::new(), Vec::new());
+    for (task, attempts) in by_task {
+        let digest = attempts.iter().find_map(|t| t.digest.as_deref());
+        let family = facts.lineage(digest).unwrap_or(task);
+        let attempt = |t: &SignalTrial, reward: f64| SignalAttempt {
+            reward,
+            cost: t.usage.map(|u| u.cost()),
+            completion: t.usage.map(|u| u.completion),
+        };
+        let strict: Vec<SignalAttempt> = attempts
+            .iter()
+            .map(|t| attempt(t, if t.passed { 1.0 } else { 0.0 }))
+            .collect();
+        let floor = credit.floor(digest);
+        let mut partial = Vec::new();
+        for t in &attempts {
+            match (t.passed, t.correctness) {
+                (true, _) => partial.push(attempt(t, 1.0)),
+                (false, Some(f)) => partial.push(attempt(t, credit.earned(f, floor))),
+                (false, None) => unmeasured_failures += 1,
+            }
+        }
+        verdict.push(TaskSignal::of(task, family, &strict));
+        shaped.push(TaskSignal::of(task, family, &partial));
+    }
+    PolicySignal {
+        verdict: SignalReport::of(verdict),
+        shaped_partial: SignalReport::of(shaped),
+        unmeasured_failures,
+        floored_tasks: credit.floors.len(),
     }
 }
 

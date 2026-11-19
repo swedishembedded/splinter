@@ -111,6 +111,9 @@ impl Rollouts for Labelled {
                     passed: Some(pass),
                     class: (!pass).then_some(FailureClass::WrongContent),
                     capabilities: vec![capability_of(task).to_string()],
+                    correctness: None,
+                    cost: None,
+                    completion_tokens: None,
                 });
             }
         }

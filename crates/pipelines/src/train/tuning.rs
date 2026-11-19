@@ -65,6 +65,12 @@ pub struct Tuning {
     /// not start. A dataset built for the run leaves such records out when
     /// it is built with the same bound ([`crate::datasets::BuildRequest::max_block`]).
     pub max_block: Option<u32>,
+    /// Passes over the records the step budget is sized to when the steps
+    /// are not named; `None` is [`super::MAX_PASSES`].
+    pub passes: Option<u32>,
+    /// The named recipe whose defaults the other settings were filled from
+    /// ([`super::Recipe::apply`]); `None` when none was named.
+    pub recipe: Option<super::Recipe>,
     /// The settings of the policy-gradient objective, for a run on rollout
     /// records; a run of any other regime refuses them. Brain's defaults for
     /// what is left out.

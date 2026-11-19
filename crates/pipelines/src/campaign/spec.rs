@@ -15,7 +15,8 @@ use serde::{Deserialize, Serialize};
 use splinter_core::model_ref::ModelRef;
 
 use super::types::CampaignError;
-use crate::datasets::ViewName;
+use crate::datasets::{RewardPreset, ViewName};
+use crate::train::Recipe;
 
 /// The tasks a champion has mastered at this pass rate are not rolled out
 /// again: [`splinter_eval::campaign::pass_rate::RETIRE_AT`].
@@ -83,8 +84,8 @@ pub struct RolloutSpec {
     /// How a generation's tasks are chosen.
     #[serde(default, skip_serializing_if = "RolloutCurriculum::is_all")]
     pub curriculum: RolloutCurriculum,
-    /// With the capability curriculum: the most tasks a generation
-    /// practises; every task of positive weight when absent.
+    /// With the capability or signal curriculum: the most tasks a
+    /// generation practises; every task of positive weight when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tasks: Option<usize>,
     /// With the capability curriculum: fresh transfer exercises drawn from
@@ -118,6 +119,12 @@ pub enum RolloutCurriculum {
     /// failures; never a task the infrastructure stopped every time
     /// ([`crate::curriculum::capability`]).
     Capability,
+    /// Tasks drawn by variance per cost: in proportion to the square root of
+    /// their shrunk reward variance (under the curate stage's reward) over
+    /// the mean tokens an attempt costs; never a task whose graded attempts
+    /// all earned the same, nor one the infrastructure stopped every time
+    /// ([`crate::curriculum::signal`]).
+    Signal,
 }
 
 impl RolloutCurriculum {
@@ -151,6 +158,16 @@ pub struct CurateSpec {
     /// For the sft-step view: one record per trajectory.
     #[serde(default)]
     pub pack: bool,
+    /// For the policy-gradient view: the named reward; `shaped-partial`
+    /// reads the naive floors of the practice material
+    /// ([`crate::datasets::RewardPreset`]). The signal curriculum measures
+    /// attempts under it too.
+    #[serde(default, skip_serializing_if = "is_verdict")]
+    pub reward: RewardPreset,
+}
+
+fn is_verdict(reward: &RewardPreset) -> bool {
+    *reward == RewardPreset::Verdict
 }
 
 impl Default for CurateSpec {
@@ -159,6 +176,7 @@ impl Default for CurateSpec {
             view: ViewName::SftStep,
             max_block: None,
             pack: false,
+            reward: RewardPreset::Verdict,
         }
     }
 }
@@ -182,6 +200,10 @@ pub struct TrainSpec {
     /// The longest training row in tokens.
     #[serde(default)]
     pub max_block: Option<u32>,
+    /// A named recipe whose defaults fill what is left unset
+    /// ([`crate::train::Recipe`]); for a policy-gradient view only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipe: Option<Recipe>,
 }
 
 impl Default for TrainSpec {
@@ -192,6 +214,7 @@ impl Default for TrainSpec {
             learning_rate: None,
             records_per_step: None,
             max_block: None,
+            recipe: None,
         }
     }
 }
@@ -325,11 +348,25 @@ impl CampaignSpec {
                 self.rollout.retire_at
             ));
         }
-        let capability = self.rollout.curriculum == RolloutCurriculum::Capability;
-        if !capability && (self.rollout.tasks.is_some() || self.rollout.transfer.is_some()) {
+        let curriculum = self.rollout.curriculum;
+        if curriculum == RolloutCurriculum::All && self.rollout.tasks.is_some() {
             return refuse(
-                "rollout.tasks and rollout.transfer apply to curriculum = \"capability\"".into(),
+                "rollout.tasks applies to curriculum = \"capability\" or \"signal\"".into(),
             );
+        }
+        if curriculum != RolloutCurriculum::Capability && self.rollout.transfer.is_some() {
+            return refuse("rollout.transfer applies to curriculum = \"capability\"".into());
+        }
+        if self.curate.reward != RewardPreset::Verdict
+            && !matches!(
+                self.curate.view,
+                ViewName::PolicyGradient | ViewName::SelfDistill
+            )
+        {
+            return refuse(format!(
+                "curate.reward applies to a view that rewards attempts, not {}",
+                self.curate.view.as_str()
+            ));
         }
         if self.rollout.tasks == Some(0) {
             return refuse("rollout.tasks: at least one".into());

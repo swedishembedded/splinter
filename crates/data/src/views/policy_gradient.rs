@@ -22,7 +22,8 @@
 //!   the minimum strength, as [`Exclusion::Undecided`] or
 //!   [`Exclusion::TooWeak`].
 //! * The attempt's reward is [`RewardShape::reward`]: a pass earns `1.0`, a
-//!   failure what the configured metrics earn below the ceiling, either less
+//!   failure what the configured metrics earn below the ceiling (or, under
+//!   `shaped-partial`, its credit above its task's naive floor), either less
 //!   DAPO's over-length penalty when one is set ([`crate::Overlong`]), from the
 //!   completion tokens the attempt recorded.
 //! * A group is the trials of one task version made by one policy (the model
@@ -78,6 +79,7 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
 use splinter_core::harness::HarnessConversation;
+use splinter_core::usage::TokenUsage;
 use splinter_store::decision::decide;
 
 use super::privileged::teacher_context;
@@ -127,6 +129,10 @@ struct Rollout {
     trial: String,
     reward: f64,
     passed: bool,
+    /// The task's content digest, as the verdict records it.
+    digest: Option<String>,
+    /// What the attempt's requests processed, as its score counts them.
+    usage: Option<TokenUsage>,
     /// The evidence of the deciding verdict: what the verifier recorded.
     evidence: Value,
 }
@@ -137,6 +143,7 @@ struct TrialSeen {
     reward: f64,
     passed: bool,
     conversations: usize,
+    usage: Option<TokenUsage>,
 }
 
 /// What an attempt becomes in the dataset.
@@ -302,9 +309,11 @@ impl PolicyGradient {
         let policy = text(evidence, "/model")
             .or_else(|| provenance.policy.clone())
             .unwrap_or_else(|| provenance.solver.clone());
+        let digest = text(evidence, "/task/digest");
         let reward = self.reward.reward(
             decision.passed,
             evidence.get("metrics"),
+            digest.as_deref(),
             completion_tokens(evidence, &entry.experience.trajectory),
             &trial,
         )?;
@@ -317,6 +326,8 @@ impl PolicyGradient {
             trial,
             reward,
             passed: decision.passed,
+            digest,
+            usage: TokenUsage::of_trial(evidence),
             evidence: evidence.clone(),
         }))
     }
@@ -415,6 +426,7 @@ impl View for PolicyGradient {
         // before all of the group is known.
         let mut placed: Vec<(&Entry, Option<HarnessConversation>, Rollout)> = Vec::new();
         let mut groups: BTreeMap<GroupKey, BTreeMap<String, TrialSeen>> = BTreeMap::new();
+        let mut digests: BTreeMap<GroupKey, String> = BTreeMap::new();
         for entry in corpus.entries() {
             let harness = HarnessConversation::of(&entry.experience.trajectory);
             if !self.rendering.wants_role(harness.as_ref()) {
@@ -436,7 +448,13 @@ impl View for PolicyGradient {
                     reward: rollout.reward,
                     passed: rollout.passed,
                     conversations: 0,
+                    usage: rollout.usage,
                 });
+            if let Some(digest) = &rollout.digest {
+                digests
+                    .entry(rollout.group.clone())
+                    .or_insert_with(|| digest.clone());
+            }
             // The conversations of a trial are graded together, so they
             // agree; if not, the store holds two grades of one trial.
             if (seen.reward - rollout.reward).abs() > f64::EPSILON {
@@ -454,6 +472,7 @@ impl View for PolicyGradient {
         projection.advantage = Some(self.advantage);
         projection.packed = self.rendering.packed;
         projection.overlong = self.reward.overlong();
+        projection.partial_credit = self.reward.partial_credit().cloned();
         let mut treatment_of: BTreeMap<(&GroupKey, &str), Treatment> = BTreeMap::new();
         for (key, trials) in &groups {
             let rewards: Vec<f64> = trials.values().map(|t| t.reward).collect();
@@ -487,9 +506,17 @@ impl View for PolicyGradient {
                     written: !matches!(treatment, Treatment::Nothing),
                     baseline_only: false,
                     conversations: seen.conversations,
+                    cost: seen.usage.map(|u| u.cost()),
+                    completion_tokens: seen.usage.map(|u| u.completion),
                 });
                 treatment_of.insert((key, trial), treatment);
             }
+            let digest = digests.get(key).cloned();
+            let naive_floor = projection.partial_credit.as_mut().and_then(|credit| {
+                let floor = credit.floor(digest.as_deref());
+                credit.groups_without_floor += usize::from(floor.is_none());
+                floor
+            });
             projection.groups.push(GroupReport {
                 task: key.task.clone(),
                 version: key.version.clone(),
@@ -498,6 +525,8 @@ impl View for PolicyGradient {
                 signal,
                 kind,
                 distilled,
+                naive_floor,
+                digest,
             });
         }
         // The trials that wrote a record, and the first conversation of each

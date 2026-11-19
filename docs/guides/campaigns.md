@@ -35,14 +35,15 @@ seed = "12126459309185286876"  # optional; drawn, printed and recorded when left
 attempts = 4                   # attempts of each task
 retire_at = 0.9                # a task the champion passes this often is mastered and not practised again
 retire_after = 4               # ... on at least this many graded attempts
-# curriculum = "capability"    # optional: draw the tasks by capability gap (below); default "all"
-# tasks = 64                   # with "capability": the most tasks a generation practises
+# curriculum = "capability"    # optional: draw the tasks by capability gap, or "signal" by variance per cost (below); default "all"
+# tasks = 64                   # with "capability" or "signal": the most tasks a generation practises
 # transfer = { capabilities = 2, count = 40 }   # with "capability": fresh exercises for the weakest capabilities
 
 [curate]
 view = "sft-step"              # the dataset view (dataset build --view)
 max_block = 16384              # optional: leave out longer records
 pack = false
+# reward = "shaped-partial"    # optional, policy-gradient views: partial credit above each task's naive floor
 
 [train]
 rank = 16
@@ -50,6 +51,7 @@ steps = 200                    # optional: sized to the dataset when left out
 learning_rate = 0.0002         # optional
 records_per_step = 4           # optional
 max_block = 16384              # optional
+# recipe = "on-policy-rl"      # optional, policy-gradient views: the recipe's defaults fill what is unset
 
 [budget]                       # optional limits, summed over the whole campaign
 rollouts = 2000
@@ -124,8 +126,18 @@ exam generated with `make <domain>/exam/generate SEED_FILE=...`).
    --capability`, into the stage's `transfer/`), the champion practises them beside the chosen tasks, and their trials
    join the same export. The rollout record keeps every task's weight, the tasks set aside for the infrastructure, and
    the capabilities asked for. A campaign under `all` keeps its stage keys and records as before.
+   Under `curriculum = "signal"` the tasks are chosen by variance per cost: every earlier attempt is rewarded as the
+   curate stage rewards it (`reward`, the strict pass by default; `shaped-partial` credits a failure above its task's
+   naive floor from the practice material), and a task is drawn in proportion to `sqrt(V) / mean cost`, `V` its reward
+   variance shrunk by a Beta posterior and the cost an attempt's completion plus uncached prompt tokens (see the
+   learning signal in [Datasets](../reference/datasets.md)). A task never attempted weighs as the prior and the mean
+   cost say. A task whose graded attempts all earned the same is never drawn (it has no advantage to learn from), nor a
+   mastered task, nor one the infrastructure stopped every time. `tasks` of them are drawn without replacement from a
+   seed of the campaign's; the rollout record keeps every weight, the tasks left out as uninformative or for the
+   infrastructure, and the reward they were measured under (`signal`).
 2. **ingest.** The export is admitted as `splinter experiences ingest-bench` admits it. Admitting it again adds nothing.
-3. **curate.** One dataset over the experience of every generation so far, through `[curate]`. Its held-out split is
+3. **curate.** One dataset over the experience of every generation so far, through `[curate]`. With `reward =
+   "shaped-partial"` it reads the naive floors of the `[practice]` material. Its held-out split is
    drawn by the generation's own seed. The record names the dataset by its id, the digest of its manifest. A generation
    with no training material ends here and the champion stays.
 4. **train.** A candidate trained from the base on that dataset, as a served brain job. Its candidate id and brain's

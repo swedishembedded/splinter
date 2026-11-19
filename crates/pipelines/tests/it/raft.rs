@@ -145,6 +145,7 @@ fn projection(records: Vec<Record>) -> Projection {
         terms: None,
         curation: None,
         overlong: None,
+        partial_credit: None,
         pairing: None,
         feedback: None,
     }
@@ -498,6 +499,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         roles: None,
         images: false,
         rl: Default::default(),
+        practice: Vec::new(),
         split_seed: None,
         history: Default::default(),
         base: None,

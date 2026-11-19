@@ -77,6 +77,7 @@ fn projection(records: Vec<Record>) -> Projection {
         terms: None,
         curation: None,
         overlong: None,
+        partial_credit: None,
         pairing: None,
         feedback: None,
     }

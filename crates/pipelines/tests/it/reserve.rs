@@ -314,6 +314,7 @@ fn reserving_twice_over_a_lineage_with_fresh_seeds_never_examines_what_was_train
             terms: None,
             curation: None,
             overlong: None,
+            partial_credit: None,
             pairing: None,
             feedback: None,
         },

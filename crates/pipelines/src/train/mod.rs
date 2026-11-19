@@ -61,6 +61,7 @@ mod policy_gradient;
 
 mod supervised;
 pub(crate) use policy_gradient::check_settings as check_policy_gradient_settings;
+mod recipe;
 mod records;
 mod rehearsal;
 mod seeds;
@@ -78,14 +79,16 @@ pub use full::{
 pub use identified::train_identified;
 use keep::{keep_candidate, Finished, Outcome};
 pub use pairs::feedback_weights;
+pub use recipe::{Reached, Recipe, RecipeReading};
 pub(crate) use records::carries_reasoning;
 use records::{combine, concatenate};
 use rehearsal::{prepare_rehearsal, RehearsalSplit};
 pub use rehearsal::{RehearsalPlan, Rehearse, REHEARSAL_FILE};
 pub use seeds::{record_seed, train_recorded, train_recorded_as, SEED as TRAIN_SEED};
 pub use sizing::{
-    auto_records_per_step, auto_steps, eval_every_for, steps_for, DEFAULT_MONITOR_SHARE,
-    DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET, MAX_AUTO_STEPS, MAX_MONITOR_SHARE, MAX_PASSES,
+    auto_records_per_step, auto_steps, eval_every_for, steps_for, steps_for_passes,
+    DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, EVALUATIONS_PER_BUDGET, MAX_AUTO_STEPS,
+    MAX_MONITOR_SHARE, MAX_PASSES,
 };
 pub use splinter_model::consolidate::Checkpoint as ModelCheckpoint;
 pub use tuning::{PairSettings, Tuning};
@@ -529,9 +532,13 @@ pub(crate) fn plan_training_as(
             .is_none()
             .then(|| auto_records_per_step(examples))
     });
-    let steps = request
-        .steps
-        .unwrap_or_else(|| steps_for(examples, records_per_step.unwrap_or(1)));
+    let steps = request.steps.unwrap_or_else(|| {
+        steps_for_passes(
+            examples,
+            records_per_step.unwrap_or(1),
+            request.tuning.passes.unwrap_or(MAX_PASSES),
+        )
+    });
     // A policy-gradient run has no monitoring loss to select on.
     let monitored = regime != Regime::PolicyGradient;
     let eval_every = if monitored {

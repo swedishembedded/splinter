@@ -200,6 +200,9 @@ impl Rollouts for Practice {
                     passed: Some(pass),
                     class: None,
                     capabilities: Vec::new(),
+                    correctness: None,
+                    cost: None,
+                    completion_tokens: None,
                 })
                 .collect(),
             tokens: Some(15 * u64::from(request.attempts) * request.tasks.len() as u64),

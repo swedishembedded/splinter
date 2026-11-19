@@ -552,19 +552,25 @@ impl Session {
                     steps: args.steps,
                     rank: args.rank,
                     beta: args.beta,
-                    tuning: args.optimiser.applied_to(Tuning {
-                        records_per_step: args.records_per_step,
-                        eval_every: args.monitoring.eval_every,
-                        patience: args.monitoring.patience,
-                        monitor_share: args.monitoring.monitor_share,
-                        keep_evaluations: args.monitoring.keep_evaluations,
-                        max_block: args.max_block,
-                        seed: args.seed,
-                        base_precision: args.base_precision,
-                        policy_gradient: args.policy_gradient.options(args.temperature),
-                        pairs: args.pairs.settings(),
-                        ..Tuning::default()
-                    }),
+                    tuning: {
+                        let tuning = args.optimiser.applied_to(Tuning {
+                            records_per_step: args.records_per_step,
+                            eval_every: args.monitoring.eval_every,
+                            patience: args.monitoring.patience,
+                            monitor_share: args.monitoring.monitor_share,
+                            keep_evaluations: args.monitoring.keep_evaluations,
+                            max_block: args.max_block,
+                            seed: args.seed,
+                            base_precision: args.base_precision,
+                            policy_gradient: args.policy_gradient.options(args.temperature),
+                            pairs: args.pairs.settings(),
+                            ..Tuning::default()
+                        });
+                        match args.recipe {
+                            Some(recipe) => recipe.apply(tuning),
+                            None => tuning,
+                        }
+                    },
                 };
                 let candidate = record(ctx, "train", &request, |run| {
                     train_recorded(ctx, run, &request, self.splinter.trainer())
