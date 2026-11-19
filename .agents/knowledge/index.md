@@ -168,3 +168,4 @@ in the same commit.
 | [180](180-a2s1-practice-competence-is-weakest-on-review-procedure-and-arithmetic.md) | A2s1's practice competence is weakest on review, procedure and arithmetic, not on the domains |
 | [181](181-two-worktrees-sharing-a-target-directory-build-each-others-crates.md) | Two worktrees sharing a target directory build each other's crates |
 | [182](182-an-archive-ends-at-a-checkpoint-but-adopting-it-walked-past.md) | An archive ends at a checkpoint, but adopting it walked past |
+| [183](183-a-killed-campaign-leaves-the-examiners-processes-running.md) | A killed campaign leaves the examiner's processes running |

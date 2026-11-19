@@ -67,7 +67,27 @@ Scope: `splinter campaign` (resumable multi-generation learning over the stage l
   exact-arithmetic 0.44, abstention 0.89, stateful-service 0.87; the curriculum would weigh design-review (0.49),
   professional-procedure (0.47) and exact-arithmetic (0.44) first.
 
+## Done (2026-11-19, lane CR: the first real campaign run)
+
+- `splinter campaign` ran on real brain (1bdd5400c, gpu1) and bench (agent protocol, Ed25519-signed verdict/3) with
+  Qwen3-4B: a base-champion campaign (every compiled practice trial failed, so no generation had material) and a
+  campaign from lane R's A2s1 adapter. Generation 1 of the latter: rollout 64 trials (48 passed), 271 sft-step records,
+  30-step served train, three verdicts over dev/retention/a throwaway sealed slice, gate reject (`no_dev_gain`,
+  `inferior`); generation 2 practised only the 4 tasks the champion had not mastered. SIGKILL mid-rollout,
+  mid-training and mid-evaluate each resumed at the first uncommitted stage; the train resume reused brain's job by
+  `resume_key` (knowledge 183). Fixes landed: `champion = "local:<base>+<adapter>"` (67b1f60d9) and
+  `--brain-adapter-dir` (d1cac5987). Report: the experience-to-competence progress notes, campaign-demo-2026-11-19.
+
 ## Open
+
+- A SIGKILLed run leaves bench's gateway, harbor and trial sandboxes running (knowledge 183): start them in a process
+  group splinter can take down, or with a parent-death signal.
+- `campaign status` refuses while a run holds the ledger lock; a read-only status should not need the lock.
+- Every candidate trains from the base: with an adapter champion the candidate starts without the champion's training
+  (generation 1 was 0.19 below A2s1 on dev). Continuing from the champion, or rehearsing its training data, is open.
+- `Reason::NoDevGain` prints `gain Some(-0.1875)` and says an interval entirely below 0 "reaches 0".
+- The agent examiner's six bench runs take most of a generation's wall time on one card: champion and
+  candidate run one after the other on one endpoint.
 
 - No campaign has run with `curriculum = "capability"` on real models (no GPU in lane K); the transfer draw's
   bench call is covered by the argv it builds and bench's own tests, not by a live rollout.
