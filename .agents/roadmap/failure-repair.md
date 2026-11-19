@@ -53,6 +53,21 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
   service; sven's shell launcher (sven b70e5db3) runs every replayed and every teacher command through
   `bench task session-exec`, and the session grades the state they left. Support tasks are repairable.
 
+- 2026-11-19 Full repair pass over lane R's five G=8 practice runs (1275 trials, 543 failed; 27B teacher on frozen
+  brain e9044bbeb, gpu2; fork and grade in bench's trial-sandbox session; --per-task 8, --samples 2, legal 3): 143
+  accepted, 495 rejected, 260 refused (repair keys). Accepted per domain and class: legal 90 (wrong content 87, no
+  answer 2, malformed 1), accounting 32 (wrong content 19, tool 9, repetition 4), compiled 21 (wrong content), support
+  0 (48 rejected: the teacher fails support continuations too; 32 refused). Refusals left: nondeterministic output
+  (`date`, timestamps in support's CLI), sven error-text drift between the student's build and main, a mid-run
+  system turn or a final reply with nothing to continue. 107 packed sft-step records (16k block); lane P's preference
+  view: 103 repair pairs from 101 repairs, beside 215 attempt pairs.
+- 2026-11-19 A3 arm, seed 1: the pilot's LoRA recipe (bf16 base, rank 16, alpha 32, lr 2e-4, 210 steps x 4 records,
+  gen 1's step budget) continued from A2 seed 1 on the 107 repair records alone: stopped at step 118 by the monitor's
+  patience, best monitor loss at step 42, 334k supervised positions (gen 1: 3.35M), 1264 s of device time. Dev strict
+  pass (129 items, lane R's dev.sh; paired cluster bootstrap): pooled 0.167 vs A0 0.027 (+0.140 [+0.071, +0.213]) but
+  vs A2 0.550 (-0.384 [-0.464, -0.309]); support collapsed 0.871 -> 0.029, compiled 0.812 -> 0.312. Repairs alone
+  from A2 forget what A2 knew; an A3 that keeps A2's data (replay, or cumulative like gen 1) is the next run.
+
 ## Open
 
 - Real infrastructure, repetition and history-probing failures in practice exports for the fixture set: the pilot's
@@ -66,3 +81,4 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
   refused; replaying with the student's own sven build (or the examiner's sandbox) would remove that.
 - Retry and decomposition interventions for practice tasks do not exist; only the fork correction is behind the
   `Intervention` interface.
+- An A3 with replay of A2's training data, and seeds 2-3, before any claim about repairs.
