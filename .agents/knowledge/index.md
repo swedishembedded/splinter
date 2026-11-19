@@ -169,3 +169,5 @@ in the same commit.
 | [181](181-two-worktrees-sharing-a-target-directory-build-each-others-crates.md) | Two worktrees sharing a target directory build each other's crates |
 | [182](182-an-archive-ends-at-a-checkpoint-but-adopting-it-walked-past.md) | An archive ends at a checkpoint, but adopting it walked past |
 | [183](183-a-killed-campaign-leaves-the-examiners-processes-running.md) | A killed campaign leaves the examiner's processes running |
+| [184](184-teacher-free-grpo-never-moved-the-policy.md) | Teacher-free GRPO never moved the policy |
+| [185](185-a-strict-pass-reward-wastes-the-verifiers-partial-credit.md) | A strict-pass reward wastes the verifier's partial credit |
