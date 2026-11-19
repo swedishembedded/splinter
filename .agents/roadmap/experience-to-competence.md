@@ -216,3 +216,44 @@ teacher-free arms never truly tested it.
 | Train tasks gain >= 0.10, held-out flat | memorisation (more tasks needed) |
 | Held-out gain >= 0.05 with CI above 0 | first teacher-free gain |
 | Never-solved tasks still at 0 at k=16-32 | teacher or repair lane |
+
+## Learning signal per GPU-hour (expert review 2026-11-19; bench side in bench `practice-signal`)
+
+**Finding:** bench verifiers already compute weighted partial credit (`functional_correctness`), but the default
+`RewardShape::unshaped()` gives every failure 0. About half of the rollouts sit in all-pass or all-fail groups, which
+carry no advantage.
+
+**Ranked splinter items** (signal gains are estimates)
+
+1. **Shaped reward (first package).**
+   - Reward: `r = 1` on a pass, else `c * max(0, (f - f_naive) / (1 - f_naive))` with `c` about 0.5, where `f_naive` is
+     bench's naive floor. Until bench exports it, use raw `functional_correctness` (the existing `--reward-metric`,
+     `--fail-ceiling`).
+   - The gate stays strict pass. Track over-listing (F1 sets) and abstention drift.
+   - Optional A/B: per-check z-scored advantages, once bench exports `checks`.
+   - Zero-GPU validation: on the existing 1,280 rollouts, count groups with a nonzero `functional_correctness` spread,
+     against the 82 with a pass spread.
+2. **Variance-per-cost selection (first package).**
+   - Metric: `LS_i = Var_j(r_ij) / mean cost_ij`, with cost = completion plus uncached prompt tokens (or GPU-seconds).
+     Shrink the variance by a Beta posterior.
+   - Per family: count lineages, not seeds.
+   - Sample in proportion to `sqrt(Var)/cost`; drop zero-variance groups. This replaces the band factor in
+     `curriculum/capability.rs`.
+   - Validation: rank-correlate `LS_i` with the pass change after one round.
+3. **Start-from-state forks at the decisive step.**
+   - Replay the prefix through `bench task session-exec`, then roll G suffixes with sven fork.
+   - Group by (task, prefix digest); train on the suffix only; check the state digest before forking.
+   - Mix in 30-50% full episodes, and move the fork point earlier over generations.
+   - Expected 3-5x signal per completion token on forked tasks.
+4. **Hint-ladder fading schedule.** Pick the lowest hint level with pass rate at or above 0.3; promote only on hint-0;
+   cap hinted tasks at 30% of a batch. The existing `Distill` view on all-fail groups is the no-bench-change alternative.
+5. **Potential-based shaping from bench milestone progress**, `F = gamma*Phi(s') - Phi(s)`, if bench exports progress.
+6. **Cost.** Tighten the practice step cap to about the p90 of passing trajectories; stop early on repetition or no answer
+   file; keep DAPO's over-length penalty.
+
+**First package (3-4 days):** items 1 and 2 here, plus bench items 1 and 2 (`naive_floor` and three dials).
+Measure on the same rollouts plus one fresh round:
+- informative-group share (82/160 today);
+- sum of Var(r) per million completion tokens;
+- KL actually moving (0.02-0.05, against 0.002);
+- strict pass on 48 paired held-out tasks: the ground truth.
