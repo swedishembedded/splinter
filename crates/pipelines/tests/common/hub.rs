@@ -50,6 +50,9 @@ struct Repo {
     commits: HashMap<String, BTreeMap<String, Stored>>,
     branches: BTreeMap<String, String>,
     tags: BTreeMap<String, String>,
+    /// The tag object of each annotated tag (one made with a message), which
+    /// the refs list in place of the commit, as the Hub does.
+    tag_objects: BTreeMap<String, String>,
 }
 
 #[derive(Default)]
@@ -404,6 +407,8 @@ fn repo_call(
             None => error(404, "Revision not found"),
         },
         ("GET", ["refs"]) => {
+            let mut listed_tags = repo.tags.clone();
+            listed_tags.extend(repo.tag_objects.clone());
             let list = |refs: &BTreeMap<String, String>, kind: &str| -> Vec<Value> {
                 refs.iter()
                     .map(|(name, target)| {
@@ -413,7 +418,7 @@ fn repo_call(
             };
             reply(
                 200,
-                json!({ "branches": list(&repo.branches, "heads"), "tags": list(&repo.tags, "tags"), "converts": [] }),
+                json!({ "branches": list(&repo.branches, "heads"), "tags": list(&listed_tags, "tags"), "converts": [] }),
             )
         }
         ("GET", ["tree", revision]) => {
@@ -469,6 +474,10 @@ fn repo_call(
             }
             match resolve(repo, revision) {
                 Some(commit) => {
+                    if asked.get("message").is_some() {
+                        let object = new_commit(&commit, tag.as_bytes());
+                        repo.tag_objects.insert(tag.clone(), object);
+                    }
                     repo.tags.insert(tag, commit);
                     reply(200, json!({}))
                 }

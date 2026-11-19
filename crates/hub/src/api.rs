@@ -20,12 +20,14 @@ pub struct RepoInfo {
     pub private: Option<bool>,
 }
 
-/// A branch or a tag and the commit it points at.
+/// A branch or a tag and the object it points at.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GitRef {
     /// Its name.
     pub name: String,
-    /// The commit it points at.
+    /// The object it points at, as the Hub lists it: a branch's commit, but
+    /// an annotated tag's own tag object, not the commit it tags (resolve the
+    /// tag with [`Hub::resolve`] for that).
     pub target: CommitId,
 }
 
@@ -48,10 +50,11 @@ impl Refs {
             .map(|r| &r.target)
     }
 
-    /// The commit the tag `name` points at.
+    /// Whether the tag `name` exists. What it tags is [`Hub::resolve`]'s to
+    /// say: the Hub lists an annotated tag by its tag object.
     #[must_use]
-    pub fn tag(&self, name: &str) -> Option<&CommitId> {
-        self.tags.iter().find(|r| r.name == name).map(|r| &r.target)
+    pub fn has_tag(&self, name: &str) -> bool {
+        self.tags.iter().any(|r| r.name == name)
     }
 }
 
@@ -215,12 +218,13 @@ impl Hub {
             &json!({ "tag": tag, "message": message }),
         ))?;
         if reply.status == 409 {
-            return match self.refs(repo)?.tag(tag) {
-                Some(target) if target == commit => Ok(()),
-                other => Err(HubError::Invalid(format!(
-                    "tag {tag} of {repo} already points at {}",
-                    other.map_or_else(|| "something else".to_owned(), ToString::to_string)
-                ))),
+            let tagged = self.resolve(repo, tag)?;
+            return if &tagged == commit {
+                Ok(())
+            } else {
+                Err(HubError::Invalid(format!(
+                    "tag {tag} of {repo} already tags {tagged}"
+                )))
             };
         }
         reply.ok(&what).map(|_| ())

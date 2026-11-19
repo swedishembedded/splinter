@@ -16,6 +16,7 @@ Scope: publishing experience sets, datasets, candidates and signed aggregate ver
 | D5 | `ingest-hf REPO@REVISION`: branch or tag resolved to its commit and recorded as it; manifest identity and tree sizes checked; every file hashed while downloaded; stores written only through their APIs, each under its content address (sets, experiences, datasets byte for byte, candidates, artifacts, verdicts re-verified); a `hub_ingest` provenance record; re-ingest stores nothing | `hub_bundle` round trip and `a_tampered_file_is_refused_and_nothing_of_the_bundle_is_stored` |
 | D6 | Mutation check: dropping the privacy check or the republish no-op turns the privacy and round-trip specs red | run 2026-11-19 |
 | D7 | A bundle whose staged database passed a checkpoint ingests (and any such `state archive` restores): `ancestry_all` no longer reads manifests below a checkpoint that a snapshot does not carry (knowledge 182) | `recovery::a_state_whose_history_passed_a_checkpoint_restores_from_its_archive`, `hub_bundle::a_large_set_from_a_loose_state_round_trips_past_a_checkpoint` |
+| D8 | A republish of an already published bundle reports the commit its tag names, resolved through the revision API: the Hub's refs list an annotated tag by its tag object (`c3f7edbf` for the bundle on commit `01dc4011`), which the no-op path had reported as the commit; the emulator now lists annotated tags the same way | `hub_bundle::a_published_bundle_ingests_back_under_the_same_ids_and_once` (red before) |
 
 ## Open
 

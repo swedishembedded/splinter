@@ -403,8 +403,10 @@ pub fn publish(
         lfs_uploaded: 0,
         lfs_present: 0,
     };
-    if let Some(commit) = refs.tag(&tag) {
-        return Ok(unchanged(commit.clone()));
+    if refs.has_tag(&tag) {
+        // The commit the tag names: the refs list an annotated tag by its own
+        // object.
+        return Ok(unchanged(hub.resolve(&repo, &tag)?));
     }
     let head = refs.branch(BRANCH).cloned();
     let mut previous: Vec<String> = Vec::new();
