@@ -342,7 +342,15 @@ source of truth. A trial without that file is refused. The records then open wit
 system prompt the trial's agent was served (it differs between trials only in the
 repository commit it names, so a dataset holds each record under its own) and carry the
 tools it offered. A tool the agent loaded later in a session is not in the first
-request's list.
+request's list. When the log holds one answered request per agent step and none of them
+showed a picture, ingestion also files the requests themselves with the experience (as a
+harness conversation's are), and every view reads the conversation from them: the
+instruction as the harness sent it (its time line included) and the history as the model
+was given it, so a policy-gradient record's prompt ids are those of its context. Requests
+that do not read as one conversation (the agent rewrote its context between two of them)
+leave the trial the record its trajectory makes, which a policy-gradient build counts as
+`context_reconstructed`. An export that declares its log (`requests.schema` in the manifest)
+in a schema other than `sven.request-log/1` is refused.
 
 ## Reinforcement learning from the trials
 

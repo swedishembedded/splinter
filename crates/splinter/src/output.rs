@@ -11,7 +11,7 @@ use serde::Serialize;
 use splinter_sdk::ask::Answer;
 use splinter_sdk::critique::Critiqued;
 use splinter_sdk::curriculum::corrections::Corrections;
-use splinter_sdk::datasets::{BlockMeasure, Built, Exported, GroupKind};
+use splinter_sdk::datasets::Exported;
 use splinter_sdk::experiences::{CallReplay, ExperienceLine, ExperienceShow, Replayed, SetList};
 use splinter_sdk::judge::{Calibrated, JudgeMeasured};
 use splinter_sdk::router::Routed;
@@ -540,83 +540,6 @@ impl Report for splinter_sdk::conversation_policy_gradient::Stored {
             r.mean_reward,
             r.mean_group_std
         );
-        out
-    }
-}
-
-impl Report for Built {
-    fn human(&self) -> String {
-        let mut out = format!(
-            "dataset {}: {} {} record(s), objective {}, format {}\n  file: {}\n  excluded: {}\n",
-            self.dataset,
-            self.records,
-            self.view,
-            word(&self.objective),
-            word(&self.format),
-            self.path.display(),
-            tally(&self.excluded)
-        );
-        match &self.block_measure {
-            Some(BlockMeasure::Trainer {
-                base,
-                first_refusal,
-            }) => {
-                let _ = writeln!(
-                    out,
-                    "  block: records counted as the trainer counts them, for the base {}",
-                    base.display()
-                );
-                if let Some(reason) = first_refusal {
-                    let _ = writeln!(
-                        out,
-                        "  block: a record the trainer would refuse was left out: {reason}"
-                    );
-                }
-            }
-            Some(BlockMeasure::Floor { reason }) => {
-                let _ = writeln!(
-                    out,
-                    "  block: WARNING records counted by a floor on the trainer's count, which can still refuse a kept record: {reason}"
-                );
-            }
-            None => {}
-        }
-        if !self.groups.is_empty() {
-            let count = |kind: GroupKind| self.groups.iter().filter(|g| g.kind == kind).count();
-            let distilled = self.groups.iter().filter(|g| g.distilled).count();
-            let _ = writeln!(
-                out,
-                "  groups: {} graded, {} all-fail, {} all-pass; {distilled} distilled with a teacher context",
-                count(GroupKind::Graded),
-                count(GroupKind::AllFail),
-                count(GroupKind::AllPass)
-            );
-        }
-        for group in &self.groups {
-            let _ = writeln!(
-                out,
-                "  group {} v{} by {}: {} trial(s), {}{}",
-                group.task,
-                group.version,
-                group.policy,
-                group.trials.len(),
-                group.kind.name(),
-                match (group.signal, group.distilled) {
-                    (_, true) => ", distilled",
-                    (true, false) => "",
-                    (false, false) => ", no signal",
-                }
-            );
-            for trial in &group.trials {
-                let _ = writeln!(
-                    out,
-                    "    {}: reward {:.3}{}",
-                    trial.trial,
-                    trial.reward,
-                    if trial.written { "" } else { ", not written" }
-                );
-            }
-        }
         out
     }
 }

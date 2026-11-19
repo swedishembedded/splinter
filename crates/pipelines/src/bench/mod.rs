@@ -494,7 +494,10 @@ fn recorded_trajectory(unit: &Unit) -> atif::Trajectory {
     }
 }
 
-/// The exported trajectory, plus what the
+/// The exported trajectory, plus the requests its model was sent when the
+/// request log divides among its agent steps (filed as a harness
+/// conversation's are, [`harness::CALLS_KEY`], so its records are read from
+/// them), plus what the
 /// model was given before its first turn, which this agent's ATIF does not
 /// carry - its system prompt as a leading system step and its tool schemas as
 /// `agent.tool_definitions` - read from the trial's first model request. The
@@ -526,6 +529,9 @@ fn with_agent_context(unit: &Unit, context: &AgentContext) -> atif::Trajectory {
         Some(other) => serde_json::Map::from_iter([("exported".to_string(), other)]),
         None => serde_json::Map::new(),
     };
+    if let Some(calls) = &unit.calls {
+        extra.insert(harness::CALLS_KEY.to_string(), calls.to_value());
+    }
     extra.insert(
         ENRICHMENT.to_string(),
         json!({

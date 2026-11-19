@@ -33,6 +33,7 @@ mod conversation_dataset;
 mod corrections_session;
 mod curriculum_output;
 mod dataset_build;
+mod dataset_output;
 mod decision_fixtures_dataset;
 mod diagnosis_output;
 mod doctor_output;

@@ -95,7 +95,8 @@ attempt did against the others at the same task:
   written with exactly those, so nothing is re-rendered: its supervised assistant message carries
   `prompt_token_ids`, `token_ids` and `behavior_logprobs`, and the record carries
   `tokenizer_digest`. An action without a usable trace is still written, without any of these,
-  and brain trains it against its start-of-run proxy; the manifest's `tokens` report counts
+  and brain trains it against its start-of-run proxy; the manifest's `tokens` report (printed
+  by `dataset build` as `sampled tokens`) counts
   `exact` actions and `proxy` ones by reason: `context_reconstructed` (the conversation was rebuilt
   from the trajectory, not read from the requests the model was sent, so brain's check of the
   prompt ids would refuse it), `no_trace`, `sampler_logprobs` (figures taken after

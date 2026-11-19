@@ -97,6 +97,10 @@ pub struct Built {
     /// records it; what it left out is counted in `excluded`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub curation: Option<Curation>,
+    /// How many rewarded actions carry the tokens the policy sampled, and why
+    /// the others are trained against a proxy; empty for a view that attaches
+    /// none.
+    pub tokens: splinter_data::TokenReport,
 }
 
 impl From<StoredDataset> for Built {
@@ -115,6 +119,7 @@ impl From<StoredDataset> for Built {
             block_measure: None,
             split: stored.manifest.split,
             curation: stored.manifest.curation,
+            tokens: stored.manifest.tokens,
         }
     }
 }

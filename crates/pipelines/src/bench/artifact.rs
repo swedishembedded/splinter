@@ -141,6 +141,18 @@ pub struct ManifestGrade {
     pub metrics: Option<Value>,
 }
 
+/// The schema of the request log this reader reads (sven's
+/// `--record-requests`): a `request` line with the whole conversation sent and
+/// a `response` line with what came back, per model request.
+pub const REQUEST_LOG_SCHEMA: &str = "sven.request-log/1";
+
+/// The manifest's declaration of `model-requests.jsonl`.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ManifestRequests {
+    /// The log's format; [`REQUEST_LOG_SCHEMA`] is the one read.
+    pub schema: String,
+}
+
 /// One model the trial's agent used.
 #[derive(Clone, Debug, Deserialize)]
 pub struct ManifestModel {
@@ -178,6 +190,11 @@ pub struct Manifest {
     /// Wall-clock seconds the trial took.
     #[serde(default)]
     pub wall_seconds: Option<f64>,
+    /// The examiner's account of the request log: its schema, and how many
+    /// requests it holds and how many were answered; absent in exports made
+    /// before it declared one.
+    #[serde(default)]
+    pub requests: Option<ManifestRequests>,
     /// Whether the trial ran a released harness package.
     #[serde(default)]
     pub confidential: bool,
@@ -222,9 +239,9 @@ pub struct Unit {
     pub trajectory: atif::Trajectory,
     /// The sha256 of the trajectory file as exported.
     pub trajectory_sha256: String,
-    /// The requests a harness conversation's model was sent and its
-    /// responses, when the request log divides among the conversations and
-    /// holds every response.
+    /// The requests its model was sent and their responses, when the request
+    /// log divides among its agent steps (a harness trial's: among its
+    /// conversations) and holds every response.
     pub calls: Option<RecordedCalls>,
 }
 
@@ -351,13 +368,34 @@ pub fn read_trial(export: &Path, row: &IndexRow) -> Result<Artifact, String> {
 /// The units of a verified trial: its trajectory, or its conversations.
 fn units_of(manifest: &Manifest, read: Read) -> Result<Vec<Unit>, String> {
     let requests = &manifest.files[REQUESTS];
+    if let Some(declared) = manifest
+        .requests
+        .as_ref()
+        .filter(|r| r.schema != REQUEST_LOG_SCHEMA)
+    {
+        return Err(format!(
+            "{REQUESTS} is declared {:?}, and only {REQUEST_LOG_SCHEMA:?} is read",
+            declared.schema
+        ));
+    }
     if read.conversations.is_empty() {
         let trajectory_sha256 = manifest.files[TRAJECTORY].to_ascii_lowercase();
+        let context = first_request(&read.requests, requests)?;
+        // The requests the agent's model was sent, when the log holds one,
+        // answered, per agent step; a request that showed a picture keeps
+        // the trajectory's own record of it.
+        let log = RequestLog::parse(&read.requests)?;
+        let calls = log
+            .attribute(&[&read.trajectory])
+            .and_then(|a| a.into_iter().next())
+            .filter(|a| !a.images)
+            .and_then(|a| log.calls_of(&a))
+            .map(|calls| RecordedCalls::record(requests, &calls));
         return Ok(vec![Unit {
-            kind: UnitKind::Single(first_request(&read.requests, requests)?),
+            kind: UnitKind::Single(context),
             trajectory: read.trajectory,
             trajectory_sha256,
-            calls: None,
+            calls,
         }]);
     }
     let named = read

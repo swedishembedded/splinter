@@ -90,6 +90,11 @@ pub struct Trial {
     /// writes them into the index row and the manifest; `None` writes none,
     /// as an export made before the examiner labelled tasks.
     pub capabilities: Option<&'static [&'static str]>,
+    /// Each agent step records the policy's own trace (prompt ids, sampled
+    /// ids, their log-probabilities), and the request log holds every request
+    /// the model was sent, the harness's time line in the user turn, with the
+    /// response it got; the manifest declares the log's schema.
+    pub traced: bool,
 }
 
 impl Trial {
@@ -113,6 +118,16 @@ impl Trial {
             command: "ls",
             commit: None,
             capabilities: None,
+            traced: false,
+        }
+    }
+
+    /// The same trial with each agent step's policy trace and the full
+    /// request log beside it.
+    pub fn traced(self) -> Self {
+        Self {
+            traced: true,
+            ..self
         }
     }
 
@@ -198,7 +213,7 @@ impl Trial {
 
 /// An ATIF trajectory of one tool call answered by its result, then a final
 /// answer; `note` distinguishes the trials.
-fn trajectory(note: &str, picture: bool, command: &str) -> String {
+fn trajectory(note: &str, picture: bool, command: &str, traced: bool) -> String {
     let instruction = format!("Repair the firmware ({note}).");
     let opening = if picture {
         json!([{"type": "text", "text": instruction},
@@ -206,7 +221,7 @@ fn trajectory(note: &str, picture: bool, command: &str) -> String {
     } else {
         json!(instruction)
     };
-    json!({
+    let mut trajectory = json!({
         "schema_version": "ATIF-v1.7",
         "agent": {"name": "sven", "version": "4.0.0", "model_name": "openai/main"},
         "extra": {"sven": {"created_at": "2026-10-27T18:16:21.405627709Z"}},
@@ -219,8 +234,60 @@ fn trajectory(note: &str, picture: bool, command: &str) -> String {
              "observation": {"results": [{"source_call_id": "c0", "content": "main.c"}]}},
             {"step_id": 3, "source": "agent", "model_name": "m", "message": "Fixed."}
         ]
-    })
-    .to_string()
+    });
+    if traced {
+        for (step, metrics) in [
+            (1, trace(&[1, 2, 3], &[10, 11])),
+            (2, trace(&[1, 2, 3, 10, 11, 4], &[12, 13])),
+        ] {
+            trajectory["steps"][step]["metrics"] = metrics;
+        }
+    }
+    trajectory.to_string()
+}
+
+/// What sven records on an agent step the policy served: the ids it was
+/// given, the ids it sampled and one log-probability of the policy per
+/// sampled id.
+fn trace(prompt: &[i64], completion: &[i64]) -> Value {
+    json!({"prompt_token_ids": prompt, "completion_token_ids": completion,
+           "logprobs": completion.iter().map(|_| -0.5).collect::<Vec<_>>(),
+           "extra": {"sven": {"logprob_kind": "policy", "tokenizer_digest": "sha256:aa"}}})
+}
+
+/// The instruction of a traced trial as the harness sent it: the task's,
+/// followed by the time line the trajectory does not record.
+pub const TIME_LINE: &str = "Time: 0 of 18 min used, 18 min left.";
+
+/// The request log of a traced trial (sven's `--record-requests`): one
+/// request per agent step, each the whole conversation so far, and the
+/// response it got.
+fn requests_as_sent(note: &str, command: &str) -> String {
+    let shell = json!({"name": "shell", "description": "Run a command.",
+                       "parameters": {"type": "object", "properties": {"command": {"type": "string"}}}});
+    let opening = vec![
+        json!({"role": "system", "content": format!("You are Sven.\nCommit: {note}")}),
+        json!({"role": "user", "content": format!("Repair the firmware ({note}).\n\n{TIME_LINE}")}),
+    ];
+    let arguments = json!({"command": command}).to_string();
+    let mut later = opening.clone();
+    later.extend([
+        json!({"role": "assistant", "content": "", "reasoning": "look first"}),
+        json!({"role": "assistant", "content": {"tool_call_id": "c0", "function": {"name": "shell", "arguments": arguments}}}),
+        json!({"role": "tool", "content": {"tool_call_id": "c0", "content": "main.c"}}),
+    ]);
+    [
+        json!({"kind": "request", "seq": 1, "provider": "brain", "model": "main",
+               "request": {"messages": opening, "tools": [shell.clone()]}}),
+        json!({"kind": "response", "seq": 1, "response": {"text": "", "reasoning": "look first",
+               "tool_calls": [{"index": 0, "id": "c0", "name": "shell", "arguments": arguments}]}}),
+        json!({"kind": "request", "seq": 2, "provider": "brain", "model": "main",
+               "request": {"messages": later, "tools": [shell]}}),
+        json!({"kind": "response", "seq": 2, "response": {"text": "Fixed.", "reasoning": "", "tool_calls": []}}),
+    ]
+    .iter()
+    .map(|line| format!("{line}\n"))
+    .collect()
 }
 
 /// The bytes of the picture a trial with a picture shows.
@@ -255,11 +322,16 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         let mut files: Vec<(String, Vec<u8>)> = vec![
             (
                 "trajectory.atif.json".into(),
-                trajectory(t.commit.unwrap_or(t.name), t.picture, t.command).into_bytes(),
+                trajectory(t.commit.unwrap_or(t.name), t.picture, t.command, t.traced).into_bytes(),
             ),
             (
                 "model-requests.jsonl".into(),
-                requests(t.commit.unwrap_or(t.name)).into_bytes(),
+                if t.traced {
+                    requests_as_sent(t.commit.unwrap_or(t.name), t.command)
+                } else {
+                    requests(t.commit.unwrap_or(t.name))
+                }
+                .into_bytes(),
             ),
             (
                 "verification.json".into(),
@@ -311,6 +383,10 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
         }
         if t.confidential {
             manifest["confidential"] = json!(true);
+        }
+        if t.traced {
+            manifest["requests"] = json!({"file": "model-requests.jsonl",
+                "schema": "sven.request-log/1", "requests": 2, "answered": 2});
         }
         let manifest_text = serde_json::to_string_pretty(&manifest).unwrap();
         fs::write(trial_dir.join("manifest.json"), &manifest_text).unwrap();

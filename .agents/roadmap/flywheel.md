@@ -142,8 +142,13 @@ inconclusive and more tasks are collected rather than the threshold changed.
 - Done: the first request of the trial's `model-requests.jsonl` supplies the system prompt
   and the tool schemas, added to the experience's trajectory with the derivation recorded;
   the records train under them.
-- Open: a tool the agent loaded mid-session is in later requests only, so the records carry the
-  first request's tool list (about 1.4% of requests differ).
+- Done (2026-11-19, lane T2): a single agent's trial whose request log divides among its agent
+  steps files its requests with the experience, and every view reads its conversation from them
+  (the harness's time line included; each request's own tool list); policy-gradient builds count
+  those traced actions `exact` (dataset manifest and `dataset build` report `tokens`). Pictures and
+  requests that do not read as one conversation keep the trajectory's record.
+- Open: a tool the agent loaded mid-session is in later requests only; records read from the
+  trajectory still carry the first request's tool list (about 1.4% of requests differ).
 - Done: the reasoning of each step rides on the assistant message as `reasoning_content`
   (brain's `generic-messages-v2` gained the field and renders it through the template).
 

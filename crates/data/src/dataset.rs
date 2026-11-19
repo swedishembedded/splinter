@@ -214,6 +214,11 @@ pub struct Manifest {
     /// ([`crate::FeedbackBalance`]); `None` for any other dataset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feedback: Option<crate::FeedbackBalance>,
+    /// How many rewarded actions carry the tokens the policy sampled, and why
+    /// the others do not ([`crate::TokenReport`]); empty for a dataset whose
+    /// view attaches none.
+    #[serde(default, skip_serializing_if = "crate::TokenReport::is_empty")]
+    pub tokens: crate::TokenReport,
 }
 
 /// How many records a projection yielded and how many candidates it left
@@ -713,6 +718,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         overlong: projection.overlong,
         pairing: projection.pairing.clone(),
         feedback: projection.feedback,
+        tokens: projection.tokens.clone(),
     }
 }
 

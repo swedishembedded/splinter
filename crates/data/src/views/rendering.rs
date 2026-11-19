@@ -59,7 +59,11 @@ impl Rendering {
     /// The conversation `entry` is: read from the requests its model was sent
     /// when it recorded them, else from its trajectory. A conversation whose
     /// model was shown images is the first only, and only when images are
-    /// wanted.
+    /// wanted. A single agent's requests that do not read as one conversation
+    /// (its context was rewritten between two of them) leave it the record its
+    /// trajectory makes, as before they were kept: that context is a
+    /// reconstruction, and a view that counts one counts it
+    /// ([`Conversation::as_sent`]). A harness conversation's are refused.
     pub(crate) fn conversation_of(
         &self,
         entry: &Entry,
@@ -70,8 +74,13 @@ impl Rendering {
             return Err(Exclusion::ShownImages);
         }
         if let Some(recorded) = RecordedCalls::of(&entry.experience.trajectory) {
-            let calls = recorded.calls().ok_or(Exclusion::Unrepresentable)?;
-            return conversation_of_requests(&entry.experience, &calls);
+            let read = recorded
+                .calls()
+                .ok_or(Exclusion::Unrepresentable)
+                .and_then(|calls| conversation_of_requests(&entry.experience, &calls));
+            if read.is_ok() || harness.is_some() {
+                return read;
+            }
         }
         if shown_images {
             return Err(Exclusion::RequestsNotRecorded);
