@@ -20,9 +20,10 @@ Scope: publishing experience sets, datasets, candidates and signed aggregate ver
 
 ## Open
 
-- [ ] No bundle has been published to the real Hub from this code: the LFS transfer and commit calls are verified
-      against the local emulator only (the Hub's own client of version 2.4.0 was the reference for the wire format).
-      The first real publish is the check.
+- [x] First real publish and ingest (2026-11-19): private repo `swedishembedded/experience-to-competence-evidence`, tag
+      `splinter-b0f65b12fffa370c40fa` = commit 01dc4011 (12 files, 150 MB). It found two defects, fixed with regression specs
+      (expdb restore walked past a checkpoint into uncopied parents, 5805bf025; an annotated tag was reported as the commit,
+      bc8fd17de). Republish is a no-op and a fresh ingest restores set, dataset, candidate and five verdicts.
 - [ ] A candidate that continues a release is refused: a bundle does not carry release lineage (releases, aliases,
       replayed records) yet.
 - [ ] A basic LFS transfer reads the whole file into memory; the Hub answers large files with a multipart transfer,

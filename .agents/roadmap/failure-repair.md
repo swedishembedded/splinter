@@ -94,8 +94,10 @@ Scope: the deterministic diagnosis of why an examined practice attempt failed (`
   repair reads the request log instead, a fix belongs in sven's runner.
 - A tool's error text differs between sven builds (the student's a0235c71 against the fork's main): such a fork is
   refused; replaying with the student's own sven build (or the examiner's sandbox) would remove that.
-- No real-model measurement yet of retry, knowledge-assisted correction or decomposition (GPU smoke prepared in the
-  campaign's lane Q scratch, not run). A preference pair from a decomposition would put guidance turns in the chosen
-  side's context: the preference view does not tell guided repairs apart yet.
+- First real-model smoke of the four interventions (2026-11-19, 20 failures, 27B teacher, one card): decompose 1/16 accepted,
+  knowledge 0/15 (the plain teacher 0/8 on the same failures: no effect visible at that size), fork 1/9, retry 0/4; refusals are
+  the replay drift above. A larger pass and the knowledge 2x2 are open (`experience-to-competence.md` item 4). A preference pair
+  from a decomposition would put guidance turns in the chosen side's context: the preference view does not tell guided repairs
+  apart yet.
 - The knowledge retrieves by word (sven's lexical index); no vectors.
 - An A3 with replay of A2's training data, and seeds 2-3, before any claim about repairs.
