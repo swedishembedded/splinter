@@ -94,9 +94,17 @@ pub struct TrialRecord {
 
 /// Every trial admitted so far.
 pub fn trials(ctx: &Context) -> Result<Vec<TrialRecord>, OrchestratorError> {
+    trials_in(ctx.workspace())
+}
+
+/// The trial register of the database `workspace`, which need not be the
+/// run's own (an import reads another state root's).
+pub fn trials_in(
+    workspace: &splinter_store::workspace::Workspace,
+) -> Result<Vec<TrialRecord>, OrchestratorError> {
     let mut found = Vec::new();
-    for id in ctx.workspace().document_ids(TRIAL)? {
-        if let Some(record) = ctx.workspace().get_document::<TrialRecord>(TRIAL, &id)? {
+    for id in workspace.document_ids(TRIAL)? {
+        if let Some(record) = workspace.get_document::<TrialRecord>(TRIAL, &id)? {
             found.push(record);
         }
     }

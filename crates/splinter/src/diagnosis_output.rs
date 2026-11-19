@@ -13,6 +13,7 @@ use std::fmt::Write as _;
 
 use splinter_sdk::bench::diagnose::DiagnosisReport;
 use splinter_sdk::bench::repair::RepairReport;
+use splinter_sdk::set_import::SetsImported;
 
 use crate::output::Report;
 
@@ -83,6 +84,21 @@ impl Report for RepairReport {
         if let Some(set) = &self.repair_set {
             let _ = writeln!(out, "accepted repairs: experience set {set}");
         }
+        out
+    }
+}
+
+impl Report for SetsImported {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        for set in &self.sets {
+            let _ = writeln!(out, "imported experience set {set}");
+        }
+        let _ = writeln!(
+            out,
+            "experiences: {} new, {} held ({} named by relations); annotations: {} new; trial records: {} new",
+            self.experiences_new, self.experiences_held, self.related, self.annotations_new, self.trial_records_new
+        );
         out
     }
 }

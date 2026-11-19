@@ -511,6 +511,9 @@ pub enum ExperiencesCommand {
     /// A teacher continues the failed attempts of practice runs from their
     /// last good step; the task's own verifier keeps a repair only on a pass.
     Repair(RepairArgs),
+    /// Import experience sets, with their experiences' annotations and trial
+    /// register, from another state root.
+    Import(ImportArgs),
     /// Compare two experience sets of the same tasks: the candidate's against
     /// the baseline's, paired by task, a family counted once. Exposed and
     /// harness-failed attempts are left out and counted.
@@ -737,7 +740,7 @@ pub use corrections::CorrectionsArgs;
 pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
-pub use experiences::{DiagnoseArgs, RepairArgs, StrataArgs};
+pub use experiences::{DiagnoseArgs, ImportArgs, RepairArgs, StrataArgs};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
 pub use global::Global;

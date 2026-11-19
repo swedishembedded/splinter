@@ -479,6 +479,14 @@ impl Session {
                 })?;
                 emit(json, &report);
             }
+            Command::Experiences(ExperiencesCommand::Import(args)) => {
+                let source = splinter_sdk::store::StateRoot::new(args.from.clone());
+                let arguments = json!({ "from": args.from, "sets": args.sets });
+                let imported = record(ctx, "experiences import", &arguments, |_| {
+                    splinter_sdk::set_import::import_sets(ctx, &source, &args.sets)
+                })?;
+                emit(json, &imported);
+            }
             Command::Experiences(ExperiencesCommand::Compare {
                 candidate,
                 baseline,

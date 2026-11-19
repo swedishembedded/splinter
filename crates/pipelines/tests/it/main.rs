@@ -84,6 +84,7 @@ mod router;
 mod runtime;
 mod sample_anchor;
 mod sealed_everywhere;
+mod set_import;
 mod solve_concurrency;
 mod solve_resume;
 mod state_layout;

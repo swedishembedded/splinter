@@ -82,8 +82,8 @@ pub use splinter_pipelines::{
     decision_fixtures, describe, dialogue, doctor, episodes, eval, exam, exam_set, experiences,
     experiment, generations, goal, graded, harbor, harness_opt, history, improve, judge, learn,
     lineage, objects, plan, powered, practice, preflight, raft, rehearsal, release, rerank,
-    reserve, retrieval, router, sealed, sessions, solving, sources, state, status, tasks, timeline,
-    train, validate, variants, verify,
+    reserve, retrieval, router, sealed, sessions, set_import, solving, sources, state, status,
+    tasks, timeline, train, validate, variants, verify,
 };
 
 // The layers, each under one name.

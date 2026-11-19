@@ -133,6 +133,7 @@ mod rl_build;
 pub mod router;
 pub mod sealed;
 pub mod sessions;
+pub mod set_import;
 pub mod skill_library;
 pub mod solving;
 pub mod sources;

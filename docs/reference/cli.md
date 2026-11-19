@@ -142,6 +142,7 @@ Every command takes these.
   - [splinter experiences ingest-bench](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
   - [splinter experiences diagnose](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
   - [splinter experiences repair](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
+  - [splinter experiences import](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
@@ -1546,6 +1547,7 @@ Subcommands:
 - [`ingest-bench`](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
 - [`diagnose`](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
 - [`repair`](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
+- [`import`](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
 
 #### splinter experiences list
@@ -1647,6 +1649,22 @@ Options:
 - `--seed <N>`: The seed that orders the tasks and the attempts of each (drawn and printed when not given)
 - `--samples <K>`: Teacher continuations of each selected failure, each a repair of its own (default 1)
 - `--class <CLASS>...`: Only failures of this class (repeatable; `wrong_content`, `tool`, ...)
+
+#### splinter experiences import
+
+Import experience sets, with their experiences' annotations and trial register, from another state root
+
+```text
+splinter experiences import [OPTIONS] --from <DIR> <SET>...
+```
+
+Arguments:
+
+- `<SET>...` (required): The sets, by id or unique prefix in that root.
+
+Options:
+
+- `--from <DIR>` (required): The state root to read the sets from (only read; import from a copy of a root another process writes)
 
 #### splinter experiences compare
 

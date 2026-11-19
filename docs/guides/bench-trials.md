@@ -159,6 +159,20 @@ order `--seed` fixes (drawn and printed when not given), at most N repairs of a 
 already graded counted. `--samples K` has the teacher continue each selected failure K times, each a repair of
 its own (keyed by its sample index), since one sample of a hard task is often wrong.
 
+## Moving experience between state roots
+
+```sh
+splinter experiences import --from ~/old-state blake3:c2ff3061    # sets by id or unique prefix in that root
+```
+
+`experiences import` reads experience sets from another state root and writes them into this one through the
+store's own API, whichever layout (loose or packed) either database has: every member experience checked against
+its content address and written under the same one, every annotation in the order written, every experience a
+relation names (with its annotations), the examiner's trial register for what was imported (so examination material
+stays out of every dataset here), and the set under its own id. A write that lands under another address is
+refused. Importing again writes nothing. The other root is only read; import from a copy of a root another process
+writes.
+
 ## Harness trials: one experience per conversation
 
 A benchmark run through a sven harness is several conversations, each answered by a

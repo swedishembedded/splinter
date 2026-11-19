@@ -7,7 +7,7 @@
 // them, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! The grammar of `experiences diagnose`, `experiences repair` and the strata `experiences compare`
+//! The grammar of `experiences diagnose`, `experiences repair`, `experiences import` and the strata `experiences compare`
 //! reports by.
 
 use std::path::PathBuf;
@@ -72,6 +72,19 @@ pub struct RepairArgs {
 
 fn failure_class(name: &str) -> Result<FailureClass, String> {
     FailureClass::parse(name)
+}
+
+/// `experiences import`: experience sets from another state root, each
+/// experience checked against its content address.
+#[derive(Debug, Args)]
+pub struct ImportArgs {
+    /// The state root to read the sets from (only read; import from a copy of
+    /// a root another process writes).
+    #[arg(long = "from", value_name = "DIR")]
+    pub from: PathBuf,
+    /// The sets, by id or unique prefix in that root.
+    #[arg(required = true, value_name = "SET")]
+    pub sets: Vec<String>,
 }
 
 /// The cutoffs of the difficulty strata, all or none.
