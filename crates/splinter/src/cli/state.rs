@@ -60,6 +60,11 @@ pub enum StateCommand {
         #[arg(long, value_name = "ARCHIVE")]
         since: Option<PathBuf>,
     },
+    /// Rewrite the experience database into the packed layout: a few large
+    /// files instead of one or more per experience, every object verified
+    /// on the way. A packed database is compacted. Stop every process using
+    /// the state first.
+    Pack,
     /// Unpack an archive (and the archives an incremental one was made
     /// after) into an empty state root, verifying everything first.
     Restore {

@@ -184,6 +184,13 @@ fn identical_content_is_one_source_and_blobs_are_shared_across_sources() {
 #[test]
 fn damaged_storage_is_refused_on_read() {
     let scratch = Scratch::new("corrupt");
+    // One file per object, which this test damages directly.
+    splinter_expdb::Database::open_as(
+        scratch.0.join("expdb"),
+        splinter_expdb::backend::Layout::Loose,
+        splinter_expdb::Config::default(),
+    )
+    .unwrap();
     let store = scratch.store();
     let id = store
         .put_source(&repository("2026-09-30T08:00:00.000Z", NOTES))

@@ -703,6 +703,7 @@ impl Session {
                 no_artifacts,
                 since,
             }) => emit(json, &state::archive(ctx, &file, no_artifacts, since)?),
+            Command::State(StateCommand::Pack) => emit(json, &state::pack(ctx)?),
             Command::State(StateCommand::Restore { files }) => {
                 emit(json, &state::restore(ctx, &files)?);
             }

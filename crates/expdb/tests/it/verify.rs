@@ -37,7 +37,7 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
 
 /// A database with three commits of entities, two blobs and a signal.
 fn populated(scratch: &Scratch) -> Database {
-    let db = scratch.open();
+    let db = scratch.open_loose();
     let mut collector = db
         .collector(&WriterIdentity::new("exp", "job", "node", 0))
         .unwrap();
@@ -196,7 +196,7 @@ fn a_snapshot_names_every_file_it_needs_and_copying_them_reproduces_it() {
     assert!(files.windows(2).all(|w| w[0] < w[1]), "sorted, each once");
 
     let copy = Scratch::new();
-    let other = copy.open();
+    let other = copy.open_loose();
     for path in &files {
         let bytes = std::fs::read(scratch.dir.path().join(path)).unwrap();
         assert!(other.fill(path, &bytes).unwrap(), "{path}");

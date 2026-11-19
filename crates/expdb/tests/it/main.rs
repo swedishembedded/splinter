@@ -28,6 +28,7 @@ mod ids;
 mod indexes;
 mod ordering;
 mod overlay;
+mod packed;
 mod processes;
 mod properties;
 mod queries;

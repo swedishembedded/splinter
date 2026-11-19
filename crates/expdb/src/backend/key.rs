@@ -11,7 +11,7 @@
 use crate::error::{Error, Result};
 
 /// What an object is, which decides where a backend puts it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     /// A sealed segment of records.
     Segment,
@@ -90,7 +90,7 @@ impl Kind {
 }
 
 /// The address of one object.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
     kind: Kind,
     name: String,

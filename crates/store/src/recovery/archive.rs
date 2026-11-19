@@ -17,6 +17,7 @@ use std::io::{self, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use splinter_expdb::backend::{Key, ObjectReader};
 use splinter_expdb::{Config, ContentId, Database};
 
 use super::tar::{Reader, Writer};
@@ -151,16 +152,42 @@ fn read_manifest(archive: &Path) -> Result<(Manifest, Members), StoreError> {
     Ok((manifest, members))
 }
 
-/// The digest and size of the file at `path`.
-fn describe(member: &str, path: &Path) -> Result<FileEntry, StoreError> {
-    let mut file = fs::File::open(path).map_err(|e| match e.kind() {
-        io::ErrorKind::NotFound => StoreError::Recovery(format!(
-            "{member} is missing from the state; run `splinter state repair` first"
-        )),
-        _ => io_error(path)(e),
-    })?;
+/// Where an archived file's bytes come from: an object of the database,
+/// in whichever layout it is stored, or a file of the state root.
+enum Origin {
+    Object(Key),
+    File(PathBuf),
+}
+
+impl Origin {
+    /// A reader over the bytes; a missing one is a state to repair first.
+    fn open<'a>(&self, db: &'a Database) -> Result<Box<dyn Read + 'a>, StoreError> {
+        let missing = |what: &dyn std::fmt::Display| {
+            StoreError::Recovery(format!(
+                "{what} is missing from the state; run `splinter state repair` first"
+            ))
+        };
+        match self {
+            Origin::Object(key) => match ObjectReader::new(db.backend(), key.clone()) {
+                Ok(reader) => Ok(Box::new(reader)),
+                Err(splinter_expdb::Error::NotFound { .. }) => {
+                    Err(missing(&format!("expdb/{}", key.relative_path())))
+                }
+                Err(other) => Err(other.into()),
+            },
+            Origin::File(path) => match fs::File::open(path) {
+                Ok(file) => Ok(Box::new(file)),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => Err(missing(&path.display())),
+                Err(e) => Err(io_error(path)(e)),
+            },
+        }
+    }
+}
+
+/// The digest and size of what `reader` holds, archived as `member`.
+fn describe(member: &str, reader: &mut dyn Read) -> Result<FileEntry, StoreError> {
     let mut hasher = blake3::Hasher::new();
-    let size = io::copy(&mut file, &mut hasher).map_err(io_error(path))?;
+    let size = io::copy(reader, &mut hasher).map_err(io_error(Path::new(member)))?;
     Ok(FileEntry {
         path: member.to_owned(),
         size,
@@ -295,12 +322,14 @@ impl Workspace {
         options: &ArchiveOptions,
     ) -> Result<Archived, StoreError> {
         let root = self.root();
-        let mut files: BTreeMap<String, (FileEntry, PathBuf)> = BTreeMap::new();
+        let mut files: BTreeMap<String, (FileEntry, Origin)> = BTreeMap::new();
         for relative in snapshot.files()? {
             let member = format!("expdb/{relative}");
-            let path = root.expdb().join(&relative);
-            let entry = describe(&member, &path)?;
-            files.insert(member, (entry, path));
+            let key = Key::from_relative(&relative).ok_or_else(|| {
+                StoreError::Recovery(format!("{member} is not a database object's name"))
+            })?;
+            let entry = describe(&member, &mut Origin::Object(key.clone()).open(db)?)?;
+            files.insert(member, (entry, Origin::Object(key)));
         }
         let mut artifacts = 0;
         if !options.no_artifacts {
@@ -316,14 +345,14 @@ impl Workspace {
                 }
                 let member = artifact.relative_path();
                 let path = root.path().join(&member);
-                let entry = describe(&member, &path)?;
+                let entry = describe(&member, &mut Origin::File(path.clone()).open(db)?)?;
                 if entry.blake3 != artifact.digest.hex() {
                     return Err(StoreError::Recovery(format!(
                         "artifact {} is corrupt on disk; run `splinter state verify --deep`",
                         artifact.digest
                     )));
                 }
-                files.insert(member, (entry, path));
+                files.insert(member, (entry, Origin::File(path)));
                 artifacts += 1;
             }
         }
@@ -346,10 +375,10 @@ impl Workspace {
         let total = files.len();
         let mut listed = Vec::with_capacity(total);
         let mut carry = Vec::new();
-        for (member, (mut entry, path)) in files {
+        for (member, (mut entry, origin)) in files {
             entry.base = base.get(&member) == Some(&entry.blake3);
             if !entry.base {
-                carry.push((member, entry.size, path));
+                carry.push((member, entry.size, origin));
             }
             listed.push(entry);
         }
@@ -371,8 +400,9 @@ impl Workspace {
                 zstd::stream::write::Encoder::new(BufWriter::new(file), COMPRESSION_LEVEL)?;
             let mut tar = Writer::new(encoder);
             tar.member(MANIFEST, manifest.len() as u64, manifest.as_slice())?;
-            for (member, size, path) in &carry {
-                tar.member(member, *size, fs::File::open(path)?)?;
+            for (member, size, origin) in &carry {
+                let reader = origin.open(db).map_err(io::Error::other)?;
+                tar.member(member, *size, reader)?;
             }
             let file = tar
                 .finish()?

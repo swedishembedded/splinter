@@ -15,7 +15,7 @@ use serde::Serialize;
 use serde_json::json;
 use splinter_store::maintenance::{Maintained, Pin, Storage};
 use splinter_store::recovery::{
-    ArchiveOptions, Archived, Loss, RepairOptions, Repaired, Restored, StateVerify,
+    ArchiveOptions, Archived, Loss, RepairOptions, Repaired, Restored, StatePacked, StateVerify,
 };
 use splinter_store::workspace::Workspace;
 
@@ -95,6 +95,13 @@ pub fn archive(
 /// [`Workspace::restore`].
 pub fn restore(ctx: &Context, archives: &[PathBuf]) -> Result<Restored, OrchestratorError> {
     Ok(Workspace::restore(ctx.root(), archives)?)
+}
+
+/// Rewrites the context's experience database into the packed layout, or
+/// compacts a packed one; see [`Workspace::pack_state`]. Not recorded as a
+/// run: a run's record would open the database being replaced.
+pub fn pack(ctx: &Context) -> Result<StatePacked, OrchestratorError> {
+    Ok(ctx.workspace().pack_state()?)
 }
 
 /// What `state unpin` reports.

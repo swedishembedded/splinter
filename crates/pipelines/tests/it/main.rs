@@ -86,6 +86,7 @@ mod sample_anchor;
 mod sealed_everywhere;
 mod solve_concurrency;
 mod solve_resume;
+mod state_layout;
 mod subjects;
 mod system_prompt;
 mod task_pick;

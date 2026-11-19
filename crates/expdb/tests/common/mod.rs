@@ -122,6 +122,17 @@ impl Scratch {
     pub fn open_with(&self, config: Config) -> Database {
         Database::open(self.dir.path(), config).unwrap()
     }
+
+    /// The database in the loose layout, one file per object, for a test
+    /// that damages or inspects those files.
+    pub fn open_loose(&self) -> Database {
+        Database::open_as(
+            self.dir.path(),
+            splinter_expdb::backend::Layout::Loose,
+            Config::default(),
+        )
+        .unwrap()
+    }
 }
 
 /// A task definition, instance and initial state for a coding task.

@@ -73,11 +73,11 @@ It is a single file however many arms the campaign runs, because the project dis
 file quota, not its size, is what a long run exhausts; saving a state is a
 compare-and-swap on the head, so a second controller on the same campaign is refused.
 
-`state status` reports what the database holds as files and what was written
+`state status` reports what the database holds and what was written
 off: `{"state", "storage": {"segments", "blob_packs", "index_runs", "pins",
 "history", "artifacts", "losses"}, "losses", "pins"}`. A dataset keeps the
 database as it was alive under a name (`pins` lists them); `state unpin <holder>`
-lets one go so `state maintain --collect` can free its files. Every commit leaves small files
+lets one go so `state maintain --collect` can free its files. Every commit leaves small objects
 behind, and a command that opens the database reads them all, so `state
 maintain` merges them, indexes what is not indexed and retires finished
 writers; nothing stored changes, and it is safe beside a running command.
@@ -87,6 +87,40 @@ files no commit made official. Its report is `{"run", "before", "after",
 "segment_groups", "blob_groups", "writers_retired", "removed",
 "orphan_artifacts"}` with the last two `null` unless `--collect` was given.
 State written before the experience database is not read: regenerate it.
+
+### Layout
+
+The database's objects (segments of records, blob packs, manifests, index
+runs, signals) are immutable and named by the hash of their bytes. A state
+root made by this version keeps them **packed**: appended to
+`<state>/expdb/packs/<n>.pack` files of up to 1 GiB, with the append-only
+`packs/journal` naming where each one lies. The few mutable pointers stay
+small files: `refs/` (`refs/format` names the layout), `pins/` and
+`overlay/`. A state therefore holds a handful of files whatever number of
+experiences it holds, where the former **loose** layout kept one file per
+object, three or four per ingested experience, which exhausts a
+file-counting quota long before its bytes do.
+
+Every write takes an exclusive lock on the journal, appends the object's
+bytes to the newest pack and syncs them, then appends one journal entry
+naming them and syncs it: an object exists once its entry is whole. A process
+killed mid-write leaves bytes no entry names, or a torn last entry; readers
+never see either and the next writer cuts both off. Writers in several
+processes take turns on the lock; a filesystem without locks refuses the
+write. Damage inside the journal is reported, never cut away. Removing or
+collecting an object only records that it is gone; its bytes stay in the
+pack until the state is packed again.
+
+A state in the loose layout is read and written as it is. `state pack`
+rewrites it into the packed layout: the new database is built beside the old
+one (`expdb.packing`), every object is checked against its name and read
+back, and only then is it moved into place and the old one deleted. A pack
+that dies before the move leaves the old database in use; one that dies
+during it is finished by the next command that opens the state. Stop every
+process using the state first: a write to it while it is copied is detected
+and the pack refused. On a packed state, `state pack` compacts: only live
+objects are copied. A binary older than the packed layout refuses a packed
+state instead of writing beside it.
 
 ### Archive and recovery
 
@@ -111,7 +145,7 @@ wherever it would have been used.
 ## Related
 
 - The commands are `state status`, `state maintain`, `state unpin`, `state verify`, `state repair`,
-  `state archive` and `state restore` in the [command reference](cli.md#splinter-state).
+  `state archive`, `state restore` and `state pack` in the [command reference](cli.md#splinter-state).
 - The JSON each prints is in [Output and exit status](output.md).
 - The experience database is the `splinter-expdb` crate; its specification is in the repository under
   `crates/expdb`.

@@ -12,16 +12,12 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::backend::{Key, Kind, PosixBackend, StorageBackend};
+use crate::backend::{Key, Kind, Layout, StorageBackend, FORMAT_NAME};
 use crate::clock::{Clock, SystemClock};
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::id::ContentId;
 use crate::manifest::Manifest;
-
-/// The marker that says a directory is a database, and of which format.
-const FORMAT_NAME: &str = "format";
-const FORMAT_TEXT: &[u8] = b"splinter-expdb 2\n";
 
 /// An open database. Cheap to clone; clones share nothing but the files.
 #[derive(Clone)]
@@ -33,17 +29,25 @@ pub struct Database {
 }
 
 impl Database {
-    /// Opens the database under `root`, creating it if the directory is new.
+    /// Opens the database under `root` in the layout it holds, creating a
+    /// packed one if the directory holds none.
     pub fn open(root: impl AsRef<Path>, config: Config) -> Result<Self> {
-        Self::with_backend(
-            Arc::new(PosixBackend::new(root.as_ref())),
-            config,
-            Arc::new(SystemClock),
-        )
+        Self::open_as(root, Layout::Packed, config)
     }
 
-    /// Opens a database over any backend and clock. A store holding another
-    /// format is refused rather than written into.
+    /// Opens the database under `root` in the layout it holds, creating one
+    /// in `layout` if the directory holds none. A root that already holds
+    /// the other layout opens in that one: the marker decides, not the
+    /// caller.
+    pub fn open_as(root: impl AsRef<Path>, layout: Layout, config: Config) -> Result<Self> {
+        let root = root.as_ref();
+        let layout = Layout::establish(root, layout)?;
+        Self::with_backend(layout.backend(root), config, Arc::new(SystemClock))
+    }
+
+    /// Opens a database over any backend and clock. A store whose format
+    /// marker names another layout than the backend's is refused rather
+    /// than written into.
     pub fn with_backend(
         backend: Arc<dyn StorageBackend>,
         config: Config,
@@ -51,10 +55,14 @@ impl Database {
     ) -> Result<Self> {
         config.validate()?;
         let marker = Key::new(Kind::Ref, FORMAT_NAME)?;
-        if !backend.write_once(&marker, FORMAT_TEXT)? && backend.read(&marker)? != FORMAT_TEXT {
+        let wanted = backend.layout().marker();
+        if !backend.write_once(&marker, wanted)? && backend.read(&marker)? != wanted {
             return Err(Error::corrupt(
                 "database format marker",
-                "this is not a splinter-expdb 2 store",
+                format!(
+                    "this is not a {} store",
+                    String::from_utf8_lossy(wanted).trim()
+                ),
             ));
         }
         Ok(Self {

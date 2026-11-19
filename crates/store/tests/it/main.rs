@@ -24,4 +24,5 @@ mod recovery;
 mod run_log;
 mod source_store;
 mod stage_ledger;
+mod state_layout;
 mod task_store;

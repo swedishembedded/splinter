@@ -226,7 +226,13 @@ fn releasing_a_candidate_again_completes_or_repeats_but_never_duplicates() {
 
     // The process died after the release was committed and before the alias
     // moved: no alias points anywhere.
-    std::fs::remove_dir_all(ctx.root().expdb().join("signals/pointer/alias-default")).unwrap();
+    let db = splinter_expdb::Database::open(ctx.root().expdb(), Default::default()).unwrap();
+    let backend = db.backend();
+    for key in backend.list(splinter_expdb::backend::Kind::Signal).unwrap() {
+        if key.name().starts_with("pointer/alias-default/") {
+            backend.remove(&key).unwrap();
+        }
+    }
     assert_eq!(store.alias("default").unwrap(), None);
     let completed = decide(&ctx, &candidate);
     assert_eq!(completed.release, Some(id.clone()));

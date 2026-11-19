@@ -35,7 +35,7 @@ fn noise(len: usize, seed: u64) -> Vec<u8> {
 #[test]
 fn a_put_object_reads_back_and_its_ref_names_its_bytes() {
     let scratch = Scratch::new();
-    let mut blobs = BlobStore::open(&scratch.open()).unwrap();
+    let mut blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let data = noise(300_000, 1);
     let blob = blobs.put(&data).unwrap();
     assert_eq!(blob.id, ContentId::of(&data));
@@ -46,7 +46,7 @@ fn a_put_object_reads_back_and_its_ref_names_its_bytes() {
 #[test]
 fn putting_the_same_bytes_twice_stores_them_once() {
     let scratch = Scratch::new();
-    let mut blobs = BlobStore::open(&scratch.open()).unwrap();
+    let mut blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let data = noise(500_000, 2);
     blobs.put(&data).unwrap();
     let after_first = blobs.stats();
@@ -58,7 +58,7 @@ fn putting_the_same_bytes_twice_stores_them_once() {
 #[test]
 fn an_edit_inside_a_large_object_stores_only_the_chunks_it_touched() {
     let scratch = Scratch::new();
-    let mut blobs = BlobStore::open(&scratch.open()).unwrap();
+    let mut blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let original = noise(4_000_000, 3);
     blobs.put(&original).unwrap();
     let before = blobs.stats();
@@ -84,7 +84,7 @@ fn an_edit_inside_a_large_object_stores_only_the_chunks_it_touched() {
 #[test]
 fn flushed_objects_are_readable_by_a_store_opened_later() {
     let scratch = Scratch::new();
-    let db = scratch.open();
+    let db = scratch.open_loose();
     let data = noise(900_000, 4);
     let blob = {
         let mut blobs = BlobStore::open(&db).unwrap();
@@ -100,7 +100,7 @@ fn flushed_objects_are_readable_by_a_store_opened_later() {
 #[test]
 fn an_empty_object_is_a_valid_object() {
     let scratch = Scratch::new();
-    let mut blobs = BlobStore::open(&scratch.open()).unwrap();
+    let mut blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let blob = blobs.put(b"").unwrap();
     assert_eq!(blob.len, 0);
     assert_eq!(blobs.get(&blob).unwrap(), b"");
@@ -109,7 +109,7 @@ fn an_empty_object_is_a_valid_object() {
 #[test]
 fn a_flipped_byte_in_a_pack_is_an_error_not_silently_wrong_data() {
     let scratch = Scratch::new();
-    let db = scratch.open();
+    let db = scratch.open_loose();
     let data = noise(200_000, 5);
     let blob = {
         let mut blobs = BlobStore::open(&db).unwrap();
@@ -134,7 +134,7 @@ fn a_flipped_byte_in_a_pack_is_an_error_not_silently_wrong_data() {
 #[test]
 fn getting_an_unknown_blob_is_not_found() {
     let scratch = Scratch::new();
-    let blobs = BlobStore::open(&scratch.open()).unwrap();
+    let blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let missing = splinter_expdb::blob::BlobRef {
         id: ContentId::of(b"never stored"),
         len: 12,
@@ -162,7 +162,7 @@ fn repository() -> BTreeMap<String, Vec<u8>> {
 #[test]
 fn a_tree_reads_back_every_file_by_path() {
     let scratch = Scratch::new();
-    let mut blobs = BlobStore::open(&scratch.open()).unwrap();
+    let mut blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let files = repository();
     let root = Tree::write(&mut blobs, &files).unwrap();
     for (path, content) in &files {
@@ -182,7 +182,7 @@ fn a_tree_reads_back_every_file_by_path() {
 #[test]
 fn identical_trees_have_the_same_root() {
     let scratch = Scratch::new();
-    let mut blobs = BlobStore::open(&scratch.open()).unwrap();
+    let mut blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let a = Tree::write(&mut blobs, &repository()).unwrap();
     let b = Tree::write(&mut blobs, &repository()).unwrap();
     assert_eq!(a, b);
@@ -191,7 +191,7 @@ fn identical_trees_have_the_same_root() {
 #[test]
 fn changing_one_file_stores_that_file_and_its_ancestor_directories_only() {
     let scratch = Scratch::new();
-    let mut blobs = BlobStore::open(&scratch.open()).unwrap();
+    let mut blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let root = Tree::write(&mut blobs, &repository()).unwrap();
     let before = blobs.stats();
 
@@ -215,7 +215,7 @@ fn changing_one_file_stores_that_file_and_its_ancestor_directories_only() {
 #[test]
 fn a_missing_path_in_a_tree_is_not_found() {
     let scratch = Scratch::new();
-    let mut blobs = BlobStore::open(&scratch.open()).unwrap();
+    let mut blobs = BlobStore::open(&scratch.open_loose()).unwrap();
     let root = Tree::write(&mut blobs, &repository()).unwrap();
     assert!(Tree::read_file(&blobs, root, "src/none.rs").is_err());
 }

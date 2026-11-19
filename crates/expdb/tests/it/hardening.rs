@@ -524,7 +524,7 @@ fn files_under(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
 #[test]
 fn a_file_a_compaction_just_retired_gets_the_whole_grace_period_before_it_can_be_collected() {
     let scratch = Scratch::new();
-    let db = scratch.open();
+    let db = scratch.open_loose();
     // A reader that opened a snapshot before the compaction still names the
     // inputs; they must outlive the compaction by the grace period, however
     // old they already were.

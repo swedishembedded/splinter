@@ -321,6 +321,25 @@ fn state_reports_the_database_and_maintenance_keeps_what_is_stored() {
     assert_eq!(code, 0);
     assert_eq!(copy["sources"].as_array().unwrap().len(), 1);
 
+    // Packing it again (a new state is packed already) keeps it whole.
+    let (code, packed) = splinter(&elsewhere, &["state", "pack"]);
+    assert_eq!(code, 0, "{packed}");
+    assert_eq!(
+        keys(&packed),
+        [
+            "bytes",
+            "files_after",
+            "files_before",
+            "from",
+            "objects",
+            "state"
+        ]
+    );
+    assert_eq!(packed["from"], "packed");
+    let (code, copy) = splinter(&elsewhere, &["source", "list"]);
+    assert_eq!(code, 0);
+    assert_eq!(copy["sources"].as_array().unwrap().len(), 1);
+
     let (code, list) = splinter(&state, &["source", "list"]);
     assert_eq!(code, 0);
     assert_eq!(

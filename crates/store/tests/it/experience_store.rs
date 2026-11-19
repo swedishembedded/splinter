@@ -282,6 +282,13 @@ fn an_object_that_no_longer_matches_its_address_is_an_error_not_silently_accepte
 #[test]
 fn damaged_storage_is_an_error_not_a_wrong_answer() {
     let scratch = Scratch::new("damaged");
+    // One file per object, which this test damages directly.
+    splinter_expdb::Database::open_as(
+        scratch.0.join("expdb"),
+        splinter_expdb::backend::Layout::Loose,
+        splinter_expdb::Config::default(),
+    )
+    .unwrap();
     let id = scratch.store().put(&experience("quick brown fox")).unwrap();
     let segments: Vec<_> = walk(&scratch.0.join("expdb/segments"));
     assert!(!segments.is_empty());

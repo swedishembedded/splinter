@@ -212,16 +212,22 @@ impl Workspace {
         if let Some(db) = slot.as_ref() {
             return Ok(db.clone());
         }
+        crate::recovery::settle(&self.shared.root)?;
         let db = Database::open(self.shared.root.expdb(), Config::default())?;
         *slot = Some(db.clone());
         Ok(db)
+    }
+
+    /// Whether this workspace (or a clone of it) has opened its database.
+    pub(crate) fn opened(&self) -> bool {
+        locked(&self.shared.database).is_some()
     }
 
     /// Whether a database exists under the root, or has been opened by this
     /// process. A command that only plans, or reads, must not create one: what
     /// is absent reads as empty.
     pub(crate) fn initialised(&self) -> bool {
-        locked(&self.shared.database).is_some()
+        self.opened()
             || self
                 .shared
                 .root
@@ -229,6 +235,7 @@ impl Workspace {
                 .join("refs")
                 .join("format")
                 .exists()
+            || crate::recovery::interrupted(&self.shared.root)
     }
 
     /// Raises the signal `name` with `note`; whether this call raised it.

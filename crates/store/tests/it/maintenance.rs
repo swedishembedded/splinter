@@ -163,6 +163,13 @@ fn a_long_running_reader_survives_the_files_it_opened_being_collected() {
         std::env::temp_dir().join(format!("splinter-maint-reader-{}", std::process::id())),
     );
     let _ = std::fs::remove_dir_all(root.path());
+    // One file per object, which this test damages directly.
+    splinter_expdb::Database::open_as(
+        root.expdb(),
+        splinter_expdb::backend::Layout::Loose,
+        splinter_expdb::Config::default(),
+    )
+    .unwrap();
     let writer = ExperienceStore::new(&Workspace::at(&root));
     let ids: Vec<_> = (0..6)
         .map(|n| writer.put(&experience(n)).unwrap())

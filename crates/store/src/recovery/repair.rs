@@ -23,6 +23,7 @@ use super::{loss_name, Loss};
 use crate::artifacts::{Artifact, ArtifactState, ArtifactStore};
 use crate::error::StoreError;
 use crate::workspace::Workspace;
+use crate::StateRoot;
 use splinter_core::digest::Digest;
 
 /// What is wrong with an artifact's file.
@@ -334,9 +335,29 @@ fn fetch(db: &Database, wants: &[Want], copies: &[PathBuf]) -> Result<HashSet<us
             break;
         }
         if copy.is_dir() {
+            // The copy's database, in whichever layout it holds; its objects
+            // are read through it rather than as files.
+            let copy_db = splinter_expdb::backend::open_existing(&StateRoot::new(copy).expdb())?;
             for (index, want) in wants.iter().enumerate() {
+                if filled.contains(&index) {
+                    continue;
+                }
+                if let (Some(backend), Some(path)) = (copy_db.as_ref(), want.database.as_deref()) {
+                    let Some(key) = splinter_expdb::backend::Key::from_relative(path) else {
+                        continue;
+                    };
+                    let bytes = match backend.read(&key) {
+                        Ok(bytes) => bytes,
+                        Err(splinter_expdb::Error::NotFound { .. }) => continue,
+                        Err(other) => return Err(other.into()),
+                    };
+                    if place(db, want, &mut bytes.as_slice(), bytes.len() as u64)? {
+                        filled.insert(index);
+                    }
+                    continue;
+                }
                 let candidate = copy.join(&want.member);
-                if filled.contains(&index) || !candidate.is_file() {
+                if !candidate.is_file() {
                     continue;
                 }
                 let io = |source| StoreError::Io {

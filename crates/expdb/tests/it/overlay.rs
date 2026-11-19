@@ -19,16 +19,15 @@ use splinter_expdb::model::Outcome;
 use splinter_expdb::overlay::ReplayOverlay;
 use splinter_expdb::{ContentId, WriterIdentity};
 
-fn segment_bytes(root: &std::path::Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
-    let mut found = Vec::new();
-    for dir in std::fs::read_dir(root.join("segments")).unwrap() {
-        for file in std::fs::read_dir(dir.unwrap().path()).unwrap() {
-            let path = file.unwrap().path();
-            found.push((path.clone(), std::fs::read(path).unwrap()));
-        }
-    }
-    found.sort();
-    found
+/// Every segment and its bytes, as the database stores them.
+fn segment_bytes(db: &splinter_expdb::Database) -> Vec<(String, Vec<u8>)> {
+    let backend = db.backend();
+    backend
+        .list(splinter_expdb::backend::Kind::Segment)
+        .unwrap()
+        .into_iter()
+        .map(|key| (key.name().to_owned(), backend.read(&key).unwrap()))
+        .collect()
 }
 
 #[test]
@@ -40,7 +39,7 @@ fn priorities_change_without_touching_a_single_byte_of_the_experience() {
         .unwrap();
     let (decisions, _) = attempt(&mut c, 1, "p", 3, Outcome::Pass);
     c.flush().unwrap();
-    let before = segment_bytes(scratch.dir.path());
+    let before = segment_bytes(&db);
 
     let mut overlay = ReplayOverlay::load(&db, "trainer-a").unwrap();
     for (n, d) in decisions.iter().enumerate() {
@@ -49,7 +48,7 @@ fn priorities_change_without_touching_a_single_byte_of_the_experience() {
     }
     overlay.save(&db).unwrap();
 
-    assert_eq!(segment_bytes(scratch.dir.path()), before);
+    assert_eq!(segment_bytes(&db), before);
 }
 
 #[test]

@@ -95,7 +95,9 @@ fix, before anything is captured or generated. A `--dry-run` only plans and does
 "index_runs", "problems"}, "artifacts", "artifacts_unchecked"}`. `state repair`:
 `{"filled", "rebuilt", "quarantined", "lost", "unresolved"}`. `state archive`:
 `{"snapshot", "files", "carried", "artifacts", "bytes"}`. `state restore`:
-`{"files", "artifacts", "verified"}`.
+`{"files", "artifacts", "verified"}`. `state pack`: `{"state", "from",
+"objects", "bytes", "files_before", "files_after"}`, where `from` is the
+layout the database was in (`loose` or `packed`).
 
 `release list`: `{"releases": [{"id", "created_at", "candidate",
 "parent", "adapter_digest", "aliases"}]}`. `release`: `{"run",

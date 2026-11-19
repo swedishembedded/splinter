@@ -11,10 +11,17 @@
 //! an object store.
 
 mod key;
+mod layout;
+mod packed;
 mod posix;
+mod repack;
 
 pub use key::{Key, Kind};
+pub(crate) use layout::FORMAT_NAME;
+pub use layout::{open_existing, Layout};
+pub use packed::PackedBackend;
 pub use posix::PosixBackend;
+pub use repack::{repack, Repacked};
 
 use std::time::SystemTime;
 
@@ -60,4 +67,61 @@ pub trait StorageBackend: Send + Sync {
     }
     /// The write size this storage prefers; writers batch up to it.
     fn preferred_write_bytes(&self) -> usize;
+    /// How the objects lie on disk, which the database's format marker
+    /// records so a binary that knows only another layout refuses the root.
+    fn layout(&self) -> Layout {
+        Layout::Loose
+    }
+}
+
+/// Reads one object in pieces of the backend's preferred size, so an object
+/// of gigabytes can be streamed (into an archive, say) without holding it.
+pub struct ObjectReader<'a> {
+    backend: &'a dyn StorageBackend,
+    key: Key,
+    at: u64,
+    len: u64,
+}
+
+impl<'a> ObjectReader<'a> {
+    /// A reader over the object under `key`, which must exist.
+    pub fn new(backend: &'a dyn StorageBackend, key: Key) -> Result<Self> {
+        let len = backend.len(&key)?;
+        Ok(Self {
+            backend,
+            key,
+            at: 0,
+            len,
+        })
+    }
+
+    /// The object's size in bytes.
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// Whether the object is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+impl std::io::Read for ObjectReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.len - self.at;
+        let want = usize::try_from(left)
+            .unwrap_or(usize::MAX)
+            .min(buf.len())
+            .min(self.backend.preferred_write_bytes());
+        if want == 0 {
+            return Ok(0);
+        }
+        let bytes = self
+            .backend
+            .read_range(&self.key, self.at, want)
+            .map_err(std::io::Error::other)?;
+        buf[..want].copy_from_slice(&bytes);
+        self.at += want as u64;
+        Ok(want)
+    }
 }

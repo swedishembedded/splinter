@@ -13,7 +13,9 @@ use std::fmt::Write as _;
 
 use splinter_sdk::state::{StateStorage, Unpinned};
 use splinter_sdk::store::maintenance::{Maintained, Storage};
-use splinter_sdk::store::recovery::{Archived, ArtifactFault, Repaired, Restored, StateVerify};
+use splinter_sdk::store::recovery::{
+    Archived, ArtifactFault, Repaired, Restored, StatePacked, StateVerify,
+};
 
 use crate::output::Report;
 
@@ -163,6 +165,20 @@ impl Report for Restored {
         format!(
             "restored {} file(s) ({} artifact(s)); the state verified before it was put in place\n",
             self.files, self.artifacts
+        )
+    }
+}
+
+impl Report for StatePacked {
+    fn human(&self) -> String {
+        format!(
+            "packed the {} database of {}: {} object(s), {} bytes, verified; {} file(s) before, {} now\n",
+            self.from,
+            self.state.display(),
+            self.objects,
+            self.bytes,
+            self.files_before,
+            self.files_after
         )
     }
 }

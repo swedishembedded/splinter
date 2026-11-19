@@ -25,6 +25,7 @@
 //!   first; [`Workspace::repair`] fixes what can be fixed.
 
 mod archive;
+mod relayout;
 mod repair;
 pub(crate) mod tar;
 
@@ -35,6 +36,8 @@ use crate::error::StoreError;
 use crate::workspace::Workspace;
 
 pub use archive::{ArchiveOptions, Archived, Restored};
+pub use relayout::StatePacked;
+pub(crate) use relayout::{interrupted, settle};
 pub use repair::{ArtifactFault, ArtifactProblem, RepairOptions, Repaired, StateVerify};
 
 /// The name of the signal that records a loss.

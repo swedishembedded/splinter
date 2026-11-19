@@ -188,6 +188,13 @@ fn an_incremental_archive_carries_only_what_is_new_and_restores_with_its_base() 
 fn what_goes_missing_is_found_and_filled_from_any_copy() {
     let scratch = Scratch::new("repair");
     let source = scratch.root("a");
+    // One file per object, which this test damages directly.
+    splinter_expdb::Database::open_as(
+        source.expdb(),
+        splinter_expdb::backend::Layout::Loose,
+        splinter_expdb::Config::default(),
+    )
+    .unwrap();
     let (ws, adapter, dataset, _) = populated(&source);
     let archive = scratch.file("state.tar.zst");
     ws.archive(&archive, &ArchiveOptions::default()).unwrap();
@@ -257,6 +264,13 @@ fn what_goes_missing_is_found_and_filled_from_any_copy() {
 fn a_loss_nothing_can_restore_is_written_off_in_a_ledger_only_when_accepted() {
     let scratch = Scratch::new("ledger");
     let source = scratch.root("a");
+    // One file per object, which this test damages directly.
+    splinter_expdb::Database::open_as(
+        source.expdb(),
+        splinter_expdb::backend::Layout::Loose,
+        splinter_expdb::Config::default(),
+    )
+    .unwrap();
     let (ws, adapter, _, _) = populated(&source);
     let artifacts = ArtifactStore::new(&ws, &source);
     std::fs::remove_file(artifacts.path(&adapter).unwrap()).unwrap();

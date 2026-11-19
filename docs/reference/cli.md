@@ -186,6 +186,7 @@ Every command takes these.
   - [splinter state verify](#splinter-state-verify) - Check the database and every file it tracks, and report each one that is missing or damaged
   - [splinter state repair](#splinter-state-repair) - Recover what verify finds
   - [splinter state archive](#splinter-state-archive) - Pack the database and the files it tracks into one archive
+  - [splinter state pack](#splinter-state-pack) - Rewrite the experience database into the packed layout
   - [splinter state restore](#splinter-state-restore) - Unpack an archive (and the archives an incremental one was made after) into an empty state root, verifying everything first
 - [splinter lineage](#splinter-lineage) - Trace any artifact up to where it came from (down to source bytes) and down to everything that came from it
 
@@ -1416,7 +1417,7 @@ Subcommands:
 
 #### splinter harness optimise
 
-Search a space of variants of a baseline harness for one that verifiably beats it: each candidate is run on the task set through sven, its attempts verified by the tasks' own verifiers and compared with the baseline's (a family counted once). A candidate is promoted only when the promotion rule finds a gain (its two-sided interval resampling families above zero, over at least six families, recorded as not exam-verified), no family got worse and, with `--gate evidence`, the evidence gate's e-process crosses its level too; the promotion moves the `harness/champion` pointer
+Search a space of variants of a baseline harness for one that verifiably beats it: each candidate is run on the task set through sven, its attempts verified by the tasks' own verifiers and compared with the baseline's (a family counted once). A candidate is promoted only when the promotion rule finds a gain (its two-sided interval resampling families above zero, recorded as not exam-verified), no family got worse and, with `--gate evidence`, the evidence gate's e-process crosses its level too; the promotion moves the `harness/champion` pointer
 
 ```text
 splinter harness optimise [OPTIONS] --baseline <FILE> --evaluations <N> --search-seed <N> <TASKSET-ID>
@@ -1644,6 +1645,7 @@ Options:
 - `--jobs <N>`: Repairs run at once [default: 8]
 - `--per-task <N>`: The most repairs of one task, the ones a run already graded counted: spreads a run across task families.
 - `--seed <N>`: The seed that orders the tasks and the attempts of each (drawn and printed when not given)
+- `--samples <K>`: Teacher continuations of each selected failure, each a repair of its own (default 1)
 - `--class <CLASS>...`: Only failures of this class (repeatable; `wrong_content`, `tool`, ...)
 
 #### splinter experiences compare
@@ -2299,6 +2301,7 @@ Subcommands:
 - [`verify`](#splinter-state-verify) - Check the database and every file it tracks, and report each one that is missing or damaged
 - [`repair`](#splinter-state-repair) - Recover what verify finds
 - [`archive`](#splinter-state-archive) - Pack the database and the files it tracks into one archive
+- [`pack`](#splinter-state-pack) - Rewrite the experience database into the packed layout
 - [`restore`](#splinter-state-restore) - Unpack an archive (and the archives an incremental one was made after) into an empty state root, verifying everything first
 
 #### splinter state status
@@ -2374,6 +2377,14 @@ Options:
 
 - `--no-artifacts`: Leave the artifacts (adapters, datasets) out.
 - `--since <ARCHIVE>`: An earlier archive: carry only what it lacks. Restore the result together with that archive.
+
+#### splinter state pack
+
+Rewrite the experience database into the packed layout: a few large files instead of one or more per experience, every object verified on the way. A packed database is compacted. Stop every process using the state first
+
+```text
+splinter state pack [OPTIONS]
+```
 
 #### splinter state restore
 
