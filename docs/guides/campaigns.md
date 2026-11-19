@@ -28,6 +28,7 @@ be rolled back to, and neither can the current champion.
 name = "support-4b"            # letters, digits, -, _ and . (the ledger directory's name)
 generations = 3
 base = "local:<models>/Qwen/Qwen3-4B"
+# champion = "local:<models>/Qwen/Qwen3-4B+<adapter>"  # optional: generation 0's champion, an adapter on the base
 seed = "12126459309185286876"  # optional; drawn, printed and recorded when left out
 
 [rollout]
@@ -93,6 +94,10 @@ serving_build = "brain-e9044bbeb"  # declared by both sides; bench pairs only ru
 dev_set = "eval"               # optional: bench run --set for the dev collection
 sven_build = "<sven-binary>"   # optional: BENCH_SVEN_BUILD
 ```
+
+Generation 0's champion is the base, unless `champion` names an adapter on the base: then that model practises first,
+every candidate is still trained from the base, the gate compares the first candidate with it by the adapter's `sha256:`
+digest, and `rollback --to 0` returns to it. A campaign is continued from the champion it began with.
 
 A seed above what a TOML integer holds is written as a string, decimal or `0x` hex. A campaign is continued as it began:
 a changed `name`, `base`, `[rollout]`, `[curate]` or `[train]`, other practice material (by its digests), or other
@@ -211,4 +216,4 @@ The records (`summary`):
 | `gate` | `promoted`, `rule`, `exam_verified`, `reasons`, `pair`, and the aggregates of each verdict that verified |
 | `promote`, `rollback/N` | `kind` (`promote`, `keep`, `rollback`), `generation`, `from`, `to`, `reason` |
 
-The champion is the base until the first promotion, and then what the newest `promote` or `rollback` record moved it to.
+The champion is generation 0's (the base, or `champion`) until the first promotion, and then what the newest `promote` or `rollback` record moved it to.

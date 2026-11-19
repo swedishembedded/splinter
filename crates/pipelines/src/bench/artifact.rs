@@ -305,7 +305,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 /// The sha256 of the file at `path`, read without holding it in memory.
-fn sha256_file(path: &Path) -> io::Result<String> {
+pub(crate) fn sha256_file(path: &Path) -> io::Result<String> {
     let mut hasher = Sha256::new();
     io::copy(&mut BufReader::new(File::open(path)?), &mut hasher)?;
     Ok(hex(hasher.finalize()))

@@ -26,8 +26,8 @@ use splinter_store::stage_ledger::{
 };
 
 use super::account::{
-    base_of, latest_per_generation, next_generation, rates, report, spent, CampaignReport,
-    CurateRecord, IngestRecord, RolloutRecord, TrainRecord,
+    base_of, first_champion, latest_per_generation, next_generation, rates, report, spent,
+    CampaignReport, CurateRecord, IngestRecord, RolloutRecord, TrainRecord,
 };
 use super::champion::{self, Move};
 use super::curriculum::{self, Planned};
@@ -88,7 +88,10 @@ pub struct CampaignController<'p> {
     ctx: &'p Context,
     spec: CampaignSpec,
     seed: u64,
+    /// What every candidate is trained from.
     base: Model,
+    /// Generation 0's champion: the base, or the adapter the campaign names.
+    first: Model,
     ledger: StageLedger,
     parts: Parts<'p>,
 }
@@ -250,11 +253,13 @@ impl<'p> CampaignController<'p> {
             )));
         }
         let base = base_of(&spec)?;
+        let first = first_champion(&spec)?;
         Ok(Self {
             ctx,
             spec,
             seed,
             base,
+            first,
             ledger,
             parts,
         })
@@ -295,7 +300,7 @@ impl<'p> CampaignController<'p> {
     /// `to` was never a champion or is the champion now, the reason is
     /// empty, or the ledger.
     pub fn rollback(&self, to: u32, reason: &str) -> Result<Move, CampaignError> {
-        champion::rollback(&self.ledger, &self.base, to, reason)
+        champion::rollback(&self.ledger, &self.first, to, reason)
     }
 
     /// What the campaign has done, read from its ledger.
@@ -306,7 +311,7 @@ impl<'p> CampaignController<'p> {
         report(
             &self.spec.name,
             self.seed,
-            &self.base,
+            &self.first,
             &self.ledger.commits()?,
         )
     }
@@ -369,7 +374,7 @@ impl<'p> CampaignController<'p> {
     /// budget stopped it before a stage.
     fn generation(&mut self, generation: u32) -> Result<Option<Stopped>, CampaignError> {
         let commits = self.ledger.commits()?;
-        let (champion, _) = champion::history(&self.base, &commits)?;
+        let (champion, _) = champion::history(&self.first, &commits)?;
         // The tasks of a generation follow from the rollouts before it alone, so
         // a resumed generation draws the tasks it drew the first time.
         let rates = rates(&self.spec, &commits, generation)?;

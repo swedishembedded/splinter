@@ -30,8 +30,14 @@ pub struct CampaignSpec {
     /// Generations to run. Not part of its identity: a campaign that ran its
     /// generations continues when it is given more.
     pub generations: u32,
-    /// The base policy, generation 0's champion: a `local:` checkpoint.
+    /// The base every candidate is trained from: a `local:` checkpoint. It
+    /// is generation 0's champion unless `champion` names another.
     pub base: String,
+    /// Generation 0's champion when it is not the base: an adapter on the
+    /// base (`local:<base>+<adapter>`), for a campaign that continues from a
+    /// model trained before it. Candidates are still trained from the base.
+    #[serde(default)]
+    pub champion: Option<String>,
     /// The seed every generation's draws derive from; drawn, printed and
     /// recorded in the ledger when left out, and read back from it on resume.
     /// Written as an integer, or as a string (decimal or `0x` hex) for a
@@ -255,6 +261,39 @@ impl CampaignSpec {
         }
     }
 
+    /// Generation 0's champion as a model reference: `champion`, or the
+    /// base when there is none.
+    ///
+    /// # Errors
+    /// The base's, or a champion that is not an adapter on the base.
+    pub fn champion_ref(&self) -> Result<ModelRef, CampaignError> {
+        let base = self.base_ref()?;
+        let Some(champion) = &self.champion else {
+            return Ok(base);
+        };
+        let parsed: ModelRef = champion
+            .parse()
+            .map_err(|e| CampaignError::Config(format!("champion {champion:?}: {e}")))?;
+        match (&parsed, &base) {
+            (
+                ModelRef::Local {
+                    checkpoint,
+                    adapter: Some(_),
+                    ..
+                },
+                ModelRef::Local {
+                    checkpoint: base_checkpoint,
+                    ..
+                },
+            ) if checkpoint == base_checkpoint => Ok(parsed),
+            _ => Err(CampaignError::Config(format!(
+                "champion {champion:?}: generation 0's champion is an adapter on the base {:?} \
+                 (local:<base>+<adapter>)",
+                self.base
+            ))),
+        }
+    }
+
     /// Refuses a specification no campaign can run.
     ///
     /// # Errors
@@ -308,7 +347,7 @@ impl CampaignSpec {
         if self.budget.gpu_hours.is_some_and(|h| h.is_nan() || h < 0.0) {
             return refuse("budget.gpu_hours: not negative".into());
         }
-        self.base_ref().map(|_| ())
+        self.champion_ref().map(|_| ())
     }
 
     /// The part of the specification that is the campaign's identity: all
@@ -318,12 +357,18 @@ impl CampaignSpec {
     /// own identity.
     #[must_use]
     pub fn identity(&self) -> serde_json::Value {
-        serde_json::json!({
+        let mut identity = serde_json::json!({
             "name": self.name,
             "base": self.base,
             "rollout": self.rollout,
             "curate": self.curate,
             "train": self.train,
-        })
+        });
+        // Only a campaign that names one carries it, so the campaigns begun
+        // before keep their identity.
+        if let Some(champion) = &self.champion {
+            identity["champion"] = champion.clone().into();
+        }
+        identity
     }
 }

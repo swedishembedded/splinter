@@ -28,6 +28,7 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use serde_json::Value;
+use sha2::Digest as _;
 use splinter_eval::promotion::{Reason, Rejection, Role};
 use splinter_pipelines::campaign::{CampaignError, MoveKind, Stopped, CAMPAIGN_UNIT, STAGES};
 use splinter_store::stage_ledger::Commit;
@@ -392,4 +393,60 @@ fn a_campaign_is_continued_as_it_began() {
         doubles.open(&rig, reseeded),
         Err(CampaignError::Config(_))
     ));
+}
+
+#[test]
+fn a_campaign_begun_from_an_adapter_champion_practises_it_trains_from_the_base_and_rolls_back_to_it(
+) {
+    let rig = Rig::new("campaign-adapter-champion");
+    let adapter = rig.scratch.0.join("champion.safetensors");
+    std::fs::write(&adapter, b"an adapter trained before the campaign").unwrap();
+    let digest = format!(
+        "sha256:{:x}",
+        sha2::Sha256::digest(std::fs::read(&adapter).unwrap())
+    );
+    let mut doubles = Doubles::new(&rig, &[GOOD, GOOD]);
+    let seed = splinter_model::seed::draw().value();
+    let mut spec = rig.spec("adapter", 1, seed);
+    spec.champion = Some(format!("{}+{}", spec.base, adapter.display()));
+    let champion = spec.champion.clone().unwrap();
+
+    let report = doubles.open(&rig, spec.clone()).unwrap().run().unwrap();
+    assert_eq!(
+        *doubles.practice.models.borrow(),
+        std::slice::from_ref(&champion),
+        "generation 1 practised under the named champion, not the base"
+    );
+    let first = &report.generations[0];
+    assert_eq!(first.moved.from.adapter.as_deref(), Some(digest.as_str()));
+    assert_eq!(first.moved.kind, MoveKind::Promote);
+    let created = rig.brain.jobs().created();
+    assert!(
+        created.iter().all(|p| p["base"] == "Qwen/Qwen3-0.6B"),
+        "the candidate is trained from the base: {created:?}"
+    );
+
+    let moved = doubles
+        .open(&rig, spec.clone())
+        .unwrap()
+        .rollback(0, "the adapter champion served better")
+        .unwrap();
+    assert_eq!(
+        moved.to.model, champion,
+        "generation 0 is the named champion"
+    );
+    assert_eq!(moved.to.adapter.as_deref(), Some(digest.as_str()));
+
+    let mut other = spec;
+    other.champion = None;
+    assert!(
+        matches!(doubles.open(&rig, other), Err(CampaignError::Config(_))),
+        "a campaign is continued from the champion it began with"
+    );
+    let mut wrong = rig.spec("wrong", 1, seed);
+    wrong.champion = Some("local:/elsewhere/Qwen3+/a.safetensors".into());
+    assert!(
+        wrong.validate().is_err(),
+        "the champion is an adapter on the base"
+    );
 }

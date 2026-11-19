@@ -138,6 +138,8 @@ pub struct Practice {
     pub kill_at: Cell<Option<(u32, usize)>>,
     /// Every rollout's champion generation, in order.
     pub champions: RefCell<Vec<u32>>,
+    /// Every rollout's champion as it was asked for, in order.
+    pub models: RefCell<Vec<String>>,
 }
 
 impl Rollouts for Practice {
@@ -159,6 +161,9 @@ impl Rollouts for Practice {
         self.champions
             .borrow_mut()
             .push(request.champion.generation);
+        self.models
+            .borrow_mut()
+            .push(request.champion.model.clone());
         let generation = request.champion.generation;
         let mut planned: Vec<(String, bool, &'static str, &'static str)> = Vec::new();
         for task in request.tasks {

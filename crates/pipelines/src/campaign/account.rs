@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use splinter_core::model_ref::ModelRef;
 use splinter_eval::campaign::pass_rate::PassRates;
 use splinter_eval::promotion::Promotion;
 use splinter_orchestrator::context::Context;
@@ -257,6 +258,27 @@ pub(super) fn base_of(spec: &CampaignSpec) -> Result<Model, CampaignError> {
     })
 }
 
+/// Generation 0's champion: the base, or the adapter on it the campaign
+/// names, identified by its file's digest as the examiner names it.
+pub(super) fn first_champion(spec: &CampaignSpec) -> Result<Model, CampaignError> {
+    let reference = spec.champion_ref()?;
+    let ModelRef::Local {
+        adapter: Some(adapter),
+        ..
+    } = &reference
+    else {
+        return base_of(spec);
+    };
+    let digest = crate::bench::artifact::sha256_file(std::path::Path::new(adapter))
+        .map_err(|e| CampaignError::Config(format!("champion adapter {adapter}: {e}")))?;
+    Ok(Model {
+        generation: 0,
+        model: reference.to_string(),
+        candidate: None,
+        adapter: Some(format!("sha256:{digest}")),
+    })
+}
+
 /// What the campaign `spec` names has done, from its ledger; nothing runs.
 ///
 /// # Errors
@@ -267,7 +289,7 @@ pub fn campaign_status(
 ) -> Result<CampaignReport, CampaignError> {
     let (ledger, seed) = begun(ctx, spec)?
         .ok_or_else(|| CampaignError::Config(format!("campaign {} has not begun", spec.name)))?;
-    report(&spec.name, seed, &base_of(spec)?, &ledger.commits()?)
+    report(&spec.name, seed, &first_champion(spec)?, &ledger.commits()?)
 }
 
 /// Moves the champion of the campaign `spec` names back to the model
@@ -284,7 +306,7 @@ pub fn campaign_rollback(
 ) -> Result<Move, CampaignError> {
     let (ledger, _) = begun(ctx, spec)?
         .ok_or_else(|| CampaignError::Config(format!("campaign {} has not begun", spec.name)))?;
-    champion::rollback(&ledger, &base_of(spec)?, to, reason)
+    champion::rollback(&ledger, &first_champion(spec)?, to, reason)
 }
 
 impl From<CampaignError> for OrchestratorError {
