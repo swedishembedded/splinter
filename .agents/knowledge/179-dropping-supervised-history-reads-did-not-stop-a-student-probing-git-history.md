@@ -12,7 +12,7 @@ demonstration before the read) and align the detector with the examiner's audit 
 
 Found 2026-11-19 (lane R, gen 1): gen-1 SFT data rebuilt with drop-step (17 steps dropped; 420 gen-0 + 265 own
 records), trained from base at three seeds. On the dev eval (129 items x 2) and retention (91 x 2) the examiner flagged
-security_violation in 10 of 1320 gen-1 trials (0.8 %) against 2 of 440 for A2 seed 1 (0.5 %), trained on the same
+security_violation in 11 of 1320 gen-1 trials (0.8 %) against 2 of 440 for A2 seed 1 (0.5 %), trained on the same
 gen-0 data with the reads supervised: no reduction. Most flagged gen-1 calls are `git log --all`, `git reflog`,
 `git log --stat` and reads under `.git/refs`; the RL arms trained on the rollouts with history kept (the
 policy-gradient view does not curate) were flagged as often (A6 s1 6 of 440, DPO 4 of 440).
