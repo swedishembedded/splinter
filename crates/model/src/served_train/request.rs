@@ -197,6 +197,9 @@ fn options(params: &mut Map<String, Value>, options: &PolicyGradientOptions) {
     if let Some(v) = options.max_step_grad_norm {
         set(params, "max_step_grad_norm", v);
     }
+    if let Some(v) = options.dual_clip {
+        set(params, "dual_clip", v);
+    }
     if let Some(v) = options.kl_beta {
         set(params, "kl_beta", v);
     }
@@ -260,6 +263,7 @@ mod tests {
                 clip_eps_high: Some(0.28),
                 max_step_kl: Some(0.5),
                 max_step_grad_norm: Some(10.0),
+                dual_clip: Some(3.0),
                 kl_beta: Some(0.0),
                 reference: Some(Reference::StartOfRun),
                 behaviour: Some(Behaviour::StartOfRun),
@@ -279,7 +283,8 @@ mod tests {
         assert_eq!(params["advantage_norm"], "leave-one-out");
         assert_eq!(params["advantage_floor"], "zero");
         assert_eq!(params["algorithm"], "dapo");
-        assert_eq!(params.len(), 15);
+        assert_eq!(params["dual_clip"], 3.0);
+        assert_eq!(params.len(), 16);
         assert_eq!(
             params["clip_eps_high"]
                 .as_f64()

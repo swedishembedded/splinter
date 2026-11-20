@@ -218,6 +218,19 @@ pub struct PolicyGradientArgs {
         "For a dataset of rollouts: skip, and record, every optimiser step whose global gradient \
          norm is over NORM [default: no bound]")]
     pub max_step_grad_norm: Option<f32>,
+    /// Dual-clip PPO's bound on a negative advantage's term.
+    #[arg(long, value_name = "C", value_parser = above_one, help =
+        "For a dataset of rollouts: dual-clip PPO's bound C (above 1) on a negative advantage's \
+         term, max(min(r*A, clip(r)*A), C*A): a token whose ratio ran past C gives no gradient, \
+         and each step reports the share it bounded [default: brain's, 3]")]
+    pub dual_clip: Option<f32>,
+}
+
+fn above_one(text: &str) -> Result<f32, String> {
+    match text.parse::<f32>() {
+        Ok(c) if c.is_finite() && c > 1.0 => Ok(c),
+        _ => Err(format!("{text:?} is not a number above 1")),
+    }
 }
 
 impl PolicyGradientArgs {
@@ -238,6 +251,7 @@ impl PolicyGradientArgs {
             sequence_advantage_cap: self.sequence_advantage_cap,
             max_step_kl: self.max_step_kl,
             max_step_grad_norm: self.max_step_grad_norm,
+            dual_clip: self.dual_clip,
             ..PolicyGradientOptions::default()
         }
     }

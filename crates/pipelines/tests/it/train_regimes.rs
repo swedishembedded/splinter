@@ -283,6 +283,7 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
                 clip_eps_high: Some(0.2),
                 max_step_kl: Some(0.5),
                 max_step_grad_norm: Some(8.0),
+                dual_clip: Some(3.0),
                 kl_beta: Some(0.0),
                 reference: Some(Reference::StartOfRun),
                 behaviour: Some(Behaviour::StartOfRun),
@@ -314,10 +315,11 @@ fn rollout_records_train_the_policy_gradient_with_the_settings_named_and_brains_
         (
             used.clip_eps_high,
             used.max_step_kl,
-            used.max_step_grad_norm
+            used.max_step_grad_norm,
+            used.dual_clip
         ),
-        (Some(0.2), Some(0.5), Some(8.0)),
-        "clip-higher and the step guard reach the plan as named"
+        (Some(0.2), Some(0.5), Some(8.0), Some(3.0)),
+        "clip-higher, the step guard and the dual clip reach the plan as named"
     );
     assert_eq!(
         used.algorithm,

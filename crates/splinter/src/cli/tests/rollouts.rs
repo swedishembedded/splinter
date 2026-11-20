@@ -197,18 +197,26 @@ fn a_run_on_rollouts_skips_the_steps_its_guards_name() {
         "0.1",
         "--max-step-grad-norm",
         "5",
+        "--dual-clip",
+        "3",
     ]) else {
         panic!("train");
     };
     let options = train.policy_gradient.options(train.temperature);
     assert_eq!(
-        (options.max_step_kl, options.max_step_grad_norm),
-        (Some(0.1), Some(5.0))
+        (
+            options.max_step_kl,
+            options.max_step_grad_norm,
+            options.dual_clip
+        ),
+        (Some(0.1), Some(5.0), Some(3.0))
     );
     for refused in [
         &["--max-step-kl", "0"][..],
         &["--max-step-kl", "-1"],
         &["--max-step-grad-norm", "0"],
+        &["--dual-clip", "1"],
+        &["--dual-clip", "0.5"],
     ] {
         let mut argv = vec!["train", "ab12"];
         argv.extend_from_slice(refused);

@@ -201,6 +201,11 @@ pub struct PolicyGradientStep {
     /// Of the tokens with an advantage, the share whose importance ratio was
     /// outside the clip band on the side the advantage pushes toward.
     pub clip_fraction: f32,
+    /// Of the tokens with an advantage, the share whose negative-advantage
+    /// term brain's dual clip bounded (a ratio past `c`; no gradient, not in
+    /// `clip_fraction`). Zero in records written before brain reported it.
+    #[serde(default)]
+    pub clip_fraction_dual: f32,
     /// The k3 KL to the reference over the policy tokens; `None` when no
     /// reference was measured.
     pub kl: Option<f32>,
@@ -258,6 +263,9 @@ pub struct PolicyGradientSummary {
     pub mean_kl: Option<f32>,
     /// Mean clip fraction over all steps.
     pub mean_clip_fraction: Option<f32>,
+    /// The mean share of the signed tokens the dual clip bounded.
+    #[serde(default)]
+    pub mean_clip_fraction_dual: Option<f32>,
     /// Mean of the steps' mean importance ratio.
     pub mean_ratio: Option<f32>,
     /// Mean advantage-weighted loss over all steps.
@@ -282,6 +290,7 @@ impl PolicyGradientSummary {
             last_kl: kls().next_back(),
             mean_kl: mean(kls()),
             mean_clip_fraction: mean(steps.iter().map(|s| s.clip_fraction)),
+            mean_clip_fraction_dual: mean(steps.iter().map(|s| s.clip_fraction_dual)),
             mean_ratio: mean(steps.iter().map(|s| s.ratio_mean)),
             mean_loss: mean(steps.iter().map(|s| s.loss)),
             mean_entropy: mean(steps.iter().map(|s| s.entropy_estimate)),
@@ -596,6 +605,15 @@ mod tests {
             "steps without a KL do not count"
         );
         assert_eq!(summary.mean_clip_fraction, Some(0.25));
+        assert_eq!(summary.mean_clip_fraction_dual, Some(0.0));
+        let dual = PolicyGradientSummary::from_steps(
+            vec![PolicyGradientStep {
+                clip_fraction_dual: 0.125,
+                ..pg_step(1, Some(0.0), 0.0)
+            }],
+            0,
+        );
+        assert_eq!(dual.mean_clip_fraction_dual, Some(0.125));
         assert_eq!(summary.steps_skipped_nonfinite, 1);
         let line = summary.line();
         assert!(

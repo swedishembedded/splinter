@@ -169,6 +169,10 @@ pub struct PolicyGradientOptions {
     /// Skip, and record, the optimiser step of a step whose global gradient
     /// norm exceeds this; unset: no bound.
     pub max_step_grad_norm: Option<f32>,
+    /// Dual-clip PPO's bound `c` (above 1) on a negative advantage's term,
+    /// `max(min(r*A, clip(r)*A), c*A)`: a token whose ratio ran past `c`
+    /// gives no gradient; unset: brain's default.
+    pub dual_clip: Option<f32>,
     /// Coefficient of the KL term to the reference policy; 0 puts none in the
     /// loss.
     pub kl_beta: Option<f32>,
@@ -211,6 +215,7 @@ impl PolicyGradientOptions {
             (self.clip_eps_high.is_some(), "--clip-eps-high"),
             (self.max_step_kl.is_some(), "--max-step-kl"),
             (self.max_step_grad_norm.is_some(), "--max-step-grad-norm"),
+            (self.dual_clip.is_some(), "--dual-clip"),
             (self.kl_beta.is_some(), "--kl-beta"),
             (self.reference.is_some(), "--reference"),
             (self.behaviour.is_some(), "--behaviour"),
