@@ -171,7 +171,7 @@ pub struct Draw {
     /// The seed they were drawn under.
     pub seed: u64,
     /// The rung of the generator's difficulty ladder it was drawn at.
-    pub rung: Option<u64>,
+    pub rung: Option<i64>,
     /// The families it was narrowed to; empty when not narrowed.
     pub families: Vec<String>,
 }
@@ -284,8 +284,8 @@ impl Practice {
             .get("rung")
             .filter(|v| !v.is_null())
             .map(|v| {
-                v.as_u64()
-                    .ok_or_else(|| malformed(&self.dir, "the draw's rung is not a number"))
+                v.as_i64()
+                    .ok_or_else(|| malformed(&self.dir, "the draw's rung is not an integer"))
             })
             .transpose()?;
         let families = draw

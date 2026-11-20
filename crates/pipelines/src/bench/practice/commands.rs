@@ -223,7 +223,7 @@ pub struct PracticeDraw<'a> {
     pub seed: u64,
     /// The rung of the generator's difficulty ladder to draw at; the
     /// generator's own when absent.
-    pub rung: Option<u32>,
+    pub rung: Option<i64>,
     /// The families to draw from; all that respond to the rung when empty.
     pub families: &'a [String],
     /// The capability ids a kept task exercises one of; none keeps every

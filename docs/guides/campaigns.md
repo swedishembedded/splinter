@@ -62,7 +62,7 @@ tokens = 50000000
 dir = "<practice-dir>"
 bench = "<bench-checkout>"
 jobs = 16                      # trials run at once
-# rung = 2                     # transfer draws at this rung of the generator's difficulty ladder (`--rung`)
+# rung = 2                     # transfer draws at this rung of the generator's difficulty ladder (`--rung`; may be negative, `rung = -1`)
 # families = ["procurement"]   # and only of these families (`--family`); both optional
 # harbor, sven_build and profile as for `tasks harbor practice`
 

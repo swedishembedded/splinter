@@ -54,7 +54,7 @@ name that returns with other content is refused.
 `DIR/<collection>/`: the staged task folders, `job.yaml` (the Harbor job), `practice.json` (schema
 `bench.practice/2`: the collection's manifest and content digests, each staged task's digest, and the draw) and
 `bench-run.json`. Only the train side is ever written; `practice.json` of any other side is refused. A draw at a
-rung (`--rung R`) or of some families (`--family F`, repeatable) records both in its `draw`; staging it again for a
+rung (`--rung R`) or of some families (`--family F`, repeatable) records both in its `draw` (a rung is a signed integer; ladders may have negative rungs, `--rung -1`); staging it again for a
 run passes the same count, seed, rung and families, so such a draw is accepted as the same material. Material staged
 before the examiner recorded them (no `rung` or `families`, or both null) is staged again as it was.
 

@@ -62,7 +62,7 @@ pub struct PracticeSpec {
     /// are drawn at (`bench task practice --rung`); the generator's own
     /// when absent.
     #[serde(default)]
-    pub rung: Option<u32>,
+    pub rung: Option<i64>,
     /// The families the transfer exercises are drawn from (`--family`); every
     /// family that responds to the rung when empty.
     #[serde(default)]
@@ -80,7 +80,7 @@ pub struct PracticeRollouts {
     profile: Option<PathBuf>,
     profile_sha256: Option<String>,
     jobs: usize,
-    transfer_rung: Option<u32>,
+    transfer_rung: Option<i64>,
     transfer_families: Vec<String>,
 }
 
@@ -332,6 +332,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(narrowed.rung, Some(2));
+        let negative: PracticeSpec =
+            toml::from_str("dir = \"p\"\nbench = \"b\"\nrung = -1\n").unwrap();
+        assert_eq!(negative.rung, Some(-1));
         assert_eq!(narrowed.families, ["procurement", "deadline"]);
     }
 }

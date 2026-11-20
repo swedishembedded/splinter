@@ -324,6 +324,18 @@ fn a_draw_at_a_rung_of_some_families_is_staged_again_with_the_same_arguments() {
 }
 
 #[test]
+fn a_draw_at_a_negative_rung_is_staged_again_at_that_rung() {
+    let staging = restaging_of(
+        "practice-rung-negative",
+        json!({"count": 12, "seed": 9536, "rung": -1, "families": null}),
+    );
+    assert!(
+        staging.contains("--count 12 --seed 9536 --rung -1"),
+        "{staging}"
+    );
+}
+
+#[test]
 fn a_draw_recorded_without_a_rung_or_families_is_staged_again_as_before() {
     for (name, draw) in [
         ("old", json!({"count": 40, "seed": 7})),
