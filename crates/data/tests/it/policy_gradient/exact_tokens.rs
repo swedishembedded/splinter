@@ -341,3 +341,40 @@ fn a_context_read_from_requests_keeps_the_text_the_model_was_sent() {
         "{\"command\":  \"ls\"}"
     );
 }
+
+#[test]
+fn a_build_that_trains_only_sampled_tokens_leaves_every_proxy_action_out_and_says_so() {
+    // A proxy action's text is re-rendered and weighed against the start of
+    // the run, not against what the policy sampled: tokens it may never have
+    // drawn, whose importance ratio is unbounded (knowledge 188). Asked to
+    // train only sampled tokens, the view writes no such record, counts each,
+    // and keeps every trial in its group's baseline.
+    let (_, answer) = good();
+    let sampler = trace(&[1, 2, 3], &[10, 11], &[-0.5, -0.25], "sampler");
+    let mixed = traced(sampler, answer.clone(), None);
+    let projection = view().sampled_only(true).project(&mixed).unwrap();
+    let written = lines(&projection);
+    assert_eq!(written.len(), 2, "only the two traced answers are trained");
+    for line in &written {
+        assert!(!supervised(line).is_empty());
+        for message in supervised(line) {
+            assert!(message.get("token_ids").is_some(), "{message}");
+        }
+    }
+    assert_eq!(projection.excluded.get(&Exclusion::ProxyTokens), Some(&2));
+
+    // A conversation whose every action is a proxy trains nothing, yet both
+    // trials still set the group's baseline.
+    let (call_step, answer) = good();
+    let scrubbed = traced(call_step, answer, Some("\x2fhome/marsch/part.py"));
+    let projection = view().sampled_only(true).project(&scrubbed).unwrap();
+    assert_eq!(projection.excluded.get(&Exclusion::ProxyTokens), Some(&4));
+    let outcomes = outcomes(&projection);
+    assert_eq!(outcomes.len(), 2);
+    assert!(outcomes.iter().all(|o| o.baseline_only));
+
+    // Left unset, proxies are written as before.
+    let (call_step, answer) = good();
+    let scrubbed = traced(call_step, answer, Some("\x2fhome/marsch/part.py"));
+    assert_eq!(lines(&view().project(&scrubbed).unwrap()).len(), 4);
+}

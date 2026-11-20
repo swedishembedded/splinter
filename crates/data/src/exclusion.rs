@@ -61,6 +61,12 @@ pub enum Exclusion {
     /// the attempts above the group's mean, fewer than two that differ), so
     /// no attempt did better or worse than another.
     NoGroupSignal,
+    /// An action that carries no tokens the policy sampled (its trace is
+    /// missing or unusable, the scrub changed its conversation, or its context
+    /// was rebuilt from the trajectory), left out of a build that trains only
+    /// sampled tokens: its re-rendered text is weighed against the start of the
+    /// run, not the behaviour policy, and its importance ratio is unbounded.
+    ProxyTokens,
     /// The verdict does not record which attempt (trial) of which task it
     /// grades, so the experience belongs to no group.
     NoRollout,

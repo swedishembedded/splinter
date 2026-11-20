@@ -295,7 +295,8 @@ fn project_without(
     if !request.rl.rewards_are_default() && !rewards_attempts {
         return Err(OrchestratorError::Refused(format!(
             "view {} has no rewards or advantages, so --reward, --reward-metric, \
-             --fail-ceiling, --advantage, --cliff-distill and --overlong-max-tokens do not apply",
+             --fail-ceiling, --advantage, --cliff-distill, --sampled-only and --overlong-max-tokens do \
+             not apply",
             view.as_str()
         )));
     }
@@ -366,6 +367,7 @@ fn project_without(
             .with_strip(strip)
             .rewards(request.rl.shape(facts)?)
             .advantage(request.rl.advantage)
+            .sampled_only(request.rl.sampled_only)
             .packed(request.pack)
             .serialise_calls(request.serialise_calls)
             .only_actions(request.only_actions.clone().unwrap_or_default())

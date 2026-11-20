@@ -126,6 +126,17 @@ pub struct BuildArgs {
     /// by kind. The `self-distill` view distils every attempt instead.
     #[arg(long)]
     pub cliff_distill: bool,
+    /// For the policy-gradient view: train only the tokens the policy
+    /// sampled. A record whose actions do not all carry their exact sampled
+    /// ids and log-probabilities (no usable trace, a scrubbed conversation, a
+    /// context rebuilt from the trajectory) is left out and counted as
+    /// `proxy_tokens`; its trial still sets its group's baseline. Every trained
+    /// token then has the behaviour policy's own log-probability, which
+    /// `train --behaviour recorded` needs and which keeps the importance ratio
+    /// bounded (a re-rendered proxy token weighed against the start of the run
+    /// can reach a ratio of 1e6).
+    #[arg(long)]
+    pub sampled_only: bool,
     /// For the policy-gradient view: DAPO's soft over-length penalty, the
     /// completion tokens (as the attempt recorded them) at and past which an
     /// attempt loses a whole reward. From `N - buffer` tokens on the penalty

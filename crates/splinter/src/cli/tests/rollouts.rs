@@ -217,6 +217,27 @@ fn a_run_on_rollouts_skips_the_steps_its_guards_name() {
 }
 
 #[test]
+fn a_policy_gradient_dataset_can_train_only_the_tokens_the_policy_sampled() {
+    let Command::Dataset(DatasetCommand::Build(args)) = command(&[
+        "dataset",
+        "build",
+        "ab12",
+        "--view",
+        "policy-gradient",
+        "--sampled-only",
+    ]) else {
+        panic!("dataset build");
+    };
+    assert!(args.sampled_only);
+    let Command::Dataset(DatasetCommand::Build(plain)) =
+        command(&["dataset", "build", "ab12", "--view", "policy-gradient"])
+    else {
+        panic!("dataset build");
+    };
+    assert!(!plain.sampled_only);
+}
+
+#[test]
 fn a_policy_gradient_dataset_takes_dapos_over_length_penalty() {
     let Command::Dataset(DatasetCommand::Build(args)) = command(&[
         "dataset",

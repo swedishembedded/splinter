@@ -165,6 +165,7 @@ pub struct PolicyGradient {
     reward: RewardShape,
     advantage: AdvantageKind,
     distill: Distill,
+    sampled_only: bool,
 }
 
 impl PolicyGradient {
@@ -184,6 +185,20 @@ impl PolicyGradient {
             reward: RewardShape::unshaped(),
             advantage: AdvantageKind::default(),
             distill: Distill::Off,
+            sampled_only: false,
+        }
+    }
+
+    /// The same view training only the tokens the policy sampled: a rewarded
+    /// record whose actions do not all carry their exact sampled tokens is
+    /// left out and counted as [`Exclusion::ProxyTokens`]; its trial still
+    /// sets its group's baseline. Every trained token then has the behaviour
+    /// policy's own log-probability, so the importance ratio is exact.
+    #[must_use]
+    pub fn sampled_only(self, sampled_only: bool) -> Self {
+        Self {
+            sampled_only,
+            ..self
         }
     }
 
@@ -578,6 +593,13 @@ impl View for PolicyGradient {
                             &actions,
                             &mut projection.tokens,
                         );
+                        let exact = sampled
+                            .as_ref()
+                            .is_some_and(|s| s.turns.iter().all(Option::is_some));
+                        if self.sampled_only && !exact {
+                            projection.exclude(Exclusion::ProxyTokens);
+                            continue;
+                        }
                         record.with_outcome(outcome.clone().with_sampled(sampled))
                     }
                     (_, Some(context)) => record.with_teacher_context(context.clone()),

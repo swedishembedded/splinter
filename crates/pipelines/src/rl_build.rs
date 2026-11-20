@@ -80,6 +80,10 @@ pub struct RlBuild {
     /// teacher context, and keep the scalar advantage for the other groups.
     /// The self-distill view distils every attempt and needs no flag.
     pub cliff_distill: bool,
+    /// For the policy-gradient view: train only the tokens the policy
+    /// sampled; a record with a proxy action is left out and counted
+    /// (`splinter_data::PolicyGradient::sampled_only`).
+    pub sampled_only: bool,
     /// DAPO's soft over-length penalty: the completion tokens at and past
     /// which an attempt loses a whole reward (`L`); `None` penalises no
     /// length.
@@ -179,6 +183,7 @@ impl RlBuild {
             && self.fail_ceiling.is_none()
             && self.advantage == AdvantageKind::default()
             && !self.cliff_distill
+            && !self.sampled_only
             && self.overlong_max_tokens.is_none()
             && self.overlong_buffer.is_none()
     }

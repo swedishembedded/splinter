@@ -191,10 +191,23 @@ fn reward_options_belong_to_the_policy_gradient_view_alone() {
         fail_ceiling: Some(0.5),
         ..RlBuild::default()
     };
-    let error = build(&ctx, &request(train, ceiling_alone))
+    let error = build(&ctx, &request(train.clone(), ceiling_alone))
         .unwrap_err()
         .to_string();
     assert!(error.contains("--fail-ceiling"), "{error}");
+    // Training only sampled tokens is a policy-gradient setting too.
+    let sampled_elsewhere = BuildRequest {
+        rl: RlBuild {
+            sampled_only: true,
+            ..RlBuild::default()
+        },
+        split_seed: None,
+        history: Default::default(),
+        base: None,
+        ..sft_request(train)
+    };
+    let error = build(&ctx, &sampled_elsewhere).unwrap_err().to_string();
+    assert!(error.contains("--sampled-only"), "{error}");
 }
 
 const WHY: &str = "a check failed: python3 -m unittest tests.hidden (exit 1)";
