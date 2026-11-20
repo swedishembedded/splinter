@@ -27,3 +27,28 @@ skip. At step 6 the policy had moved by KL < 0.008, yet a token's ratio was 1.9e
 (minimum about 1e-5). The open question is which records. It is either recorded log-probabilities that do not belong to
 the trained ids, or proxy tokens (`scrubbed`, `context_reconstructed`) that the policy never sampled. Each needs a
 per-record ratio dump.
+
+## Update 2026-11-20: root cause, start-of-run proxy tokens; fix, `--sampled-only`
+
+**Which tokens.** Every spike was on a proxy token, never on a recorded one.
+- The round-1 dataset's 1,027,275 recorded behaviour log-probabilities are all at or above -5.18. The sampler draws
+  under top-k 20 and top-p 0.95, so it never records a far-tail token.
+- With the trainer's log-probability at or below 0, a recorded token's ratio is at most e^5.18 = 177. Every spike (518 to
+  1.6e6) is above that, so each one was a token weighed against the start-of-run proxy.
+- Those tokens belong to the actions counted `scrubbed` (652) and `context_reconstructed` (475). Their text is re-rendered,
+  not the ids the policy drew, and they can sit far in the tail.
+- PPO's surrogate takes the unclipped side when the advantage is negative and the ratio is above 1 + eps. One such token
+  then enters the gradient at its full ratio (norm 1.4e5 on step 19).
+
+**Fix.** `splinter dataset build --sampled-only` (b879d37d2) leaves every record whose actions do not all carry their
+exact sampled tokens out, counts it as `proxy_tokens`, and keeps its trial in the group's baseline. Training then runs
+`behaviour: recorded`.
+
+**Verified.** A 24-step diagnostic on round 1 rebuilt this way (1,902 records, 1,127 left out), with the same recipe, seed
+and reference:
+- ratio max per step 2.1-12.3, against rl1's 1.9e4, 1.3e5, 1.0e4, 1.6e6 and 3.1e4 on steps 6, 7, 15, 19 and 23;
+- KL 0.003-0.029 (mean 0.018), clip mean 0.071, gradient norm at most 7.6, no guard skips.
+
+**Still open.**
+- The fix drops 48% of trained tokens. Exact contexts for scrubbed and request-log-rebuilt actions would bring them back.
+- brain still has no bound on the negative-advantage side (dual clip) for any proxy that remains.

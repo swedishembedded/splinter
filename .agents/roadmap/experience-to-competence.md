@@ -125,7 +125,7 @@ SimPO, ORPO, KTO and a rejection-sampling SFT floor, with fresh prompts per roun
 | 16 | Real runs for KTO, IPO, SimPO, ORPO | after brain efficiency work (reference pass 55 min, 170 s/step) | one seed each on the frontier data |
 | 17 | Two load-sensitive test flakes found by the clean re-verification at dfb62e12f (3619 passed, 2 failed, each passes alone) | `solve_concurrency::a_remote_model_is_asked_up_to_the_configured_width_at_once` (timing) and `distributed_plan::a_retry_writes_its_own_plan_naming_the_same_job` (ETXTBSY, a spawn racing a just-written executable): make both deterministic | 20 consecutive parallel workspace runs without either failing |
 | 18 | Campaign demo evidence incomplete at hand-over: generation-2 evaluate and rollback outcomes were not recorded when this ledger was written | record both in `campaigns.md` from the campaign lane's final report | rollback shown moving the champion back on real models |
-| 19 | First-package arm run 2026-11-20 (results below, "Item 19: first-package RL round"): no teacher-free gain; the unguarded round damaged A2 through record-driven ratio spikes (knowledge 188) | find why some records score 10+ nats apart under the behaviour log-probabilities (recorded for 52% of tokens, start-of-run proxy for 48%); make exact contexts cover the `scrubbed` and `context_reconstructed` actions so `behaviour: recorded` runs; then a full-budget guarded round on 2+ seeds with turn-level credit | held-out gain >= 0.05 with CI above 0 against A2s1 on paired fresh tasks, retention non-inferior at 0.10, KL 0.02-0.05 with no guard skips |
+| 19 | First-package arm run 2026-11-20 (results below, "Item 19: first-package RL round"): no teacher-free gain; the unguarded round damaged A2 through ratio spikes on start-of-run proxy tokens, root-caused and fixed by `dataset build --sampled-only` (b879d37d2, knowledge 188) | a guarded round on `--sampled-only` data with `behaviour: recorded` (verified: 24 steps, ratio max 12.3, KL 0.018); make exact contexts cover `scrubbed` and `context_reconstructed` actions (48% of tokens are left out today); bound brain's negative-advantage term (dual clip); 2+ seeds, turn-level credit | held-out gain >= 0.05 with CI above 0 against A2s1 on paired fresh tasks, retention non-inferior at 0.10, KL 0.02-0.05 with no guard skips |
 | 20 | Bench draws at a rung or of families (bench 15a9220d) were refused when practised: splinter re-staged a draw from count and seed only | done 2026-11-20: the draw identity carries `rung` and `families` into the re-stage (`--rung`, `--family`), `[practice]` takes `rung` and `families` for transfer draws; older practice.json unchanged | `bench_practice` tests: re-stage passes both, old and null draws pass neither |
 
 Verification at the time of writing (clean force-rebuilt gates, no GPU): splinter `make check` exit 0; sven tests 5300 passed, clippy
@@ -364,6 +364,19 @@ non-inferior at 0.10): A2s1 0.599; RFT +0.005 [-0.077, +0.088] non-inferior; rl1
 **Compute (approximate GPU-h).** Rollouts 5.5 (plus 1.0 lost when a harness limit killed round 1, whose rerun restarts
 every trial, knowledge 190); training rl1 3.6 (plus 1.9 lost the same way), rl1g 3.6, rl2 3.6, RFT 0.8; evaluation about
 20.
+
+**Root cause and fix (2026-11-20).**
+- **Which tokens.** Every spike was on a start-of-run proxy token. Recorded behaviour log-probabilities are all at or above
+  -5.18 (1,027,275 tokens of the round-1 dataset). With the trainer's log-probability at or below 0, a recorded token's
+  ratio is at most e^5.18 = 177, and every spike (518 to 1.6e6) is above that bound.
+- **What a proxy token is.** The proxy tokens are the actions counted `scrubbed` (652) and `context_reconstructed` (475).
+  Their text is re-rendered (not the ids the policy drew) and weighed against the start adapter. Under the unclipped
+  negative-advantage side of the surrogate, one such token's ratio enters the gradient (norm 1.4e5).
+- **Fix.** `dataset build --sampled-only` leaves every record with a proxy action out as `proxy_tokens` and keeps its trial
+  in the baseline (round 1: 1,902 records, 1,127 left out). Training then runs `behaviour: recorded`.
+- **Verified with a 24-step diagnostic, not a round.** Same recipe, seed and reference; ratio max per step 2.1-12.3
+  against rl1's 1.9e4, 1.3e5, 1.0e4, 1.6e6 and 3.1e4 on steps 6, 7, 15, 19 and 23. KL 0.003-0.029 (mean 0.018), clip
+  0.005-0.133 (mean 0.071), gradient norm at most 7.6, no guard skips.
 
 **Reading (the ledger's rule).**
 - KL is not near zero: the optimiser moves (median 0.016-0.018, just under the 0.02-0.05 band; clip 0.056, under 0.10).
