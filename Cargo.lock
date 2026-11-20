@@ -3,22 +3,6 @@
 version = 4
 
 [[package]]
-name = "ab_glyph"
-version = "0.2.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01c0457472c38ea5bd1c3b5ada5e368271cb550be7a4ca4a0b4634e9913f6cc2"
-dependencies = [
- "ab_glyph_rasterizer",
- "owned_ttf_parser",
-]
-
-[[package]]
-name = "ab_glyph_rasterizer"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
-
-[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -211,7 +195,7 @@ version = "0.38.0+1.3.281"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
 dependencies = [
- "libloading",
+ "libloading 0.8.9",
 ]
 
 [[package]]
@@ -262,14 +246,12 @@ dependencies = [
 
 [[package]]
 name = "atif"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
- "chrono",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "uuid",
 ]
 
 [[package]]
@@ -307,9 +289,9 @@ dependencies = [
 
 [[package]]
 name = "bit-set"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ddef2995421ab6a5c779542c81ee77c115206f4ad9d5a8e05f4ff49716a3dd"
+checksum = "09ec2f926cc3060f09db9ebc5b52823d85268d24bb917e472c0c4bea35780a7d"
 dependencies = [
  "bit-vec 0.9.1",
 ]
@@ -395,8 +377,8 @@ checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
 
 [[package]]
 name = "brain"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-appopts",
  "brain-arch",
@@ -412,8 +394,8 @@ dependencies = [
 
 [[package]]
 name = "brain-appopts"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-gpu-core",
  "brain-seed",
@@ -421,13 +403,13 @@ dependencies = [
 
 [[package]]
 name = "brain-arch"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 
 [[package]]
 name = "brain-audio"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-capability",
  "brain-data",
@@ -442,15 +424,16 @@ dependencies = [
 
 [[package]]
 name = "brain-backend-api"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 
 [[package]]
 name = "brain-backend-cpu"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-backend-api",
+ "brain-kernels",
  "brain-wgsl-cpu",
  "libc",
  "rayon",
@@ -458,20 +441,21 @@ dependencies = [
 
 [[package]]
 name = "brain-backend-cuda"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-backend-api",
  "brain-wgsl-cuda",
- "libloading",
- "sha2 0.10.9",
+ "hex",
+ "libloading 0.9.1",
+ "sha2 0.11.1",
  "tracing",
 ]
 
 [[package]]
 name = "brain-backend-vulkan"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -483,8 +467,8 @@ dependencies = [
 
 [[package]]
 name = "brain-backend-wgpu"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -498,18 +482,17 @@ dependencies = [
 
 [[package]]
 name = "brain-capability"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
- "brain-seed",
  "libc",
  "serde_json",
 ]
 
 [[package]]
 name = "brain-checkpoint"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-backend-cpu",
  "brain-kernels",
@@ -523,20 +506,21 @@ dependencies = [
 
 [[package]]
 name = "brain-data"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-checkpoint",
  "brain-seed",
- "fancy-regex 0.18.0",
+ "fancy-regex 0.20.2",
+ "hex",
  "image",
  "imageproc",
- "minijinja",
+ "minijinja 3.1.0",
  "minijinja-contrib",
  "serde",
  "serde_json",
  "serde_norway",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "unicode-general-category",
  "unicode-normalization",
  "unicode-segmentation",
@@ -544,8 +528,8 @@ dependencies = [
 
 [[package]]
 name = "brain-gpu-core"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-backend-api",
  "brain-backend-cpu",
@@ -562,8 +546,8 @@ dependencies = [
 
 [[package]]
 name = "brain-horizon"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-capability",
  "brain-checkpoint",
@@ -577,37 +561,38 @@ dependencies = [
  "bytemuck",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
 ]
 
 [[package]]
 name = "brain-kernels"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-backend-api",
 ]
 
 [[package]]
 name = "brain-kernels-cuda"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-backend-api",
 ]
 
 [[package]]
 name = "brain-memauth"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 
 [[package]]
 name = "brain-model"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-audio",
  "brain-backend-cpu",
+ "brain-capability",
  "brain-checkpoint",
  "brain-data",
  "brain-gpu-core",
@@ -615,25 +600,26 @@ dependencies = [
  "brain-optim",
  "brain-paramstore",
  "half",
+ "hex",
  "pollster",
  "ring",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
 ]
 
 [[package]]
 name = "brain-modelref"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "brain-modelstore"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-arch",
  "brain-capability",
@@ -642,15 +628,15 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "ureq",
  "url",
 ]
 
 [[package]]
 name = "brain-optim"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-backend-cpu",
  "brain-checkpoint",
@@ -665,8 +651,8 @@ dependencies = [
 
 [[package]]
 name = "brain-paramstore"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "brain-checkpoint",
  "brain-gpu-core",
@@ -678,18 +664,18 @@ dependencies = [
 
 [[package]]
 name = "brain-seed"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 
 [[package]]
 name = "brain-survival"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 
 [[package]]
 name = "brain-vulkan"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "ash",
  "brain-backend-api",
@@ -701,8 +687,8 @@ dependencies = [
 
 [[package]]
 name = "brain-wgsl-cpu"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -714,8 +700,8 @@ dependencies = [
 
 [[package]]
 name = "brain-wgsl-cuda"
-version = "5.1.0"
-source = "git+https://github.com/swedishembedded/brain#796871647e854a68089631c98842c027cd5c9c7a"
+version = "6.0.0"
+source = "git+https://github.com/swedishembedded/brain#b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
 dependencies = [
  "naga",
 ]
@@ -998,6 +984,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "cookie"
+version = "0.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a373e3602691c3cdea496d2f0ee5935151e6168fe87739483c463db1b2f2f87"
+dependencies = [
+ "percent-encoding",
+ "time",
+ "version_check",
+]
+
+[[package]]
+name = "cookie_store"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15b2c103cf610ec6cae3da84a766285b42fd16aad564758459e6ecf128c75206"
+dependencies = [
+ "cookie",
+ "document-features",
+ "idna",
+ "indexmap",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "time",
+ "url",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1039,27 +1054,27 @@ dependencies = [
 
 [[package]]
 name = "cranelift-assembler-x64"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adc822414b18d1f5b1b33ce1441534e311e62fef86ebb5b9d382af857d0272c9"
+checksum = "147e998317ed418623afd8dc719b3413d391a3b2f048100f459a90dadfd4fd72"
 dependencies = [
  "cranelift-assembler-x64-meta",
 ]
 
 [[package]]
 name = "cranelift-assembler-x64-meta"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c646808b06f4532478d8d6057d74f15c3322f10d995d9486e7dcea405bf521a"
+checksum = "775c4e3222b290bc05e07e73e0cfab0b3b4c6510034f70585fa7cbf4feb9f0ea"
 dependencies = [
  "cranelift-srcgen",
 ]
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b5996f01a686b2349cdb379083ec5ad3e8cb8767fb2d495d3a4f2ee4163a18d"
+checksum = "f64e582cbf252e01cbcf4c701b26a349fab461a9f0c327025995db64b1364a78"
 dependencies = [
  "cranelift-entity",
  "wasmtime-internal-core",
@@ -1067,18 +1082,18 @@ dependencies = [
 
 [[package]]
 name = "cranelift-bitset"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "523fea83273f6a985520f57788809a4de2165794d9ab00fb1254fceb4f5aa00c"
+checksum = "ba37434039b4cdc98d3178eefca3f5bd180b955e49c0787e9cc0eee3de182fcb"
 dependencies = [
  "wasmtime-internal-core",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d73d1e372730b5f64ed1a2bd9f01fe4686c8ec14a28034e3084e530c8d951878"
+checksum = "028652607246c4117796ed9ab9e966994b4ee12146b329a91e85c8fd1335152f"
 dependencies = [
  "bumpalo",
  "cranelift-assembler-x64",
@@ -1090,7 +1105,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-isle",
  "gimli",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "libm",
  "log",
  "regalloc2",
@@ -1103,9 +1118,9 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0319c18165e93dc1ebf78946a8da0b1c341c95b4a39729a69574671639bdb5f"
+checksum = "21ba849e90d3398951aef9a9a3d2fa1e7df6196836ae1d0723ec24b091215b84"
 dependencies = [
  "cranelift-assembler-x64-meta",
  "cranelift-codegen-shared",
@@ -1115,24 +1130,24 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9195cd8aeecb55e401aa96b2eaa55921636e8246c127ed7908f7ef7e0d40f270"
+checksum = "6116ab06dc15034ee1b4e3124371acb6742c189b438040837aeb0cfcf790e356"
 
 [[package]]
 name = "cranelift-control"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8976c2154b74136322befc74222ab5c7249edd7e2604f8cbef2b94975541ffb9"
+checksum = "33a932ab1cef0158e6b0f0360139d5d19bdf7a3bee0160f02865b1bdafb218c7"
 dependencies = [
  "arbitrary",
 ]
 
 [[package]]
 name = "cranelift-entity"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6038b3147c7982f4951150d5f96c7c06c1e7214b99d4b4a98607aadf8ded89d1"
+checksum = "7c048097f9ae9b7c23db66e6f35882f6e1fbcd522f3db2a520d5c7aaa0079a67"
 dependencies = [
  "cranelift-bitset",
  "wasmtime-internal-core",
@@ -1140,11 +1155,12 @@ dependencies = [
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cbd294abe236e23cc3d907b0936226b6a8342db7636daa9c7c72be1e323420e"
+checksum = "3b45328ff7bac253860079032352989eae50341e155ddd4c6cfb8f5d40c490fa"
 dependencies = [
  "cranelift-codegen",
+ "hashbrown 0.17.1",
  "log",
  "smallvec",
  "target-lexicon",
@@ -1152,15 +1168,15 @@ dependencies = [
 
 [[package]]
 name = "cranelift-isle"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5a90b6ed3aba84189352a87badeb93b2126d3724225a42dc67fdce53d1b139c"
+checksum = "ff643d297ee16c7a8a6aba6bf526b610879635275ec14e7ee75b94f0b46e9514"
 
 [[package]]
 name = "cranelift-jit"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7442301de5c6462fa18bb448a4e941616039845f676469c8ffc60a5640ed7237"
+checksum = "e7fc0b9ac5a79477796bc1f45e41263cb42557454b68a5cd8a6a16f07ed1b1d2"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -1170,6 +1186,7 @@ dependencies = [
  "cranelift-native",
  "libc",
  "log",
+ "memmap2",
  "region",
  "target-lexicon",
  "wasmtime-internal-jit-icache-coherence",
@@ -1178,31 +1195,33 @@ dependencies = [
 
 [[package]]
 name = "cranelift-module"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c71e29d8186c8d1566748002b7c7b3715f3a4616b667651ac0896bdd61ca508b"
+checksum = "769e3d8ae10c7f07f49f600c1fd8ef5e431a7fcb745746338f89f9a09c9a48b2"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-control",
+ "hashbrown 0.17.1",
 ]
 
 [[package]]
 name = "cranelift-native"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3ec0cc1a54e22925eacf4fc3dc815f907734d3b377899d19d52bec04863e853"
+checksum = "66b186c9de1edc598d055ff3f13918fc8f49d3e23811b99ab45a3cbf52dc2a7b"
 dependencies = [
  "cranelift-codegen",
  "libc",
+ "mach2 0.6.0",
  "target-lexicon",
 ]
 
 [[package]]
 name = "cranelift-srcgen"
-version = "0.130.2"
+version = "0.137.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "948865622f87f30907bb46fbb081b235ae63c1896a99a83c26a003305c1fa82d"
+checksum = "e30dff68753c0933cb30eb445d75d6b3cdcc0f7f0121b9c5aaabbe4a8315617d"
 
 [[package]]
 name = "crc32fast"
@@ -1445,7 +1464,7 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a"
 dependencies = [
- "libloading",
+ "libloading 0.8.9",
 ]
 
 [[package]]
@@ -1617,9 +1636,9 @@ checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
 name = "fancy-regex"
-version = "0.18.0"
+version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
+checksum = "d301f5bf187b3c295fce6468d3875037a0bccc5f6b151c63cac2f85babf21912"
 dependencies = [
  "bit-set 0.8.0",
  "regex-automata",
@@ -1628,9 +1647,9 @@ dependencies = [
 
 [[package]]
 name = "fancy-regex"
-version = "0.19.2"
+version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d301f5bf187b3c295fce6468d3875037a0bccc5f6b151c63cac2f85babf21912"
+checksum = "0a2e16b9a584b602f1e0e5e22c30ca0906786088c27500653e432d086def8b53"
 dependencies = [
  "bit-set 0.8.0",
  "regex-automata",
@@ -1971,6 +1990,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.30.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19fc433e8437a212d1b6f1e68c7824af3aed907da60afa994e7f542d18d12aa9"
+
+[[package]]
+name = "glam"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "556f6b2ea90b8d15a74e0e7bb41671c9bdf38cd9f78c284d750b9ce58a2b5be7"
+
+[[package]]
+name = "glam"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+
+[[package]]
+name = "glam"
+version = "0.33.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37bfe73dc8ec21f54d181e5a60554327ec3f1c600c455a75ccbfc65d2106a6c4"
+
+[[package]]
 name = "glifo"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2032,26 +2075,6 @@ dependencies = [
  "presser",
  "thiserror 2.0.21",
  "windows",
-]
-
-[[package]]
-name = "gpu-descriptor"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b89c83349105e3732062a895becfc71a8f921bb71ecbbdd8ff99263e3b53a0ca"
-dependencies = [
- "bitflags 2.13.2",
- "gpu-descriptor-types",
- "hashbrown 0.15.5",
-]
-
-[[package]]
-name = "gpu-descriptor-types"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdf242682df893b86f33a73828fb09ca4b2d3bb6cc95249707fc684d27484b91"
-dependencies = [
- "bitflags 2.13.2",
 ]
 
 [[package]]
@@ -2231,12 +2254,6 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-
-[[package]]
-name = "hexf-parse"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "html2text"
@@ -2531,18 +2548,17 @@ dependencies = [
 
 [[package]]
 name = "imageproc"
-version = "0.25.1"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "602b4e8a4cc3e98372b766cd184ab532999bc0e839b7469e759511ccabc65d77"
+checksum = "c7b27bc0867dc40df08deb53d6e96342db6e0702e7ae33ed09a4eba33e594b05"
 dependencies = [
- "ab_glyph",
  "approx",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "image",
  "itertools",
  "nalgebra",
  "num",
- "rand 0.8.8",
+ "rand 0.10.3",
  "rand_distr",
 ]
 
@@ -2582,9 +2598,9 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itertools"
-version = "0.12.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -2787,7 +2803,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6aae1df220ece3c0ada96b8153459b67eebe9ae9212258bb0134ae60416fdf76"
 dependencies = [
  "libc",
- "libloading",
+ "libloading 0.8.9",
  "pkg-config",
 ]
 
@@ -2837,6 +2853,16 @@ name = "libloading"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
+
+[[package]]
+name = "libloading"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1832accd5a4ca2795ace4d05d15c4039be15b62d3b950eff99746a990e3cc10"
 dependencies = [
  "cfg-if",
  "windows-link",
@@ -2963,6 +2989,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mach2"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
+
+[[package]]
 name = "markup5ever"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3044,20 +3076,28 @@ version = "2.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86886cf6dbf4e614b19c9a1eec9775f021869d7eadde0fc73921a81b90c9b4c9"
 dependencies = [
- "indexmap",
  "memo-map",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "minijinja-contrib"
-version = "2.24.0"
+name = "minijinja"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd3e5f077bc2379f0f7d911e7cfdd921114ed99fc884533dca502944cb355b11"
+checksum = "509eeb2603a84eccabb4d75f6ec8ba23b46bbf441aaeb863d6b83a5887fd51e4"
 dependencies = [
- "minijinja",
+ "indexmap",
  "serde",
+]
+
+[[package]]
+name = "minijinja-contrib"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64b62a39daf92d02b89f7888ab57f08d15d22dab862e5c95353253f91e9344f0"
+dependencies = [
+ "minijinja 3.1.0",
 ]
 
 [[package]]
@@ -3109,22 +3149,22 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "naga"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2bf919621e7975acb27d881bae2fb993e0d45c8e0446e85e6272971e00dc8df"
+checksum = "fd0dd362bf26c0ffdd143df6da66a25d287e196eff482f117771010b207ad163"
 dependencies = [
  "arrayvec",
- "bit-set 0.9.1",
+ "bit-set 0.10.0",
  "bitflags 2.13.2",
  "cfg-if",
  "cfg_aliases",
  "codespan-reporting",
  "half",
- "hashbrown 0.16.1",
- "hexf-parse",
+ "hashbrown 0.17.1",
  "indexmap",
  "libm",
  "log",
+ "naga-types",
  "num-traits",
  "once_cell",
  "rustc-hash 1.1.0",
@@ -3134,12 +3174,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "nalgebra"
-version = "0.32.6"
+name = "naga-types"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b5c17de023a86f59ed79891b2e5d5a94c705dbe904a5b5c9c952ea6221b03e4"
+checksum = "14474170feb673cfb18b3565111a9869797cc1d290fb9ec969c53f5e1e231c6d"
+dependencies = [
+ "hashbrown 0.17.1",
+ "indexmap",
+ "rustc-hash 1.1.0",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "nalgebra"
+version = "0.35.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adc43a60c217b0c6ff46e47f26911015ad8d2e5a8be1af668c67e370d99a4346"
 dependencies = [
  "approx",
+ "glam 0.30.10",
+ "glam 0.31.1",
+ "glam 0.32.1",
+ "glam 0.33.12",
  "matrixmultiply",
  "num-complex",
  "num-rational",
@@ -3339,6 +3395,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-core-graphics"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
+dependencies = [
+ "dispatch2",
+ "objc2",
+ "objc2-core-foundation",
+ "objc2-io-surface",
+]
+
+[[package]]
 name = "objc2-encode"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3349,6 +3417,17 @@ name = "objc2-foundation"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-surface"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
 dependencies = [
  "bitflags 2.13.2",
  "objc2",
@@ -3376,6 +3455,7 @@ dependencies = [
  "bitflags 2.13.2",
  "objc2",
  "objc2-core-foundation",
+ "objc2-core-graphics",
  "objc2-foundation",
  "objc2-metal",
 ]
@@ -3457,15 +3537,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 
 [[package]]
-name = "owned_ttf_parser"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
-dependencies = [
- "ttf-parser",
-]
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3493,12 +3564,6 @@ dependencies = [
  "smallvec",
  "windows-link",
 ]
-
-[[package]]
-name = "paste"
-version = "1.0.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "pdf-extract"
@@ -3653,9 +3718,9 @@ dependencies = [
 
 [[package]]
 name = "pollster"
-version = "0.4.0"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f3a9f18d041e6d0e102a0a46750538147e5e8992d3b4873aaafee2520b00ce3"
+checksum = "7e9b9cf600136f5b976fbc5727d58c26e1ecab8ee23088d44ef1c7af793550ab"
 
 [[package]]
 name = "polycool"
@@ -3931,12 +3996,12 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "rand_distr"
-version = "0.4.3"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
+checksum = "4d431c2703ccf129de4d45253c03f49ebb22b97d6ad79ee3ecfc7e3f4862c1d8"
 dependencies = [
  "num-traits",
- "rand 0.8.8",
+ "rand 0.10.3",
 ]
 
 [[package]]
@@ -4144,7 +4209,7 @@ checksum = "e6b6ebd13bc009aef9cd476c1310d49ac354d36e240cf1bd753290f3dc7199a7"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
- "mach2",
+ "mach2 0.4.3",
  "windows-sys 0.52.0",
 ]
 
@@ -4386,9 +4451,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "safe_arch"
-version = "0.7.4"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96b02de82ddbe1b636e6170c21be622223aea188ef2e139be0a5b219ec215323"
+checksum = "42c6efa15875e6ecb39ca61fb0b0c1a40b84fac5a5ffe71eef7d1000c8eb3f5f"
 dependencies = [
  "bytemuck",
 ]
@@ -4622,7 +4687,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
  "digest 0.10.7",
- "sha2-asm",
 ]
 
 [[package]]
@@ -4634,15 +4698,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.1",
  "digest 0.11.3",
-]
-
-[[package]]
-name = "sha2-asm"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b845214d6175804686b2bd482bcffe96651bb2d1200742b712003504a2dac1ab"
-dependencies = [
- "cc",
 ]
 
 [[package]]
@@ -4678,14 +4733,13 @@ checksum = "28d567dcbaf0049cb8ac2608a76cd95ff9e4412e1899d389ee400918ca7537f5"
 
 [[package]]
 name = "simba"
-version = "0.8.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "061507c94fc6ab4ba1c9a0305018408e312e17c041eb63bef8aa726fa33aceae"
+checksum = "f1a7200d82ff1c7b4235efd12f11e2537a402c91cf83a5cb97ce80eef787fde7"
 dependencies = [
  "approx",
  "num-complex",
  "num-traits",
- "paste",
  "wide",
 ]
 
@@ -5048,7 +5102,7 @@ name = "splinter-minimind"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "minijinja",
+ "minijinja 2.24.0",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -5380,7 +5434,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sven-audio"
 version = "1.0.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "base64 0.22.1",
  "thiserror 1.0.69",
@@ -5388,8 +5442,8 @@ dependencies = [
 
 [[package]]
 name = "sven-bootstrap"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -5438,8 +5492,8 @@ dependencies = [
 
 [[package]]
 name = "sven-chain"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "chrono",
  "serde",
@@ -5451,8 +5505,8 @@ dependencies = [
 
 [[package]]
 name = "sven-chunks"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "hex",
@@ -5465,8 +5519,8 @@ dependencies = [
 
 [[package]]
 name = "sven-config"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "serde",
@@ -5478,8 +5532,8 @@ dependencies = [
 
 [[package]]
 name = "sven-control"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "serde",
  "serde_json",
@@ -5490,8 +5544,8 @@ dependencies = [
 
 [[package]]
 name = "sven-cost"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "serde",
  "serde_json",
@@ -5501,8 +5555,8 @@ dependencies = [
 
 [[package]]
 name = "sven-decision"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "hex",
@@ -5521,8 +5575,8 @@ dependencies = [
 
 [[package]]
 name = "sven-document"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5544,8 +5598,8 @@ dependencies = [
 
 [[package]]
 name = "sven-executors"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5579,8 +5633,8 @@ dependencies = [
 
 [[package]]
 name = "sven-harness-runtime"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "serde",
  "serde_json",
@@ -5594,8 +5648,8 @@ dependencies = [
 
 [[package]]
 name = "sven-harness-spec"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -5607,8 +5661,8 @@ dependencies = [
 
 [[package]]
 name = "sven-hsm"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "serde",
  "serde_json",
@@ -5621,8 +5675,8 @@ dependencies = [
 
 [[package]]
 name = "sven-http"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "reqwest",
  "rustls",
@@ -5632,8 +5686,8 @@ dependencies = [
 
 [[package]]
 name = "sven-image"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -5644,8 +5698,8 @@ dependencies = [
 
 [[package]]
 name = "sven-kernel"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -5658,8 +5712,8 @@ dependencies = [
 
 [[package]]
 name = "sven-machines"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "serde",
  "serde_json",
@@ -5670,8 +5724,8 @@ dependencies = [
 
 [[package]]
 name = "sven-mcp-client"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5697,8 +5751,8 @@ dependencies = [
 
 [[package]]
 name = "sven-memory"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "atif",
@@ -5710,8 +5764,8 @@ dependencies = [
 
 [[package]]
 name = "sven-memory-api"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "hex",
@@ -5723,8 +5777,8 @@ dependencies = [
 
 [[package]]
 name = "sven-memory-sqlite"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "rusqlite",
@@ -5738,8 +5792,8 @@ dependencies = [
 
 [[package]]
 name = "sven-model"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5755,8 +5809,8 @@ dependencies = [
 
 [[package]]
 name = "sven-model-catalog"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "serde",
@@ -5767,8 +5821,8 @@ dependencies = [
 
 [[package]]
 name = "sven-model-drivers"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5801,8 +5855,8 @@ dependencies = [
 
 [[package]]
 name = "sven-model-mock"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5819,16 +5873,16 @@ dependencies = [
 
 [[package]]
 name = "sven-roots"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "dirs 5.0.1",
 ]
 
 [[package]]
 name = "sven-rt"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "futures",
  "gloo-timers",
@@ -5839,8 +5893,8 @@ dependencies = [
 
 [[package]]
 name = "sven-sdk"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5884,8 +5938,8 @@ dependencies = [
 
 [[package]]
 name = "sven-sdk-macros"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5894,8 +5948,8 @@ dependencies = [
 
 [[package]]
 name = "sven-session-model"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "serde",
  "serde_json",
@@ -5908,8 +5962,8 @@ dependencies = [
 
 [[package]]
 name = "sven-session-store"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "atif",
@@ -5934,16 +5988,16 @@ dependencies = [
 
 [[package]]
 name = "sven-sources"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "sven-memory-api",
 ]
 
 [[package]]
 name = "sven-tool-api"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "atif",
@@ -5958,8 +6012,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tool-registry"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "regex",
@@ -5973,8 +6027,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-agent"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5995,8 +6049,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-android"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "hex",
@@ -6014,8 +6068,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-ctx"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6036,8 +6090,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-document"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -6054,8 +6108,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-exec"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6074,8 +6128,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-fs"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6102,28 +6156,21 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-gdb"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
- "async-trait",
- "libc",
  "regex",
  "serde",
  "serde_json",
  "sven-config",
- "sven-hsm",
- "sven-tool-api",
- "sven-tool-registry",
- "sven-vocab",
  "tokio",
- "tracing",
 ]
 
 [[package]]
 name = "sven-tools-media"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6141,8 +6188,8 @@ dependencies = [
 
 [[package]]
 name = "sven-tools-web"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6163,8 +6210,8 @@ dependencies = [
 
 [[package]]
 name = "sven-turn"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6187,8 +6234,8 @@ dependencies = [
 
 [[package]]
 name = "sven-vocab"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "clap",
  "hex",
@@ -6199,8 +6246,8 @@ dependencies = [
 
 [[package]]
 name = "sven-workspace"
-version = "5.5.0"
-source = "git+https://github.com/swedishembedded/sven#0d7d6643ab5e1cd82e7f354ae26bba7a7f18d18e"
+version = "5.9.2"
+source = "git+https://github.com/swedishembedded/sven#1db749d9de659dfe14bb379f93c20b7889c17700"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6737,19 +6784,33 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "ureq"
-version = "2.12.1"
+version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02d1a66277ed75f640d608235660df48c8e3c19f3b4edb6a263315626cc3c01d"
+checksum = "9a7ac20be9b7726e0bbdbf974c059676d9acb1cd414961f570a4e8231cacd7fc"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
+ "cookie_store",
  "log",
- "once_cell",
+ "percent-encoding",
  "rustls",
  "rustls-pki-types",
  "serde",
  "serde_json",
- "url",
- "webpki-roots 0.26.11",
+ "ureq-proto",
+ "utf8-zero",
+ "webpki-roots",
+]
+
+[[package]]
+name = "ureq-proto"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841583fc36089d7d59419568ae157f43a5a03a2e5a81ba87c77d1596ef46e922"
+dependencies = [
+ "base64 0.23.1",
+ "http",
+ "httparse",
+ "log",
 ]
 
 [[package]]
@@ -6770,6 +6831,12 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
+
+[[package]]
+name = "utf8-zero"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8c0a043c9540bae7c578c88f91dda8bd82e59ae27c21baca69c8b191aaf5a6e"
 
 [[package]]
 name = "utf8_iter"
@@ -6967,21 +7034,20 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-internal-core"
-version = "43.0.2"
+version = "50.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3820b174f477d2a7083209d1ad5353fcdb11eaea434b2137b8681029460dd3"
+checksum = "b4668db5cde6343ae9c7c188741689d30bcefa40c70647b87be2afb2c14511aa"
 dependencies = [
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "libm",
 ]
 
 [[package]]
 name = "wasmtime-internal-jit-icache-coherence"
-version = "43.0.2"
+version = "50.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b86701b234a4643e3f111869aa792b3a05a06e02d486ee9cb6c04dae16b52dab"
+checksum = "62a0d73e89a065e74332c8651d27bbc9fa1e4c7357ff219c3929aa9c02b6a31e"
 dependencies = [
- "cfg-if",
  "libc",
  "wasmtime-internal-core",
  "windows-sys 0.61.2",
@@ -7046,15 +7112,6 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "0.26.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
-dependencies = [
- "webpki-roots 1.0.9",
-]
-
-[[package]]
-name = "webpki-roots"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
@@ -7070,9 +7127,9 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
 name = "wgpu"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76e8840e1ba2881d4cbb18d2147627a56af426ff064c0401eb0c8410c6325d07"
+checksum = "146fc3d654250e6207921a66c87534c621bc886c70df83dcf466c1d66813810e"
 dependencies = [
  "arrayvec",
  "bitflags 2.13.2",
@@ -7080,7 +7137,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "document-features",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "js-sys",
  "log",
  "naga",
@@ -7100,21 +7157,22 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f519832254e56965a9940c4af57dcb75f702b6f6fa4a0b172f685395843a4d7"
+checksum = "ad661da2ee99f208c30090b585284b2ab5b8bf2358ddf2d2215592808ec62f1a"
 dependencies = [
  "arrayvec",
- "bit-set 0.9.1",
+ "bit-set 0.10.0",
  "bit-vec 0.9.1",
  "bitflags 2.13.2",
  "bytemuck",
  "cfg_aliases",
  "document-features",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "indexmap",
  "log",
  "naga",
+ "naga-types",
  "once_cell",
  "parking_lot",
  "portable-atomic",
@@ -7133,41 +7191,41 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core-deps-apple"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5e39e26c4c0e07589e67d18546cf79ff45383659fc72fca4dd293358a0347f3"
+checksum = "7d3f2f24aee039ffe9ef527300daf6b7428c58edeefdaa1700f4fa0fd754df16"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-emscripten"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01e09be551dc939498bdd5f6b2c66e55ab275dad25825267a08605a80fc9f0af"
+checksum = "55ccf093bd215ae9dc4f96df293e675513ac1f2569f8293a2911cc34ca3505d1"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e592c1bbef6ad047647ae6e666ebd8cee7a32bb4544d9700ec96cbf73230257"
+checksum = "1331b08fa2362c5d454eccc4448e6e4f01eccfea569a00e310adbfc4415f2bdc"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-hal"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97ace1c17727311c22a46e4e3faf56ea6de81af99dcc839bdfb54857b94d448d"
+checksum = "a57452fe453658e141aafdb09de1028afa498805fab518238ddf372a518813ff"
 dependencies = [
  "android_system_properties",
  "arrayvec",
  "ash",
- "bit-set 0.9.1",
+ "bit-set 0.10.0",
  "bitflags 2.13.2",
  "block2",
  "bytemuck",
@@ -7176,17 +7234,18 @@ dependencies = [
  "glow",
  "glutin_wgl_sys",
  "gpu-allocator",
- "gpu-descriptor",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "js-sys",
  "khronos-egl",
  "libc",
- "libloading",
+ "libloading 0.8.9",
  "log",
  "naga",
+ "naga-types",
  "ndk-sys",
  "objc2",
  "objc2-core-foundation",
+ "objc2-core-graphics",
  "objc2-foundation",
  "objc2-metal",
  "objc2-quartz-core",
@@ -7201,6 +7260,7 @@ dependencies = [
  "raw-window-metal",
  "renderdoc-sys",
  "smallvec",
+ "static_assertions",
  "thiserror 2.0.21",
  "wasm-bindgen",
  "wayland-sys",
@@ -7214,9 +7274,9 @@ dependencies = [
 
 [[package]]
 name = "wgpu-naga-bridge"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95226013f547544b223281cd16a4fb549aa9dcb562adbda0faae4c73ffbbc161"
+checksum = "44a62ead68aad7cd40ac9e2cd2b8ec64f32dfbad2765f429b9fb74b8b735869f"
 dependencies = [
  "naga",
  "wgpu-types",
@@ -7224,23 +7284,25 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "29.0.4"
+version = "30.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84bf84cd9ca8ca45e2b223a3868f1adf9bfc0c66aeac212e76ee7e40fdadf8f5"
+checksum = "a9f6ee0bd50f5ab79fb8c25e3f33afb27126f034af4ba5909c7a0967058659e6"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
  "js-sys",
  "log",
+ "naga-types",
  "raw-window-handle",
+ "static_assertions",
  "web-sys",
 ]
 
 [[package]]
 name = "wide"
-version = "0.7.33"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce5da8ecb62bcd8ec8b7ea19f69a51275e91299be594ea5cc6ef7819e16cd03"
+checksum = "d920ac99c3c8edce110cb8d07dbb324d6d026011dce85b1e9355b70f0adacc4f"
 dependencies = [
  "bytemuck",
  "safe_arch",
