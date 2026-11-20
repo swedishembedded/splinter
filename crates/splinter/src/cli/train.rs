@@ -208,6 +208,16 @@ pub struct PolicyGradientArgs {
          when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a \
          step [default: none]")]
     pub sequence_advantage_cap: Option<f32>,
+    /// The mean KL to the reference over which a step is skipped.
+    #[arg(long, value_name = "KL", value_parser = positive_rate, help =
+        "For a dataset of rollouts: skip, and record, every optimiser step whose mean KL to the \
+         reference is over KL, so one outlier batch cannot throw the policy off [default: no bound]")]
+    pub max_step_kl: Option<f32>,
+    /// The gradient norm over which a step is skipped.
+    #[arg(long, value_name = "NORM", value_parser = positive_rate, help =
+        "For a dataset of rollouts: skip, and record, every optimiser step whose global gradient \
+         norm is over NORM [default: no bound]")]
+    pub max_step_grad_norm: Option<f32>,
 }
 
 impl PolicyGradientArgs {
@@ -226,6 +236,8 @@ impl PolicyGradientArgs {
             teacher: self.teacher_policy,
             advantage_bound: self.advantage_bound,
             sequence_advantage_cap: self.sequence_advantage_cap,
+            max_step_kl: self.max_step_kl,
+            max_step_grad_norm: self.max_step_grad_norm,
             ..PolicyGradientOptions::default()
         }
     }

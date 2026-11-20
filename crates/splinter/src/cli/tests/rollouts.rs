@@ -187,6 +187,36 @@ fn self_distillation_is_built_from_the_cliff_groups_and_trained_with_named_guard
 }
 
 #[test]
+fn a_run_on_rollouts_skips_the_steps_its_guards_name() {
+    // A step whose mean KL or gradient norm is over its bound is skipped by
+    // brain and recorded, so one outlier batch cannot throw the policy off.
+    let Command::Train(train) = command(&[
+        "train",
+        "ab12",
+        "--max-step-kl",
+        "0.1",
+        "--max-step-grad-norm",
+        "5",
+    ]) else {
+        panic!("train");
+    };
+    let options = train.policy_gradient.options(train.temperature);
+    assert_eq!(
+        (options.max_step_kl, options.max_step_grad_norm),
+        (Some(0.1), Some(5.0))
+    );
+    for refused in [
+        &["--max-step-kl", "0"][..],
+        &["--max-step-kl", "-1"],
+        &["--max-step-grad-norm", "0"],
+    ] {
+        let mut argv = vec!["train", "ab12"];
+        argv.extend_from_slice(refused);
+        assert!(parse(&argv).is_err(), "{refused:?}");
+    }
+}
+
+#[test]
 fn a_policy_gradient_dataset_takes_dapos_over_length_penalty() {
     let Command::Dataset(DatasetCommand::Build(args)) = command(&[
         "dataset",
