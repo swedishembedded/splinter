@@ -176,3 +176,5 @@ in the same commit.
 | [188](188-record-driven-ratio-spikes-wrecked-an-on-policy-round-and-a-step-guard-removed-the-damage.md) | Record-driven ratio spikes wrecked an on-policy round; a step guard removed the damage; proxy tokens were the cause, `--sampled-only` the fix |
 | [189](189-the-on-policy-recipe-does-not-fit-real-rollouts-at-the-current-step-cost.md) | The on-policy recipe does not fit real rollouts at the current step cost |
 | [190](190-a-rerun-of-an-interrupted-practice-run-restarts-every-trial.md) | A rerun of an interrupted practice run restarts every trial |
+| [191](191-a-4b-told-to-read-a-mounted-collection-almost-never-opens-it.md) | A 4B told to read a mounted collection almost never opens it |
+| [192](192-an-edited-driver-script-breaks-running-bash-jobs.md) | An edited driver script breaks running bash jobs |

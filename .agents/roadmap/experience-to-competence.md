@@ -127,7 +127,7 @@ SimPO, ORPO, KTO and a rejection-sampling SFT floor, with fresh prompts per roun
 | 18 | Campaign demo evidence incomplete at hand-over: generation-2 evaluate and rollback outcomes were not recorded when this ledger was written | record both in `campaigns.md` from the campaign lane's final report | rollback shown moving the champion back on real models |
 | 19 | First-package arm run 2026-11-20 (results below, "Item 19: first-package RL round"): no teacher-free gain; the unguarded round damaged A2 through ratio spikes on start-of-run proxy tokens, root-caused and fixed by `dataset build --sampled-only` (b879d37d2, knowledge 188); brain bounds a negative advantage's term by dual-clip PPO since bcd17ba8b (default c 3, `clip_fraction_dual` per step, splinter `train --dual-clip`, db33cd729) | a guarded round on `--sampled-only` data with `behaviour: recorded` (verified: 24 steps, ratio max 12.3, KL 0.018); make exact contexts cover `scrubbed` and `context_reconstructed` actions (48% of tokens are left out today); 2+ seeds, turn-level credit | held-out gain >= 0.05 with CI above 0 against A2s1 on paired fresh tasks, retention non-inferior at 0.10, KL 0.02-0.05 with no guard skips |
 | 20 | Bench draws at a rung or of families (bench 15a9220d) were refused when practised: splinter re-staged a draw from count and seed only | done 2026-11-20: the draw identity carries `rung` and `families` into the re-stage (`--rung`, `--family`), `[practice]` takes `rung` and `families` for transfer draws; older practice.json unchanged | `bench_practice` tests: re-stage passes both, old and null draws pass neither |
-| 21 | Knowledge-assisted self-learning: no arm has yet learned from written principles instead of trajectories (plan below, "Item 21"; S0 leakage gate PASSED 2026-11-20: `swedishembedded/knowledge@v0.2`, mounted-copy digest `sha256:262ff959...`, bench knowledge audit signed pass on 8 sealed exams with 0 shared 8-grams; S1 next) | bench: `--knowledge <dir>` mount with digest, contamination audit of the collection, open-book exam plan; then S0 and the S1 zero-training check on the base and A2 | S1: collection + instruction against none >= +0.06 pass@1 (or pass@8 +0.05), probe share under 2%; programme: closed-book tier c gain >= 0.05 with CI above 0 against the matched no-knowledge RFT control, retention non-inferior at 0.10 |
+| 21 | Knowledge-assisted self-learning: no arm has yet learned from written principles instead of trajectories (plan below, "Item 21"; S0 leakage gate PASSED 2026-11-20: `swedishembedded/knowledge@v0.2`, mounted-copy digest `sha256:262ff959...`, bench knowledge audit signed pass on 8 sealed exams with 0 shared 8-grams; S1 2026-11-20: STOP by its rule, A2 collection + instruction - none -0.002 [-0.038, +0.035], but A2 opened the collection in 6% of trials and no domain page (knowledge 191); S1b: page preload +0.029 [-0.050, +0.105], inconclusive, helps support/compiled, hurts accounting VAT/accrual; index preload +0.010; user wording +0.044, no go, fewer look-ups; next: accounting pages back to the author, 96-task confirmation of preload on legal/support/compiled) | bench: `--knowledge <dir>` mount with digest, contamination audit of the collection, open-book exam plan; then S0 and the S1 zero-training check on the base and A2 | S1: collection + instruction against none >= +0.06 pass@1 (or pass@8 +0.05), probe share under 2%; programme: closed-book tier c gain >= 0.05 with CI above 0 against the matched no-knowledge RFT control, retention non-inferior at 0.10 |
 
 Verification at the time of writing (clean force-rebuilt gates, no GPU): splinter `make check` exit 0; sven tests 5300 passed, clippy
 and doc clean (the wasm target is not installed on the node); brain clippy clean, `ci/static` clean, per-crate suites data 376,
@@ -397,6 +397,47 @@ every trial, knowledge 190); training rl1 3.6 (plus 1.9 lost the same way), rl1g
   but its held-out +0.039 has CI including 0.
 - None of this is a sealed claim.
 
+### Item 19 round R19: guarded on-policy RL on sampled tokens (pre-registered 2026-11-20 22:00, lane R19, n110, before any job ran)
+
+**Builds (one for every arm, A2s1's baseline re-measured on it).** brain 5e25d5b82 (tool-call parser fix and dual clip;
+frozen `containers/bin/brain-5e25d5b82`, brain sha256 a8ead99e..., worker 509d51d6...), splinter 7220b1d5d (holds
+`--sampled-only` b879d37d2 and `train --dual-clip` db33cd729), sven a0235c71 compact, bench 62da1dbb (worktree
+`r19-bench`). A2s1 = lane L6's `a2-s1.safetensors` (sha256 386cc64d...). Sampling T 1.0, top-p 0.95, top-k 20, logprobs.
+
+**Tasks (drawn 2026-11-20 21:40, held-out first).** Held-out: 48 fresh train-side tasks, 12 per domain (legal 19181,
+support 19182, accounting 19183, compiled 19184), never practised. Pool: 80 fresh train-side tasks by round 1's
+learning-signal pool rule: legal deadlines rung 0 x 20 (19101), accounting rung -1 x 20 (19102), support refund rung 2 x 20
+(19103), legal x 10 (19104) and accounting x 10 (19105) at the default rung. No name is shared between the two sets.
+
+**Practice.** A2s1, G = 8 (640 trials), practice seeds 19201-19205, `want_logprobs` and policy traces.
+
+**Dataset.** Policy-gradient view, `--reward shaped-partial` (C 0.5, floors from `naive_floor`), `--sampled-only`, max
+block 32768. Reported: records kept and left out (`proxy_tokens`), share of supervised tokens kept.
+
+**Train (2 seeds, separate cards).** `--recipe on-policy-rl --behaviour recorded --reference start --dual-clip 3
+--max-step-kl 0.1 --max-step-grad-norm 5 --records-per-step 8 --eval-every 0 --patience 0`, recipe lr 1e-4, seeds 1 and 2.
+Turn-level credit: splinter 7220b1d5d has none (neither `dataset build` nor `train` takes one; every action of a trial
+carries its trial's advantage), so the round runs without it. Steps N, fixed before launch from the kept records K:
+N = min(2K/8, 164) (164 x 175 s = 8 GPU-h), lowered if needed so that training ends by 09:00 on 11-21 (the lease ends
+about 14:15 and the evaluation needs about 4 h on 4 cards). N is recorded with the launch. Targets: median KL 0.02-0.05,
+median clip 0.10-0.20, no guard skips; `clip_fraction_dual` reported. No setting is tuned on a result of this round.
+
+**Control.** RFT: the sft-step view of this round's verified passes (strict pass only, no teacher data), from A2s1, lr
+2e-4, max block 16384, 8 records per step, the same N steps, patience 0, seed 1.
+
+**Evaluation (arms A2s1, rl-s1, rl-s2, rft; one build).**
+- Held-out: the 48 tasks x 8, sampling seeds per domain 19281-19284 shared by every arm; paired by task against A2s1,
+  task-cluster bootstrap 95% (10,000 resamples).
+- Training tasks: the 40 tasks of the pool with the highest learning signal `LS_i` x 8, seeds 19291-19295 shared.
+- Retention: orchestration 32 + workspace-tools-reference 59, 2 attempts, lane R's dev profile (sven-5889a139),
+  non-inferior when the paired lower bound is above -0.10.
+- Per domain and family, timeouts, probe share and sampled-token NLL for every arm.
+
+**Decision rule (item 19's acceptance).** The RL arm is the two seeds' per-task mean pass rate. Accept when all hold:
+held-out gain against A2s1 >= 0.05 with the 95% lower bound above 0; retention non-inferior at 0.10; each seed's median KL
+in 0.02-0.05 with no guard skips. Each seed is also reported alone, and RL against RFT as a secondary contrast. Anything
+else is "no teacher-free gain" for this round. Not a sealed claim either way.
+
 ## Item 21: knowledge-assisted self-learning (plan 2026-11-20)
 
 Distillation through a written knowledge base, no trajectory teacher. Design from the 2026-11-20 ML review, with the
@@ -571,3 +612,171 @@ pages per trial, pass rate split by whether a page of the task's domain was read
 - Reported beside it: availability gain (b) - (a), instruction gain (c) - (b), non-specific gain (d) - (a); base (c) - (a).
   If (c) - (a) clears the go margin but (c) - (d) does not, the gain is not specific to the collection and the result is
   recorded as a harness effect, not a go.
+
+**S1 results (2026-11-20, runs 14:37-18:10, about 14 GPU-h on 4 GH200s; splinter 7220b1d5d, evidence
+`~/project/shared/archive/lane-s1-2026-11-20.tar.zst`).** 2,688 trials, 17 infrastructure failures (left out), all 28 runs
+exit 0, every open-book run's report records the digest it mounted.
+
+| Cell | pass@1 | pass@8 | never | legal | acct | support | compiled | timeouts | probe | rescued | compl. tok | wall s | touched /knowledge | read index.md | pages/trial |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A2 (a) none | 0.529 | 0.812 | 9 | 0.484 | 0.312 | 0.719 | 0.859 | 19 | 0.013 | 0.146 | 13,608 | 299 | 0 | 0 | 0 |
+| A2 (b) mounted | 0.522 | 0.771 | 11 | 0.445 | 0.317 | 0.719 | 0.891 | 12 | 0.034 | 0.154 | 14,790 | 301 | 0.00 | 0.00 | 0.00 |
+| A2 (c) mounted + instruction | 0.527 | 0.812 | 9 | 0.432 | 0.359 | 0.703 | 0.875 | 13 | 0.036 | 0.133 | 13,238 | 271 | 0.06 | 0.03 | 0.01 |
+| A2 (d) placebo + instruction | 0.514 | 0.792 | 10 | 0.424 | 0.352 | 0.672 | 0.859 | 9 | 0.013 | 0.094 | 14,149 | 283 | 0.08 | 0.05 | 0.10 |
+| A2 (e) oracle mount + instruction | 0.517 | 0.771 | 11 | 0.445 | 0.372 | 0.656 | 0.812 | 15 | 0.026 | 0.125 | 13,036 | 296 | 0.08 | 0.04 | 0.03 |
+| base (a) none | 0.044 | 0.188 | 39 | 0.008 | 0.086 | 0.078 | 0.000 | 0 | 0.000 | 0.018 | 5,076 | 122 | 0 | 0 | 0 |
+| base (c) mounted + instruction | 0.036 | 0.125 | 42 | 0.023 | 0.078 | 0.016 | 0.000 | 1 | 0.000 | 0.057 | 4,906 | 121 | 0.13 | 0.13 | 0.20 |
+
+Paired by task (95% task bootstrap; sign-flip over task families, two-sided):
+
+| Contrast | delta pass@1 | delta pass@8 | family p |
+|---|---|---|---|
+| A2 (c) - (a), primary | -0.002 [-0.038, +0.035] | 0.000 [-0.083, +0.083] | 0.96 |
+| A2 (b) - (a), availability | -0.006 [-0.063, +0.052] | -0.042 [-0.146, +0.062] | 0.97 |
+| A2 (c) - (b), instruction | +0.004 [-0.045, +0.053] | +0.042 [-0.042, +0.125] | 0.92 |
+| A2 (d) - (a), non-specific | -0.015 [-0.062, +0.033] | -0.021 [-0.104, +0.062] | 0.80 |
+| A2 (c) - (d), specific | +0.013 [-0.036, +0.061] | +0.021 [-0.042, +0.083] | 0.73 |
+| A2 (e) - (a), oracle mount | -0.011 [-0.065, +0.043] | -0.042 [-0.146, +0.062] | 0.74 |
+| base (c) - (a) | -0.008 [-0.031, +0.013] | -0.062 [-0.146, +0.021] | 1.00 |
+
+Reads (knowledge 191): A2 (c) opened `index.md` in 11 of 382 trials and no domain page; several calls named paths that do
+not exist (`/knowledge/reference/rule_table.md`, the task's own file names under the mount). A2 (e) opened a domain page in
+2 trials (both failed). Base (c) opened `index.md` in 50 trials and a domain page in 37 (`compiled/apply-rules.md` 29),
+and passed none of those 37. The pass-rate split by "read the domain's page" is therefore empty for A2 and 0.000 against
+0.040 for base.
+
+**Decision (pre-registered rule): STOP.** Neither (c) nor (e) beats (a); the probe share of A2 (c) is 0.036, also over the
+2% cap (A2 (b), without the instruction, 0.034; A2 (a) 0.013). The rule says "back to the author". The reads show that
+this null does not test the content: the policies hardly opened it. A2 (trained on 27B demonstrations that never read a
+collection) ignores the system-prompt line, and base Qwen3-4B reads but cannot do the tasks (pass@1 0.04). Not supported
+by S1: any claim about the collection's quality. Next cheap checks, before any training: (1) the review's oracle-page
+*injection* (the domain page pre-loaded into the first user turn, which this run's narrowed mount did not do) to separate
+"does not look" from "cannot use"; (2) the read tool's description naming the mount (a sven prerequisite not yet built);
+(3) the advisory's reframe, a habit SFT on the few open-book trials that read and passed. No 27B cell was run (user's
+exclusion), so "only the 27B gains" was not tested.
+
+**Correction to S1 (2026-11-20).** The pre-registration said the per-trial seeds were identical in every cell. They were
+not: bench derives a trial's seed from the run seed and the trial's name (`sha256(f'{run_seed}:{trial}')`), and Harbor's
+trial names carry a random suffix. Each cell shared its run seed per domain, but its trial seeds differed. The paired
+analysis pairs by task, not by trial, so the contrasts stand; the sampling noise is that of independent attempts.
+
+**S1 probe check.** Every probe counted in S1 was a read of the task workspace's own git history (`git show HEAD`, `git log`,
+`git cat-file -p`), in every cell. No call read `/knowledge` and was counted, and bench's leak audit does not match
+`/knowledge` (it flags the snapshot mount only), so no classifier needs a fix. Trials with a probe: (a) 5, (b) 13, (c) 14,
+(d) 5, (e) 10 of about 382. Cell (b) never touched the mount, so the rise is not caused by reading the collection.
+
+### Item 21 S1b: does not look, or cannot use (pre-registered 2026-11-20, before any job)
+
+**Mechanism.** bench 62da1dbb adds `[sven].knowledge_preload = [PATH...]`: files of the mounted copy appended to the system
+prompt after the knowledge prompt, recorded as `knowledge.preload` (path, sha256, bytes) in the run and every trial record.
+
+**Cells, A2s1 only, the same 48 tasks x 8 as S1** (same draws, brain-5e25d5b82, sven-a0235c71 compact, splinter
+7220b1d5d, same sampling, run seeds and caps; bench 62da1dbb):
+- (a) none, rerun interleaved (S1's (a) ran under bench 3fa3820c in another time slot).
+- (f) index preload: the full v0.2 collection mounted, the instruction, `index.md` preloaded.
+- (g) page preload: the full collection mounted, the instruction, and the task domain's folder (index and pages) plus the
+  `calculation/` pages preloaded. Legal, support and compiled: about 6.0-6.1k tokens (words x 1.3), 26-28 kB.
+  Accounting is over the cap (about 7.9k tokens, 35 kB): it gets `accounting/index.md` plus the two pages that fit the task's
+  family: accrual `period-end` + `money`, bank-rec `bank-reconciliation` + `money`, consolidation `consolidation` + `money`,
+  missing-info-vat-category `vat` + `agent-workflow/missing-information`, trial-balance `journal-errors` + `money`, vat
+  `vat` + `money` (one run per family group).
+- Interleaving as in S1: cell k's domain d on card (d + k) mod 4, all runs at once.
+
+**Decision rule (fixed now).**
+- (g) - (a) >= +0.06 pass@1: the content helps when it is read. The next work is the habit or navigation (preload by default,
+  or a habit SFT).
+- (g) <= (a): the content does not help A2 even when read. Return to the content, with a per-domain analysis of the
+  failures.
+- Between the two: inconclusive at this sample size; report the interval.
+- (f) - (a) and (g) - (f) say whether the index alone is enough.
+Reported as in S1, plus the probe share per cell.
+
+**S1b cell (h), added 2026-11-20 at the user's request, pre-registered before any (h) job.** Same 48 tasks x 8, draws,
+builds, caps and run seeds as S1b; the full v0.2 collection mounted, no preload, and in place of the grounding text the
+user's wording, verbatim: "A knowledge base is available at /knowledge (start from /knowledge/index.md). Whenever you can
+not directly solve the problem, look in the knowledge base for the correct approach. Find it and use it." Placement: bench
+can only append to Sven's system prompt (`[sven].knowledge_prompt` becomes `--append-system-prompt`; putting text first
+would mean replacing Sven's whole prompt with `--system-prompt-file`), so the text is appended, as (c)'s was. (h) runs
+after (a), (f) and (g) started, in a later time slot, so it is not interleaved with its baseline. Decision rule, the same go
+rule as S1: (h) - (a) >= +0.06 pass@1, or pass@8 up >= 0.05 with fewer never-solved tasks, with the probe share under 2%.
+Also reported: (h) - (c) against S1's (c) (another time slot and bench 3fa3820c, so indicative only), and the read rate
+(trials touching `/knowledge`, reading `index.md`, opening a domain page) against (c)'s 6% / 3% / 0%.
+
+**S1b results (2026-11-20, runs 18:46-22:19; bench 62da1dbb, splinter 7220b1d5d; evidence
+`~/project/shared/archive/lane-s1b-2026-11-20.tar.zst`).** A2s1, the same 48 tasks x 8.
+
+| Cell | pass@1 | pass@8 | never | legal | acct | support | compiled | timeouts | probe | rescued | compl. tok | wall s | touched /knowledge | index.md | domain page opened |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| (a) none | 0.487 | 0.750 | 12 | 0.432 | 0.350 | 0.547 | 0.812 | 18 | 0.026 | 0.159 | 14,453 | 298 | 0 | 0 | 0 |
+| (f) index preload | 0.497 | 0.750 | 12 | 0.438 | 0.273 | 0.719 | 0.844 | 11 | 0.021 | 0.109 | 13,725 | 295 | 0.05 | 0.01 | 0 |
+| (g) page preload | 0.517 | 0.833 | 8 | 0.484 | 0.238 | 0.719 | 0.938 | 26 | 0.026 | 0.130 | 14,908 | 308 | 0.04 | 0.00 | 4 trials |
+| (h) user wording | 0.531 | 0.854 | 7 | 0.445 | 0.336 | 0.734 | 0.891 | 12 | 0.029 | 0.154 | 13,921 | 238 | 0.02 | 0.02 | 2 trials |
+
+| Contrast | delta pass@1 (95% task bootstrap) | delta pass@8 | family p | legal / acct / support / compiled |
+|---|---|---|---|---|
+| (g) - (a) | +0.029 [-0.050, +0.105] | +0.083 [0.000, +0.188] | 0.88 | +0.05 / -0.11 / +0.17 / +0.13 |
+| (f) - (a) | +0.010 [-0.045, +0.065] | 0.000 | 0.94 | +0.01 / -0.08 / +0.17 / +0.03 |
+| (g) - (f) | +0.019 [-0.049, +0.091] | +0.083 [+0.021, +0.167] | 0.81 | |
+| (h) - (a) | +0.044 [-0.012, +0.102] | +0.104 [+0.021, +0.188] | 0.10 | +0.01 / -0.02 / +0.19 / +0.08 |
+| (h) - S1 (c), other slot | +0.004 [-0.040, +0.044] | | | |
+| S1b (a) - S1 (a), same cell, other slot | -0.041 [-0.090, +0.008] | | | |
+
+Trials the leak audit marked `exposed` (a 7, f 2, g 1, h 0) were left out as above. Counted as failures instead, they give
+(g) - (a) +0.036 [-0.042, +0.112] and (h) - (a) +0.052 [-0.005, +0.109].
+
+Accounting under (g), per family (pass rate (a) -> (g), 7-16 trials each): vat-single-rate 0.88 -> 0.50, vat-boundary 0.86 ->
+0.43, vat-multi-rate 0.57 -> 0.25, accrual-accrued 1.00 -> 0.12, missing-info-vat-category 0.69 -> 0.50, bank-rec-timing 0.12
+-> 0.50; the rest of accounting was at or near 0 in both cells (trial-balance, consolidation, bank-rec-errors).
+
+**Decisions (pre-registered rules).**
+- (g): +0.029 is between the bars, so the result is INCONCLUSIVE at this sample size. The baseline itself moved by -0.041
+  between two time slots, about the size of the effect. By domain, the preloaded pages helped support (+0.17) and compiled
+  (+0.13), but HURT accounting (-0.11): the VAT and accrual families fell sharply with `accounting/vat.md`,
+  `period-end.md` and `calculation/money.md` in the prompt. Return the accounting pages to the author with this
+  per-family list. Legal, support and compiled are worth a confirmation at 96 tasks.
+- (f): the index alone does nothing (+0.010; the policy still opened no domain page).
+- (h): no go. Pass@8 rose by 0.104 with fewer never-solved tasks (12 -> 7), but pass@1 is +0.044 and the probe share is
+  0.029, over the 2% cap (the baseline's is 0.026 in this slot). The conditional wording LOWERED look-ups: 2% of trials
+  touched `/knowledge` and 2 opened a domain page, against (c)'s 6%. So whatever (h) gained did not come through the
+  collection, and (h) is no different from S1's (c) (+0.004). It ran after (a), in a less loaded slot (wall 238 s against
+  298 s), so its gain is not separated from load. The text was appended, not placed first: bench can only append to Sven's
+  system prompt without replacing it.
+- Probes: all S1b probes are again reads of the workspace's own git history; the cap is breached in the baseline too, so
+  it measures the policy, not the mount.
+
+**Run note.** The lane's driver script was edited while three runs were inside it (knowledge 192). Their logs were
+truncated and they recorded rc 127, but their reports hold every trial and were harvested. The first (h) accounting run was
+stopped at 24 of 128 trials and rerun as three task subsets on three cards; the stopped run is not analysed.
+
+### Item 21 S1c: confirmation with knowledge v0.3 (pre-registered 2026-11-20, before any job)
+
+**Collection.** `swedishembedded/knowledge@v0.3` (94bc175): every page opens with "the task's files win", worked examples
+are marked illustration only, `period-end` is split into `accrued-costs`, `prepaid-costs` and `depreciation`, and `money` and
+`vat` are rewritten; bench's leakage audit passed on 8 sealed exams. Exports: tier 3
+`sha256:625bb3ad5dedfa7aaa84a2bf2b5c4eb270f2da598c3f047838016912d15d206f` (29 files), tier 2 (no worked examples)
+`sha256:e170326a2790f7229e88644e7d944cdc163e278fb085cb2061a6a6b960d0973b`.
+
+**Material.** 96 fresh train-side tasks, 24 per domain (bench 62da1dbb; seeds 9831 legal, 9832 accounting, 9833 support at
+refund-eligibility rung 2, 9834 compiled; default rungs otherwise), 8 attempts; A2s1 on brain-5e25d5b82, sven-a0235c71,
+splinter 7220b1d5d; run seeds 7311-7314 per domain; caps as in S1.
+
+**Cells.** (a) none; (g3) v0.3 tier 3 mounted, the grounding instruction, pages preloaded as in (g): the domain folder plus
+the `calculation/` pages for legal, support and compiled (about 6.0k tokens). Accounting is over the 32 KiB cap (about 9.9k
+tokens), so it gets `accounting/index.md` plus the two pages for the task's family: accrued `accrued-costs` + `money`,
+prepaid `prepaid-costs` + `money`, depreciation `depreciation` + `money`, bank-rec `bank-reconciliation` + `money`,
+consolidation `consolidation` + `money`, missing-info-vat-category `vat` + `agent-workflow/missing-information`,
+trial-balance `journal-errors` + `money`, vat `vat` + `money`. (g3t2) the same paths from the tier-2 export. (h3) the user's
+wording (S1b (h), appended), v0.3 tier 3 mounted, no preload.
+
+**Interleaving.** The 96 tasks form 8 units of 12, half a domain each. A card runs all four cells of one unit at once (10
+trials at a time per cell), and takes the next unit (accounting first) when it is done. Every task's trials in every cell
+therefore share a card and a time slot. Cards are taken from lane R19 as it frees them.
+
+**Decision rule (fixed now).**
+- Primary, (g3) - (a): go if pass@1 >= +0.06, or pass@8 >= +0.05 with fewer never-solved tasks; and probe share (g3) minus
+  probe share (a) under +0.02. **Change from S1:** the probe gate is on the difference against (a), not on the absolute
+  share, because S1b's baseline itself was at 0.026, over the 2% cap. Every probe so far was a read of the workspace's git
+  history by the policy, in every cell, so the gate should catch what the context adds, not what the policy already does.
+- Secondary, Holm-corrected over two family sign-flip tests: (g3t2) - (g3), (h3) - (a).
+- Reported: per domain, and accounting's VAT and accrual families against S1b's harm; steps per trial (the v0.2 pages
+  doubled to quadrupled steps in accounting); the same read, timeout, token and rescued-call metrics as S1.
