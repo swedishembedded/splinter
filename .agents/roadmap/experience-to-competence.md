@@ -528,3 +528,46 @@ Never do this:
 aggregate coverage report, open-book exam plans. sven: the instruction as profile configuration, the read cap, restatements
 as visible assistant content if the template drops earlier reasoning. splinter: the three views and their lint, the matched
 control, the gap ledger.
+
+### Item 21 S1: zero-training check (pre-registered 2026-11-20, lane S1, n110, before any job ran)
+
+**Material.** 48 fresh train-side tasks drawn with bench 3fa3820c (`bench task practice --count N --seed S`): legal 16
+(seed 9811, default rung), accounting 16 (9812, default rung), compiled 8 (9814, default rung), support 8 (9813, rung 2,
+family `refund-eligibility`: A2 is 0.885 on support at the default rung, 0.71 at refund rung 2 per the dial check). 8
+attempts per task; per-trial seeds from one run seed per domain (legal 7211, accounting 7212, support 7213, compiled 7214),
+identical in every cell.
+
+**Serving and harness, identical in every cell.** brain-5e25d5b82 (frozen, `--max-batch 64`), one server per GH200, base
+Qwen3-4B with A2s1 registered on the same server; sven-a0235c71 `compact`, sampling T 1.0, top-p 0.95, top-k 20,
+logprobs; splinter practice executor (this commit's `tasks harbor practice --knowledge`). Caps: sven's default 200 tool
+rounds (median use about 11, so the four allowed reads need no raise), the task's own agent time limit, the same context
+window. A model-caused timeout counts as a failure.
+
+**Cells.** A2s1: (a) none; (b) collection mounted, no instruction (profile without `knowledge_prompt`); (c) collection +
+instruction (`profiles/brain-local-knowledge.toml`'s `knowledge_prompt`, verbatim); (d) placebo: the same instruction with a
+same-shape public-domain collection (Franklin's Autobiography, Project Gutenberg #148: 6 folders with an index each, 20
+passages, 27 files, 97 kB against the collection's 95 kB; no task-domain rule and no workflow advice; digest
+`sha256:25323eca987a26b5598c842bde22eb9ee09ac1784e209ac9c849003fc803c126`); (e) oracle page: the instruction with a mount
+that holds only the task's domain folder, `calculation/` and `agent-workflow/`, root index reduced to those entries
+(digests: legal `sha256:8c7cd1c1...`, accounting `sha256:a9fb111a...`, support `sha256:760df516...`, compiled
+`sha256:c6b2b6fb...`). Base Qwen3-4B: (a) none; (c) collection + instruction. Collection: `swedishembedded/knowledge@v0.2`,
+`kb.py export --max-tier 3`, digest `sha256:262ff959b54abf6d36c400a6e4f32fe12a155899ac4c601040ad6f2bb01bade8`.
+Interleaving: all 28 (cell, domain) runs at once, cell k's domain d on card (d + k) mod 4, so every cell spans all four
+cards in the same time slot.
+
+**Measures.** pass@1 = mean over tasks of the per-task pass rate over graded trials (an infrastructure failure is reported
+and left out; a timeout is a failure); pass@8 = share of tasks solved at least once; never-solved = tasks with 0 of 8.
+Paired differences by task with a 95% task bootstrap (10,000 resamples) and a sign-flip permutation test over task
+families (the generator family, company name removed). Per domain. Mean completion tokens and wall time per trial.
+Timeouts; probe share (trials with a git-history probe); `tool_call_rescued_from_think` share (trials with a response that
+has calls, reasoning and no text). Reads: files under `/knowledge` opened per trial, share of trials that read `index.md`,
+pages per trial, pass rate split by whether a page of the task's domain was read.
+
+**Decision rule (fixed now).**
+- Go: A2(c) - A2(a) >= +0.06 pass@1, or pass@8 up >= 0.05 with fewer never-solved tasks; and the probe share of A2(c)
+  under 2%.
+- Navigation repair: only (e) beats (a) (the go margin on (e) - (a), with (c) failing it): fix the index and rerun once.
+- Stop: neither (c) nor (e) beats (a): the content is the problem, back to the author.
+- Reported beside it: availability gain (b) - (a), instruction gain (c) - (b), non-specific gain (d) - (a); base (c) - (a).
+  If (c) - (a) clears the go margin but (c) - (d) does not, the gain is not specific to the collection and the result is
+  recorded as a harness effect, not a go.
