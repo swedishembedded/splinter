@@ -24,3 +24,22 @@ lr 1e-4, 3-4 epochs per batch), sample tasks by p(1-p) and drop zero-variance gr
 
 Found 2026-11-19, expert review of the A2 and A6 arms. The ranked causes, the decisive experiment and how to read its
 outcome are in `.agents/roadmap/experience-to-competence.md`, section "Why teacher-free learning showed no gain".
+
+## Update 2026-11-20: the paper's earlier policy-gradient runs had the same signature
+
+The optimiser logs of "The Frontier Must Grow"'s two negative policy-gradient results read the same way (per-step
+`kl` to the base reference, `clip` fraction and mean importance `ratio`, medians over steps):
+
+| Run | Steps x records | lr | KL median (steps >= 0.01) | Clip median | \|ratio - 1\| median |
+|---|---|---|---|---|---|
+| S2 Lua, Qwen3-4B, lineages r0-r3 | 2 generations x 24 steps | 6e-6 | 0.0025-0.0034 (1-3 of 48) | 0.9% | 0.001-0.002 |
+| 27B gen 0 GRPO | 60 x 4 of 476 | 2e-5 | 0.0044 (4 of 60) | 1.9% | 0.002 |
+| 27B gen 0 GRPO + self-distill | 60 x 4 of 440 | 2e-5 | 0.0061 (9 of 60) | 2.5% | 0.007 |
+| 27B gen 1 frontier GRPO | 120 x 4 of 2379 | 2e-5 | 0.0077 (27 of 120) | 2.6% | 0.012 |
+| 27B gen 1 frontier self-distill | 120 x 4 of 2378 | 2e-5 | 0.0064 (24 of 120) | 2.3% | 0.009 |
+
+None reached the KL 0.02-0.05 and clip 10-20% this entry asks for; the few steps above 0.01 are isolated spikes (to
+0.34 and 31.9 on single steps). The 27B runs drew each record at most once and saw 20-50% of their datasets. These are
+under-optimised updates, not evidence that the method gives no gain. Sources: the training logs in the private HF
+dataset `swedishembedded/qwen38-27b-flywheel` (`decisions/gen-{0,1}/generation-files.tar.zst`, `train-*.log`) and
+`swedishembedded/splinter-flywheel-evidence` (`rsi2/lineages/r*.log`).

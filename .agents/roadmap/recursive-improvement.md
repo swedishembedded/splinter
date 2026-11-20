@@ -244,6 +244,23 @@ headline (interpreter-labelled self-proposed SFT, 8.3% to 16.7% on the fresh exa
 2. **Negative appendix results.** "No gain on repository tasks / 27B agent" may share the agentic GRPO failure, where the
    update never moved the policy (KL about 0.002, ratio about 1.002, clip about 1%; splinter knowledge 184). Check those
    runs' KL and clip logs. Unless the policy moved, report them as under-optimised configurations, not as no gain.
+   **Checked 2026-11-20 (lane L11, CPU): the policy did not move in any of them.** The 27B agent's candidates were RL
+   (GRPO and GRPO with privileged self-distillation, k3 KL to the base at beta 0.02, clip 0.2, lr 2e-5, 4 records per
+   step, each record drawn at most once). Medians over steps from their training logs (private HF dataset
+   `qwen38-27b-flywheel`, `decisions/gen-{0,1}/generation-files.tar.zst`, `train-*.log`):
+   gen 0 GRPO (60 steps, 240 of 476 records) KL 0.0044, clip 1.9%, |ratio - 1| 0.002, 4 of 60 steps with KL >= 0.01;
+   gen 0 GRPO + self-distill (60 steps, 240 of 440) KL 0.0061, clip 2.5%, |ratio - 1| 0.007, 9 of 60;
+   gen 1 frontier GRPO (120 steps, 480 of 2379) KL 0.0077, clip 2.6%, |ratio - 1| 0.012, 27 of 120;
+   gen 1 frontier self-distill (120 steps, 480 of 2378) KL 0.0064, clip 2.3%, |ratio - 1| 0.009, 24 of 120.
+   The steps above 0.01 are isolated spikes (to 0.34 and 31.9 on single steps), not a sustained move. The same holds for
+   S2, the paper's Lua policy-gradient series on the 4B (`splinter-flywheel-evidence`, `rsi2/lineages/r*.log`, lr 6e-6,
+   2 x 24 steps per lineage): KL median 0.0025-0.0034, clip 0.9%, |ratio - 1| 0.001-0.002. All five are in the regime of
+   knowledge 184 (target KL 0.02-0.05, clip 10-20%), so the paper should report them as under-optimised RL
+   configurations, not as "no gain" from the method. The repository-task results are SFT, not RL: the registered query's
+   decisive-action adapter (seed 13, 120 steps, lr 5e-5) has no kept training log, and the 27B pilots' kept summaries
+   (paper `data/measurements.json`) show the supervised update did move the model: CE8-T monitor loss 0.1738 against
+   its base's 0.1799 (113 records, 57 steps), CE8-T-S 0.2315 against 0.2635, u1b 0.1676 against 0.1835 (1200 steps),
+   while the tasks did not improve. There the question is transfer of a moved model, not a stalled optimiser.
 3. **Small-cluster intervals.** The minimum-family rule (knowledge 177: a family-resampled interval has zero width when a
    few families agree) means intervals over 4 lineages are fragile. Re-check the round 2/3 "both intervals above zero"
    claims with an exact sign or permutation bound over lineages.
