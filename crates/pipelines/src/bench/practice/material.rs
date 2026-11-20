@@ -161,13 +161,19 @@ impl PracticeFacts {
     }
 }
 
-/// The draw of a practice manifest made with `--count N --seed S`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+/// The draw of a practice manifest made with `--count N --seed S`, at one
+/// rung (`--rung R`) and of some families (`--family F`) when it was
+/// narrowed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Draw {
     /// Tasks drawn.
     pub count: u64,
     /// The seed they were drawn under.
     pub seed: u64,
+    /// The rung of the generator's difficulty ladder it was drawn at.
+    pub rung: Option<u64>,
+    /// The families it was narrowed to; empty when not narrowed.
+    pub families: Vec<String>,
 }
 
 /// The profile a practice job was staged under, as the examiner's run
@@ -261,7 +267,8 @@ impl Practice {
     /// The draw the material was made from, when it is one.
     ///
     /// # Errors
-    /// The manifest's draw names no count or seed.
+    /// The manifest's draw names no count or seed, a rung that is not a
+    /// number or families that are not strings.
     pub fn draw(&self) -> Result<Option<Draw>, EpisodeError> {
         let Some(draw) = &self.manifest.draw else {
             return Ok(None);
@@ -271,9 +278,31 @@ impl Practice {
                 .and_then(Value::as_u64)
                 .ok_or_else(|| malformed(&self.dir, format!("the draw records no {key}")))
         };
+        // Material staged before the examiner narrowed draws records neither
+        // key; a draw that was not narrowed records them as null.
+        let rung = draw
+            .get("rung")
+            .filter(|v| !v.is_null())
+            .map(|v| {
+                v.as_u64()
+                    .ok_or_else(|| malformed(&self.dir, "the draw's rung is not a number"))
+            })
+            .transpose()?;
+        let families = draw
+            .get("families")
+            .filter(|v| !v.is_null())
+            .map(|v| {
+                v.as_array()
+                    .and_then(|a| a.iter().map(|f| f.as_str().map(str::to_owned)).collect())
+                    .ok_or_else(|| malformed(&self.dir, "the draw's families are not strings"))
+            })
+            .transpose()?
+            .unwrap_or_default();
         Ok(Some(Draw {
             count: field("count")?,
             seed: field("seed")?,
+            rung,
+            families,
         }))
     }
 

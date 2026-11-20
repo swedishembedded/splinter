@@ -268,6 +268,8 @@ fn material_selected_by_capability_is_staged_again_with_its_selection_and_a_draw
                 count: 40,
                 seed,
                 capabilities: &["design-review".to_string(), "exact-arithmetic".to_string()],
+                rung: None,
+                families: &[],
             },
             &out,
             &scratch.0.join("draw.log"),
@@ -281,6 +283,97 @@ fn material_selected_by_capability_is_staged_again_with_its_selection_and_a_draw
         format!(
             "bench task practice tasks/support --environment userns --count 40 --seed {seed} --out {} \
              --capability design-review --capability exact-arithmetic",
+            out.display()
+        )
+    );
+}
+
+/// The staging command of the first `bench task practice` call after
+/// running material whose manifest records `draw` under the stand-in examiner.
+fn restaging_of(test: &str, draw: serde_json::Value) -> String {
+    let (scratch, ctx, policy) = served(test);
+    let dir = practice_dir(&scratch.0, "train");
+    let mut manifest = practice_manifest("train");
+    manifest["draw"] = draw;
+    fs::write(dir.join("practice.json"), manifest.to_string()).unwrap();
+    let checkout = checkout(
+        &scratch.0,
+        &graded_export(&scratch.0),
+        &dir.join("practice.json"),
+    );
+    let practice = Practice::read(&dir).unwrap();
+    run_practice(&ctx, &request(&practice, &checkout, &policy)).unwrap();
+    let calls = fs::read_to_string(scratch.0.join("calls.log")).unwrap();
+    calls
+        .lines()
+        .find(|l| l.starts_with("bench task practice"))
+        .unwrap()
+        .to_string()
+}
+
+#[test]
+fn a_draw_at_a_rung_of_some_families_is_staged_again_with_the_same_arguments() {
+    let staging = restaging_of(
+        "practice-rung-draw",
+        json!({"count": 8, "seed": 5, "rung": 3, "families": ["procurement", "deadline"]}),
+    );
+    assert!(
+        staging.contains("--count 8 --seed 5 --rung 3 --family procurement --family deadline"),
+        "{staging}"
+    );
+}
+
+#[test]
+fn a_draw_recorded_without_a_rung_or_families_is_staged_again_as_before() {
+    for (name, draw) in [
+        ("old", json!({"count": 40, "seed": 7})),
+        (
+            "null",
+            json!({"count": 40, "seed": 7, "rung": null, "families": null}),
+        ),
+    ] {
+        let staging = restaging_of(&format!("practice-plain-draw-{name}"), draw);
+        assert!(staging.contains("--count 40 --seed 7"), "{staging}");
+        assert!(
+            !staging.contains("--rung") && !staging.contains("--family"),
+            "{staging}"
+        );
+    }
+}
+
+#[test]
+fn a_transfer_draw_at_a_rung_of_some_families_asks_the_examiner_for_both() {
+    let (scratch, _ctx, _policy) = served("practice-rung-transfer");
+    let dir = practice_dir(&scratch.0, "train");
+    let checkout = checkout(
+        &scratch.0,
+        &graded_export(&scratch.0),
+        &dir.join("practice.json"),
+    );
+    let seed = splinter_model::seed::draw().value();
+    let out = scratch.0.join("transfer");
+    checkout
+        .draw_practice(
+            &PracticeDraw {
+                collection: "tasks/support",
+                environment: "userns",
+                count: 8,
+                seed,
+                capabilities: &[],
+                rung: Some(2),
+                families: &["procurement".to_string()],
+            },
+            &out,
+            &scratch.0.join("draw.log"),
+        )
+        .unwrap();
+    let calls = fs::read_to_string(scratch.0.join("calls.log")).unwrap();
+    let draw = calls.lines().last().unwrap();
+    assert_eq!(
+        draw,
+        format!(
+            "bench task practice tasks/support --environment userns --count 8 --seed {seed} --rung 2 \
+             --family procurement --out {}",
             out.display()
         )
     );
@@ -479,6 +572,8 @@ fn as_a_campaigns_rollouts_the_tokens_are_summed_from_each_trials_usage_so_a_tok
         sven_build: checkout.sven_build.clone(),
         profile: None,
         jobs: 2,
+        rung: None,
+        families: Vec::new(),
     })
     .unwrap();
     let champion = Model {

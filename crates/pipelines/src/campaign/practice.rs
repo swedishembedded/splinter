@@ -58,6 +58,15 @@ pub struct PracticeSpec {
     /// Trials run at once.
     #[serde(default = "one")]
     pub jobs: usize,
+    /// The rung of the generator's difficulty ladder the transfer exercises
+    /// are drawn at (`bench task practice --rung`); the generator's own
+    /// when absent.
+    #[serde(default)]
+    pub rung: Option<u32>,
+    /// The families the transfer exercises are drawn from (`--family`); every
+    /// family that responds to the rung when empty.
+    #[serde(default)]
+    pub families: Vec<String>,
 }
 
 fn one() -> usize {
@@ -71,6 +80,8 @@ pub struct PracticeRollouts {
     profile: Option<PathBuf>,
     profile_sha256: Option<String>,
     jobs: usize,
+    transfer_rung: Option<u32>,
+    transfer_families: Vec<String>,
 }
 
 impl PracticeRollouts {
@@ -101,6 +112,8 @@ impl PracticeRollouts {
             profile: spec.profile.clone(),
             profile_sha256,
             jobs: spec.jobs.max(1),
+            transfer_rung: spec.rung,
+            transfer_families: spec.families.clone(),
         })
     }
 }
@@ -294,6 +307,8 @@ impl PracticeRollouts {
                     environment: &manifest.environment,
                     count: transfer.count,
                     seed: transfer.seed,
+                    rung: self.transfer_rung,
+                    families: &self.transfer_families,
                     capabilities: transfer.capabilities,
                 },
                 &out,
@@ -301,5 +316,22 @@ impl PracticeRollouts {
             )
             .map_err(CampaignError::Collector)?;
         Practice::read(&written).map_err(|e| CampaignError::Collector(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PracticeSpec;
+
+    #[test]
+    fn the_practice_section_may_name_a_rung_and_families_for_its_transfer_draws() {
+        let plain: PracticeSpec = toml::from_str("dir = \"p\"\nbench = \"b\"\n").unwrap();
+        assert_eq!((plain.rung, plain.families), (None, Vec::new()));
+        let narrowed: PracticeSpec = toml::from_str(
+            "dir = \"p\"\nbench = \"b\"\nrung = 2\nfamilies = [\"procurement\", \"deadline\"]\n",
+        )
+        .unwrap();
+        assert_eq!(narrowed.rung, Some(2));
+        assert_eq!(narrowed.families, ["procurement", "deadline"]);
     }
 }

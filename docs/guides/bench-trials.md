@@ -50,10 +50,13 @@ name that returns with other content is refused.
 
 ## Practice material: the examiner's staged train side
 
-`bench task practice <collection> [--count N --seed S] --environment userns --profile P --out DIR` writes
+`bench task practice <collection> [--count N --seed S [--rung R] [--family F]...] --environment userns --profile P --out DIR` writes
 `DIR/<collection>/`: the staged task folders, `job.yaml` (the Harbor job), `practice.json` (schema
 `bench.practice/2`: the collection's manifest and content digests, each staged task's digest, and the draw) and
-`bench-run.json`. Only the train side is ever written; `practice.json` of any other side is refused.
+`bench-run.json`. Only the train side is ever written; `practice.json` of any other side is refused. A draw at a
+rung (`--rung R`) or of some families (`--family F`, repeatable) records both in its `draw`; staging it again for a
+run passes the same count, seed, rung and families, so such a draw is accepted as the same material. Material staged
+before the examiner recorded them (no `rung` or `families`, or both null) is staged again as it was.
 
 A teacher's run of it, exported by the examiner (`bench export <job> --out EXPORT`), is ingested as above. To run
 the material under a policy brain serves:

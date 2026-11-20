@@ -62,6 +62,8 @@ tokens = 50000000
 dir = "<practice-dir>"
 bench = "<bench-checkout>"
 jobs = 16                      # trials run at once
+# rung = 2                     # transfer draws at this rung of the generator's difficulty ladder (`--rung`)
+# families = ["procurement"]   # and only of these families (`--family`); both optional
 # harbor, sven_build and profile as for `tasks harbor practice`
 
 [examine]                      # who examines: bench
@@ -123,7 +125,8 @@ exam generated with `make <domain>/exam/generate SEED_FILE=...`).
    attempt is never chosen. `tasks` of them are drawn without replacement in proportion to their weights, from a seed
    of the campaign's. With `transfer`, the `capabilities` heaviest measured capabilities get fresh exercises: bench draws
    `count` tasks from the collection's generator and keeps those that exercise one (`bench task practice --count --seed
-   --capability`, into the stage's `transfer/`), the champion practises them beside the chosen tasks, and their trials
+   --capability`, into the stage's `transfer/`; at the `[practice]` section's `rung` and of its `families` when it names
+   them), the champion practises them beside the chosen tasks, and their trials
    join the same export. The rollout record keeps every task's weight, the tasks set aside for the infrastructure, and
    the capabilities asked for. A campaign under `all` keeps its stage keys and records as before.
    Under `curriculum = "signal"` the tasks are chosen by variance per cost: every earlier attempt is rewarded as the

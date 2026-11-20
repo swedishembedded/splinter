@@ -181,6 +181,7 @@ pub(super) fn stage(
         command
             .args(["--count", &draw.count.to_string()])
             .args(["--seed", &draw.seed.to_string()]);
+        narrow(&mut command, draw.rung, &draw.families);
     }
     for capability in practice
         .selected_capabilities()
@@ -192,6 +193,20 @@ pub(super) fn stage(
         command.arg("--tool").arg(format!("{name}={path}"));
     }
     logged(&mut command, "stage the practice material", log)
+}
+
+/// Narrows a draw to `rung` and `families` (`--rung`, `--family`), as the
+/// examiner records them in practice.json.
+fn narrow<R>(command: &mut Command, rung: Option<R>, families: &[String])
+where
+    R: std::fmt::Display,
+{
+    if let Some(rung) = rung {
+        command.args(["--rung", &rung.to_string()]);
+    }
+    for family in families {
+        command.args(["--family", family]);
+    }
 }
 
 /// A fresh draw of practice material from a collection's generator, kept
@@ -206,6 +221,11 @@ pub struct PracticeDraw<'a> {
     pub count: usize,
     /// The draw's seed.
     pub seed: u64,
+    /// The rung of the generator's difficulty ladder to draw at; the
+    /// generator's own when absent.
+    pub rung: Option<u32>,
+    /// The families to draw from; all that respond to the rung when empty.
+    pub families: &'a [String],
     /// The capability ids a kept task exercises one of; none keeps every
     /// task drawn.
     pub capabilities: &'a [String],
@@ -231,9 +251,9 @@ impl BenchCheckout {
             .args(["task", "practice", draw.collection])
             .args(["--environment", draw.environment])
             .args(["--count", &draw.count.to_string()])
-            .args(["--seed", &draw.seed.to_string()])
-            .arg("--out")
-            .arg(out);
+            .args(["--seed", &draw.seed.to_string()]);
+        narrow(&mut command, draw.rung, draw.families);
+        command.arg("--out").arg(out);
         for capability in draw.capabilities {
             command.args(["--capability", capability]);
         }
