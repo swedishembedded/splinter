@@ -145,6 +145,12 @@ pub enum HarborCommand {
         /// material was staged under, as its bench-run.json records it).
         #[arg(long, value_name = "FILE")]
         profile: Option<PathBuf>,
+        /// A reference-knowledge collection (a directory) every trial's
+        /// sandbox mounts read-only at /knowledge (`bench task practice
+        /// --knowledge`); the run is keyed and reported by its digest.
+        /// Without it the run is closed-book.
+        #[arg(long, value_name = "DIR")]
+        knowledge: Option<PathBuf>,
         /// Attempts of each task.
         #[arg(long, default_value = "1", value_parser = positive_count, value_name = "N")]
         attempts: usize,

@@ -79,6 +79,13 @@ the ones the given `practice.json` names. Harbor runs the job (`harbor run -c`, 
 stopped, the examiner exports the graded trials and they are admitted exactly as `experiences ingest-bench` admits
 them. The material is never edited.
 
+`--knowledge DIR` runs the material open-book: the staging mounts that reference-knowledge collection read-only at
+`/knowledge` in every trial's sandbox (`bench task practice --knowledge`), and how the agent is told about it is the
+profile's (`[sven].knowledge_prompt`). The run is keyed by the collection's digest (sha256 over
+`<path>\0<sha256 of the file>\n` per file in path order, `.git` left out, as the examiner documents it), so the same
+material with another collection, or with none, is another job; the staging is refused unless the examiner records
+that digest as mounted (or nothing mounted for a closed-book run), and the report carries it as `knowledge`.
+
 Every trial is reported with a typed outcome read from the examiner's score record: `passed`, `failed`, `exposed`
 (the agent reached for the hidden answers), a verifier failure, `ungraded` (a time limit on a task that does not
 grade timeouts, a spent budget, an unsupported capability, a defective task) or an infrastructure failure (the

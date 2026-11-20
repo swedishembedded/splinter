@@ -159,6 +159,7 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
             harbor,
             sven_build,
             profile,
+            knowledge,
             attempts,
             seed,
             jobs,
@@ -171,6 +172,7 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                 "harbor": harbor,
                 "sven_build": sven_build,
                 "profile": profile,
+                "knowledge": knowledge,
                 "attempts": attempts,
                 "seed": seed,
                 "jobs": jobs,
@@ -192,6 +194,7 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                         practice: &practice,
                         checkout: &checkout,
                         profile: profile.as_deref(),
+                        knowledge: knowledge.as_deref(),
                         policy: &policy,
                         adapter: None,
                         settings: practice::PracticeSettings {

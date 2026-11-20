@@ -270,6 +270,7 @@ impl PracticeRollouts {
                 practice,
                 checkout: &self.checkout,
                 profile: self.profile.as_deref(),
+                knowledge: None,
                 policy: &policy,
                 adapter: None,
                 settings: PracticeSettings {

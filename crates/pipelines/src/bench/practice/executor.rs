@@ -149,6 +149,7 @@ impl EpisodeExecutor for BenchPractice<'_> {
                 practice: &self.practice,
                 checkout: &self.checkout,
                 profile: self.profile.as_deref(),
+                knowledge: None,
                 policy: &self.serving,
                 adapter: self.adapter.clone(),
                 settings: PracticeSettings {

@@ -100,6 +100,11 @@ pub struct PracticeManifest {
     /// absent or null for material staged whole.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selection: Option<Value>,
+    /// The reference-knowledge collection the job mounts at `/knowledge`
+    /// (`mounted`, `sha256`, ...), or `{"mounted": false}`; absent in
+    /// material staged before the examiner recorded it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub knowledge: Option<Value>,
 }
 
 /// The key of a staged task's `task.toml` `[metadata]` that names the

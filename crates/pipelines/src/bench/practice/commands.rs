@@ -161,11 +161,13 @@ impl Drop for Gateway {
 }
 
 /// Stages `practice`'s collection again under `profile` into `out`
-/// (`bench task practice`): the committed train side, or the same draw.
+/// (`bench task practice`): the committed train side, or the same draw,
+/// with the reference-knowledge collection `knowledge` mounted when given.
 pub(super) fn stage(
     checkout: &BenchCheckout,
     practice: &Practice,
     profile: &Path,
+    knowledge: Option<&Path>,
     out: &Path,
     log: &Path,
 ) -> Result<(), String> {
@@ -191,6 +193,9 @@ pub(super) fn stage(
     }
     for (name, path) in &practice.tools {
         command.arg("--tool").arg(format!("{name}={path}"));
+    }
+    if let Some(knowledge) = knowledge {
+        command.arg("--knowledge").arg(knowledge);
     }
     logged(&mut command, "stage the practice material", log)
 }

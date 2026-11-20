@@ -198,6 +198,7 @@ fn request<'a>(
         practice,
         checkout,
         profile: None,
+        knowledge: None,
         policy,
         adapter: None,
         // seed: the stand-in examiner ignores it; any seed names a job.
@@ -618,4 +619,112 @@ fn as_a_campaigns_rollouts_the_tokens_are_summed_from_each_trials_usage_so_a_tok
     // counted.
     assert_eq!(rolled.tokens, Some(30));
     assert_eq!(rolled.trials.len(), 3);
+}
+
+/// A two-page reference-knowledge collection in `root/knowledge` (with a
+/// `.git` the examiner leaves out), and its digest as the examiner documents
+/// it: sha256 over `<relative path>\0<sha256 of the file>\n` per file in
+/// path order.
+fn knowledge_collection(root: &Path) -> (PathBuf, String) {
+    let dir = root.join("knowledge");
+    fs::create_dir_all(dir.join("legal")).unwrap();
+    fs::create_dir_all(dir.join(".git")).unwrap();
+    fs::write(dir.join(".git").join("HEAD"), "ref: x\n").unwrap();
+    let pages = [
+        ("index.md", "# Start here\n"),
+        ("legal/deadlines.md", "# Deadlines\n"),
+    ];
+    let mut lines = String::new();
+    for (relative, text) in pages {
+        fs::write(dir.join(relative), text).unwrap();
+        lines.push_str(&format!("{relative}\0{}\n", sha256_hex(text.as_bytes())));
+    }
+    (dir, format!("sha256:{}", sha256_hex(lines.as_bytes())))
+}
+
+/// The practice manifest the examiner writes when it stages with a
+/// collection of `digest` mounted.
+fn staged_with_knowledge(root: &Path, digest: &str) -> PathBuf {
+    let mut manifest = practice_manifest("train");
+    manifest["knowledge"] =
+        json!({"mounted": true, "mount": "/knowledge", "sha256": digest, "files": 2, "bytes": 26});
+    let path = root.join("staged-knowledge.json");
+    fs::write(&path, manifest.to_string()).unwrap();
+    path
+}
+
+#[test]
+fn a_run_with_a_knowledge_collection_stages_it_mounted_records_its_digest_and_is_its_own_job() {
+    let (scratch, ctx, policy) = served("practice-knowledge");
+    let dir = practice_dir(&scratch.0, "train");
+    let (knowledge, digest) = knowledge_collection(&scratch.0);
+    let practice = Practice::read(&dir).unwrap();
+
+    let closed = checkout(
+        &scratch.0,
+        &graded_export(&scratch.0),
+        &dir.join("practice.json"),
+    );
+    let without = run_practice(&ctx, &request(&practice, &closed, &policy)).unwrap();
+    assert_eq!(without.knowledge, None);
+
+    let open = checkout(
+        &scratch.0,
+        &graded_export(&scratch.0),
+        &staged_with_knowledge(&scratch.0, &digest),
+    );
+    let with = run_practice(
+        &ctx,
+        &PracticeRequest {
+            knowledge: Some(&knowledge),
+            ..request(&practice, &open, &policy)
+        },
+    )
+    .unwrap();
+    let calls = fs::read_to_string(scratch.0.join("calls.log")).unwrap();
+    let stagings: Vec<&str> = calls
+        .lines()
+        .filter(|l| l.starts_with("bench task practice"))
+        .collect();
+    assert_eq!(stagings.len(), 2, "{calls}");
+    assert!(!stagings[0].contains("--knowledge"), "{}", stagings[0]);
+    assert!(
+        stagings[1].contains(&format!("--knowledge {}", knowledge.display())),
+        "{}",
+        stagings[1]
+    );
+    assert!(
+        with.ran,
+        "the same material with a collection is not the closed-book job"
+    );
+    assert_ne!(with.job, without.job);
+    assert_eq!(with.knowledge.as_deref(), Some(digest.as_str()));
+}
+
+#[test]
+fn a_collection_the_examiner_did_not_mount_as_given_is_refused_before_harbor_runs() {
+    let (scratch, ctx, policy) = served("practice-knowledge-drift");
+    let dir = practice_dir(&scratch.0, "train");
+    let (knowledge, _digest) = knowledge_collection(&scratch.0);
+    let practice = Practice::read(&dir).unwrap();
+    for (case, staged) in [
+        ("none mounted", dir.join("practice.json")),
+        (
+            "another mounted",
+            staged_with_knowledge(&scratch.0, &format!("sha256:{}", "0".repeat(64))),
+        ),
+    ] {
+        let checkout = checkout(&scratch.0, &graded_export(&scratch.0), &staged);
+        let error = run_practice(
+            &ctx,
+            &PracticeRequest {
+                knowledge: Some(&knowledge),
+                ..request(&practice, &checkout, &policy)
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("knowledge"), "{case}: {error}");
+    }
+    let calls = fs::read_to_string(scratch.0.join("calls.log")).unwrap();
+    assert!(!calls.contains("harbor"), "{calls}");
 }

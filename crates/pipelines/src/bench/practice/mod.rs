@@ -27,7 +27,10 @@
 //!    directory (`bench task practice`), which writes the job config Harbor
 //!    runs, registers the job with the gateway and records the run, and
 //!    refuses the result unless every staged task, the draw and the
-//!    collection's digests are the ones the given `practice.json` names;
+//!    collection's digests are the ones the given `practice.json` names,
+//!    and the reference-knowledge collection it mounts at `/knowledge` is
+//!    the one the run names (by digest, [`knowledge`]) or none for a
+//!    closed-book run;
 //! 4. runs the job (`harbor run -c`) with the attempts, concurrency and
 //!    tasks this run owns, under a job name derived from them and the seed;
 //! 5. exports the graded trials (`bench export`) and admits them.
@@ -53,6 +56,7 @@
 
 mod commands;
 mod executor;
+pub mod knowledge;
 pub mod material;
 
 use std::collections::BTreeMap;
@@ -101,6 +105,9 @@ pub struct PracticeRequest<'a> {
     /// The profile to derive the policy's from, in place of the one the
     /// material was staged under.
     pub profile: Option<&'a Path>,
+    /// The reference-knowledge collection every trial's sandbox mounts
+    /// read-only at `/knowledge`; `None` runs closed-book.
+    pub knowledge: Option<&'a Path>,
     /// The policy.
     pub policy: &'a ModelRef,
     /// The adapter the policy serves, by content, when the caller knows it;
@@ -187,6 +194,9 @@ pub struct PracticeReport {
     pub attempts: u32,
     /// The material.
     pub provenance: PracticeProvenance,
+    /// The digest of the reference-knowledge collection the trials had
+    /// mounted ([`knowledge::knowledge_digest`]); `None`: closed-book.
+    pub knowledge: Option<String>,
     /// The run's directory: the derived profile, the staging, the export.
     pub dir: PathBuf,
     /// The Harbor job's name (`<dir>/staged/<collection>/<job>`).
@@ -207,6 +217,9 @@ struct StageKey<'a> {
     policy: &'a PolicyIdentity,
     served_as: &'a str,
     profile: &'a str,
+    /// Left out when none is mounted, so a closed-book run keeps its key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    knowledge: Option<&'a str>,
 }
 
 /// What a run is keyed by: what it is about, and how it is run.
@@ -381,12 +394,17 @@ pub fn run_practice(
     let endpoint = ctx.served_endpoint(request.policy)?;
     let policy = identity_of(&endpoint, request.adapter.clone())?;
     let (base, profile_sha256) = base_profile(request)?;
+    let knowledge = request
+        .knowledge
+        .map(knowledge::knowledge_digest)
+        .transpose()?;
     let stage = key_of(&StageKey {
         format: PRACTICE_FORMAT,
         practice: &practice.sha256,
         policy: &policy,
         served_as: &endpoint.model,
         profile: &profile_sha256,
+        knowledge: knowledge.as_deref(),
     })?;
     let job = key_of(&JobKey {
         stage: &stage,
@@ -434,12 +452,15 @@ pub fn run_practice(
             checkout,
             practice,
             &profile,
+            request.knowledge,
             &staged,
             &dir.join("stage.log"),
         )
         .map_err(failed("staging"))?;
         let again = Practice::read(&job_dir)?;
-        if let Some(why) = practice.same_material(&again.manifest) {
+        if let Some(why) = practice.same_material(&again.manifest).or_else(|| {
+            knowledge::mount_differs(again.manifest.knowledge.as_ref(), knowledge.as_deref())
+        }) {
             return Err(EpisodeError::Settings(format!(
                 "the examiner staged other material than {} into {}: {why}",
                 practice.dir.display(),
@@ -487,6 +508,7 @@ pub fn run_practice(
             profile: base,
             profile_sha256,
         },
+        knowledge,
         dir: dir.clone(),
         job: name,
         ran,
