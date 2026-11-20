@@ -100,6 +100,12 @@ impl Report for Ingested {
         for set in &self.experiences.sets {
             let _ = writeln!(out, "experience set {set}");
         }
+        for dataset in &self.datasets {
+            let _ = writeln!(out, "dataset {dataset}");
+        }
+        for (candidate, adapter) in &self.adapters {
+            let _ = writeln!(out, "candidate {candidate}: adapter {}", adapter.display());
+        }
         let _ = writeln!(
             out,
             "experiences: {} new, {} held; datasets: {} new, {} held; candidates: {}; artifacts: {} new; verdicts: {}",

@@ -71,8 +71,13 @@ pub struct Ingested {
     pub datasets_new: usize,
     /// Datasets this root held already.
     pub datasets_held: usize,
+    /// Every dataset of the bundle, stored or held, by id.
+    pub datasets: Vec<String>,
     /// The candidates recorded (or held already), by id.
     pub candidates: Vec<String>,
+    /// The adapter file of each candidate, by candidate id: what a server is
+    /// given to serve it.
+    pub adapters: BTreeMap<String, PathBuf>,
     /// Artifact files written here by this ingest.
     pub artifacts_new: usize,
     /// Verdicts kept, verified under the bundled key.
@@ -324,6 +329,7 @@ pub fn ingest(ctx: &Context, hub: &Hub, source: &str) -> Result<Ingested, Orches
     }
     let held_datasets: BTreeSet<_> = ctx.datasets().list()?.into_iter().collect();
     let (mut datasets_new, mut datasets_held) = (0, 0);
+    let mut datasets = Vec::new();
     for entry in &contents.datasets {
         let manifest_file = at(&dataset_manifest_path(&entry.id))?;
         let text = std::fs::read(manifest_file).map_err(io(manifest_file))?;
@@ -338,6 +344,7 @@ pub fn ingest(ctx: &Context, hub: &Hub, source: &str) -> Result<Ingested, Orches
             &dataset_manifest,
         )?;
         record_dataset_lineage(ctx, &stored)?;
+        datasets.push(entry.id.to_string());
         if held_datasets.contains(&entry.id) {
             datasets_held += 1;
         } else {
@@ -345,6 +352,7 @@ pub fn ingest(ctx: &Context, hub: &Hub, source: &str) -> Result<Ingested, Orches
         }
     }
     let mut candidates = Vec::new();
+    let mut adapters = BTreeMap::new();
     for entry in &contents.candidates {
         let file = at(&candidate_path(&entry.candidate))?;
         let text = std::fs::read(file).map_err(io(file))?;
@@ -366,7 +374,9 @@ pub fn ingest(ctx: &Context, hub: &Hub, source: &str) -> Result<Ingested, Orches
                 format!("its record is {address}, not the {} stated", entry.record),
             ));
         }
-        candidates.push(adopt_candidate(ctx, &record)?.candidate);
+        let adopted = adopt_candidate(ctx, &record)?;
+        adapters.insert(adopted.candidate.clone(), adopted.adapter);
+        candidates.push(adopted.candidate);
     }
     let mut verdicts = 0;
     if !contents.verdicts.is_empty() {
@@ -418,7 +428,9 @@ pub fn ingest(ctx: &Context, hub: &Hub, source: &str) -> Result<Ingested, Orches
         experiences,
         datasets_new,
         datasets_held,
+        datasets,
         candidates,
+        adapters,
         artifacts_new,
         verdicts,
         record,

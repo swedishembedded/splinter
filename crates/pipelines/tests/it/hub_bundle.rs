@@ -255,6 +255,11 @@ fn a_published_bundle_ingests_back_under_the_same_ids_and_once() {
         );
     }
     assert_eq!(ingested.datasets_new, expected.len());
+    // The report names what it stored, so the next step can use it.
+    let mut named = ingested.datasets.clone();
+    named.sort();
+    expected.sort();
+    assert_eq!(named, expected);
     // The candidate, its record and its adapter.
     assert_eq!(ingested.candidates, vec![src.candidate.clone()]);
     assert_eq!(
@@ -265,6 +270,11 @@ fn a_published_bundle_ingests_back_under_the_same_ids_and_once() {
     assert_eq!(
         std::fs::read(&adopted.adapter).unwrap(),
         std::fs::read(&candidate.adapter).unwrap()
+    );
+    assert_eq!(
+        ingested.adapters.get(&src.candidate),
+        Some(&adopted.adapter),
+        "the report names the adapter file a server is given"
     );
     assert_eq!(ingested.verdicts, 1);
     // An exam register comes along only for what was published.
@@ -280,6 +290,11 @@ fn a_published_bundle_ingests_back_under_the_same_ids_and_once() {
     assert_eq!(twice.experiences.experiences_new, 0);
     assert_eq!(twice.experiences.annotations_new, 0);
     assert_eq!(twice.datasets_new, 0);
+    assert_eq!(
+        twice.datasets.len(),
+        expected.len(),
+        "held datasets are named too"
+    );
     assert_eq!(twice.artifacts_new, 0);
     assert_eq!(twice.record, ingested.record);
 

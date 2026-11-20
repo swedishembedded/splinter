@@ -102,8 +102,9 @@ layout the database was in (`loose` or `packed`).
 `publish`: `{"repo", "content", "tag", "commit", "committed", "files", "bytes", "regular", "lfs_uploaded",
 "lfs_present"}`, where `committed` is `false` when the same bundle was published before and nothing was sent.
 `experiences ingest-hf`: `{"repo", "requested", "commit", "resolved", "content", "experiences", "datasets_new",
-"datasets_held", "candidates", "artifacts_new", "verdicts", "record"}`, where `resolved` says the revision asked
-for was a branch or a tag and `experiences` is `experiences import`'s report. See
+"datasets_held", "datasets", "candidates", "adapters", "artifacts_new", "verdicts", "record"}`, where `resolved` says
+the revision asked for was a branch or a tag, `experiences` is `experiences import`'s report, `datasets` lists every
+dataset of the bundle by id (stored or held) and `adapters` maps each candidate to its adapter file. See
 [bundles on the Hub](storage.md#bundles-on-the-hugging-face-hub).
 
 `release list`: `{"releases": [{"id", "created_at", "candidate",
