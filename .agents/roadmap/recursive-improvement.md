@@ -272,6 +272,24 @@ headline (interpreter-labelled self-proposed SFT, 8.3% to 16.7% on the fresh exa
 7. **Served-prompt confound.** Brain builds before 1bdd5400c injected a "Reasoning effort" instruction into Qwen3
    prompts (brain knowledge 531). Within-build comparisons stand, but absolute accuracies may shift. Run a Tier-3 logit
    parity check on the paper's exam prompts before quoting absolute numbers across builds.
+   **Measured 2026-11-20 (lane L11, gpu2): the injection does not touch the paper's exam, so its numbers stand.** The
+   fresh exam F (2340 items) is no longer on disk (the examiner's private directory vanished 2026-11-19; its seed with
+   it), so the check ran on a deterministic 300-item sample of the paper's public 889-item exam (SHA-256 order of
+   `"l11-sample|" + instruction`, 24 families, no item excluded by r0/3's hand-off list), with the base and S4 r0/3
+   (adapter digest `a1304bb5...`), the reference examiner's protocol (user turn only, thinking off, greedy, 2048 tokens,
+   64 concurrent, `--kv-cache f32 --max-batch 64`). Builds: neither the paper's examiner binary (`d11e9134...`) nor the
+   learner's `796871647` is kept, so the injecting `brain-ad44162a7` (brain sha256 `6107dcc8...`) ran against
+   `brain-1bdd5400c` (`ae65e6f1...`), each twice, interleaved, one fresh server per run. Result: base 6/300 = 0.020
+   (Wilson 95% [0.009, 0.043]) and r0/3 65/300 = 0.217 ([0.174, 0.267]) in all four runs; the generated ids and their
+   log-probabilities are identical item for item within each build and across builds (0 grade flips, mean |dlogp| 0),
+   so the noise band of each build is zero and the base-to-adapter gain (+0.197, 61 wins, 2 losses) is the same on both.
+   The rendered prompt ids show why: with thinking off both builds render the same 58 ids on average, starting
+   `<|im_start|>user` with no system turn. The same requests with thinking on render a system turn starting
+   `Reasoning ...` (id 25139) on ad44162a7, 42 ids longer than on 1bdd5400c, so the injection is live there but gated by
+   `enable_thinking`; brain's source at `796871647` has the same gate (`qwen3::chat::render_prompt` passes no
+   `reasoning_effort` when thinking is off). The sample's absolute rates also agree with the paper's examiner build on
+   the full exam (base 12/889, r0/3 192/889). Only rows served with thinking on (the descriptive thinking baseline) could
+   have carried the directive. Scripts and records: `~/project/shared/tmp/lane-l11` (`run.py`, `analyse.py`, `result.json`).
 8. **Open directions now available.**
    - The learnability metric and difficulty dials (for RL from outcomes; failure selection is sound for oracle-labelled SFT).
    - Matched-step RFT controls.

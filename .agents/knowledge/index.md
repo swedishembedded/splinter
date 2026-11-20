@@ -172,3 +172,4 @@ in the same commit.
 | [184](184-teacher-free-grpo-never-moved-the-policy.md) | Teacher-free GRPO never moved the policy |
 | [185](185-a-strict-pass-reward-wastes-the-verifiers-partial-credit.md) | A strict-pass reward wastes the verifier's partial credit |
 | [186](186-more-informative-groups-is-not-more-signal-per-token.md) | More informative groups is not more signal per token |
+| [187](187-thinking-off-qwen3-exams-never-carried-the-reasoning-directive.md) | Thinking-off Qwen3 exams never carried the reasoning directive |
