@@ -402,6 +402,9 @@ Options:
 - `--teacher-policy <base|start>`: For records with a teacher context (the self-distill view, or policy-gradient --cliff-distill): the frozen policy that, shown the privileged context, scores the student's own tokens: the base, or `start`, the adapter the run begins from [default: base]
 - `--advantage-bound <C>`: For records with a teacher context: clip each token's advantage (log teacher - log student) to [-C, C] [default: none]
 - `--sequence-advantage-cap <SUM>`: For records with a teacher context: scale a sequence's token advantages down together when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a step [default: none]
+- `--max-step-kl <KL>`: For a dataset of rollouts: skip, and record, every optimiser step whose mean KL to the reference is over KL, so one outlier batch cannot throw the policy off [default: no bound]
+- `--max-step-grad-norm <NORM>`: For a dataset of rollouts: skip, and record, every optimiser step whose global gradient norm is over NORM [default: no bound]
+- `--dual-clip <C>`: For a dataset of rollouts: dual-clip PPO's bound C (above 1) on a negative advantage's term, max(min(r*A, clip(r)*A), C*A): a token whose ratio ran past C gives no gradient, and each step reports the share it bounded [default: brain's, 3]
 - `--records-per-step <N>`: Records averaged into one optimizer step.
 - `--seed <N>`: The seed of the adapter's initialisation and the batch order (drawn, printed and recorded if not given)
 - `--eval-every <N>`: Steps between evaluations of the monitoring records; 0 monitors nothing and the candidate carries its last step [default: 16 evaluations over the step budget]
@@ -883,6 +886,9 @@ Options:
 - `--teacher-policy <base|start>`: For records with a teacher context (the self-distill view, or policy-gradient --cliff-distill): the frozen policy that, shown the privileged context, scores the student's own tokens: the base, or `start`, the adapter the run begins from [default: base]
 - `--advantage-bound <C>`: For records with a teacher context: clip each token's advantage (log teacher - log student) to [-C, C] [default: none]
 - `--sequence-advantage-cap <SUM>`: For records with a teacher context: scale a sequence's token advantages down together when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a step [default: none]
+- `--max-step-kl <KL>`: For a dataset of rollouts: skip, and record, every optimiser step whose mean KL to the reference is over KL, so one outlier batch cannot throw the policy off [default: no bound]
+- `--max-step-grad-norm <NORM>`: For a dataset of rollouts: skip, and record, every optimiser step whose global gradient norm is over NORM [default: no bound]
+- `--dual-clip <C>`: For a dataset of rollouts: dual-clip PPO's bound C (above 1) on a negative advantage's term, max(min(r*A, clip(r)*A), C*A): a token whose ratio ran past C gives no gradient, and each step reports the share it bounded [default: brain's, 3]
 - `--records-per-step <N>`: Records averaged into one optimizer step.
 - `--seed <N>`: The seed of the adapter's initialisation and the batch order (drawn, printed and recorded if not given)
 - `--eval-every <N>`: Steps between evaluations of the monitoring records; 0 monitors nothing and the candidate carries its last step [default: 16 evaluations over the step budget]
@@ -1360,6 +1366,7 @@ Options:
 - `--harbor <PATH>`: The `harbor` program that runs the job (default: the checkout's .venv/bin/harbor)
 - `--sven-build <PATH>`: The sven build the examiner runs the agent from (given to it as BENCH_SVEN_BUILD; without it, the environment's)
 - `--profile <FILE>`: The profile the policy's is derived from (default: the one the material was staged under, as its bench-run.json records it)
+- `--knowledge <DIR>`: A reference-knowledge collection (a directory) every trial's sandbox mounts read-only at /knowledge (`bench task practice --knowledge`); the run is keyed and reported by its digest. Without it the run is closed-book.
 - `--attempts <N>`: Attempts of each task. Default: `1`.
 - `--seed <SEED>`: The seed the run is named and recorded by (drawn and printed when not given; a rerun with the same seed finds its run)
 - `--jobs <N>`: Trials run at once. Default: `1`.
@@ -1778,6 +1785,7 @@ Options:
 - `--fail-ceiling <F>`: For the policy-gradient view: the most a failed attempt earns from the reward metrics or `--reward shaped-partial`, below a pass's 1 (default 0.5), so that any pass outranks any failure.
 - `--advantage <KIND>`: For the policy-gradient view: how brain is to read an attempt's advantage from the rewards of the attempts at its task (the records carry rewards; the dataset's manifest names this for the trainer): `standardised` (GRPO's: the reward less the group mean over its standard deviation, the default), `mean-centred` (the reward less the group mean), `leave-one-out` (the reward less the mean of the others) or `positive` (standardised against the whole group, then clamped at zero by brain's `advantage_floor: zero`: every attempt sets the baseline and nothing is pushed down)
 - `--cliff-distill`: For the policy-gradient view: distil the groups whose attempts all failed alike (the cliff, where GRPO's advantage is zero and teaches nothing) with a teacher context built from what the verifier knows, and keep the scalar advantage for every group with a spread of rewards. One build then holds both kinds of records, and the report counts the groups by kind. The `self-distill` view distils every attempt instead.
+- `--sampled-only`: For the policy-gradient view: train only the tokens the policy sampled. A record whose actions do not all carry their exact sampled ids and log-probabilities (no usable trace, a scrubbed conversation, a context rebuilt from the trajectory) is left out and counted as `proxy_tokens`; its trial still sets its group's baseline. Every trained token then has the behaviour policy's own log-probability, which `train --behaviour recorded` needs and which keeps the importance ratio bounded (a re-rendered proxy token weighed against the start of the run can reach a ratio of 1e6)
 - `--overlong-max-tokens <N>`: For the policy-gradient view: DAPO's soft over-length penalty, the completion tokens (as the attempt recorded them) at and past which an attempt loses a whole reward. From `N - buffer` tokens on the penalty grows linearly from 0 to -1 at N; it is added to the reward a pass or failure earns, and the manifest records both thresholds. An attempt that recorded no completion tokens is an error. Without it, no length is penalised.
 - `--overlong-buffer <N>`: The tokens before `--overlong-max-tokens` over which the penalty grows (default a quarter of it, DAPO's 4096 of 16384)
 - `--pairs-per-group <N>`: For the preference view: the most pairs made of one group of attempts (one task version attempted by one policy) or of one repaired task (default 4). The candidate pairs are ordered by a hash of `--pair-seed` and the first that make a record are kept; the rest are counted as `OverLimit`. The manifest records the bound and the seed.
@@ -1933,6 +1941,9 @@ Options:
 - `--teacher-policy <base|start>`: For records with a teacher context (the self-distill view, or policy-gradient --cliff-distill): the frozen policy that, shown the privileged context, scores the student's own tokens: the base, or `start`, the adapter the run begins from [default: base]
 - `--advantage-bound <C>`: For records with a teacher context: clip each token's advantage (log teacher - log student) to [-C, C] [default: none]
 - `--sequence-advantage-cap <SUM>`: For records with a teacher context: scale a sequence's token advantages down together when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a step [default: none]
+- `--max-step-kl <KL>`: For a dataset of rollouts: skip, and record, every optimiser step whose mean KL to the reference is over KL, so one outlier batch cannot throw the policy off [default: no bound]
+- `--max-step-grad-norm <NORM>`: For a dataset of rollouts: skip, and record, every optimiser step whose global gradient norm is over NORM [default: no bound]
+- `--dual-clip <C>`: For a dataset of rollouts: dual-clip PPO's bound C (above 1) on a negative advantage's term, max(min(r*A, clip(r)*A), C*A): a token whose ratio ran past C gives no gradient, and each step reports the share it bounded [default: brain's, 3]
 - `--recipe <on-policy-rl>`: For a dataset of rollouts: a named recipe whose defaults fill every setting left unset; the candidate records it and where its run came out against the recipe's targets. `on-policy-rl`: recorded behaviour log-probabilities, token-sum loss, learning rate 1e-4 and 4 passes over the rollouts, aiming for a mean KL to the reference of 0.02-0.05 and a clip fraction of 0.10-0.20 [default: none]
 - `--temperature <T>`: For a dataset of rollouts: the temperature they were sampled at [default: brain's, stated in the training record]
 - `--records-per-step <N>`: Records averaged into one optimizer step (default: one when the steps are named, else from the size of the dataset)
