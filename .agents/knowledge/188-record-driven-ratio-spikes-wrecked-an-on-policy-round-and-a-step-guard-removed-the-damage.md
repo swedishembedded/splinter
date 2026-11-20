@@ -51,4 +51,6 @@ and reference:
 
 **Still open.**
 - The fix drops 48% of trained tokens. Exact contexts for scrubbed and request-log-rebuilt actions would bring them back.
-- brain still has no bound on the negative-advantage side (dual clip) for any proxy that remains.
+- Closed 2026-11-20: brain bcd17ba8b bounds the negative-advantage side by dual-clip PPO (default `c` 3, per-step
+  `clip_fraction_dual`), so a proxy that remains costs at most `c*|A|` and gives no gradient; splinter passes
+  `--dual-clip` (db33cd729).
