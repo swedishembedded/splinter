@@ -127,6 +127,7 @@ SimPO, ORPO, KTO and a rejection-sampling SFT floor, with fresh prompts per roun
 | 18 | Campaign demo evidence incomplete at hand-over: generation-2 evaluate and rollback outcomes were not recorded when this ledger was written | record both in `campaigns.md` from the campaign lane's final report | rollback shown moving the champion back on real models |
 | 19 | First-package arm run 2026-11-20 (results below, "Item 19: first-package RL round"): no teacher-free gain; the unguarded round damaged A2 through ratio spikes on start-of-run proxy tokens, root-caused and fixed by `dataset build --sampled-only` (b879d37d2, knowledge 188) | a guarded round on `--sampled-only` data with `behaviour: recorded` (verified: 24 steps, ratio max 12.3, KL 0.018); make exact contexts cover `scrubbed` and `context_reconstructed` actions (48% of tokens are left out today); bound brain's negative-advantage term (dual clip); 2+ seeds, turn-level credit | held-out gain >= 0.05 with CI above 0 against A2s1 on paired fresh tasks, retention non-inferior at 0.10, KL 0.02-0.05 with no guard skips |
 | 20 | Bench draws at a rung or of families (bench 15a9220d) were refused when practised: splinter re-staged a draw from count and seed only | done 2026-11-20: the draw identity carries `rung` and `families` into the re-stage (`--rung`, `--family`), `[practice]` takes `rung` and `families` for transfer draws; older practice.json unchanged | `bench_practice` tests: re-stage passes both, old and null draws pass neither |
+| 21 | Knowledge-assisted self-learning: no arm has yet learned from written principles instead of trajectories (plan below, "Item 21"; nothing run) | bench: `--knowledge <dir>` mount with digest, contamination audit of the collection, open-book exam plan; then S0 and the S1 zero-training check on the base and A2 | S1: collection + instruction against none >= +0.06 pass@1 (or pass@8 +0.05), probe share under 2%; programme: closed-book tier c gain >= 0.05 with CI above 0 against the matched no-knowledge RFT control, retention non-inferior at 0.10 |
 
 Verification at the time of writing (clean force-rebuilt gates, no GPU): splinter `make check` exit 0; sven tests 5300 passed, clippy
 and doc clean (the wasm target is not installed on the node); brain clippy clean, `ci/static` clean, per-crate suites data 376,
@@ -388,3 +389,135 @@ every trial, knowledge 190); training rl1 3.6 (plus 1.9 lost the same way), rl1g
 - The RFT control is not teacher-free (gen-0 rehearsal). It gains on its training tasks (+0.094) and keeps retention,
   but its held-out +0.039 has CI including 0.
 - None of this is a sealed claim.
+
+## Item 21: knowledge-assisted self-learning (plan 2026-11-20)
+
+Distillation through a written knowledge base, no trajectory teacher. Design from the 2026-11-20 ML review, with the
+user's changes of the same day (they override the review where the two differ). Nothing here has been run.
+
+**Goal (the user's words).** An agentic system that has the resources it needs to derive correct answers on its own, which
+is then taught the skill itself. Success means it derives answers without the knowledge base on held-out tasks: that proves
+the system learned on its own. Not claimed: "no larger model" (a larger model wrote the collection).
+
+**The knowledge input is interchangeable.** Bench and sven need only a directory, optionally with `index.md` files. Bench
+mounts the directory given by an explicit CLI parameter (for example `--knowledge <dir>`, never an environment variable)
+read-only at `/knowledge`, outside the workspace and without a `.git`, and records its digest in every launch record.
+Nothing may depend on a collection's folder names, front-matter or tiers; an experiment that wants a subset builds a
+filtered copy. One possible input: the private HF dataset `swedishembedded/knowledge` at revision `v0.1` (commit c392495:
+20 pages of 600-1000 tokens, a flat index, rule / procedure / worked example / common mistakes per page, sections marked
+tier 1-3, a reviewer index; lint and the author's leakage self-audit clean; no human expert review yet).
+
+**Grounding instruction** (system prompt, held in the harness or profile config, in no task; one line in the read tool's
+description names the mount): "A knowledge collection is mounted read-only at `<path>`. Start from `<path>/index.md`, use
+grep and the folder index.md files to find what applies, and read the relevant files. Before each decision that depends on
+a rule or procedure, state that rule in one or two sentences in your own words, then act. If the collection does not cover
+something, say so and use your judgement. Do not read more than four pages." It names no domain and no file. It is a
+harness change, hence its own arm.
+
+**Examiner and library.** Information flows one way. Bench may read the whole collection freely (contamination audit,
+coverage of held-out failures, judging whether a task is derivable from it). Bench's oracles, seeds and item-level results
+never reach the collection or the learner. Gate before any learner sees a collection: bench's contamination audit against
+sealed exams passes (bench owns and runs it; the author's self-audit is not that gate). An open-book exam also needs the
+exam plan to pre-register it as open-book. Tier c then means "held out from trajectories", not "held out from the
+collection".
+
+**Lineages.** Primary: from the base Qwen3-4B, because A2 holds 27B demonstrations and "learned on its own" needs a start
+without them; its rehearsal is its own earlier verified solutions, and its matched control also starts from the base.
+Secondary: from A2 (rehearsal: A2's teacher set). No 27B arm or contrast in this item.
+
+**Context arms** (same weights, same step and token caps; the step cap is raised by the allowed reads in every arm): none;
+collection mounted; collection + instruction; placebo (same instruction, an irrelevant library of the same size); oracle
+page (the page for the task's family pre-loaded: separates "cannot find" from "cannot use"); and the tier copies T1, T1+T2,
+T1-T3 against the whole collection and against none.
+
+**Training views** of each verified open-book trajectory: open-book (prompt and reads as served); closed-book (no-knowledge
+prompt, read calls and results removed, the model's own rule restatements kept); reads stripped with nothing in their place
+(ablation only). Train a mixture of open and closed, starting near 50/50. Primary contrast: against a matched control that
+does RFT on its own closed-book passes with the same rollout count, steps and rehearsal, since plain RFT alone showed
++0.039.
+
+**Continuous-improvement loop (the multi-generation design).**
+
+1. Generation k practises open-book on the train pool.
+2. It trains on its own verified solutions (mixture view).
+3. It is evaluated closed-book on held-out tasks: the primary measure. Open-book on the same tasks is reported beside it.
+4. For each train-side task it still fails: does the collection already hold the guidance needed to derive the answer? If
+   yes, the task stays in the pool for generation k+1. If no, record a gap; gaps are filled only from train-side evidence,
+   in a new collection version, and a fresh sealed slice is burned afterwards. Coverage of held-out failures is checked by
+   bench alone and reported as aggregates per lineage; the learner never sees held-out items.
+5. Generation k+1 starts from generation k's weights, gets the collection again and must solve more of the pool.
+
+Success: the number of train-pool tasks solved open-book rises generation over generation and the closed-book held-out
+score rises with it; the slope of both is pre-registered. Starting from generation k's weights departs from the review
+("retrain from A2 with accumulated data"), so collapse and forgetting are the risks to monitor every generation: pass@8,
+distinct-solution count, retention (non-inferior at 0.10, closed and open). Fallback when retention fails: retrain from the
+base model on the accumulated data.
+
+**Reported separately:** retrieval gain (collection against none, same weights); instruction gain (collection + instruction
+against collection); non-specific gain (placebo against none); internalised gain (generation k closed-book against the
+matched control closed-book); open-book gain (generation k open against generation 0 open); residual reliance (generation k
+open against closed). Weights are compared only within one context, contexts only within one set of weights. If the
+zero-training context effect explains at least 70% of a gain, the headline is a harness result.
+
+**Stages** (GPU-hours are the review's estimates less the removed 27B cells; about 150-180 in all):
+
+| Stage | Work | Go / stop |
+|---|---|---|
+| S0, no GPU | freeze the collection digest; bench's audit; token-budget lint; the three views and a lint that fails the build on a knowledge path or read call in a closed-book record; rendered-prefix byte equality between a training record and a live request per arm; a few smoke trials | all green |
+| S1 zero-training check, about 15-20 | 48 fresh train tasks x 8 (legal 16, accounting 16, support 8, compiled 8); base and A2 under all context arms | go: collection + instruction against none at least +0.06 pass@1, or pass@8 up at least 0.05 with fewer never-solved tasks, probe share under 2%. Only the oracle page helps: fix the index, rerun once. Nothing helps, oracle page included: the content is the problem, back to the author |
+| S2 generation 1, about 45-55 | 160 train tasks x 8 open-book; matched closed-book control rollouts; train mixture, stripped-only, open-only and control; 96 x 8 dev closed and open plus retention | go: mixture closed-book minus control at least +0.04 with CI above 0, retention non-inferior, closed-book knowledge-path attempts under 1%. Stop: contrast at most 0 and open-book no better than generation 0 open-book |
+| S3 generations 2-3, about 35 each | the loop above, best view only | go: dev non-inferior to the previous generation and open-book train-pool pass@8 rising. Stop: two flat generations (or the fallback) |
+| S4 confirmation, about 20-30 | three seeds of the final generation and of the control; sealed exam closed-book (primary) and, if registered, open-book | the primary contrast below |
+| S5 | RL on knowledge trajectories | only after item 19's acceptance is met |
+
+**Statistics.** Primary, one contrast: final generation against the matched control, closed-book, tier c, sealed; paired by
+item, lineage-cluster bootstrap, one-sided alpha 0.05, minimum gain 0.05; an exact sign or permutation test over lineages
+beside it. Secondary, Holm-corrected: the generation trend (slope of generation k minus the generation-0 anchor re-examined
+on every fresh slice, k = 1..3 or 4, permutation over lineages; conjunction G3 - G1 above 0 with each step non-inferior at
+0.03), the open-book gain, tier subsets, per-domain splits. Gates use 96 tasks x 8 (MDE about 0.05). One seed per
+generation while developing.
+
+**Checklist (the review's, verbatim except where the user's changes above replace a line; replaced text in brackets).**
+
+Do this:
+
+1. Call the result "distillation through a written knowledge base, no trajectory teacher"; record the KB digest in every
+   launch.
+2. Run S0, then the S1 zero-training check, on [the base and A2], with placebo and oracle-page cells, before any training.
+3. Put the grounding instruction in the system prompt; make it ask for the rule in the model's own words and cap reads at
+   four.
+4. Keep the index under about 1.2k tokens and pages under about 1k; use file navigation with existing tools.
+5. Train a mixture of open-book and closed-book views (reads removed, the model's own rule restatement kept); keep
+   [rehearsal; accumulate data; continue from the previous generation's weights, with retraining from the base as the
+   fallback].
+6. Lint closed-book records for KB paths and read calls; fail the dataset build on any hit.
+7. Assert rendered-prefix byte equality between training records and live requests, per arm.
+8. Compare weights only within one context condition; make the primary contrast final generation against a matched no-KB
+   RFT control, closed-book, tier c, sealed.
+9. Use the same step and token caps in all arms; report tokens per arm; count timeouts as failures.
+10. Run the bench-side overlap scan of the KB against exam material, aggregates only; burn a fresh slice after any KB
+    revision.
+11. Track per generation: probe share, closed-book KB-path attempts, pass@8, per-family coverage, pages read by passing and
+    failing trials, retention.
+12. Pre-register the single-step contrast as primary and the generation trend as secondary, with an anchor on every slice
+    and a permutation test over lineages.
+
+Never do this:
+
+1. Never compare a KB-trained model against [its starting weights] alone without the matched RFT control.
+2. Never train on trajectories with the reads stripped and nothing in their place as the main target.
+3. Never let a larger model rewrite the 4B's reasoning for the closed-book view.
+4. Never edit the KB after seeing dev or exam results from held-out tasks.
+5. Never run RL on KB trajectories before the ratio-spike cause is found and `behaviour: recorded` covers all supervised
+   tokens.
+6. Never mention the KB, its paths or `index.md` in the closed-book prompt or closed-book training records.
+7. Never mount the KB inside the task workspace or with a git directory.
+8. Never give the KB arms a larger step, token or time budget than the others without a placebo arm.
+9. Never read a flat exam result before reading the optimiser's KL and clip, the read rate and the page-use logs.
+
+**Later, not in this item:** a 27B-with-knowledge run, a separate experiment about the 27B itself.
+
+**Prerequisites elsewhere:** bench: `--knowledge <dir>` with the digest in the launch record, the contamination audit and
+aggregate coverage report, open-book exam plans. sven: the instruction as profile configuration, the read cap, restatements
+as visible assistant content if the template drops earlier reasoning. splinter: the three views and their lint, the matched
+control, the gap ledger.
