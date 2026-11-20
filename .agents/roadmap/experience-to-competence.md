@@ -125,7 +125,7 @@ SimPO, ORPO, KTO and a rejection-sampling SFT floor, with fresh prompts per roun
 | 16 | Real runs for KTO, IPO, SimPO, ORPO | after brain efficiency work (reference pass 55 min, 170 s/step) | one seed each on the frontier data |
 | 17 | Two load-sensitive test flakes found by the clean re-verification at dfb62e12f (3619 passed, 2 failed, each passes alone) | `solve_concurrency::a_remote_model_is_asked_up_to_the_configured_width_at_once` (timing) and `distributed_plan::a_retry_writes_its_own_plan_naming_the_same_job` (ETXTBSY, a spawn racing a just-written executable): make both deterministic | 20 consecutive parallel workspace runs without either failing |
 | 18 | Campaign demo evidence incomplete at hand-over: generation-2 evaluate and rollback outcomes were not recorded when this ledger was written | record both in `campaigns.md` from the campaign lane's final report | rollback shown moving the champion back on real models |
-| 19 | First-package arm not run | one fresh on-policy round from A2s1: `curriculum = "signal"`, `reward = "shaped-partial"` (with bench's `naive_floor` once L2 lands), `recipe = "on-policy-rl"`; rank-correlate `LS_i` with each task's pass change | KL within 0.02-0.05, informative share and sum Var(r) per M completion tokens above the zero-GPU uniform rows, strict pass on 48 paired held-out tasks |
+| 19 | First-package arm run 2026-11-20 (results below, "Item 19: first-package RL round"): no teacher-free gain; the unguarded round damaged A2 through record-driven ratio spikes (knowledge 188) | find why some records score 10+ nats apart under the behaviour log-probabilities (recorded for 52% of tokens, start-of-run proxy for 48%); make exact contexts cover the `scrubbed` and `context_reconstructed` actions so `behaviour: recorded` runs; then a full-budget guarded round on 2+ seeds with turn-level credit | held-out gain >= 0.05 with CI above 0 against A2s1 on paired fresh tasks, retention non-inferior at 0.10, KL 0.02-0.05 with no guard skips |
 | 20 | Bench draws at a rung or of families (bench 15a9220d) were refused when practised: splinter re-staged a draw from count and seed only | done 2026-11-20: the draw identity carries `rung` and `families` into the re-stage (`--rung`, `--family`), `[practice]` takes `rung` and `families` for transfer draws; older practice.json unchanged | `bench_practice` tests: re-stage passes both, old and null draws pass neither |
 
 Verification at the time of writing (clean force-rebuilt gates, no GPU): splinter `make check` exit 0; sven tests 5300 passed, clippy
@@ -309,3 +309,69 @@ Measure on the same rollouts plus one fresh round:
 - sum of Var(r) per million completion tokens;
 - KL actually moving (0.02-0.05, against 0.002);
 - strict pass on 48 paired held-out tasks: the ground truth.
+
+## Item 19: first-package RL round (2026-11-20, lane L6, n123)
+
+**Setup.** Policy A2s1 on frozen brain 1bdd5400c (exact tokens, no injected prompt), practice through splinter's executor
+(splinter a02473bde, sven a0235c71 compact, T 1.0, top-p 0.95, top-k 20, logprobs, policy traces), bench at 89e3189a with
+scratch per-rung generator configs. Pool: 80 fresh train-side tasks (legal deadlines rung 0 x 20, accounting rung -1 x 20,
+support refund rung 2 x 20, legal and accounting default rung x 10 each); held-out: 48 fresh tasks (12 per domain:
+support, legal, accounting, compiled; drawn first, never practised). Datasets: policy-gradient view, `--reward
+shaped-partial` (C 0.5, floors from `naive_floor`), zero-variance groups dropped by the view. Training: `--recipe
+on-policy-rl` (token-sum, lr 1e-4) with `--reference start` and `--behaviour start`, 8 records per step.
+
+**Cuts (recorded decisions).**
+- `behaviour: recorded` was refused: 934,787 of 1,962,062 supervised tokens had no recorded log-probability (actions
+  counted `scrubbed` 652 and `context_reconstructed` 475 of 2,668). The runs used `start`, which keeps the sampler's
+  log-probabilities where recorded and the start adapter's elsewhere.
+- The recipe's 4 passes over 2,913 per-action records were 1,314 steps at 184 s/step (66 h). Every round was capped at 72
+  steps (3.7 GPU-h, 576 of 2,628 trainable records, 0.2 of a pass).
+- The RFT control (sft-step view of the round-1 verified passes plus the gen-0 teacher set, 585 records, from A2s1, lr
+  2e-4) got 144 steps x 8 records, matching both RL rounds' steps.
+
+**Training signal.**
+
+| Round | Informative groups | sum Var(r) per M completion tokens | Median KL | Median clip | Guard skips |
+|---|---|---|---|---|---|
+| zero-GPU uniform rows (strict / shaped, `f_naive` 0) | 83/160 / 110/160 | 1.155 / 0.903 | | | |
+| round 1 (A2s1 rollouts, 640 trials) | 70/80 (0.875) | 1.49 | rl1 0.018, rl1g 0.016 | 0.059 / 0.056 | rl1 none, rl1g 13 of 72 |
+| round 2 (rl1 rollouts, 640 trials) | 76/80 (0.95) | 2.05 | rl2 0.016 | 0.056 | 8 of 72 |
+
+The unguarded round (rl1) had 9 spike steps: mean ratio 4.8-484, ratio max up to 1.6e6, KL 31-6,414, one gradient norm
+1.4e5. The guarded rerun (rl1g: same data, same seed, `--max-step-kl 0.1 --max-step-grad-norm 5`) spiked on the same
+steps; at step 6 the policy had moved by KL < 0.008. rl2 continued rl1 on round 2's rollouts (40 top-LS round-1 tasks
+re-rolled plus 40 new), with the same guards.
+
+**Held-out (48 fresh tasks x 8, paired by task against A2s1; task-cluster bootstrap 95%).**
+
+| Arm | pass@1 | pass@8 | delta pass@1 | support | legal | accounting | compiled | timeouts | probe share | NLL/token |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A2s1 | 0.607 | 0.854 | | 0.885 | 0.562 | 0.312 | 0.667 | 18 | 0.013 | 0.394 |
+| RFT control | 0.646 | 0.833 | +0.039 [-0.013, +0.094] | 0.927 | 0.583 | 0.365 | 0.708 | 15 | 0.005 | 0.312 |
+| rl1 (unguarded) | 0.378 | 0.729 | -0.229 [-0.294, -0.159] | 0.531 | 0.344 | 0.156 | 0.479 | 23 | 0.016 | 0.384 |
+| rl1g (guarded, 1 seed) | 0.576 | 0.792 | -0.031 [-0.081, +0.018] | 0.875 | 0.490 | 0.302 | 0.635 | 28 | 0.052 | 0.428 |
+| rl2 (from rl1, guarded) | 0.510 | 0.792 | -0.096 [-0.151, -0.039] | 0.729 | 0.458 | 0.250 | 0.604 | 18 | 0.010 | 0.311 |
+
+**Training tasks** (round 1's 40 top-LS tasks x 8, seeds shared by every arm): A2s1 0.575; RFT +0.094 [+0.019, +0.172];
+rl1 -0.191 [-0.263, -0.116]; rl1g -0.056 [-0.131, +0.016]; rl2 -0.094 [-0.159, -0.028]. Spearman of round 1's `LS_i`
+with the pass change: rl1 -0.33 [-0.61, -0.02], rl1g -0.13 [-0.47, +0.21], RFT -0.28 [-0.55, +0.04] (restricted range:
+the 40 highest LS).
+
+**Retention** (orchestration 32 + workspace-tools-reference 59 tasks, 2 attempts, lane R's dev profile; paired by task;
+non-inferior at 0.10): A2s1 0.599; RFT +0.005 [-0.077, +0.088] non-inferior; rl1 -0.165 [-0.258, -0.071] fails; rl1g
+-0.038 [-0.121, +0.038] not shown non-inferior; rl2 -0.104 [-0.181, -0.027] fails.
+
+**Compute (approximate GPU-h).** Rollouts 5.5 (plus 1.0 lost when a harness limit killed round 1, whose rerun restarts
+every trial, knowledge 190); training rl1 3.6 (plus 1.9 lost the same way), rl1g 3.6, rl2 3.6, RFT 0.8; evaluation about
+20.
+
+**Reading (the ledger's rule).**
+- KL is not near zero: the optimiser moves (median 0.016-0.018, just under the 0.02-0.05 band; clip 0.056, under 0.10).
+- Unguarded, the round damaged the policy on every measure. The step guard alone removes most of it (single seed):
+  held-out -0.229 to -0.031, training tasks -0.191 to -0.056, retention -0.165 to -0.038.
+- Guarded, KL moves and the training tasks are flat: the credit-assignment row. With 0.2 of a pass, the round is also
+  under-optimised, and half the trained tokens are off-policy proxies. Turn-level credit and exact contexts come next.
+- No teacher-free gain: no RL arm reaches held-out +0.05 with CI above 0.
+- The RFT control is not teacher-free (gen-0 rehearsal). It gains on its training tasks (+0.094) and keeps retention,
+  but its held-out +0.039 has CI including 0.
+- None of this is a sealed claim.

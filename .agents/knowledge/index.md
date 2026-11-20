@@ -173,3 +173,6 @@ in the same commit.
 | [185](185-a-strict-pass-reward-wastes-the-verifiers-partial-credit.md) | A strict-pass reward wastes the verifier's partial credit |
 | [186](186-more-informative-groups-is-not-more-signal-per-token.md) | More informative groups is not more signal per token |
 | [187](187-thinking-off-qwen3-exams-never-carried-the-reasoning-directive.md) | Thinking-off Qwen3 exams never carried the reasoning directive |
+| [188](188-record-driven-ratio-spikes-wrecked-an-on-policy-round-and-a-step-guard-removed-the-damage.md) | Record-driven ratio spikes wrecked an on-policy round; a step guard removed the damage |
+| [189](189-the-on-policy-recipe-does-not-fit-real-rollouts-at-the-current-step-cost.md) | The on-policy recipe does not fit real rollouts at the current step cost |
+| [190](190-a-rerun-of-an-interrupted-practice-run-restarts-every-trial.md) | A rerun of an interrupted practice run restarts every trial |
