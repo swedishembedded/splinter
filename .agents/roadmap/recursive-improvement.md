@@ -273,8 +273,12 @@ headline (interpreter-labelled self-proposed SFT, 8.3% to 16.7% on the fresh exa
    prompts (brain knowledge 531). Within-build comparisons stand, but absolute accuracies may shift. Run a Tier-3 logit
    parity check on the paper's exam prompts before quoting absolute numbers across builds.
    **Measured 2026-11-20 (lane L11, gpu2): the injection does not touch the paper's exam, so its numbers stand.** The
-   fresh exam F (2340 items) is no longer on disk (the examiner's private directory vanished 2026-11-19; its seed with
-   it), so the check ran on a deterministic 300-item sample of the paper's public 889-item exam (SHA-256 order of
+   fresh exam F (2340 items) is no longer on disk. The examiner's private directory is gone with its seed, together with
+   the other top-level `rsi*` and `huggingface` dirs. The parent directory's last change is 2026-11-18 19:50, and no
+   agent transcript on this machine removed it. Nor is there an archive copy: the HF `project-shared-archive` predates
+   it. Exam F's signed verdicts survive in the private HF dataset `generalized-continuous-learning-evidence`
+   (`verdicts/G/F`), but its items cannot be regenerated, so a later held-out claim needs a newly drawn sealed exam.
+   That is why the check ran on a deterministic 300-item sample of the paper's public 889-item exam (SHA-256 order of
    `"l11-sample|" + instruction`, 24 families, no item excluded by r0/3's hand-off list), with the base and S4 r0/3
    (adapter digest `a1304bb5...`), the reference examiner's protocol (user turn only, thinking off, greedy, 2048 tokens,
    64 concurrent, `--kv-cache f32 --max-batch 64`). Builds: neither the paper's examiner binary (`d11e9134...`) nor the
