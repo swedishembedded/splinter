@@ -32,6 +32,7 @@ navigation:
       - docs/guides/campaigns.md
       - docs/guides/harbor-tasks.md
       - docs/guides/bench-trials.md
+      - docs/guides/distillation.md
       - docs/guides/invented-tasks.md
       - docs/guides/environment-factory.md
   - title: Concepts

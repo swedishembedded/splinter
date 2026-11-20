@@ -112,6 +112,9 @@ splinter dataset check DATASET-ID --from local:Qwen/Qwen3-4B --max-block 32768
 splinter --brain-artifact-store /srv/brain-artifacts train DATASET-ID --from local:Qwen/Qwen3-4B --max-block 32768
 ```
 
+The whole recipe, from a teacher's practice run or a published bundle of its trajectories to an examined student,
+is [Distil a teacher's verified trajectories](distillation.md).
+
 `sft-step --pack` is one record per passing trajectory, the system prompt, the instruction and every tool result as
 context and every assistant turn (its reasoning, its tool calls, its answer) supervised. `sft-final` does not fit an
 agent's trial: the trial's work is its tool calls, and it records no final answer (the build counts every trial as

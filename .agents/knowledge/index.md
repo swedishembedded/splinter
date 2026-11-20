@@ -178,3 +178,4 @@ in the same commit.
 | [190](190-a-rerun-of-an-interrupted-practice-run-restarts-every-trial.md) | A rerun of an interrupted practice run restarts every trial |
 | [191](191-a-4b-told-to-read-a-mounted-collection-almost-never-opens-it.md) | A 4B told to read a mounted collection almost never opens it |
 | [192](192-an-edited-driver-script-breaks-running-bash-jobs.md) | An edited driver script breaks running bash jobs |
+| [193](193-a-rebuilt-distillation-dataset-has-the-same-records-but-not-the-same-id.md) | A rebuilt distillation dataset has the same records but not the same id |
