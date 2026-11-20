@@ -191,10 +191,10 @@ Intervals: item-paired cluster bootstrap over families. Source: lane-r-results.m
 | 7 HF artifacts | DONE: private evidence bundle and `experiences ingest-hf` round trip on the real Hub. | section Evidence |
 | 9 knowledge acquisition | PARTIAL, infrastructure only: knowledge collection `swedishembedded/knowledge@v0.1` (private, not human-reviewed); bench `--knowledge` mount with digest, exam refusal unless registered open-book, and `bench knowledge audit` (bench 37f68631, 319c5afe). The experiment (item 21, S0-S5) has not run. | item 21; bench k066 |
 | 13 training throughput | PARTIAL: A1-A3 efficiency items with Tier-1 parity, CPU fan-out fix (1974 s to 76 s). The profile shows 14% of peak, with attention 74% of the step; a Hopper attention kernel (R6) is open. | brain training-efficiency |
-| new: tool calls as text | OPEN, found 2026-11-20: in a quarter to a third of 4B practice failures the tool call is written as text inside the reasoning, so nothing runs. It is not yet known whether the brain Qwen3 tool-call parsing or sven is at fault. | knowledge-collection author review of about 150 lane-l6 failures |
+| new: tool calls as text | FIXED in brain, NO pass-rate effect: brain 5e25d5b82 (k536) parses a complete `<tool_call>` inside an unclosed think block as a call. A2s1, 24 accounting practice tasks x 8, 1bdd5400c against 5e25d5b82 (only serving change): pass@1 0.376 -> 0.354, paired -0.022 [-0.105, +0.071]. The shape was in 22% of trials before and rescued in 19% after; it marks failing trajectories (pass 0.19-0.22 vs 0.39-0.43), so the parser was not the cause of those failures. | brain k536 "Measured"; lane TM 2026-11-20, archive lane-tm-2026-11-20.tar.zst |
 | new: exam F of the Frontier paper | BLOCKER for re-use: its items and seed are lost; the signed verdicts survive (private HF `generalized-continuous-learning-evidence`). | recursive-improvement.md |
 
 The goal is not met. There is no independently verified teacher-free generalisation gain, the consecutive-generation
 knowledge loop has not run, and the row counts above are from the 11-19 audit. Next work, in order, is in the ledger:
-fix the tool-call-as-text defect; run item 21 S0 (bench audit of the knowledge collection) and S1 (zero-training check);
+run item 21 S0 (bench audit of the knowledge collection) and S1 (zero-training check);
 run item 19's guarded round on `--sampled-only` data.
