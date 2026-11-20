@@ -231,3 +231,32 @@ implementing a contract; a missing capability is refused by name, never an archi
 - Does RL (with negative rewards) raise pass@64 on unseen families and compositions where self-imitation does not?
 - Does a small model (LFM3-1.7B, full fine-tune) improve reliably across generations and discover answers its base
   never produced at pass@16 with thinking?
+
+## Paper revision after the experience-to-competence work (2026-11-20)
+
+Applies to "The Frontier Must Grow" (`papers/splinter-brain-sven-flywheel`). Findings from the agentic
+experience-to-competence campaign (ledger `experience-to-competence.md`) bear on its framing and its limitations. The
+headline (interpreter-labelled self-proposed SFT, 8.3% to 16.7% on the fresh exam) is not contradicted.
+
+1. **Framing.** In the agentic work, competence came only from a source of new correct information (verified teacher
+   solutions); the policy's own outcomes gave no gain. In this paper that source is the interpreter. The discussion
+   should name the oracle as the information source, not self-generated knowledge.
+2. **Negative appendix results.** "No gain on repository tasks / 27B agent" may share the agentic GRPO failure, where the
+   update never moved the policy (KL about 0.002, ratio about 1.002, clip about 1%; splinter knowledge 184). Check those
+   runs' KL and clip logs. Unless the policy moved, report them as under-optimised configurations, not as no gain.
+3. **Small-cluster intervals.** The minimum-family rule (knowledge 177: a family-resampled interval has zero width when a
+   few families agree) means intervals over 4 lineages are fragile. Re-check the round 2/3 "both intervals above zero"
+   claims with an exact sign or permutation bound over lineages.
+4. **Signatures.** Re-sign the verdicts with bench's Ed25519 key (bench 80ab3135), which closes the "symmetric signature
+   protects against the learner, not the authors" limitation.
+5. **Contamination.** The fresh exam shares templates with the old one (Jaccard 0.54). If GPU time allows, add an exam
+   over lineages withheld from all proposal and training (bench tier c, dc82515c).
+6. **Retention.** Add the retention anchor with a non-inferiority bound (bench retention-v1, the promotion gate).
+7. **Served-prompt confound.** Brain builds before 1bdd5400c injected a "Reasoning effort" instruction into Qwen3
+   prompts (brain knowledge 531). Within-build comparisons stand, but absolute accuracies may shift. Run a Tier-3 logit
+   parity check on the paper's exam prompts before quoting absolute numbers across builds.
+8. **Open directions now available.**
+   - The learnability metric and difficulty dials (for RL from outcomes; failure selection is sound for oracle-labelled SFT).
+   - Matched-step RFT controls.
+   - Faster training (attention is 74% of a step; brain training-efficiency R6), which makes more lineages and
+     compute-matched baselines affordable.
