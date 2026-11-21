@@ -194,3 +194,5 @@ in the same commit.
 | [206](206-not-supported-hides-a-ruled-out-target-and-an-interval-that-holds-it.md) | "Not supported" hides two results: a target ruled out, and an interval that still holds it |
 | [207](207-taking-a-persons-turn-out-of-a-path-takes-the-reply-it-answered-too.md) | Taking a person's turn out of a guided path takes the reply it answered too |
 | [208](208-a-token-and-turn-budget-makes-an-agent-exam-independent-of-server-load.md) | A token and turn budget makes an agent exam independent of server load, and shows a distilled student's length as failures |
+| [209](209-distilled-vim-skill-transfers-to-held-out-families-once-the-exam-is-budgeted.md) | Distilled vim skill transfers to held-out families once the exam is budgeted and wide enough |
+| [210](210-at-a-fixed-small-record-count-more-training-families-did-not-improve-held-out-families.md) | At a fixed small record count, more training families did not improve held-out families |

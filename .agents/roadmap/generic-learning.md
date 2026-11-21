@@ -48,6 +48,28 @@ E0 to E3 need no new method and fit in one afternoon on four cards.
 
 **Decision rule: E4 and E5 do not start before E1 shows the instrument can detect +0.05.** If E1 is falsified, breadth (E3, bench's environment factory) is funded before any algorithm.
 
+## External research report (2026-11-21): mapping and additions
+
+A literature report pasted by the user. Its citations dated 2026 are not verified here, so its effect sizes are not used. Where it matches the plan above:
+
+- **Generalization ladder and family-level splits** are rule 3 and E1 (held-out family, +0.118 [+0.021, +0.220]).
+- **Verified branch repair and prefix branching** are E4 (GL-P5, `path_guided`) and E5 (GL-P3). A branch starts from a restored state (bench GL-B3), never a replayed history it cannot reproduce.
+- **Matched-state action preferences** are E5's shared-prefix pairs.
+- **Do not train on answer-conditioned rationales** is rule 1. Its "E4 rationalization filter" does not apply: the prose filters are retired (SC-9), and our E4 is resampling, not a filter.
+- **Curriculum at 0 < p < 1** is the loop's routing by measured pass rate.
+
+New, entered as gap items. Each one tests one variable and is gated like E4/E5:
+
+| Id | Capability | Status | Acceptance | Depends on |
+|---|---|---|---|---|
+| GL-P9 | **Transition records from every trial, failed ones included.** An experience view whose target is the environment's next observation given the state and action. The tool's own output is the target, never a model's explanation of it. It passes rule 1, because the observation was produced by the environment, not sampled under a hint. Trained as an auxiliary loss beside the policy records, with observation tokens excluded from any policy-gradient term | gap | E6 | brain GL-R (per-record loss weights) |
+| GL-P10 | **Group-signal diagnostics for every PG/RL round:** share of all-fail and all-pass groups, advantage variance, KL, entropy, update norm, and train versus held-out pass. These are reported, never gated, so that the next "no transfer" (R19) can be attributed | gap | printed per round by `splinter` from the trainer's records | brain per-sample metrics |
+
+| # | Experiment (one variable) | Pre-registered success | Gate |
+|---|---|---|---|
+| E6 | **Early-experience transitions.** v1's recipe plus GL-P9 records from the same trials (failed trials included), against v1 plus an equal token count of extra policy records | held-out families +0.05 over control, interval above 0, retention non-inferior at 0.10 | E1 met; runs after E4 so that only one new data class enters at a time |
+| E7 | **Knowledge necessity (bench GL-B6).** Effect of access to the knowledge base: success with the base minus success without it, on tasks whose rule exists only in the base, under correct, absent, distractor, contradicting and updated evidence | the effect of access is above 0 with its interval, and the distractor and updated-evidence arms are not worse than the absent arm. Until this holds, the A2 knowledge-base result (barely consulted) is uninterpretable | bench GL-B6 |
+
 ## Stop doing (splinter)
 
 - Any filter that reads the prose of a trace (word lists, answer-presence, command-explained, rewrite passes): retired by `engineering-cleanup.md` SC-9; items 24c and 24d of `experience-to-competence.md` are superseded.
@@ -185,3 +207,48 @@ to 0.55).
 [+0.010, +0.064], family interval **[-0.021, +0.105]**, 75 / 58 / 35, p 0.165. Seed 1 +0.041 [-0.008, +0.105], seed 2
 +0.032 [-0.039, +0.108]. The exhaustion share is 50.5% against the base's 10.1%, 40 points apart, so that criterion
 fails. The gain is not supported, and +0.05 is not ruled out. The 4B check is running; the verdict is entered after it.
+
+**E2 result (read 2026-11-21 21:05).** **Not supported**; the problem-state rule gives *inconclusive* on the gain.
+- **At B** (E1's slot): +0.037, family interval [-0.021, +0.105], p 0.165 (above). Exhaustion 50.5% against the base's
+  10.1%: the "within 10 points of base" criterion fails. Min-cost curation cut v1's exhaustion only from 57.6% to 50.5%,
+  because a student trained on the cheapest passes still reasons at the teacher's length.
+- **At 4B** (60,456 tokens, 36 turns; 168 tasks x 4 per seed, own slot): e2 0.514 against v1 0.486, +0.029, task
+  interval [-0.010, +0.070], family interval [-0.025, +0.088], 67 / 54 / 47, p 0.275. Exhaustion 11.5% against 16.1%.
+  Nominally non-inferior at 0.05 (lower end -0.025), but **22-27% of trials hit the wall-clock backstop**
+  (`infra_timeout`, 600 s x 4: e2 301, v1 361 of 1,344 each). The backstop was not scaled with the 4x token budget, so
+  the check excludes long trials unevenly and is weak evidence. A rerun should set `wall_clock_factor` to at least 16.
+- Verdict `exp-e2` entered from `logs/e2.compare.json` (belief unchanged at 0.45). Reports:
+  `lane-exp/logs/e2*.compare.json`, `e2-4b.compare.json`.
+
+**E3 result (read 2026-11-21 21:05; 7 folds of 2 held-out rungs, all 168 tasks over 14 rungs, 4 attempts per seed;
+1,344 graded trials per dose, no infrastructure errors).** **Falsified: breadth at an equal 122 records does not help.**
+
+| dose | pass@1 | minus r4 | task 95% | family 95% | better / worse / ties | p two-sided | Holm | exhaustion |
+|---|---:|---:|---|---|---|---:|---:|---:|
+| r4 | 0.287 | | | | | | | 48.3% |
+| r8 | 0.276 | -0.010 | [-0.039, +0.019] | [-0.049, +0.026] | 49 / 57 / 62 | 0.497 | 0.959 | 49.9% |
+| r12 | 0.281 | -0.005 | [-0.033, +0.022] | [-0.041, +0.028] | 45 / 53 / 70 | 0.480 | 0.959 | 52.8% |
+
+Not monotone, and r12 minus r4 has an upper end of +0.028, below the +0.05 target, so a breadth effect of that size is
+ruled out at this record count. Descriptive only (the base ran in E1's slot, not this one): every dose sits about
++0.04 to +0.05 above E1's base (0.235), against +0.118 for E1's 343-403 records. In this range the amount of verified
+teacher data moved held-out families more than the number of training rungs did. Verdict `exp-e3` entered (belief
+0.40 to 0.20). Report: `lane-exp/logs/e3.compare.json`.
+
+**What E0-E3 decide.** The budgeted instrument works (E0), and vim distillation transfers to held-out families
+(E1, +0.118), so E4 and E5 may start. Neither min-cost selection (E2) nor breadth at a fixed small record count (E3) is
+the lever measured here. Every distilled student exhausts the budget in about half of its trials, so length remains the
+students' main failure mode. **GPU-hours:** about 25 across n467 and n445: 1.6 for E0 at low load and 1.4 at high, 4.6
+for training, and about 14 for the E1/E2/E3 exams and the 4B check. About 3.5 of the 25 went to the two invalid exam
+slots (adapter starvation; an unservable model).
+
+**E2 4B rerun (pre-registered 2026-11-21 21:10, before any of its trials; at the coordinator's request).** This
+replaces the first 4B check, which lost 22-27% of its trials to the wall-clock backstop.
+- Arms, tasks and attempts are the first check's: E1's and E2's students (seeds pooled) on each fold's held-out tasks
+  x 4 attempts per seed. Budget 4B = 60,456 completion tokens and 36 turns; per-turn thinking budget 2,048.
+- The backstop scales with the budget: `wall_clock_factor = 16` and Harbor's agent limit x 16 (600 s -> 9,600 s).
+- The build is brain-bcd67e5ad, as at B, so the serving build matches every other E2 arm.
+- On n424 (local), one fold per exam server (gpu1 a, gpu2 b, gpu3 c, `--adapter-slots 8`), 16 trials in flight per arm,
+  4 rounds of one attempt each, with per-arm preflight and the round check.
+- Analysis as registered: e2 minus v1, `compare-arms`, family interval; non-inferior at 0.05 when its lower end is
+  above -0.05. The `infra_timeout` count is reported per arm.

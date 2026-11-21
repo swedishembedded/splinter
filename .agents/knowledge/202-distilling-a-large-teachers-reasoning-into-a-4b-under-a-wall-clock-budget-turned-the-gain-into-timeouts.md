@@ -32,3 +32,7 @@ cap thinking per turn, or give the agent a budget in turns or tokens (bench 072)
 - Follow-ups pre-registered in the experience-to-competence ledger, item 25:
   - E1c: an equal per-turn thinking budget for all arms;
   - v2c: the shortest verified trajectories per task, with reasoning per turn capped and the cut-off records dropped.
+
+**Superseded in part (2026-11-21, knowledge 209):** under a token and turn budget, on 168 held-out-rung tasks, the same
+recipe transfers to families it never trained on (+0.118, family interval [+0.021, +0.220]). The null above measured the
+wall clock and a 14-task exam.
