@@ -15,7 +15,8 @@
 //! * The fork's engine runs under the image's Sven configuration the session
 //!   announces: the student is offered the task's tool and nothing else, and
 //!   its server runs in the session (`session-exec --stdin`), where the
-//!   recorded calls are replayed.
+//!   recorded calls are replayed. The session runs one command at a time, so
+//!   no server may stay connected past its call: the grade must get its turn.
 //! * `path_guided` forks a guided pass of the task there, and the examiner's
 //!   grade decides.
 
@@ -102,16 +103,20 @@ session)
   while read -r line; do
     case "$line" in
     *grade*)
+      # One command or grade at a time, as the examiner's session runs them:
+      # a command still running (a server nobody ended) fails the grade.
+      if ! flock -w 5 "{lock}" true; then echo '{{"error":"infrastructure: the session is still busy"}}'; continue; fi
       if [ "$(cat "$ws/answer.json" 2>/dev/null)" = "42" ]; then v=pass; r=1.0; else v=fail; r=0.0; fi
       echo "{{\"schema\":\"bench.grade/1\",\"task\":\"compiled/sums\",\"digest\":\"d1\",\"verdict\":\"$v\",\"reward\":$r,\"metrics\":{{}},\"reason\":null}}" ;;
     esac
   done ;;
 session-exec)
   shift 2; [ "$1" = "--stdin" ] && shift; shift 2
-  exec "$@" ;;
+  exec flock "{lock}" "$@" ;;
 esac
 "#,
         log = root.join("bench.log").display(),
+        lock = root.join("session.lock").display(),
     );
     let path = dir.join("bench");
     fs::write(&path, script).unwrap();

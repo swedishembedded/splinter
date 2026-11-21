@@ -280,6 +280,49 @@ impl Tool for McpTool {
 mod tests {
     use super::*;
 
+    /// Two calls of one turn, run at once, each through an environment that
+    /// runs one command at a time (as an examiner's session does): a call's
+    /// input must end when its writer is done, whatever else was started
+    /// meanwhile, or the first waits for an end of input that the second,
+    /// queued behind it, holds open.
+    #[test]
+    fn two_calls_at_once_through_a_one_at_a_time_environment_both_finish() {
+        let scratch = tempfile::tempdir().unwrap();
+        let lock = scratch.path().join("session.lock");
+        let script = "import json,sys\nlines=sys.stdin.read().splitlines()\nfor l in lines:\n    r=json.loads(l)\n    if 'id' in r: print(json.dumps({'jsonrpc':'2.0','id':r['id'],'result':{'content':[{'type':'text','text':'ok'}]}}),flush=True)\n";
+        let server = StdioServer {
+            name: "files".into(),
+            argv: vec![
+                "flock".into(),
+                lock.to_string_lossy().into_owned(),
+                "python3".into(),
+                "-c".into(),
+                script.into(),
+            ],
+            cwd: None,
+            timeout: std::time::Duration::from_secs(20),
+            failure: Arc::default(),
+        };
+        let started = std::time::Instant::now();
+        let calls: Vec<_> = (0..2)
+            .map(|_| {
+                let server = server.clone();
+                std::thread::spawn(move || {
+                    server.ask("tools/call", &json!({"name": "write", "arguments": {}}))
+                })
+            })
+            .collect();
+        for call in calls {
+            let answered = call.join().unwrap().unwrap();
+            assert_eq!(result_text(&answered), "ok");
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(10),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
     #[test]
     fn a_server_that_never_answers_fails_within_its_bound_as_infrastructure() {
         let server = StdioServer {
