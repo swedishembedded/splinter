@@ -523,8 +523,9 @@ pub enum ExperiencesCommand {
     /// The hinted retry (rationalisation): the student's failed train-side
     /// tasks of a compiled Harbor dataset worked again with the reference
     /// solution as a hint, through the tasks' own tools and sandboxes; an
-    /// attempt is kept only when verified, observed before it writes, free
-    /// of the hint, and sufficient (its reasoning alone passes again).
+    /// attempt is kept when verified and no answer content is in its own
+    /// text (real observations and sufficiency are opt-in), or earlier
+    /// runs' attempts re-graded offline.
     Rationalise(Box<RationaliseArgs>),
     /// Import experience sets, with their experiences' annotations and trial
     /// register, from another state root.

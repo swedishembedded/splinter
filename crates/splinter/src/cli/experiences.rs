@@ -123,9 +123,10 @@ pub struct RepairArgs {
 /// `experiences rationalise`: the hinted retry. The rationaliser works the
 /// student's failed train-side tasks of a compiled Harbor dataset with each
 /// task's reference solution as a hint, as Harbor trials through the
-/// examiner's sandbox, gateway and Sven adapter; an attempt is kept only
-/// when it is verified, reads the files it changes before writing them,
-/// never shows the hint, and its reasoning alone lets the model pass again.
+/// examiner's sandbox, gateway and Sven adapter; an attempt is kept when it
+/// is verified and no answer content (the hint's wording, a file line
+/// nothing showed yet) is in the model's own text. `--regrade` judges an
+/// earlier run's attempts again instead, offline unless `--sufficiency`.
 #[derive(Debug, Args)]
 pub struct RationaliseArgs {
     /// The compiled dataset (holding bench-compile.json; hints come only
@@ -133,57 +134,88 @@ pub struct RationaliseArgs {
     #[arg(long, value_name = "DIR")]
     pub dataset: PathBuf,
     /// A student's graded Harbor job, packed (`bench pack`) or not
-    /// (repeatable); every trial must be of a train-side task of the
-    /// dataset. Never changed: a packed job is unpacked in a copy.
-    #[arg(long = "student", required = true, value_name = "JOB")]
+    /// (repeatable; optional with `--regrade`); every trial must be of a
+    /// train-side task of the dataset, and its passes are kept as they are.
+    /// Never changed: a packed job is unpacked in a copy.
+    #[arg(
+        long = "student",
+        required_unless_present = "regrade",
+        value_name = "JOB"
+    )]
     pub students: Vec<PathBuf>,
     /// The model that rationalises: a local model the brain endpoint
-    /// (`--brain-endpoint`, `--brain-key-file`) serves.
-    #[arg(long, value_parser = super::model_ref, value_name = "REF")]
-    pub rationaliser: ModelRef,
-    /// The examiner's checkout (`./bench` and its Harbor run from it).
+    /// (`--brain-endpoint`, `--brain-key-file`) serves. Needed when trials
+    /// run (not for an offline `--regrade`).
+    #[arg(long, value_parser = super::model_ref, value_name = "REF",
+          required_unless_present = "regrade")]
+    pub rationaliser: Option<ModelRef>,
+    /// The examiner's checkout (`./bench` and its Harbor run from it; `bench
+    /// unpack` reads packed jobs).
     #[arg(long, value_name = "DIR")]
     pub bench: PathBuf,
-    /// The `harbor` program (default: the checkout's .venv/bin/harbor).
+    /// The `harbor` program (default: the checkout's .venv/bin/harbor)
     #[arg(long, value_name = "PATH")]
     pub harbor: Option<PathBuf>,
-    /// The sven build the agent runs, given to every sandbox.
-    #[arg(long, value_name = "PATH")]
-    pub sven_build: PathBuf,
+    /// The sven build the agent runs, given to every sandbox. Needed when
+    /// trials run.
+    #[arg(long, value_name = "PATH", required_unless_present = "regrade")]
+    pub sven_build: Option<PathBuf>,
     /// The run profile the rationaliser's is derived from: its sampling and
-    /// sven settings, its main role forwarded to the rationaliser.
-    #[arg(long, value_name = "FILE")]
-    pub profile: PathBuf,
+    /// sven settings, its main role forwarded to the rationaliser. Needed
+    /// when trials run.
+    #[arg(long, value_name = "FILE", required_unless_present = "regrade")]
+    pub profile: Option<PathBuf>,
     /// The examiner's cache of task images (default:
     /// .bench-data/rootfs-cache in the checkout).
     #[arg(long, value_name = "DIR")]
     pub images: Option<PathBuf>,
     /// Failed tasks to pick, stratified by difficulty rung.
-    #[arg(long, value_name = "N", value_parser = super::positive_count)]
-    pub count: usize,
+    #[arg(long, value_name = "N", value_parser = super::positive_count,
+          required_unless_present = "regrade", conflicts_with = "regrade")]
+    pub count: Option<usize>,
     /// The seed of the pick (drawn and printed when not given; a rerun with
     /// the same seed resumes the run).
-    #[arg(long, value_name = "N")]
+    #[arg(long, value_name = "N", conflicts_with = "regrade")]
     pub seed: Option<Seed>,
     /// Attempts of each picked task, each its own record.
-    #[arg(long, value_name = "K", value_parser = super::positive_count,
+    #[arg(long, value_name = "K", value_parser = super::positive_count, conflicts_with = "regrade",
           help = format!("Attempts of each picked task [default: {DEFAULT_SAMPLES}]"))]
     pub samples: Option<usize>,
     /// Trials run at once.
     #[arg(long, value_name = "N", value_parser = super::positive_count,
           help = format!("Trials run at once [default: {DEFAULT_RATIONALISE_JOBS}]"))]
     pub jobs: Option<usize>,
-    /// A word or phrase whose mention in the model's own text is a leak of
-    /// the hint (repeatable; replaces the default list: as given, solution,
-    /// solve.sh, expected, reference, hint).
+    /// A word or phrase whose mention in the model's own text also rejects
+    /// an attempt (repeatable; none by default: naming a hint is no leak,
+    /// only the answer's content is).
     #[arg(long = "leak-term", value_name = "TEXT")]
     pub leak_terms: Vec<String>,
+    /// Also require real observations: the first tool call shows every file
+    /// the task changes before writing it.
+    #[arg(long)]
+    pub real_observations: bool,
+    /// Also require sufficiency: a second Harbor trial whose instruction
+    /// carries only the attempt's reasoning, no hint, must pass.
+    #[arg(long)]
+    pub sufficiency: bool,
     /// How the hint is framed for the rationaliser: `worked-answer` (a worked
     /// answer for its eyes only) or `private-scratch` (private scratch
     /// knowledge: work as if you found the approach yourself, observe the
     /// files through the tool first, never mention or allude to a hint).
-    #[arg(long, value_enum, default_value = "worked-answer")]
+    #[arg(
+        long,
+        value_enum,
+        default_value = "worked-answer",
+        conflicts_with = "regrade"
+    )]
     pub hint_framing: HintFramingArg,
+    /// An earlier `experiences rationalise` run's directory whose graded
+    /// attempts are judged again with this run's checks, each with its own
+    /// run's hint framing, instead of drawing and running new ones
+    /// (repeatable). The earlier run is only read: its packed jobs are
+    /// unpacked in a copy. Without `--sufficiency` nothing runs.
+    #[arg(long = "regrade", value_name = "RUN_DIR")]
+    pub regrade: Vec<PathBuf>,
 }
 
 /// The `--hint-framing` choices.

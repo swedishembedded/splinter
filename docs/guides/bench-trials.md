@@ -272,33 +272,61 @@ An attempt is an ordinary Harbor trial of a staged copy of the task (its folder 
 `worked-answer`, the default, a worked answer for the model's eyes only; `private-scratch`, private scratch knowledge
 with the instruction to work as if the approach were found unaided and to observe the files through the tool first), run through the examiner's
 user-namespace sandbox, its gateway (`bench gateway serve --state`, serving a profile derived from `--profile` whose
-main role is the rationaliser) and its Sven adapter, `--jobs` at once. It is judged by four filters, in order:
+main role is the rationaliser) and its Sven adapter, `--jobs` at once. By default it is judged by two checks, and kept
+when both pass:
 
 | Filter | Passes when |
 |---|---|
 | verified | the task's verifier gave reward 1 |
-| real observations | the first agent step that calls a tool shows every non-empty line of each file the task changes (from `environment/workspace/` to `tests/expected/`) in its replies, and none of those replies confirms writing such a file (`"FILE" ... written`), unless the instruction itself shows every non-empty starting line of that file (then the model has observed it before any call); a task without `tests/expected/` is undecidable and fails |
-| no leak | the model's own text (reasoning and messages, not tool arguments or replies) mentions no leak term (a word prefix, case-insensitive; `--leak-term` replaces the default `as given`, `solution`, `solve.sh`, `expected`, `reference`, `hint`), repeats no run of five words from one line of the hint section that it was not also shown (instruction, system prompt, tool schemas) or sent itself as a tool argument, and quotes no line of the task's files (8 characters or more) that neither the instruction nor an earlier tool reply showed |
-| sufficient | a second trial of a copy whose instruction is the task's plus only the attempt's reasoning (no hint, no tool calls or replies) passes the verifier |
+| no answer present (`no_leak` in the record) | the model's own text (reasoning and messages, not tool arguments or replies) repeats no run of five words from one line of the hint section that it was not also shown (instruction, system prompt, tool schemas) or sent itself as a tool argument, and quotes no line of the task's files, starting or expected (8 characters or more, compared with runs of whitespace as one space), that neither the instruction nor an earlier tool reply showed |
 
-The sufficiency trial runs only for an attempt that passed the first three. A kept attempt becomes an experience of
-the task on the train side: its user turn the task's own instruction (nothing of the hint section anywhere in it),
-the system prompt and tool schemas of its first model request, its real tool replies, the verifier's pass, and its
-lineage in `extra.splinter_rationalise` (origin, trials, every verdict); its provenance marks it as made with
-material the student does not see. The student's own passes are kept the same way with origin `own`. Every attempt's
-record carries every verdict reached, kept or not, and the report counts the attempts through the filters in order
-and each filter alone. It also gives two controls from the student's own passes, which never saw a hint: how many
-mention each leak term, and how many would pass the real-observations filter. A filter that rejects most unhinted
-work measures something other than the hint. The kept experiences are one set:
+Merely naming a hint, a solution or an expected result is no leak: only the answer's content is. A run opts into more:
+
+| Option | Adds |
+|---|---|
+| `--leak-term TEXT` (repeatable) | a word list: a mention in the model's own text (a word prefix, case-insensitive) also fails no answer present |
+| `--real-observations` | real observations: the first agent step that calls a tool shows every non-empty line of each file the task changes (from `environment/workspace/` to `tests/expected/`) in its replies, and none of those replies confirms writing such a file (`"FILE" ... written`), unless the instruction itself shows every non-empty starting line of that file; a task without `tests/expected/` is undecidable and fails |
+| `--sufficiency` | sufficient: a second trial of a copy whose instruction is the task's plus only the attempt's reasoning (no hint, no tool calls or replies) passes the verifier; it runs only for an attempt that passed the other checks |
+
+A kept attempt becomes an experience of the task on the train side: its user turn the task's own instruction (nothing
+of the hint section anywhere in it), the system prompt and tool schemas of its first model request, its real tool
+replies, the verifier's pass, and its lineage in `extra.splinter_rationalise` (origin, trials, every verdict); its
+provenance marks it as made with material the student does not see. The student's own passes are kept the same way
+with origin `own`. Every attempt's record carries every verdict reached, kept or not, and the report counts the
+attempts through the filters in order and each filter alone (a check the run left off counts as passed). It also
+gives two controls from the student's own passes, which never saw a hint: how many mention each leak term, and how
+many would pass the real-observations rule. A filter that rejects most unhinted work measures something other than
+the hint. The kept experiences are one set:
 
 ```sh
 splinter dataset build --view sft-step --pack --max-block 16384 --from local:Qwen/Qwen3-4B KEPT-SET-ID
 ```
 
-A decided attempt (kept or rejected) is never redone; one that passed the first three filters resumes at its
-sufficiency trial; one the infrastructure stopped is run again. A finished Harbor job is read, not run again. The run
-directory (`STATE/rationalise/<run>`) holds the derived profile, the gateway's log, the staged copies, the Harbor
-jobs and `report.json`.
+A record is keyed by the student's trial, the rationaliser, the sample, the profile, the endpoint's model id, the
+leak terms, and the hint framing and checks where they differ from what runs used before they were options (the
+worked answer, every check on): a run made then, rerun with `--real-observations --sufficiency` and its own leak
+terms, finds its records. A decided attempt (kept or rejected) is never redone; one that passed the other checks of a
+`--sufficiency` run resumes at its sufficiency trial; one the infrastructure stopped is run again. A finished Harbor
+job is read, not run again. The run directory (`STATE/rationalise/<run>`) holds the derived profile, the gateway's
+log, the staged copies, the Harbor jobs and `report.json`.
+
+#### Re-grading earlier runs
+
+```sh
+splinter experiences rationalise --dataset ~/data/vim-headless-mastery --bench ~/bench \
+  --regrade STATE/rationalise/rationalise-947783646ccf6c8e --regrade STATE/rationalise/rationalise-941a3ca1386127e4
+```
+
+`--regrade RUN_DIR` (repeatable) judges every graded attempt of earlier runs again with this run's checks instead of
+drawing and running new ones; `--count`, `--seed`, `--samples` and `--hint-framing` are refused with it. Each
+attempt's hint section is rebuilt with its own run's framing (`hint_framing` in its `report.json`, absent meaning the
+worked answer) and must be the one its user turn holds; the run must be of the same dataset (its compile record's
+sha256), and a re-grade run is not re-graded again. A packed job (`bench pack`) is unpacked in a copy in the new
+run's directory (`STATE/rationalise/regrade-<id>/regraded/`), so the earlier run is only read. A re-graded record is
+keyed by the earlier record's key and the re-grade's checks and leak terms, names the attempt it re-grades
+(`regrade_of`), and the report lists the runs re-graded. Without `--sufficiency` nothing runs: no gateway, no Harbor
+job, no model, so `--rationaliser`, `--profile` and `--sven-build` are not needed; with it, the sufficiency trials
+run as above and those three are needed. `--student` is optional: given, its passes are kept as they are.
 
 ## Moving experience between state roots
 

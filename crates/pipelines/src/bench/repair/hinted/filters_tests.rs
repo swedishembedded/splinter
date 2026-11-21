@@ -73,8 +73,19 @@ const READ_REPLY: &str = "exit status: 0\noutput:\ntop line\nbottom line";
 const EDIT: &[&str] = &["args main.txt", "normal! jyyggP", "wqall"];
 const EDIT_REPLY: &str = "exit status: 0\nmessages:\n\"main.txt\" 3L, 33B written";
 
+/// The word list a run may opt into with `--leak-term` (the list that was the default before the check became
+/// content-only).
+const WORDS: [&str; 6] = [
+    "as given",
+    "solution",
+    "solve.sh",
+    "expected",
+    "reference",
+    "hint",
+];
+
 fn terms() -> Vec<String> {
-    LEAK_TERMS.iter().map(|t| (*t).to_string()).collect()
+    WORDS.iter().map(|t| (*t).to_string()).collect()
 }
 
 fn leak(trajectory: &atif::Trajectory) -> Verdict {
@@ -224,7 +235,7 @@ fn files_without_target() -> TaskFiles {
 }
 
 #[test]
-fn a_mention_of_a_leak_term_in_the_models_own_text_is_a_leak() {
+fn a_mention_of_an_opted_in_leak_term_in_the_models_own_text_is_a_leak() {
     let clean = trajectory(
         INSTRUCTION,
         &[
@@ -430,4 +441,89 @@ fn the_private_scratch_framing_asks_for_unaided_work_and_strips_like_the_worked_
         HintFraming::WorkedAnswer,
         "gate a's framing stays the default"
     );
+}
+
+/// Merely naming a hint, a solution or an expected result is not wrong: by default only the answer's own content
+/// present in the model's text is a leak, so the default word list is empty and a mention passes.
+#[test]
+fn by_default_only_copied_answer_content_is_a_leak_not_a_mention() {
+    assert!(
+        LEAK_TERMS.is_empty(),
+        "the default leak check is content-only"
+    );
+    let hint = hinted_instruction(INSTRUCTION, HINT, HintFraming::WorkedAnswer);
+    let section = &hint[hint.find(HINT_BEGIN).unwrap()..];
+    let check = |t: &atif::Trajectory| {
+        no_leak(
+            t,
+            &LeakCheck {
+                terms: &[],
+                hint: section,
+                instruction: INSTRUCTION,
+                shown: SYSTEM,
+                files: &target(),
+            },
+        )
+    };
+    let mention = trajectory(
+        INSTRUCTION,
+        &[(
+            "The hint and the reference solution say the expected result, as given, has three lines.",
+            READ,
+            READ_REPLY,
+        )],
+    );
+    assert_eq!(check(&mention), Verdict::pass());
+    // The hint's own wording is still the answer's content.
+    let copied = trajectory(
+        INSTRUCTION,
+        &[(
+            "It is one call of the vim tool, as the tool makes it.",
+            READ,
+            READ_REPLY,
+        )],
+    );
+    assert!(!check(&copied).passed);
+}
+
+/// A line of the expected result reproduced before any tool reply showed it is the answer's content even when the
+/// model respaces it; lines under the floor are too common to say anything and stay out of the check.
+#[test]
+fn an_expected_line_reproduced_near_verbatim_before_any_reply_showed_it_is_a_leak() {
+    let files = task_files(Some(&[(
+        "main.txt",
+        "bottom line\ntop line\nbottom line\nthe   final  tally: 42\nok\n",
+    )]));
+    let check = |t: &atif::Trajectory| {
+        no_leak(
+            t,
+            &LeakCheck {
+                terms: &[],
+                hint: "",
+                instruction: INSTRUCTION,
+                shown: SYSTEM,
+                files: &files,
+            },
+        )
+    };
+    let early = trajectory(
+        INSTRUCTION,
+        &[(
+            "The file must end with the final tally: 42 and ok.",
+            READ,
+            READ_REPLY,
+        )],
+    );
+    let verdict = check(&early);
+    assert!(!verdict.passed, "{verdict:?}");
+    assert!(verdict.reason.unwrap().contains("final"));
+    // Once a reply showed it, in whatever spacing, saying it is observation.
+    let seen = trajectory(
+        INSTRUCTION,
+        &[
+            ("Print it.", READ, "output:\nthe final tally: 42"),
+            ("So it ends with the final tally: 42.", EDIT, EDIT_REPLY),
+        ],
+    );
+    assert_eq!(check(&seen), Verdict::pass());
 }

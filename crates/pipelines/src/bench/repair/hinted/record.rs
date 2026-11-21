@@ -25,7 +25,7 @@ use splinter_orchestrator::error::OrchestratorError;
 
 use super::filters::Verdict;
 use super::material::{StudentTrial, TrainTask};
-use super::RATIONALISE_FORMAT;
+use super::{Checks, RATIONALISE_FORMAT};
 use crate::bench::artifact::AgentContext;
 use crate::bench::repair::route::InterventionKind;
 use crate::bench::split::{self, Split, SplitSource, TrialRecord};
@@ -85,25 +85,42 @@ pub struct Filters {
     /// 1: the verifier passed the attempt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verified: Option<Verdict>,
-    /// 2: its first tool call read the files it changes before writing them.
+    /// 2: its first tool call read the files it changes before writing them
+    /// (reached only when the run opts in).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub real_observations: Option<Verdict>,
-    /// 3: its text neither mentions the hint nor quotes what it did not see.
+    /// 3, no answer present: its text holds none of the answer's content
+    /// (the hint's wording, a file line nothing showed yet) and no term of
+    /// the run's word list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub no_leak: Option<Verdict>,
-    /// 4: its reasoning alone let the model pass again.
+    /// 4: its reasoning alone let the model pass again (reached only when
+    /// the run opts in).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sufficient: Option<Verdict>,
 }
 
 impl Filters {
-    /// Whether the first three filters passed.
+    /// Whether the screening filters `checks` applies passed: verified, no
+    /// answer present, and real observations when the run opts in.
     #[must_use]
-    pub fn first_three_pass(&self) -> bool {
-        [&self.verified, &self.real_observations, &self.no_leak]
-            .iter()
-            .all(|v| v.as_ref().is_some_and(|v| v.passed))
+    pub fn screened(&self, checks: Checks) -> bool {
+        let passed = |v: &Option<Verdict>| v.as_ref().is_some_and(|v| v.passed);
+        passed(&self.verified)
+            && passed(&self.no_leak)
+            && (!checks.real_observations || passed(&self.real_observations))
     }
+}
+
+/// The earlier attempt a re-graded record judges again.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegradeOf {
+    /// The earlier run's directory.
+    pub run: PathBuf,
+    /// The earlier record's key.
+    pub key: String,
+    /// The hinted trial as the earlier run recorded it.
+    pub hinted_trial: PathBuf,
 }
 
 /// The record of one attempt, or of one own pass.
@@ -150,6 +167,9 @@ pub struct RationaliseRecord {
     /// The kept experience.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub experience: Option<ExperienceId>,
+    /// The earlier attempt this record re-grades, when it does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regrade_of: Option<RegradeOf>,
 }
 
 impl RationaliseRecord {
@@ -180,6 +200,7 @@ impl RationaliseRecord {
             hinted_trial: None,
             sufficiency_trial: None,
             experience: None,
+            regrade_of: None,
         }
     }
 
@@ -262,7 +283,7 @@ fn store_experience(
     if let Some(residue) = super::filters::hint_residue(&trajectory) {
         return Err(refused(residue));
     }
-    let lineage = json!({
+    let mut lineage = json!({
         "format": RATIONALISE_FORMAT,
         "origin": record.origin,
         "key": record.key,
@@ -275,6 +296,9 @@ fn store_experience(
         "context": {"source": "agent/requests.jsonl", "source_sha256": kept.context.source_sha256,
             "added": added},
     });
+    if let Some(source) = &record.regrade_of {
+        lineage["regrade_of"] = json!(source);
+    }
     let mut extra = match trajectory.extra.take() {
         Some(Value::Object(map)) => map,
         Some(other) => serde_json::Map::from_iter([("recorded".to_string(), other)]),

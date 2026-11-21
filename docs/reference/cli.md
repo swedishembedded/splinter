@@ -1690,28 +1690,31 @@ Options:
 
 #### splinter experiences rationalise
 
-The hinted retry (rationalisation): the student's failed train-side tasks of a compiled Harbor dataset worked again with the reference solution as a hint, through the tasks' own tools and sandboxes; an attempt is kept only when verified, observed before it writes, free of the hint, and sufficient (its reasoning alone passes again)
+The hinted retry (rationalisation): the student's failed train-side tasks of a compiled Harbor dataset worked again with the reference solution as a hint, through the tasks' own tools and sandboxes; an attempt is kept when verified and no answer content is in its own text (real observations and sufficiency are opt-in), or earlier runs' attempts re-graded offline
 
 ```text
-splinter experiences rationalise [OPTIONS] --dataset <DIR> --student <JOB> --rationaliser <REF> --bench <DIR> --sven-build <PATH> --profile <FILE> --count <N>
+splinter experiences rationalise [OPTIONS] --dataset <DIR> --bench <DIR>
 ```
 
 Options:
 
 - `--dataset <DIR>` (required): The compiled dataset (holding bench-compile.json; hints come only from its train-side tasks)
-- `--student <JOB>...` (required): A student's graded Harbor job, packed (`bench pack`) or not (repeatable); every trial must be of a train-side task of the dataset. Never changed: a packed job is unpacked in a copy.
-- `--rationaliser <REF>` (required): The model that rationalises: a local model the brain endpoint (`--brain-endpoint`, `--brain-key-file`) serves.
-- `--bench <DIR>` (required): The examiner's checkout (`./bench` and its Harbor run from it)
+- `--student <JOB>...`: A student's graded Harbor job, packed (`bench pack`) or not (repeatable; optional with `--regrade`); every trial must be of a train-side task of the dataset, and its passes are kept as they are. Never changed: a packed job is unpacked in a copy.
+- `--rationaliser <REF>`: The model that rationalises: a local model the brain endpoint (`--brain-endpoint`, `--brain-key-file`) serves. Needed when trials run (not for an offline `--regrade`)
+- `--bench <DIR>` (required): The examiner's checkout (`./bench` and its Harbor run from it; `bench unpack` reads packed jobs)
 - `--harbor <PATH>`: The `harbor` program (default: the checkout's .venv/bin/harbor)
-- `--sven-build <PATH>` (required): The sven build the agent runs, given to every sandbox.
-- `--profile <FILE>` (required): The run profile the rationaliser's is derived from: its sampling and sven settings, its main role forwarded to the rationaliser.
+- `--sven-build <PATH>`: The sven build the agent runs, given to every sandbox. Needed when trials run.
+- `--profile <FILE>`: The run profile the rationaliser's is derived from: its sampling and sven settings, its main role forwarded to the rationaliser. Needed when trials run.
 - `--images <DIR>`: The examiner's cache of task images (default: .bench-data/rootfs-cache in the checkout)
-- `--count <N>` (required): Failed tasks to pick, stratified by difficulty rung.
+- `--count <N>`: Failed tasks to pick, stratified by difficulty rung.
 - `--seed <N>`: The seed of the pick (drawn and printed when not given; a rerun with the same seed resumes the run)
 - `--samples <K>`: Attempts of each picked task [default: 1]
 - `--jobs <N>`: Trials run at once [default: 8]
-- `--leak-term <TEXT>...`: A word or phrase whose mention in the model's own text is a leak of the hint (repeatable; replaces the default list: as given, solution, solve.sh, expected, reference, hint)
+- `--leak-term <TEXT>...`: A word or phrase whose mention in the model's own text also rejects an attempt (repeatable; none by default: naming a hint is no leak, only the answer's content is)
+- `--real-observations`: Also require real observations: the first tool call shows every file the task changes before writing it.
+- `--sufficiency`: Also require sufficiency: a second Harbor trial whose instruction carries only the attempt's reasoning, no hint, must pass.
 - `--hint-framing <HINT_FRAMING>`: How the hint is framed for the rationaliser: `worked-answer` (a worked answer for its eyes only) or `private-scratch` (private scratch knowledge: work as if you found the approach yourself, observe the files through the tool first, never mention or allude to a hint) Default: `worked-answer`. Values: `worked-answer`, `private-scratch`.
+- `--regrade <RUN_DIR>...`: An earlier `experiences rationalise` run's directory whose graded attempts are judged again with this run's checks, each with its own run's hint framing, instead of drawing and running new ones (repeatable). The earlier run is only read: its packed jobs are unpacked in a copy. Without `--sufficiency` nothing runs.
 
 #### splinter experiences import
 

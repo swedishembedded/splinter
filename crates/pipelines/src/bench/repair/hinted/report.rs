@@ -21,10 +21,13 @@ use splinter_store::experiences::{ExperienceSet, SetId};
 
 use super::filters::{self, Verdict};
 use super::RATIONALISE_FORMAT;
-use super::{refused, Filters, Origin, Outcome, Picked, RationaliseRecord, RationaliseRequest};
+use super::{
+    refused, Attempts, Checks, Filters, Origin, Outcome, Picked, RationaliseRecord,
+    RationaliseRequest,
+};
 
 /// How many attempts reached each filter, in order: each count is of the
-/// ones before it.
+/// ones before it. A check the run left off counts as passed.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Funnel {
     /// Attempts graded (not stopped by the infrastructure).
@@ -33,21 +36,21 @@ pub struct Funnel {
     pub verified: usize,
     /// Verified, with real observations.
     pub real_observations: usize,
-    /// ... and no leak.
+    /// ... and no answer present.
     pub no_leak: usize,
     /// ... and sufficient: kept.
     pub sufficient: usize,
 }
 
 /// How many graded attempts passed each of the first three filters, each
-/// on its own.
+/// on its own; a check the run left off counts as passed.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Alone {
     /// Verified.
     pub verified: usize,
     /// Real observations.
     pub real_observations: usize,
-    /// No leak.
+    /// No answer present.
     pub no_leak: usize,
 }
 
@@ -69,26 +72,39 @@ pub struct StudentSummary {
 pub struct RationaliseReport {
     /// Always [`RATIONALISE_FORMAT`].
     pub format: &'static str,
-    /// The rationaliser's identity, and the id its endpoint serves it under.
-    pub rationaliser: String,
+    /// The rationaliser's identity, when the run ran trials.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rationaliser: Option<String>,
     /// The id the endpoint lists it under.
-    pub served_as: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub served_as: Option<String>,
     /// The dataset, its compile record's sha256 and the examiner commit
     /// that compiled it.
     pub dataset: serde_json::Value,
-    /// The profile the rationaliser's was derived from, and its sha256.
-    pub profile: PathBuf,
+    /// The profile the rationaliser's was derived from, when the run ran
+    /// trials.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<PathBuf>,
     /// Its sha256.
-    pub profile_sha256: String,
-    /// The seed of the pick, the count asked for and the samples per task.
-    pub seed: u64,
-    /// Failed tasks asked for.
-    pub count: usize,
-    /// Attempts per task.
-    pub samples: usize,
-    /// The leak terms.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_sha256: Option<String>,
+    /// The seed of the pick (a draw).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
+    /// Failed tasks asked for (a draw).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<usize>,
+    /// Attempts per task (a draw).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub samples: Option<usize>,
+    /// The earlier runs a re-grade judged again.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub regraded: Vec<PathBuf>,
+    /// The leak terms (none unless the run named some).
     pub leak_terms: Vec<String>,
-    /// How the hint was framed.
+    /// The checks the run opted into besides verified and no answer present.
+    pub checks: Checks,
+    /// How the hint was framed (a draw; a re-grade rebuilds each run's own).
     pub hint_framing: filters::HintFraming,
     /// What the student's jobs held.
     pub students: StudentSummary,
@@ -128,12 +144,13 @@ pub struct RationaliseReport {
 
 /// What the report states besides its records.
 pub(super) struct ReportParts {
-    pub(super) rationaliser: String,
-    pub(super) served_as: String,
+    pub(super) rationaliser: Option<String>,
+    pub(super) served_as: Option<String>,
     pub(super) dataset: serde_json::Value,
-    pub(super) profile_sha256: String,
+    pub(super) profile_sha256: Option<String>,
     pub(super) students: StudentSummary,
     pub(super) picked: Vec<Picked>,
+    pub(super) regraded: Vec<PathBuf>,
     /// Each task's files and instruction, by folder, for the controls over own passes.
     pub(super) files: BTreeMap<String, (filters::TaskFiles, String)>,
     pub(super) dir: PathBuf,
@@ -154,6 +171,7 @@ pub(super) fn report(
     let passes = |r: &&RationaliseRecord, f: fn(&Filters) -> &Option<Verdict>| {
         f(&r.filters).as_ref().is_some_and(|v| v.passed)
     };
+    let checks = request.checks;
     let mut funnel = Funnel {
         graded: graded.len(),
         ..Funnel::default()
@@ -161,9 +179,9 @@ pub(super) fn report(
     let mut alone = Alone::default();
     for r in &graded {
         let v = passes(r, |f| &f.verified);
-        let o = passes(r, |f| &f.real_observations);
+        let o = !checks.real_observations || passes(r, |f| &f.real_observations);
         let l = passes(r, |f| &f.no_leak);
-        let s = passes(r, |f| &f.sufficient);
+        let s = !checks.sufficiency || passes(r, |f| &f.sufficient);
         alone.verified += usize::from(v);
         alone.real_observations += usize::from(o);
         alone.no_leak += usize::from(l);
@@ -202,21 +220,40 @@ pub(super) fn report(
         None
     } else {
         Some(store.put_set(&ExperienceSet {
-            name: format!("rationalised and own passes by {}", parts.rationaliser),
+            name: match &parts.rationaliser {
+                Some(rationaliser) => format!("rationalised and own passes by {rationaliser}"),
+                None => format!(
+                    "re-graded rationalisations and own passes of {} runs",
+                    parts.regraded.len()
+                ),
+            },
             members: kept,
         })?)
+    };
+    let draw = match request.attempts {
+        Attempts::Draw {
+            count,
+            samples,
+            seed,
+        } => Some((count, samples, seed)),
+        Attempts::Regrade(_) => None,
     };
     let report = RationaliseReport {
         format: RATIONALISE_FORMAT,
         rationaliser: parts.rationaliser,
         served_as: parts.served_as,
         dataset: parts.dataset,
-        profile: request.profile.to_path_buf(),
+        profile: parts
+            .profile_sha256
+            .as_ref()
+            .and(request.profile.map(PathBuf::from)),
         profile_sha256: parts.profile_sha256,
-        seed: request.seed,
-        count: request.count,
-        samples: request.samples,
+        seed: draw.map(|(_, _, seed)| seed),
+        count: draw.map(|(count, _, _)| count),
+        samples: draw.map(|(_, samples, _)| samples),
+        regraded: parts.regraded,
         leak_terms: request.leak_terms.to_vec(),
+        checks,
         hint_framing: request.framing,
         students: parts.students,
         picked: parts.picked,

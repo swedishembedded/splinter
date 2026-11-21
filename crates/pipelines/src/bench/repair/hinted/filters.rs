@@ -23,15 +23,17 @@
 //!    between the starting files and the task's target files
 //!    (`tests/expected/`); a task without target files is undecidable and
 //!    fails;
-//! 3. **no leak** ([`no_leak`]): no text the model wrote (reasoning and
-//!    messages, not tool arguments or replies) mentions a leak term (a word
-//!    prefix, case-insensitive), repeats the hint's own wording (a run of
-//!    [`HINT_NGRAM`] words from one line of the hint section that the model
-//!    was not also shown in the instruction, its system prompt or tool
-//!    schemas, and that it did not itself send as a tool argument), or
-//!    quotes a line of the task's files (at least [`MIN_QUOTED_CHARS`]
-//!    characters) that neither the instruction nor an earlier step's tool
-//!    reply showed;
+//! 3. **no answer present** ([`no_leak`], the record's `no_leak`): no text
+//!    the model wrote (reasoning and messages, not tool arguments or
+//!    replies) repeats the hint's own wording (a run of [`HINT_NGRAM`] words
+//!    from one line of the hint section that the model was not also shown in
+//!    the instruction, its system prompt or tool schemas, and that it did
+//!    not itself send as a tool argument), or quotes a line of the task's
+//!    files, starting or expected (at least [`MIN_QUOTED_CHARS`] characters,
+//!    compared with runs of whitespace as one space), that neither the
+//!    instruction nor an earlier step's tool reply showed; a run may add a
+//!    word list ([`LEAK_TERMS`] is empty) whose mention (a word prefix,
+//!    case-insensitive) is a leak too;
 //! 4. **sufficient**: given the instruction and only the attempt's reasoning
 //!    ([`reasoning_of`], in [`NOTES_BEGIN`]/[`NOTES_END`]), the model passes
 //!    the verifier again in a fresh sandbox. That run is the stage's; this
@@ -100,16 +102,12 @@ impl HintFraming {
 /// What the model is told about the notes, inside the notes section.
 pub const NOTES_PREAMBLE: &str = "Notes from an earlier attempt at this task follow.";
 
-/// The words whose mention in the model's own text is a leak of the hint
-/// (prefixes, case-insensitive), unless a run names others.
-pub const LEAK_TERMS: [&str; 6] = [
-    "as given",
-    "solution",
-    "solve.sh",
-    "expected",
-    "reference",
-    "hint",
-];
+/// The words whose mention in the model's own text is a leak (prefixes,
+/// case-insensitive) when a run names none: none. Merely naming a hint, a
+/// solution or an expected result is not a leak; the default check is
+/// content-only (the hint's wording, file lines nothing showed yet), and a
+/// run opts into a word list with its own terms.
+pub const LEAK_TERMS: &[&str] = &[];
 
 /// The length, in words, of a run of the hint's wording that is a leak when
 /// the model repeats it.
@@ -203,12 +201,13 @@ impl TaskFiles {
     }
 
     /// Every line of every file, starting and target, long enough to say
-    /// where the model learned it, with the file it is from.
-    fn quotable_lines(&self) -> BTreeMap<&str, &str> {
+    /// where the model learned it, with its runs of whitespace as one space
+    /// ([`spaced`]), and the file it is from.
+    fn quotable_lines(&self) -> BTreeMap<String, &str> {
         let mut lines = BTreeMap::new();
         let target = self.expected.iter().flat_map(BTreeMap::iter);
         for (path, content) in self.starter.iter().chain(target) {
-            for line in content.lines().map(str::trim) {
+            for line in content.lines().map(spaced) {
                 if line.chars().count() >= MIN_QUOTED_CHARS {
                     lines.entry(line).or_insert(path.as_str());
                 }
@@ -310,6 +309,17 @@ fn body_text(body: &atif::MessageBody) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// The text of `trajectory`'s first user turn: the instruction the attempt
+/// was given.
+#[must_use]
+pub fn user_turn(trajectory: &atif::Trajectory) -> Option<String> {
+    trajectory
+        .steps
+        .iter()
+        .find(|s| s.source == atif::StepOrigin::User)
+        .map(|s| body_text(&s.message))
 }
 
 /// What the model wrote in `step`: its reasoning and its message.
@@ -434,6 +444,12 @@ pub struct LeakCheck<'a> {
     pub files: &'a TaskFiles,
 }
 
+/// `text` with every run of whitespace one space and none around it: a line
+/// reproduced with other spacing or wrapping is still that line.
+fn spaced(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// The words of `text`, lowercased, each without the punctuation around it.
 fn words(text: &str) -> Vec<String> {
     text.split_whitespace()
@@ -481,9 +497,9 @@ pub fn mentioned_terms<'t>(trajectory: &atif::Trajectory, terms: &'t [String]) -
         .collect()
 }
 
-/// Filter 3: the model's own text neither mentions the hint, repeats its
-/// wording, nor quotes file content nothing showed it; see the module
-/// documentation.
+/// Filter 3, no answer present: the model's own text neither repeats the
+/// hint's wording nor quotes file content nothing showed it, nor mentions a
+/// term of the run's word list; see the module documentation.
 #[must_use]
 pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict {
     let terms: Vec<String> = check.terms.iter().map(|t| t.to_lowercase()).collect();
@@ -501,7 +517,7 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
         .filter(|n| !known.contains(n))
         .collect();
     let quotable = check.files.quotable_lines();
-    let mut seen = check.instruction.to_string();
+    let mut seen = spaced(check.instruction);
     let mut findings = Vec::new();
     for step in agent_steps(trajectory) {
         let text = model_text(step);
@@ -520,8 +536,9 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
                 step_name(step)
             ));
         }
+        let said = spaced(&text);
         for (line, path) in &quotable {
-            if text.contains(line) && !seen.contains(line) {
+            if said.contains(line.as_str()) && !seen.contains(line.as_str()) {
                 findings.push(format!(
                     "{} quotes {line:?} of {path}, which neither the instruction nor an earlier \
                      tool reply showed",
@@ -529,8 +546,8 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
                 ));
             }
         }
-        seen.push('\n');
-        seen.push_str(&replies(step));
+        seen.push(' ');
+        seen.push_str(&spaced(&replies(step)));
     }
     Verdict::of(findings)
 }

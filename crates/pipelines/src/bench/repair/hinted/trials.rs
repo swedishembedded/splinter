@@ -157,21 +157,24 @@ fn attempts_of(job: &Path) -> Result<BTreeMap<String, Attempt>, String> {
         let Some(folder) = task_of(&dir) else {
             continue;
         };
-        let path = dir.join("result.json");
-        let Ok(bytes) = std::fs::read(&path) else {
+        if !dir.join("result.json").is_file() {
             continue;
-        };
-        let result: Value =
-            serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
-        attempts.insert(
-            folder,
-            Attempt {
-                reward: reward_of(&result),
-                dir,
-            },
-        );
+        }
+        attempts.insert(folder, attempt_at(&dir)?);
     }
     Ok(attempts)
+}
+
+/// The trial at `dir`, graded by its `result.json`.
+pub(super) fn attempt_at(dir: &Path) -> Result<Attempt, String> {
+    let path = dir.join("result.json");
+    let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let result: Value =
+        serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(Attempt {
+        reward: reward_of(&result),
+        dir: dir.to_path_buf(),
+    })
 }
 
 /// The trajectory a trial's agent left (`agent/trajectory.json`, ATIF) and
@@ -188,10 +191,11 @@ pub(super) fn read_attempt(dir: &Path) -> Result<(atif::Trajectory, AgentContext
     Ok((trajectory, context))
 }
 
-/// The directory of trial `trial` of the student job `job`: in place when
-/// the job is unpacked, else in a copy under `copies` that the examiner
-/// unpacks once (`bench unpack`); the job itself is never changed.
-pub(super) fn student_trial_dir(
+/// The directory of trial `trial` of the Harbor job `job` (a student's, or
+/// an earlier run's hinted job): in place when the job is unpacked, else in
+/// a copy under `copies` that the examiner unpacks once (`bench unpack`);
+/// the job itself is never changed.
+pub(super) fn job_trial_dir(
     checkout: &BenchCheckout,
     job: &Path,
     trial: &str,
