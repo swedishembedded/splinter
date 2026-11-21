@@ -531,12 +531,7 @@ fn handle(event: &Event, frames: &Sender<Value>) -> Option<Ended> {
         "done" => Some(match data["status"].as_str() {
             Some("succeeded") => Ended::Succeeded,
             Some("cancelled") => Ended::Cancelled,
-            Some("failed") => Ended::Failed(
-                data["error"]["message"]
-                    .as_str()
-                    .unwrap_or("it failed")
-                    .to_string(),
-            ),
+            Some("failed") => Ended::Failed(brain_reason(&data["error"])),
             other => Ended::Failed(format!("it ended with the unknown status {other:?}")),
         }),
         _ => None,
@@ -545,10 +540,41 @@ fn handle(event: &Event, frames: &Sender<Value>) -> Option<Ended> {
 
 /// The message of brain's error body, else the body.
 fn message_of(body: &str) -> String {
-    serde_json::from_str::<Value>(body)
-        .ok()
-        .and_then(|v| v["error"]["message"].as_str().map(str::to_string))
-        .unwrap_or_else(|| body.chars().take(300).collect())
+    match serde_json::from_str::<Value>(body) {
+        Ok(v) if v["error"].is_object() => brain_reason(&v["error"]),
+        _ => bounded(body),
+    }
+}
+
+/// The most characters of brain's reason a failure carries.
+const REASON_CHARS: usize = 600;
+
+/// Brain's `{"message", "code"}` error as the reason a failure carries: its
+/// message verbatim, with the status it answered. The text is the server's,
+/// untrusted: control characters become spaces and its length is bounded.
+fn brain_reason(error: &Value) -> String {
+    let Some(message) = error["message"].as_str() else {
+        return "brain gave no reason".into();
+    };
+    match error["code"].as_u64() {
+        Some(code) => format!("brain answered {code}: {}", bounded(message)),
+        None => format!("brain answered: {}", bounded(message)),
+    }
+}
+
+/// `text` without control characters, cut to [`REASON_CHARS`] with `...`.
+fn bounded(text: &str) -> String {
+    let spaced: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let clean = spaced.trim();
+    if clean.chars().count() <= REASON_CHARS {
+        return clean.to_string();
+    }
+    let mut cut: String = clean.chars().take(REASON_CHARS).collect();
+    cut.push_str("...");
+    cut
 }
 
 #[cfg(test)]
@@ -596,7 +622,47 @@ mod tests {
         assert_eq!(done("cancelled", ""), Some(Ended::Cancelled));
         assert_eq!(
             done("failed", "no room"),
-            Some(Ended::Failed("no room".into()))
+            Some(Ended::Failed("brain answered: no room".into()))
+        );
+    }
+
+    #[test]
+    fn brains_reason_reaches_the_caller_bounded_and_with_its_status() {
+        let (frames, _kept) = channel();
+        let failed = |error: serde_json::Value| {
+            let data = serde_json::json!({"status": "failed", "error": error}).to_string();
+            match handle(
+                &Event {
+                    id: Some(1),
+                    name: "done".into(),
+                    data,
+                },
+                &frames,
+            ) {
+                Some(Ended::Failed(why)) => why,
+                other => panic!("{other:?}"),
+            }
+        };
+        let why = failed(serde_json::json!({
+            "message": "ChatFineTune: selecting on the monitoring loss needs eval_every > 0",
+            "code": 400
+        }));
+        assert_eq!(
+            why,
+            "brain answered 400: ChatFineTune: selecting on the monitoring loss needs eval_every > 0"
+        );
+        // Untrusted text: control characters become spaces, the length is bounded.
+        let why = failed(
+            serde_json::json!({"message": format!("a\u{1b}[2Jb\n{}", "x".repeat(5000)), "code": 500}),
+        );
+        assert!(why.starts_with("brain answered 500: a [2Jb "), "{why}");
+        assert!(why.chars().count() <= REASON_CHARS + 32, "{}", why.len());
+        assert!(why.ends_with("..."), "a cut reason says so");
+        assert!(!why.chars().any(char::is_control));
+        assert_eq!(failed(serde_json::json!({})), "brain gave no reason");
+        assert_eq!(
+            message_of(r#"{"error":{"message":"no room\u0007","code":429}}"#),
+            "brain answered 429: no room"
         );
     }
 }

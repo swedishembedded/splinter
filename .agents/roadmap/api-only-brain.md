@@ -43,6 +43,17 @@ Everything that touches brain lives in `splinter-model`, which links `brain` (fe
 
 ## Open (what remains before `splinter-model` drops `brain`)
 
+- [ ] A refused training job reaches Splinter as "the model failed to
+      process the request" (2026-11-21): brain's served job surface
+      redacts every unclassified error (`capability::failure::ReplyError::
+      Failed`, logged for the operator only), and `ChatFineTune`'s
+      parameter refusals (`selecting on the monitoring loss needs
+      eval_every > 0`, `keeping the evaluations needs eval_every > 0`) are
+      not classified `[invalid-request]`, so the caller never learns which
+      parameter was wrong. Splinter now carries brain's message and status
+      verbatim (bounded, control characters removed), so the fix is brain's:
+      classify those refusals.
+
 `splinter-model` links two brain crates, each a `[[brain.exception]]` of `architecture.toml`: `brain-survival` (survival evaluation arithmetic, no dependency and no model: the exception that stays) and `brain` with the `timeline` feature alone, for the timeline model. Every other in-process use is gone (2026-11-17/18). The timeline moves onto `timeline_train` and the served horizon model's `predict`/`eval`/`calibrate` once brain offers (brain gaps, each to add in brain with a regression test):
 
 | Gap | Splinter's use |
