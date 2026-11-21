@@ -63,3 +63,14 @@ mentioned that the semicolon ';' repeats the last find command"), which the defa
 The sufficiency run's notes (`reasoning_of`) are each agent step's reasoning followed by its visible message, so a
 non-thinking trace (empty reasoning, text before each call) gives its visible text as notes; a spec with such a
 trajectory holds it. A trace whose notes come out empty has no visible text in its steps' messages either.
+
+## The answer check missed the hint's own commands (2026-11-21, fixed)
+
+Gate c's default kept 81 of 96 4B attempts because the "no answer present" check looked only for 5-word runs of the
+hint and for file lines; a hint command is often one word (`f{ci{new`, `/BEGIN/,/END/s/off/on/g`, `normal! OHEADER`).
+Lane VSFT's own check rejected 30 of its 55 verified 27B attempts for writing a reference command in text. The check
+now also looks for each hint command line, and each word of one that is not all letters, of 6 characters or more, in
+the model's text before a tool reply showed it (`filters::hint_commands`). Re-graded offline with the fix: lane VSFT's
+run rejects all 30 of its script's and 2 more (`f{ci{new` without `normal!`), keeping 23 of 55 verified; gates a and b
+keep 5 of 96 (5.2%), under item 24's 10% bar, so gate c no longer clears it. Left unchecked on purpose: an all-letter
+word of a command alone (`jyyggP`, `cccorrect`), which cannot be told from ordinary text without its line.

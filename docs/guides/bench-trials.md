@@ -278,7 +278,7 @@ when both pass:
 | Filter | Passes when |
 |---|---|
 | verified | the task's verifier gave reward 1 |
-| no answer present (`no_leak` in the record) | the model's own text (reasoning and messages, not tool arguments or replies) repeats no run of five words from one line of the hint section that it was not also shown (instruction, system prompt, tool schemas) or sent itself as a tool argument, and quotes no line of the task's files, starting or expected (8 characters or more, compared with runs of whitespace as one space), that neither the instruction nor an earlier tool reply showed |
+| no answer present (`no_leak` in the record) | the model's own text (reasoning and messages, not tool arguments or replies) repeats no run of five words from one line of the hint section that it was not also shown (instruction, system prompt, tool schemas) or sent itself as a tool argument, and quotes no line of the task's files, starting or expected (8 characters or more, compared with runs of whitespace as one space), that neither the instruction nor an earlier tool reply showed, and writes none of the hint's commands (each line of its code, and each word of one that is not all letters, 6 characters or more, compared with runs of whitespace as one space) that the instruction, system prompt or tool schemas do not show and no earlier tool reply showed |
 
 Merely naming a hint, a solution or an expected result is no leak: only the answer's content is. A run opts into more:
 

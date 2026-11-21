@@ -518,6 +518,10 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
         .collect();
     let quotable = check.files.quotable_lines();
     let mut seen = spaced(check.instruction);
+    let commands = hint_commands(
+        check.hint,
+        &spaced(&format!("{}\n{}", check.instruction, check.shown)),
+    );
     let mut findings = Vec::new();
     for step in agent_steps(trajectory) {
         let text = model_text(step);
@@ -546,10 +550,54 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
                 ));
             }
         }
+        for command in commands
+            .iter()
+            .filter(|c| said.contains(c.as_str()) && !seen.contains(c.as_str()))
+        {
+            findings.push(format!(
+                "{} writes the hint's command {command:?}, which no tool reply had shown",
+                step_name(step)
+            ));
+        }
         seen.push(' ');
         seen.push_str(&spaced(&replies(step)));
     }
     Verdict::of(findings)
+}
+
+/// The shortest hint command, or word of one, that counts as the answer: shorter ones (`dd`, `1`) are too common in
+/// ordinary text to say where the model learned them.
+const MIN_COMMAND_CHARS: usize = 6;
+
+/// The commands of the hint's code (the lines of its fenced body, comments left out) and the words of each, at least
+/// [`MIN_COMMAND_CHARS`] long (a word only when it is not all letters), spaced as [`spaced`] spaces them, leaving out what `known` (the instruction, system
+/// prompt and tool schemas, spaced) already holds.
+fn hint_commands(hint: &str, known: &str) -> BTreeSet<String> {
+    let mut fences = hint
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| l.trim_start().starts_with("```"));
+    let (Some((open, _)), Some((close, _))) = (fences.next(), fences.last()) else {
+        return BTreeSet::new();
+    };
+    hint.lines()
+        .skip(open + 1)
+        .take(close.saturating_sub(open + 1))
+        .map(spaced)
+        .filter(|line| !line.starts_with('#'))
+        .flat_map(|line| {
+            // A word of a command counts only when it is not a plain word: `f{ci{new` does, `execute` does not.
+            let words: Vec<String> = line
+                .split(' ')
+                .filter(|w| !w.chars().all(char::is_alphabetic))
+                .map(str::to_string)
+                .collect();
+            std::iter::once(line).chain(words)
+        })
+        .filter(|piece| {
+            piece.chars().count() >= MIN_COMMAND_CHARS && !known.contains(piece.as_str())
+        })
+        .collect()
 }
 
 /// The reasoning of an attempt, as a sufficiency run is shown it: each agent
