@@ -1177,6 +1177,15 @@ No timeouts and no infrastructure errors in any harvest. The share of calls with
 generation (59% to 40%): training on the 4B's own traces, about half of which carry none, reinforces calling without
 a sentence. The exam measurement is item 24b's: gen 1, gen 2 and gen 3 beside base in item 25's E2 slot.
 
+**Item 24b in-family transfer check (pre-registered 2026-11-21 ~13:25, before any trial; lane VIM, gpu1).** The 79 train
+tasks no generation trained on (not in the gen-3 set; caveat: they are mostly the tasks the 4B never solved through gen
+2's harvest, plus the 4 gen 3 solved first and the few whose only passes lacked a final message, so they are harder than
+the course average, unlike item 25's 16 random validation tasks). Arms base, gen 1, gen 2, gen 3 on one brain-8f2a3d264
+server on gpu1 (`--max-batch` picked by brain: 256), the concise mode as E2a (sven-7a9f60cb, the original concise
+instruction), 8 attempts per task, 18 trials in flight per arm (72 in all, the baseline load), one slot. Analysis
+`splinter experiences compare-arms --reference base --k 8 --interval-seed 20261121` (splinter-19b6dd024): each
+generation minus base, two-sided sign test with Holm over the 3, task bootstrap 95% interval.
+
 ## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
 
 **Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`
