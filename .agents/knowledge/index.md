@@ -193,3 +193,4 @@ in the same commit.
 | [205](205-build-a-policy-gradient-dataset-against-a-training-server.md) | Build a policy-gradient dataset against a training server |
 | [206](206-not-supported-hides-a-ruled-out-target-and-an-interval-that-holds-it.md) | "Not supported" hides two results: a target ruled out, and an interval that still holds it |
 | [207](207-taking-a-persons-turn-out-of-a-path-takes-the-reply-it-answered-too.md) | Taking a person's turn out of a guided path takes the reply it answered too |
+| [208](208-a-token-and-turn-budget-makes-an-agent-exam-independent-of-server-load.md) | A token and turn budget makes an agent exam independent of server load, and shows a distilled student's length as failures |

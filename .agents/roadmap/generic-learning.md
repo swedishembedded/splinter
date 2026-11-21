@@ -132,3 +132,34 @@ Selections and dataset ids: `lane-exp/data/{selections,design}.json` and `datase
   enforces the profile's `[budget]`) and `--agent-timeout-multiplier 4`, adopted with `bench adopt`, which now records the
   budget (bench 0e574fdf), so `bench trials` classifies exhaustion. Gateway usage is not attributed per trial in this
   path, so bench's own token check reads 0 tokens and exhaustion rests on Sven's enforced stop and the turn count.
+
+**E0 result (read 2026-11-21 18:52; `compare-arms`, splinter-c2a7d877e, interval seed 20261121; 256 graded trials per
+arm and load, no infrastructure errors).** The instrument holds: **supported**.
+
+| arm | pass@1 low (4/arm) | pass@1 high (32/arm) | high minus low | task 95% | family 95% (8 rungs) | p two-sided | Holm | exhaustion low / high |
+|---|---:|---:|---:|---|---|---:|---:|---|
+| base | 0.180 | 0.203 | +0.023 | [-0.023, +0.070] | [-0.016, +0.072] | 0.754 | 1.0 | 8.2% / 9.4% |
+| v1s1 | 0.434 | 0.445 | +0.012 | [-0.035, +0.055] | [-0.029, +0.056] | 0.180 | 0.539 | 51.2% / 52.0% |
+| v1s2 | 0.441 | 0.438 | -0.004 | [-0.086, +0.086] | [-0.091, +0.069] | 1.0 | 1.0 | 52.0% / 49.2% |
+
+Every interval of high minus low contains 0 and no Holm p is below 0.05, so a budgeted pass rate does not move with
+server load (E1's 71% wall-clock timeouts are gone). Secondary, v1 (pooled seeds) minus base on these 16 in-family
+validation tasks: +0.258 [+0.111, +0.410] at low load and +0.238 [+0.068, +0.402] at high load (sign p 0.057 and
+0.013). Half of v1's trials run out of B: v1 learned the teacher's length, which the budget now counts as a fail. A few
+exhausted trials record 0 turns (2-7 per v1 arm): Sven stopped a looping reasoning block and charged it the whole
+budget. Reports: `lane-exp/logs/e0-*.compare.json`. Verdict entered as `exp-e0` in the canonical problem state.
+
+**Invalid, discarded unread (infrastructure, 2026-11-21 18:05-18:47).** E3 folds p1-p2 (4 rounds each) and E1/E2
+folds a-b (rounds 1-3) ran on two n445 servers started with `--adapter-slots 24`. With that bank brain sized Qwen3-4B at
+97 GB, so it wrote its ready file and then answered every request with `500 failed_to_load` (brain knowledge 546).
+bench scored each of the 2,358 trials as a `graded` fail with 0 turns (bench knowledge 077). They are archived
+(`lane-exp/archive/n445-invalid-unservable-model.tar.zst`) and not analysed. The E3 trainings of fold p7 hung client
+side and were stopped. **Rerun protocol (before any rerun trial):** exam servers use `--adapter-slots 8` with at most 6
+adapters per server (one fold per server). Before any trial, each slot sends one real request per arm, and any
+failure stops it. After each round, any arm with a 0-turn trial carrying an upstream error stops the fold. Everything
+else is as registered.
+
+**Rerun placement (dated 2026-11-21 19:05, before any rerun trial).** E0 showed that budgeted pass rates do not depend
+on load, so the reruns use more concurrency per arm: E1/E2 16 trials in flight per arm, E3 12, the 4B check 16. Each
+E1/E2 fold runs on two identical exam servers, rounds 1-4 on one and rounds 5-8 on the other, every arm on both. Each
+E3 fold runs on one server. E3 fold p7's six trainings are rerun one at a time from the same datasets and seeds.
