@@ -125,7 +125,7 @@ SimPO, ORPO, KTO and a rejection-sampling SFT floor, with fresh prompts per roun
 | 16 | Real runs for KTO, IPO, SimPO, ORPO | after brain efficiency work (reference pass 55 min, 170 s/step) | one seed each on the frontier data |
 | 17 | Two load-sensitive test flakes found by the clean re-verification at dfb62e12f (3619 passed, 2 failed, each passes alone) | `solve_concurrency::a_remote_model_is_asked_up_to_the_configured_width_at_once` (timing) and `distributed_plan::a_retry_writes_its_own_plan_naming_the_same_job` (ETXTBSY, a spawn racing a just-written executable): make both deterministic | 20 consecutive parallel workspace runs without either failing |
 | 18 | Campaign demo evidence incomplete at hand-over: generation-2 evaluate and rollback outcomes were not recorded when this ledger was written | record both in `campaigns.md` from the campaign lane's final report | rollback shown moving the champion back on real models |
-| 19 | First-package arm run 2026-11-20 (results below, "Item 19: first-package RL round"): no teacher-free gain; the unguarded round damaged A2 through ratio spikes on start-of-run proxy tokens, root-caused and fixed by `dataset build --sampled-only` (b879d37d2, knowledge 188); brain bounds a negative advantage's term by dual-clip PPO since bcd17ba8b (default c 3, `clip_fraction_dual` per step, splinter `train --dual-clip`, db33cd729) | a guarded round on `--sampled-only` data with `behaviour: recorded` (verified: 24 steps, ratio max 12.3, KL 0.018); make exact contexts cover `scrubbed` and `context_reconstructed` actions (48% of tokens are left out today); 2+ seeds, turn-level credit | held-out gain >= 0.05 with CI above 0 against A2s1 on paired fresh tasks, retention non-inferior at 0.10, KL 0.02-0.05 with no guard skips |
+| 19 | First-package arm run 2026-11-20 and round R19 2026-11-21 (results under "Item 19"): no teacher-free gain. R19 trained 2 passes on `--sampled-only` data with recorded behaviour, dual clip and step guards. Seed 1 diverged on the unweighted KL penalty, fixed in brain 7a7869433 (knowledge 537). With the fix, training is stable (median KL 0.024, clip 0.08, 0-2 skips): training tasks +0.064, held-out -0.016 [-0.064, +0.033], retention -0.077 (fails). The RFT control is flat and keeps retention | do not run a third round of the same recipe; a gain on trained tasks that neither transfers nor keeps retention needs a different signal: turn-level credit (splinter has none), retention rehearsal or a KL to A2 in the loss, exact contexts for the 35% of records left out, and a frontier pool drawn per family rather than per rung | held-out gain >= 0.05 with CI above 0 against A2s1 on paired fresh tasks, retention non-inferior at 0.10, KL 0.02-0.05 with no guard skips |
 | 20 | Bench draws at a rung or of families (bench 15a9220d) were refused when practised: splinter re-staged a draw from count and seed only | done 2026-11-20: the draw identity carries `rung` and `families` into the re-stage (`--rung`, `--family`), `[practice]` takes `rung` and `families` for transfer draws; older practice.json unchanged | `bench_practice` tests: re-stage passes both, old and null draws pass neither |
 | 21 | Knowledge-assisted self-learning: no arm has yet learned from written principles instead of trajectories (plan below, "Item 21"; S0 leakage gate PASSED 2026-11-20: `swedishembedded/knowledge@v0.2`, mounted-copy digest `sha256:262ff959...`, bench knowledge audit signed pass on 8 sealed exams with 0 shared 8-grams; S1 2026-11-20: STOP by its rule, A2 collection + instruction - none -0.002 [-0.038, +0.035], but A2 opened the collection in 6% of trials and no domain page (knowledge 191); S1b: page preload +0.029 [-0.050, +0.105], inconclusive, helps support/compiled, hurts accounting VAT/accrual; index preload +0.010; user wording +0.044, no go, fewer look-ups; next: accounting pages back to the author, 96-task confirmation of preload on legal/support/compiled) | bench: `--knowledge <dir>` mount with digest, contamination audit of the collection, open-book exam plan; then S0 and the S1 zero-training check on the base and A2 | S1: collection + instruction against none >= +0.06 pass@1 (or pass@8 +0.05), probe share under 2%; programme: closed-book tier c gain >= 0.05 with CI above 0 against the matched no-knowledge RFT control, retention non-inferior at 0.10 |
 
@@ -459,6 +459,62 @@ else is "no teacher-free gain" for this round. Not a sealed claim either way.
 - **Addendum arm rl-kw (a new arm, not the pre-registered one).** The same dataset, recipe, guards, dual clip and
   N = 501 on brain 7a7869433, seeds 1 and 2. It is evaluated exactly as the other arms (served on 5e25d5b82) and judged
   by the same decision rule, reported separately from the pre-registered RL arm.
+- 2026-11-21 05:00: bench moved to f37811d4 (sandbox start in seconds, gateway pool uncapped; nothing under
+  `environments/`, `tasks/` or `config/` changed, so the task digests are the same). Every evaluation ran on it, A2s1's
+  re-measured baseline included. On the same seeds, A2s1's 62da1dbb held-out pass@1 was 0.607 against 0.576 on
+  f37811d4. That -0.031 is the A/A gap between the two bench builds, and no contrast crosses it.
+- Every arm ran at A2s1's load: one dedicated server, `--max-batch` 64, 12 jobs per domain on held-out, 16 on training
+  tasks, the retention profile unchanged.
+
+**Results (2026-11-21).** Training: 501 steps x 8 records = 2.0 passes over 2,006 records, about 20 s per step (3 GPU-h
+per seed). Medians are per step. RFT trained 501 steps on 1,601 records (2.5 passes).
+
+| Arm | median KL | median clip | dual clip (mean share) | guard skips | max grad norm |
+|---|---|---|---|---|---|
+| rl-s1 (5e25d5b82, seed 1) | diverged at step ~160, stopped by brain | | | 11 by step 159 | 1.6e6 |
+| rl-s2 (5e25d5b82, seed 2) | 0.023 | 0.080 | 0.0003 | 16 | 4,750 |
+| rl-kw-s1 (7a7869433, seed 1) | 0.024 | 0.082 | 0.0003 | 2 (KL 0.13, 0.11) | 4.0 |
+| rl-kw-s2 (7a7869433, seed 2) | 0.024 | 0.081 | 0.0003 | 0 | 1.9 |
+
+Held-out (48 fresh tasks x 8, paired by task against A2s1, task-cluster bootstrap 95%):
+
+| Arm | pass@1 | pass@8 | delta pass@1 | support | legal | accounting | compiled | timeouts | probe share | NLL/token |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A2s1 | 0.576 | 0.854 | | 0.875 | 0.479 | 0.250 | 0.698 | 20 | 0.016 | 0.391 |
+| rl-s2 | 0.523 | 0.792 | -0.052 [-0.107, +0.005] | 0.688 | 0.448 | 0.271 | 0.688 | 16 | 0.029 | 0.467 |
+| RFT | 0.555 | 0.812 | -0.021 [-0.083, +0.042] | 0.823 | 0.417 | 0.281 | 0.698 | 26 | 0.021 | 0.328 |
+| rl-kw-s1 | 0.542 | 0.750 | -0.034 [-0.089, +0.021] | 0.771 | 0.438 | 0.281 | 0.677 | 28 | 0.013 | 0.594 |
+| rl-kw-s2 | 0.578 | 0.792 | +0.003 [-0.049, +0.055] | 0.854 | 0.448 | 0.323 | 0.688 | 18 | 0.021 | 0.469 |
+| rl-kw (seed mean) | | | -0.016 [-0.064, +0.033] | | | | | | | |
+
+Training tasks (the 40 highest-LS pool tasks x 8, seeds shared): A2s1 0.572; rl-s2 +0.062 [-0.013, +0.134]; RFT +0.022
+[-0.053, +0.094]; rl-kw-s1 +0.059 [-0.031, +0.147]; rl-kw-s2 +0.069 [-0.009, +0.144]; rl-kw seed mean +0.064 [-0.013,
++0.138]. Retention (91 tasks x 2, non-inferior at 0.10): A2s1 0.687; rl-s2 -0.088 [-0.176, 0.000] fails; RFT +0.005
+[-0.077, +0.088] non-inferior; rl-kw-s1 -0.077 [-0.165, +0.011] and rl-kw-s2 -0.077 [-0.159, +0.005], seed mean -0.077
+[-0.151, -0.003], all fail.
+
+Per family (8 trials each, noisy), rl-s2 lost most on support. Escalation-fraud went 0.50 -> 0.12 and over-limit
+1.00 -> 0.50, families never practised; refund partial went 0.88 -> 0.50, practised at rung 2 and held out at the
+default rung.
+
+**Decision (the pre-registered rule): no teacher-free gain.**
+- The RL arm is seed 2 alone, since seed 1 diverged:
+  - held-out -0.052 with the CI reaching +0.005;
+  - retention not shown non-inferior;
+  - KL in band but 16 guard skips.
+- The addendum arm is the same recipe with the KL penalty fixed:
+  - Training is stable: 0-2 skips, gradient norms at most 4.
+  - Held-out -0.016 [-0.064, +0.033] and retention -0.077: it fails the rule too.
+- The RFT control is flat on all three measures and keeps retention.
+
+**Reading.**
+- The fix removed the instability (brain knowledge 537), so the null result is no longer an optimisation failure. Two
+  passes of guarded on-policy RL on A2's own rollouts raise pass@1 on the trained tasks by about +0.06 (CI just
+  including 0). They do not transfer to fresh tasks of the same domains, and they cost about 0.08 of retention.
+- Sampled-token NLL rose from 0.39 to 0.47-0.59: at T = 1 the RL policies sample from a broader distribution.
+- The dual clip almost never binds on sampled-only data (0.03% of signed tokens; ratio max 30-54).
+- The clip fraction stayed under its band (0.08 against 0.10-0.20) at the recipe's lr 1e-4.
+- Not a sealed claim. Splinter knowledge 204 and 205, brain knowledge 537.
 
 ## Item 21: knowledge-assisted self-learning (plan 2026-11-20)
 

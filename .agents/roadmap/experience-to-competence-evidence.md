@@ -183,7 +183,7 @@ Intervals: item-paired cluster bootstrap over families. Source: lane-r-results.m
 | Gap above | State now | Evidence |
 |---|---|---|
 | 1 gen1 sealed verdict | DONE: signed. A2s1 vs base on tier c: +0.383 [+0.298, +0.469], retention non-inferior, Promote. Every teacher-free candidate was rejected: A6 +0.004, gen1s3 +0.020, DPO -0.029, A3 -0.308 (also fails retention). | ledger "Results"; bench generation exams |
-| 2 a teacher-free recipe beats A2 | OPEN. Item 19 on-policy RL, held-out pass@1 against A2s1: rl1 -0.229, rl1g (step guards) -0.031, rl2 -0.096; RFT control +0.039 (not significant). | ledger item 19; knowledge 188-190 |
+| 2 a teacher-free recipe beats A2 | OPEN. Item 19 on-policy RL, held-out pass@1 against A2s1: rl1 -0.229, rl1g (step guards) -0.031, rl2 -0.096; RFT control +0.039 (not significant). Round R19 (2026-11-21, `--sampled-only`, recorded behaviour, dual clip, 2 passes): rl-s2 -0.052 [-0.107, +0.005]; with the fixed KL penalty (brain 7a7869433) rl-kw two-seed mean -0.016 [-0.064, +0.033], training tasks +0.064, retention -0.077 (fails); RFT -0.021, retention non-inferior. | ledger item 19; knowledge 188-190, 204, 205; brain knowledge 537 |
 | 3 git-history probing | PARTIAL: under the 2% exam cap (sealed leak share 0.07-1.58% per arm), not eliminated. | gen1 verdicts |
 | 4 repairs | PARTIAL: cumulative A3c (teacher + repairs) dev 0.547 against A2 0.550, so no harm and no gain. | ledger |
 | 5 real campaign | DONE: a real campaign survived 4 SIGKILLs, each resumed at the first incomplete stage; gen1 rejected; rollback correctly refused. | ledger; campaign records |
@@ -197,4 +197,4 @@ Intervals: item-paired cluster bootstrap over families. Source: lane-r-results.m
 The goal is not met. There is no independently verified teacher-free generalisation gain, the consecutive-generation
 knowledge loop has not run, and the row counts above are from the 11-19 audit. Next work, in order, is in the ledger:
 run item 21 S0 (bench audit of the knowledge collection) and S1 (zero-training check);
-run item 19's guarded round on `--sampled-only` data.
+item 19's guarded round on `--sampled-only` data ran 2026-11-21 (no gain; ledger item 19).
