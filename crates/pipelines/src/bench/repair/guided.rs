@@ -27,9 +27,11 @@
 //!
 //! The intervention ([`PathGuided`]) forks a failed attempt's task at the
 //! path's states, the latest first: its `n`-th sample forks after the
-//! `n+1`-th latest action (never after the last), so a failure's chain of samples moves the fork earlier
-//! until the student succeeds alone (the chain then stops) or the samples run
-//! out. Which path a task uses is [`PrivilegedPaths::for_task`]: the store's
+//! `n+1`-th latest action (never after the last), so a failure's chain of
+//! samples moves the fork earlier until the student succeeds alone (the chain
+//! then stops) or the samples run out. A continuation that calls no tool is no
+//! success of the student's: the path had done the work, so it is refused and
+//! the chain goes on. Which path a task uses is [`PrivilegedPaths::for_task`]: the store's
 //! verified guided passes of the same bench task, in id order.
 
 use std::collections::BTreeMap;
@@ -237,6 +239,14 @@ impl Intervention for PathGuided<'_> {
                 after_turn: &mut |_, _| true,
             },
         )?;
+        // A pass without an action of the student's own is the path's work,
+        // not the student's: no repair, and the chain moves the fork earlier.
+        if !forked.acted() {
+            return Err(format!(
+                "the student took no action of its own after step {keep_through}: the path had \
+                 done the task's work there"
+            ));
+        }
         let notes = Notes {
             sampling: Some(sampling),
             privileged_path: Some(json!({

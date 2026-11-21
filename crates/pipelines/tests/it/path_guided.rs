@@ -44,11 +44,12 @@ fn student_ref() -> ModelRef {
 
 /// A verified pass of the failed attempt's task by another source: the
 /// student's own reads, then (when `person`) the person's turn, then the
-/// right answer, by `solver`.
+/// right answer, then (when `verify`) a read of it, by `solver`.
 fn privileged_path(
     ctx: &splinter_orchestrator::Context,
     student: &splinter_core::experience::ExperienceId,
     person: bool,
+    verify: bool,
     solver: &str,
 ) -> splinter_core::experience::ExperienceId {
     let store = ctx.experiences();
@@ -82,6 +83,15 @@ fn privileged_path(
         atif::ObservationEntry::for_call("guided-1", "wrote 2 bytes to answer.json"),
     ));
     steps.push(write);
+    if verify {
+        let mut read = atif::TraceStep::new(0, atif::StepOrigin::Agent, "");
+        read.tool_calls = Some(vec![atif::ToolInvocation::new("guided-2", "read_file")
+            .with_arguments(json!({"path": "answer.json"}))]);
+        read.observation = Some(atif::StepObservation::single(
+            atif::ObservationEntry::for_call("guided-2", "L1:42"),
+        ));
+        steps.push(read);
+    }
     steps.push(atif::TraceStep::new(0, atif::StepOrigin::Agent, "Done."));
     for (index, step) in steps.iter_mut().enumerate() {
         step.step_id = index as u64 + 1;
@@ -110,7 +120,7 @@ fn guided_path(
     ctx: &splinter_orchestrator::Context,
     student: &splinter_core::experience::ExperienceId,
 ) {
-    privileged_path(ctx, student, true, "harbor/sven@5/student");
+    privileged_path(ctx, student, true, false, "harbor/sven@5/student");
 }
 
 #[test]
@@ -240,7 +250,7 @@ fn a_teachers_pass_named_by_its_set_is_a_path_and_only_the_students_steps_are_tr
     let failed = splinter_pipelines::bench::split::trials(&ctx).unwrap()[0]
         .experience
         .clone();
-    let path = privileged_path(&ctx, &failed, false, "harbor/sven@5/teacher-27b");
+    let path = privileged_path(&ctx, &failed, false, false, "harbor/sven@5/teacher-27b");
     let store = ctx.experiences();
     let set = store
         .put_set(&splinter_store::experiences::ExperienceSet {
@@ -307,4 +317,141 @@ fn a_teachers_pass_named_by_its_set_is_a_path_and_only_the_students_steps_are_tr
             .all(|m| !m.contains("guided-1") && !m.contains("Done.")),
         "a step of the teacher's path is a target: {trained:?}"
     );
+}
+
+/// A student that ends the run when it is shown the answer written already,
+/// and writes it otherwise.
+struct Finisher {
+    seen: std::sync::Mutex<usize>,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Finisher {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+    fn model_name(&self) -> &str {
+        "finisher"
+    }
+    async fn complete(
+        &self,
+        req: sven_sdk::model::CompletionRequest,
+    ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
+        use sven_sdk::model::{MessageContent, ResponseEvent};
+        *self.seen.lock().unwrap() += 1;
+        let results: Vec<(&str, String)> = req
+            .messages
+            .iter()
+            .filter_map(|m| match &m.content {
+                MessageContent::ToolResult {
+                    tool_call_id,
+                    content,
+                } => Some((tool_call_id.as_str(), format!("{content:?}"))),
+                _ => None,
+            })
+            .collect();
+        let written = results
+            .iter()
+            .any(|(id, text)| id.starts_with("finisher") || text.contains("wrote 2 bytes"));
+        let events = if written {
+            vec![
+                Ok(ResponseEvent::TextDelta("Done.".into())),
+                Ok(ResponseEvent::Done),
+            ]
+        } else {
+            vec![
+                Ok(ResponseEvent::ToolCall {
+                    index: 0,
+                    id: "finisher-0".into(),
+                    name: "write_file".into(),
+                    arguments: json!({"path": "answer.json", "text": "42"}).to_string(),
+                }),
+                Ok(ResponseEvent::Done),
+            ]
+        };
+        Ok(Box::pin(futures::stream::iter(events)))
+    }
+}
+
+/// A continuation that passes without one action of the student's own is no
+/// repair: the path had done the work. The chain moves to an earlier state,
+/// where the student acts itself.
+#[test]
+fn a_continuation_without_an_action_of_the_students_own_moves_the_fork_earlier() {
+    let scratch = Scratch::new("path-guided-act");
+    let finisher = Arc::new(Finisher {
+        seen: std::sync::Mutex::new(0),
+    });
+    let ctx = splinter_orchestrator::Context::new(common::config(&scratch), true)
+        .unwrap()
+        .with_model(
+            student_ref(),
+            Model::new(
+                Arc::clone(&finisher) as Arc<dyn ModelProvider>,
+                "scripted/student",
+            ),
+        )
+        .with_model(
+            teacher_ref(),
+            Model::new(
+                steps("teacher", vec![]) as Arc<dyn ModelProvider>,
+                "scripted/teacher",
+            ),
+        );
+    let tree = scratch.0.join("student-tree");
+    fs::create_dir_all(&tree).unwrap();
+    let trajectory = ctx.block_on(student_trajectory(&tree));
+    let runs = vec![practice_run(&ctx, &scratch.0, &trajectory)];
+    let checkout = examiner(&scratch.0);
+    let failed = splinter_pipelines::bench::split::trials(&ctx).unwrap()[0]
+        .experience
+        .clone();
+    // Reads, the write, a read of the answer: forks after the write, then
+    // after the reads.
+    let path = privileged_path(&ctx, &failed, false, true, "harbor/sven@5/teacher-27b");
+    let set = ctx
+        .experiences()
+        .put_set(&splinter_store::experiences::ExperienceSet {
+            name: "teacher passes".into(),
+            members: vec![path],
+        })
+        .unwrap();
+    let teacher = teacher_ref();
+    let student_model = student_ref();
+    let only = [InterventionKind::PathGuided];
+    let sets = [set];
+    let mut asked = request(&runs, &checkout, &teacher);
+    asked.student = Some(&student_model);
+    asked.interventions = &only;
+    asked.paths = &sets;
+    asked.samples = 2;
+    let report = repair(&ctx, &asked).unwrap();
+    let outcomes: Vec<_> = report
+        .repairs
+        .iter()
+        .map(|r| (r.outcome, r.reason.clone()))
+        .collect();
+    assert_eq!(outcomes.len(), 2, "two samples: {outcomes:?}");
+    let by = |o| report.repairs.iter().find(|r| r.outcome == o);
+    let (Some(ended), Some(acted)) = (by(RepairOutcome::Refused), by(RepairOutcome::Accepted))
+    else {
+        panic!("one refused, one accepted: {outcomes:?}")
+    };
+    assert!(ended
+        .reason
+        .as_deref()
+        .is_some_and(|r| r.contains("no action of its own")));
+    assert!(ended.experience.is_none());
+    assert_eq!(acted.outcome, RepairOutcome::Accepted, "{outcomes:?}");
+    // The next state: after the reads (step 3), not the write (step 4).
+    let fork = &acted.notes.privileged_path.as_ref().unwrap();
+    assert_eq!(fork["fork_after"], json!(3));
+    let kept = ctx
+        .experiences()
+        .get(acted.experience.as_ref().unwrap())
+        .unwrap();
+    let own = &kept.trajectory.steps[acted.prefix_steps.unwrap()..];
+    assert!(own
+        .iter()
+        .any(|s| s.tool_calls.as_ref().is_some_and(|c| !c.is_empty())));
 }

@@ -169,6 +169,16 @@ pub(super) struct Forked {
     actor: String,
 }
 
+impl Forked {
+    /// Whether the continuation called a tool: an answer alone after the
+    /// kept prefix changed nothing the verifier reads.
+    pub(super) fn acted(&self) -> bool {
+        self.trajectory.steps[self.prefix_steps..]
+            .iter()
+            .any(|s| s.tool_calls.as_ref().is_some_and(|c| !c.is_empty()))
+    }
+}
+
 /// Forks `case` at its last good step (or `source`'s kept step, when the fork
 /// starts from another path of the task) in the examiner's session for its
 /// task, continues it as `continuation` says, and has the session grade
