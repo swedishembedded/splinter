@@ -13,7 +13,8 @@ Prefer deleting and consolidating over adding a layer; an abstraction is introdu
 
 SC-1 (silent no-ops) first, alone, because each part is a defect today. Then SC-2 and SC-3, independent of each other.
 SC-4 after SC-2 and SC-3 (it moves the files they rewrite). SC-5 after SC-4. SC-6 and SC-7 any time. SC-8 is
-deferred: see "Not now".
+deferred: see "Not now". SC-9 (retire the prose-reading filters) after E4 of `generic-learning.md` has
+built its replacement.
 
 ## SC-1 Silent no-ops in the dataset build and the fork (S, open)
 
@@ -138,6 +139,23 @@ deferred: see "Not now".
   sample. Take the id from the caller.
 - `InterventionKind::HintedRetry` (see SC-2) until SC-2 lands: give it its own type rather than a router variant no
   route can produce.
+
+## SC-9 Retire the prose-reading filters of `experiences rationalise` (S, open; 2026-11-21 training-methods review)
+
+- **Problem.** `experiences rationalise` decides from the text of a trace whether its reasoning depended on a hint:
+  `--leak-term` word lists, `--hint-framing`, the real-observations rule, the answer-presence check and the
+  command-explained proxy (c2a7d877e). Whether reasoning depended on a hint is not decidable by string inspection, and
+  each check is per benchmark: the answer check was vacuous on vim, then defective (knowledge 201), and the
+  pre-registered filters rejected nearly all unhinted passes (knowledge 200). The planned item 24d (`--rewrite-with`,
+  a rewrite pass) is the same approach one step removed and is not to be built.
+- **Target.** Path-guided unhinted resampling (E4 of `generic-learning.md`): a hinted run supplies a verified action
+  path and its text is discarded; the student is forked without the hint at each state and its verified suffixes are the
+  records. The provenance invariant (a target token was sampled in a context the student will see) is checked
+  structurally on the record, not on prose. Delete the five checks and their flags; the command keeps the generic
+  `--distinct-calls` (structural equality of calls) and `--only-actions` (a tool allow-list).
+- **Safety net.** E4's yield measured on the same never-solved tasks the gates a to c used, and a spec that a record
+  carrying a token sampled under a hint or knowledge page is refused.
+- **Order.** After E4 has built the replacement, so the gates a to c evidence stays reproducible until then. Size S.
 
 ## Not now
 

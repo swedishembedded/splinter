@@ -187,7 +187,7 @@ document says, so no configuration can widen the firewall into what it guards.
 
 ## Seed: the state on 2026-11-21
 
-`examples/problem-state/problems.toml` holds today's five problems with their candidates, priors and evidence;
+`examples/problem-state/problems.toml` holds today's six problems with their candidates, priors and evidence;
 `examples/problem-state/verdicts.toml` holds the verdicts already recorded in `experience-to-competence.md`
 (items 19, 21, 24, 25), each with the numbers it rests on. Replaying both gives the beliefs; the eval crate's
 `problem_state` spec replays the fixture and holds the resulting order.
@@ -199,6 +199,12 @@ document says, so no configuration can widen the firewall into what it guards.
 | P-ratio-spikes: RL ratio spikes from proxy tokens | pass@1 | resolved (knowledge 188, `--sampled-only`) |
 | P-distill-transfer: exam transfer of distillation is unproven | pass@1 | open |
 | P-4b-data: the 4B-only data volume is small | train-task-coverage | open |
+| P-trajectory-credit: teacher-free RL with trajectory-level credit sharpens practised tasks only | pass@1 | open (added 2026-11-21 with E0-E5) |
+
+The 2026-11-21 training-methods review's experiments E0-E5 (`generic-learning.md`) are candidates of these problems,
+one variable each: E0 `overthink.token-turn-budget`, E1 `distill-transfer.leave-families-out`, E2
+`distill-transfer.min-cost-selection`, E3 `distill-transfer.family-breadth`, E4 `4b-data.path-guided-resampling`, E5
+`trajectory-credit.branch-value-pairs`. They change the replay's top six (E0 second, E5 fifth).
 
 ## Open
 

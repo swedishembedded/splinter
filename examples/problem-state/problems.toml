@@ -7,7 +7,7 @@
 # services by sending an email to info@swedishembedded.com.
 #
 # The problem state of the experience-to-competence programme on 2026-11-21:
-# five diagnosed problems, the candidate interventions against each, the prior
+# six diagnosed problems, the candidate interventions against each, the prior
 # belief of each with why, and the evidence links. The verdicts already
 # recorded are in verdicts.toml; `splinter campaign problems FILE add` seeds a
 # campaign's state with this document.
@@ -70,6 +70,19 @@ belief = 0.3
 prior = "pre-registered as E1c and replaced by the concise mode before any trial; it bounds the symptom at exam time, not what the student learned"
 evidence = [
     { ref = "ledger:experience-to-competence#item-25-e1c", note = "E1c pre-registered 09:15, superseded by the concise trace rule at 10:12" },
+]
+
+[[problems.candidates]]
+id = "overthink.token-turn-budget"
+intervention = "instrument"
+statement = "E0. Enforce a token and turn budget in the task contract (about 1.5x the base's p90 of passing trials), so a model-caused exhaustion is a fail and wall clock is an infrastructure error; re-examine the base and v1 on the 16 validation tasks at two loads."
+variable = "examine.agent.token_budget"
+belief = 0.5
+prior = "wall-clock limits decided 77-84% of student trials (knowledge 202), so no exam read so far separates the arms from the load; the budget is set offline from existing passing trials and needs the sven total cap and brain's closing thinking budget first"
+evidence = [
+    { ref = "knowledge:202", note = "wall-clock timeouts decided 77-84% of student trials" },
+    { ref = "knowledge:196", note = "the baseline moved 0.04 between time slots" },
+    { ref = "ledger:generic-learning#e0", note = "pre-registered success: pass rates agree across loads within the A/A band" },
 ]
 
 # ---------------------------------------------------------------------------
@@ -223,6 +236,42 @@ evidence = [
     { ref = "knowledge:201", note = "the answer check, corrected" },
 ]
 
+[[problems.candidates]]
+id = "distill-transfer.leave-families-out"
+intervention = "teacher-distillation"
+statement = "E1. Retrain v1's recipe on the existing teacher traces of two thirds of the 14 vim rungs and examine on the held-out third (three folds, 8 attempts per held-out rung), to measure the champion's held-out-family gain properly."
+variable = "curate.holdout_rungs"
+belief = 0.4
+prior = "v1 is the only arm with a supported held-out gain, but the pooled E1b gain is +0.016 [-0.009, +0.040] on a 14-task exam the base sits at 0.05 on; whether the gain crosses families is unmeasured"
+evidence = [
+    { ref = "result:item25-E1b", note = "pooled +0.016 [-0.009, +0.040]; 14-task exam, six rungs never passed by any arm" },
+    { ref = "ledger:generic-learning#e1", note = "success: pooled held-out-family gain at least +0.05, interval above 0; falsified means breadth is the bottleneck" },
+]
+
+[[problems.candidates]]
+id = "distill-transfer.min-cost-selection"
+intervention = "curation"
+statement = "E2. Keep, per task, the verified teacher passes within the student's token budget, lowest total completion tokens first, from the existing 579 passes; native reasoning mode, no instruction text."
+variable = "curate.select"
+belief = 0.45
+prior = "length control by selection replaces the concise prompt that decayed under self-training (rationale compliance 59% to 40%); v1's loss was length without competence, which selection under the student's budget removes directly; no new teacher run is needed"
+evidence = [
+    { ref = "knowledge:202", note = "students copied the teacher's length (392 tokens per action) without its competence" },
+    { ref = "knowledge:203", note = "the non-thinking rule this candidate replaces; thinking off cut train pass@1 0.263 to 0.197 and tasks ever solved 95 to 62" },
+    { ref = "ledger:generic-learning#e2", note = "success: at budget B gain over v1 at least +0.05, interval above 0; non-inferior at 4B; exhaustion within 10 points of base" },
+]
+
+[[problems.candidates]]
+id = "distill-transfer.family-breadth"
+intervention = "curation"
+statement = "E3. Vary the number of training families (4, 8, 12 rungs) at equal record count and examine on the same held-out rungs."
+variable = "curate.families"
+belief = 0.4
+prior = "breadth of families is the lever in the procedurally generated environment literature, and A2's 47 lineages are the only recipe that transferred; not measured here at fixed record count"
+evidence = [
+    { ref = "ledger:generic-learning#e3", note = "success: monotone, 12 minus 4 at least +0.05 with interval above 0; decides environment factory against algorithms" },
+]
+
 # ---------------------------------------------------------------------------
 
 [[problems]]
@@ -280,3 +329,39 @@ statement = "Rewrite each kept rationalisation to present the reasoning as the m
 variable = "curate.rewrite"
 belief = 0.3
 prior = "planned, not pre-registered; the rewrite may degrade the reasoning it rewrites"
+
+[[problems.candidates]]
+id = "4b-data.path-guided-resampling"
+intervention = "star"
+statement = "E4. For tasks the champion never solves, replay a verified path's states, fork the student without the hint at each state, keep verified unhinted suffixes and train on the suffix only; the control adds an equal count of extra teacher records."
+variable = "curate.resample_from_path"
+belief = 0.35
+prior = "needs no prose filter (the hint is never in context), which removes the defect of knowledge 200 and 201; yield on never-solved tasks is unmeasured and the arm waits on E1 showing that the instrument detects +0.05"
+evidence = [
+    { ref = "knowledge:200", note = "pre-registered prose filters rejected nearly all unhinted vim passes" },
+    { ref = "knowledge:201", note = "the answer check was vacuous, then defective, on vim" },
+    { ref = "ledger:generic-learning#e4", note = "success: yield at least 30% of never-solved tasks; from-scratch pass@4 +0.10; held-out families +0.05 over control; retention non-inferior at 0.10" },
+]
+
+# ---------------------------------------------------------------------------
+
+[[problems]]
+id = "trajectory-credit"
+statement = "Teacher-free RL with trajectory-level credit on a few hundred tasks sharpened the practised tasks only: train up, held-out and retention down."
+metric = "pass@1"
+evidence = [
+    { ref = "knowledge:204", note = "R19: train +0.064, held-out -0.016, retention -0.077" },
+    { ref = "ledger:generic-learning", note = "2026-11-21 training-methods review: step credit from branch outcomes is untried here" },
+]
+
+[[problems.candidates]]
+id = "trajectory-credit.branch-value-pairs"
+intervention = "rl-round"
+statement = "E5. On tasks with 0 < p < 1, estimate V(s_t) by forked continuations, find the decisive step by binary search, and train on shared-prefix pairs at that step; the control is rejection fine-tuning at equal rollout tokens."
+variable = "train.credit"
+belief = 0.3
+prior = "the review's own prior is about 0.3: step credit by branch outcome is published (Math-Shepherd, VinePPO) but at larger scale, and nothing of the kind exists here; forks and prefix caching (87% hit rate) make it affordable"
+evidence = [
+    { ref = "knowledge:204", note = "trajectory-level credit gave train-only gains" },
+    { ref = "ledger:generic-learning#e5", note = "success: held-out +0.05 over the RFT control with interval above 0; retention non-inferior" },
+]

@@ -25,3 +25,12 @@
 - In non-thinking mode the 27B still explored and sometimes looped: one smoke pass made 102 vim calls before it acted.
   Curate per task for the fewest actions as well.
 - The v2 yield and the E2 result are recorded in the experience-to-competence ledger, item 25.
+
+## Superseded in part (2026-11-21, training-methods review)
+
+The 2026-11-21 training-methods review recommends the model's native reasoning mode everywhere, with length controlled
+by a token and turn budget in the task contract and by selecting the lowest-cost verified pass, instead of turning
+thinking off and instructing a short rationale. Thinking off cut the base's own support (train pass@1 0.263 to 0.197,
+tasks ever solved 95 to 62), and the instruction decayed under self-training (compliance 59% to 40%). This entry's rule
+stays in force until experiment E2 of `roadmap/generic-learning.md` is read; do not extend it. The evidence above is
+unchanged.

@@ -1008,6 +1008,8 @@ tool arguments as known. Fixed test-first (fc0ce7443, 561351610); re-graded offl
 the 10% bar, so gate c does not clear it either, and item 24c's basis is gone; 24c is not started. The same fix
 rejects in lane VSFT's 27B run all 30 attempts its own script rejects, plus 2.
 
+**SUPERSEDED 2026-11-21 by the training-methods review: replaced by E4, path-guided unhinted resampling (`generic-learning.md`). Item 24c rationalises with the hint in context and then filters the prose, which no string check can decide (the answer check was vacuous on vim, then defective: knowledge 201). Not started and not to be started.**
+
 **Item 24c (PROPOSED, not started; lane VIM 2026-11-21).** A generation-1 STaR arm beside item 24b: base Qwen3-4B
 trained from base on its own verified concise passes plus gate-c-kept rationalisations of the failed train tasks, in
 the shared concise mode. Open points before it can be registered: (1) gates a and b ran in thinking mode, so their 81
@@ -1017,6 +1019,8 @@ can cite the hint, so the arm trains the model to cite a hint it will not have; 
 (item 24d's rewrite) is the user's call; (3) the measurement would be E2a's protocol at the same load.
 
 ### Item 24d: a rewrite pass over rationalisations (planned 2026-11-21 at the user's request; not run, not pre-registered)
+
+**SUPERSEDED 2026-11-21 by the training-methods review (`generic-learning.md`, E4).** A rewrite pass is the same prose-level approach one step removed, and the rewritten text still came from a context that held the hint. Path-guided unhinted resampling keeps no hinted text at all. Not to be built; `--rewrite-with` is not added. The design below is kept as the record.
 
 **Idea.** Each kept rationalisation goes through a separate step in which a model is told only to rewrite it to meet
 given rules (for example: present the reasoning as one's own, keep every step and every observation, change no

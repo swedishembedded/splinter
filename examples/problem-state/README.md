@@ -3,7 +3,7 @@
 
 # Problem state of 2026-11-21
 
-`problems.toml` is the problem state of the experience-to-competence programme on 2026-11-21: five diagnosed problems,
+`problems.toml` is the problem state of the experience-to-competence programme on 2026-11-21: six diagnosed problems,
 the candidate interventions against each with a prior belief and why, and links to the knowledge entries, ledger items,
 results and commits behind them. `verdicts.toml` lists the verdicts the programme had reached by then, in order. Each
 verdict that carries an effect is the one the problem state's rule gives for that effect against the problem's target.

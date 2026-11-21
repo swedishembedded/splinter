@@ -138,11 +138,11 @@ fn todays_state_replays_to_a_known_order_and_redelivery_records_nothing() {
         top,
         [
             "overthink.concise-traces",
+            "overthink.token-turn-budget",
             "overthink.drop-unfinished",
             "overthink.exam-thinking-budget",
+            "trajectory-credit.branch-value-pairs",
             "distill-transfer.v2-concise",
-            "distill-transfer.v2-star",
-            "4b-data.more-samples",
         ]
     );
     assert!(
