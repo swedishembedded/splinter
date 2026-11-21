@@ -51,6 +51,11 @@
 //! [`CampaignController::rollback`] appends a record moving the champion
 //! back to an earlier one, with its reason.
 //!
+//! **What to try next.** The campaign's problem state ([`problems`]): the
+//! problems that limit the model with their evidence, the candidate
+//! interventions with a belief each, revised by every generation's verdict,
+//! and the next single-variable hypothesis as an arm of this campaign.
+//!
 //! The in-memory rollout machinery over a served policy ([`served`],
 //! [`endpoint`], [`brain`], [`factory`]) is what samples and the episode
 //! executors are built on; the campaign controller itself practises through
@@ -66,6 +71,7 @@ mod environments;
 pub mod examiner;
 pub mod factory;
 pub mod practice;
+pub mod problems;
 pub mod served;
 mod spec;
 mod types;

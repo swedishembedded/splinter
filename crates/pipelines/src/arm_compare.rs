@@ -250,7 +250,7 @@ pub struct CompareRequest {
 }
 
 /// pass@k of an arm.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PassAtK {
     /// k.
     pub k: usize,
@@ -262,7 +262,7 @@ pub struct PassAtK {
 }
 
 /// One arm over its own trials.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ArmSummary {
     /// The arm.
     pub arm: String,
@@ -285,7 +285,7 @@ pub struct ArmSummary {
 }
 
 /// An interval of a mean difference.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Bounds {
     /// Its lower end.
     pub low: f64,
@@ -294,7 +294,7 @@ pub struct Bounds {
 }
 
 /// One arm against the reference over the tasks graded in both.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Contrast {
     /// The arm.
     pub arm: String,
@@ -333,7 +333,7 @@ pub struct Contrast {
 }
 
 /// What `experiences compare-arms` reports.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ArmComparison {
     /// Always [`ARM_COMPARISON_FORMAT`].
     pub format: String,

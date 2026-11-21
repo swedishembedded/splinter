@@ -36,3 +36,9 @@ curation-final-answer-ignored	curation	crates/data/src/curation.rs	if self.final
 curation-duplicates-kept	curation	crates/data/src/curation.rs	let first = seen.insert(profile.calls.clone());	let first = seen.insert(profile.calls.clone()) || true;	splinter-data	all
 curation-whitespace-not-normalised	curation	crates/data/src/curation.rs	(c.function_name.clone(), spaced(&arguments))	(c.function_name.clone(), arguments)	splinter-data	all
 curation-cap-by-total-reasoning	curation	crates/data/src/curation.rs	p.reasoning as f64 / p.actions.max(1) as f64	p.reasoning as f64	splinter-data	all
+problem-priority-without-attempts	problem-state	crates/eval/src/campaign/problems/rules.rs	belief / (f64::from(attempts) + 1.0)	belief	splinter-eval	lib	campaign::problems
+problem-priority-attempts-unshifted	problem-state	crates/eval/src/campaign/problems/rules.rs	belief / (f64::from(attempts) + 1.0)	belief / f64::from(attempts).max(1.0)	splinter-eval	lib	campaign::problems
+problem-falsified-raises-belief	problem-state	crates/eval/src/campaign/problems/rules.rs	Verdict::Falsified => (belief - parameters.belief_down).max(0.0),	Verdict::Falsified => (belief + parameters.belief_down).min(1.0),	splinter-eval	lib	campaign::problems
+problem-inconclusive-as-falsified	problem-state	crates/eval/src/campaign/problems/rules.rs	Verdict::Inconclusive | Verdict::Invalid => belief,	Verdict::Invalid => belief,\n        Verdict::Inconclusive => (belief - parameters.belief_down).max(0.0),	splinter-eval	lib	campaign::problems
+problem-inconclusive-effect-falsified	problem-state	crates/eval/src/campaign/problems/rules.rs	    } else if e.high < target {	    } else if e.low <= 0.0 || e.high < target {	splinter-eval	lib	campaign::problems
+problem-variable-prefix-match	problem-state	crates/eval/src/campaign/problems/variables.rs	.is_some_and(|rest| rest.starts_with('.'))	.is_some()	splinter-eval	lib	campaign::problems

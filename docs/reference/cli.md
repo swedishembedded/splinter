@@ -100,6 +100,13 @@ Every command takes these.
   - [splinter campaign run](#splinter-campaign-run) - Run a campaign's generations
   - [splinter campaign status](#splinter-campaign-status) - What a campaign has done
   - [splinter campaign rollback](#splinter-campaign-rollback) - Move the champion back to the one a generation made (0
+  - [splinter campaign problems](#splinter-campaign-problems) - The campaign's problem state
+    - [splinter campaign problems show](#splinter-campaign-problems-show) - Every problem with its evidence and attempts, every candidate with its belief, priority, status and history, the parameters, and the state's digest
+    - [splinter campaign problems add](#splinter-campaign-problems-add) - Seed the problem state with a document (TOML, or JSON by its `.json` extension), or extend it
+    - [splinter campaign problems update](#splinter-campaign-problems-update) - Record one experiment's verdict on one candidate
+    - [splinter campaign problems revise](#splinter-campaign-problems-revise) - A coordinator's revision, recorded with its reason
+    - [splinter campaign problems check](#splinter-campaign-problems-check) - Check that an arm's campaign file differs from FILE in one declared variable only (`--variable`, or the candidate's), and, for an engineering change, only in the engineering paths
+  - [splinter campaign next](#splinter-campaign-next) - Propose the next hypothesis
 - [splinter session](#splinter-session) - Take in recorded agent sessions, secrets removed
   - [splinter session add](#splinter-session-add) - Take recorded agent sessions in as sources
   - [splinter session list](#splinter-session-list) - List the stored sessions
@@ -916,7 +923,7 @@ Options:
 
 ### splinter campaign
 
-A resumable multi-generation learning campaign with one promotion gate: run its generations, show what it has done, or roll its champion back
+A resumable multi-generation learning campaign with one promotion gate: run its generations, show what it has done, roll its champion back, keep its problem state, or propose its next hypothesis
 
 ```text
 splinter campaign [OPTIONS] <COMMAND>
@@ -927,6 +934,8 @@ Subcommands:
 - [`run`](#splinter-campaign-run) - Run a campaign's generations
 - [`status`](#splinter-campaign-status) - What a campaign has done
 - [`rollback`](#splinter-campaign-rollback) - Move the champion back to the one a generation made (0
+- [`problems`](#splinter-campaign-problems) - The campaign's problem state
+- [`next`](#splinter-campaign-next) - Propose the next hypothesis
 
 #### splinter campaign run
 
@@ -972,6 +981,127 @@ Options:
 
 - `--to <GENERATION>` (required): The generation whose champion to move back to; 0 is the base.
 - `--reason <TEXT>` (required): Why, as the history records it.
+
+#### splinter campaign problems
+
+The campaign's problem state: the problems that limit the model, each with its evidence, and the candidate interventions against each with a belief, revised by every verdict. Kept as an append-only list of events beside the campaign's ledger; an event recorded again records nothing
+
+```text
+splinter campaign problems [OPTIONS] <COMMAND>
+```
+
+Subcommands:
+
+- [`show`](#splinter-campaign-problems-show) - Every problem with its evidence and attempts, every candidate with its belief, priority, status and history, the parameters, and the state's digest
+- [`add`](#splinter-campaign-problems-add) - Seed the problem state with a document (TOML, or JSON by its `.json` extension), or extend it
+- [`update`](#splinter-campaign-problems-update) - Record one experiment's verdict on one candidate
+- [`revise`](#splinter-campaign-problems-revise) - A coordinator's revision, recorded with its reason
+- [`check`](#splinter-campaign-problems-check) - Check that an arm's campaign file differs from FILE in one declared variable only (`--variable`, or the candidate's), and, for an engineering change, only in the engineering paths
+
+##### splinter campaign problems show
+
+Every problem with its evidence and attempts, every candidate with its belief, priority, status and history, the parameters, and the state's digest
+
+```text
+splinter campaign problems show [OPTIONS] <FILE>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file.
+
+##### splinter campaign problems add
+
+Seed the problem state with a document (TOML, or JSON by its `.json` extension), or extend it: new problems, new candidates of a known problem, new parameters from this point on
+
+```text
+splinter campaign problems add [OPTIONS] <FILE> <DOCUMENT>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file.
+- `<DOCUMENT>` (required): The problem-state document (schema `splinter.problem-state/1`)
+
+##### splinter campaign problems update
+
+Record one experiment's verdict on one candidate: from an `experiences compare-arms` report (`--compare`, `--arm`), from an arm campaign's promotion gate (`--gate`, `--generation`), or stated with its reason (`--verdict`, `--reason`). Supported adds to the belief and adopts the candidate, falsified takes from it, inconclusive and invalid leave it; each counts one attempt against the problem
+
+```text
+splinter campaign problems update [OPTIONS] --candidate <ID> --experiment <ID> <FILE>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file.
+
+Options:
+
+- `--candidate <ID>` (required): The candidate the experiment tested.
+- `--experiment <ID>` (required): The experiment's id: one verdict per experiment and candidate.
+- `--verdict <VERDICT>`: A verdict stated by hand; needs `--reason`. Values: `supported`, `falsified`, `inconclusive`, `invalid`.
+- `--compare <REPORT>`: An `experiences compare-arms --json` report.
+- `--arm <NAME>`: The report's arm whose contrast against its reference is read.
+- `--gate <ARM>`: The arm's campaign file whose generation's gate is read; it must differ from FILE in the candidate's variable only.
+- `--generation <N>`: The arm campaign's generation.
+- `--evidence <REF>...`: Where the result is recorded, as `<kind>:<id>` (repeatable)
+- `--reason <TEXT>`: Why, as the history records it.
+
+##### splinter campaign problems revise
+
+A coordinator's revision, recorded with its reason: a candidate's belief (`--candidate`, `--belief`) or a problem's status (`--problem`, `--status`)
+
+```text
+splinter campaign problems revise [OPTIONS] --reason <TEXT> <FILE>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file.
+
+Options:
+
+- `--candidate <ID>`: The candidate whose belief is set.
+- `--belief <B>`: The new belief, in [0, 1]
+- `--problem <ID>`: The problem whose status is set.
+- `--status <STATUS>`: The new status. Values: `open`, `resolved`.
+- `--reason <TEXT>` (required): Why.
+
+##### splinter campaign problems check
+
+Check that an arm's campaign file differs from FILE in one declared variable only (`--variable`, or the candidate's), and, for an engineering change, only in the engineering paths
+
+```text
+splinter campaign problems check [OPTIONS] <FILE> <ARM>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file of the champion.
+- `<ARM>` (required): The arm's campaign file.
+
+Options:
+
+- `--candidate <ID>`: The candidate the arm tests: its variable and phase.
+- `--variable <PATH>`: The one variable the arm may change, as a dotted path.
+- `--engineering`: Hold the arm to the engineering paths too.
+
+#### splinter campaign next
+
+Propose the next hypothesis: the pending candidate of an open problem with the highest belief / (attempts on its problem + 1). When the candidate declares a value, its arm is this campaign file continuing from the current champion under the same seed with that one change, checked to change nothing else
+
+```text
+splinter campaign next [OPTIONS] <FILE>
+```
+
+Arguments:
+
+- `<FILE>` (required): The campaign file.
+
+Options:
+
+- `--engineering`: Propose an engineering candidate instead (a throughput or serving change, held to the engineering paths)
+- `--write <ARM>`: Write the arm's campaign file here.
 
 ### splinter session
 

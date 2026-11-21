@@ -232,3 +232,90 @@ The records (`summary`):
 | `promote`, `rollback/N` | `kind` (`promote`, `keep`, `rollback`), `generation`, `from`, `to`, `reason` |
 
 The champion is generation 0's (the base, or `champion`) until the first promotion, and then what the newest `promote` or `rollback` record moved it to.
+
+## The problem state: what to try next
+
+A campaign can keep a problem state beside its ledger: the problems that limit the model, each with links to its
+evidence, and the candidate interventions against each with a belief between 0 and 1. Every verdict revises a belief,
+and `campaign next` proposes the next single-variable hypothesis from it.
+
+```bash
+splinter campaign problems add campaign.toml problems.toml
+splinter campaign problems show campaign.toml
+splinter campaign next campaign.toml --write arm.toml
+splinter campaign problems check campaign.toml arm.toml --candidate lr
+splinter campaign problems update campaign.toml --candidate lr --experiment lr-g1 --gate arm.toml --generation 1
+splinter campaign problems update campaign.toml --candidate lr --experiment e2 --compare report.json --arm lr
+splinter campaign problems update campaign.toml --candidate lr --experiment e3 --verdict invalid --reason "the card was shared"
+splinter campaign problems revise campaign.toml --candidate lr --belief 0.3 --reason "an insight from e2"
+splinter campaign problems revise campaign.toml --problem p --status resolved --reason "fixed by the sampled-only view"
+```
+
+**The document** (`problems add`, TOML or JSON by its `.json` extension, schema `splinter.problem-state/1`) seeds the
+state or extends it. `examples/problem-state/problems.toml` is the state of the experience-to-competence programme on
+2026-11-21, and `examples/problem-state/verdicts.toml` the verdicts it had reached.
+
+```toml
+schema = "splinter.problem-state/1"
+
+[parameters]                     # optional; these are the defaults
+belief_up = 0.15                 # a supported verdict adds this to the belief
+belief_down = 0.20               # a falsified verdict takes this from it
+alpha = 0.05                     # the level every interval and test decides at
+engineering = ["practice.jobs", "practice.harbor"]   # what an engineering change may touch
+targets = { "pass@1" = 0.05 }    # the least effect a hypothesis must show, per metric
+
+[[problems]]
+id = "p"
+statement = "the exam pass rate is low"
+metric = "pass@1"                # must have a target
+attempts = 0                     # experiments run against it before the state existed
+evidence = [{ ref = "knowledge:202", note = "students time out" }]
+
+[[problems.candidates]]
+id = "lr"
+intervention = "rl-round"
+statement = "a lower learning rate"
+variable = "train.learning_rate" # the one setting its arm changes
+value = 3e-6                     # optional: when present, `campaign next` writes the arm
+belief = 0.5
+prior = "why the belief starts here"
+# phase = "engineering"          # a throughput change, held to the engineering paths
+```
+
+An evidence link is `<kind>:<id>` with kind `knowledge`, `ledger`, `result`, `diagnosis`, `commit`, `experience`,
+`dataset`, `campaign` or `paper`. A later document adds problems, adds candidates to a known problem (repeated with the
+same statement and metric), or replaces the parameters from that point on. A metric without a target is refused, and so
+is a variable that names a whole section (`train`) and an engineering list that reaches the base, the rollout, curation
+or training settings, the practice material or profile, or the examiner.
+
+**The rules.** A candidate's priority is its belief over the experiments run against its problem plus one. `campaign
+next` proposes the pending candidate of an open problem with the highest priority and a belief above 0 (`--engineering`
+for engineering candidates); ties go to the higher belief, then to the problem with fewer attempts, then by id. A
+verdict comes from one of three sources:
+
+- `--compare REPORT --arm NAME`: the arm's contrast in an `experiences compare-arms --json` report at the state's level.
+  Supported when the interval (by family when the report has one) is above 0, the difference is at least the target and
+  the Holm-adjusted two-sided sign test is below `alpha`; falsified when the interval's upper end is below the target;
+  inconclusive otherwise; invalid with no difference or interval.
+- `--gate ARM --generation N`: the promotion gate of the arm campaign's generation. The arm must differ from the
+  campaign file in the candidate's variable only. Supported when it promoted; invalid when it refused a verdict as
+  evidence; falsified when the dev interval is below the target or the retention interval lies wholly past the margin;
+  inconclusive otherwise.
+- `--verdict V --reason TEXT`: stated by a coordinator, for an experiment measured elsewhere.
+
+Supported adds `belief_up` (at most 1) and adopts the candidate; falsified takes `belief_down` (at least 0);
+inconclusive and invalid leave the belief. Every verdict counts one attempt against the problem, so an inconclusive
+result lowers the priority without being treated as a falsification. One experiment gives a candidate one verdict.
+
+**The arm.** For a candidate with a `value`, `campaign next --write ARM` writes the campaign file named
+`<campaign>-<candidate>`: the same file continuing from the current champion under the same seed, with the one change.
+It is checked before it is written. `campaign problems check FILE ARM` checks any arm: it passes when every changed
+setting lies under the declared variable (`--variable`, or the candidate's), and with `--engineering` (or for an
+engineering candidate) only under the engineering paths. The name, generations, budget, seed and starting champion are
+not variables and are not compared.
+
+**Storage.** The state is the fold of an append-only list of events in `<state>/campaigns/<name>/problems/ledger.jsonl`,
+a stage ledger of its own, so it can be read and revised while `campaign run` holds the campaign's. Each event is one unit
+named by its digest. Recording an event already recorded records nothing, and an event the state refuses is refused
+before anything is written. `problems show` prints the state's digest: the same events give the same digest.

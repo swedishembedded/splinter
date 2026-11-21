@@ -36,6 +36,9 @@
 //!   effect it targets is refused before it spends a GPU-hour, and repeated
 //!   gates spend alpha by default.
 //! * [`plateau`] - discovery per GPU-hour, and the switch when it falls.
+//! * [`problems`] - the problem state: diagnosed problems with evidence,
+//!   candidate interventions with beliefs, best-first choice of the next
+//!   single-variable hypothesis and the belief update of each verdict.
 
 pub mod dev_pool;
 pub mod evidence;
@@ -44,5 +47,6 @@ pub mod learning_signal;
 pub mod pass_rate;
 pub mod plan;
 pub mod plateau;
+pub mod problems;
 pub mod sampling;
 pub mod signals;

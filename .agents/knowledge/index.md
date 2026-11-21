@@ -191,3 +191,4 @@ in the same commit.
 | [203](203-teacher-traces-for-a-small-student-must-come-from-non-thinking-mode-with-concise-rationales.md) | Teacher traces for a small student must come from non-thinking mode with concise rationales |
 | [204](204-stable-on-policy-rl-on-own-rollouts-fits-the-trained-tasks-and-gives-up-retention.md) | Stable on-policy RL on own rollouts fits the trained tasks and gives up retention |
 | [205](205-build-a-policy-gradient-dataset-against-a-training-server.md) | Build a policy-gradient dataset against a training server |
+| [206](206-not-supported-hides-a-ruled-out-target-and-an-interval-that-holds-it.md) | "Not supported" hides two results: a target ruled out, and an interval that still holds it |

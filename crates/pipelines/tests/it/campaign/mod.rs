@@ -8,11 +8,13 @@
 // info@swedishembedded.com.
 
 //! The campaign: the generation controller over its stage ledger, and the
-//! in-memory rollout machinery over a served policy.
+//! in-memory rollout machinery over a served policy, and the problem state
+//! that chooses the next arm.
 
 mod agentic;
 mod capabilities;
 mod generations;
+mod problems;
 mod served;
 mod signal;
 mod world;
