@@ -180,6 +180,13 @@ pub fn under_environment(
             });
         }
     }
+    // The servers are the fork's to run, one exchange per call: an engine that
+    // connected them itself would keep each one running for its whole life,
+    // and an examiner's session, which runs one command at a time, would wait
+    // behind it for ever (its input never ends).
+    if let Some(servers) = merged.get_mut("mcp_servers") {
+        *servers = serde_json::json!({});
+    }
     let config = serde_json::from_value(merged).map_err(|e| refuse(&e))?;
     Ok((config, stdio))
 }
@@ -485,18 +492,9 @@ mod tests {
             config.tools.max_timeout_secs, 77,
             "the run's own setting wins"
         );
-        let server = serde_json::to_value(&config.mcp_servers["files"]).unwrap();
-        assert_eq!(server["transport"]["command"], json!("bench"));
-        assert_eq!(
-            server["transport"]["args"],
-            json!([
-                "session-exec",
-                "--stdin",
-                "SOCK",
-                "--",
-                "python3",
-                "files.py"
-            ])
+        assert!(
+            config.mcp_servers.is_empty(),
+            "the engine connects no server itself: one that stayed connected would hold an environment that runs one command at a time"
         );
         assert_eq!(servers.len(), 1);
         assert_eq!(
