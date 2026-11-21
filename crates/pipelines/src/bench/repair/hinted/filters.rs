@@ -544,13 +544,15 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
                 ));
             }
         }
-        for command in commands
+        let written: Vec<&String> = commands
             .iter()
             .filter(|c| said.contains(c.as_str()) && !seen.contains(c.as_str()))
-        {
+            .collect();
+        if !written.is_empty() && !explains(&said, &written) {
             findings.push(format!(
-                "{} writes the hint's command {command:?}, which no tool reply had shown",
-                step_name(step)
+                "{} writes the hint's command {:?} without explaining it, and no tool reply had shown it",
+                step_name(step),
+                written[0]
             ));
         }
         seen.push(' ');
@@ -559,6 +561,48 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
         known.extend(ngrams(&replies(step)));
     }
     Verdict::of(findings)
+}
+
+/// Words a step's text must hold, besides the commands it writes, to explain them.
+const MIN_EXPLANATION_WORDS: usize = 12;
+
+/// Whether `text` explains the hint commands it writes (`written`) rather than dumping them: with every written
+/// command removed it still holds [`MIN_EXPLANATION_WORDS`] words, and one of them names a part of a command, a
+/// stretch of two or more of a command's letters (`yy`, `gg` of `jyyggP`; `BEGIN` of `/BEGIN/,/END/s/off/on/g`) or one
+/// of its letters standing alone (`j moves down`; `a` and `I` alone are left out, being ordinary words). The user's
+/// rule for vim reasoning: it is about the parts of the command, and naming them is planning, not copying.
+fn explains(text: &str, written: &[&String]) -> bool {
+    let mut rest = text.to_string();
+    let mut by_length = written.to_vec();
+    by_length.sort_by_key(|c| std::cmp::Reverse(c.len()));
+    for command in by_length {
+        rest = rest.replace(command.as_str(), " ");
+    }
+    let words: Vec<&str> = rest
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect();
+    if words.len() < MIN_EXPLANATION_WORDS {
+        return false;
+    }
+    let runs: Vec<String> = written
+        .iter()
+        .flat_map(|c| {
+            c.split(|ch: char| !ch.is_alphabetic())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .filter(|run| !run.is_empty())
+        .collect();
+    words.iter().any(|word| {
+        if !word.chars().all(char::is_alphabetic) {
+            return false;
+        }
+        match word.chars().count() {
+            1 => !matches!(*word, "a" | "I") && runs.iter().any(|run| run.contains(word)),
+            _ => runs.iter().any(|run| run.contains(word)),
+        }
+    })
 }
 
 /// The shortest hint command, or word of one, that counts as the answer: shorter ones (`dd`, `1`) are too common in

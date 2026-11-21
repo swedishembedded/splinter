@@ -656,3 +656,38 @@ fn hint_wording_sent_as_a_later_or_the_same_call_is_not_known_when_written() {
         "the model's own earlier call is its own"
     );
 }
+
+/// Writing the command one is about to run is planning, not copying, when the text explains it (the user's rule: the
+/// reasoning is about the parts of the command). A bare command dump is copying; the same command beside an
+/// explanation that names its parts is kept. Calibration: unexplained hint commands in 94% of the 4B's and 58% of the
+/// 27B's hinted vim traces, 8% and 28% with any mention in their unhinted ones, 1% and 6% unexplained (knowledge 201).
+#[test]
+fn a_hint_command_the_text_explains_is_planning_and_a_bare_dump_is_copying() {
+    let dump = trajectory(
+        INSTRUCTION,
+        &[("Run normal! jyyggP then save.", EDIT, EDIT_REPLY)],
+    );
+    assert!(!leak(&dump).passed, "a bare command dump is copying");
+    let explained = trajectory(
+        INSTRUCTION,
+        &[(
+            "I need line two above line one. In vim j moves down one line (hjkl are the motion keys), yy yanks the \
+             whole line, gg jumps to the first line and P puts the yank above it, so normal! jyyggP does it.",
+            EDIT,
+            EDIT_REPLY,
+        )],
+    );
+    assert_eq!(
+        leak(&explained),
+        Verdict::pass(),
+        "the user's hjkl-style explanation is planning"
+    );
+    let padded = trajectory(
+        INSTRUCTION,
+        &[("Okay, so now I am going to go ahead and simply run this here: normal! jyyggP and then we are done.", EDIT, EDIT_REPLY)],
+    );
+    assert!(
+        !leak(&padded).passed,
+        "words that name no part of the command are no explanation"
+    );
+}

@@ -79,3 +79,25 @@ Also fixed (found by lane ALG-S): the 5-word wording check counted the tool argu
 included, as known, so wording written first and sent as a call later passed. A step's own arguments (and replies) now
 count as known only to the steps after it. Re-graded with both fixes (same counts): gates a and b keep 5 of 96, lane
 VSFT's run keeps 23 of 55 verified (all 30 of its script's rejections, plus 2 for `f{ci{new`).
+
+## Planning or copying: a calibration on unhinted traces (2026-11-21)
+
+Writing the command one is about to run is ordinary planning on vim, so the check was run, offline, over verified
+traces that never saw a hint (lane VIM's `calib.py`, which mirrors the stage's rule; the 4B unhinted traces are concise
+mode, its hinted ones thinking mode):
+
+| traces | verified | command in text (rule of 19b6dd024) | only in an earlier step than its call | whole hint line only | not explained |
+|---|---:|---:|---:|---:|---:|
+| 4B hinted (gates a, b) | 81 | 76 (94%) | 0 | 76 (94%) | 2 (2%) |
+| 27B hinted (lane VSFT) | 55 | 32 (58%) | 0 | 30 (55%) | 2 (4%) |
+| 4B unhinted (concise gen 0) | 497 | 42 (8%) | 0 | 40 (8%) | 6 (1%) |
+| 27B unhinted (concise c1) | 452 | 125 (28%) | 1 (0%) | 107 (24%) | 24 (5%) |
+
+Counting a command only when it is written in a step earlier than the one whose call sends it catches nothing: the
+models write the command in the same step that runs it. Matching whole hint lines only changes little. At the user's
+direction (the reasoning should be about the parts of the command), the default now counts a written hint command as
+copying only when the step does not explain it (`filters::explains`): with the written commands removed, the step
+still holds 12 or more words and one names a part of a command, a stretch of two or more of its letters or one of its
+letters standing alone. Re-graded with it: gates a and b keep 76 of 96 (79%), lane VSFT's run 53 of 55 verified. The
+proxy is permissive: long reasoning nearly always names some part, so it separates a bare dump from any explanation,
+not a good explanation from a padded one.
