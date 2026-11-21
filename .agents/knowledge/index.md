@@ -192,3 +192,4 @@ in the same commit.
 | [204](204-stable-on-policy-rl-on-own-rollouts-fits-the-trained-tasks-and-gives-up-retention.md) | Stable on-policy RL on own rollouts fits the trained tasks and gives up retention |
 | [205](205-build-a-policy-gradient-dataset-against-a-training-server.md) | Build a policy-gradient dataset against a training server |
 | [206](206-not-supported-hides-a-ruled-out-target-and-an-interval-that-holds-it.md) | "Not supported" hides two results: a target ruled out, and an interval that still holds it |
+| [207](207-taking-a-persons-turn-out-of-a-path-takes-the-reply-it-answered-too.md) | Taking a person's turn out of a guided path takes the reply it answered too |
