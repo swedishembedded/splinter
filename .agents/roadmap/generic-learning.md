@@ -56,3 +56,61 @@ E0 to E3 need no new method and fit in one afternoon on four cards.
 - Reading results from the 14-task vim exam or from wall-clock-limited runs; claiming transfer from in-family held-out instances.
 
 Kept as generic: `--distinct-calls` (structural equality of calls) and `--only-actions` (a tool allow-list).
+
+## E0-E3 runs (lane EXP; pre-registered 2026-11-21 17:30, before any trial or training)
+
+**Instrument, shared by every arm of E0-E3.**
+- **Builds (frozen):** brain-bcd67e5ad (per-turn thinking budget that always closes, exact reasoning counts) for serving and
+  training; sven-fe9cda90 (enforced token and turn caps); bench 3403023a (origin/main, `[budget]` since 023814be) in a
+  pinned worktree; splinter-c2a7d877e for datasets, training and `compare-arms` (origin/main differs from it only in
+  roadmap, an example and a test).
+- **Mode:** thinking on, no appended instruction, brain's per-turn `thinking_budget = 2048` (E2c's), Qwen3 thinking
+  sampling T 0.6 / top-p 0.95 / top-k 20, run seed 20261121, sven's brain driver, one bench gateway per arm.
+- **Budget B (set offline):** the base's 78 passing thinking-capped trials (lane VIM `xt-base-g1/g3`, `e2c-base-*-lost2`,
+  same mode) spent p90 10,076 completion tokens and 6 turns; B = 1.5 x p90 = **15,114 completion tokens and 9 turns**,
+  the same for every arm and experiment (`[budget]`, wall clock factor 4, a backstop counted as infrastructure). A
+  `budget_exhausted` trial is a model fail; the exhaustion share is reported per arm.
+- **Data:** the existing 27B thinking-mode teacher passes behind v1 (VSFT t1-t6 and t34: 1,192 graded, 579 passed),
+  curated as v1 (`sft-step --pack --only-actions vim-vim --max-block 16384`); selections read verdicts, rungs and token or
+  turn counts only. No new teacher run, no prompt change.
+- **Training:** v1's recipe (A2's: Qwen3-4B bf16 base, LoRA r16/alpha 32, lr 2e-4, no weight decay, 4 records per step,
+  monitoring every 14 steps, patience 4), steps = round(0.4 x records) (v1: 576 -> 230, about two epochs), seeds 1 and 2.
+- **Families** are the 14 difficulty rungs of the train side (`bench_difficulty`); every trials line carries its task's rung
+  as `family`.
+- **Analysis:** `bench trials` per job, then `splinter experiences compare-arms --trials ... --interval-seed 20261121`,
+  two-sided sign test, Holm over each experiment's pre-registered contrasts, task and family-clustered 95% intervals; the
+  two seeds of a student are pooled as one arm. Verdicts enter the canonical problem state
+  (`~/project/shared/campaigns/experience-to-competence/`) with `update --compare`, experiment ids `exp-e0` to `exp-e3`.
+- **Placement:** nodes n467 and n445 (4 GH200 each); each server holds one load, and every arm of a contrast runs in the
+  same slot on the same server(s) at equal concurrency.
+
+**E0 (instrument; candidate `overthink.token-turn-budget`).** Base, v1s1 and v1s2 (VSFT adapters) on v1's 16 held-out
+validation tasks x 16 attempts, at two loads at once on n467: low (gpu0, 4 trials in flight per arm, 12 in all) and high
+(gpu1, 32 per arm, 96 in all). Contrast per arm: high minus low (reference the arm at low load), 3 contrasts, Holm.
+**Success:** for every arm the 95% task interval of high minus low contains 0 and the Holm p is at least 0.05 (the A/A
+band); the exhaustion share is reported per arm and load. Secondary: v1 minus base at each load.
+
+**E1 (leave-families-out; candidate `distill-transfer.leave-families-out`).** Folds of held-out rungs a {1,4,7,10,13},
+b {2,5,8,11,14}, c {3,6,9,12}. Per fold v1's recipe is retrained, seeds 1 and 2, on every teacher pass of the other rungs
+(datasets of 402, 343 and 403 records), and base and both seeds are examined on all tasks of the held-out rungs x 8
+(58, 65 and 45 tasks; 168 tasks over 14 families pooled). Primary contrast: pooled students minus base. **Success:**
+difference at least +0.05, family interval above 0, Holm p below 0.05. If falsified, vim distillation does not cross
+families and breadth (E3, bench's environment factory) is funded before any algorithm.
+
+**E2 (budget-matched selection; candidate `distill-transfer.min-cost-selection`).** The single variable is curation:
+per fold, of E1's training passes only those within the student budget (at most B completion tokens, N turns, and every
+turn's reasoning within the 2,048-token per-turn budget), at most 4 per task, lowest total completion tokens first
+(317, 279 and 316 records); trained as E1 (seeds 1 and 2). Examined in E1's slot on the same held-out tasks x 8 against
+E1's students as v1 (pooled). **Success at B:** gain over v1 at least +0.05, family interval above 0, Holm p below 0.05;
+exhaustion share within 10 points of base. **At 4B** (60,456 tokens, 36 turns), the same E2 and E1 students x 4 attempts,
+in their own slot: non-inferior at 0.05 (lower end of the family interval of E2 minus v1 above -0.05). E2's arm needs
+both.
+
+**E3 (breadth dose-response; candidate `distill-transfer.family-breadth`).** Seven folds, each holding out two rungs
+({1,8}, {2,9}, {3,10}, {4,11}, {5,12}, {6,13}, {7,14}; all 168 tasks over 14 families). Per fold 4, 8 and 12 training rungs,
+nested seeded subsets (seed 20261121) of the 12 others, at an equal 122 passes drawn uniformly (seeded) from those rungs'
+passes (built 119-122 records), seeds 1 and 2; examined on the fold's held-out tasks x 4 per seed, the three doses in one
+slot. Contrasts r8 minus r4 and r12 minus r4 (Holm over 2). **Success:** monotone point estimates (r4 <= r8 <= r12), with
+r12 minus r4 at least +0.05, family interval above 0 and Holm p below 0.05.
+
+Selections and dataset ids: `lane-exp/data/{selections,design}.json` and `datasets.jsonl`; script `lane-exp/scripts/select.py`.

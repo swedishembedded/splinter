@@ -211,7 +211,7 @@ one variable each: E0 `overthink.token-turn-budget`, E1 `distill-transfer.leave-
 | # | Item | Next action | Acceptance |
 |---|---|---|---|
 | PS-1 | Schema, storage, rules, checks and the two commands | landed with this ledger (see Landed) | specs green; validation rows with their mutants killed |
-| PS-2 | E2a and E2b verdicts | enter them with `update --compare` from their `compare-arms` reports when read | the concise-traces and expert-iteration candidates carry a measured verdict |
+| PS-2 | E2a and E2b verdicts | enter them with `update --compare` from their `compare-arms` reports when read, into the canonical campaign `~/project/shared/campaigns/experience-to-competence/campaign.toml` (state `.../state`, created 2026-11-21 from `examples/problem-state` with the ten seed verdicts replayed); E2a was abandoned at the concise floor (no verdict); item 24b's thinking-capped transfer is entered against `self-transfer.expert-iteration-gen3` (inconclusive, +0.022 [-0.014, +0.059]); E2c pending | the concise-traces and expert-iteration candidates carry a measured verdict |
 | PS-3 | Engineering reward `dh - gamma ln(T_exec)` | record wall time per examined arm in the campaign's evaluate stage; then score engineering arms by it | an engineering arm ranked by a recorded reward, its outcome non-inferior |
 | PS-4 | Insight re-scoring is manual | after a verdict, propose belief revisions for sibling candidates sharing its variable (proposal only, the coordinator records them) | a proposal list in `update`'s output |
 | PS-5 | Campaign stages do not record verdicts themselves | let `campaign run` take `--hypothesis ID` and record its generation's verdict on its own | one arm run end to end with no manual `update` |
@@ -222,3 +222,12 @@ one variable each: E0 `overthink.token-turn-budget`, E1 `distill-transfer.leave-
   classification, belief update, single-variable and firewall checks); `splinter_pipelines::campaign::problems`
   (storage on the stage ledger, campaign-file configuration, protected paths, the arm `next` writes);
   `splinter campaign problems show|add|update|revise|check` and `splinter campaign next`.
+
+## The canonical campaign (2026-11-21)
+
+Every lane enters its verdicts into one problem state: `~/project/shared/campaigns/experience-to-competence/`
+(`campaign.toml`, state in `state/`, the seed `problems.toml` and `verdicts.toml`, and each added document beside
+them). Created by lane VIM from `examples/problem-state` with the ten seed verdicts replayed (`next` then proposes
+`overthink.concise-traces`, as the example's README states), plus the problem `self-transfer` (lane VIM's item 24b).
+Use it as `splinter --state ~/project/shared/campaigns/experience-to-competence/state campaign problems ... campaign.toml`
+from that directory.
