@@ -6,16 +6,24 @@
 // your team needs expertise in continual learning or agent evaluation, you
 // can procure our services by sending an email to info@swedishembedded.com.
 
-//! Spec: a model reached over an API is asked several tasks at once, a model
-//! on the local device one at a time, and the experience set is the same
-//! either way: one member per attempt, in the order of the task set.
+//! Spec: a model reached over an API is asked up to the configured width at
+//! once, a model a brain server decodes as wide as its slots, and the
+//! experience set is the same either way: one member per attempt, in the
+//! order of the task set.
+//!
+//! How wide a solve asks is read without a clock: each request waits at a
+//! barrier as wide as the width the spec expects, so the barrier fills only
+//! if that many requests are in flight together, and a request beyond the
+//! width shows as a peak above it. A barrier that never fills is a defect,
+//! reported after a long liveness bound (never reached by a correct solve,
+//! however loaded the machine) instead of hanging the suite.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
 use crate::common;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -29,25 +37,64 @@ use splinter_pipelines::solving::{solve_tasks, SamplingChoice, SolveRequest};
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 
-/// A model that takes a while to answer, and counts how many are waiting on
-/// it at once.
-struct Slow {
+/// How long a request waits for its barrier to fill before the test calls
+/// the solve too narrow: a liveness bound for a defect, not a timing
+/// assumption (a correct solve fills it as soon as its requests start).
+const STALLED_AFTER: Duration = Duration::from_secs(120);
+
+/// A model that counts how many requests are waiting on it at once, and
+/// holds each one until as many as `together` are waiting (or, without a
+/// barrier, for `hold`).
+struct Counting {
     waiting: AtomicUsize,
     most: AtomicUsize,
+    together: Option<tokio::sync::Barrier>,
+    hold: Duration,
+    stalled: AtomicBool,
+}
+
+impl Counting {
+    /// Each request waits until `width` are in flight together.
+    fn at_barrier(width: usize) -> Self {
+        Self {
+            waiting: AtomicUsize::new(0),
+            most: AtomicUsize::new(0),
+            together: Some(tokio::sync::Barrier::new(width)),
+            hold: Duration::ZERO,
+            stalled: AtomicBool::new(false),
+        }
+    }
+
+    /// Each request takes at least `hold` to answer.
+    fn taking(hold: Duration) -> Self {
+        Self {
+            together: None,
+            hold,
+            ..Self::at_barrier(1)
+        }
+    }
 }
 
 #[async_trait::async_trait]
-impl ModelProvider for Slow {
+impl ModelProvider for Counting {
     fn name(&self) -> &str {
-        "slow"
+        "counting"
     }
     fn model_name(&self) -> &str {
-        "slow-1"
+        "counting-1"
     }
     async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
         let now = self.waiting.fetch_add(1, Ordering::SeqCst) + 1;
         self.most.fetch_max(now, Ordering::SeqCst);
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        if let Some(barrier) = &self.together {
+            if tokio::time::timeout(STALLED_AFTER, barrier.wait())
+                .await
+                .is_err()
+            {
+                self.stalled.store(true, Ordering::SeqCst);
+            }
+        }
+        tokio::time::sleep(self.hold).await;
         self.waiting.fetch_sub(1, Ordering::SeqCst);
         Ok(Box::pin(futures::stream::iter(vec![
             Ok(ResponseEvent::TextDelta("an answer".into())),
@@ -74,19 +121,24 @@ fn tasks(ctx: &Context, n: usize) -> TaskSetId {
         .unwrap()
 }
 
-/// Solves six tasks twice each with `slow` as `reference`; the most that
-/// waited on it at once, and the tasks the experience set's members answer,
-/// in order.
-fn solve_with(test: &str, reference: ModelRef, width: usize) -> (usize, Vec<String>, Vec<String>) {
+/// Solves six tasks twice each with a model behind `reference` that holds
+/// each request until `expected` are in flight; the most that waited on it
+/// at once, and the tasks the experience set's members answer, in order.
+fn solve_with(
+    test: &str,
+    reference: ModelRef,
+    width: usize,
+    expected: usize,
+) -> (usize, Vec<String>, Vec<String>) {
     let scratch = Scratch::new(test);
     let mut settings = config(&scratch);
     settings.remote_concurrency = width;
     let ctx = Context::new(settings, true).unwrap();
-    let slow = Arc::new(Slow {
-        waiting: AtomicUsize::new(0),
-        most: AtomicUsize::new(0),
-    });
-    ctx.add_model(reference.clone(), Model::new(slow.clone(), "slow/model"));
+    let model = Arc::new(Counting::at_barrier(expected));
+    ctx.add_model(
+        reference.clone(),
+        Model::new(model.clone(), "counting/model"),
+    );
     let set = tasks(&ctx, 6);
     let solved = solve_tasks(
         &ctx,
@@ -121,13 +173,18 @@ fn solve_with(test: &str, reference: ModelRef, width: usize) -> (usize, Vec<Stri
         .iter()
         .map(|id| ctx.experiences().get(id).unwrap().task.id.to_string())
         .collect();
-    (slow.most.load(Ordering::SeqCst), wanted, answered)
+    assert!(
+        !model.stalled.load(Ordering::SeqCst),
+        "{expected} requests were never in flight together (at most {})",
+        model.most.load(Ordering::SeqCst)
+    );
+    (model.most.load(Ordering::SeqCst), wanted, answered)
 }
 
 #[test]
 fn a_remote_model_is_asked_up_to_the_configured_width_at_once() {
     let remote: ModelRef = "remote:test/model".parse().unwrap();
-    let (most, wanted, answered) = solve_with("remote-wide", remote, 3);
+    let (most, wanted, answered) = solve_with("remote-wide", remote, 3, 3);
     assert_eq!(most, 3, "three requests are in flight together");
     let expected: Vec<String> = wanted.iter().flat_map(|t| [t.clone(), t.clone()]).collect();
     assert_eq!(answered.len(), 12, "one member per attempt");
@@ -150,7 +207,7 @@ fn a_remote_model_is_asked_up_to_the_configured_width_at_once() {
 #[test]
 fn a_local_model_is_asked_as_wide_as_the_brain_server_decodes_together() {
     let local: ModelRef = "local:/models/base".parse().unwrap();
-    let (most, ..) = solve_with("local-wide", local, 3);
+    let (most, ..) = solve_with("local-wide", local, 3, 12);
     // Every attempt of the solve (12) fits the server's slots, so all are in flight together.
     assert_eq!(
         most, 12,
@@ -164,14 +221,14 @@ fn a_model_is_handed_to_a_stage_with_the_width_it_is_asked_at() {
     let mut settings = config(&scratch);
     settings.remote_concurrency = 5;
     let ctx = Context::new(settings, true).unwrap();
-    let slow = Arc::new(Slow {
-        waiting: AtomicUsize::new(0),
-        most: AtomicUsize::new(0),
-    });
+    let model = Arc::new(Counting::taking(Duration::ZERO));
     let remote: ModelRef = "remote:test/model".parse().unwrap();
     let local: ModelRef = "local:/models/base".parse().unwrap();
     for reference in [&remote, &local] {
-        ctx.add_model(reference.clone(), Model::new(slow.clone(), "slow/model"));
+        ctx.add_model(
+            reference.clone(),
+            Model::new(model.clone(), "counting/model"),
+        );
     }
     assert_eq!(ctx.model(&remote).unwrap().slots(), 5);
     assert_eq!(
@@ -183,7 +240,7 @@ fn a_model_is_handed_to_a_stage_with_the_width_it_is_asked_at() {
     let served: ModelRef = "local:/models/served".parse().unwrap();
     ctx.add_model(
         served.clone(),
-        Model::new(slow, "slow/served").with_slots(16),
+        Model::new(model, "counting/served").with_slots(16),
     );
     assert_eq!(ctx.model(&served).unwrap().slots(), 16);
 }
@@ -194,11 +251,8 @@ fn every_solved_attempt_keeps_the_facts_the_experience_cannot() {
     let scratch = Scratch::new("attempt-facts");
     let ctx = Context::new(config(&scratch), true).unwrap();
     let reference: ModelRef = "remote:test/model".parse().unwrap();
-    let slow = Arc::new(Slow {
-        waiting: AtomicUsize::new(0),
-        most: AtomicUsize::new(0),
-    });
-    ctx.add_model(reference.clone(), Model::new(slow, "slow/model"));
+    let model = Arc::new(Counting::taking(Duration::from_millis(60)));
+    ctx.add_model(reference.clone(), Model::new(model, "counting/model"));
     let set = tasks(&ctx, 2);
     let solved = solve_tasks(
         &ctx,
@@ -237,8 +291,9 @@ fn every_solved_attempt_keeps_the_facts_the_experience_cannot() {
             .collect();
         assert_eq!(reports.len(), 1);
         // perf-number: the scripted model's configured delay, not a measurement
-        // The model takes 60 ms to answer; an answer in one reply has no
-        // tool calls to count, and nothing else was measured.
+        // The model takes at least 60 ms to answer (a lower bound, whatever
+        // the load); an answer in one reply has no tool calls to count, and
+        // nothing else was measured.
         assert!(reports[0].wall_seconds.unwrap() >= 0.05);
         assert_eq!(reports[0].tool_calls, None);
         assert_eq!(reports[0].gpu_seconds, None);
