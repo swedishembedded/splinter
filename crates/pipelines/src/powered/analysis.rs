@@ -185,20 +185,8 @@ pub struct Comparison {
     pub holm_p: Option<f64>,
 }
 
-/// Holm's step-down correction of `p` values: each, in the order given,
-/// adjusted for how many were made.
-#[must_use]
-pub fn holm(p: &[f64]) -> Vec<f64> {
-    let mut order: Vec<usize> = (0..p.len()).collect();
-    order.sort_by(|&a, &b| p[a].total_cmp(&p[b]));
-    let mut adjusted = vec![0.0; p.len()];
-    let mut running: f64 = 0.0;
-    for (rank, &i) in order.iter().enumerate() {
-        running = running.max(((p.len() - rank) as f64 * p[i]).min(1.0));
-        adjusted[i] = running;
-    }
-    adjusted
-}
+/// Holm's step-down correction ([`splinter_model::stats::holm`]).
+pub use splinter_model::stats::holm;
 
 /// Resamples of the families an interval is made from.
 const RESAMPLES: usize = 10_000;

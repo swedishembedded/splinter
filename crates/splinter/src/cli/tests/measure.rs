@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 //! The grammar's specs for the measurement verbs: the release gate's settings
-//! and canaries, the results matrix, and the experiment plan.
+//! and canaries, the results matrix, the experiment plan, and the comparison
+//! of arms.
 
 use super::{command, parse, Command};
 use crate::cli::{EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand, TasksCommand};
@@ -221,5 +222,38 @@ fn compare_takes_the_difficulty_cutoffs_together_or_not_at_all() {
         ])
         .is_err(),
         "the cutoffs come together"
+    );
+}
+
+#[test]
+fn compare_arms_takes_arms_trials_files_a_reference_and_the_interval_settings() {
+    let Command::Experiences(ExperiencesCommand::CompareArms(args)) = command(&[
+        "experiences",
+        "compare-arms",
+        "--arm",
+        "base=jobs/e2a-base",
+        "--arm",
+        "gen1=jobs/e2a-gen1",
+        "--trials",
+        "more.jsonl",
+        "--reference",
+        "base",
+        "--k",
+        "16",
+        // seed: the grammar is asked to carry a given seed through unchanged.
+        "--interval-seed",
+        "20261121",
+    ]) else {
+        panic!("experiences compare-arms");
+    };
+    assert_eq!(args.arms, ["base=jobs/e2a-base", "gen1=jobs/e2a-gen1"]);
+    assert_eq!(args.reference, "base");
+    assert_eq!(args.k, [16]);
+    assert_eq!(args.resamples, splinter_sdk::arm_compare::DEFAULT_RESAMPLES);
+    assert_eq!(args.level, splinter_sdk::arm_compare::DEFAULT_LEVEL);
+    assert_eq!(args.interval_seed.map(|s| s.value()), Some(20_261_121));
+    assert!(
+        parse(&["experiences", "compare-arms", "--arm", "a=x"]).is_err(),
+        "the reference arm is named"
     );
 }

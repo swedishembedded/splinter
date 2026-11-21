@@ -53,6 +53,26 @@ def sign_case(wins, losses, ties):
     }
 
 
+def pass_at_k_case(n, c, k):
+    """The unbiased pass@k of one task, 1 - C(n - c, k) / C(n, k), exact."""
+    value = 1 - Fraction(math.comb(n - c, k), math.comb(n, k))
+    return {"n": n, "passed": c, "k": k, "pass_at_k": float(value),
+            # The biased "any of the first k" reading a defect would give: 1 if
+            # any of the n passed, whatever k.
+            "any_of_n": float(c > 0)}
+
+
+def holm_case(p):
+    """Holm's step-down adjustment of p, in exact rationals."""
+    m = len(p)
+    order = sorted(range(m), key=lambda i: p[i])
+    adjusted, running = [None] * m, Fraction(0)
+    for rank, i in enumerate(order):
+        running = max(running, min(Fraction(1), (m - rank) * p[i]))
+        adjusted[i] = running
+    return {"p": [float(x) for x in p], "holm": [float(x) for x in adjusted]}
+
+
 def multinomial_mean_pmf(n, counts, values):
     """PMF of the mean of n draws with replacement from items whose distinct
     `values` occur `counts` times, keyed by the numerator over n."""
@@ -157,6 +177,23 @@ def main():
                 (1, 9, 0),
                 (250, 200, 10),
                 (11, 3, 0),
+            ]
+        ],
+        "pass_at_k": [
+            pass_at_k_case(n, c, k)
+            for n, c, k in [
+                (1, 0, 1), (1, 1, 1), (4, 1, 1), (4, 1, 2), (4, 1, 4), (8, 3, 2), (8, 3, 5),
+                (8, 3, 6), (16, 1, 8), (16, 4, 4), (16, 16, 16), (16, 0, 16), (5, 2, 5),
+                (100, 7, 10), (200, 1, 199),
+            ]
+        ],
+        "holm": [
+            holm_case([Fraction(x) for x in ps])
+            for ps in [
+                ["1/100", "4/100", "3/100"],
+                ["1/50", "1/50", "1/2", "3/10", "9/10"],
+                ["3/5", "1/1000", "1/5", "7/100", "1/40"],
+                ["1"],
             ]
         ],
         "paired_bootstrap": [

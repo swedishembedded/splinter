@@ -21,6 +21,7 @@
 mod absorb_output;
 mod absorb_session;
 mod acquire_output;
+mod arms_output;
 mod baseline_report;
 mod build_info;
 mod campaign_session;

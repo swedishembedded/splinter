@@ -7,7 +7,7 @@
 // them, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! The grammar of `experiences diagnose`, `experiences capabilities`, `experiences repair`, `experiences rationalise`, `experiences import` and the strata `experiences compare`
+//! The grammar of `experiences diagnose`, `experiences capabilities`, `experiences repair`, `experiences rationalise`, `experiences import`, `experiences compare-arms` and the strata `experiences compare`
 //! reports by.
 
 use std::path::PathBuf;
@@ -266,4 +266,40 @@ impl StrataArgs {
             instruction_chars: self.stratum_instruction_chars?,
         })
     }
+}
+
+/// `experiences compare-arms`: graded trials of several arms on the same
+/// tasks, each arm against a reference arm.
+#[derive(Debug, Args)]
+pub struct CompareArmsArgs {
+    /// An arm and the Harbor job directory of its trials (one subdirectory
+    /// with a result.json per trial), as NAME=DIR; repeat for each arm.
+    #[arg(long = "arm", value_name = "NAME=DIR")]
+    pub arms: Vec<String>,
+    /// A trials file: one JSON object per line, {"task", "arm", "family"?,
+    /// "attempt"?, "pass" or "reward", "status"?} with status graded
+    /// (default), timeout or infra_error; repeat for several.
+    #[arg(long = "trials", value_name = "FILE")]
+    pub trials: Vec<PathBuf>,
+    /// The arm every other arm is compared with.
+    #[arg(long, value_name = "NAME")]
+    pub reference: String,
+    /// A JSON object naming each task's family ({"task": "family"}): the
+    /// difference is then also resampled by whole families.
+    #[arg(long, value_name = "FILE")]
+    pub families: Option<PathBuf>,
+    /// A k to report pass@k at (unbiased, over the tasks with at least k
+    /// graded attempts); repeat for several. pass@1 is always reported.
+    #[arg(long = "k", value_name = "K")]
+    pub k: Vec<usize>,
+    /// Resamples per bootstrap interval.
+    #[arg(long, value_name = "N", default_value_t = splinter_sdk::arm_compare::DEFAULT_RESAMPLES)]
+    pub resamples: usize,
+    /// The share of resampled means an interval holds.
+    #[arg(long, value_name = "SHARE", default_value_t = splinter_sdk::arm_compare::DEFAULT_LEVEL)]
+    pub level: f64,
+    /// The seed the intervals are resampled with (drawn and printed when not
+    /// given; the same trials and seed give the same intervals).
+    #[arg(long, value_name = "N")]
+    pub interval_seed: Option<Seed>,
 }

@@ -502,6 +502,9 @@ impl Session {
                 })?;
                 emit(json, &report);
             }
+            Command::Experiences(ExperiencesCommand::CompareArms(args)) => {
+                crate::compare_session::compare_arms(ctx, json, *args)?;
+            }
             Command::Experiences(ExperiencesCommand::Rationalise(args)) => {
                 crate::rationalise_session::rationalise_command(ctx, json, *args)?;
             }

@@ -52,6 +52,8 @@ of the package) or an integration test binary; filter a substring of the test na
 | Paired percentile bootstrap | numerical | the interval of the mean per-item difference, items resampled with both verdicts together; each bound is the exact quantile of the multinomial bootstrap distribution within five Monte Carlo standard errors | `splinter-model/it/statistics_conformance` | per-PR | arms resampled independently, one-sided bound (in-test); `bootstrap-one-sided-tail` |
 | Family-clustered bootstrap (powered exam, release task level, promotion measurement) | numerical | whole families resampled, the statistic the mean over every task drawn (a family weighs what its tasks weigh); 2.5%, 5% and 97.5% bounds are exact quantiles of the enumerated family bootstrap | `splinter-pipelines/lib/powered::analysis` | per-PR | tasks resampled alone (in-test); `family-bootstrap-equal-weights` |
 | Competence intervals | numerical | quality, autonomy and cost resampled by family, pooled ratio; bounds are exact family-bootstrap quantiles | `splinter-eval/it/golden::` `splinter-eval/it/competence::` | per-PR | item-level resample, families weighted equally (in-test); `competence-item-level-resample` |
+| Two-sided sign test, Holm, unbiased pass@k | numerical | two-sided `min(1, 2 min(P(X >= wins), P(X <= wins)))`; Holm's step-down `max_{j <= i} min(1, (m - j) p_(j))` in the order given; per task `1 - C(n - c, k) / C(n, k)`, undefined for `k > n` | `splinter-model/it/statistics_conformance` | per-PR | one-sided as two-sided, upper tail doubled, Bonferroni, step-down without the running maximum, any of the attempts, the rate whatever k (in-test); `two-sided-as-one-sided`, `holm-as-bonferroni`, `pass-at-k-any-of-n` |
+| Arm comparison (`experiences compare-arms`) | numerical | per arm: trials, graded (timeouts included and counted apart), infrastructure errors in no denominator, pass@1 and unbiased pass@k over the tasks with at least k graded attempts; per arm against the reference over the tasks graded in both: mean per-task difference, task and family bootstrap intervals, better/worse/tied, one- and two-sided sign tests, each Holm-adjusted across the arms; all against an exact golden comparison of three arms | `splinter-pipelines/lib/arm_compare` | per-PR | biased pass@k, one-sided as two-sided, no Holm (in-test); `compare-arms-timeout-ungraded`, `compare-arms-infra-counted-as-failure`, `compare-arms-unpaired-tasks` |
 | Exact power of the sign test | numerical | the chance the gate's own test rejects when each unit is a win with `(d + e) / 2`, a loss with `(d - e) / 2`; critical wins from the handed-in test; spent alpha never sums past the level; hand-derived values (`0.9^5`, `9/256`) | `splinter-eval/lib/power::` | per-PR | |
 | pass@k of a samples arm | numerical | a task is solved when any of its `k` graded attempts passed, which is the unbiased `1 - C(n - c, k) / C(n, k)` at `n = k`; the rate arm is `c / n` | `splinter-pipelines/lib/improve::arms` | per-PR | `pass-at-k-as-rate` |
 | Cluster units of the gate's sign test | algorithmic | one unit per family: a win when the candidate won more of its items, a tie (dropped) when equal | `splinter-eval/lib/paired::` | per-PR | |
@@ -77,13 +79,32 @@ of the package) or an integration test binary; filter a substring of the test na
 
 - brain's advantage normalisation, losses, gradients and updates on CUDA, bf16 and quantised paths: brain's
   validation, not Splinter's.
-- pass@k from more attempts than `k`: Splinter has no unbiased estimator for `n > k`. Its one pass@k count (the
-  improvement experiment's samples arm) is any-of-the-graded-attempts, exact only when all `k` attempts were graded;
-  an ungraded attempt makes it any-of-fewer.
+- The improvement experiment's samples arm counts any of its graded attempts, exact pass@k only when all `k`
+  attempts were graded; an ungraded attempt makes it any-of-fewer. `experiences compare-arms` reports the unbiased
+  estimator for any `k` up to the attempts.
 - Rationalisation: the user's rule that a kept trace is rejected only when it holds the actual answer before it was
   observed (no word lists) is not what the filters do; they also reject on a list of leak terms and require a first
   read before any write and a sufficiency rerun.
 - Near-duplicate removal and per-task caps of a curated set (item 24b's "at most 3 passes per task, least reasoning
   first") are done by campaign scripts: Splinter's dataset build has no such option, so nothing here proves them.
 - Results computed outside Splinter (the paired task bootstraps, sign tests and pass@k tables of campaign ledgers
-  produced by analysis scripts) are not proven by this map.
+  produced by analysis scripts before `experiences compare-arms`) are not proven by this map.
+
+## Comparing arms
+
+Report a campaign's arms with `experiences compare-arms`, never with a script of its own: it computes every number
+with the statistics this map proves.
+
+```bash
+splinter experiences compare-arms --reference base \
+  --arm base=jobs/e2a-base --arm gen1=jobs/e2a-gen1 --arm gen2=jobs/e2a-gen2 \
+  --k 16 --json
+```
+
+An arm is a Harbor job directory (`--arm NAME=DIR`) or the lines of a trials file (`--trials FILE`, one
+`{"task", "arm", "family"?, "attempt"?, "pass" or "reward", "status"?}` per line, status `graded`, `timeout` or
+`infra_error`). `--families FILE` (a JSON object of task to family) adds the family-clustered interval. A Harbor
+trial passes on a reward of exactly 1; an agent timeout that was still graded is graded and counted as a timeout;
+any other exception, or no reward, is an infrastructure error and in no denominator. The report states the sign
+test's convention; the Holm adjustment is over the arms compared in that run. The interval seed is drawn and printed
+unless `--interval-seed` names a pre-registered one.

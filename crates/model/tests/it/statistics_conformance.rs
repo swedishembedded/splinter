@@ -25,12 +25,30 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use serde::Deserialize;
-use splinter_model::stats::{bootstrap_interval, one_sided_p, sign_test};
+use splinter_model::stats::{
+    bootstrap_interval, holm, one_sided_p, pass_at_k, sign_test, two_sided_p,
+};
 
 #[derive(Deserialize)]
 struct Fixture {
     sign_test: Vec<SignCase>,
+    pass_at_k: Vec<PassAtKCase>,
+    holm: Vec<HolmCase>,
     paired_bootstrap: Vec<PairedCase>,
+}
+
+#[derive(Deserialize)]
+struct PassAtKCase {
+    n: usize,
+    passed: usize,
+    k: usize,
+    pass_at_k: f64,
+}
+
+#[derive(Deserialize)]
+struct HolmCase {
+    p: Vec<f64>,
+    holm: Vec<f64>,
 }
 
 #[derive(Deserialize)]
@@ -39,6 +57,7 @@ struct SignCase {
     losses: usize,
     ties: usize,
     one_sided_p: f64,
+    two_sided_p: f64,
 }
 
 #[derive(Deserialize)]
@@ -265,4 +284,118 @@ fn the_interval_check_catches_independent_arms_and_a_one_sided_bound() {
         check_paired_interval(&one_sided, false).is_err(),
         "the interval check did not catch a one-sided bound"
     );
+}
+
+/// A two-sided sign test from its counts.
+type TwoSidedOf<'a> = &'a dyn Fn(usize, usize) -> f64;
+
+/// The first fixture case on which `p_of` disagrees with the exact two-sided
+/// p-value (twice the smaller tail, at most one).
+fn check_two_sided(p_of: TwoSidedOf<'_>) -> Result<(), String> {
+    for case in fixture().sign_test {
+        let got = p_of(case.wins, case.losses);
+        if (got - case.two_sided_p).abs() > 1e-9 * case.two_sided_p.max(1e-300) {
+            return Err(format!(
+                "two-sided sign test diverges at wins {} losses {}: {got} against exact {}",
+                case.wins, case.losses, case.two_sided_p
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn the_two_sided_sign_test_is_twice_the_smaller_exact_tail() {
+    check_two_sided(&two_sided_p).unwrap();
+    let mutants: [(&str, TwoSidedOf<'_>); 2] = [
+        ("one-sided passed off as two-sided", &one_sided_p),
+        ("twice the upper tail whichever side is smaller", &|w, l| {
+            (2.0 * one_sided_p(w, l)).min(1.0)
+        }),
+    ];
+    for (name, mutant) in mutants {
+        assert!(check_two_sided(mutant).is_err(), "not caught: {name}");
+    }
+}
+
+/// A per-task pass@k estimator over `(n, passed, k)`.
+type PassAtKOf<'a> = &'a dyn Fn(usize, usize, usize) -> Option<f64>;
+
+fn check_pass_at_k(estimate: PassAtKOf<'_>) -> Result<(), String> {
+    for case in fixture().pass_at_k {
+        let got = estimate(case.n, case.passed, case.k);
+        if got.is_none_or(|g| (g - case.pass_at_k).abs() > 1e-12) {
+            return Err(format!(
+                "pass@{} of {} passes in {} is {got:?}, exactly {}",
+                case.k, case.passed, case.n, case.pass_at_k
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn pass_at_k_is_the_unbiased_estimator_and_undefined_beyond_the_attempts() {
+    check_pass_at_k(&pass_at_k).unwrap();
+    assert_eq!(
+        pass_at_k(4, 1, 5),
+        None,
+        "k above the attempts is not estimated"
+    );
+    assert_eq!(pass_at_k(4, 1, 0), None);
+    assert_eq!(pass_at_k(4, 5, 2), None);
+    let mutants: [(&str, PassAtKOf<'_>); 2] = [
+        ("any of the n attempts", &|n, c, k| {
+            (k <= n).then_some(f64::from(c > 0))
+        }),
+        ("the pass rate whatever k", &|n, c, k| {
+            (k <= n).then_some(c as f64 / n as f64)
+        }),
+    ];
+    for (name, mutant) in mutants {
+        assert!(check_pass_at_k(mutant).is_err(), "not caught: {name}");
+    }
+}
+
+/// A multiple-comparison correction of p-values.
+type CorrectionOf<'a> = &'a dyn Fn(&[f64]) -> Vec<f64>;
+
+fn check_holm(correct: CorrectionOf<'_>) -> Result<(), String> {
+    for case in fixture().holm {
+        let got = correct(&case.p);
+        if got.len() != case.holm.len()
+            || got
+                .iter()
+                .zip(&case.holm)
+                .any(|(g, w)| (g - w).abs() > 1e-12)
+        {
+            return Err(format!(
+                "Holm of {:?} is {got:?}, exactly {:?}",
+                case.p, case.holm
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn holm_is_the_step_down_adjustment_in_the_order_given() {
+    check_holm(&holm).unwrap();
+    let mutants: [(&str, CorrectionOf<'_>); 2] = [
+        ("Bonferroni", &|p| {
+            p.iter().map(|x| (x * p.len() as f64).min(1.0)).collect()
+        }),
+        ("step-down without the running maximum", &|p| {
+            let mut order: Vec<usize> = (0..p.len()).collect();
+            order.sort_by(|&a, &b| p[a].total_cmp(&p[b]));
+            let mut out = vec![0.0; p.len()];
+            for (rank, &i) in order.iter().enumerate() {
+                out[i] = ((p.len() - rank) as f64 * p[i]).min(1.0);
+            }
+            out
+        }),
+    ];
+    for (name, mutant) in mutants {
+        assert!(check_holm(mutant).is_err(), "not caught: {name}");
+    }
 }

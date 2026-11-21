@@ -61,7 +61,8 @@
 //! * [`doctor`] - whether a run can start here, before one does;
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions;
 //!   [`compare`] - two experience sets of the same tasks compared, a family
-//!   counted once;
+//!   counted once; [`arm_compare`] - graded trials of several arms (Harbor
+//!   jobs or a trials file) each against a reference arm;
 //!   [`answers`] - every answer `ask` gave, and what gave it.
 //! * [`lineage`] - from any artifact, where it came from and what came
 //!   from it.
@@ -72,6 +73,7 @@
 pub mod absorb;
 pub mod abstain;
 pub mod acquire;
+pub mod arm_compare;
 pub mod ask;
 mod attempt_store;
 pub mod author;

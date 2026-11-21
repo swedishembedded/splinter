@@ -51,6 +51,52 @@ pub fn one_sided_p(wins: usize, losses: usize) -> f64 {
     binomial_upper_tail(wins + losses, wins)
 }
 
+/// The exact two-sided sign test's p-value from its counts: twice the
+/// smaller one-sided tail, `min(1, 2 * min(P(X >= wins), P(X <= wins)))` for
+/// `X ~ Binomial(wins + losses, 1/2)`; `1.0` with no discordant pair. This is
+/// the convention of the exact binomial test (`P(X <= wins)` is the one-sided
+/// p-value of the losses).
+#[must_use]
+pub fn two_sided_p(wins: usize, losses: usize) -> f64 {
+    (2.0 * one_sided_p(wins, losses).min(one_sided_p(losses, wins))).min(1.0)
+}
+
+/// Holm's step-down correction of `p` values: each adjusted for how many were
+/// made, `max over j <= i of min(1, (m - j) * p_(j))` in ascending order of
+/// `p`, returned in the order given. It never lowers a p-value.
+#[must_use]
+pub fn holm(p: &[f64]) -> Vec<f64> {
+    let mut order: Vec<usize> = (0..p.len()).collect();
+    order.sort_by(|&a, &b| p[a].total_cmp(&p[b]));
+    let mut adjusted = vec![0.0; p.len()];
+    let mut running: f64 = 0.0;
+    for (rank, &i) in order.iter().enumerate() {
+        running = running.max(((p.len() - rank) as f64 * p[i]).min(1.0));
+        adjusted[i] = running;
+    }
+    adjusted
+}
+
+/// The unbiased pass@k estimate of one task from `n` graded attempts of
+/// which `passed` passed: `1 - C(n - passed, k) / C(n, k)`, the chance that
+/// `k` attempts drawn without replacement hold a pass. `None` for `k = 0`,
+/// `k > n` or `passed > n`, where it is not defined. Computed as
+/// `1 - prod_{i = n - passed + 1}^{n} (1 - k / i)`, which neither overflows
+/// nor cancels.
+#[must_use]
+pub fn pass_at_k(n: usize, passed: usize, k: usize) -> Option<f64> {
+    if k == 0 || k > n || passed > n {
+        return None;
+    }
+    if n - passed < k {
+        return Some(1.0);
+    }
+    let none: f64 = (n - passed + 1..=n)
+        .map(|i| 1.0 - k as f64 / i as f64)
+        .product();
+    Some(1.0 - none)
+}
+
 /// `P(Binomial(n, 1/2) >= k)`, summed in log space so a large `n` neither
 /// overflows nor underflows a term that matters: `ln C(n, i)` is carried from
 /// one `i` to the next by `ln((n - i) / (i + 1))`, and the terms are added

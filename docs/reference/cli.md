@@ -148,6 +148,7 @@ Every command takes these.
   - [splinter experiences import](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
   - [splinter experiences ingest-hf](#splinter-experiences-ingest-hf) - Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
+  - [splinter experiences compare-arms](#splinter-experiences-compare-arms) - Compare graded trials of several arms (Harbor jobs or trials files) with a reference arm
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
   - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
   - [splinter dataset conversations](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
@@ -1565,6 +1566,7 @@ Subcommands:
 - [`import`](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
 - [`ingest-hf`](#splinter-experiences-ingest-hf) - Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
+- [`compare-arms`](#splinter-experiences-compare-arms) - Compare graded trials of several arms (Harbor jobs or trials files) with a reference arm
 
 #### splinter experiences list
 
@@ -1768,6 +1770,25 @@ Options:
 - `--stratum-checkers <N>`: Tests a task's fail-to-pass commands run: more is above.
 - `--stratum-footprint <N>`: Files a task's reference patch changes: more is above.
 - `--stratum-instruction-chars <N>`: Characters of a task's instruction: more is above.
+
+#### splinter experiences compare-arms
+
+Compare graded trials of several arms (Harbor jobs or trials files) with a reference arm: pass@1 and unbiased pass@k, the paired difference with task and family bootstrap intervals, exact one- and two-sided sign tests, Holm-adjusted; timeouts and infrastructure errors counted apart
+
+```text
+splinter experiences compare-arms [OPTIONS] --reference <NAME>
+```
+
+Options:
+
+- `--arm <NAME=DIR>...`: An arm and the Harbor job directory of its trials (one subdirectory with a result.json per trial), as NAME=DIR; repeat for each arm.
+- `--trials <FILE>...`: A trials file: one JSON object per line, {"task", "arm", "family"?, "attempt"?, "pass" or "reward", "status"?} with status graded (default), timeout or infra_error; repeat for several.
+- `--reference <NAME>` (required): The arm every other arm is compared with.
+- `--families <FILE>`: A JSON object naming each task's family ({"task": "family"}): the difference is then also resampled by whole families.
+- `--k <K>...`: A k to report pass@k at (unbiased, over the tasks with at least k graded attempts); repeat for several. pass@1 is always reported.
+- `--resamples <N>`: Resamples per bootstrap interval. Default: `10000`.
+- `--level <SHARE>`: The share of resampled means an interval holds. Default: `0.95`.
+- `--interval-seed <N>`: The seed the intervals are resampled with (drawn and printed when not given; the same trials and seed give the same intervals)
 
 ### splinter dataset
 

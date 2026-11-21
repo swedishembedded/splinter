@@ -556,6 +556,12 @@ pub enum ExperiencesCommand {
         #[command(flatten)]
         strata: StrataArgs,
     },
+    /// Compare graded trials of several arms (Harbor jobs or trials files)
+    /// with a reference arm: pass@1 and unbiased pass@k, the paired
+    /// difference with task and family bootstrap intervals, exact one- and
+    /// two-sided sign tests, Holm-adjusted; timeouts and infrastructure
+    /// errors counted apart.
+    CompareArms(Box<CompareArmsArgs>),
 }
 
 /// `dataset ...`.
@@ -762,8 +768,8 @@ pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs}
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use experiences::{
-    CapabilitiesArgs, DiagnoseArgs, HintFramingArg, ImportArgs, RationaliseArgs, RepairArgs,
-    StrataArgs,
+    CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, HintFramingArg, ImportArgs, RationaliseArgs,
+    RepairArgs, StrataArgs,
 };
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
