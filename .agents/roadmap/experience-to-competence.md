@@ -1028,6 +1028,22 @@ Qwen3-4B, 168 train tasks x 5, maximum concurrency, a throughput job), and only 
 221 thinking-mode passes are not used. Every harvest and every exam of item 24b runs in this mode; item 24b's
 measurement uses it instead of E1c's thinking budget. The curation, recipe and decision rule are unchanged.
 
+**Item 24b concise gen-0 harvest (2026-11-21 10:20-10:34, shared gpu0 :8977, brain-8f2a3d264 --max-batch 128, sven-7a9f60cb,
+192 in flight).** Base Qwen3-4B, 168 x 5: pass@1 0.201 (169 passes), 50 tasks solved at least once (pass@5 0.298), no
+timeouts, no infrastructure errors; thinking mode gave 0.263 and 95 tasks. Of 4,162 responses that call a tool, 2,396
+(57.6%) state a sentence before the call and 0 carry reasoning: the 4B follows the concise instruction a little over
+half the time, so about 4 in 10 of its own traces' actions carry no stated rationale, unlike the 27B's traces. Curation:
+6 passes without a final message, 76 duplicates (identical call sequences are common without thinking), 2 over the
+cap; kept 85 over 48 tasks; `sft-step` dataset blake3:f36d51956d0c... of 85 records.
+
+**Item 24b amendment 2 (2026-11-21 ~10:45, after the 168 x 5 harvest, before any training).** 85 records is a small
+seed, so gen 0 becomes 168 x 15 concise attempts: 10 more per task in the same mode, server and build, at the same 192
+in flight. Gen 1 is built from all 15 samples per task with the curation unchanged (passes only, a final message
+required, identical call sequences deduplicated, at most 3 per task).
+
+**User rule (2026-11-21):** every later harvest (item 24b gen 1 onward, any STaR or extra sampling) uses 4 attempts per
+task; the running 168 x 10 extra gen-0 harvest finishes as it is.
+
 ## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
 
 **Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`
