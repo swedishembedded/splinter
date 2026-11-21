@@ -1439,6 +1439,45 @@ reasoning budget (E2c).
 - **Statistics:** `splinter experiences compare-arms` (frozen splinter-c2a7d877e or later): primary each arm minus
   base, two-sided sign test with Holm over the 5, task bootstrap 95% interval, pass@16; secondary gen 3 minus pooled v1
   (`--reference v1 --arm v1=v1s1 --arm v1=v1s2`). Timeouts and infrastructure errors per arm reported apart.
+- **Interrupted (2026-11-21 ~14:xx):** the container restarted (new lease on n510) and killed every process: E2c
+  (started 13:46) and item 24b's thinking-capped transfer rerun (started 13:54) never finished. Their partial trials
+  (E2c 24-38 per arm, the rerun 154-168 per arm) are not analysed; they are kept packed as `jobs/e2c-*-lost` and
+  `jobs/xt-*-lost`. Both are rerun from scratch at 15:xx with the identical pre-registered settings (frozen
+  brain-8f2a3d264, sven-7a9f60cb, thinking with the 2,048-token per-turn cap, 12 per arm on gpu0 for E2c and 18 per arm
+  on gpu1 for the rerun).
+- **Placement of the reruns (recorded 2026-11-21 ~15:25, before their trials; all four cards are lane VIM's):** every
+  arm is interleaved across two cards, so card and load are not confounded with arm. E2c: two identical exam servers
+  (brain-8f2a3d264 `--max-batch 128 --vram-budget 32`, lane-vsft/adapters) on gpu0 (:8977) and gpu2 (:8979); each arm
+  runs 8 of its 16 attempts per task on each card with 6 in flight there (12 per arm in all, 36 per card). The transfer
+  rerun: two identical transfer servers (brain-8f2a3d264, batch picked by brain, training on, lane-vim/ei/adapters) on
+  gpu1 (:8995) and gpu3 (:8996); each arm runs 4 of its 8 attempts per task on each card with 9 in flight there (18 per
+  arm, 36 per card). Each card's per-arm jobs are pooled by arm in `compare-arms`. The load per server is half the
+  registered single-server load (36 instead of 72): a deviation of the per-server load, made to finish sooner.
+- **Second and third restarts (2026-11-21 ~16:50 and ~17:00, node n424):** E2c's interleaved rerun (started 15:18) was
+  about half done and is lost again (kept packed as `jobs/e2c-*-g?-lost2`, not analysed). The transfer rerun had
+  finished at 16:32 and is analysed below.
+
+**Item 24b thinking-capped transfer result (`compare-arms`, splinter-c2a7d877e, two-sided sign test, Holm over 3;
+the 79 untrained train tasks x 8, 632 graded trials per arm, no timeouts, no infrastructure errors).**
+
+| arm | pass@1 | pass@8 | minus base | task bootstrap 95% | better / worse / ties | p two-sided | Holm |
+|---|---:|---:|---:|---|---|---:|---:|
+| base | 0.114 | 0.392 | | | | | |
+| gen 1 | 0.117 | 0.443 | +0.003 | [-0.030, +0.035] | 20 / 14 / 45 | 0.39 | 1.0 |
+| gen 2 | 0.136 | 0.430 | +0.022 | [-0.014, +0.062] | 20 / 16 / 43 | 0.62 | 1.0 |
+| gen 3 | 0.136 | 0.392 | +0.022 | [-0.014, +0.059] | 20 / 17 / 42 | 0.74 | 1.0 |
+
+No generation's in-family transfer is supported: every interval contains 0 and no Holm-adjusted p is below 0.05. The
+point estimates are small and positive and grow from gen 1 to gen 2, then stop; a +0.05 gain is ruled out for gen 1
+(upper bound 0.035) and not for gens 2 and 3. Caveat as registered: these are the tasks the generations never trained
+on, mostly the ones the 4B never solved, so they are harder than the course average (base 0.114 here against the
+concise floor of 0.006 on the same tasks, where every arm sat at 0.006-0.021). Report:
+`lane-vim/logs/xt-thinking.compare.json`; raw rows `lane-vim/logs/xt-*-g?.arms.jsonl`.
+
+**E2c third run, placement (recorded 2026-11-21 ~17:15, before its trials):** four identical exam servers
+(brain-8f2a3d264 `--max-batch 128 --vram-budget 32`, lane-vsft/adapters), started one at a time on gpu0 :8977, gpu1
+:8978, gpu2 :8979 and gpu3 :8980; every arm runs 4 of its 16 attempts per task on each card with 3 in flight there (12
+per arm in all, 18 per card), each card's per-arm jobs pooled by arm in `compare-arms`.
 
 ### Item 25 E2b: the concise-mode exam of v2 (pre-registered 2026-11-21 12:40, before any E2b trial; E2a's protocol in its own slot)
 
