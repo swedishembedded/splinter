@@ -188,3 +188,4 @@ in the same commit.
 | [200](200-pre-registered-leak-and-observation-filters-reject-nearly-all-unhinted-vim-passes.md) | Pre-registered leak and observation filters reject nearly all unhinted vim passes |
 | [201](201-the-base-qwen3-4b-names-the-hint-it-was-shown-so-its-rationalisations-fail-the-leak-filter.md) | The base Qwen3-4B names the hint it was shown, so its rationalisations fail the leak filter |
 | [202](202-distilling-a-large-teachers-reasoning-into-a-4b-under-a-wall-clock-budget-turned-the-gain-into-timeouts.md) | Distilling a large teacher's reasoning into a 4B under a wall-clock budget turned the gain into timeouts |
+| [203](203-teacher-traces-for-a-small-student-must-come-from-non-thinking-mode-with-concise-rationales.md) | Teacher traces for a small student must come from non-thinking mode with concise rationales |

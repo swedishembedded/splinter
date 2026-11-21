@@ -993,6 +993,41 @@ pass@16). Also reported per generation: train coverage (tasks with any pass in t
 cumulatively), timeouts, model turns per trial and reasoning tokens per turn. **Decision rule:** item 25 E1's (CI
 wholly above 0 and sign-test p < 0.05); anything else is "not supported", with its interval.
 
+### Concise trace mode shared by items 24b and 25 (user rule 2026-11-21; proposed by lane VIM, to be confirmed or amended by lane VSFT before either arm's first concise trial)
+
+Every new trace (harvest, rationalisation, teacher capture) and every exam of these arms runs in one mode, set
+identically in both lanes' bench profiles:
+
+- **Thinking off:** `driver = "brain"` on the main upstream and `[sven.driver_options] chat_template_kwargs =
+  { enable_thinking = false }` (bench renders it on the gateway provider's main model entry, bench knowledge 073).
+  `[sven.config.model] enable_thinking = false` does NOT work with sven-1db749d9: the rendered config carried it, but
+  the recorded requests sent nothing and the 4B reasoned 3.6k-8.8k characters per turn (checked 2026-11-21 on 2 vim
+  trials); with the driver option the same trials reasoned 0 characters. Each lane checks one recorded trial for an
+  empty reasoning block before its slot.
+- **Instruction:** `[sven] append_system_prompt = "Before each tool call, state in one or two short sentences what you
+  observed and what you will do next. No long deliberation."` (bench e21a2ea6 or later: appended verbatim to sven's
+  system prompt in every run, recorded by sha256 in `bench-run.json` and per trial in `agent/append-system-prompt.json`;
+  `knowledge_prompt` would be sent only with a mounted collection). Each lane checks one recorded request's system
+  message for the sentence before its first concise trial.
+- **Sampling:** Qwen3's published non-thinking setting, T 0.7 / top-p 0.8 / top-k 20, run seed 20261121 (per-trial
+  seeds derived by bench).
+- **Sven build (both arms, every concise trial, harvest and exam, base arms included):** `sven-7a9f60cb` (commit
+  7a9f60cb5f6a879acfd16828d91236551e6231b8, sha256 2055b5d39b57e8c7...): holds 0d94638e (the system prompt names only the
+  built-in tools a session offers) and 7a9f60cb (every `model:` setting survives the expansion of its named provider,
+  so `enable_thinking` is no longer dropped). Checked 2026-11-21 on 2 vim train trials with the base 4B on brain-8f2a3d264:
+  the system message holds the instruction and names no absent tool, the only tool is `vim-vim`, every response has 0
+  reasoning characters (both failed; the model wrote no sentence before its calls).
+- **Shared gpu0 server :8977 (brain-8f2a3d264, edge 788):** lane VIM's concise gen-0 harvest (item 24b, base 4B, 168 x 5,
+  started 2026-11-21 ~10:35) keeps at most 192 trials in flight (`harbor -n 192`, one model request each at a time);
+  lane VSFT keeps its 27B concise re-capture to the other half.
+- **Everything else** as item 25 E1b: default profile, agent limit as the tasks set, exams 14 x 16 at
+  24 trials in flight per arm, one slot for all arms of a comparison.
+
+**Item 24b amendment (2026-11-21, before any item 24b build or trial).** Gen 0 is re-harvested in this mode (base
+Qwen3-4B, 168 train tasks x 5, maximum concurrency, a throughput job), and only those passes seed generation 1; the
+221 thinking-mode passes are not used. Every harvest and every exam of item 24b runs in this mode; item 24b's
+measurement uses it instead of E1c's thinking budget. The curation, recipe and decision rule are unchanged.
+
 ## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
 
 **Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`
@@ -1144,3 +1179,44 @@ generations) must run at the baseline's load (bench knowledge 072).
   with v1's flags. The reasoning-length distributions before and after curation are reported.
 - **Training:** v2c is trained with A2's recipe at seeds 1 and 2, with steps scaled to about 2 epochs, and v2a at
   seed 1. The joint eval measures all of them at the baseline's load.
+
+### Item 25 v2 and E2 in concise trace mode (pre-registered 2026-11-21 10:25, before any v2 build or E2 trial; replaces E1c and the thinking-trace v2)
+
+**User correction (10:12).** Traces for a small student come from non-thinking mode with concise rationales. The
+v1 teacher ran with thinking on and with thinking sampling (0.6 / 0.95 / 20). The thinking-trace v2a and v2c were
+built but their training was cancelled. They stay published only under the tag `v1.5-thinking-star` (the `v2` tag was
+removed). E1c (a thinking budget) is dropped.
+
+**Mode** (the ledger section "Concise trace mode shared by items 24b and 25"):
+- `[sven.driver_options] chat_template_kwargs = { enable_thinking = false }`;
+- `[sven].append_system_prompt` = "Before each tool call, state in one or two short sentences what you observed and
+  what you will do next. No long deliberation.";
+- sampling 0.7 / 0.8 / 20, seed 20261121;
+- sven-7a9f60cb, whose prompt names only the offered tools and keeps model-section settings.
+
+A smoke check of 4 trials on the 27B confirmed that the instruction ends the system message, the prompt names no
+absent tool, the responses carry no reasoning, and every call is `vim-vim`.
+
+**v2 teacher.** Qwen3.8-27B-FP8 on brain-8f2a3d264, in this mode, on the 168 train tasks x 4 (job c1, 48 in flight).
+Only verified passes are kept, through `bench adopt`, `bench export`, `ingest-bench` and
+`dataset build --view sft-step --pack --only-actions vim-vim --max-block 16384 --split-seed 17925836769974212992`.
+
+**STaR (27B), the same mode.** `experiences rationalise` (splinter-2756587f8) runs on the tasks c1 never solved, with
+item 24's calibrated filters. Each filter's rejections are reported.
+
+**v2 build and curation.** v2 is the c1 passes plus the kept rationalisations. A record stays only if its trajectory
+ends in a final answer. Per task, up to 4 records are kept, those with the fewest vim calls; this drops looping passes.
+The report gives, before and after curation, the token length of the visible text before each action (v1's
+reasoning text per action is reported for comparison).
+
+**Training.** Two seeds (1 and 2) from base Qwen3-4B with A2's recipe, steps for about 2 epochs, through
+brain-5e25d5b82 and splinter-7220b1d5d.
+
+**E2: the exam in concise mode.**
+- **Arms:** base, v1s1, v1s2, v2s1 and v2s2, all in this mode. v1 was trained on thinking traces, so its E2 result is
+  reported as such.
+- **Run:** the 14 eval tasks x 16 attempts, one slot, 24 trials in flight per arm (120 in all), on one 4B server
+  (brain-5e25d5b82 `--max-batch 256`, adapters hot-served).
+- **Analysis:** E1's analysis unchanged (task bootstrap, sign test, pass@16, timeouts and infrastructure errors
+  separate). It also reports turns per trial and the visible text per action.
+- **Primary comparison:** pooled v2 against base. The decision rule is E1's.
