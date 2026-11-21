@@ -373,11 +373,11 @@ impl ModelProvider for Finisher {
     }
 }
 
-/// A continuation that passes without one action of the student's own is no
-/// repair: the path had done the work. The chain moves to an earlier state,
-/// where the student acts itself.
+/// A state where the path has already done the task's work is no fork point:
+/// its grade passes before the student acts. The forks are the states before
+/// the path's last state-changing action, the earliest first.
 #[test]
-fn a_continuation_without_an_action_of_the_students_own_moves_the_fork_earlier() {
+fn a_state_where_the_path_has_done_the_work_is_no_fork_point() {
     let scratch = Scratch::new("path-guided-act");
     let finisher = Arc::new(Finisher {
         seen: std::sync::Mutex::new(0),
@@ -406,8 +406,8 @@ fn a_continuation_without_an_action_of_the_students_own_moves_the_fork_earlier()
     let failed = splinter_pipelines::bench::split::trials(&ctx).unwrap()[0]
         .experience
         .clone();
-    // Reads, the write, a read of the answer: forks after the write, then
-    // after the reads.
+    // The listing (2), the read (3), the write (4), a read of the answer (5):
+    // after the write the task is done, so the states are after 2 and 3.
     let path = privileged_path(&ctx, &failed, false, true, "harbor/sven@5/teacher-27b");
     let set = ctx
         .experiences()
@@ -426,26 +426,13 @@ fn a_continuation_without_an_action_of_the_students_own_moves_the_fork_earlier()
     asked.paths = &sets;
     asked.samples = 2;
     let report = repair(&ctx, &asked).unwrap();
-    let outcomes: Vec<_> = report
-        .repairs
-        .iter()
-        .map(|r| (r.outcome, r.reason.clone()))
-        .collect();
-    assert_eq!(outcomes.len(), 2, "two samples: {outcomes:?}");
-    let by = |o| report.repairs.iter().find(|r| r.outcome == o);
-    let (Some(ended), Some(acted)) = (by(RepairOutcome::Refused), by(RepairOutcome::Accepted))
-    else {
-        panic!("one refused, one accepted: {outcomes:?}")
+    let [acted] = report.repairs.as_slice() else {
+        panic!("one sample, accepted: {:?}", report.repairs)
     };
-    assert!(ended
-        .reason
-        .as_deref()
-        .is_some_and(|r| r.contains("no action of its own")));
-    assert!(ended.experience.is_none());
-    assert_eq!(acted.outcome, RepairOutcome::Accepted, "{outcomes:?}");
-    // The next state: after the reads (step 3), not the write (step 4).
-    let fork = &acted.notes.privileged_path.as_ref().unwrap();
-    assert_eq!(fork["fork_after"], json!(3));
+    assert_eq!(acted.outcome, RepairOutcome::Accepted, "{:?}", acted.reason);
+    let fork = acted.notes.privileged_path.as_ref().unwrap();
+    assert_eq!(fork["states"], json!(2));
+    assert_eq!(fork["fork_after"], json!(2));
     let kept = ctx
         .experiences()
         .get(acted.experience.as_ref().unwrap())
@@ -502,7 +489,7 @@ impl ModelProvider for Flaky {
     }
 }
 
-/// Samples beyond a path's states fork at its states again, the latest first:
+/// Samples beyond a path's states fork at its states again, the earliest first:
 /// a state the student failed from once is tried again under a seed of its
 /// own.
 #[test]
@@ -535,7 +522,7 @@ fn samples_beyond_the_paths_states_try_its_states_again() {
     let failed = splinter_pipelines::bench::split::trials(&ctx).unwrap()[0]
         .experience
         .clone();
-    // Two states: after the reads (step 3) and after the listing (step 2).
+    // Two states: after the listing (step 2) and after the read (step 3).
     let path = privileged_path(&ctx, &failed, false, false, "harbor/sven@5/teacher-27b");
     let set = ctx
         .experiences()
@@ -573,9 +560,9 @@ fn samples_beyond_the_paths_states_try_its_states_again() {
     assert_eq!(
         forks,
         [
-            (0, RepairOutcome::Rejected, Some(json!(3))),
-            (1, RepairOutcome::Rejected, Some(json!(2))),
-            (2, RepairOutcome::Accepted, Some(json!(3))),
+            (0, RepairOutcome::Rejected, Some(json!(2))),
+            (1, RepairOutcome::Rejected, Some(json!(3))),
+            (2, RepairOutcome::Accepted, Some(json!(2))),
         ]
     );
 }

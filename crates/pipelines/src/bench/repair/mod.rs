@@ -463,6 +463,7 @@ pub fn repair(
         paths: &paths,
         deadline: request.deadline,
         cancel: request.cancel.clone(),
+        done_at: Mutex::default(),
     });
     let decompose = student.as_ref().map(|student| Decompose {
         checkout: request.checkout,

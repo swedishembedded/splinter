@@ -26,21 +26,28 @@
 //! student will also see.
 //!
 //! The intervention ([`PathGuided`]) forks a failed attempt's task at the
-//! path's states, the latest first: its `n`-th sample forks after the
-//! `n+1`-th latest action (never after the last), so a failure's chain of
-//! samples moves the fork earlier until the student succeeds alone (the chain
-//! then stops) or the samples run out; samples beyond the states try them
-//! again, the latest first. A continuation that calls no tool is no
-//! success of the student's: the path had done the work, so it is refused and
-//! the chain goes on. Which path a task uses is [`PrivilegedPaths::for_task`]: the store's
-//! verified guided passes of the same bench task, in id order.
+//! path's open states, the earliest first: the states after its actions where
+//! the task's verifier does not pass yet (each graded once by forking there
+//! with a model that ends at once), which are the states before the path's
+//! last state-changing action. A state where the path has done the work
+//! already teaches the student nothing but to stop. Its `n`-th sample forks
+//! at the `n`-th open state, so a failure's chain of samples moves the fork
+//! later until the student succeeds alone (the chain then stops) or the
+//! samples run out; samples beyond the states try them again. A continuation
+//! that calls no tool is no success of the student's and is refused. Which
+//! path a task uses is [`PrivilegedPaths::for_task`]: the store's verified
+//! privileged passes of the same bench task, in id order.
 
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
 use atif::{StepOrigin, Trajectory};
 use serde_json::json;
 use splinter_agent::fork_at::POLICY;
 use splinter_agent::solve::{Model, SolveOptions};
+use splinter_agent::sven::model::{
+    CompletionRequest, ModelProvider, ResponseEvent, ResponseStream,
+};
 use splinter_agent::CancelToken;
 use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance};
 use splinter_data::is_human_turn;
@@ -82,10 +89,11 @@ pub fn unguided(path: &Trajectory) -> Trajectory {
 }
 
 /// The steps of `path` (numbered as given) after which the student can be
-/// put to continue, the latest first: every agent step that called a tool
+/// put to continue, the earliest first: every agent step that called a tool
 /// but the path's last action. After its last action the path has done its
 /// work: a student put there can only end it, which passes without one
-/// action of its own to learn.
+/// action of its own to learn. Earlier states where the work is done already
+/// are found by grading them ([`PathGuided`]).
 #[must_use]
 pub fn fork_points(path: &Trajectory) -> Vec<u64> {
     let mut points: Vec<u64> = path
@@ -96,7 +104,6 @@ pub fn fork_points(path: &Trajectory) -> Vec<u64> {
         .map(|s| s.step_id)
         .collect();
     points.pop();
-    points.reverse();
     points
 }
 
@@ -177,6 +184,92 @@ pub struct PathGuided<'a> {
     pub deadline: std::time::Duration,
     /// Stops a continuation.
     pub cancel: CancelToken,
+    /// Whether the path's state after a step already passes the task's
+    /// verifier, by path and step: graded once per run.
+    pub done_at: Mutex<BTreeMap<(ExperienceId, u64), bool>>,
+}
+
+/// A model that ends its turn at once: forked at a path's state, it leaves
+/// the state as the path made it, so its grade says whether the path had
+/// done the task's work there.
+struct EndsAtOnce;
+
+#[async_trait::async_trait]
+impl ModelProvider for EndsAtOnce {
+    fn name(&self) -> &str {
+        "state-probe"
+    }
+    fn model_name(&self) -> &str {
+        "state-probe"
+    }
+    async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let events = vec![
+            Ok(ResponseEvent::TextDelta(".".into())),
+            Ok(ResponseEvent::Done),
+        ];
+        Ok(Box::pin(futures::stream::iter(events)))
+    }
+}
+
+impl PathGuided<'_> {
+    /// The states of `path` the student can be put in, the earliest first:
+    /// its fork points where the task's verifier does not pass yet, which are
+    /// the states before the path's last state-changing action.
+    fn open_states(
+        &self,
+        ctx: &Context,
+        case: &Case<'_>,
+        path_id: &ExperienceId,
+        source: &Source<'_>,
+        points: &[u64],
+    ) -> Result<Vec<u64>, String> {
+        let probe = Model::new(Arc::new(EndsAtOnce), "state-probe");
+        let mut open = Vec::new();
+        for &point in points {
+            let key = (path_id.clone(), point);
+            let known = self
+                .done_at
+                .lock()
+                .map_err(|e| e.to_string())?
+                .get(&key)
+                .copied();
+            let done = match known {
+                Some(done) => done,
+                None => {
+                    let mut options = SolveOptions::new(self.deadline);
+                    options.cancel = Some(self.cancel.clone());
+                    let graded = fork_and_grade(
+                        ctx,
+                        self.checkout,
+                        case,
+                        Some(&Source {
+                            keep_through: point,
+                            ..*source
+                        }),
+                        Continuation {
+                            model: &probe,
+                            role: POLICY,
+                            options,
+                            briefing: None,
+                            turns: &[],
+                            after_turn: &mut |_, _| true,
+                        },
+                    )
+                    .map_err(|e| format!("the path's state after step {point}: {e}"))?;
+                    let done = graded.passed();
+                    self.done_at
+                        .lock()
+                        .map_err(|e| e.to_string())?
+                        .insert(key, done);
+                    done
+                }
+            };
+            if !done {
+                open.push(point);
+            }
+        }
+        Ok(open)
+    }
 }
 
 impl Intervention for PathGuided<'_> {
@@ -205,12 +298,19 @@ impl Intervention for PathGuided<'_> {
             .count();
         let stored = unguided(&path.trajectory);
         let (system, exported) = split_system(&stored);
-        let points = fork_points(&exported);
-        // Samples beyond the states try them again, the latest first, each
+        let source = Source {
+            stored: &stored,
+            exported: &exported,
+            system: system.as_deref(),
+            solver: &path.provenance.solver,
+            keep_through: 0,
+        };
+        let points = self.open_states(ctx, case, path_id, &source, &fork_points(&exported))?;
+        // Samples beyond the states try them again, the earliest first, each
         // under a seed of its own.
         let keep_through = *points
             .get(case.sample.checked_rem(points.len()).unwrap_or(0))
-            .ok_or("the path has no state to fork at: one action or none")?;
+            .ok_or("the path has no state before its work is done: one action or none")?;
         // Sampled as the practice run was, under a seed of the repair's own.
         let (params, sampling) =
             super::retry::sampling(case.run, super::retry::retry_seed(case.key));
@@ -223,11 +323,8 @@ impl Intervention for PathGuided<'_> {
             self.checkout,
             case,
             Some(&Source {
-                stored: &stored,
-                exported: &exported,
-                system: system.as_deref(),
-                solver: &path.provenance.solver,
                 keep_through,
+                ..source
             }),
             Continuation {
                 model: &self.student,

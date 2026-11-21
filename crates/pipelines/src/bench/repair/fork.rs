@@ -170,6 +170,11 @@ pub(super) struct Forked {
 }
 
 impl Forked {
+    /// Whether the task's verifier passed the state the fork left.
+    pub(super) fn passed(&self) -> bool {
+        self.grade.passed()
+    }
+
     /// Whether the continuation called a tool: an answer alone after the
     /// kept prefix changed nothing the verifier reads.
     pub(super) fn acted(&self) -> bool {
