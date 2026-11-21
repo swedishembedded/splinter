@@ -17,6 +17,12 @@ Every command takes these.
 - `--brain-endpoint <BRAIN_ENDPOINT>...`: A running `brain serve --openai` to request every local model from (its base URL, ending in `/v1`); repeat for more. Without one, a server is started from `--brain-bin`.
 - `--brain-key-file <BRAIN_KEY_FILE>`: The file holding the endpoints' API key.
 - `--brain-bin <BRAIN_BIN>`: The `brain` binary a server is started from (default: the first on `PATH`)
+- `--cluster <MODE>`: Whether a Slurm allocation this process runs inside is used: `auto` (default) serves models on every usable node of a multi-node allocation and spreads a distributed job's ranks over them; `off` keeps everything on this machine.
+- `--cluster-nodes <HOSTLIST>`: The nodes of the allocation this process may use, as a Slurm host list (`n[442,445]`); default: every node of the allocation. Naming nodes uses them even when only one is named.
+- `--cluster-exec-prefix <WORDS>`: The words a program started on a node runs under, split at spaces: a step starts on the node's host, so a container this process runs in is entered again there (`apptainer exec --nv IMAGE`, or a wrapper script that also sets the node's environment)
+- `--slurm-srun <PATH>`: The `srun` program steps on the allocation's nodes are started with (default: the first on `PATH`)
+- `--slurm-step-arg <ARG>...`: An argument every step passes to `srun` (`--mem=64G`); repeat for more.
+- `--slurm-single-node-step-arg <ARG>...`: An argument a step on a single node passes to `srun` besides `--slurm-step-arg` (on an HPE Slingshot fabric, `--network=single_node_vni`, without which a single-node step has no fabric access); repeat for more.
 - `--state <DIR>`: The state root (default: ~/.splinter)
 - `--job-owner <NAME>`: The controller name recorded with each job this process submits and the claim it takes on one (default: this machine's host name)
 - `--detach-on-interrupt`: On Ctrl-C (or SIGTERM), exit at once and leave the brain training jobs of the command running, instead of cancelling them through brain's API (`DELETE /v1/jobs/{id}`) first; running the same command again continues each job from its last saved state. A second Ctrl-C always exits at once.

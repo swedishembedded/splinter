@@ -135,6 +135,10 @@ fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
 /// configures.
 fn apply_brain_flags(config: &mut Config, global: &cli::Global) -> Result<(), String> {
     global.device.apply_to(config).map_err(|e| e.to_string())?;
+    // The program that cancels a batch job also stops a step on a node.
+    if let Some(scancel) = &global.slurm_scancel {
+        config.cluster.scancel = Some(scancel.clone());
+    }
     config.brain_max_batch = global.attempt_concurrency;
     let Some(brain) = config.brain.take() else {
         let stray = [

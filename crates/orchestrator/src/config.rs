@@ -21,6 +21,8 @@ use splinter_core::prompt::CodingPrompt;
 use splinter_knowledge::capture::DEFAULT_ENV_ALLOWLIST;
 use splinter_store::StateRoot;
 
+use crate::cluster::{ClusterAllocation, ClusterSettings, SLURM_VARS};
+
 /// The model Splinter trains by default, as brain's model store names it:
 /// the size whose base serves and whose adapters train, at agent-trajectory
 /// lengths, on one 24 GB GPU.
@@ -146,6 +148,10 @@ pub struct Config {
     /// command line, which knows its own build. Recorded in every run and
     /// release.
     pub build: BuildInfo,
+    /// The batch allocation this process runs inside, and how it uses its
+    /// nodes: brain servers on each of them, and a job's ranks spread over
+    /// them.
+    pub cluster: ClusterSettings,
 }
 
 /// What starts a job's workers.
@@ -389,6 +395,11 @@ impl Config {
     ///   command sources;
     /// * the host name, as the default name of the job controller;
     /// * the [`DOCKER_CLIENT_ENV`] variables a docker client needs.
+    ///
+    /// The batch allocation is not read here: a program that uses it asks
+    /// [`detect_cluster`] (the command line does, through its device flags),
+    /// so a test or an embedding that builds a configuration runs on this
+    /// machine alone even inside an allocation.
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -441,7 +452,30 @@ impl Config {
                 ..WorkspaceSettings::default()
             },
             build: BuildInfo::default(),
+            cluster: BRAIN_DEFAULTS
+                .get()
+                .map(|d| d.cluster.clone())
+                .unwrap_or_default(),
         }
+    }
+}
+
+/// The batch allocation this process runs inside, as the scheduler's
+/// [`SLURM_VARS`] describe it, with the `srun` and `scancel` on `PATH` that
+/// start and stop work on its nodes. Outside an allocation it detects none; a
+/// value that does not parse is kept as the error it is and reported when the
+/// allocation is used.
+#[must_use]
+pub fn detect_cluster() -> ClusterSettings {
+    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
+    ClusterSettings {
+        detected: ClusterAllocation::from_vars(
+            |name| SLURM_VARS.contains(&name).then(|| var(name)).flatten(),
+            Some(default_owner()).filter(|host| host != "local"),
+        ),
+        srun: var("PATH").and_then(|path| find_executable(&path, "srun")),
+        scancel: var("PATH").and_then(|path| find_executable(&path, "scancel")),
+        ..ClusterSettings::default()
     }
 }
 
@@ -461,6 +495,8 @@ pub struct BrainDefaults {
     pub endpoints: Option<splinter_model::BrainEndpoints>,
     /// [`Config::brain_binary`], when the command line names one.
     pub binary: Option<PathBuf>,
+    /// [`Config::cluster`].
+    pub cluster: ClusterSettings,
 }
 
 static BRAIN_DEFAULTS: std::sync::OnceLock<BrainDefaults> = std::sync::OnceLock::new();

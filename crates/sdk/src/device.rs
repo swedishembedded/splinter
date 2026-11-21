@@ -19,6 +19,7 @@
 
 use std::path::PathBuf;
 
+use crate::cluster::{ClusterMode, ClusterSettings};
 use crate::model::{BrainConnection, BrainEndpoints, ManagedBrain, PolicyError, ServiceSettings};
 use crate::Config;
 
@@ -51,6 +52,51 @@ pub struct DeviceFlags {
     /// `PATH`).
     #[arg(long, global = true)]
     pub brain_bin: Option<PathBuf>,
+    /// Whether a Slurm allocation this process runs inside is used: `auto`
+    /// (default) serves models on every usable node of a multi-node
+    /// allocation and spreads a distributed job's ranks over them; `off`
+    /// keeps everything on this machine.
+    #[arg(long, global = true, value_name = "MODE", value_parser = cluster_mode)]
+    pub cluster: Option<ClusterMode>,
+    /// The nodes of the allocation this process may use, as a Slurm host
+    /// list (`n[442,445]`); default: every node of the allocation. Naming
+    /// nodes uses them even when only one is named.
+    #[arg(long, global = true, value_name = "HOSTLIST")]
+    pub cluster_nodes: Option<String>,
+    /// The words a program started on a node runs under, split at spaces: a
+    /// step starts on the node's host, so a container this process runs in
+    /// is entered again there (`apptainer exec --nv IMAGE`, or a wrapper
+    /// script that also sets the node's environment).
+    #[arg(long, global = true, value_name = "WORDS")]
+    pub cluster_exec_prefix: Option<String>,
+    /// The `srun` program steps on the allocation's nodes are started with
+    /// (default: the first on `PATH`).
+    #[arg(long, global = true, value_name = "PATH")]
+    pub slurm_srun: Option<PathBuf>,
+    /// An argument every step passes to `srun` (`--mem=64G`); repeat for
+    /// more.
+    #[arg(
+        long = "slurm-step-arg",
+        global = true,
+        value_name = "ARG",
+        allow_hyphen_values = true
+    )]
+    pub slurm_step_arg: Vec<String>,
+    /// An argument a step on a single node passes to `srun` besides
+    /// `--slurm-step-arg` (on an HPE Slingshot fabric,
+    /// `--network=single_node_vni`, without which a single-node step has no
+    /// fabric access); repeat for more.
+    #[arg(
+        long = "slurm-single-node-step-arg",
+        global = true,
+        value_name = "ARG",
+        allow_hyphen_values = true
+    )]
+    pub slurm_single_node_step_arg: Vec<String>,
+}
+
+fn cluster_mode(text: &str) -> Result<ClusterMode, String> {
+    ClusterMode::parse(text).map_err(|e| e.to_string())
 }
 
 impl DeviceFlags {
@@ -87,6 +133,10 @@ impl DeviceFlags {
         let brain_endpoint = take_all("--brain-endpoint")?;
         let brain_key_file = take_all("--brain-key-file")?.pop().map(PathBuf::from);
         let brain_bin = take_all("--brain-bin")?.pop().map(PathBuf::from);
+        let cluster = take_all("--cluster")?
+            .pop()
+            .map(|text| cluster_mode(&text))
+            .transpose()?;
         Ok(Self {
             device,
             backend,
@@ -94,16 +144,47 @@ impl DeviceFlags {
             brain_endpoint,
             brain_key_file,
             brain_bin,
+            cluster,
+            cluster_nodes: take_all("--cluster-nodes")?.pop(),
+            cluster_exec_prefix: take_all("--cluster-exec-prefix")?.pop(),
+            slurm_srun: take_all("--slurm-srun")?.pop().map(PathBuf::from),
+            slurm_step_arg: take_all("--slurm-step-arg")?,
+            slurm_single_node_step_arg: take_all("--slurm-single-node-step-arg")?,
         })
     }
 
+    /// The allocation settings these flags make of `detected` (what
+    /// [`crate::config::detect_cluster`] found).
+    #[must_use]
+    pub fn cluster_settings(&self, detected: ClusterSettings) -> ClusterSettings {
+        let mut cluster = detected;
+        if let Some(mode) = self.cluster {
+            cluster.mode = mode;
+        }
+        cluster.nodes.clone_from(&self.cluster_nodes);
+        if let Some(prefix) = &self.cluster_exec_prefix {
+            cluster.exec_prefix = prefix.split_whitespace().map(String::from).collect();
+        }
+        if let Some(srun) = &self.slurm_srun {
+            cluster.srun = Some(srun.clone());
+        }
+        cluster.step_args.clone_from(&self.slurm_step_arg);
+        cluster
+            .single_node_step_args
+            .clone_from(&self.slurm_single_node_step_arg);
+        cluster
+    }
+
     /// Puts the flags into `config`: the compute and the binary of the server
-    /// a run starts, and the endpoints of one it is given.
+    /// a run starts, the endpoints of one it is given, and the batch
+    /// allocation this process runs inside ([`crate::config::detect_cluster`])
+    /// as the cluster flags restrict it.
     ///
     /// # Errors
     /// An endpoint is not a base URL, it has no key file, or the key file
     /// cannot be read.
     pub fn apply_to(&self, config: &mut Config) -> Result<(), PolicyError> {
+        config.cluster = self.cluster_settings(crate::config::detect_cluster());
         config.brain_device.clone_from(&self.device);
         config.brain_backend.clone_from(&self.backend);
         if let Some(gib) = self.vram_budget {
@@ -141,6 +222,7 @@ impl DeviceFlags {
             max_batch: config.brain_max_batch,
             endpoints: config.brain,
             binary: self.brain_bin.clone(),
+            cluster: config.cluster,
         })
         .map_err(|e| PolicyError::Endpoint {
             url: String::new(),
@@ -275,6 +357,42 @@ mod tests {
             refused.contains("--brain-endpoint") && refused.contains("--brain-bin"),
             "{refused}"
         );
+    }
+
+    #[test]
+    fn the_cluster_flags_restrict_and_shape_the_detected_allocation() {
+        let mut args = words(
+            "run --cluster off --cluster-nodes n[442,445] --slurm-srun /s/srun \
+             --slurm-step-arg --mem=64G --slurm-single-node-step-arg --network=single_node_vni \
+             --cluster-exec-prefix x --x",
+        );
+        let flags = DeviceFlags::take(&mut args).unwrap();
+        assert_eq!(args, words("run --x"));
+        assert_eq!(flags.cluster, Some(ClusterMode::Off));
+        let flags = DeviceFlags {
+            cluster_exec_prefix: Some("apptainer exec --nv /img.sif".into()),
+            ..flags
+        };
+        let detected = ClusterSettings {
+            srun: Some("/path/srun".into()),
+            ..ClusterSettings::default()
+        };
+        let cluster = flags.cluster_settings(detected);
+        assert_eq!(cluster.mode, ClusterMode::Off);
+        assert_eq!(cluster.nodes.as_deref(), Some("n[442,445]"));
+        assert_eq!(
+            cluster.srun,
+            Some(PathBuf::from("/s/srun")),
+            "the flag wins"
+        );
+        assert_eq!(cluster.step_args, ["--mem=64G"]);
+        assert_eq!(cluster.single_node_step_args, ["--network=single_node_vni"]);
+        assert_eq!(
+            cluster.exec_prefix,
+            ["apptainer", "exec", "--nv", "/img.sif"]
+        );
+        let mut args = words("run --cluster sometimes");
+        assert!(DeviceFlags::take(&mut args).is_err(), "an unknown mode");
     }
 
     #[test]

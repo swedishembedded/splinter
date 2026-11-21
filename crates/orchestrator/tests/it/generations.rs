@@ -102,6 +102,7 @@ fn context(scratch: &Scratch) -> Context {
         served_seed: None,
         served_thinking_budget: None,
         build: Default::default(),
+        cluster: Default::default(),
     };
     Context::new(config, false).unwrap()
 }

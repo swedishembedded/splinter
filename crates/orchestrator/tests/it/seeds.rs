@@ -63,6 +63,7 @@ fn context(test: &str) -> (Context, Reported) {
         served_seed: None,
         served_thinking_budget: None,
         build: Default::default(),
+        cluster: Default::default(),
     };
     let reported = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&reported);

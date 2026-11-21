@@ -243,6 +243,7 @@ impl Fixture {
             served_seed: None,
             served_thinking_budget: None,
             build: Default::default(),
+            cluster: Default::default(),
         };
         let splinter = Splinter::builder(config).build().unwrap();
         splinter.runtime().add_model(

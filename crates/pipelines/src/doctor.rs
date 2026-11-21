@@ -18,6 +18,7 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::role::{Role, RoleOverrides};
 use splinter_model::device::{devices, GpuCard};
 use splinter_model::ModelSelection;
+use splinter_orchestrator::cluster::{ClusterMode, ClusterSettings};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::roles;
 use splinter_store::space::available_bytes;
@@ -99,6 +100,7 @@ impl Doctor {
 /// is configured with.
 pub fn doctor(ctx: &Context) -> Doctor {
     let mut checks = storage(ctx);
+    checks.push(cluster_check(&ctx.config().cluster));
     checks.extend(gpu_check(ctx));
     checks.extend(roles_resolve(ctx));
     Doctor { checks }
@@ -258,6 +260,60 @@ fn roles_resolve(ctx: &Context) -> Vec<Check> {
             }
         })
         .collect()
+}
+
+/// What the batch allocation this process runs inside is, and which of its
+/// nodes a run uses: models are served on every one of them when it spans
+/// nodes. An allocation that does not parse fails the check, by the value.
+pub fn cluster_check(cluster: &ClusterSettings) -> Check {
+    let name = "cluster";
+    if cluster.mode == ClusterMode::Off {
+        return Check::ok(name, "--cluster off: everything runs on this machine");
+    }
+    match cluster.usable() {
+        Err(e) => Check::problem(
+            Verdict::Fail,
+            name,
+            format!("the allocation cannot be used: {e}"),
+            "fix the value named, or run with --cluster off",
+        ),
+        Ok(None) => Check::ok(name, "no batch allocation: everything runs on this machine"),
+        Ok(Some(usable)) => {
+            let allocation = &usable.allocation;
+            let this = allocation.this_node.as_deref().unwrap_or("unknown");
+            let found = format!(
+                "job {}: nodes {} ({} GPUs each), this node {this}",
+                allocation.job_id,
+                allocation.nodes.join(","),
+                allocation.gpus_per_node
+            );
+            if !usable.spans_nodes() {
+                return Check::ok(
+                    name,
+                    format!("{found}; one node: everything runs on this machine"),
+                );
+            }
+            let how = if usable.chosen {
+                "chosen by --cluster-nodes"
+            } else {
+                "every node of the allocation"
+            };
+            let using = format!(
+                "{found}; using {} ({how}, {} GPUs): a brain server per node",
+                usable.nodes.join(","),
+                usable.cards()
+            );
+            if cluster.srun.is_none() {
+                return Check::problem(
+                    Verdict::Fail,
+                    name,
+                    format!("{using}, but no srun is known to start them with"),
+                    "put srun on PATH or name it with --slurm-srun, or run with --cluster off",
+                );
+            }
+            Check::ok(name, using)
+        }
+    }
 }
 
 const GIB: u64 = 1 << 30;

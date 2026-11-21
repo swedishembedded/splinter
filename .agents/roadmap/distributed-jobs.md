@@ -130,6 +130,22 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       (10,140,344 bytes). Tests: plan fixture bytes, plan-written-before-ranks,
       disjoint rank records, per-attempt retry, and a two-rank stand-in that
       commits and registers.
+- [x] **A Slurm allocation is detected and can be restricted (2026-11-21).**
+      `splinter_orchestrator::cluster::ClusterAllocation` is read from
+      `SLURM_JOB_ID`, `SLURM_JOB_NODELIST` (compressed host lists expanded:
+      ranges, lists, zero padding, products; malformed input refused by
+      name), `SLURM_GPUS_ON_NODE`/`SLURM_JOB_GPUS` and `SLURMD_NODENAME`,
+      only by `config::detect_cluster`, which the device flags call, so a
+      test or an embedding that builds a `Config` stays single-machine inside
+      an allocation. `--cluster auto|off`, `--cluster-nodes HOSTLIST` (refused
+      outside the allocation), `--cluster-exec-prefix`, `--slurm-srun`,
+      `--slurm-step-arg` and `--slurm-single-node-step-arg` shape it, and
+      `splinter doctor` shows the job, its nodes, the GPUs per node, this
+      node and the nodes a run uses. Measured inside job 5600435: `doctor
+      --cluster-nodes n442` reports nodes n424,n442,n445,n467 with 4 GPUs
+      each and uses n442. Tests: `crates/orchestrator/src/cluster.rs`,
+      `crates/pipelines/tests/it/doctor.rs` (`cluster`), the device-flag and
+      CLI flag tests.
 
 ## Decisions
 

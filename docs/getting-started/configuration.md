@@ -35,6 +35,30 @@ repeats for more than one. Every one is a flag; the environment is not read,
 and a program the Slurm launcher needs but does not have is refused by name
 before anything is submitted.
 
+## Cluster allocations
+
+Inside a Slurm allocation, Splinter reads the job from the scheduler's
+variables: its id (`SLURM_JOB_ID`), its nodes (`SLURM_JOB_NODELIST`, the
+compressed host list such as `n[424,442-445]`), the GPUs each node was granted
+(`SLURM_GPUS_ON_NODE`, else the indices of `SLURM_JOB_GPUS`) and the node it
+runs on (`SLURMD_NODENAME`). A value that does not parse is refused by name;
+it is never read as "no allocation". `splinter doctor` shows what was
+detected and which nodes a run uses:
+
+```bash
+splinter doctor --cluster-nodes n442
+# ok   cluster: job 5600435: nodes n424,n442,n445,n467 (4 GPUs each), this node n424; using n442 (chosen by --cluster-nodes, 4 GPUs): a brain server per node
+```
+
+| Flag | Meaning |
+|---|---|
+| `--cluster auto\|off` | `auto` (the default) uses an allocation of more than one node, or the nodes `--cluster-nodes` names; `off` keeps everything on this machine, as outside an allocation. An allocation of one node with no nodes named is a single-machine run. |
+| `--cluster-nodes HOSTLIST` | The nodes this process may use, in host-list syntax (default: every node of the allocation). Other sessions may own some nodes of a shared allocation; name yours. A node outside the allocation is refused. |
+| `--cluster-exec-prefix WORDS` | What a program started on a node runs under, split at spaces. A step starts on the node's host, not in a container this process runs in. |
+| `--slurm-srun PATH` | The `srun` steps are started with (default: the first on `PATH`); `--slurm-scancel PATH` stops one. |
+| `--slurm-step-arg ARG` | An argument every step passes to `srun` (`--mem=64G`); repeats. |
+| `--slurm-single-node-step-arg ARG` | An argument a single-node step passes besides; on an HPE Slingshot fabric `--network=single_node_vni`, without which a single-node step has no fabric access; repeats. |
+
 ## Machine and models
 
 | Flag | Meaning |

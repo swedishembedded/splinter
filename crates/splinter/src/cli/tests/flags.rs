@@ -72,6 +72,40 @@ fn the_job_launcher_is_a_global_flag_of_the_configured_kinds() {
 }
 
 #[test]
+fn the_cluster_is_used_automatically_and_its_flags_are_global() {
+    use splinter_sdk::cluster::ClusterMode;
+
+    let plain = parse(&["status"]).unwrap();
+    assert_eq!(plain.global.device.cluster, None, "auto unless told");
+    let cli = parse(&[
+        "doctor",
+        "--cluster",
+        "auto",
+        "--cluster-nodes",
+        "n[442,445]",
+        "--cluster-exec-prefix",
+        "apptainer exec --nv /i.sif",
+        "--slurm-srun",
+        "/sl/srun",
+        "--slurm-step-arg",
+        "--mem=64G",
+        "--slurm-single-node-step-arg",
+        "--network=single_node_vni",
+    ])
+    .unwrap();
+    let device = &cli.global.device;
+    assert_eq!(device.cluster, Some(ClusterMode::Auto));
+    assert_eq!(device.cluster_nodes.as_deref(), Some("n[442,445]"));
+    assert_eq!(device.slurm_srun, Some("/sl/srun".into()));
+    assert_eq!(device.slurm_step_arg, ["--mem=64G"]);
+    assert_eq!(
+        device.slurm_single_node_step_arg,
+        ["--network=single_node_vni"]
+    );
+    assert!(parse(&["--cluster", "on", "status"]).is_err());
+}
+
+#[test]
 fn train_takes_a_positive_max_block() {
     match command(&["train", "ds1", "--max-block", "8192"]) {
         Command::Train(args) => assert_eq!(args.max_block, Some(8192)),

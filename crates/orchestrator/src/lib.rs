@@ -12,6 +12,8 @@
 //! stores a pipeline decides through.
 //!
 //! * [`config`] - the settings, and the only reader of the environment.
+//! * [`cluster`] - the batch allocation a process runs inside, and which of
+//!   its nodes it uses.
 //! * [`concurrency`] - bounded fan-out of work, results in order.
 //! * [`context`] - a [`Runtime`] shared by a process and a [`Context`] for
 //!   one command.
@@ -38,6 +40,7 @@
 #![warn(missing_docs)]
 
 pub mod answers;
+pub mod cluster;
 pub mod concurrency;
 pub mod config;
 pub mod context;

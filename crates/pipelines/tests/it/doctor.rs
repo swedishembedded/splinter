@@ -133,6 +133,75 @@ mod gpu {
     }
 }
 
+mod cluster {
+    use splinter_orchestrator::cluster::{ClusterAllocation, ClusterMode, ClusterSettings};
+    use splinter_pipelines::doctor::{cluster_check, Verdict};
+
+    fn inside(nodes: &[&str]) -> ClusterSettings {
+        ClusterSettings {
+            detected: Ok(Some(ClusterAllocation {
+                job_id: "5600435".into(),
+                nodes: nodes.iter().map(|n| (*n).to_string()).collect(),
+                gpus_per_node: 4,
+                this_node: Some("n424".into()),
+            })),
+            srun: Some("/usr/bin/srun".into()),
+            ..ClusterSettings::default()
+        }
+    }
+
+    #[test]
+    fn doctor_shows_the_allocation_and_the_nodes_a_run_uses() {
+        let check = cluster_check(&ClusterSettings {
+            nodes: Some("n442".into()),
+            ..inside(&["n424", "n442", "n445"])
+        });
+        assert_eq!(check.verdict, Verdict::Ok, "{check:?}");
+        for shown in [
+            "5600435",
+            "n424,n442,n445",
+            "4 GPUs each",
+            "this node n424",
+            "using n442",
+            "--cluster-nodes",
+        ] {
+            assert!(check.detail.contains(shown), "{shown}: {}", check.detail);
+        }
+    }
+
+    #[test]
+    fn no_allocation_off_and_one_node_keep_the_run_on_this_machine() {
+        for settings in [
+            ClusterSettings::default(),
+            ClusterSettings {
+                mode: ClusterMode::Off,
+                ..inside(&["n1", "n2"])
+            },
+            inside(&["n424"]),
+        ] {
+            let check = cluster_check(&settings);
+            assert_eq!(check.verdict, Verdict::Ok);
+            assert!(check.detail.contains("this machine"), "{}", check.detail);
+        }
+    }
+
+    #[test]
+    fn an_unusable_allocation_fails_by_what_is_wrong() {
+        let stranger = cluster_check(&ClusterSettings {
+            nodes: Some("n999".into()),
+            ..inside(&["n1", "n2"])
+        });
+        assert_eq!(stranger.verdict, Verdict::Fail);
+        assert!(stranger.detail.contains("n999"), "{}", stranger.detail);
+        let no_srun = cluster_check(&ClusterSettings {
+            srun: None,
+            ..inside(&["n1", "n2"])
+        });
+        assert_eq!(no_srun.verdict, Verdict::Fail);
+        assert!(no_srun.fix.unwrap().contains("--slurm-srun"));
+    }
+}
+
 /// A policy left to plan, write, teach, judge and read sentences for itself
 /// can start a run but rarely trains anything: each such role is a warning
 /// that names the way out, and naming a stronger model clears it.

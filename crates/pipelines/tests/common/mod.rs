@@ -144,6 +144,7 @@ pub fn config(scratch: &Scratch) -> Config {
         served_seed: None,
         served_thinking_budget: None,
         build: Default::default(),
+        cluster: Default::default(),
     }
 }
 

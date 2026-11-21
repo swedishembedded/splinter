@@ -152,6 +152,7 @@ impl Run {
             served_seed: None,
             served_thinking_budget: None,
             build: Default::default(),
+            cluster: Default::default(),
         };
         Ok(Context::new(config, false)?)
     }

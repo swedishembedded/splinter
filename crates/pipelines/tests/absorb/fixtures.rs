@@ -123,6 +123,7 @@ pub fn world(reply: impl Fn(&str) -> String + Send + Sync + 'static) -> anyhow::
         served_seed: None,
         served_thinking_budget: None,
         build: Default::default(),
+        cluster: Default::default(),
     };
     let prompts = Arc::new(Mutex::new(Vec::new()));
     let model = Scripted {

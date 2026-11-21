@@ -53,6 +53,7 @@ fn config(dir: &std::path::Path) -> Config {
         served_seed: None,
         served_thinking_budget: None,
         build: Default::default(),
+        cluster: Default::default(),
     }
 }
 
