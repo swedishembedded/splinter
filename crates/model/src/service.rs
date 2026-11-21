@@ -93,6 +93,13 @@ pub struct FleetSettings {
     pub insecure_plaintext: bool,
 }
 
+/// The directory, under a service's state, adapters are served from.
+pub const ADAPTERS_DIR: &str = "adapters";
+
+/// The directory, under a service's state, of the artifact store training
+/// moves data through.
+pub const ARTIFACTS_DIR: &str = "artifacts";
+
 /// The file in a server's or a fleet's directory holding the key its
 /// endpoints answer to, readable by its owner only.
 pub const KEY_FILE: &str = "key";
@@ -115,8 +122,8 @@ pub struct ManagedBrain {
 /// The state directories every server of a run shares: adapters offered,
 /// artifacts moved, and the scratch directory `work`.
 fn prepare(state: &Path, work: &Path) -> Result<(PathBuf, PathBuf), PolicyError> {
-    let adapters = state.join("adapters");
-    let artifacts = state.join("artifacts");
+    let adapters = state.join(ADAPTERS_DIR);
+    let artifacts = state.join(ARTIFACTS_DIR);
     for dir in [&adapters, &artifacts, &work.to_path_buf()] {
         std::fs::create_dir_all(dir).map_err(|source| PolicyError::Io {
             path: dir.clone(),
@@ -326,7 +333,7 @@ impl ManagedBrain {
     ) -> Result<Vec<crate::fleet_tls::ServerIdentity>, PolicyError> {
         let issued = crate::fleet_tls::issue(nodes)?;
         write_private(&work.join(AUTHORITY_FILE), &issued.authority_pem)?;
-        sven_sdk::http::trust_model_authorities(issued.authority_pem.as_bytes())
+        crate::endpoint::trust_authorities(issued.authority_pem.as_bytes())
             .map_err(|reason| refused("fleet", reason))?;
         Ok(issued.servers)
     }

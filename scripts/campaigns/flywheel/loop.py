@@ -55,6 +55,7 @@ import json
 import os
 import shutil
 import signal
+import ssl
 import subprocess
 import sys
 import threading
@@ -189,6 +190,162 @@ def concurrently(steps) -> None:
         raise failures[0]
 
 
+# --------------------------------------------------------------------------- the fleet
+#
+# Inside a Slurm allocation that spans nodes (or with `[serve.fleet]` given), the loop does not
+# place servers on cards itself: `splinter serve` starts one brain per usable node (every card of
+# it, TLS under the fleet's own authority), every model of the campaign is served there at once
+# (the base, and each adapter written into the fleet's adapter directory), bench is pointed at the
+# fleet's endpoints file and authority, and trainers train as jobs of the fleet, which lends them
+# cards from its idle replicas. `serve.fleet = false` keeps the per-card servers.
+
+
+def spans_nodes(environ: dict) -> bool:
+    """Whether this process runs inside a Slurm allocation of more than one node."""
+    nodes = environ.get("SLURM_JOB_NUM_NODES") or environ.get("SLURM_NNODES") or "1"
+    return bool(environ.get("SLURM_JOB_ID")) and nodes.isdigit() and int(nodes) > 1
+
+
+def fleet_settings(campaign: Campaign, environ: dict | None = None) -> dict | None:
+    """The `[serve.fleet]` table when the campaign serves on a fleet, else None: a table, or `fleet = true`,
+    asks for one; `fleet = false` refuses one; unset is a fleet exactly when the allocation spans nodes."""
+    setting = campaign["serve"].get("fleet", "auto")
+    if setting is False:
+        return None
+    if setting is True:
+        return {}
+    if isinstance(setting, dict):
+        return setting
+    if setting == "auto":
+        return {} if spans_nodes(os.environ if environ is None else environ) else None
+    raise SystemExit(f"loop: serve.fleet must be true, false, \"auto\" or a table, not {setting!r}")
+
+
+def fleet_flags(campaign: Campaign, fleet: dict) -> list[str]:
+    """The splinter flags that say where the fleet runs and how a node is entered."""
+    flags = []
+    if fleet.get("nodes"):
+        flags += ["--cluster-nodes", fleet["nodes"]]
+    for key, flag in (("exec_prefix", "--cluster-exec-prefix"), ("rank_exec_prefix", "--cluster-rank-exec-prefix")):
+        if fleet.get(key):
+            flags += [flag, os.path.expandvars(os.path.expanduser(fleet[key]))]
+    flags += [f"--slurm-step-arg={a}" for a in fleet.get("step_args", [])]
+    if fleet.get("insecure_plaintext"):
+        flags.append("--cluster-insecure-plaintext")
+    return flags
+
+
+class Fleet:
+    """A `splinter serve` the loop started and stops: where its servers are, and how a client reaches them."""
+
+    def __init__(self, campaign: Campaign, fleet: dict):
+        s, sp = campaign["serve"], campaign["splinter"]
+        self.record_file = campaign.work / "fleet.json"
+        self.record_file.unlink(missing_ok=True)
+        argv = [path(sp["binary"]), "--json", "--state", path(sp["state"]), "--models-dir", path(s["models_dir"]),
+                "--policy-base", path(s["checkpoint"]), "--brain-bin", path(s["brain"]), "--backend", "cuda",
+                "--attempt-concurrency", str(s["max_batch"]), *fleet_flags(campaign, fleet), "serve"]
+        log(f"fleet: {' '.join(str(a) for a in argv)}")
+        with open(self.record_file, "w") as out, open(campaign.work / "fleet.log", "a") as err:
+            self.process = subprocess.Popen(with_env_script(campaign, argv), stdout=out, stderr=err,
+                                            stdin=subprocess.DEVNULL, env={**os.environ, **s.get("env", {})},
+                                            preexec_fn=_die_with_parent)
+        deadline = time.time() + fleet.get("startup_seconds", 1200)
+        while True:
+            try:
+                self.record = json.loads(self.record_file.read_text())
+                break
+            except (OSError, ValueError):
+                pass
+            if self.process.poll() is not None:
+                raise SystemExit(f"loop: splinter serve exited ({self.process.returncode}); see {campaign.work / 'fleet.log'}")
+            if time.time() > deadline:
+                self.stop()
+                raise SystemExit("loop: the fleet did not report ready")
+            time.sleep(2)
+        self.urls = list(self.record["endpoints"])
+        self.key = Path(self.record["key_file"]).read_text().strip()
+        self.authority = self.record.get("authority_file")
+        log(f"fleet: {len(self.urls)} server(s): {', '.join(self.urls)}")
+
+    def stop(self) -> None:
+        if self.process.poll() is None:
+            self.process.send_signal(signal.SIGTERM)
+            try:
+                self.process.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+
+    def _listed(self, url: str) -> list[dict]:
+        context = ssl.create_default_context(cafile=self.authority) if self.authority else None
+        request = urllib.request.Request(f"{url}/models", headers={"Authorization": f"Bearer {self.key}"})
+        return json.load(urllib.request.urlopen(request, timeout=30, context=context))["data"]
+
+    def model_id(self, base_model: str, adapter: str | None) -> str:
+        """The id every server serves `base_model` (or `adapter` on it) as; an adapter is offered by writing it into the
+        fleet's adapter directory, where every server finds it, and waited for."""
+        if adapter is None:
+            for url in self.urls:
+                if base_model not in [m["id"] for m in self._listed(url)]:
+                    raise SystemExit(f"loop: {base_model} is not served by {url}")
+            return base_model
+        digest = hashlib.sha256(Path(adapter).read_bytes()).hexdigest()
+        directory = Path(self.record["adapter_dir"])
+        served = directory / f"{digest}.safetensors"
+        if not served.exists():
+            aside = directory / f".{digest}.partial"
+            shutil.copy(adapter, aside)
+            aside.rename(served)
+        ids, deadline = set(), time.time() + 300
+        for url in self.urls:
+            while True:
+                found = [m["id"] for m in self._listed(url) if (m.get("adapter") or {}).get("digest") == f"sha256:{digest}"]
+                if found:
+                    ids.add(found[0])
+                    break
+                if time.time() > deadline:
+                    raise SystemExit(f"loop: {url} did not list the adapter {adapter}")
+                time.sleep(2)
+        if len(ids) != 1:
+            raise SystemExit(f"loop: the servers serve the adapter as different ids: {sorted(ids)}")
+        return ids.pop()
+
+    def brain_flags(self) -> list[str]:
+        """The splinter flags that make a command use this fleet (training as its jobs) instead of a server of its own."""
+        flags = [a for url in self.urls for a in ("--brain-endpoint", url)]
+        flags += ["--brain-key-file", self.record["key_file"], "--brain-adapter-dir", self.record["adapter_dir"],
+                  "--brain-artifact-store", self.record["artifact_store"]]
+        return flags + (["--brain-ca-file", self.authority] if self.authority else [])
+
+
+def _die_with_parent() -> None:
+    """Make the child receive SIGTERM when the loop dies, so a killed loop leaves no fleet behind (Linux)."""
+    import ctypes
+
+    ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG
+
+
+_FLEET: list[Fleet] = []
+_FLEET_LOCK = threading.Lock()
+
+
+def fleet(campaign: Campaign) -> Fleet | None:
+    """The campaign's fleet, started on first use and kept until the loop ends; None when it serves per card."""
+    settings = fleet_settings(campaign)
+    if settings is None:
+        return None
+    with _FLEET_LOCK:
+        if not _FLEET:
+            _FLEET.append(Fleet(campaign, settings))
+        return _FLEET[0]
+
+
+def stop_fleet() -> None:
+    while _FLEET:
+        _FLEET.pop().stop()
+
+
 # --------------------------------------------------------------------------- serving
 
 
@@ -240,8 +397,12 @@ def endpoints(campaign: Campaign, cards: list[int]) -> list[int]:
 
 
 def serve(campaign: Campaign, model: dict, cards: list[int]) -> str:
-    """Serve `model` (base, or base + adapter) on `cards`; the model id to request."""
+    """Serve `model` (base, or base + adapter) on `cards`; the model id to request. On a fleet every model is
+    served by every server at once, so `cards` only sizes the share of trials."""
     s = campaign["serve"]
+    on_fleet = fleet(campaign)
+    if on_fleet is not None:
+        return on_fleet.model_id(s["base_model"], model.get("adapter"))
     for card in cards:
         stop_serving(campaign, card)
     for group in servers(campaign, cards):
@@ -288,7 +449,9 @@ def profile_text(campaign: Campaign, workload: dict, model_id: str, attempts: in
     """A run profile: every harness role of the workload on `model_id`, served on `cards`."""
     b = campaign["bench"]
     roles = "\n".join(f'{role} = "brain"' for role in ["main", *workload.get("roles", [])])
-    urls = ", ".join(f'"http://{host(campaign)}:{p}/v1"' for p in endpoints(campaign, cards))
+    on_fleet = fleet(campaign)
+    listed = on_fleet.urls if on_fleet is not None else [f"http://{host(campaign)}:{p}/v1" for p in endpoints(campaign, cards)]
+    urls = ", ".join(f'"{url}"' for url in listed)
     tools = "".join(f'{name} = "{path(tool)}"\n' for name, tool in workload.get("tools", {}).items())
     return (f'[sven]\nbuild = "{path(b["sven"])}"\n\n[run]\nenvironment = "userns"\nattempts = {attempts}\n'
             f'concurrency = {workload["concurrency"]}\n\n[roles]\n{roles}\n\n[upstreams.brain]\n'
@@ -332,9 +495,14 @@ def bench_run(campaign: Campaign, gen: Generation, workload: dict, model_id: str
     before = set(jobs.iterdir())
     tmp = campaign.work / "tmp"
     tmp.mkdir(exist_ok=True)
-    env = {"BRAIN_KEY": path(campaign["serve"]["key_file"]).read_text().strip(), "TMPDIR": str(tmp)}
+    on_fleet = fleet(campaign)
+    key = on_fleet.key if on_fleet is not None else path(campaign["serve"]["key_file"]).read_text().strip()
+    env = {"BRAIN_KEY": key, "TMPDIR": str(tmp)}
+    # On a fleet bench is pointed at its endpoints file and, for TLS, the authority its certificates chain to.
+    served = [] if on_fleet is None else ["--endpoints-file", on_fleet.record["endpoints_file"],
+                                          *(["--endpoint-ca", on_fleet.authority] if on_fleet.authority else [])]
     run([path(campaign["bench"]["dir"]) / "bench", "run", workload["collection"], "--profile", prof, "--set", split,
-         "--jobs-dir", jobs], gen.dir / f"{name}.log", env=env, cwd=path(campaign["bench"]["dir"]))
+         "--jobs-dir", jobs, *served], gen.dir / f"{name}.log", env=env, cwd=path(campaign["bench"]["dir"]))
     new = sorted(set(jobs.iterdir()) - before)
     if len(new) != 1:
         raise SystemExit(f"loop: expected one new job directory, found {new}")
@@ -464,9 +632,11 @@ def train_args(train: dict, start: dict) -> list[str]:
 
 def splinter(campaign: Campaign, gen: Generation, card: int, *args, log_name: str) -> dict:
     sp = campaign["splinter"]
+    on_fleet = fleet(campaign)
+    # On a fleet a command trains as a job of the fleet's servers, which lend it a card from their idle replicas.
+    where = on_fleet.brain_flags() if on_fleet is not None else ["--device", f"gpu{card}", "--backend", "cuda"]
     out = run(with_env_script(campaign, [path(sp["binary"]), "--state", path(sp["state"]), "--models-dir",
-                                         path(campaign["serve"]["models_dir"]), "--device", f"gpu{card}",
-                                         "--backend", "cuda", "--json", *args]),
+                                         path(campaign["serve"]["models_dir"]), *where, "--json", *args]),
               gen.dir / f"{log_name}.log", env=campaign["serve"].get("env", {}))
     return json.loads(out)
 
@@ -478,8 +648,9 @@ def learn(campaign: Campaign, gen: Generation, states: list[dict], start: dict) 
     recipes = variants(campaign)
     if len(recipes) > len(cards):
         raise SystemExit(f"loop: {len(recipes)} training variants but {len(cards)} cards")
-    for card in cards:
-        stop_serving(campaign, card)  # a trainer takes its whole card
+    if fleet(campaign) is None:
+        for card in cards:
+            stop_serving(campaign, card)  # a trainer takes its whole card
     ingested: dict[str, str] = gen.state.get("ingested", {})
     for workload in campaign.workloads:
         for export in learning_exports(campaign["train"], states, workload["name"]):
@@ -638,8 +809,9 @@ def generation(campaign: Campaign, number: int, stop_before: str | None = None) 
                     problems = exam_problems(summary)
                     if problems:
                         raise SystemExit(f"loop: {who}'s exam {job} decides nothing: " + "; ".join(problems))
+                # Paired per task: `bench compare BASELINE CANDIDATE`, the champion's exam the baseline.
                 per_candidate[name][w["name"]] = paired(json.loads(bench(
-                    campaign, "--output", "json", "report", theirs, "--against", ours,
+                    campaign, "--output", "json", "compare", ours, theirs,
                     log_file=campaign.work / "report.log")))
         gen.record("decide", decision=decide(per_candidate, campaign["promote"]))
     decision = gen.state["decision"]
@@ -671,12 +843,15 @@ def main() -> int:
     for gen_dir in sorted((campaign.work / "generations").glob("[0-9][0-9][0-9]")):
         state = json.loads((gen_dir / "state.json").read_text())
         first = int(gen_dir.name) + (1 if "decide" in state.get("done", []) else 0)
-    for number in range(first, first + args.generations):
-        # The campaign file is read again for every generation, so a change to it (a
-        # newer build, another recipe) takes effect at the next generation boundary.
-        campaign = Campaign(tomllib.loads(args.config.read_text()))
-        if not generation(campaign, number, args.stop_before):
-            break
+    try:
+        for number in range(first, first + args.generations):
+            # The campaign file is read again for every generation, so a change to it (a
+            # newer build, another recipe) takes effect at the next generation boundary.
+            campaign = Campaign(tomllib.loads(args.config.read_text()))
+            if not generation(campaign, number, args.stop_before):
+                break
+    finally:
+        stop_fleet()
     return 0
 
 

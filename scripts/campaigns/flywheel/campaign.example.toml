@@ -15,6 +15,12 @@ models_dir = "~/models"
 base_model = "Qwen/Qwen3.8-27B-FP8"          # the model id the base is served as
 cards = [0, 1, 2, 3]                         # one server per card; a trial stays on one server
 base_port = 8800                             # card N serves on base_port + N
+# fleet = false                              # inside an allocation that spans nodes the loop serves on a splinter fleet
+#                                            # (`splinter serve`, TLS, every model at once); false keeps per-card servers
+# [serve.fleet]                              # where the fleet runs (also turns it on outside such an allocation)
+# nodes = "n[442,445]"                       # the allocation's nodes to use (default: every one)
+# exec_prefix = "scripts/cluster/apptainer-step --image IMAGE --bind /nobackup -- scripts/cluster/rank-env --env ENV.sh --"
+# step_args = ["--mem=128G"]
 # host = "10.150.4.178"                      # bind this node's address, not the loopback, so agents on
 #                                            # other nodes of an allocation reach the servers
 key_file = "~/keys/brain"

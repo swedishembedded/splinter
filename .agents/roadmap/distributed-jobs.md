@@ -217,6 +217,34 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       `crates/model/src/{fleet_tls,distributed}.rs`,
       `scripts/cluster/test_rank_env.py`, sven's
       `crates/http/tests/model_authorities.rs`.
+- [x] **The flywheel loop serves on a fleet (2026-11-21).** Inside an
+      allocation that spans nodes (or with `[serve.fleet]`; `serve.fleet =
+      false` keeps per-card servers), `loop.py` starts one `splinter serve`
+      for the whole campaign, serves every model there at once (the base,
+      and each adapter written into the fleet's adapter directory and found
+      by its sha256), runs bench with the fleet's `--endpoints-file` and
+      `--endpoint-ca` (bench 2198163c), and trains through the fleet
+      (`--brain-endpoint ... --brain-ca-file ... --brain-artifact-store
+      ...`), so trainers take cards from its idle replicas. Measured
+      2026-11-21 on n442 (brain built by lane C2, Qwen3-4B, a 4-task
+      collection from sven-smoke): the fleet was ready 10 s after start,
+      explore (2 tasks x 4 attempts) and the exam (2 tasks, 2/2 passed, 6
+      model requests, all HTTP 200 over TLS) ran through bench's gateway in
+      37 s, and the loop tore the fleet down with no process left. The
+      training leg reached brain's `brain/train` over TLS and was refused
+      ("selecting on the monitoring loss needs eval_every > 0"): an
+      unmonitored supervised run (no monitoring group could be carved from
+      a one-source dataset) still sent its patience. Fixed in
+      `train::monitoring` (an unmonitored run gets patience 0 and keeps no
+      evaluations); rerun on the fleet, learn took 69 s, the candidate's
+      exam ran with its adapter served by the fleet, and the generation
+      decided (champion kept, mean delta +0.000 over 2 paired tasks). The
+      decide step had asked `bench report RUN --against BASE`, which bench
+      parsed as `--against-package` and answered unpaired; it now runs
+      `bench compare BASELINE CANDIDATE`, and bench refuses abbreviated
+      options (bench d2c6a497). Also found: Python 3.13+ verifies certificates in
+      X.509 strict mode, so fleet certificates now carry the authority key
+      identifier, key usage and the server-auth purpose.
 
 ## Decisions
 
@@ -252,13 +280,16 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       coordinator 2026-11-21). The job-plan CLI actions (`brain qwen3
       lora_train`, `brain gpt2 train`) run across nodes now through
       `jobs submit --distributed`, but return an adapter alone.
-- [ ] The flywheel loop (`scripts/campaigns/flywheel/loop.py`) still starts
-      its own per-card servers on one node (`serve.host` lets agents on
-      other nodes reach them). Delegating to `splinter serve` needs the
-      loop's per-card placement (models served side by side on groups of
-      cards, trainers taking a card from its server) replaced by one fleet
-      serving every model and adapter from its adapter directory, and the
-      benchmark's agents told the fleet's authority (`SSL_CERT_FILE`).
+- [ ] A local-server test failed once under load and never again:
+      `crates/model/tests/service.rs`
+      `the_server_a_run_owns_serves_the_store_..._as_wide_as_it_decodes`
+      failed in one `cargo test -p splinter-model --tests` run on n424
+      (2026-11-21, while other test binaries ran at once) and passed in 9
+      runs after, alone and with the other binaries; the panic text was not
+      kept. Suspects to rule out when it recurs: the stand-in writes its
+      arguments file with `echo > $0.args` after it is spawned, and the
+      test reads it right after `start` returns, so a slow shell could leave
+      it empty; keep the panic line.
 - [ ] `--job-launcher slurm` (sbatch) still registers a plan's ranks on
       the loopback: rank 0's node is not known at submission.
 - [ ] Artifact storage backends. Adapters and datasets are plain files at a

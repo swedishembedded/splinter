@@ -16,6 +16,7 @@ Every command takes these.
 - `--vram-budget <VRAM_BUDGET>`: The VRAM, in GiB, this process was granted: every card the server budgets from is capped at it. Without it the whole card is budgeted.
 - `--brain-endpoint <BRAIN_ENDPOINT>...`: A running `brain serve --openai` to request every local model from (its base URL, ending in `/v1`); repeat for more. Without one, a server is started from `--brain-bin`.
 - `--brain-key-file <BRAIN_KEY_FILE>`: The file holding the endpoints' API key.
+- `--brain-ca-file <FILE>`: A PEM file of certificate authorities the endpoints' https:// certificates may chain to (the `ca.pem` a fleet that serves TLS under its own authority publishes); added to the trusted roots, never in place of verification.
 - `--brain-bin <BRAIN_BIN>`: The `brain` binary a server is started from (default: the first on `PATH`)
 - `--cluster <MODE>`: Whether a Slurm allocation this process runs inside is used: `auto` (default) serves models on every usable node of a multi-node allocation and spreads a distributed job's ranks over them; `off` keeps everything on this machine.
 - `--cluster-nodes <HOSTLIST>`: The nodes of the allocation this process may use, as a Slurm host list (`n[442,445]`); default: every node of the allocation. Naming nodes uses them even when only one is named.

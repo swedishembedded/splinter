@@ -61,6 +61,17 @@ const OFFER_WAIT: Duration = Duration::from_secs(120);
 /// How often the listing is read while an offered adapter is waited for.
 const OFFER_POLL: Duration = Duration::from_millis(250);
 
+/// Trusts the certificate authorities in `pem` for every request to a model
+/// endpoint from now on, Splinter's own and the agents' alike: for servers
+/// behind an authority of their own (a fleet's `ca.pem`). Certificates are
+/// still verified.
+///
+/// # Errors
+/// `pem` holds no certificate.
+pub fn trust_authorities(pem: &[u8]) -> Result<usize, String> {
+    sven_sdk::http::trust_model_authorities(pem)
+}
+
 /// One model an endpoint lists.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServedCard {

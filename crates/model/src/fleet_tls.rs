@@ -20,8 +20,9 @@
 use std::net::IpAddr;
 
 use rcgen::{
-    BasicConstraints, CertificateParams, CidrSubnet, DistinguishedName, DnType, GeneralSubtree,
-    IsCa, Issuer, KeyPair, KeyUsagePurpose, NameConstraints, SanType,
+    BasicConstraints, CertificateParams, CidrSubnet, DistinguishedName, DnType,
+    ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, Issuer, KeyPair, KeyUsagePurpose,
+    NameConstraints, SanType,
 };
 
 use crate::error::PolicyError;
@@ -58,7 +59,7 @@ pub fn issue(nodes: &[(String, IpAddr)]) -> Result<FleetCertificates, PolicyErro
     let authority_key = KeyPair::generate().map_err(|e| refused(e.to_string()))?;
     let mut authority = CertificateParams::new(Vec::new()).map_err(|e| refused(e.to_string()))?;
     authority.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
-    authority.key_usages = vec![KeyUsagePurpose::KeyCertSign];
+    authority.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
     let mut name = DistinguishedName::new();
     name.push(DnType::CommonName, "splinter brain fleet");
     authority.distinguished_name = name;
@@ -88,6 +89,11 @@ pub fn issue(nodes: &[(String, IpAddr)]) -> Result<FleetCertificates, PolicyErro
         let mut params = CertificateParams::new(vec![node.clone()])
             .map_err(|e| refused(format!("{node}: {e}")))?;
         params.subject_alt_names.push(SanType::IpAddress(*address));
+        // What a strict verifier (OpenSSL's X.509 strict mode, Python's
+        // default since 3.13) asks of a server certificate.
+        params.use_authority_key_identifier_extension = true;
+        params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+        params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
         let mut subject = DistinguishedName::new();
         subject.push(DnType::CommonName, node.as_str());
         params.distinguished_name = subject;

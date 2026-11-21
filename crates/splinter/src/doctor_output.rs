@@ -50,6 +50,8 @@ impl Report for Serving {
         if let Some(authority) = &self.authority_file {
             let _ = writeln!(out, "certificate authority: {}", authority.display());
         }
+        let _ = writeln!(out, "adapter directory: {}", self.adapter_dir.display());
+        let _ = writeln!(out, "artifact store: {}", self.artifact_store.display());
         out.push_str("until interrupted (Ctrl-C)\n");
         out
     }

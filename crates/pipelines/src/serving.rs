@@ -15,7 +15,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::Serialize;
-use splinter_model::service::{AUTHORITY_FILE, ENDPOINTS_FILE, KEY_FILE};
+use splinter_model::service::{
+    ADAPTERS_DIR, ARTIFACTS_DIR, AUTHORITY_FILE, ENDPOINTS_FILE, KEY_FILE,
+};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::OrchestratorError;
 
@@ -31,6 +33,12 @@ pub struct Serving {
     /// The certificate authority their TLS certificates chain to, for a
     /// fleet serving TLS; `None` for plaintext servers.
     pub authority_file: Option<PathBuf>,
+    /// The directory they serve adapters from: an adapter written there is
+    /// a model of its own on every server (`--brain-adapter-dir`).
+    pub adapter_dir: PathBuf,
+    /// The artifact store training on them moves data through
+    /// (`--brain-artifact-store`).
+    pub artifact_store: PathBuf,
 }
 
 /// Starts the servers `ctx`'s configuration names (one per usable node of an
@@ -55,6 +63,8 @@ pub fn start(ctx: &Context) -> Result<Serving, OrchestratorError> {
         endpoints_file: directory.join(ENDPOINTS_FILE),
         key_file: directory.join(KEY_FILE),
         authority_file: authority.exists().then_some(authority),
+        adapter_dir: ctx.root().brain_service().join(ADAPTERS_DIR),
+        artifact_store: ctx.root().brain_service().join(ARTIFACTS_DIR),
     })
 }
 

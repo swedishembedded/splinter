@@ -48,6 +48,12 @@ pub struct DeviceFlags {
     /// The file holding the endpoints' API key.
     #[arg(long, global = true)]
     pub brain_key_file: Option<PathBuf>,
+    /// A PEM file of certificate authorities the endpoints' https://
+    /// certificates may chain to (the `ca.pem` a fleet that serves TLS under
+    /// its own authority publishes); added to the trusted roots, never in
+    /// place of verification.
+    #[arg(long, global = true, value_name = "FILE")]
+    pub brain_ca_file: Option<PathBuf>,
     /// The `brain` binary a server is started from (default: the first on
     /// `PATH`).
     #[arg(long, global = true)]
@@ -151,6 +157,7 @@ impl DeviceFlags {
             .transpose()?;
         let brain_endpoint = take_all("--brain-endpoint")?;
         let brain_key_file = take_all("--brain-key-file")?.pop().map(PathBuf::from);
+        let brain_ca_file = take_all("--brain-ca-file")?.pop().map(PathBuf::from);
         let brain_bin = take_all("--brain-bin")?.pop().map(PathBuf::from);
         let cluster = take_all("--cluster")?
             .pop()
@@ -162,6 +169,7 @@ impl DeviceFlags {
             vram_budget,
             brain_endpoint,
             brain_key_file,
+            brain_ca_file,
             brain_bin,
             cluster,
             cluster_nodes: take_all("--cluster-nodes")?.pop(),
@@ -219,7 +227,26 @@ impl DeviceFlags {
             config.brain_binary = Some(binary.clone());
         }
         if self.brain_endpoint.is_empty() {
-            return Ok(());
+            return match &self.brain_ca_file {
+                Some(_) => Err(PolicyError::Endpoint {
+                    url: String::new(),
+                    reason: "--brain-ca-file configures --brain-endpoint, which is not given"
+                        .into(),
+                }),
+                None => Ok(()),
+            };
+        }
+        if let Some(ca_file) = &self.brain_ca_file {
+            let pem = std::fs::read(ca_file).map_err(|source| PolicyError::Io {
+                path: ca_file.clone(),
+                source,
+            })?;
+            crate::model::endpoint::trust_authorities(&pem).map_err(|reason| {
+                PolicyError::Endpoint {
+                    url: self.brain_endpoint[0].clone(),
+                    reason: format!("--brain-ca-file {}: {reason}", ca_file.display()),
+                }
+            })?;
         }
         let Some(key_file) = &self.brain_key_file else {
             return Err(PolicyError::Endpoint {
@@ -400,6 +427,27 @@ mod tests {
         );
         let mut args = words("run --cluster sometimes");
         assert!(DeviceFlags::take(&mut args).is_err(), "an unknown mode");
+    }
+
+    #[test]
+    fn a_ca_file_needs_the_endpoints_it_vouches_for_and_a_certificate() {
+        let mut config = Config::from_env();
+        let stray = DeviceFlags {
+            brain_ca_file: Some(PathBuf::from("/nonexistent/ca.pem")),
+            ..DeviceFlags::default()
+        };
+        let refused = stray.apply_to(&mut config).unwrap_err().to_string();
+        assert!(refused.contains("--brain-ca-file"), "{refused}");
+        let dir = tempfile::tempdir().unwrap();
+        let junk = dir.path().join("ca.pem");
+        std::fs::write(&junk, "not a certificate").unwrap();
+        let bad = DeviceFlags {
+            brain_endpoint: vec!["https://10.0.0.1:1/v1".into()],
+            brain_ca_file: Some(junk),
+            ..DeviceFlags::default()
+        };
+        let refused = bad.apply_to(&mut config).unwrap_err().to_string();
+        assert!(refused.contains("--brain-ca-file"), "{refused}");
     }
 
     #[test]

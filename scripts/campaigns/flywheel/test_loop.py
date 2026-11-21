@@ -7,12 +7,18 @@ resumes from what its generations recorded."""
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import loop  # noqa: E402
+
+# A single-node campaign, whatever allocation runs these tests: the fleet is chosen by the
+# scheduler's variables, so they are not seen here; the fleet's own tests name them.
+for _name in [n for n in os.environ if n.startswith("SLURM_")]:
+    del os.environ[_name]
 
 RULE = {"min_mean_delta": 0.0, "max_workload_drop": 0.2}
 
@@ -230,6 +236,59 @@ def steps_run_side_by_side_and_a_failure_is_raised_after_both_finish():
 def an_exam_the_model_server_failed_decides_nothing():
     assert loop.exam_problems({"model_server_errors": 0, "environment_errors": 0, "errors": 0}) == []
     assert "22 trial(s) ended by the model server" in loop.exam_problems({"model_server_errors": 22})[0]
+
+
+def a_fleet_serves_when_the_allocation_spans_nodes_or_when_asked_and_not_when_refused():
+    multi = {"SLURM_JOB_ID": "7", "SLURM_JOB_NUM_NODES": "2"}
+    auto = loop.Campaign({"serve": {}})
+    assert loop.fleet_settings(auto, multi) == {}
+    assert loop.fleet_settings(auto, {"SLURM_JOB_ID": "7", "SLURM_JOB_NUM_NODES": "1"}) is None
+    assert loop.fleet_settings(auto, {}) is None, "outside an allocation the cards are served one by one"
+    assert loop.fleet_settings(loop.Campaign({"serve": {"fleet": False}}), multi) is None
+    table = {"nodes": "n[442,445]"}
+    assert loop.fleet_settings(loop.Campaign({"serve": {"fleet": table}}), {}) == table
+    try:
+        loop.fleet_settings(loop.Campaign({"serve": {"fleet": "sometimes"}}), {})
+    except SystemExit as error:
+        assert "serve.fleet" in str(error)
+    else:
+        raise AssertionError("an unknown fleet setting must be refused")
+
+
+def the_fleet_is_named_entered_and_secured_as_its_table_says():
+    flags = loop.fleet_flags(loop.Campaign({}), {"nodes": "n[442,445]", "exec_prefix": "step --", "step_args": ["--mem=64G"]})
+    assert flags == ["--cluster-nodes", "n[442,445]", "--cluster-exec-prefix", "step --", "--slurm-step-arg=--mem=64G"]
+    assert "--cluster-insecure-plaintext" in loop.fleet_flags(loop.Campaign({}), {"insecure_plaintext": True})
+
+
+class _FakeFleet:
+    urls = ["https://10.0.0.1:41000/v1", "https://10.0.0.2:41001/v1"]
+    key = "k"
+    authority = "/fleet/ca.pem"
+    record = {"key_file": "/fleet/key", "adapter_dir": "/state/brain-service/adapters",
+              "artifact_store": "/state/brain-service/artifacts"}
+
+    def brain_flags(self):
+        return loop.Fleet.brain_flags(self)
+
+    def stop(self):
+        pass
+
+
+def on_a_fleet_profiles_name_its_endpoints_and_commands_use_it():
+    loop._FLEET.append(_FakeFleet())
+    try:
+        campaign = loop.Campaign({"bench": {"sven": "/s"}, "serve": {"base_port": 8800, "fleet": True}})
+        text = loop.profile_text(campaign, {"name": "w", "concurrency": 8}, "M", 1, [0, 1])
+        assert 'base_url = ["https://10.0.0.1:41000/v1", "https://10.0.0.2:41001/v1"]' in text, text
+        flags = _FakeFleet().brain_flags()
+        assert flags[:4] == ["--brain-endpoint", _FakeFleet.urls[0], "--brain-endpoint", _FakeFleet.urls[1]]
+        for pair in (["--brain-ca-file", "/fleet/ca.pem"], ["--brain-artifact-store", "/state/brain-service/artifacts"],
+                     ["--brain-adapter-dir", "/state/brain-service/adapters"], ["--brain-key-file", "/fleet/key"]):
+            at = flags.index(pair[0])
+            assert flags[at:at + 2] == pair, flags
+    finally:
+        loop._FLEET.clear()
 
 
 if __name__ == "__main__":
