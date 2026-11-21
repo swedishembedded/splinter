@@ -38,6 +38,8 @@ impl Home {
     /// configured machine would set; its exit code, stdout and stderr.
     fn run(&self, args: &[&str]) -> (i32, String, String) {
         let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+            // A single-machine run, whatever allocation the test runner is in.
+            .env_remove("SLURM_JOB_ID")
             .arg("--json")
             .args(args)
             .env_clear()

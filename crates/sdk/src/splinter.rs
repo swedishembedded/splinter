@@ -68,7 +68,8 @@ impl SplinterBuilder {
     /// The handle, with its runtime started and the configured job launcher
     /// built.
     pub fn build(self) -> Result<Splinter, OrchestratorError> {
-        let jobs_launcher = splinter_orchestrator::launcher::launcher(&self.config.jobs)?;
+        let jobs_launcher =
+            splinter_orchestrator::launcher::launcher(&self.config.jobs, &self.config.cluster)?;
         Ok(Splinter {
             runtime: Arc::new(Runtime::new(self.config, self.allow_remote)?),
             trainer: self.trainer,

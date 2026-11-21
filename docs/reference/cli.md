@@ -27,7 +27,7 @@ Every command takes these.
 - `--job-owner <NAME>`: The controller name recorded with each job this process submits and the claim it takes on one (default: this machine's host name)
 - `--detach-on-interrupt`: On Ctrl-C (or SIGTERM), exit at once and leave the brain training jobs of the command running, instead of cancelling them through brain's API (`DELETE /v1/jobs/{id}`) first; running the same command again continues each job from its last saved state. A second Ctrl-C always exits at once.
 - `--job-attempt-root <DIR>`: Where a submitted job's attempt directories are written (default: `jobs` under the state root)
-- `--job-launcher <KIND>`: How each submitted job's workers are started: `local` runs them on this machine, `slurm` submits the job to Slurm's batch system (default: `local`)
+- `--job-launcher <KIND>`: How each submitted job's workers are started: `local` runs them on this machine, `slurm` submits the job to Slurm's batch system, `slurm-step` runs every rank as a task of one step on the usable nodes of the allocation this process runs inside (default: `auto`, which is `slurm-step` inside an allocation that spans nodes and `local` otherwise)
 - `--slurm-sbatch <PATH>`: The `sbatch` program a `slurm` job is submitted with; required when `--job-launcher slurm` is given.
 - `--slurm-squeue <PATH>`: The `squeue` program that reports a `slurm` job's state; required when `--job-launcher slurm` is given.
 - `--slurm-scancel <PATH>`: The `scancel` program that stops a `slurm` job; required when `--job-launcher slurm` is given.
@@ -2498,7 +2498,7 @@ Arguments:
 
 Options:
 
-- `--distributed`: Prepare a distributed training job: write its plan into every attempt directory before launching and append `--job-plan <file>` and `--job-rank <rank>` to each worker. The plan registers the ranks on this machine's loopback address.
+- `--distributed`: Prepare a distributed training job: write its plan and a fresh owner-only secret into every attempt directory before launching and append `--job-plan <file>`, `--job-rank <rank>` and `--job-secret <file>` to each worker. The plan registers the ranks on the address of the machine rank 0 runs on: this machine's loopback for a local job, the first node's address for a job on the allocation's nodes. `{local_rank}` in the command is a rank's place on its node.
 - `--nodes <N>`: How many machines the job is placed on. Default: `1`.
 - `--ranks-per-node <N>`: How many workers run on each machine. Default: `1`.
 - `--gpus-per-rank <N>`: How many accelerators each worker may use (`0` for none) Default: `0`.

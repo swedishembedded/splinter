@@ -15,6 +15,8 @@ type Outcome = Result<(), Box<dyn std::error::Error>>;
 
 fn splinter(state: &Path, args: &[&str]) -> Result<(i32, Value), Box<dyn std::error::Error>> {
     let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+        // A single-machine run, whatever allocation the test runner is in.
+        .env_remove("SLURM_JOB_ID")
         .arg("--json")
         .arg("--state")
         .arg(state)

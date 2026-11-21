@@ -25,8 +25,18 @@ submits and with the claim it takes on one (default: this machine's host name).
 `--job-attempt-root DIR` writes a job's attempt directories under `DIR`
 (default: `jobs` under the state root).
 
-`--job-launcher KIND` selects what starts a job's workers. `local` (the
-default) runs every rank as a detached process on this machine. `slurm`
+`--job-launcher KIND` selects what starts a job's workers. `auto` (the
+default) is `slurm-step` inside an allocation that spans nodes (see
+[Cluster allocations](#cluster-allocations)) and `local` otherwise. `local`
+runs every rank as a detached process on this machine. `slurm-step` runs every
+rank as a task of ONE `srun` step on the allocation's usable nodes, so a
+fabric that isolates steps lets the ranks talk to each other: the first
+`--nodes` usable nodes, `--ranks-per-node` tasks and `ranks x
+--gpus-per-rank` GPUs on each, `--slurm-single-node-step-arg` added for a
+one-node job, the step's `srun` run under Splinter's supervisor so its exit
+is recorded. In the command, `{rank}`, `{local_rank}` (a rank's place on its
+node, the card a one-card rank takes) and `{world}` become the scheduler's
+task variables. `slurm`
 submits the job to Slurm's batch system, which needs `--slurm-sbatch PATH`,
 `--slurm-squeue PATH` and `--slurm-scancel PATH`: the programs that submit a
 job, report its state and stop it. `--slurm-arg ARG` passes an argument to
@@ -99,6 +109,28 @@ exec apptainer exec --nv -B /nobackup "$HOME/images/workstation.sif" \
 splinter doctor --cluster-nodes n442 --cluster-exec-prefix ~/bin/node-exec.sh \
     --slurm-step-arg=--mem=64G --backend cuda
 ```
+
+### A distributed job across the allocation
+
+`jobs submit --distributed` writes the job's plan (`job-plan.json`) and a
+fresh owner-only secret (`job.secret`) into each attempt directory before any
+rank starts, and appends `--job-plan job-plan.json --job-rank {rank}
+--job-secret job.secret` to the command; the plan's coordinator is on the
+address of rank 0's node. A four-rank Qwen3 LoRA run on one node's four
+cards:
+
+```bash
+splinter --cluster-nodes n442 --cluster-exec-prefix ~/bin/node-exec.sh \
+    --slurm-step-arg=--mem=128G --slurm-single-node-step-arg=--network=single_node_vni \
+    jobs submit --distributed --ranks-per-node 4 --gpus-per-rank 1 -- \
+    brain --device 'gpu{local_rank}' --backend cuda qwen3 lora_train \
+    --in dataset=/shared/data.jsonl --out 'adapter=out{rank}.safetensors' --steps 8
+splinter jobs reconcile
+```
+
+Settings a rank needs in its own environment (a communication library's
+network settings re-exported by the site into every task) belong in the exec
+prefix's wrapper, which runs inside each task, not in `srun`'s environment.
 
 ## Machine and models
 

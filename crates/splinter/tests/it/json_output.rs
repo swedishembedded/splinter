@@ -38,6 +38,8 @@ impl Drop for Scratch {
 /// model would change what the reports say.
 fn splinter(state: &Path, args: &[&str]) -> (i32, Value) {
     let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+        // A single-machine run, whatever allocation the test runner is in.
+        .env_remove("SLURM_JOB_ID")
         .env("HOME", state.parent().unwrap_or(state))
         .arg("--json")
         .arg("--state")

@@ -157,22 +157,31 @@ pub struct Config {
 /// What starts a job's workers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LauncherKind {
-    /// Every rank runs as a detached process on this machine.
+    /// One step on the allocation's nodes when this process runs inside an
+    /// allocation that spans nodes ([`LauncherKind::SlurmStep`]), else this
+    /// machine ([`LauncherKind::Local`]).
     #[default]
+    Auto,
+    /// Every rank runs as a detached process on this machine.
     Local,
     /// The job is submitted to Slurm's batch system.
     Slurm,
+    /// Every rank runs as a task of one step of the allocation this process
+    /// runs inside, on its usable nodes.
+    SlurmStep,
 }
 
 impl LauncherKind {
-    /// The kind a setting names: `local` or `slurm`.
+    /// The kind a setting names: `auto`, `local`, `slurm` or `slurm-step`.
     ///
     /// An unknown name is refused by name, so a mistyped flag is reported
     /// before anything is submitted.
     pub fn parse(name: &str) -> Result<LauncherKind, LauncherKindError> {
         match name.trim() {
+            "auto" => Ok(LauncherKind::Auto),
             "local" => Ok(LauncherKind::Local),
             "slurm" => Ok(LauncherKind::Slurm),
+            "slurm-step" => Ok(LauncherKind::SlurmStep),
             unknown => Err(LauncherKindError {
                 name: unknown.to_string(),
             }),
@@ -183,15 +192,17 @@ impl LauncherKind {
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
+            LauncherKind::Auto => "auto",
             LauncherKind::Local => "local",
             LauncherKind::Slurm => "slurm",
+            LauncherKind::SlurmStep => "slurm-step",
         }
     }
 }
 
 /// A launcher kind the configuration does not have.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("unknown job launcher {name:?}: the kinds are `local` and `slurm`")]
+#[error("unknown job launcher {name:?}: the kinds are `auto`, `local`, `slurm` and `slurm-step`")]
 pub struct LauncherKindError {
     /// The name that was given.
     pub name: String,
@@ -254,7 +265,7 @@ impl Default for JobSettings {
             owner: default_owner(),
             attempt_root: None,
             supervisor: None,
-            launcher: LauncherKind::Local,
+            launcher: LauncherKind::Auto,
             slurm: SlurmSettings::default(),
         }
     }
@@ -550,13 +561,22 @@ mod tests {
             error.to_string().contains("kubernetes"),
             "the refusal names the value: {error}"
         );
-        assert!(error.to_string().contains("`local` and `slurm`"), "{error}");
+        assert!(error.to_string().contains("`slurm-step`"), "{error}");
+        assert_eq!(
+            LauncherKind::parse("slurm-step").unwrap(),
+            LauncherKind::SlurmStep
+        );
+        assert_eq!(LauncherKind::parse("auto").unwrap().as_str(), "auto");
     }
 
     #[test]
     fn jobs_are_launched_locally_until_a_slurm_configuration_is_given() {
         let jobs = JobSettings::default();
-        assert_eq!(jobs.launcher, LauncherKind::Local);
+        assert_eq!(
+            jobs.launcher,
+            LauncherKind::Auto,
+            "local outside an allocation"
+        );
         assert_eq!(jobs.slurm, SlurmSettings::default());
         assert_eq!(jobs.slurm.sbatch, None);
         assert_eq!(jobs.slurm.squeue, None);

@@ -11,31 +11,40 @@
 //! A job that carries a plan policy has `job-plan.json` in its attempt
 //! directory before any worker starts. The plan names the job by the
 //! specification's digest in hex, takes its world size from the worker plan,
-//! and registers the ranks with a free port on the loopback address. Each
-//! attempt gets its own file, so a retry runs under a fresh coordinator while
-//! naming the same job identity.
+//! and registers the ranks with a port on the address of the machine rank 0
+//! runs on (the loopback address for a job on this machine). Beside it is a
+//! fresh owner-only secret every rank proves its membership with. Each
+//! attempt gets its own files, so a retry runs under a fresh coordinator and
+//! secret while naming the same job identity.
 
 use std::fs;
-use std::io;
-use std::net::TcpListener;
+use std::io::{self, Read};
+use std::net::{IpAddr, Ipv4Addr, TcpListener};
 use std::path::Path;
 
 use splinter_core::checkpoint::JOB_PLAN_FILE;
-use splinter_core::job::JobSpec;
+use splinter_core::job::{JobSpec, JOB_SECRET_FILE};
 
 use super::JobError;
 
-/// Write the plan `spec` asks for into `dir`, or write nothing when it asks for
-/// none.
-pub(crate) fn write(spec: &JobSpec, dir: &Path) -> Result<(), JobError> {
+/// The loopback address a job on this machine registers its ranks on.
+pub(crate) const LOOPBACK: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+
+/// Write the plan `spec` asks for into `dir`, its coordinator on `host` (the
+/// address of the machine rank 0 runs on), and the job's secret beside it;
+/// write nothing when it asks for none.
+pub(crate) fn write(spec: &JobSpec, dir: &Path, host: IpAddr) -> Result<(), JobError> {
     let Some(policy) = &spec.plan else {
         return Ok(());
     };
+    let secret = dir.join(JOB_SECRET_FILE);
+    crate::step::write_secret(&secret)
+        .map_err(|error| JobError::io(format!("writing {}", secret.display()), error))?;
     let plan = policy
         .plan(
             spec.digest().hex(),
             spec.workers.world_size() as usize,
-            coordinator()?,
+            coordinator(host)?,
         )
         .map_err(|error| {
             JobError::io(
@@ -55,20 +64,29 @@ pub(crate) fn write(spec: &JobSpec, dir: &Path) -> Result<(), JobError> {
     write_atomically(&dir.join(JOB_PLAN_FILE), &body)
 }
 
-/// A loopback address whose port was free when it was chosen.
+/// An address on `host` whose port was free when it was chosen.
 ///
-/// The listener is closed before the address is returned, because the ranks
-/// bind it themselves: the port is a reservation, not a socket this process
-/// keeps.
-fn coordinator() -> Result<String, JobError> {
-    let listener = TcpListener::bind(("127.0.0.1", 0))
-        .map_err(|error| JobError::io("finding a free coordinator port", error))?;
-    let port = listener
-        .local_addr()
-        .map_err(|error| JobError::io("reading the coordinator port", error))?
-        .port();
-    drop(listener);
-    Ok(format!("127.0.0.1:{port}"))
+/// On this machine the port is one the system reports free; the listener is
+/// closed before the address is returned, because the ranks bind it
+/// themselves: the port is a reservation, not a socket this process keeps. On
+/// another machine nothing here can ask, so the port is drawn at random from
+/// the range above the usual ephemeral ports' start, where a clash is rare
+/// and is reported by the rank that cannot bind it.
+fn coordinator(host: IpAddr) -> Result<String, JobError> {
+    let port = match TcpListener::bind((host, 0)) {
+        Ok(listener) => listener
+            .local_addr()
+            .map_err(|error| JobError::io("reading the coordinator port", error))?
+            .port(),
+        Err(_) => {
+            let mut bytes = [0u8; 2];
+            fs::File::open("/dev/urandom")
+                .and_then(|mut random| random.read_exact(&mut bytes))
+                .map_err(|error| JobError::io("drawing a coordinator port", error))?;
+            20_000 + u16::from_le_bytes(bytes) % 30_000
+        }
+    };
+    Ok(std::net::SocketAddr::new(host, port).to_string())
 }
 
 /// Write `body` to `path` in one step, so a reader never sees half a plan.

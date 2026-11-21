@@ -61,10 +61,13 @@ pub struct SubmitArgs {
         value_name = "PROGRAM ARG..."
     )]
     pub command: Vec<String>,
-    /// Prepare a distributed training job: write its plan into every attempt
-    /// directory before launching and append `--job-plan <file>` and
-    /// `--job-rank <rank>` to each worker. The plan registers the ranks on this
-    /// machine's loopback address.
+    /// Prepare a distributed training job: write its plan and a fresh
+    /// owner-only secret into every attempt directory before launching and
+    /// append `--job-plan <file>`, `--job-rank <rank>` and `--job-secret
+    /// <file>` to each worker. The plan registers the ranks on the address of
+    /// the machine rank 0 runs on: this machine's loopback for a local job,
+    /// the first node's address for a job on the allocation's nodes.
+    /// `{local_rank}` in the command is a rank's place on its node.
     #[arg(long)]
     pub distributed: bool,
     /// How many machines the job is placed on.

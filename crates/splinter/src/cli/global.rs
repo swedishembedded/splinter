@@ -35,8 +35,11 @@ pub struct Global {
     #[arg(long, global = true, value_name = "DIR")]
     pub job_attempt_root: Option<PathBuf>,
     /// How each submitted job's workers are started: `local` runs them on
-    /// this machine, `slurm` submits the job to Slurm's batch system (default:
-    /// `local`).
+    /// this machine, `slurm` submits the job to Slurm's batch system,
+    /// `slurm-step` runs every rank as a task of one step on the usable nodes
+    /// of the allocation this process runs inside (default: `auto`, which is
+    /// `slurm-step` inside an allocation that spans nodes and `local`
+    /// otherwise).
     #[arg(long, global = true, value_name = "KIND", value_parser = launcher_kind)]
     pub job_launcher: Option<LauncherKind>,
     /// The `sbatch` program a `slurm` job is submitted with; required when

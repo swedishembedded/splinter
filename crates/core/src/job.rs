@@ -37,6 +37,12 @@ pub const LOCAL_RANK_PLACEHOLDER: &str = "{local_rank}";
 pub const JOB_PLAN_FLAG: &str = "--job-plan";
 /// The option a distributed job's command carries with the worker's rank.
 pub const JOB_RANK_FLAG: &str = "--job-rank";
+/// The option a distributed job's command carries with the secret file every
+/// rank proves its membership with.
+pub const JOB_SECRET_FLAG: &str = "--job-secret";
+/// The file a distributed job's secret is written to, once per attempt and
+/// readable by its owner only, in its attempt directory.
+pub const JOB_SECRET_FILE: &str = "job.secret";
 
 /// How many workers a job runs and what each may use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -233,8 +239,9 @@ impl JobSpec {
     }
 
     /// This job launched under a generated plan: every worker gains
-    /// `--job-plan <file>` and `--job-rank <rank>`, and the launcher writes the
-    /// plan the file names into each attempt directory before any worker starts.
+    /// `--job-plan <file>`, `--job-rank <rank>` and `--job-secret <file>`, and
+    /// the launcher writes the plan and a fresh owner-only secret into each
+    /// attempt directory before any worker starts.
     #[must_use]
     pub fn with_plan(mut self, plan: PlanPolicy) -> JobSpec {
         self.command.extend([
@@ -242,6 +249,8 @@ impl JobSpec {
             JOB_PLAN_FILE.to_owned(),
             JOB_RANK_FLAG.to_owned(),
             RANK_PLACEHOLDER.to_owned(),
+            JOB_SECRET_FLAG.to_owned(),
+            JOB_SECRET_FILE.to_owned(),
         ]);
         self.plan = Some(plan);
         self
@@ -481,16 +490,23 @@ mod tests {
     }
 
     #[test]
-    fn a_distributed_job_appends_the_plan_and_its_rank_to_every_worker() {
+    fn a_distributed_job_appends_the_plan_its_rank_and_its_secret_to_every_worker() {
         let job = distributed();
         assert_eq!(job.plan, Some(PlanPolicy::default()));
         let command = job.command_for(1);
         assert_eq!(
-            command[command.len() - 4..],
-            [JOB_PLAN_FLAG, JOB_PLAN_FILE, JOB_RANK_FLAG, "1"]
+            command[command.len() - 6..],
+            [
+                JOB_PLAN_FLAG,
+                JOB_PLAN_FILE,
+                JOB_RANK_FLAG,
+                "1",
+                JOB_SECRET_FLAG,
+                JOB_SECRET_FILE
+            ]
         );
         let first = job.command_for(0);
-        assert_eq!(first.last().unwrap(), "0");
+        assert_eq!(first[first.len() - 3], "0");
         assert_eq!(
             job.digest().hex().len(),
             64,

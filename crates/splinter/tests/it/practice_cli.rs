@@ -38,6 +38,8 @@ impl Drop for Scratch {
 
 fn splinter(state: &std::path::Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_splinter"))
+        // A single-machine run, whatever allocation the test runner is in.
+        .env_remove("SLURM_JOB_ID")
         .arg("--state")
         .arg(state)
         .args(args)

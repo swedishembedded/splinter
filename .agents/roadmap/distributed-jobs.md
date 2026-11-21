@@ -165,6 +165,27 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       10.150.4.178 in 7.9 s wall from command start to exit, and left no
       process on n442. Tests: `crates/model/tests/service.rs` (`fleet`),
       `crates/sandbox/src/step.rs`, the doctor card tests.
+- [x] **A distributed job runs across the allocation as one step
+      (2026-11-21).** `--job-launcher auto` (the new default) is
+      `slurm-step` inside an allocation that spans nodes:
+      `splinter_sandbox::job::NodeStepLauncher` runs every rank as a task of
+      ONE `srun --overlap` step (a Slingshot VNI is per step) on the first
+      `nodes` usable nodes, `--ntasks-per-node` and `--gpus-per-node`
+      stated, `--slurm-single-node-step-arg` for a one-node job, the `srun`
+      under the supervisor so the step's exit is recorded; `{rank}`,
+      `{local_rank}` and `{world}` map to `SLURM_PROCID`, `SLURM_LOCALID` and
+      `SLURM_NTASKS` in the step script (brain reads no scheduler variable).
+      The plan's coordinator is on rank 0's node's address, and
+      `--distributed` writes a fresh owner-only `job.secret` per attempt and
+      appends `--job-secret` (brain refuses a plan without one). Measured
+      2026-11-21 in job 5600435 on n442 (brain bcd67e5ad, host TCP
+      collective, `--network=single_node_vni`): a 4-rank Qwen3-4B LoRA
+      (rank 8, 8 steps, batch 1, 16 two-turn records) ran as step
+      5600435.142, 16 s from launch to exit, exit 0, the four rank adapters
+      byte-identical (sha256 c632a989...), `jobs reconcile` completed it.
+      Tests: `crates/sandbox/tests/it/distributed_plan.rs` (a stand-in
+      `srun` running both ranks of one step), the launcher factory tests,
+      `crates/core/src/job.rs`.
 
 ## Decisions
 
@@ -186,11 +207,17 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       scheduler programs. A real cluster run is still unproven; the adapter
       maps the scheduler's terminal states to distinct outcomes, and job
       accounting (exit codes from a scheduler) is not wired yet.
-- [ ] No pipeline stage runs a training job through the controller. The train
-      stage still calls brain in-process, so a distributed run is submitted by
-      hand with `jobs submit --distributed`. The generated plan registers the
-      ranks on the loopback address of one machine; a coordinator reachable
-      across nodes is still open.
+- [ ] No pipeline stage runs a training job through the job plan. The train
+      stage trains as a job of the brain service (`/v1/jobs`, one card per
+      run, with held-out scores, curve and selection in its report); the
+      plan path is the `brain qwen3 lora_train` / `brain gpt2 train` action,
+      whose output is an adapter alone. Using the plan from the stage needs
+      either brain's service job to take a world of ranks (brain C2) or the
+      stage to rebuild the report from the action's outputs; a distributed
+      run is submitted with `jobs submit --distributed` meanwhile. A
+      coordinator reachable across nodes exists (`slurm-step`); `--job-launcher
+      slurm` (sbatch) still registers on the loopback, since rank 0's node
+      is not known at submission.
 - [ ] Artifact storage backends. Adapters and datasets are plain files at a
       content address; a parallel filesystem works as it is, while an object
       store needs a fetch path brain can read (brain resolves a local path

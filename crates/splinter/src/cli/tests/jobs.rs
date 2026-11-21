@@ -7,7 +7,9 @@
 
 use super::{command, parse, Command, JobsArgs, JobsCommand};
 use splinter_sdk::vocabulary::checkpoint::JOB_PLAN_FILE;
-use splinter_sdk::vocabulary::job::{PlanPolicy, JOB_PLAN_FLAG, JOB_RANK_FLAG};
+use splinter_sdk::vocabulary::job::{
+    PlanPolicy, JOB_PLAN_FLAG, JOB_RANK_FLAG, JOB_SECRET_FILE, JOB_SECRET_FLAG,
+};
 
 #[test]
 fn a_submission_takes_its_worker_plan_wall_clock_and_attempts() {
@@ -84,8 +86,15 @@ fn a_distributed_submission_prepares_a_plan_for_every_rank() {
     assert_eq!(spec.workers.world_size(), 2);
     let for_rank = spec.command_for(1);
     assert_eq!(
-        for_rank[for_rank.len() - 4..],
-        [JOB_PLAN_FLAG, JOB_PLAN_FILE, JOB_RANK_FLAG, "1"]
+        for_rank[for_rank.len() - 6..],
+        [
+            JOB_PLAN_FLAG,
+            JOB_PLAN_FILE,
+            JOB_RANK_FLAG,
+            "1",
+            JOB_SECRET_FLAG,
+            JOB_SECRET_FILE
+        ]
     );
 
     // Without the option a single-rank job asks for no plan at all.

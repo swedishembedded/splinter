@@ -46,6 +46,8 @@ impl Drop for Scratch {
 /// `splinter --json --state <state> args...`; its exit code and stdout as JSON.
 fn splinter(state: &Path, args: &[&str]) -> (i32, Value) {
     let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+        // A single-machine run, whatever allocation the test runner is in.
+        .env_remove("SLURM_JOB_ID")
         .arg("--json")
         .arg("--state")
         .arg(state)
@@ -269,6 +271,8 @@ fn cancelling_stops_the_workers_and_records_the_job_cancelled() {
 #[test]
 fn plain_jobs_lists_its_subcommands_and_the_help_names_what_submit_takes() {
     let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+        // A single-machine run, whatever allocation the test runner is in.
+        .env_remove("SLURM_JOB_ID")
         .args(["jobs"])
         .output()
         .unwrap();
@@ -282,6 +286,8 @@ fn plain_jobs_lists_its_subcommands_and_the_help_names_what_submit_takes() {
     }
 
     let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+        // A single-machine run, whatever allocation the test runner is in.
+        .env_remove("SLURM_JOB_ID")
         .args(["jobs", "submit", "--help"])
         .output()
         .unwrap();

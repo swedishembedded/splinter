@@ -206,7 +206,9 @@ impl JobLauncher for SlurmLauncher {
     }
 
     fn launch(&self, spec: &JobSpec, attempt: u32, dir: &Path) -> Result<Launch, JobError> {
-        claim_attempt(spec, attempt, dir)?;
+        // A batch job's rank 0 runs on a node not known until it is placed:
+        // the plan's coordinator is the loopback, for a one-node job.
+        claim_attempt(spec, attempt, dir, super::plan::LOOPBACK)?;
         let script = dir.join(SCRIPT_FILE);
         fs::write(&script, batch_script(spec))
             .map_err(|e| JobError::io(format!("writing {}", script.display()), e))?;

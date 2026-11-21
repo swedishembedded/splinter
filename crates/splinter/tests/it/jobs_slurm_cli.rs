@@ -122,6 +122,8 @@ fn write_program(path: &Path, body: &str) {
 /// stdout as JSON.
 fn splinter(state: &Path, global: &[String], args: &[&str]) -> (i32, Value) {
     let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+        // A single-machine run, whatever allocation the test runner is in.
+        .env_remove("SLURM_JOB_ID")
         .arg("--json")
         .arg("--state")
         .arg(state)
@@ -244,6 +246,8 @@ fn a_slurm_launcher_without_its_programs_is_refused_by_name() {
 fn an_unknown_launcher_kind_is_refused_by_the_grammar() {
     let scratch = Scratch::new("unknown");
     let output = Command::new(env!("CARGO_BIN_EXE_splinter"))
+        // A single-machine run, whatever allocation the test runner is in.
+        .env_remove("SLURM_JOB_ID")
         .arg("--json")
         .arg("--state")
         .arg(&scratch.state)

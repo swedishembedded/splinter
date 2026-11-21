@@ -188,6 +188,112 @@ fn a_retry_writes_its_own_plan_naming_the_same_job() {
         second_dir.join("job-plan.json").exists(),
         "the retry has its own plan file"
     );
+    // Every attempt has its own owner-only secret for its ranks.
+    let secret = |dir: &Path| std::fs::read_to_string(dir.join("job.secret")).unwrap();
+    assert_eq!(secret(&first_dir).trim().len(), 64);
+    assert_ne!(secret(&first_dir), secret(&second_dir));
+    let mode = std::fs::metadata(first_dir.join("job.secret"))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+}
+
+/// A stand-in `srun`: records its arguments, then runs the step's script
+/// once per task of a one-node step, as the scheduler's task variables say.
+const SRUN: &str = r#"#!/bin/sh
+echo "$@" > "$0.args"
+tasks=1
+for a in "$@"; do case "$a" in --ntasks=*) tasks=${a#--ntasks=} ;; esac; done
+while [ "$1" != sh ]; do shift; done
+script=$2
+i=0
+pids=""
+while [ "$i" -lt "$tasks" ]; do
+  SLURM_JOB_ID=9 SLURM_STEP_ID=4 SLURM_PROCID=$i SLURM_LOCALID=$i SLURM_NTASKS=$tasks sh "$script" &
+  pids="$pids $!"
+  i=$((i + 1))
+done
+status=0
+for p in $pids; do wait "$p" || status=1; done
+exit $status
+"#;
+
+#[test]
+fn a_step_launch_runs_every_rank_as_one_step_with_the_coordinator_on_rank_0s_node() {
+    use splinter_sandbox::job::NodeStepLauncher;
+    use splinter_sandbox::step::NodeSteps;
+    let scratch = tempfile::tempdir().unwrap();
+    let worker = worker(scratch.path());
+    let srun = scratch.path().join("srun");
+    std::fs::write(&srun, SRUN).unwrap();
+    std::fs::set_permissions(&srun, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let launcher = NodeStepLauncher::new(
+        NodeSteps {
+            srun: srun.clone(),
+            scancel: None,
+            args: vec!["--mem=1G".into()],
+            single_node_args: vec!["--network=single_node_vni".into()],
+            exec_prefix: Vec::new(),
+        },
+        vec!["localhost".into(), "unused".into()],
+        None,
+    );
+    let mut job = two_rank(&worker);
+    job.workers.gpus_per_rank = 1;
+    job.command.push("--card=gpu{local_rank}".into());
+    let dir = scratch.path().join("attempt-1");
+    let launch = launcher.launch(&job, 1, &dir).expect("launch");
+    assert_eq!(launch.world_size, 1, "one srun carries every rank");
+    for rank in 0..2 {
+        wait_for(&dir.join(format!("record-{rank}.txt")));
+    }
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let outcome = loop {
+        match launcher.observe(&launch) {
+            Observation::Finished { outcome, .. } => break outcome,
+            Observation::Running { ranks_alive } => {
+                assert_eq!(ranks_alive, [0, 1], "every rank of the step is alive");
+            }
+        }
+        assert!(Instant::now() < deadline, "the step did not end");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert_eq!(outcome, splinter_sandbox::job::JobOutcome::Completed);
+
+    let (_, plan) = read_plan(&dir);
+    assert!(
+        plan.coordinator.starts_with("127.0.0.1:"),
+        "rank 0's node is localhost: {}",
+        plan.coordinator
+    );
+    let args = std::fs::read_to_string(scratch.path().join("srun.args")).unwrap();
+    for wanted in [
+        "--overlap",
+        "--nodelist=localhost",
+        "--nodes=1",
+        "--ntasks-per-node=2",
+        "--gpus-per-node=2",
+        "--network=single_node_vni",
+        "--mem=1G",
+    ] {
+        assert!(args.contains(wanted), "{wanted} in {args}");
+    }
+    assert_eq!(
+        std::fs::read_to_string(dir.join("step.id")).unwrap().trim(),
+        "9.4"
+    );
+    let script = std::fs::read_to_string(dir.join("job.step.sh")).unwrap();
+    assert!(script.contains("'--card=gpu'${SLURM_LOCALID}"), "{script}");
+
+    let mut too_wide = two_rank(&worker);
+    too_wide.workers.nodes = 3;
+    too_wide.workers.ranks_per_node = 1;
+    let error = launcher
+        .launch(&too_wide, 1, &scratch.path().join("attempt-wide"))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("3 nodes"), "{error}");
 }
 
 #[test]
