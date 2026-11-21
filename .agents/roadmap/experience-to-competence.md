@@ -802,3 +802,28 @@ therefore share a card and a time slot. Cards are taken from lane R19 as it free
 - Secondary, Holm-corrected over two family sign-flip tests: (g3t2) - (g3), (h3) - (a).
 - Reported: per domain, and accounting's VAT and accrual families against S1b's harm; steps per trial (the v0.2 pages
   doubled to quadrupled steps in accounting); the same read, timeout, token and rescued-call metrics as S1.
+
+**S1c run notes (2026-11-21, during the run).**
+- A run-name collision (two accounting page groups both named `vat`) failed the `vat` and `missing-info` groups of
+  g3/g3t2 in unit accounting-u1 at once. They were relaunched 15 minutes later on the same card; the unit script was
+  replaced atomically with distinct group names.
+- gpu0 was not ours (a coordination error). accounting-u2 ran there for about a minute at 01:51, was stopped, and was
+  requeued whole; the stopped states are not analysed.
+- **Concurrency change (the user's maximum-concurrency rule).** A card's server started after 2026-11-21 02:10 asks for
+  `--max-batch 128` and falls back to 64 if it does not fit. Every cell of a unit then runs 20 trials at a time (accounting
+  page groups 4) instead of 10 (2). The setting is per unit and the same for all four cells of a unit, so every within-unit
+  contrast keeps one setting. `logs/runs.log` records each unit's `max_batch` and `jobs`. gpu1's server stays at 64, so its
+  units keep 10. Timeouts per unit are compared across the two settings; if they rise noticeably, the setting steps back.
+- **Raised again (2026-11-21 ~03:20, the user's rule, brain knowledge 538):** at its next unit boundary each card's server
+  restarts at `--max-batch 256` (KV sized by brain; falling back to 128, then 64), and every cell of that unit runs 10
+  trials at a time per 64 of the batch: 40 per cell, 8 per accounting page group, under brain's 256 in-flight limit. The
+  units accounting-u1 and accounting-u2 ran at 64 / 10 on gpu1.
+- **Stepped back (2026-11-21 03:55), before any unit ran at 256.** accounting-u1 at 64 / 10 had 33-40 timeouts of 96 trials
+  in every cell (median agent wall 780 s against about 300 s in S1). The node's load average was near its core count
+  (other lanes), so more concurrency would have raised timeouts further. Every S1c unit runs at 64 / 10, as designed.
+  Timeouts count as failures in all four cells of a unit alike, but they compress the differences; report them per unit.
+- **Bench f37811d4 from the next unit boundary (2026-11-21 ~04:05).** Sandbox start drops from about 50 s to about 2 s and
+  the gateway no longer caps upstream connections at 100 (bench knowledge 071); agent behaviour, caps and isolation are
+  unchanged, and setup time is outside the agent's time limit. The pinned worktree moves to it when no other unit is
+  running, so every unit runs on one bench build for all its cells; `logs/runs.log` records each unit's bench. Regenerating
+  the accounting and support draws under f37811d4 gave the same task digests and collection digests.

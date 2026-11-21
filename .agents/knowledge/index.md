@@ -183,3 +183,4 @@ in the same commit.
 | [195](195-a-small-model-reads-a-worked-example-as-a-description-of-its-own-task.md) | A small model reads a worked example as a description of its own task |
 | [196](196-a-baseline-moves-between-time-slots-by-as-much-as-the-effects-measured.md) | A baseline moves between time slots by as much as the effects measured |
 | [197](197-moving-beyond-teacher-sft-failed-in-three-distinct-ways.md) | Moving beyond teacher SFT failed in three distinct ways |
+| [198](198-the-base-qwen3-4b-passes-a-quarter-of-the-vim-practice-tasks-and-one-of-fourteen-exams.md) | The base Qwen3-4B passes a quarter of the vim practice tasks and one of fourteen exams |
