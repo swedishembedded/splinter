@@ -250,6 +250,7 @@ impl BenchExaminer {
         request: &ExamRequest<'_>,
         files: &CandidateFiles,
         examined: &Examined,
+        fleet: &[String],
         cancel: &CancelToken,
     ) -> Result<(), CampaignError> {
         for (collection, out) in [
@@ -264,6 +265,7 @@ impl BenchExaminer {
                 request.training,
                 out,
             );
+            let args: Vec<String> = args.into_iter().chain(fleet.iter().cloned()).collect();
             self.run(&args, &[], cancel)?;
         }
         Ok(())
@@ -523,7 +525,8 @@ impl Examiner for BenchExaminer {
         match self.spec.protocol {
             Protocol::DirectCompletion => {
                 let files = self.candidate_files(request)?;
-                self.examine_directly(request, &files, &examined, cancel)?;
+                let fleet = fleet_flags(ctx, request)?;
+                self.examine_directly(request, &files, &examined, &fleet, cancel)?;
             }
             Protocol::Agent => {
                 let endpoint = |model: &Model| {
@@ -543,9 +546,79 @@ impl Examiner for BenchExaminer {
     }
 }
 
+/// The `bench examine` flags that examine on the brain fleet this run
+/// serves on, inside an allocation that spans nodes: both models are first
+/// offered to every server of the fleet (which starts it on first use), then
+/// bench is pointed at its endpoints, key and certificate authority, and
+/// checks for itself that every server lists exactly the model it examines.
+/// None outside such an allocation, or with endpoints given by the command
+/// line: bench serves on its own card as configured.
+fn fleet_flags(ctx: &Context, request: &ExamRequest<'_>) -> Result<Vec<String>, CampaignError> {
+    let config = ctx.config();
+    let spans = config
+        .cluster
+        .usable()
+        .ok()
+        .flatten()
+        .is_some_and(|usable| usable.spans_nodes());
+    if !spans || config.brain.is_some() {
+        return Ok(Vec::new());
+    }
+    for model in [request.predecessor, request.candidate] {
+        ctx.served_endpoint(&model.reference()?).map_err(|e| {
+            CampaignError::Validator(format!(
+                "the fleet does not serve {} for the examiner: {e}",
+                model.model
+            ))
+        })?;
+    }
+    let Some(dir) = ctx.runtime().brain_directory() else {
+        return Ok(Vec::new());
+    };
+    Ok(fleet_arguments(&dir))
+}
+
+/// The flags that point `bench examine` at the fleet whose directory is
+/// `dir` (its endpoints file, key and, for TLS, certificate authority).
+fn fleet_arguments(dir: &Path) -> Vec<String> {
+    use splinter_model::service::{AUTHORITY_FILE, ENDPOINTS_FILE, KEY_FILE};
+    let mut flags = vec![
+        "--endpoints-file".to_string(),
+        dir.join(ENDPOINTS_FILE).display().to_string(),
+        // After the campaign's own serving flags, so the fleet's key wins.
+        "--api-key-file".into(),
+        dir.join(KEY_FILE).display().to_string(),
+    ];
+    let authority = dir.join(AUTHORITY_FILE);
+    if authority.is_file() {
+        flags.extend(["--endpoint-ca".into(), authority.display().to_string()]);
+    }
+    flags
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bench_is_pointed_at_the_fleets_endpoints_key_and_authority() {
+        let dir = tempfile::tempdir().unwrap();
+        let flags = fleet_arguments(dir.path());
+        let endpoints = dir.path().join("endpoints").display().to_string();
+        let key = dir.path().join("key").display().to_string();
+        assert_eq!(
+            flags,
+            ["--endpoints-file", &endpoints, "--api-key-file", &key]
+        );
+        std::fs::write(dir.path().join("ca.pem"), "x").unwrap();
+        let tls = fleet_arguments(dir.path());
+        let ca = dir.path().join("ca.pem").display().to_string();
+        assert_eq!(
+            tls[4..],
+            ["--endpoint-ca".to_string(), ca],
+            "and the authority for TLS"
+        );
+    }
 
     fn spec(protocol: Protocol) -> ExamineSpec {
         ExamineSpec {

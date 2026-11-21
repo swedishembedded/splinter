@@ -269,6 +269,15 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       included, one run each; no process was left. brain's own measurement
       of a larger case: a 27B base on 8 ranks, 124.7 s to a finished step
       from the shared filesystem, 92.3 s staged cold, 54.5 s staged warm.
+- [x] **The campaign's examiner examines on the fleet (2026-11-21).**
+      Inside an allocation that spans nodes, a direct-completion `[examine]`
+      first offers the candidate and its predecessor to every server of the
+      fleet, then runs `bench examine` with the fleet's `--endpoints-file`,
+      key and `--endpoint-ca` (bench 0c37ddae), and bench refuses unless
+      every server lists exactly the model it examines; outside such an
+      allocation bench serves on its own card as configured. Tests: the
+      examiner's flag test, the campaign suite; bench's
+      `tests/integration/test_examination_endpoints.py`. Not yet run on GPUs.
 
 ## Decisions
 
