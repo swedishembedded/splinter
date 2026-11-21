@@ -224,6 +224,7 @@ fn sft_of(ctx: &Context, experience: &Experience) -> Result<(), String> {
             practice: Vec::new(),
             split_seed: None,
             history: Default::default(),
+            pass_curation: Default::default(),
             base: None,
         },
     )

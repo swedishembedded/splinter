@@ -314,6 +314,7 @@ pub fn rehearse_on(
             practice: Vec::new(),
             split_seed: None,
             history: Default::default(),
+            pass_curation: Default::default(),
             base: None,
         },
     )?;

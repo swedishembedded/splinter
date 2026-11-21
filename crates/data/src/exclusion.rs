@@ -160,4 +160,13 @@ pub enum Exclusion {
     /// A repair whose copied prefix is not the failed attempt's own
     /// conversation, so the two do not continue one state.
     PrefixMismatch,
+    /// A pass whose last agent step calls a tool or says nothing, left out by
+    /// a curation that wants a final answer ([`crate::curation::PassCuration`]).
+    NoFinalAnswer,
+    /// A pass that made the same tool calls as another pass of its task with
+    /// less reasoning ([`crate::curation::PassCuration`]).
+    DuplicatePass,
+    /// A pass beyond the curation's cap of passes per task
+    /// ([`crate::curation::PassCuration`]).
+    OverTaskCap,
 }

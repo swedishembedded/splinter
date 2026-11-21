@@ -57,6 +57,7 @@ pub fn sft_request(set: SetId) -> BuildRequest {
         practice: Vec::new(),
         split_seed: None,
         history: Default::default(),
+        pass_curation: Default::default(),
         base: None,
     }
 }

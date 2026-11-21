@@ -216,6 +216,22 @@ pub struct BuildArgs {
     /// reads learns to dig through the history. The manifest names the policy.
     #[arg(long, value_parser = history, value_name = "keep|drop-step|truncate")]
     pub repository_history: Option<HistoryCuration>,
+    /// For the sft-step view: leave out a pass whose last agent step calls a
+    /// tool or says nothing, counted as `no_final_answer`: it teaches acting
+    /// without concluding.
+    #[arg(long)]
+    pub final_answer_only: bool,
+    /// For the sft-step view: passes of one task whose tool calls are the same
+    /// (name and arguments, whitespace normalised) are one demonstration; the
+    /// one with the least reasoning is kept, the others counted as
+    /// `duplicate_pass`. Applied after --final-answer-only.
+    #[arg(long)]
+    pub distinct_calls: bool,
+    /// For the sft-step view: keep at most N passes of each task, the least
+    /// reasoning per action first; the rest are counted as `over_task_cap`.
+    /// Applied after --distinct-calls. The manifest records the curation.
+    #[arg(long, value_name = "N", value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+    pub max_passes_per_task: Option<usize>,
     /// The seed the dataset's held-out and monitoring sets are drawn by:
     /// within each stratum (the domain a record's task exercises) its groups
     /// are ordered by a hash of the seed, so every stratum is held out at its

@@ -144,6 +144,7 @@ fn projection(records: Vec<Record>) -> Projection {
         block_measure: None,
         terms: None,
         curation: None,
+        pass_curation: None,
         overlong: None,
         partial_credit: None,
         pairing: None,
@@ -502,6 +503,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         practice: Vec::new(),
         split_seed: None,
         history: Default::default(),
+        pass_curation: Default::default(),
         base: None,
     };
     let retrieval = Retrieval {

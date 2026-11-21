@@ -201,6 +201,11 @@ pub struct Manifest {
     /// for a dataset no policy curated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub curation: Option<crate::curation::Curation>,
+    /// How the passes of each task were curated
+    /// ([`crate::curation::PassCuration`]); its counts are in `counts`. `None`
+    /// for a dataset whose passes were not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass_curation: Option<crate::curation::PassCuration>,
     /// DAPO's over-length penalty the records' rewards carry, with its
     /// thresholds ([`crate::Overlong`]); `None` for rewards without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -720,6 +725,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         terms: projection.terms.clone(),
         split: projection.split_policy(),
         curation: projection.curation.clone(),
+        pass_curation: projection.pass_curation,
         overlong: projection.overlong,
         partial_credit: projection.partial_credit.clone(),
         pairing: projection.pairing.clone(),

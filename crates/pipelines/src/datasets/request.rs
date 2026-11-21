@@ -11,7 +11,7 @@
 use serde::Serialize;
 use splinter_core::annotation::Strength;
 use splinter_core::model_ref::ModelRef;
-use splinter_data::curation::HistoryCuration;
+use splinter_data::curation::{HistoryCuration, PassCuration};
 use splinter_store::experiences::SetId;
 
 use super::{Control, RlBuild, Strip, ViewName};
@@ -86,6 +86,10 @@ pub struct BuildRequest {
     /// repository's history or git's raw storage
     /// (`splinter_data::curation`): by default it is not supervised.
     pub history: HistoryCuration,
+    /// For the sft-step view: how the passes of each task are curated
+    /// ([`PassCuration`]): without a final answer left out, the same tool
+    /// calls kept once, at most a number per task. The default curates none.
+    pub pass_curation: PassCuration,
     /// The seed the held-out and monitoring sets of the dataset are drawn by
     /// (every record carries it, with its stratum: `splinter_data::holdout`).
     /// `None` derives it from the experiences the records come from, so a
@@ -128,6 +132,7 @@ impl BuildRequest {
             rl: RlBuild::default(),
             practice: Vec::new(),
             history: HistoryCuration::default(),
+            pass_curation: PassCuration::default(),
             split_seed: None,
             base: None,
         }

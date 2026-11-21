@@ -40,6 +40,9 @@ pub fn run(ctx: &Context, json: bool, args: BuildArgs) -> Result<(), Error> {
         control,
         control_seed,
         repository_history,
+        final_answer_only,
+        distinct_calls,
+        max_passes_per_task,
         split_seed,
         drop_leaking,
         serialise_calls,
@@ -105,6 +108,11 @@ pub fn run(ctx: &Context, json: bool, args: BuildArgs) -> Result<(), Error> {
         },
         practice,
         history: repository_history.unwrap_or_default(),
+        pass_curation: splinter_sdk::data::curation::PassCuration {
+            final_answer: final_answer_only,
+            distinct_calls,
+            per_task: max_passes_per_task,
+        },
         split_seed: split_seed.map(splinter_sdk::seed::Seed::value),
         base: from,
     };

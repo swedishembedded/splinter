@@ -6,7 +6,7 @@
 //! row's bound, the tier the frozen base is held at, the seed a dataset's
 //! held-out split is drawn by, and the settings of preference and feedback
 //! datasets and runs (the pairing bound and seed, the pair loss and its
-//! margin, KTO's class weights).
+//! margin, KTO's class weights), and the curation of passes per task.
 
 use super::{command, parse, Command, DatasetCommand};
 
@@ -338,4 +338,34 @@ fn the_pair_loss_its_settings_and_the_pairing_bound_parse() {
         (Some(2), Some(7))
     );
     assert!(parse(&["dataset", "build", "ab12", "--view", "feedback"]).is_ok());
+}
+
+#[test]
+fn a_build_curates_passes_by_final_answer_distinct_calls_and_a_cap_per_task() {
+    let Command::Dataset(DatasetCommand::Build(build)) = command(&[
+        "dataset",
+        "build",
+        "ab12",
+        "--view",
+        "sft-step",
+        "--final-answer-only",
+        "--distinct-calls",
+        "--max-passes-per-task",
+        "3",
+    ]) else {
+        panic!("dataset build");
+    };
+    assert!(build.final_answer_only && build.distinct_calls);
+    assert_eq!(build.max_passes_per_task, Some(3));
+    let Command::Dataset(DatasetCommand::Build(plain)) =
+        command(&["dataset", "build", "ab12", "--view", "sft-step"])
+    else {
+        panic!("dataset build");
+    };
+    assert!(!plain.final_answer_only && !plain.distinct_calls);
+    assert_eq!(plain.max_passes_per_task, None, "no cap unless asked");
+    assert!(
+        parse(&["dataset", "build", "ab12", "--max-passes-per-task", "0"]).is_err(),
+        "a cap of zero would keep nothing"
+    );
 }

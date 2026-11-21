@@ -16,6 +16,7 @@ mod corrections;
 mod dataset;
 mod dataset_store;
 mod judgement_views;
+mod pass_curation;
 mod policy_gradient;
 mod projection_refusal;
 mod session_dialogue;

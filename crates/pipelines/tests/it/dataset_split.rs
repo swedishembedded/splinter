@@ -137,6 +137,7 @@ fn request(set: SetId, max_block: Option<usize>, split_over_block: bool) -> Buil
         practice: Vec::new(),
         split_seed: None,
         history: Default::default(),
+        pass_curation: Default::default(),
         base: None,
         split_over_block,
     }

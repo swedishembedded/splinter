@@ -357,6 +357,7 @@ fn project_without(
             .only_roles(request.roles.clone().unwrap_or_default())
             .images(request.images)
             .history(request.history)
+            .pass_curation(request.pass_curation)
             .project(&corpus),
         ViewName::PolicyGradient | ViewName::SelfDistill => PolicyGradient::new(strength)
             .distilling(match (view, request.rl.cliff_distill) {

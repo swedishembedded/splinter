@@ -499,6 +499,7 @@ fn teach_records(
             practice: Vec::new(),
             split_seed: None,
             history: Default::default(),
+            pass_curation: Default::default(),
             base: None,
         },
         None,

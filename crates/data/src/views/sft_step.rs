@@ -64,7 +64,7 @@ use splinter_core::harness::HarnessConversation;
 use splinter_core::rng::SplitMix64;
 
 use super::rendering::{Judgement, Rendering};
-use crate::curation::HistoryCuration;
+use crate::curation::{HistoryCuration, Pass, PassCuration};
 use crate::{
     require_pass, Corpus, Entry, Exclusion, Objective, Projection, Provenance, RecordBody, Strip,
     View, ViewError,
@@ -105,6 +105,7 @@ pub struct SftStep {
     min_strength: Strength,
     rendering: Rendering,
     control: Control,
+    pass_curation: PassCuration,
 }
 
 impl SftStep {
@@ -117,7 +118,17 @@ impl SftStep {
             min_strength,
             rendering: Rendering::default(),
             control: Control::Verified,
+            pass_curation: PassCuration::default(),
         }
+    }
+
+    /// The same view curating the passes of each task as `curation` says
+    /// ([`PassCuration`]): without a final answer left out, the same calls
+    /// kept once, at most a number per task.
+    #[must_use]
+    pub fn pass_curation(mut self, curation: PassCuration) -> Self {
+        self.pass_curation = curation;
+        self
     }
 
     /// The same view writing one record per trajectory, instead of one per
@@ -269,8 +280,27 @@ impl View for SftStep {
         projection.packed = self.rendering.packed;
         projection.outcome_verified_only = self.control == Control::OutcomeVerified;
         projection.curation = self.rendering.history.recorded();
+        let left_out = if self.pass_curation.curates() {
+            projection.pass_curation = Some(self.pass_curation);
+            let passes: Vec<Pass<'_>> = corpus
+                .entries()
+                .iter()
+                .filter(|e| require_pass(e, self.min_strength).is_ok())
+                .map(|e| Pass {
+                    id: &e.id,
+                    task: e.experience.task.id.to_string(),
+                    trajectory: &e.experience.trajectory,
+                })
+                .collect();
+            self.pass_curation.left_out(&passes)
+        } else {
+            Default::default()
+        };
         for entry in corpus.entries() {
-            self.project_entry(entry, &mut projection);
+            match left_out.get(&entry.id) {
+                Some(reason) => projection.exclude(*reason),
+                None => self.project_entry(entry, &mut projection),
+            }
         }
         if let Control::ShuffledInstructions { seed } = self.control {
             shuffle_instructions(&mut projection, seed)?;

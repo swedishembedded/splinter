@@ -182,6 +182,7 @@ fn reward_options_belong_to_the_policy_gradient_view_alone() {
         rl: shaped(),
         split_seed: None,
         history: Default::default(),
+        pass_curation: Default::default(),
         base: None,
         ..sft_request(train.clone())
     };
@@ -203,6 +204,7 @@ fn reward_options_belong_to_the_policy_gradient_view_alone() {
         },
         split_seed: None,
         history: Default::default(),
+        pass_curation: Default::default(),
         base: None,
         ..sft_request(train)
     };

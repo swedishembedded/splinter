@@ -147,6 +147,7 @@ fn a_mixed_dataset_records_the_seed_that_picked_its_subjects_and_rebuilds_from_i
                 practice: Vec::new(),
                 split_seed: None,
                 history: Default::default(),
+                pass_curation: Default::default(),
                 base: None,
             },
         )

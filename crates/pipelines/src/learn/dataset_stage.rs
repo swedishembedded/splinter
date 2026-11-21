@@ -91,6 +91,7 @@ pub(super) fn dataset_stage(
         practice: Vec::new(),
         split_seed: None,
         history: Default::default(),
+        pass_curation: Default::default(),
         base: None,
     };
     // Passages of the run's own sources, when a share of the records is to

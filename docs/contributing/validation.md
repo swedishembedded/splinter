@@ -65,6 +65,7 @@ of the package) or an integration test binary; filter a substring of the test na
 | `--only-actions`, `--repository-history` | algorithmic | only the named tools' calls and the final answer are supervised, the rest is context; a history read is dropped (counted, kept as context), kept, or ends the demonstration | `splinter-data/it/supervision_mask` `splinter-data/it/sft_step_curation` | per-PR | `history-read-supervised` |
 | Rendered record against the served request | algorithmic | a conversation that recorded the requests its model was sent is rendered from them as sent; the policy's own prompt and sampled ids are written one to one with their action, and a context the scrub or a rebuild changed carries no ids | `splinter-data/it/sft_step_requests` `splinter-data/it/policy_gradient::exact_tokens` | per-PR | |
 | `--sampled-only` | algorithmic | an action without the policy's own sampled tokens is left out and counted; its trial still sets its group's baseline | `splinter-data/it/policy_gradient::exact_tokens` | per-PR | `sampled-only-ignored` |
+| Pass curation (`--final-answer-only`, `--distinct-calls`, `--max-passes-per-task`) | algorithmic | in this order: a pass whose last agent step calls a tool or says nothing is left out; passes of a task with the same tool calls (name and arguments, keys sorted, whitespace normalised) are one, the least reasoning kept; at most N passes per task, the least reasoning per action first; each counted; the manifest records the curation | `splinter-data/it/pass_curation` | per-PR | `curation-final-answer-ignored`, `curation-duplicates-kept`, `curation-whitespace-not-normalised`, `curation-cap-by-total-reasoning` |
 | Verified-only admission, exposure exclusion | algorithmic | an sft dataset admits only experiences decided pass at the minimum strength (step labels aside); the unverified control never keeps an exposed attempt; a failed verdict is no evidence whatever the solver claimed | `splinter-data/it/sft_admission` `splinter-data/it/sft_step_controls` | per-PR | |
 | Held-out splits | algorithmic | a group (task, family) is held out whole wherever its samples sit; seeded, stratified, reproducible | `splinter-data/lib/holdout` | per-PR | |
 | Exam seal | algorithmic | an attempt or action touching a reserved family is refused, and a build lists what it trained on | `splinter-pipelines/it/dataset_seal` | per-PR | |
@@ -85,8 +86,6 @@ of the package) or an integration test binary; filter a substring of the test na
 - Rationalisation: the user's rule that a kept trace is rejected only when it holds the actual answer before it was
   observed (no word lists) is not what the filters do; they also reject on a list of leak terms and require a first
   read before any write and a sufficiency rerun.
-- Near-duplicate removal and per-task caps of a curated set (item 24b's "at most 3 passes per task, least reasoning
-  first") are done by campaign scripts: Splinter's dataset build has no such option, so nothing here proves them.
 - Results computed outside Splinter (the paired task bootstraps, sign tests and pass@k tables of campaign ledgers
   produced by analysis scripts before `experiences compare-arms`) are not proven by this map.
 

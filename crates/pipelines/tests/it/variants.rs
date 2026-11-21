@@ -279,6 +279,7 @@ fn a_variant_never_enters_a_training_dataset() {
             practice: Vec::new(),
             split_seed: None,
             history: Default::default(),
+            pass_curation: Default::default(),
             base: None,
         },
     )
@@ -489,6 +490,7 @@ fn a_task_listed_as_an_original_is_trained_on_though_recorded_as_a_variant() {
             practice: Vec::new(),
             split_seed: None,
             history: Default::default(),
+            pass_curation: Default::default(),
             base: None,
         },
     )

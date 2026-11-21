@@ -283,6 +283,10 @@ pub struct Projection {
     /// ([`curation`]); `None` when it applied none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub curation: Option<curation::Curation>,
+    /// How the view curated the passes of each task
+    /// ([`curation::PassCuration`]); `None` when it curated none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass_curation: Option<curation::PassCuration>,
     /// The over-length penalty the records' rewards carry ([`Overlong`]);
     /// `None` when they carry none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -357,6 +361,7 @@ impl Projection {
             terms: None,
             block_measure: None,
             curation: None,
+            pass_curation: None,
             overlong: None,
             partial_credit: None,
             pairing: None,

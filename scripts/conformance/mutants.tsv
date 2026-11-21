@@ -32,3 +32,7 @@ holm-as-bonferroni	statistics	crates/model/src/stats.rs	running = running.max(((
 compare-arms-timeout-ungraded	statistics	crates/pipelines/src/arm_compare.rs	(Some(AGENT_TIMEOUT), Some(_)) => Status::Timeout,	(Some(AGENT_TIMEOUT), Some(_)) => Status::InfraError,	splinter-pipelines	lib	arm_compare
 compare-arms-infra-counted-as-failure	statistics	crates/pipelines/src/arm_compare.rs	        if trial.status != Status::InfraError {\n            tasks	        if trial.status != Status::Timeout || true {\n            tasks	splinter-pipelines	lib	arm_compare
 compare-arms-unpaired-tasks	statistics	crates/pipelines/src/arm_compare.rs	.filter_map(|(task, v)| theirs.get(task).map(|w| (task, rate(v), rate(w))))	.map(|(task, v)| (task, rate(v), theirs.get(task).map_or(0.0, |w| rate(w))))	splinter-pipelines	lib	arm_compare
+curation-final-answer-ignored	curation	crates/data/src/curation.rs	if self.final_answer && !profile.final_answer {	if false && self.final_answer && !profile.final_answer {	splinter-data	all
+curation-duplicates-kept	curation	crates/data/src/curation.rs	let first = seen.insert(profile.calls.clone());	let first = seen.insert(profile.calls.clone()) || true;	splinter-data	all
+curation-whitespace-not-normalised	curation	crates/data/src/curation.rs	(c.function_name.clone(), spaced(&arguments))	(c.function_name.clone(), arguments)	splinter-data	all
+curation-cap-by-total-reasoning	curation	crates/data/src/curation.rs	p.reasoning as f64 / p.actions.max(1) as f64	p.reasoning as f64	splinter-data	all
