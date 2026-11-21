@@ -252,3 +252,20 @@ replaces the first 4B check, which lost 22-27% of its trials to the wall-clock b
   4 rounds of one attempt each, with per-arm preflight and the round check.
 - Analysis as registered: e2 minus v1, `compare-arms`, family interval; non-inferior at 0.05 when its lower end is
   above -0.05. The `infra_timeout` count is reported per arm.
+
+**E2 4B rerun stopped (2026-11-21 21:55, after rounds 1-2 of folds a and c and round 1 of b).** Scaling the backstop
+did not help: Sven's own run limit comes from the task's 600 s (480 s after its margin), not from the run's wall-clock
+factor (bench knowledge 078, GL-B8), so 26% of trials still ended as `infra_timeout` (e2 142, v1 138 of 542 each). The
+completed rounds, for the record only: e2 0.506 against v1 0.492, +0.021, family interval [-0.029, +0.086]. No revised
+verdict: `exp-e2` stays *inconclusive* (at B: +0.037 [-0.021, +0.105], exhaustion 50% against 10%). The 4B
+non-inferiority check needs GL-B8 fixed first (fixed in bench 0d8f13de). Interrupted rounds are archived
+(`lane-exp/archive/e2-4b-rerun-stopped-rounds.tar.zst`). Ran on n424 gpu1-3 (about 2.2 GPU-h); n445 was not used for it.
+
+**E2 4B rerun 2 (pre-registered 2026-11-21 22:20, before any of its trials).** Identical to the stopped rerun except
+for bench 0d8f13de: Sven's run limit is now 600 s x 16 less its margin, 9,480 s. Same arms, tasks, budget (60,456
+tokens, 36 turns, factor 16), brain-bcd67e5ad, n424 gpu1-3 (one fold per server, `--adapter-slots 8`), 16 trials in
+flight per arm, 4 rounds of one attempt, preflight and round check. The analysis is the registered one: e2 minus v1,
+non-inferior at 0.05 when the lower end of the family interval is above -0.05. The verdict on
+`distill-transfer.min-cost-selection` is revised from it together with the B result: supported only if B's
+gain criterion also held (it did not), so a non-inferior 4B result leaves `exp-e2` inconclusive and an inferior one
+falsifies the candidate.
