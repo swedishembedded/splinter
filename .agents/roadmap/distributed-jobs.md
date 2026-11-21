@@ -261,10 +261,14 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       source, or why there is none. Tests: stand-in `srun` and brain in
       `crates/orchestrator/src/brain_service.rs`,
       `crates/sandbox/src/step.rs`, `crates/model/tests/service.rs`,
-      `crates/sdk/src/jobs.rs`, the doctor and loop tests. Not yet measured
-      on GPUs through Splinter (brain's own measurement: a 27B base on 8
-      ranks, 124.7 s to a finished step from the shared filesystem, 92.3 s
-      staged cold, 54.5 s staged warm).
+      `crates/sdk/src/jobs.rs`, the doctor and loop tests. Measured
+      2026-11-21 in job 5600435 on n442 (4 cards, Qwen3-4B, a brain build
+      with `--stage-models`): `splinter ask` through the TLS fleet staged
+      the base under `/scratch/local/brain-models` (7.6 GB on the node) and
+      answered in 26.4 s wall cold, 19.1 s warm, fleet start and teardown
+      included, one run each; no process was left. brain's own measurement
+      of a larger case: a 27B base on 8 ranks, 124.7 s to a finished step
+      from the shared filesystem, 92.3 s staged cold, 54.5 s staged warm.
 
 ## Decisions
 
