@@ -1002,6 +1002,12 @@ file, so those lines count as shown, and on this benchmark the default is in eff
 may name the hint (e.g. "The hint mentioned that the semicolon ';' repeats the last find command"), which the user's
 rule allows. Experience set blake3:cd7cc1aa494d...
 
+**Gate c corrected (2026-11-21 ~13:00, splinter 19b6dd024; knowledge 201).** The 81 were a defect: the answer check
+did not see a hint command written in the text (`f{ci{new`, `/BEGIN/,/END/s/off/on/g`), and counted the model's later
+tool arguments as known. Fixed test-first (fc0ce7443, 561351610); re-graded offline: 81 verified, 5 kept (5.2%), under
+the 10% bar, so gate c does not clear it either, and item 24c's basis is gone; 24c is not started. The same fix
+rejects in lane VSFT's 27B run all 30 attempts its own script rejects, plus 2.
+
 **Item 24c (PROPOSED, not started; lane VIM 2026-11-21).** A generation-1 STaR arm beside item 24b: base Qwen3-4B
 trained from base on its own verified concise passes plus gate-c-kept rationalisations of the failed train tasks, in
 the shared concise mode. Open points before it can be registered: (1) gates a and b ran in thinking mode, so their 81
@@ -1411,3 +1417,16 @@ brain-5e25d5b82 and splinter-7220b1d5d.
 - **Decision rule:** E1's. The pooled effect is supported when its CI lies wholly above 0 and p < 0.05.
 - **Secondary:** gen 3 - base and v2 pooled - gen 3. Also per arm: pass@16, timeouts, infrastructure errors, turns
   per trial, and text per action.
+
+**E2b deviation (dated 2026-11-21 13:02, before any E2b trial).** The coordinator gave lane VSFT gpu3, so E2a keeps
+gpu0 alone. E2b therefore runs on gpu3, on its own server with E2a's exact server configuration: brain-8f2a3d264
+`--max-batch 128 --vram-budget 32`, the same adapters directory, port 8979. It does not share E2a's server. Everything
+else is unchanged.
+
+The statistics come from `splinter experiences compare-arms` on a frozen build at or after 129802923:
+- the primary run uses `--reference base` with arms v2s1, v2s2 and v2 (both seeds' jobs), Holm-corrected over these
+  3 contrasts;
+- the secondary runs compare gen 3 against base, and v2 against gen 3.
+
+Two-sided p and Holm-adjusted p are reported. v2 was curated by fewest vim calls per task, not by
+`--max-passes-per-task`'s least reasoning per action.
