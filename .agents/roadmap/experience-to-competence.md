@@ -827,3 +827,103 @@ therefore share a card and a time slot. Cards are taken from lane R19 as it free
   unchanged, and setup time is outside the agent's time limit. The pinned worktree moves to it when no other unit is
   running, so every unit runs on one bench build for all its cells; `logs/runs.log` records each unit's bench. Regenerating
   the accounting and support draws under f37811d4 gave the same task digests and collection digests.
+
+## Item 24: 4B-only rationalisation (STaR) on the vim benchmark (pre-registered 2026-11-21, lane VIM, before any job)
+
+Items 22 and 23 are reserved by the 2026-11-20 handover (decision-level learning, an agent-RL sanity task).
+
+**Question.** Can base Qwen3-4B learn the vim benchmark from its own verified trajectories alone, with the reference
+command list as a hint it may see while writing reasoning but which never reaches training (Zelikman et al. 2022,
+rationalisation)? Compared with the 27B distillation arm (lane VSFT) on the same eval protocol and server.
+
+**Material.** `vim-headless-mastery` (dd3e5331): `train/` 168 tasks, `eval/` 14 held-out exams. Hints come only from a
+task whose `bench-compile.json` entry has `set = "train"` (its `solution/solve.sh`); anything else is refused by the
+stage. Eval never takes part except to be measured.
+
+**Generation 0 attempt set.** The base 4B's 840 train trials of 2026-11-21 (168 x 5, splinter knowledge 198: pass@1
+0.263, 95 tasks solved at least once, 73 never). Passed trials are kept as they are (`origin: own`).
+
+**Stage (splinter rationalise-and-verify, a hinted-retry intervention).** For a failed train task the rationaliser
+(the same model, sampling T 1.0 / top-p 0.95 / top-k 20) is shown the task and the hint and works the task through the
+real vim tool in the task's sandbox. A trace is kept (`origin: rationalised`) only when all hold:
+
+1. **Verified:** the task's verifier passes the state it left.
+2. **Real observations:** its first tool call reads the files (no write before a read of the file it changes).
+3. **No leak:** no message mentions the hint (`as given`, `solution`, `solve.sh`, `expected`, `reference`, the hint's
+   own wording), and no reasoning quotes file content that no earlier tool reply in the trace showed.
+4. **Sufficient:** given only the task and the trace's reasoning (no hint), the model produces vim calls that, run
+   through the real tool, pass the verifier byte for byte.
+
+The kept trajectory is user instruction, reasoning and vim calls, real tool replies, final message; the hint is
+nowhere in it. Each record carries its origin and every filter's verdict.
+
+**Feasibility gate (before any generation).** 24 tasks drawn with seed 20261121 from the train tasks the base failed
+at least once, stratified by difficulty rung; 2 rationalisations each (48). Reported: how many pass each filter in
+order. **Stop rule:** if fewer than 10% of rationalisations pass the sufficiency check, rationalisation does not work
+for this base model; the arm stops and the result is reported as such.
+
+**Generations (only if the gate passes).** Each generation trains a LoRA from BASE (A2's recipe family: rank 16,
+alpha 32, lr 2e-4, 4 records per step, steps scaled to the cumulative verified set at about 2 epochs) on every
+verified trajectory so far (own passes and kept rationalisations), then attempts the still-unsolved train tasks
+(1 attempt each) and rationalises the failures. At most 3 generations; a generation that adds fewer than 5 new tasks
+ends the arm.
+
+**Evaluation.** One shared interleaved job with the base, the VSFT adapters and this arm's generation adapters,
+hot-loaded on one brain server (`--max-batch 256`, one instance): eval 14 x 16 per arm, paired by task; train-side
+pass@1 on the 168 reported as training fit, never as transfer.
+
+**Stage implemented (2026-11-21, before the gate).** `splinter experiences rationalise` (docs/guides/bench-trials.md,
+"The hinted retry") runs the attempts and sufficiency runs as Harbor trials of staged task copies through bench's
+userns sandbox, gateway (`--state`) and Sven adapter with the default profile, and keeps every verdict per record.
+Verified without a model: filter and plumbing specs, and a CPU run on the real dataset and the 840 student trials
+with brain's mock model (2 attempts graded and rejected, 221 own passes kept, an sft-step dataset of 208 records
+built from them). Its controls on the 221 own passes, which never saw a hint (knowledge 200): 218 mention
+`expected` and 99 `solution`, and 19 pass the real-observations filter. Under the filters as pre-registered the
+stop rule would fire for reasons unrelated to the hint; a change of the leak terms (`--leak-term`) or of filter 2 is
+a dated deviation for the lane owner to decide before the gate runs.
+
+## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
+
+**Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`
+(c875538865ad, task digests identical to dd3e5331). 1,192 trials were graded and 579 passed; 163 of the 168 tasks are
+solved (knowledge 199). The dataset is `swedishembedded/vim-headless-mastery-sft` v1, PUBLIC. It is
+`sft-step --pack --only-actions vim-vim`, 576 records, split by whole task: 516 train records, and 60 eval records that
+form splinter's held-out set. Students are Qwen3-4B LoRAs trained with A2's recipe for 230 steps of 4 records (about 2
+epochs) on bf16, through brain-5e25d5b82 and splinter-7220b1d5d:
+
+- v1s1 is candidate-20261121T035929.503-cd69, adapter sha256 9a686a71...;
+- v1s2 is candidate-20261121T035931.483-e4a8, adapter sha256 9560f5be...;
+- held-out loss falls from 2.143 for the base to 0.816 (v1s1) and 0.812 (v1s2).
+
+### Item 25 E1: v1 on the benchmark exams (pre-registered 2026-11-21 05:55, before any eval trial ran)
+
+**Arms.** base Qwen3-4B, v1s1 and v1s2. All three are served by one brain-5e25d5b82 on gpu0 with lane VIM's
+configuration: `--max-batch 256`, one instance, adapters hot-served with `--adapter-targets all`. The agent is sven
+1db749d9 with its default profile, sampling T 1.0 / top-p 0.95 / top-k 20, run seed 20261121, agent limit 600 s.
+
+**Run.** `harbor run` of `eval/` (14 tasks), 16 attempts per task per arm, with the three arms' jobs launched together
+in one slot (74 trials in flight each, 222 in all), each through its own bench gateway.
+
+**Outcomes per trial.** Each trial is a pass (reward 1) or a fail (reward 0); a timed-out agent is graded on the files
+it left and is a pass or a fail like any other. An infrastructure error is not a fail and is left out of the
+denominator: a Harbor exception, a gateway 5xx, or bench score status `model_error` or `environment_error`. Timeouts
+and infrastructure errors are reported separately per arm. If more than 2 of a task-arm's 16 trials are infrastructure
+errors, those trials are rerun in a later slot and the rerun is reported as a deviation.
+
+**Statistics.**
+- **pass@1 of an arm:** the mean over the 14 tasks of the task's pass rate.
+- **Effect:** pass@1(seed) - pass@1(base) for each seed, and the pooled effect, which is the mean of the two seeds'
+  pass@1 minus base.
+- **95% CI:** a task bootstrap with 10,000 resamples of the 14 tasks with replacement, seed 20261121, percentile
+  interval, resampling the paired per-task differences.
+- **Paired sign test:** over the 14 tasks, on the sign of (arm task rate - base task rate), ties dropped, exact
+  two-sided binomial. For the pooled effect the arm task rate is the mean of the two seeds.
+- **pass@16:** the share of tasks with at least one pass in 16. Per-task pass rates of all arms are listed.
+
+**Decision rule.** The improvement is called statistically supported only when the pooled CI lies wholly above 0 and
+the pooled sign test gives p < 0.05. With 14 tasks only large effects can meet this (bench knowledge 068); anything
+else is reported as not supported, with its interval.
+
+**Training-fit check, reported separately and never as transfer.** The same three arms on the 168 train tasks x 2
+attempts, run in the slot just before. Its results are split three ways: the 147 trained tasks, the 16 held-out
+validation tasks, and the 5 tasks the teacher never solved.
