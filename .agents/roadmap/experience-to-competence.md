@@ -1479,6 +1479,42 @@ concise floor of 0.006 on the same tasks, where every arm sat at 0.006-0.021). R
 :8978, gpu2 :8979 and gpu3 :8980; every arm runs 4 of its 16 attempts per task on each card with 3 in flight there (12
 per arm in all, 18 per card), each card's per-arm jobs pooled by arm in `compare-arms`.
 
+**E2c result (third run 2026-11-21 17:14-20:31, n424, all four cards; `compare-arms`, splinter-c2a7d877e, two-sided
+sign test, Holm over 5; 14 exams x 16 = 224 trials per arm, no infrastructure errors).** Scoring: every arm is read
+the same way, from each trial's verifier reward and Harbor exception (no bench score record), so bench's 86f5b420
+re-classification cannot split the arms; its rule (zero model turns with only 5xx answers is infrastructure) matches
+no trial: the 3-13 zero-turn trials per arm all ended on sven's own 780 s step limit or a model that never answered,
+not on 5xx, and stay graded fails.
+
+| arm | pass@1 | pass@16 | minus base | task bootstrap 95% | better / worse / ties | p two-sided | Holm |
+|---|---:|---:|---:|---|---|---:|---:|
+| base | 0.049 | 0.143 | | | | | |
+| v1s1 | 0.067 | 0.286 | +0.018 | [-0.004, +0.040] | 4 / 1 / 9 | 0.38 | 1.0 |
+| v1s2 | 0.085 | 0.214 | +0.036 | [0.000, +0.089] | 2 / 0 / 12 | 0.50 | 1.0 |
+| gen 1 | 0.058 | 0.143 | +0.009 | [-0.009, +0.031] | 2 / 1 / 11 | 1.0 | 1.0 |
+| gen 2 | 0.040 | 0.071 | -0.009 | [-0.022, 0.000] | 0 / 2 / 12 | 0.50 | 1.0 |
+| gen 3 | 0.045 | 0.143 | -0.005 | [-0.018, +0.009] | 1 / 2 / 11 | 1.0 | 1.0 |
+
+Secondary, gen 3 minus pooled v1 (0.076): -0.031 [-0.067, -0.004], 0 / 5 / 9, p two-sided 0.0625: the 27B-distilled
+v1 is ahead of the 4B-only arm on the exam, but the sign test does not reach 0.05 on 5 untied tasks. **No arm's gain
+over base is supported**; gen 1 to gen 3 are within +-0.01 of base (every upper bound below +0.035, so a +0.05 gain is
+ruled out for the 4B-only generations). Wall-clock: no Harbor timeouts, but sven's own 780 s step limit ended
+24 / 45 / 49 / 66 base, gen 1, gen 2, gen 3 trials and 117 / 104 v1s1, v1s2 trials (11%, 20%, 22%, 30%, 52%, 46%),
+all graded on the files left. Model-side budget exhaustion (responses whose reasoning reached the 2,048-token cap, about
+7,000 characters): base 34%, gen 1 31%, gen 2 32%, gen 3 24%, v1s1 2%, v1s2 6%. Caveats (the advisory's): 14 tasks,
+a base near the floor (0.049), and arms not separable below about 0.11; the cap binds for the base and the
+self-trained generations, while v1 runs out of wall clock instead. Raw rows `lane-vim/logs/e2c-*-c?.trials.jsonl`,
+reports `lane-vim/logs/e2c.compare.json` and `e2c-secondary.compare.json`.
+
+**E2c's verdicts are INVALID (revised 2026-11-21, coordinator's decision).** E2c ran under sven's 780 s wall-clock step
+limit, which stopped 52% and 46% of v1's trials against 11% of base's: the load-dependent instrument E0 replaced (E0
+showed the token and turn budget holds across loads), and 14 near-floor tasks cannot separate below about 0.11. Its
+"falsified" entries for `distill-transfer.v1-thinking` and `self-transfer.expert-iteration-gen3` in the canonical
+campaign are revised (beliefs back to 0.30, the reason recorded; the stage has no verdict-correction path, so the
+history keeps the original entry followed by the revision). The item 24b transfer check's inconclusive verdict stands.
+The valid distillation-transfer evidence is lane EXP's E1 under the budget instrument: +0.118 [+0.021, +0.220] on
+held-out rungs.
+
 ### Item 25 E2b: the concise-mode exam of v2 (pre-registered 2026-11-21 12:40, before any E2b trial; E2a's protocol in its own slot)
 
 **v2 as trained.**
