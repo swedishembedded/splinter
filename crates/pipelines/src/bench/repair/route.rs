@@ -51,16 +51,23 @@ pub enum InterventionKind {
     /// runs as Harbor trials of compiled task folders, never as a fork of a
     /// practice run, so no failure class routes to it.
     HintedRetry,
+    /// The student's own model continues, unhinted, from a state of a
+    /// verified privileged path of the task (a pass a person guided), the
+    /// person's turns taken out: path-guided resampling. Its samples fork
+    /// after the latest action first, then earlier. It applies only to a task
+    /// that has such a path.
+    PathGuided,
 }
 
 impl InterventionKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Retry,
         Self::ForkCorrection,
         Self::KnowledgeCorrection,
         Self::Decompose,
         Self::HintedRetry,
+        Self::PathGuided,
     ];
 
     /// The name records and keys carry.
@@ -72,6 +79,7 @@ impl InterventionKind {
             Self::KnowledgeCorrection => "knowledge_correction",
             Self::Decompose => "decompose",
             Self::HintedRetry => "hinted_retry",
+            Self::PathGuided => "path_guided",
         }
     }
 }
@@ -141,7 +149,9 @@ impl Routing {
         Ok(Self { chains, budget })
     }
 
-    /// The standard table under `budget`. Retry first where a sample of the
+    /// The standard table under `budget`. A path-guided resampling first in
+    /// every chain (it applies only to a task with a privileged path). Then
+    /// retry first where a sample of the
     /// same policy may well pass (a malformed call or artifact, a loop);
     /// decomposition first where the plan or its pacing failed (no answer,
     /// out of time or steps, a strategy or planning class); knowledge first
@@ -185,7 +195,15 @@ impl Routing {
                 vec![I::ForkCorrection, I::KnowledgeCorrection, I::Decompose],
             ),
         ];
-        Self::new(chains.into_iter().collect(), budget)
+        // A privileged path of the task, when there is one, comes first: the
+        // student's own continuation from a state it could not reach alone.
+        Self::new(
+            chains
+                .into_iter()
+                .map(|(class, chain)| (class, [vec![I::PathGuided], chain].concat()))
+                .collect(),
+            budget,
+        )
     }
 
     /// The route of `diagnosis` among the `available` interventions: its
@@ -273,7 +291,9 @@ mod tests {
         let all = InterventionKind::ALL.into_iter().collect();
         assert_eq!(
             routing.route(&diagnosis, &all),
+            // A privileged path, where the task has one, comes first.
             Route::To(vec![
+                InterventionKind::PathGuided,
                 InterventionKind::ForkCorrection,
                 InterventionKind::KnowledgeCorrection,
                 InterventionKind::Decompose

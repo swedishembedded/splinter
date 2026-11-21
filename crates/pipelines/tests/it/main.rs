@@ -65,6 +65,7 @@ mod lineage;
 mod model_refs;
 mod monitoring;
 mod overlap_learn;
+mod path_guided;
 mod pipeline_seeds;
 mod plan;
 mod plan_learn;

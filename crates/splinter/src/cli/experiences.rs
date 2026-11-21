@@ -82,9 +82,9 @@ pub struct RepairArgs {
     #[arg(long = "knowledge", value_name = "PATH")]
     pub knowledge: Vec<PathBuf>,
     /// Only this intervention (repeatable: `retry`, `fork_correction`,
-    /// `knowledge_correction`, `decompose`); without it every one the
-    /// models and knowledge given allow, in the order each failure class's
-    /// chain tries them.
+    /// `knowledge_correction`, `decompose`, `path_guided`); without it every
+    /// one the models and knowledge given allow, in the order each failure
+    /// class's chain tries them.
     #[arg(long = "intervention", value_name = "NAME")]
     pub interventions: Vec<InterventionKind>,
     /// Attempts one failure may cost, every intervention of its chain and

@@ -117,7 +117,7 @@ pub use dataset::{
     Format, Manifest, Unchecked, EXPORT_FORMAT,
 };
 pub use exclusion::Exclusion;
-pub use markers::has_human_turn;
+pub use markers::{has_human_turn, is_human_turn};
 pub use record::{
     PairSource, Record, RecordBody, RecordMetadata, RolloutIdentity, RolloutOutcome, Side,
     SplitDraw, TeacherMessage,

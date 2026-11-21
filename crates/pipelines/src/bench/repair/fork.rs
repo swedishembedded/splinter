@@ -101,6 +101,7 @@ impl ForkCorrection<'_> {
             ctx,
             self.checkout,
             case,
+            None,
             Continuation {
                 model: &self.teacher,
                 role: TEACHER,
@@ -136,6 +137,23 @@ pub(super) struct Continuation<'a> {
     pub after_turn: &'a mut (dyn FnMut(usize, &Path) -> bool + Send),
 }
 
+/// Where a fork starts when it is not the case's own attempt: a path of the
+/// same task, in its stored and its exported shape, forked after
+/// `keep_through` (exported numbering).
+pub(super) struct Source<'a> {
+    /// The path as the store holds it (led by its system prompt when it
+    /// recorded one).
+    pub stored: &'a atif::Trajectory,
+    /// The path without that system step, numbered from 1.
+    pub exported: &'a atif::Trajectory,
+    /// The system prompt the path ran under, when it recorded one.
+    pub system: Option<&'a str>,
+    /// The model the path's steps are attributed to.
+    pub solver: &'a str,
+    /// The last step of the path kept.
+    pub keep_through: u64,
+}
+
 /// A continuation the examiner graded.
 pub(super) struct Forked {
     keep_through: u64,
@@ -146,19 +164,24 @@ pub(super) struct Forked {
     actor: String,
 }
 
-/// Forks `case` at its last good step in the examiner's session for its
+/// Forks `case` at its last good step (or `source`'s kept step, when the fork
+/// starts from another path of the task) in the examiner's session for its
 /// task, continues it as `continuation` says, and has the session grade
 /// the state the commands left.
 pub(super) fn fork_and_grade(
     ctx: &Context,
     checkout: &BenchCheckout,
     case: &Case<'_>,
+    source: Option<&Source<'_>>,
     continuation: Continuation<'_>,
 ) -> Result<Forked, String> {
-    let keep_through = case
-        .diagnosis
-        .last_good_step()
-        .ok_or("the diagnosis places no last good step")?;
+    let keep_through = match source {
+        Some(source) => source.keep_through,
+        None => case
+            .diagnosis
+            .last_good_step()
+            .ok_or("the diagnosis places no last good step")?,
+    };
     let folder = case
         .trial
         .staged_task
@@ -179,8 +202,24 @@ pub(super) fn fork_and_grade(
         return Err("a harness conversation is not forked".into());
     };
     // The practice run is read only; the repair works under this run's own
-    // state root.
+    // state root. Another path's observations are held to its own record.
     let shown = shown_observations(&export.join(&row.path))?;
+    let (student, student_model, system, shown, stored) = match source {
+        Some(source) => (
+            source.exported,
+            source.solver,
+            source.system.unwrap_or(&context.system),
+            None,
+            source.stored,
+        ),
+        None => (
+            &unit.trajectory,
+            case.student.provenance.solver.as_str(),
+            context.system.as_str(),
+            Some(&shown),
+            &case.student.trajectory,
+        ),
+    };
     // Absolute: the agent's tools resolve the tree as their project root,
     // and a state root given relative to the working directory is not one.
     let work = std::path::absolute(
@@ -220,13 +259,13 @@ pub(super) fn fork_and_grade(
         let fork = ForkAt {
             tree: &tree,
             scratch: &scratch,
-            student: &unit.trajectory,
-            student_model: &case.student.provenance.solver,
-            system: &context.system,
+            student,
+            student_model,
+            system,
             keep_through,
             workspace: None,
             profile: Profile::Compact,
-            shown: Some(&shown),
+            shown,
             read_exec: toolchain_dirs(ctx.config().command_env.get("PATH")),
             launcher: Some(session.launcher(checkout)),
             briefing,
@@ -242,11 +281,8 @@ pub(super) fn fork_and_grade(
                 &mut |turn| after_turn(turn, &tree),
             ))
             .map_err(|e| format!("the continuation: {e}"))?;
-        let (trajectory, prefix_steps) = compose::onto_stored(
-            &case.student.trajectory,
-            correction.solution.trajectory,
-            keep_through,
-        )?;
+        let (trajectory, prefix_steps) =
+            compose::onto_stored(stored, correction.solution.trajectory, keep_through)?;
         let file = work.join("trajectory.json");
         let text = serde_json::to_vec(&trajectory).map_err(|e| e.to_string())?;
         std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;

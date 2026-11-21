@@ -349,6 +349,7 @@ impl Intervention for Decompose<'_> {
             ctx,
             self.checkout,
             case,
+            None,
             Continuation {
                 model: &self.student,
                 role: POLICY,

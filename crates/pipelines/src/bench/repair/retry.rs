@@ -51,7 +51,7 @@ pub fn retry_seed(key: &str) -> u64 {
 
 /// The sampling the practice run at `run` recorded (`report.json`'s
 /// `sampling`), with `seed` in place of the run's.
-fn sampling(run: &Path, seed: u64) -> (SamplingParams, Value) {
+pub(super) fn sampling(run: &Path, seed: u64) -> (SamplingParams, Value) {
     let recorded = std::fs::read(run.join("report.json"))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
@@ -97,6 +97,7 @@ impl Intervention for Retry<'_> {
             ctx,
             self.checkout,
             case,
+            None,
             Continuation {
                 model: &self.student,
                 role: POLICY,

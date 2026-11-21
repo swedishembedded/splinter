@@ -212,19 +212,24 @@ splinter experiences repair RUN... --teacher local:Qwen/Qwen3.8-27B-FP8 --bench 
   --student local:Qwen/Qwen3-4B+A2s1 --knowledge ~/bench/environments/legal/README.md --budget 3
 ```
 
-Four interventions share the fork and the grade above; which run depends on what the command is given:
+Five interventions share the fork and the grade above; which run depends on what the command is given:
 
 | Intervention | Needs | Who continues |
 |---|---|---|
 | `fork_correction` | `--teacher` | the teacher, after the last good step |
 | `knowledge_correction` | `--knowledge PATH` | the teacher, with the passages of the knowledge that match the task's instruction and the diagnosis shown beside the student's system prompt |
 | `retry` | `--student` | the student's own model, sampled again under the practice run's sampling (its report's `sampling`) and a seed derived from the repair's key |
+| `path_guided` | `--student`, and a verified path of the task a person guided in the store | the student's own model, from a state of that path with the person's turns (and the reply each one answered) taken out, sampled as `retry` is; sample `n` forks after the path's `n`-th latest action, so `--samples K` moves the fork earlier until the student passes alone |
 | `decompose` | `--student` | a proposer (`--proposer teacher`, the default, or `student`) splits the task into at most six ordered subgoals, each with a check of a state the task allows (`file_exists`, `file_contains`) or none; the student's model works them one user turn each, and a missed check ends the run |
 
 Each failure goes to its class's chain, tried in order until the verifier accepts one or the failure's `--budget`
 attempts (default 3, every intervention and sample counted) are spent; an intervention the run does not have is
 left out of the chain, and `--intervention NAME` (repeatable) keeps only the ones named (one the command cannot run
 is refused):
+
+A path-guided resampling leads every chain below for a failure whose task has a guided path (`experiences
+ingest-bench` or `ingest-harbor` of a `bench task play` job), and is left out, costing none of the budget, for one
+whose task has none.
 
 | Class | Chain |
 |---|---|
@@ -247,7 +252,10 @@ steps without them. The knowledge never holds sealed material: a path under a ve
 `oracle`, a `truth.json`, `.bench-data`, `jobs` or the examiner's private store is refused when named and left out
 (and listed) when a named directory holds it. A decomposition kept is the subgoal-guided trajectory: the student's
 kept prefix (copied, never supervised), the subgoal turns (marked `guidance`) and the student's own steps (marked
-`policy`), which `sft-step` trains on; a retry's steps are the student's own.
+`policy`), which `sft-step` trains on; a retry's steps are the student's own. A path-guided resampling kept is the
+guided path's steps through the fork (copied, never supervised; the person's turns are not among them) and the
+student's own steps after them; nothing the person typed reached any request of the continuation. Its record names
+the path, the step it forked after, the states the path offered and the turns taken out (`privileged_path`).
 
 ### The hinted retry: rationalising failures on a compiled dataset
 

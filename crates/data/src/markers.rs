@@ -38,15 +38,19 @@ const HUMAN_ORIGIN: &str = "human";
 /// steps carries `extra.sven.origin` `human`.
 #[must_use]
 pub fn has_human_turn(trajectory: &Trajectory) -> bool {
-    trajectory.steps.iter().any(|step| {
-        step.source == StepOrigin::User
-            && step
-                .extra
-                .as_ref()
-                .and_then(|extra| extra.pointer("/sven/origin"))
-                .and_then(Value::as_str)
-                == Some(HUMAN_ORIGIN)
-    })
+    trajectory.steps.iter().any(is_human_turn)
+}
+
+/// Whether `step` is a user turn a person typed during the run.
+#[must_use]
+pub fn is_human_turn(step: &TraceStep) -> bool {
+    step.source == StepOrigin::User
+        && step
+            .extra
+            .as_ref()
+            .and_then(|extra| extra.pointer("/sven/origin"))
+            .and_then(Value::as_str)
+            == Some(HUMAN_ORIGIN)
 }
 
 /// Whether `step` marks the agent's context being compacted: the history

@@ -1816,7 +1816,7 @@ Options:
 - `--student <REF>`: The student's own model (`remote:`/`local:`): a retry samples it again from the last good step, and a decomposition's subgoals are worked by it. Without it neither runs.
 - `--proposer <WHO>`: Who proposes a decomposition's subgoals: `teacher` or `student`. Default: `teacher`.
 - `--knowledge <PATH>...`: A public reference document, or a directory of them (`.md`, `.txt`, `.rst`), a knowledge-assisted correction retrieves from (repeatable). Sealed material (a verifier's `tests`, a `solution`, an `oracle`, `truth.json`, run data) is refused when named and left out of a directory. Without it the knowledge-assisted correction does not run.
-- `--intervention <NAME>...`: Only this intervention (repeatable: `retry`, `fork_correction`, `knowledge_correction`, `decompose`); without it every one the models and knowledge given allow, in the order each failure class's chain tries them.
+- `--intervention <NAME>...`: Only this intervention (repeatable: `retry`, `fork_correction`, `knowledge_correction`, `decompose`, `path_guided`); without it every one the models and knowledge given allow, in the order each failure class's chain tries them.
 - `--budget <N>`: Attempts one failure may cost, every intervention and sample counted [default: 3]
 - `--bench <DIR>` (required): The examiner's checkout, which lays out and grades the workspaces.
 - `--max <N>`: The most failures this run repairs [default: 32]

@@ -71,10 +71,12 @@
 //! crash between storing an accepted experience and its record leaves an
 //! experience no set names, and the rerun repairs the attempt again.
 
+mod attempt;
 mod commands;
 mod compose;
 mod decompose;
 mod fork;
+mod guided;
 pub mod hinted;
 mod keep;
 mod knowledge;
@@ -102,11 +104,13 @@ pub use decompose::{
     Check, Decompose, Decomposition, Proposer, Subgoal, SubgoalOutcome, SubgoalState, MAX_SUBGOALS,
 };
 pub use fork::ForkCorrection;
+pub use guided::{fork_points, unguided, PathGuided, PrivilegedPaths};
 pub use knowledge::{KnowledgeBase, KnowledgeCorrection, KnowledgeUse, KNOWLEDGE_PASSAGES};
 pub use retry::Retry;
 pub use route::{route, InterventionKind, Route, Routing, DEFAULT_BUDGET};
 pub use select::{spread, Spread};
 
+use attempt::attempt_case;
 use keep::{held_records, is_zero, keep, key_of};
 
 use super::diagnose::{diagnose_dirs, DiagnosedTrial, DiagnosisReport};
@@ -256,6 +260,11 @@ pub struct Notes {
     /// The knowledge a correction was shown, and where it came from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub knowledge: Option<KnowledgeUse>,
+    /// A path-guided resampling: the privileged path forked, after which of
+    /// its steps, how many states it offered and how many turns of a person
+    /// were taken out of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub privileged_path: Option<serde_json::Value>,
 }
 
 /// Repairs of one class, counted.
@@ -320,6 +329,8 @@ pub struct Case<'a> {
     pub student_id: &'a ExperienceId,
     /// The repair's key, which names its working directory.
     pub key: &'a str,
+    /// Which sample of its intervention the repair is, from 0.
+    pub sample: usize,
 }
 
 /// What an intervention made of a case: the grade, and the experience to
@@ -352,6 +363,13 @@ pub trait Intervention: Sync {
     /// nothing.
     fn variant(&self) -> Option<String> {
         None
+    }
+
+    /// Whether it can repair a failure of `task` at all (a path-guided
+    /// resampling needs a privileged path of the task); one that cannot is
+    /// left out of the failure's chain and costs none of its budget.
+    fn applies(&self, _task: &str) -> bool {
+        true
     }
 
     /// Makes a repaired attempt of `case` and has it graded.
@@ -415,7 +433,11 @@ pub fn repair(
         knowledge: base,
     });
     if student.is_none() && !request.interventions.is_empty() {
-        for kind in [InterventionKind::Retry, InterventionKind::Decompose] {
+        for kind in [
+            InterventionKind::Retry,
+            InterventionKind::Decompose,
+            InterventionKind::PathGuided,
+        ] {
             if wanted(kind) {
                 return refuse(kind, "no student model was given");
             }
@@ -424,6 +446,18 @@ pub fn repair(
     let retry = student.as_ref().map(|student| Retry {
         checkout: request.checkout,
         student: student.clone(),
+        deadline: request.deadline,
+        cancel: request.cancel.clone(),
+    });
+    let paths = if student.is_some() && wanted(InterventionKind::PathGuided) {
+        PrivilegedPaths::load(ctx)?
+    } else {
+        PrivilegedPaths::default()
+    };
+    let path_guided = student.as_ref().map(|student| PathGuided {
+        checkout: request.checkout,
+        student: student.clone(),
+        paths: &paths,
         deadline: request.deadline,
         cancel: request.cancel.clone(),
     });
@@ -438,7 +472,11 @@ pub fn repair(
         deadline: request.deadline,
         cancel: request.cancel.clone(),
     });
-    let made: [(InterventionKind, Option<&dyn Intervention>); 4] = [
+    let made: [(InterventionKind, Option<&dyn Intervention>); 5] = [
+        (
+            InterventionKind::PathGuided,
+            path_guided.as_ref().map(|p| p as &dyn Intervention),
+        ),
         (InterventionKind::ForkCorrection, Some(&fork)),
         (
             InterventionKind::KnowledgeCorrection,
@@ -527,6 +565,9 @@ pub fn repair_with(
                 // as many as its budget allows.
                 let mut steps = Vec::new();
                 for kind in chain {
+                    if !interventions[&kind].applies(&trial.task) {
+                        continue;
+                    }
                     for sample in 0..request.samples.max(1) {
                         let key = key_of(student, interventions[&kind], sample)?;
                         steps.push((kind, sample, key));
@@ -702,73 +743,4 @@ pub fn repair_with(
         repair_set,
         diagnosis,
     })
-}
-
-/// Runs the intervention on one case and makes its record.
-#[allow(clippy::too_many_arguments)]
-fn attempt_case(
-    ctx: &Context,
-    intervention: &dyn Intervention,
-    trial: &DiagnosedTrial,
-    result: &DiagnosticResult,
-    run: &Path,
-    student_id: &ExperienceId,
-    key: &str,
-    sample: usize,
-) -> (RepairRecord, Option<Experience>) {
-    let mut record = RepairRecord {
-        format: REPAIR_FORMAT.into(),
-        key: key.into(),
-        student: student_id.clone(),
-        trial: trial.trial.clone(),
-        task: trial.task.clone(),
-        domain: trial.domain.clone(),
-        diagnosis: result.clone(),
-        intervention: intervention.name().into(),
-        sample,
-        keep_through: result.last_good_step().unwrap_or_default(),
-        teacher: intervention.actor().into(),
-        outcome: RepairOutcome::Refused,
-        reason: None,
-        grade: None,
-        experience: None,
-        prefix_steps: None,
-        teacher_actions: None,
-        notes: Notes::default(),
-    };
-    let student = match ctx.experiences().get(student_id) {
-        Ok(student) => student,
-        Err(e) => {
-            record.reason = Some(format!("the student's experience: {e}"));
-            return (record, None);
-        }
-    };
-    let case = Case {
-        trial,
-        diagnosis: result,
-        run,
-        student: &student,
-        student_id,
-        key,
-    };
-    match intervention.attempt(ctx, &case) {
-        Err(reason) => {
-            record.reason = Some(reason);
-            (record, None)
-        }
-        Ok(attempted) => {
-            record.keep_through = attempted.keep_through;
-            record.prefix_steps = Some(attempted.prefix_steps);
-            record.teacher_actions = Some(attempted.teacher_actions);
-            record.notes = attempted.notes;
-            let passed = attempted.grade.passed();
-            record.outcome = if passed {
-                RepairOutcome::Accepted
-            } else {
-                RepairOutcome::Rejected
-            };
-            record.grade = Some(attempted.grade);
-            (record, passed.then_some(attempted.experience))
-        }
-    }
 }
