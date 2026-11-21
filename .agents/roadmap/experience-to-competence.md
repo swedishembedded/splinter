@@ -1044,6 +1044,62 @@ required, identical call sequences deduplicated, at most 3 per task).
 **User rule (2026-11-21):** every later harvest (item 24b gen 1 onward, any STaR or extra sampling) uses 4 attempts per
 task; the running 168 x 10 extra gen-0 harvest finishes as it is.
 
+**Item 24b gen 0 complete (2026-11-21 11:02; 168 x 15 concise).** The extra 168 x 10 (10:36-11:02, same server, build and
+192 in flight): pass@1 0.195, no timeouts, no infrastructure errors. Over all 15 samples: 497 passes of 2,520 (0.197),
+62 tasks with any pass; 59.2% of the 11,702 tool-calling responses state a sentence before the call. Curation: 18
+without a final message, 322 duplicates, 33 over the cap; kept 124 over 61 tasks; gen-1 `sft-step` dataset
+blake3:e3e3711fdbfc... of 124 records (7 more excluded as repeated actions), 62 training steps at about 2 epochs.
+**Known difference between the arms, not a defect:** the 4B-only gen 1 covers 61 train tasks with 124 records, against
+item 25 v1's 147 trained tasks and 516 records; it is what the 4B's own concise passes give.
+
+**Item 24b gen-1 training (2026-11-21 ~11:30, gpu0, brain-8f2a3d264 `--training --vram-budget 32` beside lane VSFT's
+27B).** The server chose `--max-batch 256` by itself (brain 538's operating point) and printed edge 534. At max block
+16384 brain refused the run (31.9 GiB needed, 30 GiB available), so the block is 8192: lossless for this set, since
+building it at 8192 with the server's own token counts gives the same dataset digest (no record is over 8192). Every
+other recipe value is item 25 v1's; 62 steps.
+
+**Item 24b gen 1 (2026-11-21).** Trained 11:08-11:13 (62 steps): held-out loss 0.383 (base) to 0.137 on 19 records,
+token accuracy 0.929 to 0.950; final training loss 0.020, which splinter flags as memorised (training loss under half
+the monitoring loss) on its 113-record training split. Adapter candidate-20261121T100839.481-1e69, sha256 de1d6c1a...
+Harvest 11:14-11:26 (168 x 4, concise, shared :8977 at 192 in flight, sven-7a9f60cb): pass@1 0.301 (base concise
+0.197), pass@4 0.423, 71 tasks solved, 15 of them never solved in gen 0's 15 samples (so gen 3 stays possible); no
+timeouts, no infrastructure errors; 51.2% of 1,860 tool-calling responses state a rationale. The harvest ended at
+11:26, before the disk's inode quota ran out at about 11:40, and none of its 672 trials lacks agent logs or a grade.
+Gen-2 set (cumulative, curation unchanged): 699 passes, 18 without a final message, 434 duplicates, 72 over the cap;
+175 records over 77 tasks, blake3:909e11ab4cfb...; 88 steps.
+
+**Item 24b gen 2 training (2026-11-21 11:29-11:34, the same gpu0 swap).** Block: one gen-2 record is longer than 8,192
+tokens (building at 8192 drops it), so 8192 is not used; 16384 with 4 or 2 records per step is refused on the shared
+card (about 32 GiB either way: memory is per row, not per step), and 10240 is lossless (it builds the same dataset
+digest as 16384, checked with the server's token counts). Gen 2 trains at block 10240, 4 records per step, 88 steps;
+gen 1's 8192 was likewise lossless for its own set. Held-out (monitor) loss every 14 steps on 15 records: 0.136, 0.136,
+0.135, 0.120, 0.113, 0.108, 0.107 at step 88; it fell throughout, so no early stop (patience 4) and step 88 is kept.
+Base 0.375 to 0.111 on the score set, token accuracy 0.936 to 0.961. Final training loss 0.033 is again flagged as
+memorised (under half the monitor loss). Adapter candidate-20261121T102923.834-f015, sha256 aaa04e3f1fd21...
+
+**Item 24b gen 2 harvest and gen 3 (2026-11-21).** Gen-2 harvest 11:34-11:45 (168 x 4, concise): pass@1 0.366, pass@4
+0.464, 78 tasks solved, 12 never solved before (gen 0's 15 samples and gen 1's 4), so the gen-3 rule (5 or more) holds;
+no timeouts, no infrastructure errors; 48.2% of 1,969 tool-calling responses state a rationale. Gen-3 set: 945
+cumulative passes, 18 without a final message, 603 duplicates, 115 over the cap; 209 records over 89 tasks,
+blake3:18771ae53c8f...; one record is over 8,192 tokens, block 10240 is lossless (same digest as 12288). Trained
+11:46-11:50, block 10240, 4 records per step, 105 steps: monitor loss (15 records, every 14 steps) 0.243, 0.205, 0.211,
+0.227, 0.206, 0.191, 0.186, 0.184; no early stop, step 105 kept; score set 0.364 to 0.145, token accuracy 0.930 to
+0.956; flagged memorised. Adapter candidate-20261121T104621.616-6708, sha256 b23f19f18d054ce... Gen-3 harvest (168 x
+4) started 11:51 for the coverage report. Gen 3 is the last generation (at most 3).
+
+**Item 24b train-side summary (training fit, never transfer; concise mode, shared :8977).**
+
+| generation | harvest | pass@1 | pass@k | tasks solved | new tasks | cumulative tasks | stated rationale |
+|---|---|---:|---:|---:|---:|---:|---:|
+| base (gen 0) | 168 x 15 | 0.197 | 0.369 (k 15) | 62 | 62 | 62 | 59.2% |
+| gen 1 | 168 x 4 | 0.301 | 0.423 | 71 | 15 | 77 | 51.2% |
+| gen 2 | 168 x 4 | 0.366 | 0.464 | 78 | 12 | 89 | 48.2% |
+| gen 3 | 168 x 4 | 0.405 | 0.482 | 81 | 4 | 93 | 40.4% |
+
+No timeouts and no infrastructure errors in any harvest. The share of calls with a stated rationale falls each
+generation (59% to 40%): training on the 4B's own traces, about half of which carry none, reinforces calling without
+a sentence. The exam measurement is item 24b's: gen 1, gen 2 and gen 3 beside base in item 25's E2 slot.
+
 ## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
 
 **Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`
@@ -1236,3 +1292,23 @@ brain-5e25d5b82 and splinter-7220b1d5d.
 - **Analysis:** E1's analysis unchanged (task bootstrap, sign test, pass@16, timeouts and infrastructure errors
   separate). It also reports turns per trial and the visible text per action.
 - **Primary comparison:** pooled v2 against base. The decision rule is E1's.
+
+### E2a: the concise-mode exam of base, v1 and item 24b's generations (pre-registered 2026-11-21 ~12:10, lane VIM, before any E2a trial; a dated deviation of item 25 E2 (d82ee5ea8) and of item 24b's measurement)
+
+- **Why:** E2 waits for v2; E2a measures what exists now. VSFT's E2b runs base, v2s1, v2s2 and gen 3 as anchors later,
+  in its own slot at the same settings.
+- **Arms (6):** base Qwen3-4B; v1s1 (candidate-20261121T035929.503-cd69) and v1s2 (candidate-20261121T035931.483-e4a8),
+  trained on thinking traces and reported as such; item 24b gen 1 (candidate-20261121T100839.481-1e69), gen 2
+  (candidate-20261121T102923.834-f015) and gen 3 (candidate-20261121T104621.616-6708).
+- **Run:** the 14 eval tasks x 16 attempts per arm, one slot, all six jobs launched together, 12 trials in flight per
+  arm (72 in all, E1b's measured load). One server: brain-8f2a3d264 on gpu0 :8977 (`--max-batch 128 --vram-budget 32`,
+  adapters hot-served), shared with lane VSFT's 27B process on the same card. The concise mode of the shared section
+  (sven-7a9f60cb, thinking off, the concise instruction through `append_system_prompt`, T 0.7 / top-p 0.8 / top-k 20,
+  run seed 20261121), each arm through its own bench gateway.
+- **Primary contrasts (5):** each arm minus base in pass@1 (mean over the 14 tasks of the per-task pass rate), with the
+  task bootstrap 95% CI (10,000 resamples, seed 20261121) and the exact paired sign test over tasks; the 5 p-values are
+  Holm-corrected. An effect is supported when its CI lies wholly above 0 and its Holm-adjusted p < 0.05.
+- **Secondary:** gen 3 minus pooled v1 (the mean of v1s1 and v1s2): the 4B-only arm against the 27B-distilled arm,
+  same statistics, not corrected.
+- **Also reported per arm:** pass@16, timeouts, infrastructure errors (left out of the denominator, as E1), model turns
+  per trial, visible text characters per action, and the share of tool calls with a stated rationale.
