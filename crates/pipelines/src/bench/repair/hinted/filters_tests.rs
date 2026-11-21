@@ -132,6 +132,28 @@ fn only_a_reward_of_one_is_verified() {
     }
 }
 
+/// An instruction that names the file but does not show it: the model has seen nothing of it.
+const UNSHOWN: &str = "# Paste above\n\nCopy line two and paste it above line one of `main.txt`.\n";
+
+/// A file the instruction itself shows (a vim task prints the starting files) is observed before any tool call:
+/// editing it in the first call is not editing blind, and the base model's own unhinted passes do exactly that
+/// (155 of 221, knowledge 200). A file the instruction does not show must still be read first.
+#[test]
+fn a_file_the_instruction_shows_counts_as_observed() {
+    let files = target();
+    let blind = trajectory(INSTRUCTION, &[("edit", EDIT, EDIT_REPLY)]);
+    assert_eq!(
+        read_before_write(&blind, &files, INSTRUCTION),
+        Verdict::pass()
+    );
+    assert!(!read_before_write(&blind, &files, UNSHOWN).passed);
+    let partly = "Copy line two of `main.txt`:\n\n```text\ntop line\n```\n";
+    assert!(
+        !read_before_write(&blind, &files, partly).passed,
+        "one of its lines unshown is not shown"
+    );
+}
+
 #[test]
 fn the_first_call_must_read_every_changed_file_before_writing_it() {
     let files = target();
@@ -140,10 +162,10 @@ fn the_first_call_must_read_every_changed_file_before_writing_it() {
         INSTRUCTION,
         &[("read it", READ, READ_REPLY), ("edit", EDIT, EDIT_REPLY)],
     );
-    assert_eq!(read_before_write(&good, &files), Verdict::pass());
+    assert_eq!(read_before_write(&good, &files, UNSHOWN), Verdict::pass());
     // A first call that edits blind.
     let blind = trajectory(INSTRUCTION, &[("edit", EDIT, EDIT_REPLY)]);
-    let verdict = read_before_write(&blind, &files);
+    let verdict = read_before_write(&blind, &files, UNSHOWN);
     assert!(!verdict.passed, "{verdict:?}");
     // A first call that prints the file and writes it in the same call.
     let both: Vec<&str> = READ.iter().chain(EDIT).copied().collect();
@@ -151,7 +173,7 @@ fn the_first_call_must_read_every_changed_file_before_writing_it() {
         INSTRUCTION,
         &[("all", &both, &format!("{READ_REPLY}\n{EDIT_REPLY}"))],
     );
-    let verdict = read_before_write(&same, &files);
+    let verdict = read_before_write(&same, &files, UNSHOWN);
     assert!(!verdict.passed && verdict.reason.unwrap().contains("writes"));
     // A first call that reads only part of the file.
     let part = trajectory(
@@ -161,10 +183,17 @@ fn the_first_call_must_read_every_changed_file_before_writing_it() {
             ("edit", EDIT, EDIT_REPLY),
         ],
     );
-    assert!(!read_before_write(&part, &files).passed);
+    assert!(!read_before_write(&part, &files, UNSHOWN).passed);
     // No tool call at all, and a task without target files.
-    assert!(!read_before_write(&trajectory(INSTRUCTION, &[("think", &[], "")]), &files).passed);
-    let undecidable = read_before_write(&good, &files_without_target());
+    assert!(
+        !read_before_write(
+            &trajectory(INSTRUCTION, &[("think", &[], "")]),
+            &files,
+            UNSHOWN
+        )
+        .passed
+    );
+    let undecidable = read_before_write(&good, &files_without_target(), UNSHOWN);
     assert!(!undecidable.passed && undecidable.reason.unwrap().contains("target"));
     // A task that only creates a file has nothing to read first.
     let create = task_files(Some(&[
@@ -181,7 +210,10 @@ fn the_first_call_must_read_every_changed_file_before_writing_it() {
             "\"new.txt\" [New] 1L, 6B written",
         )],
     );
-    assert_eq!(read_before_write(&write_new, &create), Verdict::pass());
+    assert_eq!(
+        read_before_write(&write_new, &create, UNSHOWN),
+        Verdict::pass()
+    );
     // A removed file is a changed file too.
     let removed = task_files(Some(&[("main.txt", "top line\nbottom line\n")]));
     assert_eq!(removed.changed(), Some(vec!["keep.txt"]));

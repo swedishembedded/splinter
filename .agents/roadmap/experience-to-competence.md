@@ -882,6 +882,21 @@ built from them). Its controls on the 221 own passes, which never saw a hint (kn
 stop rule would fire for reasons unrelated to the hint; a change of the leak terms (`--leak-term`) or of filter 2 is
 a dated deviation for the lane owner to decide before the gate runs.
 
+**Deviations (2026-11-21, before the feasibility gate ran; knowledge 200).** Run on the base model's 221 unhinted
+passes, two filters as written rejected nearly all of them, so they would have stopped the arm for reasons unrelated to
+the hint:
+
+1. Leak terms are `as given`, `solve.sh`, `reference` and `hint` (`--leak-term`). `expected` (218 of 221 unhinted
+   passes; every vim instruction has an "Expected" heading) and `solution` (99 of 221, the model's own idiom) are
+   dropped. The check for the hint's own wording (5-word runs) and for quoted file content no earlier reply or the
+   instruction showed is unchanged.
+2. Real observations: a changed file whose every non-empty starting line the instruction itself shows counts as
+   observed before any call, so editing it in the first call is not editing blind (155 of 221 unhinted passes do
+   that). A file the instruction does not show must still be read first. The rule is the one filter 3 already
+   applies to the instruction.
+
+Both controls (`own_term_mentions`, `own_real_observations`) are reported with the gate; the 10% stop rule is unchanged.
+
 ## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
 
 **Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`

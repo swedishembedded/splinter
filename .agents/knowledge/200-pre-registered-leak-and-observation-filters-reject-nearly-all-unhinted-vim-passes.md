@@ -34,3 +34,7 @@ decision, recorded as a dated deviation of item 24.
 
 The hinted instruction tells the model to read the files before it changes them. Whether that lifts filter 2 above
 the base rate is measured by the feasibility gate.
+
+**Decided (2026-11-21, item 24 deviations, before the gate):** the leak terms are `as given`, `solve.sh`, `reference`
+and `hint`; filter 2 counts a changed file as observed when the instruction shows all its starting lines
+(`read_before_write` takes the instruction).

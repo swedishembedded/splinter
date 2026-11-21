@@ -132,8 +132,8 @@ pub(super) struct ReportParts {
     pub(super) profile_sha256: String,
     pub(super) students: StudentSummary,
     pub(super) picked: Vec<Picked>,
-    /// Each task's files, by folder, for the controls over own passes.
-    pub(super) files: BTreeMap<String, filters::TaskFiles>,
+    /// Each task's files and instruction, by folder, for the controls over own passes.
+    pub(super) files: BTreeMap<String, (filters::TaskFiles, String)>,
     pub(super) dir: PathBuf,
 }
 
@@ -185,10 +185,11 @@ pub(super) fn report(
         for term in filters::mentioned_terms(&experience.trajectory, request.leak_terms) {
             *own_term_mentions.entry(term.to_string()).or_default() += 1;
         }
-        own_real_observations +=
-            usize::from(parts.files.get(&record.folder).is_some_and(|files| {
-                filters::read_before_write(&experience.trajectory, files).passed
-            }));
+        own_real_observations += usize::from(parts.files.get(&record.folder).is_some_and(
+            |(files, instruction)| {
+                filters::read_before_write(&experience.trajectory, files, instruction).passed
+            },
+        ));
     }
     let kept: Vec<ExperienceId> = records
         .iter()

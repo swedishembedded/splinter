@@ -388,7 +388,7 @@ pub fn rationalise(
             picked,
             files: tasks
                 .values()
-                .map(|t| (t.rel.clone(), t.files.clone()))
+                .map(|t| (t.rel.clone(), (t.files.clone(), t.instruction.clone())))
                 .collect(),
             dir,
         },
@@ -484,8 +484,11 @@ fn hinted_phase(
             serde_json::to_string(&context.tools).unwrap_or_default()
         );
         record.filters.verified = Some(filters::verified(Some(reward)));
-        record.filters.real_observations =
-            Some(filters::read_before_write(&trajectory, &case.task.files));
+        record.filters.real_observations = Some(filters::read_before_write(
+            &trajectory,
+            &case.task.files,
+            &case.task.instruction,
+        ));
         record.filters.no_leak = Some(filters::no_leak(
             &trajectory,
             &LeakCheck {

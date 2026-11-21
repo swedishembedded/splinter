@@ -321,9 +321,16 @@ fn step_name(step: &atif::TraceStep) -> String {
 }
 
 /// Filter 2: the first agent step that calls a tool reads every changed
-/// file with content and writes none of them; see the module documentation.
+/// file with content and writes none of them, except a file `instruction`
+/// already shows (every non-empty line of its starting content is in it),
+/// which the model has observed before any call; see the module
+/// documentation.
 #[must_use]
-pub fn read_before_write(trajectory: &atif::Trajectory, files: &TaskFiles) -> Verdict {
+pub fn read_before_write(
+    trajectory: &atif::Trajectory,
+    files: &TaskFiles,
+    instruction: &str,
+) -> Verdict {
     let Some(changed) = files.changed() else {
         return Verdict::fail(
             "the task states no target files (no tests/expected/), so which files it changes \
@@ -341,6 +348,14 @@ pub fn read_before_write(trajectory: &atif::Trajectory, files: &TaskFiles) -> Ve
         let Some(start) = files.starter.get(path).filter(|c| !c.trim().is_empty()) else {
             continue;
         };
+        let shown = start
+            .lines()
+            .map(str::trim_end)
+            .filter(|line| !line.trim().is_empty())
+            .all(|line| instruction.contains(line));
+        if shown {
+            continue;
+        }
         if let Some(unseen) = start
             .lines()
             .map(str::trim_end)

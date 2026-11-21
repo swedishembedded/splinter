@@ -275,7 +275,7 @@ main role is the rationaliser) and its Sven adapter, `--jobs` at once. It is jud
 | Filter | Passes when |
 |---|---|
 | verified | the task's verifier gave reward 1 |
-| real observations | the first agent step that calls a tool shows every non-empty line of each file the task changes (from `environment/workspace/` to `tests/expected/`) in its replies, and none of those replies confirms writing such a file (`"FILE" ... written`); a task without `tests/expected/` is undecidable and fails |
+| real observations | the first agent step that calls a tool shows every non-empty line of each file the task changes (from `environment/workspace/` to `tests/expected/`) in its replies, and none of those replies confirms writing such a file (`"FILE" ... written`), unless the instruction itself shows every non-empty starting line of that file (then the model has observed it before any call); a task without `tests/expected/` is undecidable and fails |
 | no leak | the model's own text (reasoning and messages, not tool arguments or replies) mentions no leak term (a word prefix, case-insensitive; `--leak-term` replaces the default `as given`, `solution`, `solve.sh`, `expected`, `reference`, `hint`), repeats no run of five words from one line of the hint section that it was not also shown (instruction, system prompt, tool schemas) or sent itself as a tool argument, and quotes no line of the task's files (8 characters or more) that neither the instruction nor an earlier tool reply showed |
 | sufficient | a second trial of a copy whose instruction is the task's plus only the attempt's reasoning (no hint, no tool calls or replies) passes the verifier |
 
