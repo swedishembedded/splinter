@@ -172,6 +172,7 @@ pub fn build_dataset(ctx: &Context, sets: &[String], settings: &DatasetSettings)
         split_over_block: false,
         pack: true,
         control: Default::default(),
+        pass_curation: Default::default(),
         serialise_calls: false,
         only_actions: None,
         roles: None,
