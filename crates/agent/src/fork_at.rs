@@ -175,6 +175,8 @@ pub fn under_environment(
                 name: name.clone(),
                 argv,
                 cwd: None,
+                timeout: crate::mcp_stdio::DEFAULT_EXCHANGE_TIMEOUT,
+                failure: Arc::default(),
             });
         }
     }
@@ -306,7 +308,7 @@ pub async fn continue_in_turns(
         Some(workspace) => RecordedState::new(workspace.clone(), digest),
         None => RecordedState::observed(digest),
     };
-    let engine = fork_engine(request, model, &options)?;
+    let (engine, servers) = fork_engine(request, model, &options)?;
     let mut agent = engine
         .fork(&Fork::new(transcript, request.tree, recorded))
         .await?;
@@ -332,6 +334,11 @@ pub async fn continue_in_turns(
             CorrectionError::Trajectory("the deadline passed before the first turn".into())
         })?
     };
+    // A tool of the environment that failed (its server, its launcher) leaves
+    // no observation the model earned: the fork fails as infrastructure.
+    if let Some(failure) = servers.iter().find_map(StdioServer::failure) {
+        return Err(CorrectionError::Trajectory(failure));
+    }
     let continuation = agent.trajectory();
     let trajectory = compose_as(
         &prefix,
@@ -364,12 +371,13 @@ fn count_agent(steps: &[sven_sdk::atif::TraceStep]) -> u32 {
     .unwrap_or(u32::MAX)
 }
 
-/// The engine the fork runs on: the student's profile, confined to the tree.
+/// The engine the fork runs on: the student's profile, confined to the tree;
+/// and the environment's MCP servers its tools call.
 fn fork_engine(
     request: &ForkAt<'_>,
     model: &Model,
     options: &SolveOptions,
-) -> Result<Engine, CorrectionError> {
+) -> Result<(Engine, Vec<StdioServer>), CorrectionError> {
     let mut config = options.engine_config();
     config.tools.disabled = WITHHELD_TOOLS.iter().map(|t| (*t).to_string()).collect();
     let mut servers = Vec::new();
@@ -418,7 +426,7 @@ fn fork_engine(
         .project_root(request.tree)
         .approvals(ApprovalPolicy::Auto)
         .build()?;
-    Ok(engine)
+    Ok((engine, servers))
 }
 
 #[cfg(test)]

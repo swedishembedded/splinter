@@ -275,8 +275,10 @@ tasks (`bench task session DATASET --task FOLDER`): the task's image, its workin
 the image's own Sven configuration (`sven_config`, or else the task's MCP servers). The fork's engine runs under that
 configuration with Sven's default profile, so the model is offered exactly the tools the trial's agent was (`tools.only`
 included), named as Sven names them (`<server>-<tool>`), with the system prompt the trial recorded. Each MCP server is
-started in the session through `bench task session-exec --stdin`, from the tree's root, once per call; a recorded call is
-replayed there and held to its recorded observation. A tool whose output is not the same for the same call (a random path in
+started in the session through `bench task session-exec --stdin`, from the tree's root, once per call, without Sven's own
+`intent` argument unless the tool declares it; a recorded call is replayed there and held to its recorded observation. One
+exchange with a server takes at most 300 s; a server that does not answer by then is stopped and the repair is refused as
+an infrastructure failure, never shown to the model as an observation. A tool whose output is not the same for the same call (a random path in
 a message) cannot be replayed, and the examiner's `bench task replay` measures how often that happens.
 
 ### The hinted retry: rationalising failures on a compiled dataset
