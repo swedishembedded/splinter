@@ -171,6 +171,13 @@ def with_replicas_one_server_spans_the_cards():
     assert 'base_url = ["http://127.0.0.1:8800/v1"]' in text
 
 
+def a_host_serves_off_the_loopback_for_agents_on_other_nodes():
+    campaign = loop.Campaign({"bench": {"sven": "/s"}, "serve": {"base_port": 8800, "host": "10.1.2.3"}})
+    text = loop.profile_text(campaign, {"name": "w", "concurrency": 8}, "M", 1, [0, 1])
+    assert 'base_url = ["http://10.1.2.3:8800/v1", "http://10.1.2.3:8801/v1"]' in text
+    assert loop.url(campaign, 1) == "http://10.1.2.3:8801/v1"
+
+
 def a_model_on_a_share_of_the_cards_runs_that_share_of_the_trials():
     campaign = loop.Campaign({"serve": {"cards": [0, 1, 2]}})
     assert loop.scaled(campaign, {"name": "w", "concurrency": 30}, [0, 1, 2])["concurrency"] == 30

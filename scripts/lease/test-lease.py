@@ -148,7 +148,7 @@ class CardTest(unittest.TestCase):
     """`card` reserves VRAM shares on one of several GPUs (11 GiB each)."""
 
     def card(self, d, args, body):
-        return run([LEASE / "card", "--lock-dir", d, *args, "--", "sh", "-c", body])
+        return run([LEASE / "card", "--lock-dir", d, "--cards", "2", *args, "--", "sh", "-c", body])
 
     def test_the_command_is_told_its_card_and_the_device_flag(self):
         with tempfile.TemporaryDirectory() as d:
@@ -159,7 +159,7 @@ class CardTest(unittest.TestCase):
     def test_cards_lock_independently_and_a_full_card_refuses(self):
         with tempfile.TemporaryDirectory() as d:
             holder = subprocess.Popen(
-                [str(LEASE / "card"), "--lock-dir", d, "--card", "0", "--gb", "88",
+                [str(LEASE / "card"), "--lock-dir", d, "--cards", "2", "--card", "0", "--gb", "88",
                  "--", "sleep", "5"],
                 stderr=subprocess.DEVNULL,
             )
@@ -179,6 +179,17 @@ class CardTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(self.card(d, ["--card", "0", "--gb", "89"], "true").returncode, 2)
             self.assertEqual(self.card(d, ["--card", "0", "--gb", "1"], "exit 7").returncode, 7)
+
+    def test_every_card_the_machine_has_is_offered_and_one_beyond_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            four = run([LEASE / "card", "--lock-dir", d, "--cards", "4", "--card", "3", "--gb", "11",
+                        "--", "sh", "-c", 'echo "$CARD"'])
+            self.assertEqual(four.returncode, 0, four.stderr)
+            self.assertEqual(four.stdout.strip(), "3")
+            beyond = run([LEASE / "card", "--lock-dir", d, "--cards", "2", "--card", "2", "--gb", "11",
+                          "--", "true"])
+            self.assertEqual(beyond.returncode, 2)
+            self.assertIn("2 card(s)", beyond.stderr)
 
 
 class DoctorTest(unittest.TestCase):

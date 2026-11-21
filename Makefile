@@ -345,7 +345,7 @@ lease/gpu/run:
 lease/card:
 	@bash scripts/make-help.sh lease/card
 
-## lease/card/run - run CMD with a GB GiB VRAM reservation on one GPU (CARD=0|1|any, default any; blocks until the shares are free; the command sees CARD and BRAIN_DEVICE_FLAG)
+## lease/card/run - run CMD with a GB GiB VRAM reservation on one GPU (CARD=<n>|any, default any, over the cards nvidia-smi lists; blocks until the shares are free; the command sees CARD and BRAIN_DEVICE_FLAG)
 lease/card/run:
 	bash scripts/lease/card --lock-dir $(LEASE_ROOT)/locks --card $(or $(CARD),any) --gb $(GB) --wait -- $(CMD)
 

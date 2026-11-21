@@ -196,6 +196,17 @@ def port(campaign: Campaign, card: int) -> int:
     return campaign["serve"]["base_port"] + card
 
 
+def host(campaign: Campaign) -> str:
+    """The address the servers bind and every client reaches them at: `serve.host`, so
+    agents on other nodes of an allocation can reach them (this node's address), else
+    the loopback."""
+    return campaign["serve"].get("host", "127.0.0.1")
+
+
+def url(campaign: Campaign, card: int) -> str:
+    return f"http://{host(campaign)}:{port(campaign, card)}/v1"
+
+
 def stop_serving(campaign: Campaign, card: int) -> None:
     """Stop any brain binary serving `card`, whichever path started it."""
     pattern = f"/brain[^ /]* --device ([a-z0-9]+,)*gpu{card}[ ,]"
@@ -211,7 +222,7 @@ def stop_serving(campaign: Campaign, card: int) -> None:
 
 def served_ids(campaign: Campaign, card: int) -> list[str]:
     key = path(campaign["serve"]["key_file"]).read_text().strip()
-    request = urllib.request.Request(f"http://127.0.0.1:{port(campaign, card)}/v1/models",
+    request = urllib.request.Request(f"{url(campaign, card)}/models",
                                      headers={"Authorization": f"Bearer {key}"})
     return [m["id"] for m in json.load(urllib.request.urlopen(request, timeout=30))["data"]]
 
@@ -238,8 +249,11 @@ def serve(campaign: Campaign, model: dict, cards: list[int]) -> str:
         ready = campaign.work / f"ready-gpu{card}"
         devices = ",".join(f"gpu{c}" for c in group)
         argv = [path(s["brain"]), "--device", devices, "--backend", "cuda", "serve", "--max-batch",
-                s["max_batch"], "--speculative", "off", "--openai", f"127.0.0.1:{port(campaign, card)}",
+                s["max_batch"], "--speculative", "off", "--openai", f"{host(campaign)}:{port(campaign, card)}",
                 "--api-key-file", path(s["key_file"]), "--checkpoint", path(s["checkpoint"]), "--ready-file", ready]
+        if host(campaign) != "127.0.0.1":
+            # Off the loopback brain wants TLS; the allocation's private network carries the key.
+            argv.append("--insecure-plaintext")
         if model.get("adapter"):
             argv += ["--adapter", model["adapter"], "--adapter-targets", "all"]
         with open(campaign.work / f"brain-gpu{card}.log", "a") as out:
@@ -274,7 +288,7 @@ def profile_text(campaign: Campaign, workload: dict, model_id: str, attempts: in
     """A run profile: every harness role of the workload on `model_id`, served on `cards`."""
     b = campaign["bench"]
     roles = "\n".join(f'{role} = "brain"' for role in ["main", *workload.get("roles", [])])
-    urls = ", ".join(f'"http://127.0.0.1:{p}/v1"' for p in endpoints(campaign, cards))
+    urls = ", ".join(f'"http://{host(campaign)}:{p}/v1"' for p in endpoints(campaign, cards))
     tools = "".join(f'{name} = "{path(tool)}"\n' for name, tool in workload.get("tools", {}).items())
     return (f'[sven]\nbuild = "{path(b["sven"])}"\n\n[run]\nenvironment = "userns"\nattempts = {attempts}\n'
             f'concurrency = {workload["concurrency"]}\n\n[roles]\n{roles}\n\n[upstreams.brain]\n'

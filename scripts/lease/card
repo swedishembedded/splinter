@@ -12,13 +12,14 @@
 # memory. `gpu` holds the whole node for exclusive measurements; `card` is the
 # per-card, per-share lock the campaign's servers, trainers and evaluations use.
 #
-# Usage: card [--lock-dir DIR] [--card 0|1|any] --gb <GiB> [--wait] -- <command> [args...]
+# Usage: card [--lock-dir DIR] [--cards N] [--card <n>|any] --gb <GiB> [--wait] -- <command> [args...]
 #
 # Each card's usable VRAM is split into 8 shares of 11 GiB (88 GiB), each a
 # flock file (gpu<card>.s<k>.lock under --lock-dir, default
 # ~/.cache/splinter/card-locks; every user of a node must name the same one). A job takes
 # ceil(GiB/11) shares on one card; with --card any it takes the first card
-# that has enough free shares. Without --wait it fails (status 75) when no
+# that has enough free shares. The cards are the ones nvidia-smi lists
+# (--cards N names the count instead, for a machine without it). Without --wait it fails (status 75) when no
 # card has room; with --wait it retries every 15 s. The command sees
 # CARD=<n> and BRAIN_DEVICE_FLAG=--device gpu<n>; pass "$BRAIN_DEVICE_FLAG"
 # (or --device gpu$CARD) to brain/splinter. The shares are held until the
@@ -26,22 +27,33 @@
 # reservation.
 set -u
 dir=${HOME:?}/.cache/splinter/card-locks
-card=any gb="" wait=0
+card=any gb="" wait=0 count=
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --lock-dir) dir=${2:?}; shift 2 ;;
         --card) card=${2:?}; shift 2 ;;
+        --cards) count=${2:?}; shift 2 ;;
         --gb) gb=${2:?}; shift 2 ;;
         --wait) wait=1; shift ;;
         --) shift; break ;;
         *) echo "card: unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-[ -n "$gb" ] && [ "$#" -gt 0 ] || { echo "card: usage: card [--lock-dir DIR] [--card 0|1|any] --gb N [--wait] -- cmd..." >&2; exit 2; }
+[ -n "$gb" ] && [ "$#" -gt 0 ] || { echo "card: usage: card [--lock-dir DIR] [--cards N] [--card <n>|any] --gb N [--wait] -- cmd..." >&2; exit 2; }
 need=$(( (gb + 10) / 11 ))
 [ "$need" -ge 1 ] && [ "$need" -le 8 ] || { echo "card: --gb $gb needs $need shares; 1..8 (<= 88 GiB)" >&2; exit 2; }
 mkdir -p "$dir"
-case "$card" in any) cards="0 1" ;; 0|1) cards=$card ;; *) echo "card: --card 0|1|any" >&2; exit 2 ;; esac
+if [ -z "$count" ]; then
+    command -v nvidia-smi >/dev/null || { echo "card: no nvidia-smi to count the cards; name the count with --cards N" >&2; exit 2; }
+    count=$(nvidia-smi -L | grep -c '^GPU ')
+fi
+case "$count" in ''|*[!0-9]*) echo "card: --cards needs a count, got $count" >&2; exit 2 ;; esac
+[ "$count" -ge 1 ] || { echo "card: this machine has no GPU" >&2; exit 2; }
+case "$card" in
+    any) cards=$(seq 0 $((count - 1)) | tr '\n' ' ') ;;
+    *[!0-9]*|'') echo "card: --card <n>|any, n below $count" >&2; exit 2 ;;
+    *) [ "$card" -lt "$count" ] || { echo "card: --card $card: this machine has $count card(s)" >&2; exit 2; }; cards=$card ;;
+esac
 
 held=()
 release() { for fd in "${held[@]}"; do exec {fd}>&-; done; held=(); }

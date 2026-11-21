@@ -15,6 +15,8 @@ models_dir = "~/models"
 base_model = "Qwen/Qwen3.8-27B-FP8"          # the model id the base is served as
 cards = [0, 1, 2, 3]                         # one server per card; a trial stays on one server
 base_port = 8800                             # card N serves on base_port + N
+# host = "10.150.4.178"                      # bind this node's address, not the loopback, so agents on
+#                                            # other nodes of an allocation reach the servers
 key_file = "~/keys/brain"
 max_batch = 48
 env = { BRAIN_BACKEND = "cuda" }
