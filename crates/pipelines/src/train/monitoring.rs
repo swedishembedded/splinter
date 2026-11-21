@@ -37,6 +37,11 @@ pub(super) struct WatchPlan {
     /// Steps between evaluations: the plan's when there is a monitoring set,
     /// else 0.
     pub(super) eval_every: u32,
+    /// Evaluations without improvement before the run stops: the plan's
+    /// when there is a monitoring set, else 0. A run with no evaluations has
+    /// nothing to be patient about, and brain refuses a patience without a
+    /// cadence (the selection would rest on a loss never measured).
+    pub(super) patience: u32,
     /// Why monitoring that was asked for was not done, for the candidate's
     /// record.
     pub(super) skipped: Option<String>,
@@ -63,6 +68,7 @@ pub(super) fn plan_monitoring(
         fit: None,
         monitor: None,
         eval_every: 0,
+        patience: 0,
         skipped: None,
     };
     if plan.eval_every > 0 {
@@ -83,6 +89,7 @@ pub(super) fn plan_monitoring(
                     concatenate(&parts, &plan.dir.join(MONITOR_ALL_FILE))?
                 });
                 watch.eval_every = plan.eval_every;
+                watch.patience = plan.patience;
                 watch.fit = Some(m.fit);
             }
             Monitoring::Skipped(why) => skipped.push(why),
@@ -161,6 +168,50 @@ mod tests {
             why.contains("not monitored") && why.contains("1 independent source text"),
             "{why}"
         );
+    }
+
+    #[test]
+    fn a_run_whose_monitoring_set_cannot_be_carved_is_given_no_patience() {
+        // Found 2026-11-21: a small campaign's dataset (one source text) left
+        // the run unmonitored, but its patience of 2 still reached brain,
+        // which refused the run ("selecting on the monitoring loss needs
+        // eval_every > 0").
+        let dir = std::env::temp_dir().join(format!("monitoring-plan-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let train = dir.join("train.jsonl");
+        std::fs::write(&train, records(&["only"; 8])).unwrap();
+        let plan = TrainPlan {
+            candidate: "c".into(),
+            regime: splinter_core::training::Regime::Sft,
+            dir: dir.clone(),
+            datasets: Vec::new(),
+            base: dir.join("base"),
+            continue_from: None,
+            parent: None,
+            replay_file: None,
+            replay_share: None,
+            rehearsal: None,
+            steps: 8,
+            rank: 2,
+            beta: 0.1,
+            tuning: super::super::Tuning::default(),
+            train_precision: None,
+            seed: 1, // seed: no draw depends on it here
+            eval_every: 4,
+            patience: 2,
+            monitor_share: 0.1,
+            resume_key: None,
+        };
+        let unmonitored = plan_monitoring(&plan, &train).unwrap();
+        assert_eq!((unmonitored.eval_every, unmonitored.patience), (0, 0));
+        assert!(unmonitored.skipped.is_some());
+
+        let groups: Vec<String> = (0..12).map(|n| format!("g{n}")).collect();
+        let refs: Vec<&str> = groups.iter().map(String::as_str).collect();
+        std::fs::write(&train, records(&refs)).unwrap();
+        let monitored = plan_monitoring(&plan, &train).unwrap();
+        assert_eq!((monitored.eval_every, monitored.patience), (4, 2));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -33,9 +33,9 @@ pub(super) fn train(
 ) -> Result<Trained, OrchestratorError> {
     let split = split_dataset_file(&combine(plan)?, &plan.dir)?;
     let watch = monitoring::plan_monitoring(plan, &split.train)?;
-    let kept = plan
-        .tuning
-        .keep_evaluations
+    // Evaluations are kept only where there are some: an unmonitored run
+    // (its skipped reason recorded) has none, and brain refuses to keep them.
+    let kept = (plan.tuning.keep_evaluations && watch.eval_every > 0)
         .then(|| plan.dir.join(EVALUATIONS_DIR));
     let replayed: Vec<PathBuf> = plan.replay_file.iter().cloned().collect();
     let rehearsed: Vec<(PathBuf, f32)> = plan
@@ -51,7 +51,7 @@ pub(super) fn train(
         held_out_text: split.held_out_text.as_deref(),
         monitor: watch.monitor.as_deref(),
         eval_every: watch.eval_every,
-        patience: plan.patience,
+        patience: watch.patience,
         attempt_dir: &plan.dir,
         steps: plan.steps,
         rank: plan.rank,
