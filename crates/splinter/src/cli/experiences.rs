@@ -178,6 +178,19 @@ pub struct RationaliseArgs {
     /// solve.sh, expected, reference, hint).
     #[arg(long = "leak-term", value_name = "TEXT")]
     pub leak_terms: Vec<String>,
+    /// How the hint is framed for the rationaliser: `worked-answer` (a worked
+    /// answer for its eyes only) or `private-scratch` (private scratch
+    /// knowledge: work as if you found the approach yourself, observe the
+    /// files through the tool first, never mention or allude to a hint).
+    #[arg(long, value_enum, default_value = "worked-answer")]
+    pub hint_framing: HintFramingArg,
+}
+
+/// The `--hint-framing` choices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum HintFramingArg {
+    WorkedAnswer,
+    PrivateScratch,
 }
 
 fn failure_class(name: &str) -> Result<FailureClass, String> {

@@ -13,14 +13,14 @@ use std::fmt::Write as _;
 
 use serde_json::json;
 use splinter_sdk::bench::practice::BenchCheckout;
-use splinter_sdk::bench::repair::hinted::filters::LEAK_TERMS;
+use splinter_sdk::bench::repair::hinted::filters::{HintFraming, LEAK_TERMS};
 use splinter_sdk::bench::repair::hinted::{
     rationalise, RationaliseReport, RationaliseRequest, DEFAULT_RATIONALISE_JOBS, DEFAULT_SAMPLES,
 };
 use splinter_sdk::runs::record;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::RationaliseArgs;
+use crate::cli::{HintFramingArg, RationaliseArgs};
 use crate::output::{emit, Report};
 
 /// Runs the command and prints its report.
@@ -47,6 +47,10 @@ pub(crate) fn rationalise_command(
     } else {
         args.leak_terms.clone()
     };
+    let framing = match args.hint_framing {
+        HintFramingArg::WorkedAnswer => HintFraming::WorkedAnswer,
+        HintFramingArg::PrivateScratch => HintFraming::PrivateScratch,
+    };
     let samples = args.samples.unwrap_or(DEFAULT_SAMPLES);
     let jobs = args.jobs.unwrap_or(DEFAULT_RATIONALISE_JOBS);
     let arguments = json!({
@@ -54,7 +58,7 @@ pub(crate) fn rationalise_command(
         "rationaliser": args.rationaliser.to_string(), "bench": args.bench,
         "harbor": args.harbor, "sven_build": args.sven_build, "profile": args.profile,
         "images": images, "count": args.count, "seed": args.seed, "samples": samples,
-        "jobs": jobs, "leak_terms": leak_terms,
+        "jobs": jobs, "leak_terms": leak_terms, "hint_framing": framing,
     });
     let report = record(ctx, "experiences rationalise", &arguments, |run| {
         let seed = run.seed("seed", args.seed)?;
@@ -72,6 +76,7 @@ pub(crate) fn rationalise_command(
                 seed: seed.value(),
                 jobs,
                 leak_terms: &leak_terms,
+                framing,
                 cancel: run.cancel_token(),
             },
         )

@@ -65,6 +65,38 @@ Work the task yourself through the tool: read the files before you change them, 
 each step from what the files and the tool's replies show. Never mention, quote or refer to \
 this section in anything you write.";
 
+/// The private-scratch framing of the hint ([`HintFraming::PrivateScratch`]).
+pub const PRIVATE_SCRATCH_PREAMBLE: &str = "Private scratch knowledge follows: an approach to this task \
+that works. Use it only to steer your own work. Work as if you found the approach yourself: first \
+observe the files through the tool, then act, and explain each step only from what the task, the files \
+and the tool's replies show. Never mention, quote or allude to any hint, reference, provided answer, \
+solution or solution file, in your reasoning or in anything you write.";
+
+/// How the hint section frames the hint for the model: a prompt-template choice of a run, recorded in its key.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HintFraming {
+    /// A worked answer shown for the model's eyes only ([`HINT_PREAMBLE`]).
+    #[default]
+    WorkedAnswer,
+    /// Private scratch knowledge, with the instruction to work as if unaided ([`PRIVATE_SCRATCH_PREAMBLE`]).
+    PrivateScratch,
+}
+
+impl HintFraming {
+    /// Every framing, so a residue check knows each preamble.
+    pub const ALL: [HintFraming; 2] = [HintFraming::WorkedAnswer, HintFraming::PrivateScratch];
+
+    /// The text the hint section opens with.
+    #[must_use]
+    pub fn preamble(self) -> &'static str {
+        match self {
+            HintFraming::WorkedAnswer => HINT_PREAMBLE,
+            HintFraming::PrivateScratch => PRIVATE_SCRATCH_PREAMBLE,
+        }
+    }
+}
+
 /// What the model is told about the notes, inside the notes section.
 pub const NOTES_PREAMBLE: &str = "Notes from an earlier attempt at this task follow.";
 
@@ -204,11 +236,11 @@ fn with_section(instruction: &str, begin: &str, end: &str, preamble: &str, body:
 }
 
 /// The instruction a hinted attempt is given: `instruction`, then the hint
-/// section holding [`HINT_PREAMBLE`] and `hint` in a code fence longer than
+/// section holding `framing`'s preamble and `hint` in a code fence longer than
 /// any backtick run in it.
 #[must_use]
-pub fn hinted_instruction(instruction: &str, hint: &str) -> String {
-    with_section(instruction, HINT_BEGIN, HINT_END, HINT_PREAMBLE, hint)
+pub fn hinted_instruction(instruction: &str, hint: &str, framing: HintFraming) -> String {
+    with_section(instruction, HINT_BEGIN, HINT_END, framing.preamble(), hint)
 }
 
 /// The instruction a sufficiency run is given: `instruction`, then the
@@ -552,8 +584,9 @@ pub fn kept_trajectory(
 pub fn hint_residue(trajectory: &atif::Trajectory) -> Option<String> {
     let mut leaves = Vec::new();
     strings(&serde_json::to_value(trajectory).ok()?, &mut leaves);
-    [HINT_BEGIN, HINT_END, HINT_PREAMBLE]
+    [HINT_BEGIN, HINT_END]
         .into_iter()
+        .chain(HintFraming::ALL.map(HintFraming::preamble))
         .find(|part| leaves.iter().any(|leaf| leaf.contains(part)))
         .map(|part| format!("the trajectory still holds the hint section's {part:?}"))
 }

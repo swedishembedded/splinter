@@ -117,6 +117,8 @@ pub struct RationaliseRequest<'a> {
     pub jobs: usize,
     /// The leak terms ([`filters::LEAK_TERMS`] unless a run names others).
     pub leak_terms: &'a [String],
+    /// How the hint is framed for the rationaliser.
+    pub framing: filters::HintFraming,
     /// Stops the run between its phases.
     pub cancel: CancelToken,
 }
@@ -223,11 +225,16 @@ pub fn rationalise(
         request.seed,
     );
     let identity = endpoint.identity.clone();
-    let variant = digest_of(&json!({
+    let mut variant = json!({
         "profile_sha256": profile_sha256,
         "served_as": endpoint.model,
         "leak_terms": request.leak_terms,
-    }))?;
+    });
+    // The default framing adds nothing, so the records of runs made before the option keep their keys.
+    if request.framing != filters::HintFraming::default() {
+        variant["framing"] = json!(request.framing);
+    }
+    let variant = digest_of(&variant)?;
     let mut picked = Vec::new();
     let mut cases = Vec::new();
     for rel in &chosen {
@@ -434,7 +441,8 @@ fn hinted_phase(
     let mut staged = BTreeMap::new();
     for case in cases {
         let folder = staged_name(&case.key, &folder_name(case.task));
-        let instruction = filters::hinted_instruction(&case.task.instruction, &case.task.hint);
+        let instruction =
+            filters::hinted_instruction(&case.task.instruction, &case.task.hint, request.framing);
         stage_copy(case.task, &instruction, &tasks_dir, &folder).map_err(refused)?;
         staged.insert(case.key.as_str(), (folder, instruction));
     }

@@ -1711,6 +1711,7 @@ Options:
 - `--samples <K>`: Attempts of each picked task [default: 1]
 - `--jobs <N>`: Trials run at once [default: 8]
 - `--leak-term <TEXT>...`: A word or phrase whose mention in the model's own text is a leak of the hint (repeatable; replaces the default list: as given, solution, solve.sh, expected, reference, hint)
+- `--hint-framing <HINT_FRAMING>`: How the hint is framed for the rationaliser: `worked-answer` (a worked answer for its eyes only) or `private-scratch` (private scratch knowledge: work as if you found the approach yourself, observe the files through the tool first, never mention or allude to a hint) Default: `worked-answer`. Values: `worked-answer`, `private-scratch`.
 
 #### splinter experiences import
 

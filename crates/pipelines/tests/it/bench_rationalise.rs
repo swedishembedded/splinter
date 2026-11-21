@@ -34,7 +34,9 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 use splinter_agent::CancelToken;
 use splinter_pipelines::bench::practice::BenchCheckout;
-use splinter_pipelines::bench::repair::hinted::filters::{HINT_BEGIN, HINT_PREAMBLE, LEAK_TERMS};
+use splinter_pipelines::bench::repair::hinted::filters::{
+    HintFraming, HINT_BEGIN, HINT_PREAMBLE, LEAK_TERMS,
+};
 use splinter_pipelines::bench::repair::hinted::material::{COMPILE_FILE, COMPILE_SCHEMA};
 use splinter_pipelines::bench::repair::hinted::{
     rationalise, Origin, Outcome, RationaliseReport, RationaliseRequest,
@@ -274,6 +276,7 @@ fn failed_train_tasks_are_rationalised_filtered_and_kept_without_the_hint() {
                 seed,
                 jobs: 2,
                 leak_terms: &terms,
+                framing: HintFraming::default(),
                 cancel: CancelToken::new(),
             },
         )
@@ -395,6 +398,7 @@ fn a_student_trial_of_an_eval_task_refuses_the_run_by_name() {
             seed: 0, // seed: the run is refused before anything is drawn
             jobs: 1,
             leak_terms: &terms,
+            framing: HintFraming::default(),
             cancel: CancelToken::new(),
         },
     )

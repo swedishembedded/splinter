@@ -88,6 +88,8 @@ pub struct RationaliseReport {
     pub samples: usize,
     /// The leak terms.
     pub leak_terms: Vec<String>,
+    /// How the hint was framed.
+    pub hint_framing: filters::HintFraming,
     /// What the student's jobs held.
     pub students: StudentSummary,
     /// The tasks picked.
@@ -215,6 +217,7 @@ pub(super) fn report(
         count: request.count,
         samples: request.samples,
         leak_terms: request.leak_terms.to_vec(),
+        hint_framing: request.framing,
         students: parts.students,
         picked: parts.picked,
         funnel,

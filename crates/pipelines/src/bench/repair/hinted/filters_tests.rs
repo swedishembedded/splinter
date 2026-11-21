@@ -78,7 +78,7 @@ fn terms() -> Vec<String> {
 }
 
 fn leak(trajectory: &atif::Trajectory) -> Verdict {
-    let hint = hinted_instruction(INSTRUCTION, HINT);
+    let hint = hinted_instruction(INSTRUCTION, HINT, HintFraming::WorkedAnswer);
     let section = &hint[hint.find(HINT_BEGIN).unwrap()..];
     let terms = terms();
     no_leak(
@@ -96,7 +96,7 @@ fn leak(trajectory: &atif::Trajectory) -> Verdict {
 #[test]
 fn the_hint_section_is_stripped_back_to_the_instruction_exactly() {
     for instruction in [INSTRUCTION, INSTRUCTION.trim_end(), "one line"] {
-        let staged = hinted_instruction(instruction, HINT);
+        let staged = hinted_instruction(instruction, HINT, HintFraming::WorkedAnswer);
         assert!(staged.starts_with(instruction.trim_end()));
         assert!(staged.contains(HINT_BEGIN) && staged.contains(HINT_END));
         assert!(staged.contains(HINT_PREAMBLE) && staged.contains("normal! jyyggP"));
@@ -106,14 +106,14 @@ fn the_hint_section_is_stripped_back_to_the_instruction_exactly() {
         );
     }
     // A hint holding a code fence is fenced by a longer one.
-    let fenced = hinted_instruction("x", "```\ncode\n```");
+    let fenced = hinted_instruction("x", "```\ncode\n```", HintFraming::WorkedAnswer);
     assert!(fenced.contains("````\n```\ncode\n```\n````"), "{fenced}");
     // No section, two sections, or an end before the begin are refused.
     assert!(strip_hint(INSTRUCTION).is_err());
     let twice = format!(
         "{}{}",
-        hinted_instruction("a", "b"),
-        hinted_instruction("", "c")
+        hinted_instruction("a", "b", HintFraming::WorkedAnswer),
+        hinted_instruction("", "c", HintFraming::WorkedAnswer)
     );
     assert!(strip_hint(&twice).is_err());
     assert!(strip_hint(&format!("x\n{HINT_END}\ny\n{HINT_BEGIN}\n")).is_err());
@@ -364,7 +364,7 @@ fn quoting_file_content_nothing_showed_yet_is_a_leak() {
 
 #[test]
 fn the_kept_trajectory_holds_the_instruction_and_no_part_of_the_hint() {
-    let staged = hinted_instruction(INSTRUCTION, HINT);
+    let staged = hinted_instruction(INSTRUCTION, HINT, HintFraming::WorkedAnswer);
     let hinted = trajectory(
         &staged,
         &[("Read.", READ, READ_REPLY), ("Edit.", EDIT, EDIT_REPLY)],
@@ -399,4 +399,35 @@ fn the_reasoning_shown_to_a_sufficiency_run_is_the_models_text_alone() {
     // No tool argument and no tool reply.
     assert!(!notes.contains("normal! jyyggP") && !notes.contains("written"));
     let _: Value = json!(notes);
+}
+
+/// The hint's framing is a template option: the private-scratch framing tells the model to work as if it found the
+/// approach itself, never to mention or allude to a hint, and to observe the files through the tool first. Either
+/// framing strips back to the task's own instruction, and either preamble left in a trajectory is residue.
+#[test]
+fn the_private_scratch_framing_asks_for_unaided_work_and_strips_like_the_worked_answer() {
+    let staged = hinted_instruction(INSTRUCTION, HINT, HintFraming::PrivateScratch);
+    let preamble = HintFraming::PrivateScratch.preamble();
+    assert_ne!(preamble, HintFraming::WorkedAnswer.preamble());
+    assert!(staged.contains(preamble) && staged.contains("normal! jyyggP"));
+    for asked in ["as if you found", "never mention", "through the tool"] {
+        assert!(
+            preamble.to_lowercase().contains(asked),
+            "{asked:?} missing from {preamble:?}"
+        );
+    }
+    assert_eq!(strip_hint(&staged).unwrap(), INSTRUCTION.trim_end());
+    let left = trajectory(
+        &format!("{INSTRUCTION}\n{preamble}"),
+        &[("Read.", READ, READ_REPLY)],
+    );
+    assert!(
+        hint_residue(&left).is_some(),
+        "the private-scratch preamble is residue too"
+    );
+    assert_eq!(
+        HintFraming::default(),
+        HintFraming::WorkedAnswer,
+        "gate a's framing stays the default"
+    );
 }

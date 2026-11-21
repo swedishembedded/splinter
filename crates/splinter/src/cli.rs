@@ -761,7 +761,8 @@ pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs}
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use experiences::{
-    CapabilitiesArgs, DiagnoseArgs, ImportArgs, RationaliseArgs, RepairArgs, StrataArgs,
+    CapabilitiesArgs, DiagnoseArgs, HintFramingArg, ImportArgs, RationaliseArgs, RepairArgs,
+    StrataArgs,
 };
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;

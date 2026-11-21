@@ -268,7 +268,9 @@ not; a packed job is unpacked in a copy, never in place) name the tasks it faile
 (`[metadata].bench_difficulty`) getting its share, and each is attempted `--samples` times.
 
 An attempt is an ordinary Harbor trial of a staged copy of the task (its folder without `solution/`, its
-`instruction.md` followed by a delimited hint section holding the reference solution), run through the examiner's
+`instruction.md` followed by a delimited hint section holding the reference solution, framed by `--hint-framing`:
+`worked-answer`, the default, a worked answer for the model's eyes only; `private-scratch`, private scratch knowledge
+with the instruction to work as if the approach were found unaided and to observe the files through the tool first), run through the examiner's
 user-namespace sandbox, its gateway (`bench gateway serve --state`, serving a profile derived from `--profile` whose
 main role is the rationaliser) and its Sven adapter, `--jobs` at once. It is judged by four filters, in order:
 
