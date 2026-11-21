@@ -98,8 +98,8 @@ pub use drills::{
 };
 pub use fixtures::Fixture;
 pub use harbor::{
-    discover, is_harbor_runner, Discovered, HarborTask, Oracle, SplinterMeta, NO_REWARD_EXIT,
-    SHIPPED_WORKDIR, SPLINTER_SCHEMA,
+    discover, exam_material, is_harbor_runner, Discovered, HarborTask, Oracle, SplinterMeta,
+    NO_REWARD_EXIT, SHIPPED_WORKDIR, SPLINTER_SCHEMA,
 };
 pub use harness::{Harness, SuiteReport};
 pub use held::Held;

@@ -260,81 +260,23 @@ impl HarborTask {
         Ok(Some(meta))
     }
 
-    /// A value of the task's `[metadata]`.
-    fn metadata(&self, key: &str) -> Option<&toml::Value> {
+    /// A string of the task's `[metadata]`.
+    fn metadata_text(&self, key: &str) -> Option<&str> {
         self.config
             .get("metadata")
             .and_then(toml::Value::as_table)
             .and_then(|m| m.get(key))
+            .and_then(toml::Value::as_str)
     }
 
-    /// A string of the task's `[metadata]`.
-    fn metadata_text(&self, key: &str) -> Option<&str> {
-        self.metadata(key).and_then(toml::Value::as_str)
-    }
-
-    /// Why the task is exam material, which is never practised on: it says
-    /// it is sealed (`[metadata].bench_sealed = true`), it is in a held-out
-    /// tier (`[metadata].bench_tier` `b` or `c`), or its family
-    /// (`[metadata].bench_family`) is in the `eval` set of the `split.toml`
-    /// beside the folder. `None` for practice material.
+    /// Why the task is exam material, which is never practised on; see
+    /// [`exam_material`]. `None` for practice material.
     ///
     /// # Errors
     ///
-    /// [`WorkspaceError::Fixture`] when a marker is not of its type, or the
-    /// collection's split cannot be read: an unreadable seal is not taken to
-    /// clear the task.
+    /// As [`exam_material`].
     pub fn sealed(&self) -> Result<Option<String>, WorkspaceError> {
-        let task_toml = self.dir.join("task.toml");
-        let malformed = |path: &Path, reason: String| WorkspaceError::Fixture {
-            path: path.to_path_buf(),
-            reason,
-        };
-        match self.metadata("bench_sealed") {
-            None | Some(toml::Value::Boolean(false)) => {}
-            Some(toml::Value::Boolean(true)) => {
-                return Ok(Some("it is marked [metadata].bench_sealed".into()))
-            }
-            Some(other) => {
-                return Err(malformed(
-                    &task_toml,
-                    format!("[metadata].bench_sealed must be true or false, not {other}"),
-                ))
-            }
-        }
-        if let Some(tier) = self.metadata("bench_tier") {
-            let tier = tier.as_str().ok_or_else(|| {
-                malformed(&task_toml, "[metadata].bench_tier must be a string".into())
-            })?;
-            if HELD_OUT_TIERS.contains(&tier) {
-                return Ok(Some(format!("it is in the held-out tier {tier}")));
-            }
-        }
-        let Some(split) = self.dir.parent().map(|p| p.join(SPLIT_FILE)) else {
-            return Ok(None);
-        };
-        if !split.is_file() {
-            return Ok(None);
-        }
-        let text = std::fs::read_to_string(&split).map_err(io(&split))?;
-        let declared: toml::Table = text
-            .parse()
-            .map_err(|e: toml::de::Error| malformed(&split, e.to_string()))?;
-        let Some(family) = self.metadata_text("bench_family") else {
-            return Ok(None);
-        };
-        let in_eval = declared
-            .get("sets")
-            .and_then(toml::Value::as_table)
-            .and_then(|sets| sets.get("eval"))
-            .and_then(toml::Value::as_array)
-            .is_some_and(|families| families.iter().any(|f| f.as_str() == Some(family)));
-        Ok(in_eval.then(|| {
-            format!(
-                "its family {family} is in the eval set of {}",
-                split.display()
-            )
-        }))
+        exam_material(&self.dir, &self.config)
     }
 
     /// The repository the environment copies, laid out in `into`.
@@ -588,4 +530,76 @@ impl WorkspaceGenerator {
         self.solution_change(&fixture.tree, &solution, &scripts, &call)
             .map(Some)
     }
+}
+
+/// Why the Harbor task folder `dir`, whose `task.toml` reads as `config`, is
+/// exam material, which is never practised on: it says it is sealed
+/// (`[metadata].bench_sealed = true`), it is in a held-out tier
+/// (`[metadata].bench_tier` `b` or `c`), or its family
+/// (`[metadata].bench_family`) is in the `eval` set of the `split.toml`
+/// beside the folder. `None` for practice material. It reads any task
+/// folder, also one [`HarborTask::read`] would not import.
+///
+/// # Errors
+///
+/// [`WorkspaceError::Fixture`] when a marker is not of its type, or the
+/// collection's split cannot be read: an unreadable seal is not taken to
+/// clear the task.
+pub fn exam_material(dir: &Path, config: &toml::Table) -> Result<Option<String>, WorkspaceError> {
+    let metadata = |key: &str| {
+        config
+            .get("metadata")
+            .and_then(toml::Value::as_table)
+            .and_then(|m| m.get(key))
+    };
+    let task_toml = dir.join("task.toml");
+    let malformed = |path: &Path, reason: String| WorkspaceError::Fixture {
+        path: path.to_path_buf(),
+        reason,
+    };
+    match metadata("bench_sealed") {
+        None | Some(toml::Value::Boolean(false)) => {}
+        Some(toml::Value::Boolean(true)) => {
+            return Ok(Some("it is marked [metadata].bench_sealed".into()))
+        }
+        Some(other) => {
+            return Err(malformed(
+                &task_toml,
+                format!("[metadata].bench_sealed must be true or false, not {other}"),
+            ))
+        }
+    }
+    if let Some(tier) = metadata("bench_tier") {
+        let tier = tier.as_str().ok_or_else(|| {
+            malformed(&task_toml, "[metadata].bench_tier must be a string".into())
+        })?;
+        if HELD_OUT_TIERS.contains(&tier) {
+            return Ok(Some(format!("it is in the held-out tier {tier}")));
+        }
+    }
+    let Some(split) = dir.parent().map(|p| p.join(SPLIT_FILE)) else {
+        return Ok(None);
+    };
+    if !split.is_file() {
+        return Ok(None);
+    }
+    let text = std::fs::read_to_string(&split).map_err(io(&split))?;
+    let declared: toml::Table = text
+        .parse()
+        .map_err(|e: toml::de::Error| malformed(&split, e.to_string()))?;
+    let Some(family) = metadata("bench_family").and_then(toml::Value::as_str) else {
+        return Ok(None);
+    };
+    let in_eval = declared
+        .get("sets")
+        .and_then(toml::Value::as_table)
+        .and_then(|sets| sets.get("eval"))
+        .and_then(toml::Value::as_array)
+        .is_some_and(|families| families.iter().any(|f| f.as_str() == Some(family)));
+    Ok(in_eval.then(|| {
+        format!(
+            "its family {family} is in the eval set of {}",
+            split.display()
+        )
+    }))
 }
