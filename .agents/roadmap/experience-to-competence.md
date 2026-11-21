@@ -904,6 +904,31 @@ the hint:
 
 Both controls (`own_term_mentions`, `own_real_observations`) are reported with the gate; the 10% stop rule is unchanged.
 
+**Feasibility gate result (2026-11-21 08:56-09:01, knowledge 201): the stop rule fires; the arm stops before any
+generation.** 48 hinted attempts (24 tasks x 2): verified 40, real observations 40, no leak 2, sufficient 2. Kept 2 of 48
+(4.2%, under 10%). The leak filter is the bottleneck: the 4B names the hint (`hint` 40 attempts, `reference` 14) where
+its unhinted passes almost never do (1 and 4 of 221); both attempts that reached the sufficiency check passed it.
+Records: `rationalise-947783646ccf6c8e` (splinter-2756587f8, brain-8f2a3d264 on gpu0 shared, sven-1db749d9,
+bench 6ccc7ec7). The kept set (221 own passes, 2 rationalised) is in lane VIM's state root.
+
+**Gate b (pre-registered 2026-11-21, before any of its trials; a separate variant, gate a's stop stands as recorded).**
+Gate a verified 40 of 48 hinted attempts and both that reached the sufficiency check passed it; it failed only because
+the model names the hint. Gate b changes one thing: how the hint is framed (`experiences rationalise --hint-framing
+private-scratch`, a generic prompt-template option). The hint is presented as private scratch knowledge, with the
+instruction to work as if the approach were found unaided, never to mention, quote or allude to any hint, reference,
+provided answer or solution file, and to observe the files through the tool before acting. The model's text is never
+edited. Everything else is gate a's: the same 24 tasks (seed 20261121), 2 samples, the same four filters and leak terms
+(`as given`, `solve.sh`, `reference`, `hint`), the same rationaliser and sampling, on the shared gpu0 endpoint if it is
+still up, else on a full card. **Decision:** if more than 10% of the 48 attempts pass the sufficiency check (5 or
+more), generation 1 proceeds as item 24 planned; otherwise the arm stops for good. Recorded either way here and in
+knowledge 201.
+
+**Gate b result (2026-11-21 09:16-09:21, knowledge 201): 4 of 48 sufficient (8.3%), under the rule; the arm stops for
+good.** Funnel: verified 41, real observations 41, no leak 4, sufficient 4. Framing the hint as private scratch did not
+stop the 4B from naming it: `hint` in 42 attempts (gate a 40), `reference` 9, `as given` 4. Every attempt that passed
+the leak filter also passed sufficiency. Kept: 011, 090, 113, 161. Records `rationalise-941a3ca1386127e4`
+(splinter-2e5f0c38e, brain-8f2a3d264 on gpu0 shared, sven-1db749d9, bench 6ccc7ec7).
+
 ## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
 
 **Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`
@@ -1029,3 +1054,29 @@ So v1 learned the course families and did not carry that to the exam families wi
 the teacher's hardest tasks. A v2 candidate should also cap the trace length the student learns, for example by
 dropping the 106 records that were stopped by the limit before a final answer. The joint eval (base, v1, v2, lane VIM's
 generations) must run at the baseline's load (bench knowledge 072).
+
+### Item 25 E1c and v2 (pre-registered 2026-11-21 09:15, before any E1c trial and before any v2 build)
+
+**E1c: the exam under an equal reasoning budget.**
+- **Arms:** base, v1s1 and v1s2, each run with `[sven.driver_options] thinking_budget = 2048`. That is brain's
+  per-request thinking budget: every model turn may think at most 2,048 tokens before the server closes the thought.
+- **Run:** E1b's run unchanged otherwise: the 14 eval tasks x 16 attempts, one slot, 24 trials in flight per arm,
+  sven 1db749d9, sampling 1.0 / 0.95 / 20, seed 20261121, and brain-5e25d5b82 `--max-batch 256` on gpu0.
+- **Shared card:** the card is shared with lane VIM's 4B gate process (brain-8f2a3d264). So E1c runs under
+  `--vram-budget 60`, and its absolute rates are not comparable with E1b's; the arms are compared within the slot only.
+- **Smoke check first:** before the slot, one request of each arm is checked in the request log for the budget field,
+  and one trajectory for a closed think block.
+- **Reported:** E1's statistics, plus model turns per trial and reasoning tokens per turn for each arm.
+- **E1d (only if time allows):** the same at a budget of 1,024.
+
+**v2: v1 plus the 27B STaR records.**
+- **v2a:** all of v1's teacher records plus every rationalisation kept by `experiences rationalise`
+  (splinter-2756587f8). It uses item 24's calibrated filters: leak terms `as given`, `solve.sh`, `reference` and
+  `hint`, the observation rule, and the sufficiency check.
+- **v2c (concise):** the same pool, curated before training. It keeps only records that end in a final answer, so the
+  106 runs the agent limit stopped are dropped. It drops any record in which one turn's reasoning exceeds 12,000
+  characters (about 3,000 tokens). Per task it keeps the 3 records with the least reasoning per action.
+- **Curation path:** a filtered copy of the bench exports, ingested by `ingest-bench` and built by `dataset build`
+  with v1's flags. The reasoning-length distributions before and after curation are reported.
+- **Training:** v2c is trained with A2's recipe at seeds 1 and 2, with steps scaled to about 2 epochs, and v2a at
+  seed 1. The joint eval measures all of them at the baseline's load.

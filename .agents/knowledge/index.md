@@ -186,3 +186,5 @@ in the same commit.
 | [198](198-the-base-qwen3-4b-passes-a-quarter-of-the-vim-practice-tasks-and-one-of-fourteen-exams.md) | The base Qwen3-4B passes a quarter of the vim practice tasks and one of fourteen exams |
 | [199](199-the-27b-teacher-solved-163-of-168-vim-practice-tasks-and-called-an-absent-tool-in-three-of-four-passes.md) | The 27B teacher solved 163 of 168 vim practice tasks and called an absent tool in three of four passes |
 | [200](200-pre-registered-leak-and-observation-filters-reject-nearly-all-unhinted-vim-passes.md) | Pre-registered leak and observation filters reject nearly all unhinted vim passes |
+| [201](201-the-base-qwen3-4b-names-the-hint-it-was-shown-so-its-rationalisations-fail-the-leak-filter.md) | The base Qwen3-4B names the hint it was shown, so its rationalisations fail the leak filter |
+| [202](202-distilling-a-large-teachers-reasoning-into-a-4b-under-a-wall-clock-budget-turned-the-gain-into-timeouts.md) | Distilling a large teacher's reasoning into a 4B under a wall-clock budget turned the gain into timeouts |

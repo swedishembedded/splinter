@@ -1,0 +1,49 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
+
+# 201. The base Qwen3-4B names the hint it was shown, so its rationalisations fail the leak filter
+
+**Lesson:** with the reference solution as a hint, the 4B reaches a verified state easily (40 of 48 hinted attempts),
+but its reasoning or messages name the hint (the words `hint` or `reference`) in 44 of the 48 attempts, despite
+the instruction telling it never to. Unhinted, it uses those words in 1 and 4 of 221 passes. Kept rationalisations are
+therefore 2 of 48 (4%), under item 24's 10% stop rule, and the bottleneck is the leak, not sufficiency: both attempts
+that reached the sufficiency check passed it.
+
+## Measured (2026-11-21, feasibility gate of item 24)
+
+`splinter experiences rationalise` (splinter-2756587f8, sven-1db749d9, bench 6ccc7ec7), rationaliser base
+`Qwen/Qwen3-4B` on brain-8f2a3d264 (gpu0, shared with another lane's 27B process), T 1.0 / top-p 0.95 / top-k 20.
+24 train tasks drawn with seed 20261121 from the 160 the base failed at least once, stratified by difficulty, x 2
+samples. Leak terms as decided before the gate: `as given`, `solve.sh`, `reference`, `hint` (knowledge 200).
+
+| filter (in order) | attempts passing | alone |
+|---|---:|---:|
+| graded | 48 | |
+| verified | 40 | 40 |
+| real observations | 40 | 48 |
+| no leak | 2 | 4 |
+| sufficient | 2 | |
+
+- Leak findings were all term mentions: `hint` in 40 attempts, `reference` in 14. No attempt was caught for the hint's
+  own wording or for quoting unobserved file content.
+- Kept: `048-delete-a-word-including-separator` and `090-repeat-a-substitution-with-a-new-range`, one sample each.
+- Controls on the 221 unhinted passes: `as given` 1, `hint` 1, `reference` 4, `solve.sh` 0; real observations 221 of
+  221 under the decided filter.
+- The whole gate took 5 minutes of wall time at 48 attempts at once.
+
+## What it means
+
+Showing the 4B a worked answer and asking it to reason as if unaided does not give clean trajectories: it narrates
+where its knowledge came from. Ways around it change the method and are not item 24: rewriting the reasoning with
+another model (then it is no longer the 4B's own), sampling many more attempts per task to find the rare clean one,
+or a sufficiency-only filter that tolerates the mention (the trace would then train the model to cite a hint it will
+not have).
+
+## Gate b: the framing does not change it (2026-11-21)
+
+The same 24 tasks x 2 with the hint framed as private scratch knowledge (`--hint-framing private-scratch`: work as if
+you found the approach yourself, observe the files through the tool first, never mention or allude to any hint,
+reference, provided answer or solution file; splinter-2e5f0c38e): verified 41, real observations 41, no leak 4,
+sufficient 4 (8.3%, under the 10% rule; the arm stops for good). The model named the hint in 42 attempts (`hint`),
+`reference` in 9 and `as given` in 4, as often as under the worked-answer framing. An explicit instruction not to
+mention the hint does not keep a 4B from mentioning it; every attempt that did not mention it passed sufficiency.
