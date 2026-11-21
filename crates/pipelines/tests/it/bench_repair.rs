@@ -279,6 +279,7 @@ pub(crate) fn request<'a>(
         classes: &[],
         per_task: None,
         samples: 1,
+        paths: &[],
         // The run has one task, which any seed selects.
         seed: splinter_model::seed::draw().value(),
         cancel: CancelToken::new(),

@@ -482,8 +482,13 @@ impl Session {
                     "student": args.student.as_ref().map(ToString::to_string),
                     "proposer": args.proposer, "knowledge": args.knowledge,
                     "interventions": args.interventions, "budget": args.budget,
-                    "seed": seed, "per_task": args.per_task, "samples": args.samples,
+                    "seed": seed, "per_task": args.per_task, "samples": args.samples, "paths": args.paths,
                     "classes": args.classes.iter().map(|c| c.as_str()).collect::<Vec<_>>() });
+                let paths = args
+                    .paths
+                    .iter()
+                    .map(|id| splinter_sdk::experiences::resolve_set(ctx, id))
+                    .collect::<Result<Vec<_>, _>>()?;
                 let report = record(ctx, "experiences repair", &arguments, |run| {
                     repair(
                         ctx,
@@ -502,6 +507,7 @@ impl Session {
                             classes: &args.classes,
                             per_task: args.per_task,
                             samples: args.samples.unwrap_or(1),
+                            paths: &paths,
                             seed,
                             cancel: run.cancel_token(),
                         },

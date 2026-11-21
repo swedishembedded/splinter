@@ -176,6 +176,9 @@ pub struct RepairRequest<'a> {
     /// repair (keyed by its sample index): a model samples, and one sample
     /// of a hard task is often wrong.
     pub samples: usize,
+    /// Experience sets whose verified passes are privileged paths for
+    /// `path_guided` (a teacher's traces), besides every human-guided pass.
+    pub paths: &'a [SetId],
     /// Stops the run between repairs.
     pub cancel: CancelToken,
 }
@@ -450,7 +453,7 @@ pub fn repair(
         cancel: request.cancel.clone(),
     });
     let paths = if student.is_some() && wanted(InterventionKind::PathGuided) {
-        PrivilegedPaths::load(ctx)?
+        PrivilegedPaths::load(ctx, request.paths)?
     } else {
         PrivilegedPaths::default()
     };

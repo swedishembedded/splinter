@@ -190,7 +190,13 @@ fn a_compiled_tasks_guided_path_is_resampled_under_its_environments_tools() {
     let scratch = Scratch::new("compiled-repair");
     let server = scratch.0.join("files.py");
     fs::write(&server, SERVER).unwrap();
-    let student = steps("pathstudent", vec![Step::Say("Done.")]);
+    let student = steps(
+        "pathstudent",
+        vec![Step::Call(
+            "files-write",
+            json!({"path": "answer.json", "text": "42"}),
+        )],
+    );
     let ctx = Context::new(common::config(&scratch), true)
         .unwrap()
         .with_model(

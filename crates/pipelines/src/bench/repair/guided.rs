@@ -12,7 +12,8 @@
 //!
 //! A privileged path is a verified pass of the task that the student could
 //! not have produced as it stands: a person typed into its run (a
-//! human-guided trial, `extra.sven.origin: human` on their turns). Its tokens
+//! human-guided trial, `extra.sven.origin: human` on their turns), or the run
+//! names it as its privileged source (a teacher's verified trace, by set). Its tokens
 //! were produced with that guidance in context, so they are never trained on
 //! ([`splinter_data::Exclusion::HumanContext`]). Its *states* are: the path
 //! with the person's turns taken out ([`unguided`]) is a sequence of actions
@@ -25,8 +26,8 @@
 //! student will also see.
 //!
 //! The intervention ([`PathGuided`]) forks a failed attempt's task at the
-//! path's states, the latest first: its `n`-th sample forks after the `n`-th
-//! latest action, so a failure's chain of samples moves the fork earlier
+//! path's states, the latest first: its `n`-th sample forks after the
+//! `n+1`-th latest action (never after the last), so a failure's chain of samples moves the fork earlier
 //! until the student succeeds alone (the chain then stops) or the samples run
 //! out. Which path a task uses is [`PrivilegedPaths::for_task`]: the store's
 //! verified guided passes of the same bench task, in id order.
@@ -42,6 +43,7 @@ use splinter_core::experience::{Environment, Experience, ExperienceId, Provenanc
 use splinter_data::is_human_turn;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
+use splinter_store::experiences::SetId;
 
 use super::super::practice::BenchCheckout;
 use super::fork::{finish, fork_and_grade, Continuation, Source};
@@ -77,19 +79,20 @@ pub fn unguided(path: &Trajectory) -> Trajectory {
 }
 
 /// The steps of `path` (numbered as given) after which the student can be
-/// put to continue, the latest first: every agent step that called a tool,
-/// but the last step (from the end the path has already ended).
+/// put to continue, the latest first: every agent step that called a tool
+/// but the path's last action. After its last action the path has done its
+/// work: a student put there can only end it, which passes without one
+/// action of its own to learn.
 #[must_use]
 pub fn fork_points(path: &Trajectory) -> Vec<u64> {
-    let last = path.steps.last().map(|s| s.step_id);
     let mut points: Vec<u64> = path
         .steps
         .iter()
         .filter(|s| s.source == StepOrigin::Agent)
         .filter(|s| s.tool_calls.as_ref().is_some_and(|c| !c.is_empty()))
         .map(|s| s.step_id)
-        .filter(|id| Some(*id) != last)
         .collect();
+    points.pop();
     points.reverse();
     points
 }
@@ -102,18 +105,24 @@ pub struct PrivilegedPaths {
 }
 
 impl PrivilegedPaths {
-    /// Every verified (passed) experience of a bench task whose trajectory
-    /// holds a turn a person typed.
+    /// Every verified (passed) experience of a bench task that is privileged:
+    /// its trajectory holds a turn a person typed, or it is a member of one of
+    /// `sets`, the passes a run names as its privileged source (a teacher's
+    /// verified traces, say). A pass by another model is never one unnamed.
     ///
     /// # Errors
     /// When the store cannot be read.
-    pub fn load(ctx: &Context) -> Result<Self, OrchestratorError> {
+    pub fn load(ctx: &Context, sets: &[SetId]) -> Result<Self, OrchestratorError> {
         let store = ctx.experiences();
+        let mut named = std::collections::BTreeSet::new();
+        for set in sets {
+            named.extend(store.get_set(set)?.members);
+        }
         let mut guided = Vec::new();
         for id in store.list()? {
             let experience = store.get(&id)?;
             if experience.environment.kind == Environment::BENCH
-                && experience.trajectory.steps.iter().any(is_human_turn)
+                && (named.contains(&id) || experience.trajectory.steps.iter().any(is_human_turn))
             {
                 guided.push((id, experience));
             }

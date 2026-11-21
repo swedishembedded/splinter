@@ -115,6 +115,11 @@ pub struct RepairArgs {
     /// its own (default 1).
     #[arg(long, value_name = "K", value_parser = super::positive_count)]
     pub samples: Option<usize>,
+    /// An experience set whose verified passes are privileged paths for
+    /// `path_guided` (a teacher's traces), besides every human-guided pass
+    /// (repeatable; id or unique prefix).
+    #[arg(long = "paths", value_name = "SET")]
+    pub paths: Vec<String>,
     /// Only failures of this class (repeatable; `wrong_content`, `tool`, ...).
     #[arg(long = "class", value_parser = failure_class, value_name = "CLASS")]
     pub classes: Vec<FailureClass>,

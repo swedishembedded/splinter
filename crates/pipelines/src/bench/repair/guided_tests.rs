@@ -72,8 +72,9 @@ fn the_persons_turns_and_the_replies_they_answered_are_taken_out() {
 }
 
 #[test]
-fn forks_are_after_the_paths_actions_the_latest_first() {
+fn forks_are_after_the_paths_actions_but_its_last_the_latest_first() {
     let (_, exported) = split_system(&unguided(&path()));
-    // Write a.txt (1), c1 (2), c2 (3), c3 (4), "Fixed." (5)
-    assert_eq!(fork_points(&exported), [4, 3, 2]);
+    // Write a.txt (1), c1 (2), c2 (3), c3 (4), "Fixed." (5): after c3 the
+    // path has done its work.
+    assert_eq!(fork_points(&exported), [3, 2]);
 }
