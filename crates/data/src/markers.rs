@@ -31,6 +31,24 @@ const RAW_ARGUMENTS_KEY: &str = "raw_arguments";
 /// The key of a tool call's `extra` flagging arguments that did not parse.
 const UNPARSED_ARGUMENTS_KEY: &str = "unparsed_arguments";
 
+/// The origin sven records on a user step a person typed during the run.
+const HUMAN_ORIGIN: &str = "human";
+
+/// Whether a person typed into the run `trajectory` records: one of its user
+/// steps carries `extra.sven.origin` `human`.
+#[must_use]
+pub fn has_human_turn(trajectory: &Trajectory) -> bool {
+    trajectory.steps.iter().any(|step| {
+        step.source == StepOrigin::User
+            && step
+                .extra
+                .as_ref()
+                .and_then(|extra| extra.pointer("/sven/origin"))
+                .and_then(Value::as_str)
+                == Some(HUMAN_ORIGIN)
+    })
+}
+
 /// Whether `step` marks the agent's context being compacted: the history
 /// before it was replaced or cut, so the conversation the agent acted in
 /// after it is not the steps that lead the trajectory.

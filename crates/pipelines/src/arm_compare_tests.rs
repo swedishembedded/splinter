@@ -289,6 +289,22 @@ fn harbor_trials_are_read_as_graded_timeouts_or_infrastructure_errors() {
     );
 }
 
+/// A trial a person typed into (bench's `human_guided` play mode) is never
+/// read into an arm: its pass is not the agent's.
+#[test]
+fn a_human_guided_trial_is_refused_in_an_arm() {
+    let scratch = tempfile::tempdir().unwrap();
+    let job = scratch.path().join("job");
+    write_result(&job, "a__1", "org/t1", None, Some(1.0));
+    let path = job.join("a__1").join("result.json");
+    let mut result: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    result["config"] =
+        serde_json::json!({"agent": {"kwargs": {"human_guided": true, "seat": "play"}}});
+    std::fs::write(&path, result.to_string()).unwrap();
+    let refused = read_harbor_job("arm", &job).unwrap_err().to_string();
+    assert!(refused.contains("human-guided"), "{refused}");
+}
+
 #[test]
 fn a_malformed_trials_line_or_an_unusable_request_is_refused_by_name() {
     let scratch = tempfile::tempdir().unwrap();

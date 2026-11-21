@@ -201,6 +201,13 @@ pub fn read_harbor_job(arm: &str, job: &Path) -> Result<Vec<Trial>, Orchestrator
             .get("task_name")
             .and_then(Value::as_str)
             .ok_or_else(|| refused(format!("{}: no task_name", path.display())))?;
+        if is_human_guided(&result) {
+            return Err(refused(format!(
+                "{}: a human-guided trial (a person typed into it): its pass is not the agent's, \
+                 so it belongs to no arm",
+                path.display()
+            )));
+        }
         let exception = result
             .pointer("/exception_info/exception_type")
             .and_then(Value::as_str);
@@ -229,6 +236,16 @@ pub fn read_harbor_job(arm: &str, job: &Path) -> Result<Vec<Trial>, Orchestrator
         )));
     }
     Ok(trials)
+}
+
+/// Whether a Harbor trial's `result.json` is of a human-guided trial: bench's
+/// play mode runs the agent with `human_guided` set, and a person typed into it.
+#[must_use]
+pub fn is_human_guided(result: &Value) -> bool {
+    result
+        .pointer("/config/agent/kwargs/human_guided")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 /// What a comparison is asked.

@@ -329,6 +329,9 @@ fn project_without(
         }
     }
     let mut corpus = Corpus::load(&store, &ids)?;
+    // Same observation: a guided run's tokens were produced with a person's
+    // message in context, which a student never sees.
+    let human_guided = corpus.withhold_human_context();
     refuse_variants(ctx, corpus.entries().iter().map(|entry| &entry.experience))?;
     let mut sources = BTreeSet::new();
     for entry in corpus.entries() {
@@ -490,6 +493,7 @@ fn project_without(
             }
         }
     }?;
+    projection = projection.with_excluded(Exclusion::HumanContext, human_guided);
     projection.terms = terms;
     if let Some(limit) = request.limit {
         projection = projection.thinned_to(limit);

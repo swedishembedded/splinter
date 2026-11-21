@@ -519,6 +519,9 @@ pub fn ingest_harbor_trials(
                     "trial": text(&result, &["trial_name"]),
                     "task_checksum": text(&result, &["task_checksum"]),
                     "exception": result.get("exception_info").filter(|e| !e.is_null()),
+                    // A person typed into the trial (bench's play mode): its
+                    // trajectory marks their turns, and no dataset trains on it.
+                    "human_guided": crate::arm_compare::is_human_guided(&result),
                 }),
             },
         })?;

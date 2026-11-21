@@ -117,6 +117,7 @@ pub use dataset::{
     Format, Manifest, Unchecked, EXPORT_FORMAT,
 };
 pub use exclusion::Exclusion;
+pub use markers::has_human_turn;
 pub use record::{
     PairSource, Record, RecordBody, RecordMetadata, RolloutIdentity, RolloutOutcome, Side,
     SplitDraw, TeacherMessage,
@@ -550,6 +551,16 @@ impl Projection {
 
     fn exclude(&mut self, reason: Exclusion) {
         *self.excluded.entry(reason).or_insert(0) += 1;
+    }
+
+    /// Counts `count` candidates left out for `reason` before the view saw
+    /// them ([`Corpus::withhold_human_context`]).
+    #[must_use]
+    pub fn with_excluded(mut self, reason: Exclusion, count: usize) -> Self {
+        if count > 0 {
+            *self.excluded.entry(reason).or_insert(0) += count;
+        }
+        self
     }
 
     /// Adds a record with this projection's view and objective, a

@@ -94,3 +94,29 @@ and redoes the ones the infrastructure stopped; more `--attempts` adds the missi
 A record is written only after its experience and verdicts are stored, so an attempt
 killed before then is run again from the start. A campaign reaches the same episodes
 through `episodes::SvenEpisodes`, its episode executor.
+
+## Human-guided trials
+
+The examiner's play mode (`bench task play`) lets a person watch the agent work on practice tasks and type a
+correction when it gets stuck; each session is graded and kept as a normal Harbor trial, whose `result.json` names
+`human_guided` in its agent's settings and whose trajectory marks every turn the person typed with
+`extra.sven.origin: human`. Such trials are a privileged source of verified paths, never training text: the model
+produced every token after the person's first message with that message in context, and a student never sees it.
+
+```sh
+bench export ~/runs/vim-play --out ~/exports/vim-play              # the examiner's export: every manifest says mode human_guided
+splinter experiences ingest-bench ~/exports/vim-play               # the guided trials as experiences
+splinter experiences ingest-harbor TASKSET-ID ~/runs/vim-play/*/   # or, for tasks imported with `tasks harbor import`
+```
+
+* **Ingestion keeps the provenance.** The trajectory's `human` turns are kept as recorded, and `ingest-harbor`'s
+  verdict evidence says `human_guided: true`.
+* **No dataset trains on them.** `dataset build` withholds every experience whose trajectory holds a `human` turn,
+  under every view, and counts it as `human_context` in the build's exclusions, so a set that mixes guided and
+  automatic experiences trains on the automatic ones only.
+* **No arm counts them.** `experiences compare-arms --arm NAME=JOB` refuses a job holding a guided trial: its pass is
+  not the agent's.
+* **What they are for** is path-guided resampling (roadmap `generic-learning.md`, GL-P8, not built yet): replay a
+  verified guided path's states, fork the student at each state without the person's messages, and keep the verified
+  unhinted continuations as records. Until that stage lands, guided trials are evidence of which states are reachable,
+  not data.

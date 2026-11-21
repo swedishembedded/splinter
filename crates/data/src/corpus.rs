@@ -111,6 +111,23 @@ impl Corpus {
         Ok(id)
     }
 
+    /// Takes out every experience a person guided (a user step of its
+    /// trajectory typed by a person, [`crate::has_human_turn`]): no view may
+    /// train on tokens the model produced with such a message in context.
+    /// How many it took out ([`crate::Exclusion::HumanContext`]).
+    pub fn withhold_human_context(&mut self) -> usize {
+        let before = self.entries.len();
+        self.entries
+            .retain(|entry| !crate::has_human_turn(&entry.experience.trajectory));
+        self.index = self
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(at, entry)| (entry.id.clone(), at))
+            .collect();
+        before - self.entries.len()
+    }
+
     /// Adds a task as its generator emitted it, solved or not.
     pub fn add_task(&mut self, task: Task) {
         self.tasks.push(task);

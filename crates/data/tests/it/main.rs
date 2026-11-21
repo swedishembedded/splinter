@@ -15,6 +15,7 @@ mod chat_tools;
 mod corrections;
 mod dataset;
 mod dataset_store;
+mod human_context;
 mod judgement_views;
 mod pass_curation;
 mod policy_gradient;

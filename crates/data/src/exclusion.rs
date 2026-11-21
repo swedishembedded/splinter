@@ -169,4 +169,10 @@ pub enum Exclusion {
     /// A pass beyond the curation's cap of passes per task
     /// ([`crate::curation::PassCuration`]).
     OverTaskCap,
+    /// An experience a person guided: a user step of its trajectory was
+    /// typed by a person during the run (`extra.sven.origin` `human`), so
+    /// the model produced its later tokens with that message in context. A
+    /// student never sees it, so they are never trained on (same
+    /// observation); the experience is a source of verified states only.
+    HumanContext,
 }
