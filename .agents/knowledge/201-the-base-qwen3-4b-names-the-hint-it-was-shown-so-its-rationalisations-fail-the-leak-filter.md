@@ -47,3 +47,19 @@ reference, provided answer or solution file; splinter-2e5f0c38e): verified 41, r
 sufficient 4 (8.3%, under the 10% rule; the arm stops for good). The model named the hint in 42 attempts (`hint`),
 `reference` in 9 and `as given` in 4, as often as under the worked-answer framing. An explicit instruction not to
 mention the hint does not keep a 4B from mentioning it; every attempt that did not mention it passed sufficiency.
+
+## Gate c: re-judged with the content-only default, offline (2026-11-21)
+
+The word list was a proxy: naming the hint is not copying the answer. The default judgement is now verified plus no
+answer content present before it was observed (the hint's wording, a line of the task's files nothing had shown);
+the word list, real observations and sufficiency are opt-in. `experiences rationalise --regrade` re-judged gates a
+and b (96 graded attempts, 24 tasks) without a model, a gateway or a Harbor job, unpacking each packed hinted job in a
+copy: 81 of 96 kept (gate a 40, gate b 41; 23 of 24 tasks), every rejection the verifier's (reward 0). The content
+check rejected none of the 81 verified attempts: vim instructions print the starting and expected files, so their
+lines count as shown, and no attempt repeated five words of a hint line it was not also shown or did not send itself.
+On this dataset the default is therefore the verifier alone; the kept traces still name the hint (one reads "The hint
+mentioned that the semicolon ';' repeats the last find command"), which the default deliberately allows.
+
+The sufficiency run's notes (`reasoning_of`) are each agent step's reasoning followed by its visible message, so a
+non-thinking trace (empty reasoning, text before each call) gives its visible text as notes; a spec with such a
+trajectory holds it. A trace whose notes come out empty has no visible text in its steps' messages either.

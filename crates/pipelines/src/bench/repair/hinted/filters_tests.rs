@@ -527,3 +527,33 @@ fn an_expected_line_reproduced_near_verbatim_before_any_reply_showed_it_is_a_lea
     );
     assert_eq!(check(&seen), Verdict::pass());
 }
+
+/// A non-thinking model writes no reasoning: its rationale is the visible text before each call, and that text is what
+/// a sufficiency run's notes carry.
+#[test]
+fn the_notes_of_a_non_thinking_attempt_are_its_visible_text_before_each_call() {
+    let t: atif::Trajectory = serde_json::from_value(json!({
+        "schema_version": "ATIF-v1.7",
+        "agent": {"name": "sven", "version": "1"},
+        "steps": [
+            {"step_id": 1, "source": "user", "message": INSTRUCTION},
+            {"step_id": 2, "source": "agent", "message": "I print main.txt to see its two lines.",
+             "tool_calls": [{"tool_call_id": "c1", "function_name": "vim-vim",
+                             "arguments": {"commands": READ}}],
+             "observation": {"results": [{"source_call_id": "c1", "content": READ_REPLY}]}},
+            {"step_id": 3, "source": "agent", "message": "Line two goes above line one.",
+             "reasoning_content": "",
+             "tool_calls": [{"tool_call_id": "c2", "function_name": "vim-vim",
+                             "arguments": {"commands": EDIT}}],
+             "observation": {"results": [{"source_call_id": "c2", "content": EDIT_REPLY}]}},
+        ],
+    }))
+    .unwrap();
+    let notes = reasoning_of(&t);
+    assert!(
+        notes.contains("I print main.txt to see its two lines."),
+        "{notes}"
+    );
+    assert!(notes.contains("Line two goes above line one."), "{notes}");
+    assert!(!notes.contains("jyyggP") && !notes.contains("written"));
+}
