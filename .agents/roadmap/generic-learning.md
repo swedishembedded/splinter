@@ -394,3 +394,103 @@ pre-registration header should read 23:43 (commit 2c511ac17), not 23:50.
     neither confirm nor rule out +0.05.** It can only show a gain of about 0.10 or more, or rule out about 0.15.
 - **Rule.** Each contrast's verdict follows the problem-state rule: supported, falsified or inconclusive against
   d = 0.05. S minus base is reported with that power caveat.
+
+## E6 (lane E6): early-experience transitions (pre-registered 2026-11-22 00:50, before any E6 training or trial)
+
+**Question.** Is the environment's response to the 4B's own actions, failed attempts included, a learning signal that
+transfers to held-out families? Design from the late review (advisory section (d)), replacing E6's registered control
+(extra policy records), which has no source: each fold already uses every teacher pass.
+
+**Observation check, before any training (2026-11-22 00:05).**
+- Measured on E1's 1,344 base trials (4,114 tool observations): 13.6% show buffer lines (an `output:` section), and
+  13.4% after an edit-like call. 58% are Vim errors (exit status, failing script line, E-code), and 28% only file
+  messages (`"main.txt" 1L, 7B written`). Length: p50 60 tokens, p99 133, max 409, so the 512-token cut never binds.
+- **Vim's observations mostly carry error dynamics, not buffer state.** A null result here is weak evidence against
+  E6 in general. A tool version that shows the changed buffer (gap table: lane PLAY) is the better test bed.
+- Every error observation names a random scratch path (`/tmp/vim-tool-XXXX`). These tokens are left in as noise, with
+  no string rule. Their share of supervised observation tokens is 8.1-8.5% per fold.
+
+**Data (built with splinter-7d5199191: the `transition` view, commit 7d5199191).**
+- Source: the base's own exam-mode trials on each fold's training rungs only, failed and passed:
+  - E1's base exam jobs `fa/fb/fc-base-*`;
+  - lane VIM's `train-k1` and `train-k4` (thinking on, no added instruction).
+  - No new rollouts. A held-out-rung trial is refused by the selection, which asserts it.
+- 1,430 / 1,339 / 1,599 trials for folds a / b / c.
+  - Ingestion refuses 4 / 7 / 11 trials whose score and grade disagree (budget-exhausted verifier passes).
+- Records: one per trial, exactly what the student saw (the requests as sent) through its last observation.
+  - Every observation of a `vim-vim` call is supervised: its content only, not the template's framing.
+  - Every model turn is context, with loss weight 0.3 on the observations (`--loss-weight 0.3`).
+  - At most 2 copies of one (task, call, observation digest) are supervised (`--per-transition-cap 2`).
+  - Records over 16,384 tokens are left out.
+- tr-a/b/c: 1,306 / 1,217 / 1,423 records; 222k / 215k / 254k supervised observation tokens.
+- sh-a/b/c: the same build under `--control shuffled` (seed 20261121): every supervised observation gets another's text.
+  - The block bound is applied after the shuffle, so the sets differ slightly: 1,307 / 1,216 / 1,425 records and
+    3-4% more observation tokens than tr.
+- v1-a/b/c: E1's selections rebuilt in this state; the dataset digests are identical to lane EXP's e1-a/b/c.
+- **Ratio (dated deviation, coordinator 2026-11-22 00:10).** Observation to policy tokens is 0.33 / 0.37 / 0.32,
+  not the advised 1:1. Every de-duplicated transition is used, without upsampling: E1's base trials plus train-k1/k4
+  are all there is. At weight 0.3 the observation share of the loss is about 0.1.
+- The task-free tool play source (gap table) is not used in this run. It will be declared separately before any use.
+
+**Arms (one fold each; seed 1; Qwen3-4B, v1's recipe: LoRA r16/alpha 32, lr 2e-4, no weight decay, 4 records per
+step, eval every 14, patience 4, max block 16,384).**
+- Steps = round(0.4 x the arm's records), so every record is seen as often as in v1.
+
+| Arm | Datasets | Purpose |
+|---|---|---|
+| v1 | v1-f | Anchor (retrained on the E6 brain build) |
+| v1+T | v1-f + tr-f | Treatment |
+| v1+S | v1-f + sh-f | Same tokens and format, broken dynamics |
+| T | tr-f | Strict teacher-free arm (base + transitions only) |
+
+- Training and serving use one frozen brain build: brain main plus the generic per-message `loss_weight` and
+  non-assistant-span change (commit recorded at freeze).
+
+**Exam.** E1's protocol on each fold's held-out rungs (58 / 65 / 45 tasks; 168 tasks over 14 families pooled).
+- Settings:
+  - budget B = 15,114 completion tokens and 9 turns;
+  - per-turn thinking budget 2,048;
+  - E1's sampling;
+  - sven-fe9cda90 and bench 0d8f13de (lane EXP's pinned worktree);
+  - wall-clock factor 4.
+- Base and the four adapters x 8 attempts, one fold per exam server (5 arms), with a registered per-replica load of
+  16 trials in flight per arm.
+- 8 rounds of one attempt; per-arm preflight and E1's round check.
+
+**Contrasts** (`compare-arms --families`, interval seed 20261121, Holm over the three):
+1. Primary: v1+T minus v1.
+2. v1+T minus v1+S: whether the dynamics matter.
+3. T minus base: the strict teacher-free number.
+
+**Success.** E6 is supported if contrast 1 is at least +0.05, its family interval is above 0 and its Holm p is below
+0.05, and contrast 2's point estimate is above 0. Falsified if contrast 1's family interval lies below +0.05.
+Otherwise inconclusive, by the problem-state rule.
+
+**Power, stated in advance.** 168 tasks over 14 families, 8 attempts, one seed per arm.
+- Between two students the family SE is about 0.025-0.03 (late review), so the minimum detectable effect at 80% power
+  is about +0.07 to +0.09. **This run can confirm only an E6 effect of about +0.07 or more.** A +0.05 effect would
+  most likely read as inconclusive.
+- T minus base has an MDE of 0.10-0.15 (E10's power note).
+- Expansion to more seeds follows only if contrast 1 is not clearly null (point estimate at or above +0.03).
+- Exhaustion share and `infra_timeout` are reported per arm.
+
+**Disk-full window (dated 2026-11-22 00:25, before the replacement rounds).** The project disk had 0 free inodes from
+about 00:00 to 00:20. Every round with a trial graded in that window is discarded unread and archived
+(`lane-exp/archive/disk-full-window-rounds.tar.zst`): the E2 4B rerun 2's round 3 of folds a and b, and E9's first
+two rounds. They are replaced with identical settings. Fold a and b each get two new rounds, numbered 5 and 6, so
+every fold keeps 4 rounds; fold c's 4 rounds ended before the window. E9 restarts from its first round. From now on,
+live job directories are on node-local disk, and only packed jobs are copied to the project disk.
+
+**E6 follow-up: task-free tool play as a transition source (declared 2026-11-22 01:00, before any play trial).**
+- **Source.** The base 4B on the vim train side's task images (168 tasks x 1), in E1's mode and budget B. The profile
+  appends one instruction (`scripts/mkplay.sh` in lane E6): a free practice session, no goal, many small experiments
+  with the tool, print the buffer after edits.
+- **Use.** Its trials are a transition source only. The `transition` view supervises the tool's observations and never
+  a token the model sampled under that instruction (rule 1). The instruction stays in the record's context.
+  - The tool is shared with held-out tasks, so play runs only in the training side's task images.
+  - Play trials never enter a fold's data while that fold is examined in this run.
+- **Read, descriptive.**
+  - The share of observations that show buffer lines, against E1's base trials (13.6%).
+  - Observation tokens per trial.
+- **Training use.** A training arm on play transitions is a later, separately pre-registered experiment. This run
+  only measures whether the source carries more state.
