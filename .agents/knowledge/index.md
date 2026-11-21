@@ -179,3 +179,7 @@ in the same commit.
 | [191](191-a-4b-told-to-read-a-mounted-collection-almost-never-opens-it.md) | A 4B told to read a mounted collection almost never opens it |
 | [192](192-an-edited-driver-script-breaks-running-bash-jobs.md) | An edited driver script breaks running bash jobs |
 | [193](193-a-rebuilt-distillation-dataset-has-the-same-records-but-not-the-same-id.md) | A rebuilt distillation dataset has the same records but not the same id |
+| [194](194-a-lock-no-build-compiles-pins-a-revision-that-no-longer-builds.md) | A lock that no build compiles pins a revision that no longer builds |
+| [195](195-a-small-model-reads-a-worked-example-as-a-description-of-its-own-task.md) | A small model reads a worked example as a description of its own task |
+| [196](196-a-baseline-moves-between-time-slots-by-as-much-as-the-effects-measured.md) | A baseline moves between time slots by as much as the effects measured |
+| [197](197-moving-beyond-teacher-sft-failed-in-three-distinct-ways.md) | Moving beyond teacher SFT failed in three distinct ways |

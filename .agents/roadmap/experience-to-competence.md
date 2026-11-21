@@ -438,6 +438,28 @@ held-out gain against A2s1 >= 0.05 with the 95% lower bound above 0; retention n
 in 0.02-0.05 with no guard skips. Each seed is also reported alone, and RL against RFT as a secondary contrast. Anything
 else is "no teacher-free gain" for this round. Not a sealed claim either way.
 
+**Deviations and addendum (recorded before any arm's evaluation was read).**
+- 2026-11-21 00:00: both datasets were first built against inference-only servers, which made splinter fall back to
+  the character-floor block measure, so brain refused 1 PG and 6 RFT records at train start. Rebuilt against training
+  servers: PG blake3:0cc4dc32 (2,006 records kept, 1,068 left out as `proxy_tokens`: 65% of records with a group signal,
+  1,631 of 2,699 actions exact), RFT blake3:d2f506b0 (1,601 records).
+- 2026-11-21 00:00: a step on sampled-only data with recorded behaviour took about 25 s, not the assumed 175 s.
+  By the budget rule (2 passes or 8 GPU-h), N = 2 passes = 501 steps for both RL seeds and the RFT control. The
+  164-step runs were stopped at step ~16 and are not evaluated.
+- 2026-11-21 00:56: seed 1 diverged and has no adapter. Guard skips came at steps 70, 94 and 110. From step 135 the loss
+  read up to 17,784 and gradient norms up to 1.6e6, while the reported KL stayed 0.02-0.03. Brain stopped the job at
+  step 160 after 8 skips in a row. Seed 2 completed with skips.
+  - The RL arm is therefore seed 2 alone.
+  - It fails the no-skip criterion whatever its held-out result.
+- Root cause (brain knowledge 537): the KL penalty's loss and gradient used unweighted k3, while the reported KL was
+  ratio-weighted. A drawn token the policy had pushed `d` nats below the reference pulled with `kl_beta * e^d`. Fixed in
+  brain 7a7869433 (the penalty is `kl_beta * ratio * k3`, the gradient of `KL(pi || ref)`), frozen as
+  `containers/bin/brain-7a7869433`. Serving is unchanged against 5e25d5b82: the source differs only in `crates/rl`.
+- gpu0 went to another benchmark at 01:50 and gpu1 to lane S1c. The round continues on gpu2 and gpu3.
+- **Addendum arm rl-kw (a new arm, not the pre-registered one).** The same dataset, recipe, guards, dual clip and
+  N = 501 on brain 7a7869433, seeds 1 and 2. It is evaluated exactly as the other arms (served on 5e25d5b82) and judged
+  by the same decision rule, reported separately from the pre-registered RL arm.
+
 ## Item 21: knowledge-assisted self-learning (plan 2026-11-20)
 
 Distillation through a written knowledge base, no trajectory teacher. Design from the 2026-11-20 ML review, with the
