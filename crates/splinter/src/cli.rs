@@ -520,6 +520,12 @@ pub enum ExperiencesCommand {
     /// A teacher continues the failed attempts of practice runs from their
     /// last good step; the task's own verifier keeps a repair only on a pass.
     Repair(Box<RepairArgs>),
+    /// The hinted retry (rationalisation): the student's failed train-side
+    /// tasks of a compiled Harbor dataset worked again with the reference
+    /// solution as a hint, through the tasks' own tools and sandboxes; an
+    /// attempt is kept only when verified, observed before it writes, free
+    /// of the hint, and sufficient (its reasoning alone passes again).
+    Rationalise(Box<RationaliseArgs>),
     /// Import experience sets, with their experiences' annotations and trial
     /// register, from another state root.
     Import(ImportArgs),
@@ -754,7 +760,9 @@ pub use corrections::CorrectionsArgs;
 pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
-pub use experiences::{CapabilitiesArgs, DiagnoseArgs, ImportArgs, RepairArgs, StrataArgs};
+pub use experiences::{
+    CapabilitiesArgs, DiagnoseArgs, ImportArgs, RationaliseArgs, RepairArgs, StrataArgs,
+};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
 pub use global::Global;

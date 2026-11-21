@@ -502,6 +502,9 @@ impl Session {
                 })?;
                 emit(json, &report);
             }
+            Command::Experiences(ExperiencesCommand::Rationalise(args)) => {
+                crate::rationalise_session::rationalise_command(ctx, json, *args)?;
+            }
             Command::Experiences(ExperiencesCommand::Import(args)) => {
                 let source = splinter_sdk::store::StateRoot::new(args.from.clone());
                 let arguments = json!({ "from": args.from, "sets": args.sets });

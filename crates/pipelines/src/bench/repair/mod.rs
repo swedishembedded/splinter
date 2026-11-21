@@ -30,6 +30,9 @@
 //!   states, and the student works them turn by turn, each subgoal's state
 //!   checked and recorded.
 //!
+//! The hinted retry ([`hinted`], rationalisation) is of the same family but
+//! runs compiled task folders as Harbor trials, not forks of practice runs.
+//!
 //! A fork correction opens the examiner's sandbox session for the task
 //! (`bench task session`: the pristine workspace bound where a trial's agent
 //! works, its account and image, the task's service), keeps the student's
@@ -72,6 +75,7 @@ mod commands;
 mod compose;
 mod decompose;
 mod fork;
+pub mod hinted;
 mod keep;
 mod knowledge;
 mod retry;
@@ -86,7 +90,6 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use splinter_agent::CancelToken;
 use splinter_core::diagnosis::DiagnosticResult;
-use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::{Experience, ExperienceId};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::outcome::FailureClass;
@@ -104,7 +107,7 @@ pub use retry::Retry;
 pub use route::{route, InterventionKind, Route, Routing, DEFAULT_BUDGET};
 pub use select::{spread, Spread};
 
-use keep::{held_records, keep};
+use keep::{held_records, is_zero, keep, key_of};
 
 use super::diagnose::{diagnose_dirs, DiagnosedTrial, DiagnosisReport};
 use super::practice::BenchCheckout;
@@ -358,42 +361,6 @@ pub trait Intervention: Sync {
     fn attempt(&self, ctx: &Context, case: &Case<'_>) -> Result<Attempted, String>;
 }
 
-/// The key of a repair.
-fn key_of(
-    student: &ExperienceId,
-    intervention: &dyn Intervention,
-    sample: usize,
-) -> Result<String, OrchestratorError> {
-    #[derive(Serialize)]
-    struct Key<'a> {
-        format: &'static str,
-        student: &'a ExperienceId,
-        teacher: &'a str,
-        intervention: &'a str,
-        // The first sample's key is the one a repair had before samples.
-        #[serde(skip_serializing_if = "is_zero")]
-        sample: usize,
-        // A fork correction's key is the one it had before variants.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        variant: Option<String>,
-    }
-    let bytes = canonical_json(&Key {
-        format: REPAIR_FORMAT,
-        student,
-        teacher: intervention.actor(),
-        intervention: intervention.name(),
-        sample,
-        variant: intervention.variant(),
-    })
-    .map_err(|e| OrchestratorError::Refused(format!("a repair key: {e}")))?;
-    Ok(Digest::of(&bytes).hex().to_string())
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if passes a reference
-fn is_zero(n: &usize) -> bool {
-    *n == 0
-}
-
 /// Diagnoses the failed trials of `request`'s runs, routes them, repairs the
 /// routed ones with the interventions the request has the models and
 /// material for, and keeps the accepted repairs; see the module
@@ -416,6 +383,16 @@ pub fn repair(
             "the intervention {kind} cannot run: {why}"
         )))
     };
+    if request
+        .interventions
+        .contains(&InterventionKind::HintedRetry)
+    {
+        return refuse(
+            InterventionKind::HintedRetry,
+            "it works compiled task folders as Harbor trials, not practice runs: run \
+             `experiences rationalise`",
+        );
+    }
     let fork = ForkCorrection {
         checkout: request.checkout,
         teacher: teacher.clone(),

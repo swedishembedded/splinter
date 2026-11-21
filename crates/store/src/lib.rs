@@ -160,6 +160,14 @@ impl StateRoot {
         self.0.join("practice")
     }
 
+    /// Where rationalisation runs are kept, one directory per run: the
+    /// staged hinted and hint-free copies of the tasks, the Harbor jobs that
+    /// ran them, the unpacked student jobs and the report.
+    #[must_use]
+    pub fn rationalise(&self) -> PathBuf {
+        self.0.join("rationalise")
+    }
+
     /// The experience database's directory.
     #[must_use]
     pub fn expdb(&self) -> PathBuf {

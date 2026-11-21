@@ -25,7 +25,7 @@ pub struct Spread<'a> {
 }
 
 /// The rank of `name` under `seed`: an order no listing of the store moves.
-fn rank(seed: u64, name: &str) -> String {
+pub(super) fn rank(seed: u64, name: &str) -> String {
     Digest::of(format!("{seed}:{name}").as_bytes())
         .hex()
         .to_string()

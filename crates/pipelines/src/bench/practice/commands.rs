@@ -88,26 +88,38 @@ fn logged(command: &mut Command, what: &str, log: &Path) -> Result<(), String> {
 
 /// The examiner's model gateway, serving the policy's profile until it is
 /// dropped.
-pub(super) struct Gateway {
+pub(crate) struct Gateway {
     child: Child,
 }
 
 impl Gateway {
     /// Starts `bench gateway serve --profile <profile> --port <port>` with the
     /// upstream key in its environment, and returns once it says it serves;
-    /// everything it prints goes to `log`.
-    pub(super) fn start(
+    /// everything it prints goes to `log`. With `state`, the gateway writes
+    /// its state file there (`--state`): the file a plain Harbor run's agent
+    /// adapter reads the run secret from (`--ak gateway_state=`); without
+    /// it, the jobs a staging registered find the gateway.
+    pub(crate) fn start(
         checkout: &BenchCheckout,
         profile: &Path,
         port: u16,
         key: &str,
+        state: Option<&Path>,
         log: &Path,
     ) -> Result<Self, String> {
+        // The examiner runs from its checkout: a path relative to this
+        // process's directory is made absolute first.
+        let absolute =
+            |path: &Path| std::path::absolute(path).map_err(|e| format!("{}: {e}", path.display()));
         let mut command = checkout.bench();
         command
             .args(["gateway", "serve", "--profile"])
-            .arg(profile)
-            .args(["--port", &port.to_string()])
+            .arg(absolute(profile)?)
+            .args(["--port", &port.to_string()]);
+        if let Some(state) = state {
+            command.arg("--state").arg(absolute(state)?);
+        }
+        command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
@@ -308,6 +320,91 @@ pub(super) fn harbor(
         }
     }
     logged(&mut command, "run the practice job in Harbor", log)
+}
+
+/// How a plain Harbor run of a task directory is made: the examiner's
+/// user-namespace sandbox and Sven adapter, the agent reaching the
+/// examiner's gateway through its state file, one attempt of every task.
+/// Nothing is staged by the examiner: Harbor reads the task folders as they
+/// are.
+pub(crate) struct DatasetRun<'a> {
+    /// The directory of task folders (`harbor run -p`).
+    pub(crate) dataset: &'a Path,
+    /// Where Harbor writes the job (`-o`), and its name (`--job-name`).
+    pub(crate) jobs_dir: &'a Path,
+    pub(crate) job_name: &'a str,
+    /// The run profile the adapter renders Sven's configuration from, and
+    /// the state file of the gateway serving it.
+    pub(crate) profile: &'a Path,
+    pub(crate) gateway_state: &'a Path,
+    /// The loopback port the gateway serves on, the only one a sandbox may
+    /// reach.
+    pub(crate) port: u16,
+    /// The examiner's cache of task images.
+    pub(crate) images: &'a Path,
+    /// Trials run at once.
+    pub(crate) jobs: usize,
+}
+
+/// The agent adapter and sandbox a plain Harbor run names: the examiner's.
+const SVEN_AGENT: &str = "agents.sven:SvenAgent";
+const USERNS_ENVIRONMENT: &str = "benchlib.harbor.userns:UserNamespaceEnvironment";
+
+/// Runs the task folders of `run.dataset` once each as Harbor job
+/// `run.job_name` (`harbor run -p`), from the checkout with its modules on
+/// the Python path, the sven build given to the sandbox as a tool.
+pub(crate) fn harbor_dataset(
+    checkout: &BenchCheckout,
+    run: &DatasetRun<'_>,
+    log: &Path,
+) -> Result<(), String> {
+    // Harbor runs from the checkout: every path it is given is made absolute
+    // from this process's directory first.
+    let absolute =
+        |path: &Path| std::path::absolute(path).map_err(|e| format!("{}: {e}", path.display()));
+    let sven = absolute(checkout.sven_build.as_ref().ok_or(
+        "no sven build is named: a plain Harbor run gives the sandbox the build the agent runs",
+    )?)?;
+    let model = run
+        .profile
+        .file_stem()
+        .map(|s| format!("bench/{}", s.to_string_lossy()))
+        .ok_or("the profile has no file name")?;
+    let mut command = Command::new(&checkout.harbor);
+    command
+        .current_dir(&checkout.dir)
+        .env("PYTHONPATH", &checkout.dir)
+        .env("BENCH_SVEN_BUILD", &sven)
+        .args(["run", "-p"])
+        .arg(absolute(run.dataset)?)
+        .args(["--env", USERNS_ENVIRONMENT, "--ek"])
+        .arg(format!("images={}", absolute(run.images)?.display()))
+        .arg("--ek")
+        .arg(format!("tools=sven:{}", sven.display()))
+        .arg("--ek")
+        .arg(format!("allow_ports={}", run.port))
+        .args(["--allow-agent-host", "127.0.0.1", "--agent", SVEN_AGENT])
+        .args(["--model", &model, "--ak"])
+        .arg(format!("profile={}", absolute(run.profile)?.display()))
+        .arg("--ak")
+        .arg(format!(
+            "gateway_state={}",
+            absolute(run.gateway_state)?.display()
+        ))
+        .args(["-n", &run.jobs.to_string(), "-k", "1", "-q", "-y", "-o"])
+        .arg(absolute(run.jobs_dir)?)
+        .args(["--job-name", run.job_name])
+        .stdin(Stdio::null());
+    logged(&mut command, "run the task folders in Harbor", log)
+}
+
+/// Restores the trial trees of the packed Harbor job `job` in place
+/// (`bench unpack`): its `trials.jsonl` and `trees.tar.zst` become trial
+/// directories again.
+pub(crate) fn unpack(checkout: &BenchCheckout, job: &Path, log: &Path) -> Result<(), String> {
+    let mut command = checkout.bench();
+    command.arg("unpack").arg(job).stdin(Stdio::null());
+    logged(&mut command, "unpack a packed job", log)
 }
 
 /// A trial the export did not write, and why.

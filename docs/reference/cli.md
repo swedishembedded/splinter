@@ -144,6 +144,7 @@ Every command takes these.
   - [splinter experiences diagnose](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
   - [splinter experiences capabilities](#splinter-experiences-capabilities) - A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs
   - [splinter experiences repair](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
+  - [splinter experiences rationalise](#splinter-experiences-rationalise) - The hinted retry (rationalisation)
   - [splinter experiences import](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
   - [splinter experiences ingest-hf](#splinter-experiences-ingest-hf) - Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
@@ -1560,6 +1561,7 @@ Subcommands:
 - [`diagnose`](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
 - [`capabilities`](#splinter-experiences-capabilities) - A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs
 - [`repair`](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
+- [`rationalise`](#splinter-experiences-rationalise) - The hinted retry (rationalisation)
 - [`import`](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
 - [`ingest-hf`](#splinter-experiences-ingest-hf) - Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
@@ -1685,6 +1687,30 @@ Options:
 - `--seed <N>`: The seed that orders the tasks and the attempts of each (drawn and printed when not given)
 - `--samples <K>`: Samples of each intervention of a failure's chain, each a repair of its own (default 1)
 - `--class <CLASS>...`: Only failures of this class (repeatable; `wrong_content`, `tool`, ...)
+
+#### splinter experiences rationalise
+
+The hinted retry (rationalisation): the student's failed train-side tasks of a compiled Harbor dataset worked again with the reference solution as a hint, through the tasks' own tools and sandboxes; an attempt is kept only when verified, observed before it writes, free of the hint, and sufficient (its reasoning alone passes again)
+
+```text
+splinter experiences rationalise [OPTIONS] --dataset <DIR> --student <JOB> --rationaliser <REF> --bench <DIR> --sven-build <PATH> --profile <FILE> --count <N>
+```
+
+Options:
+
+- `--dataset <DIR>` (required): The compiled dataset (holding bench-compile.json; hints come only from its train-side tasks)
+- `--student <JOB>...` (required): A student's graded Harbor job, packed (`bench pack`) or not (repeatable); every trial must be of a train-side task of the dataset. Never changed: a packed job is unpacked in a copy.
+- `--rationaliser <REF>` (required): The model that rationalises: a local model the brain endpoint (`--brain-endpoint`, `--brain-key-file`) serves.
+- `--bench <DIR>` (required): The examiner's checkout (`./bench` and its Harbor run from it)
+- `--harbor <PATH>`: The `harbor` program (default: the checkout's .venv/bin/harbor)
+- `--sven-build <PATH>` (required): The sven build the agent runs, given to every sandbox.
+- `--profile <FILE>` (required): The run profile the rationaliser's is derived from: its sampling and sven settings, its main role forwarded to the rationaliser.
+- `--images <DIR>`: The examiner's cache of task images (default: .bench-data/rootfs-cache in the checkout)
+- `--count <N>` (required): Failed tasks to pick, stratified by difficulty rung.
+- `--seed <N>`: The seed of the pick (drawn and printed when not given; a rerun with the same seed resumes the run)
+- `--samples <K>`: Attempts of each picked task [default: 1]
+- `--jobs <N>`: Trials run at once [default: 8]
+- `--leak-term <TEXT>...`: A word or phrase whose mention in the model's own text is a leak of the hint (repeatable; replaces the default list: as given, solution, solve.sh, expected, reference, hint)
 
 #### splinter experiences import
 

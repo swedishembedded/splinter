@@ -44,15 +44,23 @@ pub enum InterventionKind {
     /// intermediate states, and the student works them one by one from the
     /// last good step.
     Decompose,
+    /// The model works a failed task afresh, through its real tools, with
+    /// the task's reference solution as a hint; a trace is kept only when
+    /// it is verified, observes before it writes, never shows the hint, and
+    /// its reasoning alone lets the model pass again (rationalisation). It
+    /// runs as Harbor trials of compiled task folders, never as a fork of a
+    /// practice run, so no failure class routes to it.
+    HintedRetry,
 }
 
 impl InterventionKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Retry,
         Self::ForkCorrection,
         Self::KnowledgeCorrection,
         Self::Decompose,
+        Self::HintedRetry,
     ];
 
     /// The name records and keys carry.
@@ -63,6 +71,7 @@ impl InterventionKind {
             Self::ForkCorrection => "fork_correction",
             Self::KnowledgeCorrection => "knowledge_correction",
             Self::Decompose => "decompose",
+            Self::HintedRetry => "hinted_retry",
         }
     }
 }

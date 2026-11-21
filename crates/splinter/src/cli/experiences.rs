@@ -7,12 +7,13 @@
 // them, you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! The grammar of `experiences diagnose`, `experiences capabilities`, `experiences repair`, `experiences import` and the strata `experiences compare`
+//! The grammar of `experiences diagnose`, `experiences capabilities`, `experiences repair`, `experiences rationalise`, `experiences import` and the strata `experiences compare`
 //! reports by.
 
 use std::path::PathBuf;
 
 use clap::Args;
+use splinter_sdk::bench::repair::hinted::{DEFAULT_RATIONALISE_JOBS, DEFAULT_SAMPLES};
 use splinter_sdk::bench::repair::{
     InterventionKind, Proposer, DEFAULT_BUDGET, DEFAULT_MAX_REPAIRS, DEFAULT_REPAIR_JOBS,
 };
@@ -117,6 +118,66 @@ pub struct RepairArgs {
     /// Only failures of this class (repeatable; `wrong_content`, `tool`, ...).
     #[arg(long = "class", value_parser = failure_class, value_name = "CLASS")]
     pub classes: Vec<FailureClass>,
+}
+
+/// `experiences rationalise`: the hinted retry. The rationaliser works the
+/// student's failed train-side tasks of a compiled Harbor dataset with each
+/// task's reference solution as a hint, as Harbor trials through the
+/// examiner's sandbox, gateway and Sven adapter; an attempt is kept only
+/// when it is verified, reads the files it changes before writing them,
+/// never shows the hint, and its reasoning alone lets the model pass again.
+#[derive(Debug, Args)]
+pub struct RationaliseArgs {
+    /// The compiled dataset (holding bench-compile.json; hints come only
+    /// from its train-side tasks).
+    #[arg(long, value_name = "DIR")]
+    pub dataset: PathBuf,
+    /// A student's graded Harbor job, packed (`bench pack`) or not
+    /// (repeatable); every trial must be of a train-side task of the
+    /// dataset. Never changed: a packed job is unpacked in a copy.
+    #[arg(long = "student", required = true, value_name = "JOB")]
+    pub students: Vec<PathBuf>,
+    /// The model that rationalises: a local model the brain endpoint
+    /// (`--brain-endpoint`, `--brain-key-file`) serves.
+    #[arg(long, value_parser = super::model_ref, value_name = "REF")]
+    pub rationaliser: ModelRef,
+    /// The examiner's checkout (`./bench` and its Harbor run from it).
+    #[arg(long, value_name = "DIR")]
+    pub bench: PathBuf,
+    /// The `harbor` program (default: the checkout's .venv/bin/harbor).
+    #[arg(long, value_name = "PATH")]
+    pub harbor: Option<PathBuf>,
+    /// The sven build the agent runs, given to every sandbox.
+    #[arg(long, value_name = "PATH")]
+    pub sven_build: PathBuf,
+    /// The run profile the rationaliser's is derived from: its sampling and
+    /// sven settings, its main role forwarded to the rationaliser.
+    #[arg(long, value_name = "FILE")]
+    pub profile: PathBuf,
+    /// The examiner's cache of task images (default:
+    /// .bench-data/rootfs-cache in the checkout).
+    #[arg(long, value_name = "DIR")]
+    pub images: Option<PathBuf>,
+    /// Failed tasks to pick, stratified by difficulty rung.
+    #[arg(long, value_name = "N", value_parser = super::positive_count)]
+    pub count: usize,
+    /// The seed of the pick (drawn and printed when not given; a rerun with
+    /// the same seed resumes the run).
+    #[arg(long, value_name = "N")]
+    pub seed: Option<Seed>,
+    /// Attempts of each picked task, each its own record.
+    #[arg(long, value_name = "K", value_parser = super::positive_count,
+          help = format!("Attempts of each picked task [default: {DEFAULT_SAMPLES}]"))]
+    pub samples: Option<usize>,
+    /// Trials run at once.
+    #[arg(long, value_name = "N", value_parser = super::positive_count,
+          help = format!("Trials run at once [default: {DEFAULT_RATIONALISE_JOBS}]"))]
+    pub jobs: Option<usize>,
+    /// A word or phrase whose mention in the model's own text is a leak of
+    /// the hint (repeatable; replaces the default list: as given, solution,
+    /// solve.sh, expected, reference, hint).
+    #[arg(long = "leak-term", value_name = "TEXT")]
+    pub leak_terms: Vec<String>,
 }
 
 fn failure_class(name: &str) -> Result<FailureClass, String> {

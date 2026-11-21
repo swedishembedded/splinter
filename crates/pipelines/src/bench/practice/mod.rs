@@ -78,7 +78,7 @@ pub use material::{Practice, PracticeFacts, TaskFacts, PRACTICE_FILE, PRACTICE_S
 use super::score::{ScoreRecord, Status};
 use super::{ingest_bench_trials, split, BenchIngested, IngestOptions};
 use crate::episodes::{EpisodeError, EpisodeOutcome, PolicyIdentity};
-pub(crate) use commands::KEY_VARIABLE;
+pub(crate) use commands::{harbor_dataset, unpack, DatasetRun, Gateway, KEY_VARIABLE};
 use commands::{HarborRun, Skipped};
 
 /// The format tag of a [`PracticeReport`] and of the keys it is found by.
@@ -319,7 +319,7 @@ fn profile_sampling(profile: &str) -> Option<Value> {
 }
 
 /// A port free on the loopback address now, for the run's gateway.
-fn free_port() -> Result<u16, EpisodeError> {
+pub(crate) fn free_port() -> Result<u16, EpisodeError> {
     std::net::TcpListener::bind("127.0.0.1:0")
         .and_then(|l| l.local_addr())
         .map(|a| a.port())
@@ -327,7 +327,7 @@ fn free_port() -> Result<u16, EpisodeError> {
 }
 
 /// Whether the Harbor job at `dir` finished.
-fn finished(dir: &Path) -> bool {
+pub(crate) fn finished(dir: &Path) -> bool {
     std::fs::read(dir.join("result.json"))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
@@ -445,6 +445,7 @@ pub fn run_practice(
             &profile,
             free_port()?,
             &endpoint.key,
+            None,
             &dir.join("gateway.log"),
         )
         .map_err(failed("the gateway"))?;
@@ -586,7 +587,7 @@ fn skipped_outcome(reason: &str) -> (Option<String>, EpisodeOutcome) {
 
 /// The staged task folder a trial of the Harbor job attempted, as its
 /// `config.json` names it.
-fn task_of(trial_dir: &Path) -> Option<String> {
+pub(crate) fn task_of(trial_dir: &Path) -> Option<String> {
     let config: Value =
         serde_json::from_slice(&std::fs::read(trial_dir.join("config.json")).ok()?).ok()?;
     let path = config.pointer("/task/path")?.as_str()?;

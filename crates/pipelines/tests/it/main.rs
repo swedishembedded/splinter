@@ -25,6 +25,7 @@ mod bench_interventions;
 mod bench_pairs;
 mod bench_policy_gradient;
 mod bench_practice;
+mod bench_rationalise;
 mod bench_repair;
 mod bench_request_records;
 mod budget;

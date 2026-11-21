@@ -11,11 +11,14 @@
 //! sft-step request they build with and the default ingestion options.
 
 use std::fs;
+use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 use splinter_core::annotation::Strength;
 use splinter_core::clock::FixedClock;
+use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::Context;
 use splinter_pipelines::bench::artifact::sha256_hex;
 use splinter_pipelines::bench::IngestOptions;
@@ -435,4 +438,40 @@ pub fn export(dir: &Path, trials: &[Trial]) -> PathBuf {
     }
     fs::write(dir.join("index.jsonl"), index).unwrap();
     dir.to_path_buf()
+}
+
+/// A brain endpoint that lists `model` to every request.
+pub fn endpoint(model: &'static str) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut request = [0u8; 4096];
+            let _ = stream.read(&mut request);
+            let body = json!({"object": "list", "data": [{"id": model}]}).to_string();
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\
+                 Connection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    format!("http://{address}/v1")
+}
+
+/// A context whose brain endpoint serves the student, and the student.
+pub fn served(test: &str) -> (Scratch, Context, ModelRef) {
+    let (scratch, ctx) = context(test);
+    let mut config = ctx.config().clone();
+    config.brain =
+        Some(splinter_model::BrainEndpoints::new(vec![endpoint("Qwen/Qwen3-4B")], "k").unwrap());
+    let ctx = Context::new(config, false).unwrap();
+    let policy = ModelRef::Local {
+        checkpoint: "Qwen/Qwen3-4B".into(),
+        adapter: None,
+        context_tokens: None,
+    };
+    (scratch, ctx, policy)
 }

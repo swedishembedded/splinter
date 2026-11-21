@@ -249,6 +249,55 @@ steps without them. The knowledge never holds sealed material: a path under a ve
 kept prefix (copied, never supervised), the subgoal turns (marked `guidance`) and the student's own steps (marked
 `policy`), which `sft-step` trains on; a retry's steps are the student's own.
 
+### The hinted retry: rationalising failures on a compiled dataset
+
+```sh
+splinter --brain-endpoint http://127.0.0.1:8811/v1 --brain-key-file brain.key \
+  experiences rationalise --dataset ~/data/vim-headless-mastery --student jobs/train-k1 --student jobs/train-k4 \
+  --rationaliser local:Qwen/Qwen3-4B --bench ~/bench --sven-build ~/bin/sven --profile vim-base.toml \
+  --count 24 --samples 2 --seed 20261121 --jobs 16
+```
+
+The fifth intervention, `hinted_retry`, is not a fork and no failure class routes to it (`experiences repair` refuses
+it by name): it works the tasks of a compiled Harbor dataset (task folders with a `bench-compile.json` beside them, no
+practice material) through their own tools. The student's graded Harbor jobs (`--student`, packed by `bench pack` or
+not; a packed job is unpacked in a copy, never in place) name the tasks it failed. Every trial must be of a task
+`bench-compile.json` puts on the `train` side and no marker seals (`[metadata].bench_sealed`, a held-out tier, an
+`eval` family); any other refuses the run with the task and the reason, because a task's reference solution
+(`solution/solve.sh`) is the hint. `--count` failed tasks are drawn with `--seed`, each difficulty rung
+(`[metadata].bench_difficulty`) getting its share, and each is attempted `--samples` times.
+
+An attempt is an ordinary Harbor trial of a staged copy of the task (its folder without `solution/`, its
+`instruction.md` followed by a delimited hint section holding the reference solution), run through the examiner's
+user-namespace sandbox, its gateway (`bench gateway serve --state`, serving a profile derived from `--profile` whose
+main role is the rationaliser) and its Sven adapter, `--jobs` at once. It is judged by four filters, in order:
+
+| Filter | Passes when |
+|---|---|
+| verified | the task's verifier gave reward 1 |
+| real observations | the first agent step that calls a tool shows every non-empty line of each file the task changes (from `environment/workspace/` to `tests/expected/`) in its replies, and none of those replies confirms writing such a file (`"FILE" ... written`); a task without `tests/expected/` is undecidable and fails |
+| no leak | the model's own text (reasoning and messages, not tool arguments or replies) mentions no leak term (a word prefix, case-insensitive; `--leak-term` replaces the default `as given`, `solution`, `solve.sh`, `expected`, `reference`, `hint`), repeats no run of five words from one line of the hint section that it was not also shown (instruction, system prompt, tool schemas) or sent itself as a tool argument, and quotes no line of the task's files (8 characters or more) that neither the instruction nor an earlier tool reply showed |
+| sufficient | a second trial of a copy whose instruction is the task's plus only the attempt's reasoning (no hint, no tool calls or replies) passes the verifier |
+
+The sufficiency trial runs only for an attempt that passed the first three. A kept attempt becomes an experience of
+the task on the train side: its user turn the task's own instruction (nothing of the hint section anywhere in it),
+the system prompt and tool schemas of its first model request, its real tool replies, the verifier's pass, and its
+lineage in `extra.splinter_rationalise` (origin, trials, every verdict); its provenance marks it as made with
+material the student does not see. The student's own passes are kept the same way with origin `own`. Every attempt's
+record carries every verdict reached, kept or not, and the report counts the attempts through the filters in order
+and each filter alone. It also gives two controls from the student's own passes, which never saw a hint: how many
+mention each leak term, and how many would pass the real-observations filter. A filter that rejects most unhinted
+work measures something other than the hint. The kept experiences are one set:
+
+```sh
+splinter dataset build --view sft-step --pack --max-block 16384 --from local:Qwen/Qwen3-4B KEPT-SET-ID
+```
+
+A decided attempt (kept or rejected) is never redone; one that passed the first three filters resumes at its
+sufficiency trial; one the infrastructure stopped is run again. A finished Harbor job is read, not run again. The run
+directory (`STATE/rationalise/<run>`) holds the derived profile, the gateway's log, the staged copies, the Harbor
+jobs and `report.json`.
+
 ## Moving experience between state roots
 
 ```sh

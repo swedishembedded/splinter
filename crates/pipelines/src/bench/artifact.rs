@@ -651,7 +651,7 @@ fn verify_files(dir: &Path, manifest: &Manifest) -> Result<Read, String> {
 }
 
 /// The context of the first request in the `model-requests.jsonl` `bytes`.
-fn first_request(bytes: &[u8], sha256: &str) -> Result<AgentContext, String> {
+pub(crate) fn first_request(bytes: &[u8], sha256: &str) -> Result<AgentContext, String> {
     let line = bytes
         .split(|b| *b == b'\n')
         .find(|l| !l.is_empty())

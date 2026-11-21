@@ -507,23 +507,7 @@ fn recorded_trajectory(unit: &Unit) -> atif::Trajectory {
 /// the agent's own record. What the trajectory already records is kept.
 fn with_agent_context(unit: &Unit, context: &AgentContext) -> atif::Trajectory {
     let mut trajectory = unit.trajectory.clone();
-    let mut derived = Vec::new();
-    if trajectory.agent.tool_definitions.is_none() && !context.tools.is_empty() {
-        trajectory.agent.tool_definitions = Some(context.tools.clone());
-        derived.push("agent.tool_definitions");
-    }
-    if trajectory.steps.first().map(|s| s.source) != Some(atif::StepOrigin::System) {
-        // Step ids are sequential from 1, so the prompt takes the first and
-        // the recorded steps follow it.
-        for step in &mut trajectory.steps {
-            step.step_id += 1;
-        }
-        trajectory.steps.insert(
-            0,
-            atif::TraceStep::new(1, atif::StepOrigin::System, context.system.as_str()),
-        );
-        derived.push("steps[0] (system prompt)");
-    }
+    let derived = add_agent_context(&mut trajectory, context);
     let mut extra = match trajectory.extra.take() {
         Some(Value::Object(map)) => map,
         Some(other) => serde_json::Map::from_iter([("exported".to_string(), other)]),
@@ -544,6 +528,34 @@ fn with_agent_context(unit: &Unit, context: &AgentContext) -> atif::Trajectory {
     );
     trajectory.extra = Some(Value::Object(extra));
     trajectory
+}
+
+/// Adds to `trajectory` what the model was given before its first turn and
+/// this agent's ATIF does not carry: the tool schemas as
+/// `agent.tool_definitions` and the system prompt as a leading system step.
+/// What the trajectory already records is kept. Returns what was added.
+pub(crate) fn add_agent_context(
+    trajectory: &mut atif::Trajectory,
+    context: &AgentContext,
+) -> Vec<&'static str> {
+    let mut derived = Vec::new();
+    if trajectory.agent.tool_definitions.is_none() && !context.tools.is_empty() {
+        trajectory.agent.tool_definitions = Some(context.tools.clone());
+        derived.push("agent.tool_definitions");
+    }
+    if trajectory.steps.first().map(|s| s.source) != Some(atif::StepOrigin::System) {
+        // Step ids are sequential from 1, so the prompt takes the first and
+        // the recorded steps follow it.
+        for step in &mut trajectory.steps {
+            step.step_id += 1;
+        }
+        trajectory.steps.insert(
+            0,
+            atif::TraceStep::new(1, atif::StepOrigin::System, context.system.as_str()),
+        );
+        derived.push("steps[0] (system prompt)");
+    }
+    derived
 }
 
 /// What belongs to the trial and not to its task, for whoever audits the

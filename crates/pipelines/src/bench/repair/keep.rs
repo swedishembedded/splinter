@@ -21,7 +21,10 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
 use super::super::VERIFIER_PRODUCER;
-use super::{RepairOutcome, RepairRecord, PRODUCER, RECORD};
+use serde::Serialize;
+use splinter_core::digest::{canonical_json, Digest};
+
+use super::{Intervention, RepairOutcome, RepairRecord, PRODUCER, RECORD, REPAIR_FORMAT};
 
 /// Every repair record the state root holds, by key.
 pub(super) fn held_records(
@@ -137,4 +140,40 @@ fn annotate_failure(ctx: &Context, record: &RepairRecord) -> Result<(), Orchestr
         })?;
     }
     Ok(())
+}
+
+/// The key of a repair.
+pub(super) fn key_of(
+    student: &ExperienceId,
+    intervention: &dyn Intervention,
+    sample: usize,
+) -> Result<String, OrchestratorError> {
+    #[derive(Serialize)]
+    struct Key<'a> {
+        format: &'static str,
+        student: &'a ExperienceId,
+        teacher: &'a str,
+        intervention: &'a str,
+        // The first sample's key is the one a repair had before samples.
+        #[serde(skip_serializing_if = "is_zero")]
+        sample: usize,
+        // A fork correction's key is the one it had before variants.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        variant: Option<String>,
+    }
+    let bytes = canonical_json(&Key {
+        format: REPAIR_FORMAT,
+        student,
+        teacher: intervention.actor(),
+        intervention: intervention.name(),
+        sample,
+        variant: intervention.variant(),
+    })
+    .map_err(|e| OrchestratorError::Refused(format!("a repair key: {e}")))?;
+    Ok(Digest::of(&bytes).hex().to_string())
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's skip_serializing_if passes a reference
+pub(super) fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
