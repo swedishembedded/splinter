@@ -939,6 +939,21 @@ are re-judged offline (no GPU, no new trial). Reported: kept count of the 96 gra
 bar, and 3 example kept traces. If it clears the bar, a generation-1 STaR arm is proposed as item 24c beside item 24b,
 not started. Gate c's result can motivate item 24c; it is not evidence under item 24's pre-registration.
 
+**Gate c result (2026-11-21 ~12:25, offline, splinter-da5fab291 `experiences rationalise --regrade` of gates a and b;
+knowledge 201).** 96 graded attempts: verified 81, no answer present 81 of 81; kept 81 (84%, far above the 10% bar),
+over 23 of the 24 tasks. The content check rejected nothing: vim instructions print both the starting and the expected
+file, so those lines count as shown, and on this benchmark the default is in effect the verifier alone. Kept traces
+may name the hint (e.g. "The hint mentioned that the semicolon ';' repeats the last find command"), which the user's
+rule allows. Experience set blake3:cd7cc1aa494d...
+
+**Item 24c (PROPOSED, not started; lane VIM 2026-11-21).** A generation-1 STaR arm beside item 24b: base Qwen3-4B
+trained from base on its own verified concise passes plus gate-c-kept rationalisations of the failed train tasks, in
+the shared concise mode. Open points before it can be registered: (1) gates a and b ran in thinking mode, so their 81
+kept traces do not match the concise rule; 24c would rationalise again in concise mode (168 failed-task attempts at 4
+per task, the user's harvest rule), with the gate-c default; (2) since the content check is vacuous on vim, kept traces
+can cite the hint, so the arm trains the model to cite a hint it will not have; whether to keep or strip such traces
+(item 24d's rewrite) is the user's call; (3) the measurement would be E2a's protocol at the same load.
+
 ### Item 24d: a rewrite pass over rationalisations (planned 2026-11-21 at the user's request; not run, not pre-registered)
 
 **Idea.** Each kept rationalisation goes through a separate step in which a model is told only to rewrite it to meet
@@ -1312,3 +1327,31 @@ brain-5e25d5b82 and splinter-7220b1d5d.
   same statistics, not corrected.
 - **Also reported per arm:** pass@16, timeouts, infrastructure errors (left out of the denominator, as E1), model turns
   per trial, visible text characters per action, and the share of tool calls with a stated rationale.
+
+### Item 25 E2b: the concise-mode exam of v2 (pre-registered 2026-11-21 12:40, before any E2b trial; E2a's protocol in its own slot)
+
+**v2 as trained.**
+- **Data:** `swedishembedded/vim-headless-mastery-sft` tag v2 (public by user request). It holds 420 concise
+  non-thinking 27B trajectories (c1: 452 of 672 passed, 154 tasks solved), curated to those that end in a final
+  answer, up to 4 per task with the fewest vim calls. Records average 1,474 tokens (v1: 3,140). The text before each
+  action averages 14.7 tokens (v1: 392.4). Split by whole task: 377 train and 43 held-out records.
+- **Students:** Qwen3-4B LoRAs with A2's recipe, 168 steps, brain-5e25d5b82 and splinter-7220b1d5d:
+  - v2s1 is candidate-20261121T110718.579-a686 (adapter sha256 15f7a035...); held-out loss 2.522 to 0.523;
+  - v2s2 is candidate-20261121T110720.542-aca2 (adapter sha256 4fd01ee1...); held-out loss 2.522 to 0.523.
+- **STaR:** v2.1 waits. The gate-c regrade (splinter-da5fab291) kept 55 of 56 concise STaR attempts. Lane VSFT's
+  offline two-check script rejects 30 of those 55 for naming the hint's command in the model's text before any tool
+  reply. That has been reported to lane VIM as a possible stage defect, and v2.1 is built only from a corrected regrade.
+
+**E2b run.**
+- **Arms (4):** base Qwen3-4B, v2s1, v2s2, and item 24b gen 3 (candidate-20261121T104621.616-6708) as the anchor.
+- **Settings:** E2a's, unchanged: the same server (brain-8f2a3d264 on gpu0 :8977, `--max-batch 128 --vram-budget 32`),
+  the concise mode (sven-7a9f60cb, thinking off, `append_system_prompt`, T 0.7 / top-p 0.8 / top-k 20, run seed
+  20261121), the 14 eval tasks x 16, and each arm through its own gateway.
+- **Load:** 18 trials in flight per arm (72 in all, E2a's total load), all four jobs launched together after E2a
+  ends.
+- **Primary contrasts:** v2s1 - base, v2s2 - base, and pooled v2 - base (the mean of the two seeds), each with the
+  task bootstrap 95% CI (10,000 resamples, seed 20261121) and the exact two-sided paired sign test over the 14 tasks.
+  The statistics come from `splinter experiences compare-arms` (13f8e0195) where it applies.
+- **Decision rule:** E1's. The pooled effect is supported when its CI lies wholly above 0 and p < 0.05.
+- **Secondary:** gen 3 - base and v2 pooled - gen 3. Also per arm: pass@16, timeouts, infrastructure errors, turns
+  per trial, and text per action.
