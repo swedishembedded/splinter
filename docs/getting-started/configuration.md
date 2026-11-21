@@ -67,7 +67,7 @@ splinter doctor --cluster-nodes n442
 | `--cluster-exec-prefix WORDS` | What a program started on a node runs under, split at spaces. A step starts on the node's host, not in a container this process runs in. |
 | `--cluster-rank-exec-prefix WORDS` | What a distributed job's ranks run under instead (default: `--cluster-exec-prefix`); `{local_rank}` in it is a rank's card. |
 | `--brain-ca-file FILE` | With `--brain-endpoint`: a PEM file of certificate authorities the endpoints' `https://` certificates may chain to (a running fleet's `ca.pem`); added to the trusted roots, never in place of verification. |
-| `--cluster-stage-models DIR` | A directory on each node's own disk (a job-private scratch disk, bound into the container a step enters) where brain stages the model store's entries for the fleet's servers and a distributed job's brain ranks (brain's `--stage-models`, from `--models-dir`): the first process of a node copies an entry, verified, and the others read the copy instead of the shared filesystem. Off by default; `splinter doctor` shows it. |
+| `--cluster-stage-models DIR\|auto\|off` | Where brain stages the model store's entries on each node's own disk for the fleet's servers and a distributed job's brain ranks (brain's `--stage-models`, from `--models-dir`): the first process of a node copies an entry, verified, and the others read the copy instead of the shared filesystem. `auto` (the default) stages under `brain-models` in the node-local scratch the site announces to every step (`SLURM_TMPDIR`, `SNIC_TMP` or `LOCAL_SCRATCH`; `TMPDIR` is not taken as node-local), once a step on every node, under the exec prefix, made or found it writable; otherwise, or when nothing is announced, models are read from the shared store and `splinter doctor` says why. A directory names where; one a node cannot write fails the run. `off` never stages. Bind the directory into the image a step enters. |
 | `--cluster-insecure-plaintext` | Serve the fleet's HTTP in plaintext instead of TLS under its own certificate authority; only on a trusted cluster network. |
 | `--slurm-srun PATH` | The `srun` steps are started with (default: the first on `PATH`); `--slurm-scancel PATH` stops one. |
 | `--slurm-step-arg ARG` | An argument every step passes to `srun` (`--mem=64G`); repeats. |
@@ -117,7 +117,6 @@ step="scripts/cluster/apptainer-step --image $HOME/images/workstation.sif --bind
 splinter doctor --cluster-nodes 'n[442,467]' \
     --cluster-exec-prefix "$step scripts/cluster/rank-env --env $HOME/cuda-env.sh --" \
     --cluster-rank-exec-prefix "$step scripts/cluster/rank-env --env $HOME/nccl-env.sh --card {local_rank} --" \
-    --cluster-stage-models /scratch/local/brain-models \
     --slurm-step-arg=--mem=64G --backend cuda
 ```
 

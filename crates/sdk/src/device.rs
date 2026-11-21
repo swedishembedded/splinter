@@ -19,7 +19,7 @@
 
 use std::path::PathBuf;
 
-use crate::cluster::{ClusterMode, ClusterSettings};
+use crate::cluster::{ClusterMode, ClusterSettings, StageModels};
 use crate::model::{BrainConnection, BrainEndpoints, PolicyError};
 use crate::Config;
 
@@ -110,13 +110,16 @@ pub struct DeviceFlags {
     /// certificate authority made for them, whose key is discarded at once.
     #[arg(long, global = true)]
     pub cluster_insecure_plaintext: bool,
-    /// A directory on each node's own disk (a job-private scratch disk,
-    /// bound into the container a step enters) where brain stages the model
-    /// store's entries for the fleet's servers and a distributed job's brain
-    /// ranks: the first process of a node copies an entry there, verified,
-    /// and the others read the copy instead of the shared filesystem.
-    #[arg(long, global = true, value_name = "DIR")]
-    pub cluster_stage_models: Option<PathBuf>,
+    /// Where brain stages the model store's entries on each node's own disk
+    /// for the fleet's servers and a distributed job's brain ranks (the
+    /// first process of a node copies an entry, verified; the others read the
+    /// copy instead of the shared filesystem): `auto` (default) under the
+    /// node-local scratch the site announces to every step (SLURM_TMPDIR,
+    /// SNIC_TMP or LOCAL_SCRATCH), checked writable on every node, else not
+    /// at all; an absolute directory there; `off` never. The directory must
+    /// be bound into the container a step enters.
+    #[arg(long, global = true, value_name = "DIR|auto|off", value_parser = stage_models)]
+    pub cluster_stage_models: Option<StageModels>,
 }
 
 /// Removes every `name` from `args`; whether there was one.
@@ -124,6 +127,10 @@ fn take_flag(args: &mut Vec<String>, name: &str) -> bool {
     let before = args.len();
     args.retain(|arg| arg != name);
     args.len() != before
+}
+
+fn stage_models(text: &str) -> Result<StageModels, String> {
+    StageModels::parse(text).map_err(|e| e.to_string())
 }
 
 fn cluster_mode(text: &str) -> Result<ClusterMode, String> {
@@ -186,7 +193,10 @@ impl DeviceFlags {
             slurm_step_arg: take_all("--slurm-step-arg")?,
             slurm_single_node_step_arg: take_all("--slurm-single-node-step-arg")?,
             cluster_insecure_plaintext,
-            cluster_stage_models: take_all("--cluster-stage-models")?.pop().map(PathBuf::from),
+            cluster_stage_models: take_all("--cluster-stage-models")?
+                .pop()
+                .map(|text| stage_models(&text))
+                .transpose()?,
         })
     }
 
@@ -213,7 +223,9 @@ impl DeviceFlags {
             .single_node_step_args
             .clone_from(&self.slurm_single_node_step_arg);
         cluster.insecure_plaintext = self.cluster_insecure_plaintext;
-        cluster.stage_models.clone_from(&self.cluster_stage_models);
+        if let Some(staging) = &self.cluster_stage_models {
+            cluster.stage_models = staging.clone();
+        }
         cluster
     }
 
@@ -434,6 +446,15 @@ mod tests {
             cluster.exec_prefix,
             ["apptainer", "exec", "--nv", "/img.sif"]
         );
+        let mut args = words("run --cluster-stage-models off");
+        let off = DeviceFlags::take(&mut args).unwrap();
+        assert_eq!(
+            off.cluster_settings(ClusterSettings::default())
+                .stage_models,
+            StageModels::Off
+        );
+        let mut args = words("run --cluster-stage-models relative");
+        assert!(DeviceFlags::take(&mut args).is_err());
         let mut args = words("run --cluster sometimes");
         assert!(DeviceFlags::take(&mut args).is_err(), "an unknown mode");
     }

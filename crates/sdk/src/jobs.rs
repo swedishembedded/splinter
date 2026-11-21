@@ -49,6 +49,12 @@ pub struct JobView {
     pub spec: Option<JobSpec>,
 }
 
+/// A node-local staging directory and the model store staged into it.
+pub type StagedStore = (std::path::PathBuf, std::path::PathBuf);
+
+/// Decides, on the nodes, where brain ranks stage the model store.
+type StageCheck<'a> = dyn Fn() -> Result<Option<StagedStore>, Error> + 'a;
+
 /// The jobs of the state root a [`crate::Splinter`] works in.
 ///
 /// Obtained from [`crate::Splinter::jobs`]; it borrows the handle's runtime and
@@ -60,10 +66,10 @@ pub struct Jobs<'a> {
     root: std::path::PathBuf,
     owner: String,
     lease_seconds: u64,
-    /// Where brain ranks on the allocation's nodes stage the model store
-    /// (node-local directory, store): set when jobs run as allocation steps
-    /// and `--cluster-stage-models` names a directory.
-    staging: Option<(std::path::PathBuf, std::path::PathBuf)>,
+    /// How brain ranks on the allocation's nodes stage the model store: set
+    /// when jobs run as allocation steps; checked on the nodes when a brain
+    /// job is submitted.
+    staging: Option<Box<StageCheck<'a>>>,
 }
 
 impl<'a> Jobs<'a> {
@@ -88,30 +94,37 @@ impl<'a> Jobs<'a> {
     }
 
     /// This handle, a brain job's ranks on the allocation's nodes staging the
-    /// model store `models` under the node-local `dir` (brain's
-    /// `--stage-models`), when its launcher places ranks on those nodes.
+    /// model store as `stage` says when a job is submitted: the node-local
+    /// directory and the store, or `None` to read the shared store. Only for
+    /// a launcher that places ranks on those nodes.
     #[must_use]
     pub fn with_model_staging(
         mut self,
-        dir: std::path::PathBuf,
-        models: std::path::PathBuf,
+        stage: impl Fn() -> Result<Option<StagedStore>, Error> + 'a,
     ) -> Self {
         if self.launcher.name() == "slurm-step" {
-            self.staging = Some((dir, models));
+            self.staging = Some(Box::new(stage));
         }
         self
     }
 
     /// `spec` as it is submitted: a brain program run as allocation steps
     /// reads the model store's entries from the node-local copy brain stages.
-    fn staged(&self, spec: &JobSpec) -> JobSpec {
-        match &self.staging {
-            Some((dir, models)) if is_brain(spec) => JobSpec {
-                command: crate::model::distributed::with_model_staging(&spec.command, dir, models),
+    fn staged(&self, spec: &JobSpec) -> Result<JobSpec, Error> {
+        let Some(stage) = self.staging.as_ref().filter(|_| is_brain(spec)) else {
+            return Ok(spec.clone());
+        };
+        Ok(match stage()? {
+            Some((dir, models)) => JobSpec {
+                command: crate::model::distributed::with_model_staging(
+                    &spec.command,
+                    &dir,
+                    &models,
+                ),
                 ..spec.clone()
             },
-            _ => spec.clone(),
-        }
+            None => spec.clone(),
+        })
     }
 
     /// Submit `spec`, launching its first attempt unless the job already
@@ -125,7 +138,7 @@ impl<'a> Jobs<'a> {
     /// own manifests: an action that takes no plan is refused.
     pub fn submit_at(&self, spec: &JobSpec, now_unix: u64) -> Result<JobSubmission, Error> {
         check_brain_plan(spec)?;
-        let spec = &self.staged(spec);
+        let spec = &self.staged(spec)?;
         let (launched, job) = match self.controller().submit_at(spec, now_unix)? {
             Submission::Launched(job) => (true, job),
             Submission::Existing(job) => (false, job),
@@ -293,8 +306,14 @@ mod tests {
         let other = JobSpec::single(vec!["/usr/bin/python3".into(), "train.py".into()]);
         let staged = |launcher: &dyn JobLauncher, spec: &JobSpec| {
             Jobs::new(&workspace, &clock, launcher, "/jobs".into(), "me".into())
-                .with_model_staging("/scratch/local/models".into(), "/shared/models".into())
+                .with_model_staging(|| {
+                    Ok(Some((
+                        "/scratch/local/models".into(),
+                        "/shared/models".into(),
+                    )))
+                })
                 .staged(spec)
+                .unwrap()
                 .command
         };
         let step = Named("slurm-step");

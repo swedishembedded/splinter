@@ -245,20 +245,26 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       options (bench d2c6a497). Also found: Python 3.13+ verifies certificates in
       X.509 strict mode, so fleet certificates now carry the authority key
       identifier, key usage and the server-auth purpose.
-- [x] **Node-local model staging (2026-11-21).** `--cluster-stage-models
-      DIR` (a node's own disk, bound into the image a step enters; on this
-      cluster the host's job-private `/scratch/local`) makes every fleet
-      server and every brain rank of a job run on the allocation's nodes
-      pass brain's `--stage-models DIR --stage-from <models-dir>` (brain
-      9eec9e86f): the first process of a node copies a store entry there,
-      verified, the others read the copy. Off by default, and never for a
-      job on this machine; `doctor` shows it; the flywheel's `[serve.fleet]
-      stage_models` sets it. Tests: stand-in brain in
-      `crates/model/tests/service.rs`, `crates/sdk/src/jobs.rs`,
-      `crates/model/src/distributed.rs`, the doctor and loop tests. Not yet
-      measured on GPUs through Splinter (brain's own measurement: a 27B base
-      on 8 ranks, 124.7 s to a finished step from the shared filesystem,
-      92.3 s staged cold, 54.5 s staged warm).
+- [x] **Node-local model staging, used when the site announces a
+      scratch (2026-11-21).** `--cluster-stage-models DIR|auto|off`
+      (default `auto`): `config::detect_cluster` reads the node-local
+      scratch the site announces to every step (`SLURM_TMPDIR`, `SNIC_TMP`,
+      `LOCAL_SCRATCH`; on this cluster the task prolog sets
+      `SNIC_TMP=/scratch/local` in every step, the host's job-private 1.7 TB
+      disk, while `TMPDIR` is `/tmp`), and every fleet server and every brain
+      rank of a job run as allocation steps passes brain's `--stage-models
+      <scratch>/brain-models --stage-from <models-dir>` (brain 9eec9e86f),
+      once one step on every node, under the exec prefix, made or found the
+      directory writable (`NodeSteps::check_writable`). An announced scratch
+      a node cannot write is dropped with the reason; a named one fails the
+      run; nothing announced stays off. `doctor` shows the directory and its
+      source, or why there is none. Tests: stand-in `srun` and brain in
+      `crates/orchestrator/src/brain_service.rs`,
+      `crates/sandbox/src/step.rs`, `crates/model/tests/service.rs`,
+      `crates/sdk/src/jobs.rs`, the doctor and loop tests. Not yet measured
+      on GPUs through Splinter (brain's own measurement: a 27B base on 8
+      ranks, 124.7 s to a finished step from the shared filesystem, 92.3 s
+      staged cold, 54.5 s staged warm).
 
 ## Decisions
 

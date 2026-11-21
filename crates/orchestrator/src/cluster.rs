@@ -191,11 +191,71 @@ pub struct ClusterSettings {
     /// Serve plaintext between the nodes instead of TLS under the fleet's
     /// own certificate authority (`--cluster-insecure-plaintext`).
     pub insecure_plaintext: bool,
-    /// `--cluster-stage-models`: a directory on each node's own disk where
-    /// brain stages the model store's entries (the first process of a node
-    /// copies, verified; the others read the copy), for the fleet's servers
-    /// and a distributed job's brain ranks; `None` reads the shared store.
-    pub stage_models: Option<PathBuf>,
+    /// `--cluster-stage-models`: whether brain stages the model store's
+    /// entries on each node's own disk (the first process of a node copies,
+    /// verified; the others read the copy) for the fleet's servers and a
+    /// distributed job's brain ranks.
+    pub stage_models: StageModels,
+    /// The node-local scratch directory the site announces to every step,
+    /// as the variable and its value ([`SCRATCH_VARS`]); what `auto` stages
+    /// under.
+    pub announced_scratch: Option<(String, PathBuf)>,
+}
+
+/// The variables a site announces a step's node-local scratch directory in,
+/// first set first: Slurm's per-job `SLURM_TMPDIR` where a site configures
+/// it, `SNIC_TMP` (set by NAISS sites' task prolog to the node's job-private
+/// disk) and `LOCAL_SCRATCH`. `TMPDIR` is not one: nothing says it is the
+/// node's own disk.
+pub const SCRATCH_VARS: &[&str] = &["SLURM_TMPDIR", "SNIC_TMP", "LOCAL_SCRATCH"];
+
+/// The directory under a node-local scratch that brain stages models in.
+pub const STAGE_SUBDIR: &str = "brain-models";
+
+/// Whether brain stages model-store entries on each node's own disk.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum StageModels {
+    /// Under the node-local scratch the site announces, when it announces
+    /// one; off when it does not.
+    #[default]
+    Auto,
+    /// Never: every server and rank reads the shared store.
+    Off,
+    /// Under this directory.
+    Dir(PathBuf),
+}
+
+impl StageModels {
+    /// The setting `--cluster-stage-models` names: `auto`, `off` or a
+    /// directory, which must be absolute.
+    ///
+    /// # Errors
+    /// A relative directory.
+    pub fn parse(text: &str) -> Result<StageModels, ClusterError> {
+        match text.trim() {
+            "auto" => Ok(StageModels::Auto),
+            "off" => Ok(StageModels::Off),
+            dir if dir.starts_with('/') => Ok(StageModels::Dir(PathBuf::from(dir))),
+            other => Err(ClusterError::Malformed {
+                what: "--cluster-stage-models".into(),
+                value: other.into(),
+                reason: "it is `auto`, `off` or an absolute directory on each node".into(),
+            }),
+        }
+    }
+}
+
+/// Where brain stages models on each node, and what decided it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Staging {
+    /// The directory, on each node; `None` reads the shared store.
+    pub dir: Option<PathBuf>,
+    /// Whether the directory was named (`--cluster-stage-models DIR`): one a
+    /// node cannot write fails the run, where an announced one is dropped
+    /// with the reason.
+    pub named: bool,
+    /// What decided it, as `doctor` says it.
+    pub source: String,
 }
 
 impl Default for ClusterSettings {
@@ -211,7 +271,8 @@ impl Default for ClusterSettings {
             step_args: Vec::new(),
             single_node_step_args: Vec::new(),
             insecure_plaintext: false,
-            stage_models: None,
+            stage_models: StageModels::Auto,
+            announced_scratch: None,
         }
     }
 }
@@ -245,6 +306,40 @@ impl UsableCluster {
 }
 
 impl ClusterSettings {
+    /// Where brain stages models on each node: the named directory, the
+    /// announced scratch's [`STAGE_SUBDIR`] under `auto`, else nowhere.
+    #[must_use]
+    pub fn staging(&self) -> Staging {
+        match &self.stage_models {
+            StageModels::Off => Staging {
+                dir: None,
+                named: false,
+                source: "off (--cluster-stage-models off)".into(),
+            },
+            StageModels::Dir(dir) => Staging {
+                dir: Some(dir.clone()),
+                named: true,
+                source: "named by --cluster-stage-models".into(),
+            },
+            StageModels::Auto => match &self.announced_scratch {
+                Some((var, scratch)) => Staging {
+                    dir: Some(scratch.join(STAGE_SUBDIR)),
+                    named: false,
+                    source: format!("{var}={} announces the node-local scratch", scratch.display()),
+                },
+                None => Staging {
+                    dir: None,
+                    named: false,
+                    source: format!(
+                        "no node-local scratch is announced ({} unset), so models are read from the \
+                         shared store",
+                        SCRATCH_VARS.join(", ")
+                    ),
+                },
+            },
+        }
+    }
+
     /// The allocation this process uses: `None` with `--cluster off` or
     /// outside an allocation.
     ///
@@ -634,6 +729,37 @@ mod tests {
         };
         let error = nowhere.usable().unwrap_err().to_string();
         assert!(error.contains("no Slurm allocation"), "{error}");
+    }
+
+    #[test]
+    fn staging_is_automatic_under_an_announced_scratch_and_can_be_named_or_turned_off() {
+        let announced = ClusterSettings {
+            announced_scratch: Some(("SNIC_TMP".into(), "/scratch/local".into())),
+            ..ClusterSettings::default()
+        };
+        let auto = announced.staging();
+        assert_eq!(auto.dir, Some(PathBuf::from("/scratch/local/brain-models")));
+        assert!(!auto.named && auto.source.contains("SNIC_TMP=/scratch/local"));
+
+        let silent = ClusterSettings::default().staging();
+        assert_eq!(silent.dir, None, "nothing announced, nothing assumed");
+        assert!(silent.source.contains("SNIC_TMP"), "{}", silent.source);
+
+        let named = ClusterSettings {
+            stage_models: StageModels::Dir("/nvme/models".into()),
+            ..announced.clone()
+        };
+        assert_eq!(named.staging().dir, Some(PathBuf::from("/nvme/models")));
+        assert!(named.staging().named);
+        let off = ClusterSettings {
+            stage_models: StageModels::Off,
+            ..announced
+        };
+        assert_eq!(off.staging().dir, None);
+
+        assert_eq!(StageModels::parse("auto").unwrap(), StageModels::Auto);
+        assert_eq!(StageModels::parse("off").unwrap(), StageModels::Off);
+        assert!(StageModels::parse("relative/dir").is_err());
     }
 
     #[test]

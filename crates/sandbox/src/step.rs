@@ -120,6 +120,89 @@ impl NodeSteps {
     }
 }
 
+/// How long checking a directory on the nodes may take: a step, and the
+/// exec prefix entering the node's image.
+pub const CHECK_DEADLINE: Duration = Duration::from_secs(180);
+
+impl NodeSteps {
+    /// Checks, in one step with a task on every one of `nodes` and under the
+    /// exec prefix (where the programs that use it will run), that `dir`
+    /// exists or can be made and can be written. `work` is a directory every
+    /// node sees, for the step's script.
+    ///
+    /// # Errors
+    /// The step could not run, or a node cannot write `dir`: the nodes'
+    /// own words.
+    pub fn check_writable(&self, nodes: &[String], dir: &Path, work: &Path) -> Result<(), String> {
+        let script = work.join("check-writable.sh");
+        let command = [
+            "sh".to_string(),
+            "-c".into(),
+            "mkdir -p \"$1\" 2>/dev/null; if test -d \"$1\" && test -w \"$1\"; then exit 0; fi; \
+             echo \"$(hostname): cannot write $1\"; exit 1"
+                .into(),
+            "sh".into(),
+            dir.display().to_string(),
+        ];
+        fs::write(&script, self.script(work, &command))
+            .map_err(|e| format!("cannot write {}: {e}", script.display()))?;
+        let placement = Placement {
+            nodes: nodes.to_vec(),
+            tasks_per_node: 1,
+            gpus_per_node: 0,
+        };
+        let mut child = self
+            .command(&placement, &script)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("{} could not start: {e}", self.srun.display()))?;
+        let deadline = Instant::now() + CHECK_DEADLINE;
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(100))
+                }
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!(
+                        "checking {} on {} took longer than {}s",
+                        dir.display(),
+                        nodes.join(","),
+                        CHECK_DEADLINE.as_secs()
+                    ));
+                }
+            }
+        }
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("reading the check of {}: {e}", dir.display()))?;
+        let _ = fs::remove_file(&script);
+        if output.status.success() {
+            return Ok(());
+        }
+        let said = String::from_utf8_lossy(&output.stdout);
+        let lines: Vec<&str> = said
+            .lines()
+            .filter(|l| l.contains("cannot write"))
+            .collect();
+        Err(if lines.is_empty() {
+            format!(
+                "the check of {} on {} failed ({}): {}",
+                dir.display(),
+                nodes.join(","),
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            )
+        } else {
+            lines.join("; ")
+        })
+    }
+}
+
 /// A started step: its `srun`, and the directory its id is recorded in.
 pub struct StepProcess {
     /// The `srun` process.
@@ -426,6 +509,47 @@ mod tests {
             scancel: None,
         };
         assert!(!step.stop(Duration::from_secs(5)), "SIGTERM was enough");
+    }
+
+    /// A stand-in `srun` that runs the step's script once, here.
+    fn local_srun(dir: &Path) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let srun = dir.join("srun");
+        fs::write(
+            &srun,
+            "#!/bin/sh\nwhile [ \"$1\" != sh ]; do shift; done\nshift\nSLURM_PROCID=0 exec sh \"$@\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(&srun, fs::Permissions::from_mode(0o755)).unwrap();
+        srun
+    }
+
+    #[test]
+    fn a_directory_is_checked_where_the_step_runs_and_a_refusal_names_the_node() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let steps = NodeSteps {
+            srun: local_srun(dir.path()),
+            ..NodeSteps::default()
+        };
+        let nodes = ["here".to_string()];
+        let scratch = dir.path().join("scratch");
+        fs::create_dir(&scratch).unwrap();
+        steps
+            .check_writable(&nodes, &scratch.join("brain-models"), dir.path())
+            .unwrap();
+        assert!(
+            scratch.join("brain-models").is_dir(),
+            "made where it is missing"
+        );
+
+        fs::set_permissions(&scratch, fs::Permissions::from_mode(0o500)).unwrap();
+        let refused = steps
+            .check_writable(&nodes, &scratch.join("other"), dir.path())
+            .unwrap_err();
+        fs::set_permissions(&scratch, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(refused.contains("cannot write"), "{refused}");
+        assert!(refused.contains("other"), "{refused}");
     }
 
     #[test]

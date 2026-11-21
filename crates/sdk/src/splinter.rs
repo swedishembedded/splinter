@@ -121,10 +121,18 @@ impl Splinter {
             config.jobs.attempt_root(&config.state_root),
             config.jobs.owner.clone(),
         );
-        match &config.cluster.stage_models {
-            Some(dir) => jobs.with_model_staging(dir.clone(), config.model_store.clone()),
-            None => jobs,
-        }
+        // Checked on the nodes a job's ranks run on, when one is submitted.
+        jobs.with_model_staging(move || {
+            let nodes = match config.cluster.usable() {
+                Ok(Some(usable)) => usable.nodes,
+                _ => return Ok(None),
+            };
+            let steps = crate::brain_service::node_steps(config)
+                .map_err(|e| crate::Error::Refused(e.to_string()))?;
+            let dir = crate::brain_service::stage_dir(config, &steps, &nodes)
+                .map_err(|e| crate::Error::Refused(e.to_string()))?;
+            Ok(dir.map(|dir| (dir, config.model_store.clone())))
+        })
     }
 
     /// The context of one command: its own pin of each policy alias on the

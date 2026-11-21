@@ -184,16 +184,25 @@ mod cluster {
         ] {
             assert!(check.detail.contains(shown), "{shown}: {}", check.detail);
         }
-        let staged = cluster_check(&ClusterSettings {
-            stage_models: Some("/scratch/local/models".into()),
+        let announced = cluster_check(&ClusterSettings {
+            announced_scratch: Some(("SNIC_TMP".into(), "/scratch/local".into())),
             ..inside(&["n424", "n442"])
         });
+        for shown in [
+            "models staged on each node under /scratch/local/brain-models",
+            "SNIC_TMP=/scratch/local announces",
+        ] {
+            assert!(
+                announced.detail.contains(shown),
+                "{shown}: {}",
+                announced.detail
+            );
+        }
+        let silent = cluster_check(&inside(&["n424", "n442"]));
         assert!(
-            staged
-                .detail
-                .contains("models staged on each node under /scratch/local/models"),
+            silent.detail.contains("no node-local scratch is announced"),
             "{}",
-            staged.detail
+            silent.detail
         );
     }
 

@@ -21,7 +21,7 @@ use splinter_core::prompt::CodingPrompt;
 use splinter_knowledge::capture::DEFAULT_ENV_ALLOWLIST;
 use splinter_store::StateRoot;
 
-use crate::cluster::{ClusterAllocation, ClusterSettings, SLURM_VARS};
+use crate::cluster::{ClusterAllocation, ClusterSettings, SCRATCH_VARS, SLURM_VARS};
 
 /// The model Splinter trains by default, as brain's model store names it:
 /// the size whose base serves and whose adapters train, at agent-trajectory
@@ -486,6 +486,15 @@ pub fn detect_cluster() -> ClusterSettings {
         ),
         srun: var("PATH").and_then(|path| find_executable(&path, "srun")),
         scancel: var("PATH").and_then(|path| find_executable(&path, "scancel")),
+        // What the site announces to this step is what it announces to every
+        // step: a task prolog sets it alike on each node. Whether the
+        // directory exists and can be written on a node is checked there,
+        // when a step is started.
+        announced_scratch: SCRATCH_VARS.iter().find_map(|name| {
+            var(name)
+                .filter(|value| value.starts_with('/'))
+                .map(|value| ((*name).to_string(), PathBuf::from(value)))
+        }),
         ..ClusterSettings::default()
     }
 }
