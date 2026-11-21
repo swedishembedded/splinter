@@ -289,3 +289,42 @@ impl ArmRunner for SolveArms<'_> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The unbiased pass@k estimator over `n` graded attempts of which `c`
+    /// passed: `1 - C(n - c, k) / C(n, k)`, by hand from the binomials.
+    fn unbiased(n: u64, c: u64, k: u64) -> f64 {
+        let choose = |n: u64, r: u64| -> f64 {
+            if r > n {
+                return 0.0;
+            }
+            (0..r).map(|i| (n - i) as f64 / (i + 1) as f64).product()
+        };
+        1.0 - choose(n - c, k) / choose(n, k)
+    }
+
+    /// A samples arm counts a task solved when any of its `k` graded
+    /// attempts passed: with every attempt graded that is exactly the
+    /// unbiased pass@k, `1 - C(n - c, k) / C(n, k)` at `n = k`; the rate arm
+    /// is pass@1's estimate `c / n`.
+    #[test]
+    fn any_of_k_graded_attempts_is_the_unbiased_pass_at_k_and_the_rate_is_pass_at_one() {
+        for k in 1..=8u64 {
+            for c in 0..=k {
+                let graded: Vec<bool> = (0..k).map(|i| i < c).collect();
+                let any = Counting::Any.of(&graded).unwrap();
+                assert!((any - unbiased(k, c, k)).abs() < 1e-12, "k {k} c {c}");
+                let rate = Counting::Rate.of(&graded).unwrap();
+                assert!((rate - unbiased(k, c, 1)).abs() < 1e-12, "k {k} c {c}");
+            }
+        }
+        assert_eq!(
+            Counting::Any.of(&[]),
+            None,
+            "no graded attempt is no measurement"
+        );
+    }
+}

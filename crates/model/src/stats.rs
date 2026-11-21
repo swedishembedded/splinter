@@ -38,8 +38,17 @@ pub fn sign_test(pairs: &[(bool, bool)]) -> SignTest {
     SignTest {
         discordant,
         candidate_wins,
-        p_value: binomial_upper_tail(discordant, candidate_wins),
+        p_value: one_sided_p(candidate_wins, discordant - candidate_wins),
     }
+}
+
+/// The exact one-sided sign test's p-value from its counts: `wins` pairs
+/// only the candidate got right and `losses` only the baseline did (ties
+/// already dropped), `P(Binomial(wins + losses, 1/2) >= wins)`; `1.0` with
+/// no discordant pair.
+#[must_use]
+pub fn one_sided_p(wins: usize, losses: usize) -> f64 {
+    binomial_upper_tail(wins + losses, wins)
 }
 
 /// `P(Binomial(n, 1/2) >= k)`, summed in log space so a large `n` neither

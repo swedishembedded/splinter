@@ -208,25 +208,13 @@ const LEVEL: f64 = 0.95;
 const Z_ALPHA: f64 = 1.644_853_626_951_472_7;
 const Z_POWER: f64 = 0.841_621_233_572_914_4;
 
-/// `P(Binomial(n, 1/2) >= k)`: the one-sided exact sign test.
+/// `P(Binomial(n, 1/2) >= k)`: the one-sided exact sign test over the `n`
+/// tasks only one arm got right, `k` of them the first's. The arithmetic is
+/// the model backend's ([`splinter_model::stats::one_sided_p`]), the same the
+/// release gate's sign test computes.
 #[must_use]
 pub fn sign_p(first_only: usize, second_only: usize) -> f64 {
-    let n = first_only + second_only;
-    if n == 0 {
-        return 1.0;
-    }
-    // Summed in log space: n can be a few hundred.
-    let ln_half = (0.5f64).ln();
-    let ln_fact: Vec<f64> = std::iter::once(0.0)
-        .chain((1..=n).scan(0.0, |acc, i| {
-            *acc += (i as f64).ln();
-            Some(*acc)
-        }))
-        .collect();
-    (first_only..=n)
-        .map(|k| (ln_fact[n] - ln_fact[k] - ln_fact[n - k] + n as f64 * ln_half).exp())
-        .sum::<f64>()
-        .min(1.0)
+    splinter_model::stats::one_sided_p(first_only, second_only)
 }
 
 /// The arms' summaries, in the order of `arms`.
@@ -628,6 +616,136 @@ mod tests {
             .collect();
         assert!(compare(&alike, "a", "b", SEED).power.icc > 0.9);
         assert!(compare(&mixed, "a", "b", SEED).power.icc < 0.05);
+    }
+
+    /// Golden values: the exact family-bootstrap distribution of the mean
+    /// over tasks, enumerated in exact rational arithmetic by
+    /// `generate_conformance.py` beside the fixture (independent of this
+    /// code).
+    #[derive(serde::Deserialize)]
+    struct Golden {
+        clustered_bootstrap: Vec<GoldenCase>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct GoldenCase {
+        name: String,
+        families: Vec<Vec<f64>>,
+        mean: f64,
+        cdf: Vec<(f64, f64)>,
+        item_level_detectable: bool,
+    }
+
+    fn golden() -> Golden {
+        serde_json::from_str(include_str!(
+            "../../../eval/tests/fixtures/conformance/conformance.json"
+        ))
+        .unwrap()
+    }
+
+    /// A seed no test depends on, printed so a failure can be replayed.
+    fn drawn_seed() -> Seed {
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos() as u64);
+        println!("seed {seed}");
+        Seed::new(seed)
+    }
+
+    /// Whether `bound` is the `q` quantile of `cdf` within `tolerance` of CDF
+    /// mass: a value the statistic takes, with at least `q` of the mass at or
+    /// below it and at most `q` strictly below.
+    fn is_quantile(cdf: &[(f64, f64)], bound: f64, q: f64, tolerance: f64) -> Result<(), String> {
+        let at = cdf
+            .iter()
+            .position(|(x, _)| (x - bound).abs() < 1e-9)
+            .ok_or_else(|| format!("{bound} is no value the resampled mean can take"))?;
+        let below = if at == 0 { 0.0 } else { cdf[at - 1].1 };
+        if cdf[at].1 + tolerance < q || below - tolerance > q {
+            return Err(format!(
+                "{bound} is not the {q} quantile: CDF {below} below it, {} at it",
+                cdf[at].1
+            ));
+        }
+        Ok(())
+    }
+
+    /// Resamples of the conformance checks, and how far in CDF mass a bound
+    /// may sit from the exact quantile: five standard errors of an empirical
+    /// 2.5% quantile at that many draws (`sqrt(0.025 * 0.975 / 10000)` is
+    /// 0.0016).
+    const GOLDEN_RESAMPLES: usize = 10_000;
+    const GOLDEN_TOLERANCE: f64 = 0.008;
+
+    /// A family-clustered resample: the mean over tasks and the bounds at
+    /// the shares asked for.
+    type QuantilesOf<'a> = &'a dyn Fn(&[Vec<f64>], &[f64], Seed) -> (f64, Vec<f64>);
+
+    /// The bounds `quantiles_of` gives at the shares the powered exam, the
+    /// release gate and the promotion rule read (2.5%, 5% and 97.5%) against
+    /// the exact family bootstrap; the first case and share that diverge.
+    fn check_clustered(quantiles_of: QuantilesOf<'_>, detectable_only: bool) -> Result<(), String> {
+        let seed = drawn_seed();
+        let shares = [0.025, 0.05, 0.975];
+        for case in golden().clustered_bootstrap {
+            if detectable_only && !case.item_level_detectable {
+                continue;
+            }
+            let (mean, bounds) = quantiles_of(&case.families, &shares, seed);
+            if (mean - case.mean).abs() > 1e-12 {
+                return Err(format!("{}: mean {mean}, exact {}", case.name, case.mean));
+            }
+            for (share, bound) in shares.iter().zip(bounds) {
+                is_quantile(&case.cdf, bound, *share, GOLDEN_TOLERANCE)
+                    .map_err(|e| format!("{}: share {share}: {e}", case.name))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn splinter_quantiles(families: &[Vec<f64>], shares: &[f64], seed: Seed) -> (f64, Vec<f64>) {
+        let sums: Vec<(f64, usize)> = families.iter().map(|f| (f.iter().sum(), f.len())).collect();
+        let resampled = Resampled::of(&sums, GOLDEN_RESAMPLES, seed).unwrap();
+        let interval = interval_of(sums, GOLDEN_RESAMPLES, seed).unwrap();
+        assert_eq!(
+            (interval.low, interval.high),
+            (resampled.quantile(0.025), resampled.quantile(0.975)),
+            "the 95% interval reads the 2.5% and 97.5% shares"
+        );
+        (
+            resampled.mean,
+            shares.iter().map(|s| resampled.quantile(*s)).collect(),
+        )
+    }
+
+    #[test]
+    fn the_family_interval_is_the_exact_family_bootstrap_of_the_mean_over_tasks() {
+        check_clustered(&splinter_quantiles, false).unwrap();
+    }
+
+    #[test]
+    fn the_family_interval_check_catches_tasks_resampled_on_their_own() {
+        let item_level = |families: &[Vec<f64>], shares: &[f64], seed: Seed| {
+            let tasks: Vec<f64> = families.iter().flatten().copied().collect();
+            let n = tasks.len();
+            let mut rng = splinter_core::rng::SplitMix64::new(seed.value());
+            let mut means: Vec<f64> = (0..GOLDEN_RESAMPLES)
+                .map(|_| (0..n).map(|_| tasks[rng.below(n)]).sum::<f64>() / n as f64)
+                .collect();
+            means.sort_by(f64::total_cmp);
+            let last = (GOLDEN_RESAMPLES - 1) as f64;
+            (
+                tasks.iter().sum::<f64>() / n as f64,
+                shares
+                    .iter()
+                    .map(|s| means[(s * last).round() as usize])
+                    .collect(),
+            )
+        };
+        assert!(
+            check_clustered(&item_level, true).is_err(),
+            "the check did not catch a task-level resample"
+        );
     }
 
     #[test]

@@ -22,6 +22,7 @@ mod executable_verifier;
 mod exposure_audit;
 mod form_verifiers;
 mod gate;
+mod golden;
 mod grounding_verifier;
 mod mutation_oracle;
 mod overlap;
