@@ -163,3 +163,25 @@ else is as registered.
 on load, so the reruns use more concurrency per arm: E1/E2 16 trials in flight per arm, E3 12, the 4B check 16. Each
 E1/E2 fold runs on two identical exam servers, rounds 1-4 on one and rounds 5-8 on the other, every arm on both. Each
 E3 fold runs on one server. E3 fold p7's six trainings are rerun one at a time from the same datasets and seeds.
+
+**E1 result (read 2026-11-21 19:58; `compare-arms`, interval seed 20261121; 168 held-out tasks over 14 rungs x 8 per
+arm, students' seeds pooled; no infrastructure errors, no timeouts).** Supported: **vim distillation crosses families.**
+
+| arm | trials | pass@1 | minus base | task 95% | family 95% (14 rungs) | better / worse / ties | p two-sided (Holm) | exhaustion |
+|---|---:|---:|---:|---|---|---|---:|---:|
+| base | 1,344 | 0.235 | | | | | | 10.1% |
+| v1 recipe, other rungs (pooled) | 2,688 | 0.353 | **+0.118** | [+0.062, +0.173] | **[+0.021, +0.220]** | 91 / 48 / 29 | 0.0003 | 55.9% / 59.2% |
+| seed 1 | 1,344 | 0.366 | +0.131 | [+0.076, +0.186] | [+0.037, +0.230] | 83 / 42 / 43 | 0.0006 | 55.9% |
+| seed 2 | 1,344 | 0.340 | +0.105 | [+0.046, +0.163] | [+0.002, +0.215] | 79 / 48 / 41 | 0.0075 | 59.2% |
+
+The pooled gain on rungs never trained on is +0.118, its family interval is above 0, and both seeds agree. The base
+sits at 0.235, inside the 0.15-0.85 band. **Decision rule:** E1 shows that this instrument detects a +0.05 effect, so
+E4 and E5 may start. The students exhaust B in 56-59% of trials against the base's 10%. Item 25's exam-family null
+(knowledge 202) was a wall-clock artefact plus a 14-task exam, not an absence of transfer. Report: `lane-exp/logs/e1.compare.json`;
+verdict `exp-e1` entered in the canonical problem state (`distill-transfer.leave-families-out` supported, belief 0.40
+to 0.55).
+
+**E2 at B (same slot as E1).** Min-cost selection against v1's curation, pooled: +0.037, task interval
+[+0.010, +0.064], family interval **[-0.021, +0.105]**, 75 / 58 / 35, p 0.165. Seed 1 +0.041 [-0.008, +0.105], seed 2
++0.032 [-0.039, +0.108]. The exhaustion share is 50.5% against the base's 10.1%, 40 points apart, so that criterion
+fails. The gain is not supported, and +0.05 is not ruled out. The 4B check is running; the verdict is entered after it.
