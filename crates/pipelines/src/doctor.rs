@@ -304,6 +304,13 @@ pub fn cluster_check(cluster: &ClusterSettings) -> Check {
                 usable.nodes.join(","),
                 usable.cards()
             );
+            let using = match &cluster.stage_models {
+                Some(dir) => format!(
+                    "{using}; models staged on each node under {}",
+                    dir.display()
+                ),
+                None => format!("{using}; models read from the shared store"),
+            };
             if cluster.srun.is_none() {
                 return Check::problem(
                     Verdict::Fail,

@@ -232,6 +232,8 @@ def fleet_flags(campaign: Campaign, fleet: dict) -> list[str]:
     flags += [f"--slurm-step-arg={a}" for a in fleet.get("step_args", [])]
     if fleet.get("insecure_plaintext"):
         flags.append("--cluster-insecure-plaintext")
+    if fleet.get("stage_models"):
+        flags += ["--cluster-stage-models", fleet["stage_models"]]
     return flags
 
 

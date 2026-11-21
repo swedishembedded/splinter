@@ -259,6 +259,8 @@ def the_fleet_is_named_entered_and_secured_as_its_table_says():
     flags = loop.fleet_flags(loop.Campaign({}), {"nodes": "n[442,445]", "exec_prefix": "step --", "step_args": ["--mem=64G"]})
     assert flags == ["--cluster-nodes", "n[442,445]", "--cluster-exec-prefix", "step --", "--slurm-step-arg=--mem=64G"]
     assert "--cluster-insecure-plaintext" in loop.fleet_flags(loop.Campaign({}), {"insecure_plaintext": True})
+    staged = loop.fleet_flags(loop.Campaign({}), {"stage_models": "/scratch/local/models"})
+    assert staged == ["--cluster-stage-models", "/scratch/local/models"]
 
 
 class _FakeFleet:

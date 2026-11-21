@@ -138,6 +138,35 @@ pub fn check_plan_command(command: &[String], actions: &[BrainAction]) -> Result
     }
 }
 
+/// `command` (a `brain` invocation) with brain's node-local model staging
+/// (`--stage-models DIR --stage-from MODELS`, global flags, right after the
+/// program): every argument naming a path inside a model-store entry under
+/// `models` is read from a copy under `dir`, made once per node. A command
+/// that already stages is left as it is.
+#[must_use]
+pub fn with_model_staging(command: &[String], dir: &Path, models: &Path) -> Vec<String> {
+    let mut staged = command.to_vec();
+    if command.len() < 2 || command.iter().any(|word| word == STAGE_FLAG) {
+        return staged;
+    }
+    staged.splice(1..1, staging_args(dir, models));
+    staged
+}
+
+/// brain's global flags that stage `models`' entries under the node-local `dir`.
+#[must_use]
+pub fn staging_args(dir: &Path, models: &Path) -> Vec<String> {
+    vec![
+        STAGE_FLAG.into(),
+        dir.display().to_string(),
+        "--stage-from".into(),
+        models.display().to_string(),
+    ]
+}
+
+/// The flag brain stages model-store entries on node-local disk with.
+const STAGE_FLAG: &str = "--stage-models";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,6 +181,24 @@ mod tests {
 
     fn words(text: &str) -> Vec<String> {
         text.split_whitespace().map(String::from).collect()
+    }
+
+    #[test]
+    fn staging_goes_right_after_the_program_and_only_once() {
+        let staged = with_model_staging(
+            &words("/b/brain --device gpu0 qwen3 lora_train"),
+            Path::new("/scratch/local/models"),
+            Path::new("/shared/models"),
+        );
+        assert_eq!(
+            staged,
+            words(
+                "/b/brain --stage-models /scratch/local/models --stage-from /shared/models \
+                 --device gpu0 qwen3 lora_train"
+            )
+        );
+        let again = with_model_staging(&staged, Path::new("/other"), Path::new("/shared/models"));
+        assert_eq!(again, staged, "a command that stages is left alone");
     }
 
     #[test]

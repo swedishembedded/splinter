@@ -63,6 +63,7 @@ pub fn start_brain(config: &Config, cancel: &CancelToken) -> Result<BrainConnect
         nodes: cluster.nodes,
         gpus_per_node: cluster.allocation.gpus_per_node,
         insecure_plaintext: config.cluster.insecure_plaintext,
+        stage_models: config.cluster.stage_models.clone(),
     };
     let managed = ManagedBrain::start_fleet(&fleet, cancel)?;
     let work = managed.work_dir();

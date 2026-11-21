@@ -204,6 +204,7 @@ exec sleep 600
             nodes: nodes.iter().map(|n| (*n).to_string()).collect(),
             gpus_per_node: 4,
             insecure_plaintext: false,
+            stage_models: None,
         }
     }
 
@@ -334,6 +335,33 @@ exec sleep 600
         let args = std::fs::read_to_string(work.join("localhost/args")).unwrap();
         assert!(args.contains("--insecure-plaintext") && !args.contains("--tls-cert"));
         assert!(!work.join("ca.pem").exists());
+    }
+
+    #[test]
+    fn a_fleet_given_a_node_local_directory_stages_the_store_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = FleetSettings {
+            stage_models: Some("/scratch/local/models".into()),
+            ..fleet(dir.path(), &["localhost"])
+        };
+        let brain = ManagedBrain::start_fleet(&settings, &CancelToken::default()).unwrap();
+        let args = std::fs::read_to_string(brain.work_dir().join("localhost/args")).unwrap();
+        let store = dir.path().join("models");
+        let wanted = format!(
+            "--stage-models /scratch/local/models --stage-from {} ",
+            store.display()
+        );
+        assert!(args.starts_with(&wanted), "global flags first: {args}");
+        drop(brain);
+
+        let plain =
+            ManagedBrain::start_fleet(&fleet(dir.path(), &["localhost"]), &CancelToken::default())
+                .unwrap();
+        let args = std::fs::read_to_string(plain.work_dir().join("localhost/args")).unwrap();
+        assert!(
+            !args.contains("--stage-models"),
+            "none unless asked: {args}"
+        );
     }
 
     #[test]

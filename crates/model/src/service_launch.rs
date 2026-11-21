@@ -99,6 +99,10 @@ pub struct NodeService<'a> {
     /// (`--tls-cert`, `--tls-key`); `None` serves plaintext off the loopback
     /// (`--insecure-plaintext`), which the caller asked for by name.
     pub tls: Option<(&'a Path, &'a Path)>,
+    /// The node-local directory brain stages the model store's entries in
+    /// (`--stage-models`, from `--models-dir`); `None` reads them from the
+    /// shared store.
+    pub stage: Option<&'a Path>,
 }
 
 /// The server's process: a child of this one, or the `srun` of its step.
@@ -267,6 +271,11 @@ pub fn spawn_service(launch: &ServiceLaunch<'_>) -> Result<Pending, Failure> {
             // Port 0: the node's system picks a free one, which the server's
             // connection record names once it is bound.
             let mut args = service_args(launch, &format!("{}:0", node.address), &key, &ready);
+            if let Some(dir) = node.stage {
+                // Global flags, before the subcommand.
+                let staging = crate::distributed::staging_args(dir, launch.models);
+                args.splice(0..0, staging.into_iter().map(OsString::from));
+            }
             match node.tls {
                 Some((chain, private_key)) => {
                     args.push("--tls-cert".into());

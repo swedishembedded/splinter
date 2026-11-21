@@ -110,6 +110,13 @@ pub struct DeviceFlags {
     /// certificate authority made for them, whose key is discarded at once.
     #[arg(long, global = true)]
     pub cluster_insecure_plaintext: bool,
+    /// A directory on each node's own disk (a job-private scratch disk,
+    /// bound into the container a step enters) where brain stages the model
+    /// store's entries for the fleet's servers and a distributed job's brain
+    /// ranks: the first process of a node copies an entry there, verified,
+    /// and the others read the copy instead of the shared filesystem.
+    #[arg(long, global = true, value_name = "DIR")]
+    pub cluster_stage_models: Option<PathBuf>,
 }
 
 /// Removes every `name` from `args`; whether there was one.
@@ -179,6 +186,7 @@ impl DeviceFlags {
             slurm_step_arg: take_all("--slurm-step-arg")?,
             slurm_single_node_step_arg: take_all("--slurm-single-node-step-arg")?,
             cluster_insecure_plaintext,
+            cluster_stage_models: take_all("--cluster-stage-models")?.pop().map(PathBuf::from),
         })
     }
 
@@ -205,6 +213,7 @@ impl DeviceFlags {
             .single_node_step_args
             .clone_from(&self.slurm_single_node_step_arg);
         cluster.insecure_plaintext = self.cluster_insecure_plaintext;
+        cluster.stage_models.clone_from(&self.cluster_stage_models);
         cluster
     }
 

@@ -180,9 +180,21 @@ mod cluster {
             "this node n424",
             "using n442",
             "--cluster-nodes",
+            "models read from the shared store",
         ] {
             assert!(check.detail.contains(shown), "{shown}: {}", check.detail);
         }
+        let staged = cluster_check(&ClusterSettings {
+            stage_models: Some("/scratch/local/models".into()),
+            ..inside(&["n424", "n442"])
+        });
+        assert!(
+            staged
+                .detail
+                .contains("models staged on each node under /scratch/local/models"),
+            "{}",
+            staged.detail
+        );
     }
 
     #[test]

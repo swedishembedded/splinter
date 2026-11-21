@@ -60,6 +60,10 @@ pub struct Jobs<'a> {
     root: std::path::PathBuf,
     owner: String,
     lease_seconds: u64,
+    /// Where brain ranks on the allocation's nodes stage the model store
+    /// (node-local directory, store): set when jobs run as allocation steps
+    /// and `--cluster-stage-models` names a directory.
+    staging: Option<(std::path::PathBuf, std::path::PathBuf)>,
 }
 
 impl<'a> Jobs<'a> {
@@ -79,6 +83,34 @@ impl<'a> Jobs<'a> {
             root,
             owner,
             lease_seconds: splinter_orchestrator::jobs::DEFAULT_JOB_LEASE_SECS,
+            staging: None,
+        }
+    }
+
+    /// This handle, a brain job's ranks on the allocation's nodes staging the
+    /// model store `models` under the node-local `dir` (brain's
+    /// `--stage-models`), when its launcher places ranks on those nodes.
+    #[must_use]
+    pub fn with_model_staging(
+        mut self,
+        dir: std::path::PathBuf,
+        models: std::path::PathBuf,
+    ) -> Self {
+        if self.launcher.name() == "slurm-step" {
+            self.staging = Some((dir, models));
+        }
+        self
+    }
+
+    /// `spec` as it is submitted: a brain program run as allocation steps
+    /// reads the model store's entries from the node-local copy brain stages.
+    fn staged(&self, spec: &JobSpec) -> JobSpec {
+        match &self.staging {
+            Some((dir, models)) if is_brain(spec) => JobSpec {
+                command: crate::model::distributed::with_model_staging(&spec.command, dir, models),
+                ..spec.clone()
+            },
+            _ => spec.clone(),
         }
     }
 
@@ -93,6 +125,7 @@ impl<'a> Jobs<'a> {
     /// own manifests: an action that takes no plan is refused.
     pub fn submit_at(&self, spec: &JobSpec, now_unix: u64) -> Result<JobSubmission, Error> {
         check_brain_plan(spec)?;
+        let spec = &self.staged(spec);
         let (launched, job) = match self.controller().submit_at(spec, now_unix)? {
             Submission::Launched(job) => (true, job),
             Submission::Existing(job) => (false, job),
@@ -186,17 +219,22 @@ fn check_brain_plan(spec: &JobSpec) -> Result<(), Error> {
     let Some(program) = spec.command.first() else {
         return Ok(());
     };
-    let path = std::path::Path::new(program);
-    let is_brain = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name.starts_with("brain"));
-    if spec.plan.is_none() || !is_brain {
+    if spec.plan.is_none() || !is_brain(spec) {
         return Ok(());
     }
+    let path = std::path::Path::new(program);
     let actions = crate::model::distributed::brain_actions(path)
         .map_err(|e| Error::Refused(format!("asking brain which actions join a job plan: {e}")))?;
     crate::model::distributed::check_plan_command(&spec.command, &actions).map_err(Error::Refused)
+}
+
+/// Whether `spec`'s program is a `brain` binary.
+fn is_brain(spec: &JobSpec) -> bool {
+    spec.command
+        .first()
+        .and_then(|program| std::path::Path::new(program).file_name())
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with("brain"))
 }
 
 #[cfg(test)]
@@ -217,5 +255,66 @@ mod tests {
         assert!(names(&spec, &hex[..8]));
         assert!(!names(&spec, "nonsense"));
         assert!(!names(&spec, ""));
+    }
+
+    /// A launcher that only names itself: what staging is decided by.
+    struct Named(&'static str);
+
+    impl JobLauncher for Named {
+        fn name(&self) -> &'static str {
+            self.0
+        }
+        fn launch(
+            &self,
+            _: &JobSpec,
+            _: u32,
+            _: &std::path::Path,
+        ) -> Result<splinter_sandbox::job::Launch, splinter_sandbox::job::JobError> {
+            unreachable!("not launched")
+        }
+        fn observe(&self, _: &splinter_sandbox::job::Launch) -> splinter_sandbox::job::Observation {
+            unreachable!("not observed")
+        }
+        fn stop(
+            &self,
+            _: &splinter_sandbox::job::Launch,
+            _: Option<u32>,
+        ) -> Result<(), splinter_sandbox::job::JobError> {
+            unreachable!("not stopped")
+        }
+    }
+
+    #[test]
+    fn brain_ranks_on_the_allocation_stage_the_store_and_nothing_else_does() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::at(&splinter_store::StateRoot::new(dir.path()));
+        let clock = splinter_core::clock::SystemClock;
+        let brain = JobSpec::single(vec!["/b/brain".into(), "qwen3".into(), "lora_train".into()]);
+        let other = JobSpec::single(vec!["/usr/bin/python3".into(), "train.py".into()]);
+        let staged = |launcher: &dyn JobLauncher, spec: &JobSpec| {
+            Jobs::new(&workspace, &clock, launcher, "/jobs".into(), "me".into())
+                .with_model_staging("/scratch/local/models".into(), "/shared/models".into())
+                .staged(spec)
+                .command
+        };
+        let step = Named("slurm-step");
+        assert_eq!(
+            staged(&step, &brain),
+            [
+                "/b/brain",
+                "--stage-models",
+                "/scratch/local/models",
+                "--stage-from",
+                "/shared/models",
+                "qwen3",
+                "lora_train"
+            ]
+        );
+        assert_eq!(staged(&step, &other), other.command, "not brain's to stage");
+        assert_eq!(
+            staged(&Named("local"), &brain),
+            brain.command,
+            "a job on this machine reads the store as it is"
+        );
     }
 }

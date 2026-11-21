@@ -114,13 +114,17 @@ impl Splinter {
     #[must_use]
     pub fn jobs(&self) -> Jobs<'_> {
         let config = self.runtime.config();
-        Jobs::new(
+        let jobs = Jobs::new(
             self.runtime.workspace(),
             self.runtime.clock(),
             self.jobs_launcher.as_ref(),
             config.jobs.attempt_root(&config.state_root),
             config.jobs.owner.clone(),
-        )
+        );
+        match &config.cluster.stage_models {
+            Some(dir) => jobs.with_model_staging(dir.clone(), config.model_store.clone()),
+            None => jobs,
+        }
     }
 
     /// The context of one command: its own pin of each policy alias on the

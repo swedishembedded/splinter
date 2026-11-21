@@ -91,6 +91,11 @@ pub struct FleetSettings {
     /// default the fleet makes a certificate authority of its own, serves
     /// TLS under it and this process's model clients trust it.
     pub insecure_plaintext: bool,
+    /// A node-local directory each server stages the model store's entries
+    /// in (brain's `--stage-models`): the first process on a node copies an
+    /// entry there, verified, and the node's others read the copy instead of
+    /// the shared filesystem. `None` reads the shared store.
+    pub stage_models: Option<PathBuf>,
 }
 
 /// The directory, under a service's state, adapters are served from.
@@ -298,6 +303,7 @@ impl ManagedBrain {
                 gpus: settings.gpus_per_node,
                 key_file: &key_file,
                 tls: tls.as_ref().map(|(c, k)| (c.as_path(), k.as_path())),
+                stage: settings.stage_models.as_deref(),
             });
             let launch = service.launch(&node_work, adapters, artifacts, Some(&log), host);
             let started = spawn_service(&launch).map_err(|failure| {

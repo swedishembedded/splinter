@@ -21,6 +21,7 @@ base_port = 8800                             # card N serves on base_port + N
 # nodes = "n[442,445]"                       # the allocation's nodes to use (default: every one)
 # exec_prefix = "scripts/cluster/apptainer-step --image IMAGE --bind /nobackup -- scripts/cluster/rank-env --env ENV.sh --"
 # step_args = ["--mem=128G"]
+# stage_models = "/scratch/local/models"     # node-local disk each node's brain copies the base to once (bind it in the image)
 # host = "10.150.4.178"                      # bind this node's address, not the loopback, so agents on
 #                                            # other nodes of an allocation reach the servers
 key_file = "~/keys/brain"

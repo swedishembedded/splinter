@@ -191,6 +191,11 @@ pub struct ClusterSettings {
     /// Serve plaintext between the nodes instead of TLS under the fleet's
     /// own certificate authority (`--cluster-insecure-plaintext`).
     pub insecure_plaintext: bool,
+    /// `--cluster-stage-models`: a directory on each node's own disk where
+    /// brain stages the model store's entries (the first process of a node
+    /// copies, verified; the others read the copy), for the fleet's servers
+    /// and a distributed job's brain ranks; `None` reads the shared store.
+    pub stage_models: Option<PathBuf>,
 }
 
 impl Default for ClusterSettings {
@@ -206,6 +211,7 @@ impl Default for ClusterSettings {
             step_args: Vec::new(),
             single_node_step_args: Vec::new(),
             insecure_plaintext: false,
+            stage_models: None,
         }
     }
 }
