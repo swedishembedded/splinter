@@ -1,0 +1,282 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for choosing the next training
+# experiment from the evidence already paid for, for its clients. If your team
+# needs expertise in planning model-improvement campaigns you can procure our
+# services by sending an email to info@swedishembedded.com.
+#
+# The problem state of the experience-to-competence programme on 2026-11-21:
+# five diagnosed problems, the candidate interventions against each, the prior
+# belief of each with why, and the evidence links. The verdicts already
+# recorded are in verdicts.toml; `splinter campaign problems FILE add` seeds a
+# campaign's state with this document.
+
+schema = "splinter.problem-state/1"
+
+[parameters]
+belief_up = 0.15
+belief_down = 0.20
+alpha = 0.05
+engineering = ["practice.jobs", "practice.harbor"]
+
+[parameters.targets]
+"pass@1" = 0.05
+"open-book-pass@1" = 0.06
+"train-task-coverage" = 0.10
+
+# ---------------------------------------------------------------------------
+
+[[problems]]
+id = "overthink"
+statement = "Students distilled from a thinking teacher over-think under the 900 s wall-clock agent budget: the training fit turns into timeouts on the exam families."
+metric = "pass@1"
+evidence = [
+    { ref = "knowledge:202", note = "v1 students timed out in 77-84% of exam trials against the base's 21% at the same load" },
+    { ref = "knowledge:203", note = "teacher traces for a small student come from non-thinking mode with concise rationales" },
+    { ref = "result:item25-E1b", note = "students took 10.7 model turns per trial against the base's 6.5; one turn reasoned 36k characters with no action" },
+]
+
+[[problems.candidates]]
+id = "overthink.concise-traces"
+intervention = "concise-traces"
+statement = "Train and examine in the concise trace mode: thinking off, a one- or two-sentence rationale before each tool call."
+variable = "practice.profile"
+belief = 0.55
+prior = "the mechanism is measured (v2 records average 1,474 tokens against v1's 3,140; text per action 14.7 tokens against 392.4; no timeout in any concise harvest); its exam effect is not"
+evidence = [
+    { ref = "ledger:experience-to-competence#item-25-v2", note = "v2 as trained: 420 concise 27B trajectories" },
+    { ref = "result:item24b-harvests", note = "concise harvests 168 x 15 and 168 x 4 per generation had no timeouts" },
+    { ref = "ledger:experience-to-competence#e2a", note = "E2a and E2b measure it; not read on 2026-11-21" },
+]
+
+[[problems.candidates]]
+id = "overthink.drop-unfinished"
+intervention = "curation"
+statement = "Drop the training records the teacher's own agent limit stopped before a final answer."
+variable = "curate.drop_unfinished"
+belief = 0.4
+prior = "106 of v1's 576 records were cut by the limit and teach acting without concluding; v2 drops them together with the mode change, so its effect is not separated"
+evidence = [
+    { ref = "knowledge:202", note = "106 of 576 v1 records were stopped by the agent limit" },
+]
+
+[[problems.candidates]]
+id = "overthink.exam-thinking-budget"
+intervention = "serving"
+statement = "Examine every arm under an equal per-turn thinking budget (brain's thinking_budget, 2,048 tokens)."
+variable = "examine.agent.thinking_budget"
+belief = 0.3
+prior = "pre-registered as E1c and replaced by the concise mode before any trial; it bounds the symptom at exam time, not what the student learned"
+evidence = [
+    { ref = "ledger:experience-to-competence#item-25-e1c", note = "E1c pre-registered 09:15, superseded by the concise trace rule at 10:12" },
+]
+
+# ---------------------------------------------------------------------------
+
+[[problems]]
+id = "kb-unused"
+statement = "The 4B policy does not consult a mounted knowledge base: it opens the collection in a few percent of trials and almost never a page of the task's domain."
+metric = "open-book-pass@1"
+evidence = [
+    { ref = "knowledge:191", note = "A2s1 touched /knowledge in 6% of 382 trials and opened no domain page" },
+    { ref = "ledger:experience-to-competence#item-21", note = "S0 leakage gate passed; S1 STOP; S1b inconclusive; S1c running" },
+]
+
+[[problems.candidates]]
+id = "kb-unused.mount-instruction"
+intervention = "knowledge-mount"
+statement = "Mount the collection and add the grounding instruction to the system prompt."
+variable = "practice.profile"
+belief = 0.5
+prior = "uninformed before S1"
+evidence = [
+    { ref = "dataset:swedishembedded/knowledge@v0.2", note = "the mounted collection, digest sha256:262ff959..." },
+]
+
+[[problems.candidates]]
+id = "kb-unused.page-preload"
+intervention = "knowledge-mount"
+statement = "Preload the task domain's pages into the system prompt instead of relying on the policy to open them."
+variable = "practice.profile"
+belief = 0.5
+prior = "separates 'does not look' from 'cannot use', which S1 could not"
+evidence = [
+    { ref = "commit:bench-62da1dbb", note = "[sven].knowledge_preload" },
+]
+
+[[problems.candidates]]
+id = "kb-unused.index-preload"
+intervention = "knowledge-mount"
+statement = "Preload only the collection's index.md."
+variable = "practice.profile"
+belief = 0.4
+prior = "a weaker form of the page preload: the policy still has to open a page"
+
+[[problems.candidates]]
+id = "kb-unused.user-wording"
+intervention = "knowledge-mount"
+statement = "State the grounding instruction conditionally, in the user's wording."
+variable = "practice.profile"
+belief = 0.4
+prior = "a wording change; S1 showed the policy's habit wins over a system-prompt line"
+
+[[problems.candidates]]
+id = "kb-unused.open-book-training"
+intervention = "knowledge-mount"
+statement = "Train on verified open-book trajectories (S2's views), so reading the collection becomes a habit."
+variable = "curate.view"
+belief = 0.4
+prior = "the plan's S2; untried, and it needs trajectories that read and passed, which S1 found almost none of"
+evidence = [
+    { ref = "ledger:experience-to-competence#item-21", note = "S2 generation 1 plan" },
+]
+
+# ---------------------------------------------------------------------------
+
+[[problems]]
+id = "ratio-spikes"
+statement = "On-policy RL rounds on real rollouts spiked to importance ratios in the thousands on start-of-run proxy tokens (scrubbed and context-reconstructed actions) and undid the round."
+metric = "pass@1"
+status = "resolved"
+attempts = 2
+evidence = [
+    { ref = "knowledge:188", note = "rl1 held-out -0.229 [-0.294, -0.159] against A2s1; every spike on a proxy token" },
+    { ref = "result:item19-rl1", note = "unguarded round 1 (attempt 1)" },
+    { ref = "result:item19-rl1g", note = "guarded rerun (attempt 2): held-out -0.031 [-0.081, +0.018]" },
+    { ref = "commit:b879d37d2", note = "dataset build --sampled-only" },
+]
+
+[[problems.candidates]]
+id = "ratio-spikes.sampled-only"
+intervention = "curation"
+statement = "Leave every record with a proxy action out of the policy-gradient view (dataset build --sampled-only) and train with recorded behaviour."
+variable = "curate.sampled_only"
+belief = 0.5
+prior = "uninformed before the 24-step diagnostic"
+
+[[problems.candidates]]
+id = "ratio-spikes.step-guard"
+intervention = "rl-round"
+statement = "Skip a step whose KL or gradient norm exceeds a bound (train --max-step-kl, --max-step-grad-norm)."
+variable = "train.max_step_kl"
+belief = 0.6
+prior = "the guarded rerun removed most of the damage on one seed (held-out -0.229 to -0.031) but skipped 13 steps"
+evidence = [
+    { ref = "knowledge:188", note = "rl1g, single seed" },
+]
+
+[[problems.candidates]]
+id = "ratio-spikes.dual-clip"
+intervention = "rl-round"
+statement = "Bound a negative advantage's term by dual-clip PPO (c = 3)."
+variable = "train.dual_clip"
+belief = 0.5
+prior = "specified and gradchecked on CPU; not measured on a GPU training run"
+evidence = [
+    { ref = "commit:brain-bcd17ba8b", note = "dual clip in brain's shared policy-gradient term" },
+    { ref = "commit:db33cd729", note = "splinter train --dual-clip" },
+]
+
+# ---------------------------------------------------------------------------
+
+[[problems]]
+id = "distill-transfer"
+statement = "Distilling the 27B teacher into Qwen3-4B raises the training fit but its transfer to the vim exam families is unproven."
+metric = "pass@1"
+evidence = [
+    { ref = "knowledge:199", note = "the 27B solved 163 of 168 vim practice tasks" },
+    { ref = "result:item25-E1b-training-fit", note = "train pass@1 0.265 to 0.497 / 0.446; validation +0.25 [+0.09, +0.42]" },
+]
+
+[[problems.candidates]]
+id = "distill-transfer.v1-thinking"
+intervention = "teacher-distillation"
+statement = "SFT on 576 verified 27B trajectories recorded in thinking mode (v1)."
+variable = "curate.dataset"
+belief = 0.5
+prior = "uninformed before E1"
+evidence = [
+    { ref = "dataset:swedishembedded/vim-headless-mastery-sft@v1", note = "576 records" },
+]
+
+[[problems.candidates]]
+id = "distill-transfer.v2-concise"
+intervention = "teacher-distillation"
+statement = "SFT on 420 concise non-thinking 27B trajectories, up to 4 per task with the fewest vim calls (v2)."
+variable = "curate.dataset"
+belief = 0.55
+prior = "removes v1's diagnosed failure (knowledge 202); exam pending in E2b"
+evidence = [
+    { ref = "dataset:swedishembedded/vim-headless-mastery-sft@v2", note = "420 records, 377 train and 43 held-out" },
+    { ref = "ledger:experience-to-competence#item-25-e2b", note = "pre-registered 12:40" },
+]
+
+[[problems.candidates]]
+id = "distill-transfer.v2-star"
+intervention = "star"
+statement = "Add the 27B's verified rationalisations of the tasks it never solved to v2 (v2.1)."
+variable = "curate.dataset"
+belief = 0.4
+prior = "waits on v2's exam; the corrected answer check rejects all 30 of the 55 kept 27B attempts lane VSFT's script rejected, plus 2"
+evidence = [
+    { ref = "knowledge:201", note = "the answer check, corrected" },
+]
+
+# ---------------------------------------------------------------------------
+
+[[problems]]
+id = "4b-data"
+statement = "The 4B's own verified data is small: 85 concise records from 168 x 5 attempts, 62 of the 168 train tasks solved."
+metric = "train-task-coverage"
+evidence = [
+    { ref = "knowledge:198", note = "the base passes a quarter of the vim practice tasks" },
+    { ref = "result:item24b-gen0", note = "168 x 15 concise: pass@1 0.197, 62 tasks solved" },
+]
+
+[[problems.candidates]]
+id = "4b-data.expert-iteration"
+intervention = "expert-iteration"
+statement = "Train generation n on the cumulative verified passes of generations 0 to n-1 and harvest again."
+variable = "rollout.attempts"
+belief = 0.5
+prior = "uninformed before item 24b"
+
+[[problems.candidates]]
+id = "4b-data.more-samples"
+intervention = "curation"
+statement = "Sample more attempts per train task (168 x 15 instead of x 5)."
+variable = "rollout.attempts"
+belief = 0.5
+prior = "the x 15 harvest gave 497 passes against 85 records at x 5, but its coverage gain was not measured separately"
+
+[[problems.candidates]]
+id = "4b-data.star-hinted"
+intervention = "star"
+statement = "Rationalise failed train tasks with the reference solution as a hint, keeping attempts that pass item 24's four filters."
+variable = "curate.rationalise"
+belief = 0.5
+prior = "uninformed before the feasibility gates"
+evidence = [
+    { ref = "knowledge:200", note = "pre-registered leak and observation filters reject nearly all unhinted vim passes" },
+]
+
+[[problems.candidates]]
+id = "4b-data.star-concise"
+intervention = "star"
+statement = "Rationalise in the concise mode with the content-only filter (item 24c)."
+variable = "curate.rationalise"
+belief = 0.2
+prior = "gate c (exploratory, not pre-registered) first kept 81 of 96; with the answer check fixed it keeps 5 of 96 (5.2%), under the 10% bar, so item 24c's basis is gone"
+evidence = [
+    { ref = "knowledge:201", note = "gate c, corrected to 5 of 96" },
+    { ref = "commit:fc0ce7443", note = "the answer check finds hint commands written before a reply showed them" },
+]
+
+[[problems.candidates]]
+id = "4b-data.rewrite-pass"
+intervention = "star"
+statement = "Rewrite each kept rationalisation to present the reasoning as the model's own (item 24d)."
+variable = "curate.rewrite"
+belief = 0.3
+prior = "planned, not pre-registered; the rewrite may degrade the reasoning it rewrites"
