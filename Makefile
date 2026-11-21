@@ -106,6 +106,15 @@ test/families:
 test/methods:
 	bash scripts/methods/table.sh "$(CARGO)" "$(PROFILE)" "$(BRAIN_BIN)"
 
+## test/conformance - the per-PR validation tier: every per-PR row of the validation map (docs/contributing/validation.md) run once and written to target/conformance/evidence.jsonl (no model, no GPU, seconds to minutes)
+test/conformance:
+	python3 -I scripts/conformance/evidence.py --cargo "$(CARGO)"
+
+## test/conformance/integration - the integration validation tier: the map's integration rows, then each defect of scripts/conformance/mutants.tsv applied to the source in turn with the kill rate printed; fails when a row fails or a mutant survives (no model, no GPU, minutes)
+test/conformance/integration:
+	python3 -I scripts/conformance/evidence.py --cargo "$(CARGO)" --tier integration --out target/conformance/evidence-integration.jsonl
+	python3 -I scripts/conformance/mutants.py --cargo "$(CARGO)"
+
 ## test/e2e - lists the end-to-end targets, which need built brain and sven binaries; runs nothing
 test/e2e:
 	@bash scripts/make-help.sh test/e2e

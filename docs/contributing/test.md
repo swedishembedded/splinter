@@ -8,6 +8,8 @@ make test                          # every test; no model, GPU or network needed
 make test/crate/splinter-pipelines # one package; `make test/crate` lists them
 make test/families                 # the repository task families: baselines, conventions, fault detection
 make test/methods                  # one smoke per learning method on a toy model, with held-out scores before and after
+make test/conformance              # every algorithm against its spec, with an evidence file; see validation
+make test/conformance/integration  # the slower rows; every deliberate defect of the mutant table must fail the suite
 make test/e2e                      # lists the end-to-end targets
 ```
 
@@ -20,7 +22,9 @@ make test/e2e                      # lists the end-to-end targets
   trained candidate, the release gate, and the candidate served and driven by sven. Its spec, run against fakes, is
   `make test/e2e/turn/spec`.
 
-Write the test from the specification first and see it fail, then implement. Tests assert observable behavior at a real
+Write the test from the specification first and see it fail, then implement. An algorithm's test holds it to an
+independent reference, never to a copy of its own arithmetic; [validation](validation.md) maps each algorithm to the
+test that proves it and to the defects that test is known to catch. Tests assert observable behavior at a real
 boundary: a test that returns early reports a pass, and a gate rejects a test that skips itself silently. The tests that
 document a user-facing walk-through run the real binary against an empty home, so the documentation cannot drift from the
 program; see [documentation](documentation.md).

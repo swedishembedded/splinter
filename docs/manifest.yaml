@@ -114,5 +114,6 @@ navigation:
     pages:
       - docs/contributing/build.md
       - docs/contributing/test.md
+      - docs/contributing/validation.md
       - docs/contributing/gates.md
       - docs/contributing/documentation.md

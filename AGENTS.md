@@ -75,6 +75,7 @@ It names no other project: describe an orchestrator or host generically.
 | add, rename or document a make target | `.agents/rules/make-targets.md` |
 | write or change a paper, or change a finding one states | `.agents/rules/papers.md` |
 | design a gate, a verifier or an exam | `.agents/knowledge/index.md` |
+| change an algorithm (statistics, rewards, masks, splits, gates) or its test | `docs/contributing/validation.md` |
 | change a user-visible command, setting or page | `docs/contributing/documentation.md` |
 | pick up or change a workstream | its ledger in `.agents/roadmap/index.md` |
 
