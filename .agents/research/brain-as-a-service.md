@@ -69,9 +69,12 @@ What is not done:
   endpoint is the only path and those callers ask through it.
 - Phase 2 (training) is built, below. Without endpoints training still loads the base in this
   process.
-- Phase 3: the endpoint registry and Slurm launch of workers. Endpoints are named on the command
-  line, a conversation is pinned to one by hash (not by the replica holding its prefix), and the
-  key travels as one shared file.
+- Phase 3: the endpoint registry is still the command line (or the fleet's `endpoints` file), and a
+  conversation is pinned to one endpoint by hash (not by the replica holding its prefix). Slurm launch
+  of brain workers is built (2026-11-21): inside an allocation that spans nodes, Splinter starts one
+  `brain serve` per usable node as a job step serving every card of its node, one shared key file,
+  ready markers and connection records on the shared filesystem (`splinter_model::ManagedBrain::
+  start_fleet`, `.agents/roadmap/distributed-jobs.md`).
 - A closed-book solve (no workspace) is pinned by model, not by attempt: only workspace attempts
   carry a per-attempt seed to hash.
 - Per-response thinking budgets are not sent on the served path of a local reference.

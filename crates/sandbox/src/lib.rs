@@ -15,6 +15,8 @@
 //! * [`job`] - work that outlives the process that submitted it: a launcher
 //!   seam, detached workers in their own sessions, and a launch directory that
 //!   is written once so a retried submission cannot start them twice.
+//! * [`step`] - a program started on nodes of the Slurm allocation this
+//!   process runs inside, as one job step, and stopped with nothing left.
 //! * [`landlock`] - filesystem confinement of a child process by the kernel.
 //! * [`limits`] - what one code call may use, with its defaults.
 //! * [`runtime`] - the registry of runtimes (`python3`, `lua`, `node`,
@@ -54,6 +56,7 @@ pub mod process;
 pub mod runtime;
 pub mod scratch;
 pub mod seccomp;
+pub mod step;
 pub mod workspace;
 pub mod workspace_host;
 

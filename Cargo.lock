@@ -5130,6 +5130,7 @@ dependencies = [
  "splinter-data",
  "splinter-eval",
  "splinter-model",
+ "splinter-sandbox",
  "splinter-store",
  "sven-sdk",
  "tempfile",

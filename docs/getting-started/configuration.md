@@ -59,6 +59,47 @@ splinter doctor --cluster-nodes n442
 | `--slurm-step-arg ARG` | An argument every step passes to `srun` (`--mem=64G`); repeats. |
 | `--slurm-single-node-step-arg ARG` | An argument a single-node step passes besides; on an HPE Slingshot fabric `--network=single_node_vni`, without which a single-node step has no fabric access; repeats. |
 
+### A brain server on every node
+
+When the allocation spans nodes (or `--cluster-nodes` names some) and no
+`--brain-endpoint` is given, Splinter starts one `brain serve` per usable node
+as a job step (`srun --overlap --nodelist=<node> --nodes=1 --ntasks=1
+--gpus-per-node=<n> ...`), each serving every card of its node as in-process
+replicas (`--device gpu0,...,gpu<n-1>` unless `--device` names others), bound
+to the node's address on a port its system picks. Every server answers to one
+key, written owner-only into the fleet's directory under the state root, with
+the ready markers, the connection records each server publishes, a list of
+the endpoints (`endpoints`, one URL per line, for other clients while the
+fleet runs) and each node's log (`<node>.log`). The adapter directory and the
+artifact store under the state root are shared by every server, so the state
+root and the model store must be on a filesystem every node sees. Splinter
+waits until every server is ready (a server that does not start fails the
+run, naming its node), asks as many attempts at once as the servers decode
+together, and stops every step on exit: `SIGTERM` to `srun`, then `scancel`
+of the step if it has not ended.
+
+The servers speak plain HTTP on the cluster's network (`brain serve
+--insecure-plaintext`): the key travels in the clear between the nodes of the
+allocation. Use `--brain-endpoint` with servers behind TLS where that network
+is not trusted.
+
+A step starts on the node's host. When Splinter runs in a container, the
+server must enter it again there; for example, with Apptainer, a wrapper
+named by `--cluster-exec-prefix`:
+
+```bash
+#!/bin/sh
+# node-exec.sh: the workstation image, with the CUDA user space, on a node's host
+unset APPTAINER_BIND SINGULARITY_BIND LD_LIBRARY_PATH
+exec apptainer exec --nv -B /nobackup "$HOME/images/workstation.sif" \
+  bash -c '. "$HOME/cuda-env.sh" && exec "$@"' node-exec "$@"
+```
+
+```bash
+splinter doctor --cluster-nodes n442 --cluster-exec-prefix ~/bin/node-exec.sh \
+    --slurm-step-arg=--mem=64G --backend cuda
+```
+
 ## Machine and models
 
 | Flag | Meaning |

@@ -91,6 +91,7 @@ mod gpu {
 
     fn card(index: u32, free_gib: u64, measured: bool) -> GpuCard {
         GpuCard {
+            endpoint: 0,
             index,
             total_bytes: 24 * GIB,
             free_bytes: free_gib * GIB,
@@ -111,6 +112,21 @@ mod gpu {
         let check = gpu_fit(&[card(0, 2, true), card(1, 20, true)], 4 * GIB);
         assert_eq!(check.verdict, Verdict::Ok, "{check:?}");
         assert!(check.detail.contains("gpu1"), "{}", check.detail);
+    }
+
+    #[test]
+    fn the_cards_of_every_endpoint_are_counted_and_named_by_it() {
+        let elsewhere = GpuCard {
+            endpoint: 1,
+            ..card(0, 20, true)
+        };
+        let check = gpu_fit(&[card(0, 2, true), elsewhere], 4 * GIB);
+        assert_eq!(check.verdict, Verdict::Ok, "{check:?}");
+        assert!(
+            check.detail.contains("fit on endpoint 1 gpu0"),
+            "{}",
+            check.detail
+        );
     }
 
     #[test]

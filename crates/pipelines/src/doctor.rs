@@ -346,10 +346,19 @@ pub fn gpu_fit(cards: &[GpuCard], weights_bytes: u64) -> Check {
             "check the brain server's device list (GET /v1/devices)",
         );
     }
+    // With a server on every node, a card is named by its endpoint too.
+    let several = cards.iter().any(|card| card.endpoint != cards[0].endpoint);
+    let label = |card: &GpuCard| {
+        if several {
+            format!("endpoint {} gpu{}", card.endpoint, card.index)
+        } else {
+            format!("gpu{}", card.index)
+        }
+    };
     let listing = cards
         .iter()
         .filter(|card| card.measured)
-        .map(|card| format!("gpu{} {} free", card.index, gib(card.free_bytes)))
+        .map(|card| format!("{} {} free", label(card), gib(card.free_bytes)))
         .collect::<Vec<_>>()
         .join(", ");
     match cards
@@ -360,9 +369,9 @@ pub fn gpu_fit(cards: &[GpuCard], weights_bytes: u64) -> Check {
         Some(best) => Check::ok(
             name,
             format!(
-                "the policy's weights ({}) fit on gpu{} ({listing}); training needs more for activations",
+                "the policy's weights ({}) fit on {} ({listing}); training needs more for activations",
                 gib(weights_bytes),
-                best.index
+                label(best)
             ),
         ),
         None => Check::problem(

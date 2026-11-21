@@ -29,6 +29,9 @@ use crate::digest::{digest_of, Digest};
 pub const RANK_PLACEHOLDER: &str = "{rank}";
 /// The world-size placeholder a job's command may carry.
 pub const WORLD_PLACEHOLDER: &str = "{world}";
+/// The placeholder for a worker's place among the workers of its machine,
+/// the card index a one-card-per-rank trainer takes.
+pub const LOCAL_RANK_PLACEHOLDER: &str = "{local_rank}";
 
 /// The option a distributed job's command carries with the plan file's path.
 pub const JOB_PLAN_FLAG: &str = "--job-plan";
@@ -274,11 +277,13 @@ impl JobSpec {
     #[must_use]
     pub fn command_for(&self, rank: u32) -> Vec<String> {
         let world = self.workers.world_size();
+        let local = rank % self.workers.ranks_per_node.max(1);
         self.command
             .iter()
             .map(|part| {
                 part.replace(RANK_PLACEHOLDER, &rank.to_string())
                     .replace(WORLD_PLACEHOLDER, &world.to_string())
+                    .replace(LOCAL_RANK_PLACEHOLDER, &local.to_string())
             })
             .collect()
     }
@@ -432,6 +437,16 @@ mod tests {
         let mut job = spec();
         job.command.push("--world={world}".into());
         assert_eq!(job.command_for(1).last().unwrap(), "--world=1");
+        let mut job = spec();
+        job.workers.ranks_per_node = 4;
+        job.workers.nodes = 2;
+        job.command.push("gpu{local_rank}".into());
+        assert_eq!(job.command_for(1).last().unwrap(), "gpu1");
+        assert_eq!(
+            job.command_for(6).last().unwrap(),
+            "gpu2",
+            "rank 6 is the third of node 2"
+        );
     }
 
     #[test]

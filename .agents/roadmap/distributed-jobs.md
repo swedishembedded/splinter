@@ -146,6 +146,25 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       each and uses n442. Tests: `crates/orchestrator/src/cluster.rs`,
       `crates/pipelines/tests/it/doctor.rs` (`cluster`), the device-flag and
       CLI flag tests.
+- [x] **A brain server on every node of the allocation (2026-11-21).**
+      With an allocation that spans nodes (or `--cluster-nodes`) and no
+      `--brain-endpoint`, `orchestrator::brain_service::start_brain` (the one
+      start path of the runtime and of the SDK's device flags) starts
+      `ManagedBrain::start_fleet`: one `brain serve` per node as an `srun
+      --overlap` step (`splinter_sandbox::step`: nodes, tasks and GPUs
+      stated, the inherited `SLURM_GPUS` dropped, the step id recorded, the
+      exec prefix applied), every card of the node as replicas, bound to the
+      node's address on a system-picked port read back from the connection
+      record, one owner-only key, shared adapters and artifact store, an
+      `endpoints` file; attempt concurrency is the fleet's decode slots;
+      teardown is `SIGTERM` to `srun`, then `scancel` of the step after a
+      grace; a node that fails is named and the others are stopped.
+      `doctor` lists the cards of every endpoint. Measured 2026-11-21 in job
+      5600435 on n442 (brain bcd67e5ad, `doctor --cluster-nodes n442`): the
+      step started, reported ready and listed n442's four cards from
+      10.150.4.178 in 7.9 s wall from command start to exit, and left no
+      process on n442. Tests: `crates/model/tests/service.rs` (`fleet`),
+      `crates/sandbox/src/step.rs`, the doctor card tests.
 
 ## Decisions
 

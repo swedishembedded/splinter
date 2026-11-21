@@ -68,8 +68,8 @@ pub use crate::splinter::{Progress, Splinter, SplinterBuilder};
 
 // What a command works with.
 pub use splinter_orchestrator::{
-    answers, cluster, concurrency, config, context, generation, ids, interrupt, model_ref,
-    pipeline, releases, roles, runs,
+    answers, brain_service, cluster, concurrency, config, context, generation, ids, interrupt,
+    model_ref, pipeline, releases, roles, runs,
 };
 pub use splinter_orchestrator::{
     set_brain_defaults, BrainDefaults, Config, Context, OrchestratorError as Error, Runtime,

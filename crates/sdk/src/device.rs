@@ -20,7 +20,7 @@
 use std::path::PathBuf;
 
 use crate::cluster::{ClusterMode, ClusterSettings};
-use crate::model::{BrainConnection, BrainEndpoints, ManagedBrain, PolicyError, ServiceSettings};
+use crate::model::{BrainConnection, BrainEndpoints, PolicyError};
 use crate::Config;
 
 /// `--device`, `--backend`, `--vram-budget` and the flags that name the brain
@@ -244,37 +244,14 @@ impl DeviceFlags {
     }
 
     /// The brain a program that asks a model directly requests it from: the
-    /// endpoints `config` names, else a server started for the program's
-    /// lifetime ([`Runtime::brain`](crate::Runtime::brain) does the same for
+    /// endpoints `config` names, else servers started for the program's
+    /// lifetime (one on every usable node of an allocation that spans nodes) ([`Runtime::brain`](crate::Runtime::brain) does the same for
     /// a program that runs on a runtime).
     ///
     /// # Errors
     /// No endpoint is named and no server can be started.
     pub fn connection(&self, config: &Config) -> Result<BrainConnection, PolicyError> {
-        if let Some(endpoints) = &config.brain {
-            return Ok(BrainConnection::Given(endpoints.clone()));
-        }
-        let binary = config
-            .brain_binary
-            .clone()
-            .ok_or_else(|| PolicyError::Endpoint {
-                url: String::new(),
-                reason: "name a brain server with --brain-endpoint, or the `brain` binary a \
-                         server is started from with --brain-bin"
-                    .into(),
-            })?;
-        let settings = ServiceSettings {
-            binary,
-            models: config.model_store.clone(),
-            state: config.state_root.brain_service(),
-            device: config.brain_device.clone(),
-            backend: config.brain_backend.clone(),
-            max_batch: config.brain_max_batch,
-            serve_adapters: true,
-            adapter_base: Some(config.policy_base.clone()).filter(|base| base.exists()),
-        };
-        ManagedBrain::start(&settings, &crate::agent::CancelToken::default())
-            .map(BrainConnection::Owned)
+        crate::brain_service::start_brain(config, &crate::agent::CancelToken::default())
     }
 }
 

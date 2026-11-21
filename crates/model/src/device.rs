@@ -39,7 +39,11 @@ pub fn vram_budget_gib() -> Option<f64> {
 /// One GPU's memory right now, as the server accounts it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct GpuCard {
-    /// The card's index, the `i` of `--device gpu<i>`.
+    /// The endpoint whose server schedules it, by its place in
+    /// [`BrainEndpoints::urls`]: with a server on every node of an
+    /// allocation, the node.
+    pub endpoint: usize,
+    /// The card's index on its server, the `i` of `--device gpu<i>`.
     pub index: u32,
     /// Its memory in all.
     pub total_bytes: u64,
@@ -50,14 +54,23 @@ pub struct GpuCard {
     pub measured: bool,
 }
 
-/// The cards the first endpoint of `brain` schedules on (`GET /v1/devices`),
-/// in index order; the CPU and NPUs are left out.
+/// The cards every endpoint of `brain` schedules on (`GET /v1/devices`), in
+/// endpoint then index order; the CPU and NPUs are left out.
 ///
 /// # Errors
-/// The endpoint could not be reached or answered no device list.
+/// An endpoint could not be reached or answered no device list.
 pub fn devices(brain: &BrainEndpoints) -> Result<Vec<GpuCard>, PolicyError> {
-    let url = brain.urls().first().cloned().unwrap_or_default();
-    let list = brain.get(0, "devices")?;
+    let mut cards = Vec::new();
+    for endpoint in 0..brain.urls().len() {
+        cards.extend(endpoint_devices(brain, endpoint)?);
+    }
+    Ok(cards)
+}
+
+/// The cards the endpoint at `endpoint` schedules on, in index order.
+fn endpoint_devices(brain: &BrainEndpoints, endpoint: usize) -> Result<Vec<GpuCard>, PolicyError> {
+    let url = brain.urls()[endpoint].clone();
+    let list = brain.get(endpoint, "devices")?;
     let entries = list["data"]
         .as_array()
         .ok_or_else(|| PolicyError::Endpoint {
@@ -70,6 +83,7 @@ pub fn devices(brain: &BrainEndpoints) -> Result<Vec<GpuCard>, PolicyError> {
             let index = entry["id"].as_str()?.strip_prefix("gpu")?.parse().ok()?;
             let memory = &entry["memory"];
             Some(GpuCard {
+                endpoint,
                 index,
                 total_bytes: memory["total_bytes"].as_u64()?,
                 free_bytes: memory["free_bytes"].as_u64()?,

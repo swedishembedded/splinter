@@ -25,6 +25,8 @@ use std::process::Command;
 
 use splinter_core::job::JobSpec;
 
+use crate::step::shell_word;
+
 use super::{claim_attempt, write_launch, JobError, JobLauncher, JobOutcome, Launch, Observation};
 
 /// The batch script written into the launch directory.
@@ -359,44 +361,6 @@ fn wall_clock(seconds: u64) -> String {
     }
 }
 
-/// One command word for the batch script's shell.
-///
-/// The rank and world placeholders become the scheduler's own task variables,
-/// so one script gives every rank its own values. Every other character is
-/// quoted: the job's command is a program and its arguments, never a shell
-/// line, and must not gain one here.
-fn shell_word(argument: &str) -> String {
-    const RANK: &str = "{rank}";
-    const WORLD: &str = "{world}";
-    let mut word = String::new();
-    let mut rest = argument;
-    loop {
-        let rank = rest.find(RANK);
-        let world = rest.find(WORLD);
-        let (position, placeholder, expansion) = match (rank, world) {
-            (Some(rank), Some(world)) if world < rank => (world, WORLD, "${SLURM_NTASKS}"),
-            (Some(rank), _) => (rank, RANK, "${SLURM_PROCID}"),
-            (None, Some(world)) => (world, WORLD, "${SLURM_NTASKS}"),
-            (None, None) => {
-                word.push_str(&quote(rest));
-                return word;
-            }
-        };
-        word.push_str(&quote(&rest[..position]));
-        word.push_str(expansion);
-        rest = &rest[position + placeholder.len()..];
-    }
-}
-
-/// `text` as one single-quoted shell word, empty when there is nothing to
-/// quote so placeholders compose with their surroundings.
-fn quote(text: &str) -> String {
-    if text.is_empty() {
-        return String::new();
-    }
-    format!("'{}'", text.replace('\'', "'\\''"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,20 +370,6 @@ mod tests {
         assert_eq!(wall_clock(0), "00:00:00");
         assert_eq!(wall_clock(3_723), "01:02:03");
         assert_eq!(wall_clock(90_061), "1-01:01:01");
-    }
-
-    #[test]
-    fn placeholders_become_the_schedulers_task_variables() {
-        assert_eq!(shell_word("--rank={rank}"), "'--rank='${SLURM_PROCID}");
-        assert_eq!(shell_word("--world={world}"), "'--world='${SLURM_NTASKS}");
-        assert_eq!(shell_word("{rank}"), "${SLURM_PROCID}");
-        assert_eq!(shell_word("plain"), "'plain'");
-        assert_eq!(shell_word("two words"), "'two words'");
-        assert_eq!(shell_word("it's"), "'it'\\''s'");
-        assert_eq!(
-            shell_word("{rank}{world}"),
-            "${SLURM_PROCID}${SLURM_NTASKS}"
-        );
     }
 
     #[test]

@@ -257,7 +257,7 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     // Only an adapter is announced: a plain base prints no such line.
     let announced = !matches!(launch.offer, Offer::Nothing | Offer::Directory(_));
     let startup_line = wait_ready(
-        &mut running,
+        &mut running.0,
         &lines,
         &mut kept,
         &ready,
@@ -297,191 +297,11 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     })
 }
 
-/// What it takes to start a server that serves a whole model store, as the
-/// service every `local:` model of a run is requested from.
-pub struct ServiceLaunch<'a> {
-    /// The `brain` binary.
-    pub binary: &'a Path,
-    /// A scratch directory for the keys, the ready marker and the runtime
-    /// directory.
-    pub work: &'a Path,
-    /// Brain's model store: every base in it is served under the id the
-    /// store gives it.
-    pub models: &'a Path,
-    /// The directory adapters are offered in (`--serve-adapters`): one
-    /// written there is served as a model of its own, with no restart.
-    /// `None` serves none, for a store with no base an adapter can sit on
-    /// (brain refuses `--serve-adapters` then).
-    pub adapters: Option<&'a Path>,
-    /// The base those adapters sit on (`--checkpoint`); brain's choice when
-    /// `None`.
-    pub adapter_base: Option<&'a Path>,
-    /// The directory datasets and trained adapters move through
-    /// (`--artifact-store`), which also turns the training workload on.
-    pub artifacts: &'a Path,
-    /// The compute it may schedule, in brain's `--device` grammar; brain's
-    /// own choice when `None`.
-    pub device: Option<&'a str>,
-    /// How the hardware is driven (`--backend`); brain's choice when `None`.
-    pub backend: Option<&'a str>,
-    /// Sequences it decodes together (`--max-batch`);
-    /// [`DEFAULT_SERVE_SLOTS`] when `None`.
-    pub max_batch: Option<u32>,
-    /// How long the server may take to bind.
-    pub startup: Duration,
-    /// A file every line the server writes is appended to; only the last
-    /// lines are kept otherwise.
-    pub log: Option<&'a Path>,
-}
-
-/// A running service: the server, and how to reach it.
-pub struct Service {
-    /// The process, stopped when the service is dropped.
-    pub running: Running,
-    /// What it writes, line by line.
-    pub lines: Receiver<String>,
-    /// The last lines it wrote.
-    pub kept: Vec<String>,
-    /// Where it listens, `host:port`.
-    pub address: String,
-    /// The OpenAI surface's key.
-    pub key: String,
-    /// The sequences it was started to decode together.
-    pub slots: u32,
-}
-
-impl Service {
-    /// The OpenAI base URL clients request the service at.
-    #[must_use]
-    pub fn url(&self) -> String {
-        format!("http://{}/v1", self.address)
-    }
-
-    /// What the server last wrote, as one line of text.
-    pub fn recent_output(&mut self) -> String {
-        recent_output(&self.lines, &mut self.kept)
-    }
-}
-
-/// Makes the server `command` starts die with this process, as a Ctrl-C to
-/// the terminal ends both: a killed caller never leaves a server holding its
-/// card. The signal is SIGINT, so a training job saves its state as on a
-/// cancel. (Linux sends it when the thread that spawned the server ends;
-/// servers are started from a caller's main flow, not from a short-lived
-/// worker thread.)
-fn die_with_caller(command: &mut Command) {
-    use std::os::unix::process::CommandExt as _;
-    let caller = std::process::id();
-    // SAFETY: the closure makes only async-signal-safe calls (`prctl`,
-    // `getppid`) and touches no memory shared with the parent.
-    unsafe {
-        command.pre_exec(move || {
-            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGINT) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            // The caller died between the fork and the prctl.
-            if u32::try_from(libc::getppid()).ok() != Some(caller) {
-                return Err(std::io::Error::from_raw_os_error(libc::ESRCH));
-            }
-            Ok(())
-        });
-    }
-}
-
-/// Starts the service `launch` describes and waits until it is ready.
-pub fn start_service(launch: &ServiceLaunch<'_>, cancel: &CancelToken) -> Result<Service, Failure> {
-    let port = free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
-    let address = format!("127.0.0.1:{port}");
-    let keys = launch.work.join("keys.json");
-    let ready = launch.work.join("ready");
-    let slots = launch.max_batch.unwrap_or(DEFAULT_SERVE_SLOTS).max(1);
-    let mut command = Command::new(launch.binary);
-    if let Some(device) = launch.device {
-        command.args(["--device", device]);
-    }
-    if let Some(backend) = launch.backend {
-        command.args(["--backend", backend]);
-    }
-    if let Some(gib) = crate::device::vram_budget_gib() {
-        command.args(["--vram-budget", &gib.to_string()]);
-    }
-    command
-        .arg("serve")
-        .args(["--openai", &address])
-        .args(["--max-batch", &slots.to_string()])
-        .arg("--models-dir")
-        .arg(launch.models);
-    if let Some(adapters) = launch.adapters {
-        command
-            .arg("--serve-adapters")
-            .arg(adapters)
-            .args(["--adapter-targets", "all"]);
-        if let Some(base) = launch.adapter_base {
-            command.arg("--checkpoint").arg(base);
-        }
-    }
-    command
-        .arg("--training")
-        .arg("--artifact-store")
-        .arg(launch.artifacts)
-        .arg("--runtime-dir")
-        .arg(launch.work)
-        .arg("--api-keys-out")
-        .arg(&keys)
-        .arg("--ready-file")
-        .arg(&ready);
-    die_with_caller(&mut command);
-    let mut child = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            Failure::Unmeasured(format!("{} could not start: {e}", launch.binary.display()))
-        })?;
-    let log = match launch.log {
-        Some(path) => Some(
-            std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(path)
-                .map_err(|e| Failure::Unmeasured(format!("{}: {e}", path.display())))?,
-        ),
-        None => None,
-    };
-    let lines = forward_lines(&mut child, log);
-    let mut running = Running(child);
-    let mut kept: Vec<String> = Vec::new();
-    wait_ready(
-        &mut running,
-        &lines,
-        &mut kept,
-        &ready,
-        launch.startup,
-        cancel,
-        false,
-    )?;
-    let key = read_key(&keys).map_err(|why| {
-        Failure::Unmeasured(format!(
-            "{why}; it wrote: {}",
-            recent_output(&lines, &mut kept)
-        ))
-    })?;
-    Ok(Service {
-        running,
-        lines,
-        kept,
-        address,
-        key,
-        slots,
-    })
-}
-
 /// Waits until the server has created `ready` and, when `announced`, has
 /// named the adapter it serves; returns that line. A server that exits, a
 /// cancel and the deadline end the wait.
-fn wait_ready(
-    running: &mut Running,
+pub(crate) fn wait_ready(
+    child: &mut Child,
     lines: &Receiver<String>,
     kept: &mut Vec<String>,
     ready: &Path,
@@ -495,7 +315,7 @@ fn wait_ready(
         if cancel.is_cancelled() {
             return Err(Failure::Cancelled);
         }
-        if let Ok(Some(status)) = running.0.try_wait() {
+        if let Ok(Some(status)) = child.try_wait() {
             return Err(Failure::Unmeasured(format!(
                 "brain serve exited ({status}) before it served: {}",
                 recent_output(lines, kept)
@@ -543,7 +363,7 @@ pub fn recent_output(lines: &Receiver<String>, kept: &mut Vec<String>) -> String
 
 /// Every line the child writes, from stdout and stderr alike, each also
 /// appended to `log` when one is given.
-fn forward_lines(child: &mut Child, log: Option<std::fs::File>) -> Receiver<String> {
+pub(crate) fn forward_lines(child: &mut Child, log: Option<std::fs::File>) -> Receiver<String> {
     let (tx, rx) = channel();
     let log = log.map(|file| std::sync::Arc::new(std::sync::Mutex::new(file)));
     let spawn = |stream: Option<Box<dyn Read + Send>>| {
@@ -606,7 +426,7 @@ fn parse_adapter_line(line: &str) -> Option<(String, String)> {
 }
 
 /// The OpenAI surface's key from the `--api-keys-out` file.
-fn read_key(path: &PathBuf) -> Result<String, String> {
+pub(crate) fn read_key(path: &PathBuf) -> Result<String, String> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| format!("brain serve wrote no API keys to {}: {e}", path.display()))?;
     let keys: serde_json::Value =
@@ -618,7 +438,7 @@ fn read_key(path: &PathBuf) -> Result<String, String> {
 }
 
 /// A port nothing listens on now; the server binds it next.
-fn free_port() -> std::io::Result<u16> {
+pub(crate) fn free_port() -> std::io::Result<u16> {
     Ok(std::net::TcpListener::bind("127.0.0.1:0")?
         .local_addr()?
         .port())

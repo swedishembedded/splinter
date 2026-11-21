@@ -11,6 +11,8 @@
 //! each role, the run record every command that writes state keeps, and the
 //! stores a pipeline decides through.
 //!
+//! * [`brain_service`] - the brain local models are requested from: given,
+//!   a server on every node of an allocation, or one on this machine.
 //! * [`config`] - the settings, and the only reader of the environment.
 //! * [`cluster`] - the batch allocation a process runs inside, and which of
 //!   its nodes it uses.
@@ -40,6 +42,7 @@
 #![warn(missing_docs)]
 
 pub mod answers;
+pub mod brain_service;
 pub mod cluster;
 pub mod concurrency;
 pub mod config;

@@ -38,9 +38,7 @@ use serde::Serialize;
 use splinter_agent::solve::Model;
 use splinter_core::clock::{Clock, SystemClock};
 use splinter_data::DatasetStore;
-use splinter_model::{
-    BrainConnection, BrainEndpoints, LoadedModel, ManagedBrain, ModelSelection, Sampling,
-};
+use splinter_model::{BrainConnection, BrainEndpoints, LoadedModel, ModelSelection, Sampling};
 use splinter_store::artifacts::ArtifactStore;
 use splinter_store::claims::ClaimStore;
 use splinter_store::experiences::ExperienceStore;
@@ -205,10 +203,11 @@ impl Runtime {
     }
 
     /// The brain server local models are requested from: the endpoints the
-    /// configuration names, else a server this runtime starts on first use
+    /// configuration names, else servers this runtime starts on first use
     /// (`brain serve` over the model store, with adapters served from the
-    /// state directory and the training workload on) and stops when it is
-    /// dropped.
+    /// state directory and the training workload on; one on every usable node
+    /// of an allocation that spans nodes, else one on this machine) and stops
+    /// when it is dropped.
     ///
     /// # Errors
     /// No endpoint is configured and no `brain` binary is known, or the
@@ -224,28 +223,13 @@ impl Runtime {
         if let Some(connection) = held.as_ref() {
             return Ok(connection.endpoints().clone());
         }
-        let binary = self.config.brain_binary.clone().ok_or_else(|| {
-            OrchestratorError::Refused(
-                "a local model is requested from a brain server: name one with \
-                 --brain-endpoint, or make the `brain` binary known (--brain-bin, or on PATH) \
-                 so one can be started"
-                    .into(),
-            )
-        })?;
-        let settings = splinter_model::ServiceSettings {
-            binary,
-            models: self.config.model_store.clone(),
-            state: self.config.state_root.brain_service(),
-            device: self.config.brain_device.clone(),
-            backend: self.config.brain_backend.clone(),
-            max_batch: self.config.brain_max_batch,
-            serve_adapters: true,
-            adapter_base: Some(self.config.policy_base.clone()).filter(|base| base.exists()),
-        };
-        let managed = ManagedBrain::start(&settings, &splinter_agent::CancelToken::default())
-            .map_err(|e| OrchestratorError::Refused(format!("the brain server: {e}")))?;
-        let endpoints = managed.endpoints().clone();
-        *held = Some(BrainConnection::Owned(managed));
+        let connection = crate::brain_service::start_brain(
+            &self.config,
+            &splinter_agent::CancelToken::default(),
+        )
+        .map_err(|e| OrchestratorError::Refused(format!("the brain server: {e}")))?;
+        let endpoints = connection.endpoints().clone();
+        *held = Some(connection);
         Ok(endpoints)
     }
 
