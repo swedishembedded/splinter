@@ -1094,6 +1094,15 @@ identically in both lanes' bench profiles:
   so `enable_thinking` is no longer dropped). Checked 2026-11-21 on 2 vim train trials with the base 4B on brain-8f2a3d264:
   the system message holds the instruction and names no absent tool, the only tool is `vim-vim`, every response has 0
   reasoning characters (both failed; the model wrote no sentence before its calls).
+- **Concise instruction v2 (concise-compositional; 2026-11-21, the user's rule; for every trace generated from now on:
+  harvests, STaR, teacher captures. E2a, the 24b transfer check and every job already running keep v1):**
+  `[sven] append_system_prompt = "Before each tool call, briefly explain the command you will use: name each key or Ex
+  command in it, what each part does, and the family it belongs to (for example: j moves down one line; hjkl are vim's
+  motion keys). Keep it short; no long deliberation."`, thinking still off (template `lane-vim/profiles/ei-template-v2.toml`).
+  Checked on 8 vim train trials with the base 4B (gpu1, brain-8f2a3d264, sven-7a9f60cb): 72% of 50 tool calls carry a
+  sentence before the call (v1: 58% over the gen-0 harvest), median 200 characters per action; the sentences are
+  generic plans ("Let's open the file and make the change") more than explanations of the command's parts; 0 of the 8
+  passed (8 trials say nothing about the rate).
 - **Shared gpu0 server :8977 (brain-8f2a3d264, edge 788):** lane VIM's concise gen-0 harvest (item 24b, base 4B, 168 x 5,
   started 2026-11-21 ~10:35) keeps at most 192 trials in flight (`harbor -n 192`, one model request each at a time);
   lane VSFT keeps its 27B concise re-capture to the other half.
@@ -1185,6 +1194,11 @@ server on gpu1 (`--max-batch` picked by brain: 256), the concise mode as E2a (sv
 instruction), 8 attempts per task, 18 trials in flight per arm (72 in all, the baseline load), one slot. Analysis
 `splinter experiences compare-arms --reference base --k 8 --interval-seed 20261121` (splinter-19b6dd024): each
 generation minus base, two-sided sign test with Holm over the 3, task bootstrap 95% interval.
+
+**Its thinking-capped rerun (pre-registered 2026-11-21 ~13:50, before any of its trials; the user's decision that a
+measurement uses one mode for all its arms, matching E2c).** The same 79 tasks, arms, 8 attempts, 18 in flight per arm,
+gpu1 server and statistics, in E2c's mode: thinking on, `thinking_budget = 2048` per turn, T 0.6 / top-p 0.95 /
+top-k 20, no appended instruction, sven-7a9f60cb. The concise run is reported beside it as its own measurement.
 
 ## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
 
@@ -1398,6 +1412,29 @@ brain-5e25d5b82 and splinter-7220b1d5d.
   same statistics, not corrected.
 - **Also reported per arm:** pass@16, timeouts, infrastructure errors (left out of the denominator, as E1), model turns
   per trial, visible text characters per action, and the share of tool calls with a stated rationale.
+
+**E2a ABANDONED (2026-11-21 13:41, a dated deviation decided after partial results, at the user's decision).** Stopped
+cleanly (SIGINT to each Harbor run) partway: graded so far base 0/179, v1s1 2/133, v1s2 3/156, gen 1 0/216, gen 2 0/84,
+gen 3 0/219, no timeouts; the 12 trials in flight per arm at the stop are infrastructure errors. Every arm is at or
+near 0 in concise mode, a floor that cannot separate the arms. The partial jobs are packed as evidence
+(`lane-vim/jobs/e2a-*`, raw rows in `lane-vim/logs/e2a-*.trials.jsonl`). The exam moves to thinking mode with a capped
+reasoning budget (E2c).
+
+### E2c: the exam in thinking mode with a capped reasoning budget (pre-registered 2026-11-21 13:46 (commit cac56dc9a; trials started 13:46:54), lane VIM, before any E2c trial)
+
+- **Arms (6):** base, v1s1, v1s2, item 24b gen 1, gen 2, gen 3 (ids as E2a).
+- **Mode:** thinking on (no appended instruction), brain's per-turn thinking budget of 2,048 tokens for every arm
+  (`[sven.driver_options] thinking_budget = 2048`, which bench renders on the gateway provider's main model entry),
+  Qwen3 thinking sampling T 0.6 / top-p 0.95 / top-k 20, run seed 20261121 (bench derives each trial's seed from it
+  and the trial's name), sven-7a9f60cb. Evidence that the cap binds (2026-11-21, 4 exam trials, base, the E2c server):
+  every recorded request carries `thinking_budget`, the longest reasoning per turn was 7.3k-8.9k characters (about
+  2,048 tokens), agent time 38-125 s at that light load.
+- **Run:** the 14 eval tasks x 16 per arm, one interleaved slot, 12 trials in flight per arm (72 in all, the baseline
+  load), one brain-8f2a3d264 server on gpu0 :8977 (`--max-batch 128 --vram-budget 32`, adapters hot-served), each arm
+  through its own bench gateway; agent limit as the tasks set (900 s).
+- **Statistics:** `splinter experiences compare-arms` (frozen splinter-c2a7d877e or later): primary each arm minus
+  base, two-sided sign test with Holm over the 5, task bootstrap 95% interval, pass@16; secondary gen 3 minus pooled v1
+  (`--reference v1 --arm v1=v1s1 --arm v1=v1s2`). Timeouts and infrastructure errors per arm reported apart.
 
 ### Item 25 E2b: the concise-mode exam of v2 (pre-registered 2026-11-21 12:40, before any E2b trial; E2a's protocol in its own slot)
 
