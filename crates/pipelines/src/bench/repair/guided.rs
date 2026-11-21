@@ -29,7 +29,8 @@
 //! path's states, the latest first: its `n`-th sample forks after the
 //! `n+1`-th latest action (never after the last), so a failure's chain of
 //! samples moves the fork earlier until the student succeeds alone (the chain
-//! then stops) or the samples run out. A continuation that calls no tool is no
+//! then stops) or the samples run out; samples beyond the states try them
+//! again, the latest first. A continuation that calls no tool is no
 //! success of the student's: the path had done the work, so it is refused and
 //! the chain goes on. Which path a task uses is [`PrivilegedPaths::for_task`]: the store's
 //! verified guided passes of the same bench task, in id order.
@@ -205,13 +206,11 @@ impl Intervention for PathGuided<'_> {
         let stored = unguided(&path.trajectory);
         let (system, exported) = split_system(&stored);
         let points = fork_points(&exported);
-        let keep_through = *points.get(case.sample).ok_or_else(|| {
-            format!(
-                "the path has {} state(s) to fork at; sample {} has none",
-                points.len(),
-                case.sample
-            )
-        })?;
+        // Samples beyond the states try them again, the latest first, each
+        // under a seed of its own.
+        let keep_through = *points
+            .get(case.sample.checked_rem(points.len()).unwrap_or(0))
+            .ok_or("the path has no state to fork at: one action or none")?;
         // Sampled as the practice run was, under a seed of the repair's own.
         let (params, sampling) =
             super::retry::sampling(case.run, super::retry::retry_seed(case.key));

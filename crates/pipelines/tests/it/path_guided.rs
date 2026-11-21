@@ -455,3 +455,127 @@ fn a_continuation_without_an_action_of_the_students_own_moves_the_fork_earlier()
         .iter()
         .any(|s| s.tool_calls.as_ref().is_some_and(|c| !c.is_empty())));
 }
+
+/// A student whose first two continuations write a wrong answer and every
+/// later one the right answer.
+struct Flaky {
+    started: std::sync::Mutex<usize>,
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Flaky {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+    fn model_name(&self) -> &str {
+        "flaky"
+    }
+    async fn complete(
+        &self,
+        req: sven_sdk::model::CompletionRequest,
+    ) -> anyhow::Result<sven_sdk::model::ResponseStream> {
+        use sven_sdk::model::{MessageContent, ResponseEvent};
+        let answered = req.messages.iter().any(|m| {
+            matches!(&m.content, MessageContent::ToolResult { tool_call_id, .. }
+                if tool_call_id.starts_with("flaky"))
+        });
+        let events = if answered {
+            vec![
+                Ok(ResponseEvent::TextDelta("Done.".into())),
+                Ok(ResponseEvent::Done),
+            ]
+        } else {
+            let mut started = self.started.lock().unwrap();
+            *started += 1;
+            let text = if *started <= 2 { "7" } else { "42" };
+            vec![
+                Ok(ResponseEvent::ToolCall {
+                    index: 0,
+                    id: "flaky-0".into(),
+                    name: "write_file".into(),
+                    arguments: json!({"path": "answer.json", "text": text}).to_string(),
+                }),
+                Ok(ResponseEvent::Done),
+            ]
+        };
+        Ok(Box::pin(futures::stream::iter(events)))
+    }
+}
+
+/// Samples beyond a path's states fork at its states again, the latest first:
+/// a state the student failed from once is tried again under a seed of its
+/// own.
+#[test]
+fn samples_beyond_the_paths_states_try_its_states_again() {
+    let scratch = Scratch::new("path-guided-again");
+    let flaky = Arc::new(Flaky {
+        started: std::sync::Mutex::new(0),
+    });
+    let ctx = splinter_orchestrator::Context::new(common::config(&scratch), true)
+        .unwrap()
+        .with_model(
+            student_ref(),
+            Model::new(
+                Arc::clone(&flaky) as Arc<dyn ModelProvider>,
+                "scripted/student",
+            ),
+        )
+        .with_model(
+            teacher_ref(),
+            Model::new(
+                steps("teacher", vec![]) as Arc<dyn ModelProvider>,
+                "scripted/teacher",
+            ),
+        );
+    let tree = scratch.0.join("student-tree");
+    fs::create_dir_all(&tree).unwrap();
+    let trajectory = ctx.block_on(student_trajectory(&tree));
+    let runs = vec![practice_run(&ctx, &scratch.0, &trajectory)];
+    let checkout = examiner(&scratch.0);
+    let failed = splinter_pipelines::bench::split::trials(&ctx).unwrap()[0]
+        .experience
+        .clone();
+    // Two states: after the reads (step 3) and after the listing (step 2).
+    let path = privileged_path(&ctx, &failed, false, false, "harbor/sven@5/teacher-27b");
+    let set = ctx
+        .experiences()
+        .put_set(&splinter_store::experiences::ExperienceSet {
+            name: "teacher passes".into(),
+            members: vec![path],
+        })
+        .unwrap();
+    let teacher = teacher_ref();
+    let student_model = student_ref();
+    let only = [InterventionKind::PathGuided];
+    let sets = [set];
+    let mut asked = request(&runs, &checkout, &teacher);
+    asked.student = Some(&student_model);
+    asked.interventions = &only;
+    asked.paths = &sets;
+    asked.samples = 3;
+    asked.budget = 3;
+    let report = repair(&ctx, &asked).unwrap();
+    let mut forks: Vec<_> = report
+        .repairs
+        .iter()
+        .map(|r| {
+            (
+                r.sample,
+                r.outcome,
+                r.notes
+                    .privileged_path
+                    .as_ref()
+                    .map(|p| p["fork_after"].clone()),
+            )
+        })
+        .collect();
+    forks.sort_by_key(|f| f.0);
+    assert_eq!(
+        forks,
+        [
+            (0, RepairOutcome::Rejected, Some(json!(3))),
+            (1, RepairOutcome::Rejected, Some(json!(2))),
+            (2, RepairOutcome::Accepted, Some(json!(3))),
+        ]
+    );
+}
