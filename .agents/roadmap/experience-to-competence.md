@@ -929,6 +929,70 @@ stop the 4B from naming it: `hint` in 42 attempts (gate a 40), `reference` 9, `a
 the leak filter also passed sufficiency. Kept: 011, 090, 113, 161. Records `rationalise-941a3ca1386127e4`
 (splinter-2e5f0c38e, brain-8f2a3d264 on gpu0 shared, sven-1db749d9, bench 6ccc7ec7).
 
+**Gate c (EXPLORATORY, NOT PRE-REGISTERED: a dated deviation decided 2026-11-21 after gates a and b, at the user's
+request: "keep it extremely simple and only check for presence of the actual answer").** The filter is exactly two
+checks: (1) verified, the task's grader passes; (2) no answer present, the trace does not contain the hint's command
+text or the expected result's distinctive lines, verbatim or near-verbatim, before a tool reply showed that content
+(the hint-wording and unobserved-content checks). The word list, the real-observation rule and the sufficiency check
+are no longer gates (opt-in flags of `experiences rationalise`, off by default). Gates a's and b's existing attempts
+are re-judged offline (no GPU, no new trial). Reported: kept count of the 96 graded attempts against the unchanged 10%
+bar, and 3 example kept traces. If it clears the bar, a generation-1 STaR arm is proposed as item 24c beside item 24b,
+not started. Gate c's result can motivate item 24c; it is not evidence under item 24's pre-registration.
+
+### Item 24d: a rewrite pass over rationalisations (planned 2026-11-21 at the user's request; not run, not pre-registered)
+
+**Idea.** Each kept rationalisation goes through a separate step in which a model is told only to rewrite it to meet
+given rules (for example: present the reasoning as one's own, keep every step and every observation, change no
+action). Only the reasoning text changes; actions and tool replies are untouched by construction.
+
+**Why a separate experiment.** The rewrite may degrade the reasoning it rewrites, so its effect is measured, never
+assumed.
+
+**Design notes.**
+- **Decided (2026-11-21, the user):** the rewriter is the base Qwen3-4B itself, so the arm stays 4B-only; no 27B
+  rewriter variant.
+- Every rewritten trace is re-verified with the answer-presence check (gate c's check 2).
+- Degradation is measured on the same items: (a) the unrewritten kept traces against (b) the rewritten ones, trained
+  with the same recipe, examined on the same exam at the same load and reasoning budget.
+- Implementation, when built: a generic option of `experiences rationalise`, e.g. `--rewrite-with <model>
+  --rewrite-rules <file>`, test-first.
+
+## Item 24b: 4B-only expert iteration on the vim benchmark (pre-registered 2026-11-21, lane VIM, before any build or job)
+
+**Question.** Does base Qwen3-4B improve on the vim exam families by training only on its own verified, unhinted
+passes, generation after generation (expert iteration, no hint, no teacher)? It is the 4B-only counterpart of item
+25's 27B distillation, measured the same way.
+
+**Generation 0 data.** The base's 840 train trials of 2026-11-21 (`train-k1`, `train-k4`; 168 x 5, sven 1db749d9
+default profile, T 1.0 / top-p 0.95 / top-k 20, no thinking budget, brain-5e25d5b82 `--max-batch 256`): 221 passes
+over 95 tasks (splinter knowledge 198). Exported (`bench adopt`, `bench export`) and ingested (`experiences
+ingest-bench`) like item 25's v1.
+
+**Curation (fixed before any build).** Passes only. Near-duplicates: two passes of one task are duplicates when
+their sequences of vim tool-call arguments are identical after whitespace is normalised; one is kept (the one with
+the least reasoning). Then at most 3 passes per task, the ones with the least reasoning per action. Records that end
+without a final message are dropped. The counts before and after each step are reported.
+
+**Dataset and training.** `dataset build --view sft-step --pack --only-actions vim-vim` (item 25 v1's flags) on the
+curated set. A Qwen3-4B LoRA from BASE with item 25 v1's recipe (A2's: rank 16, alpha 32, lr 2e-4, no weight decay,
+bf16 base, 4 records per step, max block 16384, eval every 14 steps, patience 4), steps = ceil(2 x records / 4)
+(about 2 epochs), seed 1. Every generation trains from base, never from the previous adapter.
+
+**Harvest.** Each generation's adapter attempts all 168 train tasks x 4 under gen 0's agent settings (no thinking
+budget), at maximum concurrency (a throughput job; its pass counts are training data, never a measurement). Its
+passes join the cumulative own set, curated by the same rule over all generations' passes.
+
+**Generations.** Gen 1 from gen 0's data; gen 2 from the cumulative set after gen 1's harvest; gen 3 only if gen 2's
+harvest solved at least 5 train tasks no earlier generation had solved. At most 3 generations.
+
+**Measurement.** One slot with base and every generation's adapter hot-served on one brain server, item 25 E1c's
+setting: eval 14 x 16 per arm, `[sven.driver_options] thinking_budget = 2048`, 24 trials in flight per arm, sven
+1db749d9, sampling 1.0 / 0.95 / 20, seed 20261121. Statistics as item 25 E1 (pass@1 as the mean of per-task rates;
+the effect against base with a 10,000-resample task bootstrap 95% CI, seed 20261121; exact paired sign test over tasks;
+pass@16). Also reported per generation: train coverage (tasks with any pass in that generation's harvest and
+cumulatively), timeouts, model turns per trial and reasoning tokens per turn. **Decision rule:** item 25 E1's (CI
+wholly above 0 and sign-test p < 0.05); anything else is "not supported", with its interval.
+
 ## Item 25: 27B teacher distillation on the vim benchmark (lane VSFT, 2026-11-21)
 
 **Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`
