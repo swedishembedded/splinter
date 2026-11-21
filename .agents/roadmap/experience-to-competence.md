@@ -827,6 +827,13 @@ therefore share a card and a time slot. Cards are taken from lane R19 as it free
   unchanged, and setup time is outside the agent's time limit. The pinned worktree moves to it when no other unit is
   running, so every unit runs on one bench build for all its cells; `logs/runs.log` records each unit's bench. Regenerating
   the accounting and support draws under f37811d4 gave the same task digests and collection digests.
+- **Timeouts and an accounting rerun (2026-11-21 ~07:00, before any contrast was read).** Timeouts per cell of 96 trials:
+  accounting-u1 a 40, g3 37, g3t2 39, h3 33; accounting-u2 a 31, g3 39, g3t2 37, h3 34 (node load average near its 288
+  cores from other lanes); legal-u1 a 2, g3 1, g3t2 2, h3 2. Measurements should run where timeouts are near zero. The
+  two accounting units are therefore queued again on the same tasks as accounting-r1 and -r2. Rule fixed now: the primary
+  analysis takes accounting from the reruns if their timeouts are under 5% in every cell, and reports u1/u2 beside them as
+  load-affected; if the reruns also time out heavily, accounting is reported as load-confounded and left out of the go
+  decision. Any contrast whose cells differ markedly in timeouts is recorded as load-confounded.
 
 ## Item 24: 4B-only rationalisation (STaR) on the vim benchmark (pre-registered 2026-11-21, lane VIM, before any job)
 
@@ -901,7 +908,7 @@ Both controls (`own_term_mentions`, `own_real_observations`) are reported with t
 
 **Material.** The teacher is `Qwen/Qwen3.8-27B-FP8` (brain-5e25d5b82), run on the train side of `vim-headless-mastery`
 (c875538865ad, task digests identical to dd3e5331). 1,192 trials were graded and 579 passed; 163 of the 168 tasks are
-solved (knowledge 199). The dataset is `swedishembedded/vim-headless-mastery-sft` v1, PUBLIC. It is
+solved (knowledge 199). The dataset is `swedishembedded/vim-headless-mastery-sft` v1, public by user request (an intended exception to the private-first rule). It is
 `sft-step --pack --only-actions vim-vim`, 576 records, split by whole task: 516 train records, and 60 eval records that
 form splinter's held-out set. Students are Qwen3-4B LoRAs trained with A2's recipe for 230 steps of 4 records (about 2
 epochs) on bf16, through brain-5e25d5b82 and splinter-7220b1d5d:
@@ -942,3 +949,83 @@ else is reported as not supported, with its interval.
 **Training-fit check, reported separately and never as transfer.** The same three arms on the 168 train tasks x 2
 attempts, run in the slot just before. Its results are split three ways: the 147 trained tasks, the 16 held-out
 validation tasks, and the 5 tasks the teacher never solved.
+
+**E1 result (as pre-registered; read 06:52).**
+
+| arm | pass@1 | pass@16 | trials | passes | timeouts | infrastructure errors |
+|---|---:|---:|---:|---:|---:|---:|
+| base | 0.049 | 0.143 | 224 | 11 | 158 | 0 |
+| v1s1 | 0.071 | 0.286 | 224 | 16 | 209 | 0 |
+| v1s2 | 0.031 | 0.143 | 224 | 7 | 215 | 0 |
+
+| effect | difference | 95% task-bootstrap CI | sign test over tasks (better / worse / ties, p) |
+|---|---:|---|---|
+| v1s1 - base | +0.022 | [+0.004, +0.045] | 4 / 0 / 10, p = 0.125 |
+| v1s2 - base | -0.018 | [-0.054, 0.000] | 0 / 1 / 13, p = 1.0 |
+| pooled - base | +0.002 | [-0.011, +0.013] | 3 / 1 / 10, p = 0.625 |
+
+Under the pre-registered rule the improvement is **not supported**. The measurement itself is not valid evidence about
+the models, because the agent time limit decided it:
+
+- 71% of base trials and 93-96% of student trials ran out the 900 s agent limit.
+- With 222 trials in flight on one card, a trial got only 3-4 model turns in 900 s. A completion took 2-3 minutes at
+  about 30 tokens/s per sequence, and the students' completions are longer: mean 2,411 and 2,690 tokens against the
+  base's 2,025.
+- Lane VIM's base eval (70 in flight) had no timeouts.
+
+What E1 measured is throughput under load, not exam skill.
+
+**E1b deviation (dated 2026-11-21 06:55, before any E1b trial).** The same three arms, server, sven, sampling, tasks
+and 16 attempts are rerun in one slot at lane VIM's eval load: 72 trials in flight in all, 24 per arm. The analysis
+is E1's unchanged. E1b replaces E1 as the measurement of v1. E1 is kept above as the record of the load confound.
+
+**E1b result (read 08:51, 2026-11-21).** All three jobs started together at 06:52. The base finished at 08:11 and the
+students at 08:50, so for the students' last 40 minutes only 48 trials were in flight, not 72. That eased their load,
+if anything.
+
+| arm | pass@1 | pass@16 | trials | passes | timeouts | infrastructure errors |
+|---|---:|---:|---:|---:|---:|---:|
+| base | 0.049 | 0.286 | 224 | 11 | 46 | 0 |
+| v1s1 | 0.067 | 0.429 | 224 | 15 | 172 | 0 |
+| v1s2 | 0.0625 | 0.214 | 224 | 14 | 188 | 0 |
+
+| effect | difference | 95% task-bootstrap CI | sign test (better / worse / ties, p) |
+|---|---:|---|---|
+| v1s1 - base | +0.018 | [-0.013, +0.054] | 5 / 3 / 6, p = 0.73 |
+| v1s2 - base | +0.013 | [-0.018, +0.054] | 2 / 2 / 10, p = 1.0 |
+| pooled - base | +0.016 | [-0.009, +0.040] | 6 / 2 / 6, p = 0.29 |
+
+Per task (passes of 16; base / v1s1 / v1s2), for the tasks with any pass:
+
+| task | base | v1s1 | v1s2 |
+|---|---:|---:|---:|
+| exam-01 | 0 | 1 | 0 |
+| exam-02 | 8 | 7 | 12 |
+| exam-05 | 0 | 1 | 1 |
+| exam-07 | 0 | 3 | 0 |
+| exam-09 | 1 | 2 | 1 |
+| exam-11 | 1 | 0 | 0 |
+| exam-12 | 0 | 1 | 0 |
+| exam-14 | 1 | 0 | 0 |
+
+The other six exams had no pass in any arm.
+
+**Conclusion.** The v1 students' gain on the 14 exam families is **not statistically supported**: pooled +0.016,
+95% CI [-0.009, +0.040], sign test p = 0.29. The point estimates are positive for both seeds.
+
+**Why it does not transfer.** Even at the baseline's load the students ran out the 900 s limit in 77-84% of exam
+trials, against 21% for the base. They think far longer per turn: one exam turn ran 36k characters of reasoning with no
+action. They also take more turns, 10.7 against 6.5 per trial.
+
+**Training fit (same server, 222 in flight, 168 train tasks x 2).**
+- pass@1 went from 0.265 to 0.497 (v1s1) and 0.446 (v1s2).
+- Pooled effect +0.207 [+0.137, +0.275].
+- On the 16 held-out validation tasks (same families, never trained): 0.156 to 0.50 / 0.31, pooled +0.25
+  [+0.09, +0.42], sign p = 0.02.
+
+So v1 learned the course families and did not carry that to the exam families within the time limit.
+
+**Next.** v2 adds the 27B STaR records (splinter-2756587f8 `experiences rationalise`, item 24's calibrated filters) for
+the teacher's hardest tasks. A v2 candidate should also cap the trace length the student learns, for example by
+dropping the 106 records that were stopped by the limit before a final answer. The joint eval (base, v1, v2, lane VIM's
+generations) must run at the baseline's load (bench knowledge 072).
