@@ -74,3 +74,8 @@ the model's text before a tool reply showed it (`filters::hint_commands`). Re-gr
 run rejects all 30 of its script's and 2 more (`f{ci{new` without `normal!`), keeping 23 of 55 verified; gates a and b
 keep 5 of 96 (5.2%), under item 24's 10% bar, so gate c no longer clears it. Left unchecked on purpose: an all-letter
 word of a command alone (`jyyggP`, `cccorrect`), which cannot be told from ordinary text without its line.
+
+Also fixed (found by lane ALG-S): the 5-word wording check counted the tool arguments of every agent step, later ones
+included, as known, so wording written first and sent as a call later passed. A step's own arguments (and replies) now
+count as known only to the steps after it. Re-graded with both fixes (same counts): gates a and b keep 5 of 96, lane
+VSFT's run keeps 23 of 55 verified (all 30 of its script's rejections, plus 2 for `f{ci{new`).

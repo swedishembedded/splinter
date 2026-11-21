@@ -505,17 +505,11 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
     let terms: Vec<String> = check.terms.iter().map(|t| t.to_lowercase()).collect();
     // The hint's wording: runs within one line of it that the model had
     // another way to know.
+    // Known from the start: what the model was shown besides the hint. The model's own tool arguments become known
+    // only to the steps after the one that sent them, so wording written first and sent later is still the hint's.
     let mut known = ngrams(check.instruction);
     known.extend(ngrams(check.shown));
-    for step in agent_steps(trajectory) {
-        known.extend(ngrams(&call_text(step)));
-    }
-    let wording: HashSet<String> = check
-        .hint
-        .lines()
-        .flat_map(ngrams)
-        .filter(|n| !known.contains(n))
-        .collect();
+    let hint_runs: HashSet<String> = check.hint.lines().flat_map(ngrams).collect();
     let quotable = check.files.quotable_lines();
     let mut seen = spaced(check.instruction);
     let commands = hint_commands(
@@ -531,7 +525,7 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
         }
         let mut repeated: Vec<String> = ngrams(&text)
             .into_iter()
-            .filter(|n| wording.contains(n))
+            .filter(|n| hint_runs.contains(n) && !known.contains(n))
             .collect();
         repeated.sort();
         if let Some(run) = repeated.first() {
@@ -561,6 +555,8 @@ pub fn no_leak(trajectory: &atif::Trajectory, check: &LeakCheck<'_>) -> Verdict 
         }
         seen.push(' ');
         seen.push_str(&spaced(&replies(step)));
+        known.extend(ngrams(&call_text(step)));
+        known.extend(ngrams(&replies(step)));
     }
     Verdict::of(findings)
 }

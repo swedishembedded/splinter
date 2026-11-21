@@ -623,3 +623,36 @@ fn a_hint_command_in_the_text_before_a_reply_showed_it_is_answer_content() {
     );
     assert_eq!(leak(&word), Verdict::pass());
 }
+
+/// The model's own tool arguments make a run of the hint's wording known only to the steps after the one that sent
+/// it: wording written in the text at step k and sent as step k's (or a later step's) tool call was not observed
+/// when it was written (found by lane ALG-S).
+#[test]
+fn hint_wording_sent_as_a_later_or_the_same_call_is_not_known_when_written() {
+    let phrase = "one call of the vim tool as the tool makes it";
+    let same = trajectory(
+        INSTRUCTION,
+        &[(phrase, &["args main.txt", phrase], EDIT_REPLY)],
+    );
+    assert!(!leak(&same).passed, "{:?}", leak(&same));
+    let later = trajectory(
+        INSTRUCTION,
+        &[
+            (phrase, READ, READ_REPLY),
+            ("Now edit.", &["args main.txt", phrase], EDIT_REPLY),
+        ],
+    );
+    assert!(!leak(&later).passed);
+    let after = trajectory(
+        INSTRUCTION,
+        &[
+            ("Edit.", &["args main.txt", phrase], EDIT_REPLY),
+            (phrase, READ, READ_REPLY),
+        ],
+    );
+    assert_eq!(
+        leak(&after),
+        Verdict::pass(),
+        "the model's own earlier call is its own"
+    );
+}
