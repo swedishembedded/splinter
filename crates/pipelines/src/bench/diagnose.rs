@@ -253,6 +253,9 @@ fn practice_experiences(report: &Path) -> Result<PracticeTrials, String> {
     }
     #[derive(Deserialize)]
     struct Report {
+        // A run of a compiled dataset may name only its material: its trials
+        // are the export's, each of the folder its manifest names.
+        #[serde(default)]
         trials: Vec<Trial>,
     }
     let text = std::fs::read_to_string(report).map_err(|e| format!("{}: {e}", report.display()))?;
@@ -345,7 +348,15 @@ fn diagnose_export(
                             passed,
                             exported: true,
                             experiences: Vec::new(),
-                            staged_task: None,
+                            // The task's folder, as the export places it; a
+                            // practice run's report names it for its own trials.
+                            staged_task: artifact
+                                .manifest
+                                .task
+                                .path
+                                .as_deref()
+                                .and_then(|p| std::path::Path::new(p).file_name())
+                                .map(|n| n.to_string_lossy().into_owned()),
                             diagnosis,
                             capabilities: row
                                 .capabilities

@@ -85,11 +85,13 @@ impl ModelProvider for Steps {
                 if tool_call_id.starts_with(self.name))
             })
             .count();
-        let shown: Vec<String> = req
+        let mut shown: Vec<String> = req
             .messages
             .iter()
             .map(|m| format!("{:?}", m.content))
             .collect();
+        let tools: Vec<&str> = req.tools.iter().map(|t| t.name.as_str()).collect();
+        shown.push(format!("offered tools: {}", tools.join(",")));
         self.seen.lock().unwrap().push(shown.join("\n"));
         let events = match self
             .script

@@ -257,6 +257,28 @@ guided path's steps through the fork (copied, never supervised; the person's tur
 student's own steps after them; nothing the person typed reached any request of the continuation. Its record names
 the path, the step it forked after, the states the path offered and the turns taken out (`privileged_path`).
 
+### Repairing a compiled dataset's trials
+
+A run of a bench-compiled dataset (Harbor's task layout, each task in its own image, its tools given as MCP servers) is
+repaired the same way. Its run directory holds the examiner's export of the job (`bench adopt`, then `bench export JOB --out
+RUN/export`) and a `report.json` that names the dataset as its material, optionally with the sampling the run used:
+
+```sh
+splinter experiences ingest-bench RUN/export
+echo '{"provenance": {"dir": "<dataset>"}, "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20}}' > RUN/report.json
+splinter experiences repair RUN --bench ~/bench --teacher local:Qwen/Qwen3.8-27B-FP8 --student local:Qwen/Qwen3-4B \
+  --intervention path_guided --samples 3
+```
+
+Each trial's task is the folder its manifest names (`train/<folder>`), served by the examiner's session for compiled
+tasks (`bench task session DATASET --task FOLDER`): the task's image, its working directory shared with the fork's tree, and
+the image's own Sven configuration (`sven_config`, or else the task's MCP servers). The fork's engine runs under that
+configuration with Sven's default profile, so the model is offered exactly the tools the trial's agent was (`tools.only`
+included), named as Sven names them (`<server>-<tool>`), with the system prompt the trial recorded. Each MCP server is
+started in the session through `bench task session-exec --stdin`, from the tree's root, once per call; a recorded call is
+replayed there and held to its recorded observation. A tool whose output is not the same for the same call (a random path in
+a message) cannot be replayed, and the examiner's `bench task replay` measures how often that happens.
+
 ### The hinted retry: rationalising failures on a compiled dataset
 
 ```sh

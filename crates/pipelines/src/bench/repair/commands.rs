@@ -68,12 +68,59 @@ pub struct Session {
     stdout: BufReader<ChildStdout>,
     /// The socket commands are run through.
     pub socket: PathBuf,
+    /// The Sven configuration the task's environment gives its agent (an
+    /// image's system file, or the task's MCP servers), when it gives one.
+    pub agent_config: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct Announcement {
     schema: String,
     socket: PathBuf,
+    /// The image's Sven system configuration, when it has one.
+    #[serde(default)]
+    sven_config: Option<String>,
+    /// The MCP servers the task gives its agent.
+    #[serde(default)]
+    mcp_servers: Vec<McpServer>,
+}
+
+/// An MCP server a task gives its agent, as the session announces it.
+#[derive(Deserialize, Serialize)]
+struct McpServer {
+    name: String,
+    #[serde(default)]
+    transport: Option<String>,
+    #[serde(default)]
+    command: Option<String>,
+    #[serde(default)]
+    args: Vec<String>,
+}
+
+/// The Sven configuration of a session's announcement: the image's own, else
+/// one that gives the agent the task's stdio MCP servers; `None` for neither.
+fn agent_config(hello: &Announcement) -> Result<Option<String>, String> {
+    if hello.sven_config.is_some() {
+        return Ok(hello.sven_config.clone());
+    }
+    let servers: serde_json::Map<String, serde_json::Value> = hello
+        .mcp_servers
+        .iter()
+        .filter(|s| s.transport.as_deref().unwrap_or("stdio") == "stdio")
+        .filter_map(|s| {
+            let command = s.command.as_ref()?;
+            Some((
+                s.name.clone(),
+                serde_json::json!({"transport": {"type": "stdio", "command": command, "args": s.args}}),
+            ))
+        })
+        .collect();
+    if servers.is_empty() {
+        return Ok(None);
+    }
+    serde_yaml::to_string(&serde_json::json!({ "mcp_servers": servers }))
+        .map(Some)
+        .map_err(|e| format!("the task's MCP servers as a Sven configuration: {e}"))
 }
 
 impl Session {
@@ -135,11 +182,13 @@ impl Session {
                 hello.schema
             ));
         }
+        let agent_config = agent_config(&hello)?;
         Ok(Self {
             child,
             stdin,
             stdout,
             socket: hello.socket,
+            agent_config,
         })
     }
 
@@ -151,6 +200,21 @@ impl Session {
             checkout.dir.join("bench").to_string_lossy().into_owned(),
             "task".into(),
             "session-exec".into(),
+            self.socket.to_string_lossy().into_owned(),
+            "--".into(),
+        ]
+    }
+
+    /// The program and arguments that run a command in the session's
+    /// sandbox with this process's standard input as its own (a stdio MCP
+    /// server's requests): the command follows them.
+    #[must_use]
+    pub fn stdio_launcher(&self, checkout: &BenchCheckout) -> Vec<String> {
+        vec![
+            checkout.dir.join("bench").to_string_lossy().into_owned(),
+            "task".into(),
+            "session-exec".into(),
+            "--stdin".into(),
             self.socket.to_string_lossy().into_owned(),
             "--".into(),
         ]

@@ -84,6 +84,7 @@ pub mod harness_work;
 pub mod judge;
 pub mod knowledge;
 pub mod mapper;
+pub mod mcp_stdio;
 pub mod object_proposer;
 pub mod policy_endpoint;
 pub mod prompts;

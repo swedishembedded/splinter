@@ -34,12 +34,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use sven_sdk::atif::{StepOrigin, Trajectory};
-use sven_sdk::config::{CommandConfinement, RunProfile};
+use sven_sdk::config::{CommandConfinement, Config, RunProfile};
 use sven_sdk::fork::{transcript_digest, Fork, RecordedState};
 use sven_sdk::model::time_notice::without_time_notice;
 use sven_sdk::{ApprovalPolicy, Engine, RunConclusion, Toolset, Turn};
 
 use crate::correction::{compose_as, trajectory_transcript, Correction, CorrectionError};
+use crate::mcp_stdio::StdioServer;
 use crate::solve::{Model, Solution, SolveOptions};
 use crate::work::WITHHELD_TOOLS;
 
@@ -96,6 +97,115 @@ pub struct ForkAt<'a> {
     /// steps: [`TEACHER`] for another model's correction, [`POLICY`] for
     /// the student's own model sampled again.
     pub role: &'a str,
+    /// The Sven configuration the recording's environment gave its agent
+    /// (an image's system configuration: its tool set, its MCP servers), when
+    /// it gave one; the fork's engine runs under it, as the student's did.
+    pub environment: Option<&'a EnvironmentConfig<'a>>,
+}
+
+/// The Sven configuration a recording's environment gave its agent, and how
+/// a command of that environment is run from here.
+pub struct EnvironmentConfig<'a> {
+    /// The configuration, as Sven reads its system file (YAML).
+    pub config: &'a str,
+    /// The program and arguments that run a command in the environment with
+    /// this process's standard input as its own: every stdio MCP server the
+    /// configuration names is started through it.
+    pub stdio_launcher: &'a [String],
+}
+
+/// `run` (the fork's own settings) laid over `environment`'s configuration,
+/// as Sven lays a run's configuration over its system file: a setting the
+/// run leaves at its default keeps the environment's; and the stdio MCP
+/// servers the result names, each started through the environment's
+/// launcher.
+///
+/// # Errors
+///
+/// [`CorrectionError::Trajectory`] when the environment's configuration is
+/// not a Sven configuration.
+pub fn under_environment(
+    run: &Config,
+    environment: &EnvironmentConfig<'_>,
+) -> Result<(Config, Vec<StdioServer>), CorrectionError> {
+    let refuse = |e: &dyn std::fmt::Display| {
+        CorrectionError::Trajectory(format!("the environment's Sven configuration: {e}"))
+    };
+    let base: serde_json::Value =
+        serde_yaml::from_str(environment.config).map_err(|e| refuse(&e))?;
+    let mut merged = base;
+    let defaults = serde_json::to_value(Config::default()).map_err(|e| refuse(&e))?;
+    let own = serde_json::to_value(run).map_err(|e| refuse(&e))?;
+    lay_over(&mut merged, &own, &defaults);
+    let mut stdio = Vec::new();
+    if let Some(servers) = merged
+        .get_mut("mcp_servers")
+        .and_then(|s| s.as_object_mut())
+    {
+        for (name, server) in servers.iter_mut() {
+            let Some(transport) = server.get_mut("transport") else {
+                continue;
+            };
+            if transport.get("type").and_then(|t| t.as_str()) != Some("stdio") {
+                continue;
+            }
+            let command = transport.get("command").cloned().unwrap_or_default();
+            let args = transport
+                .get("args")
+                .and_then(|a| a.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let (program, rest) = environment
+                .stdio_launcher
+                .split_first()
+                .ok_or_else(|| refuse(&"no launcher to start its MCP servers through"))?;
+            transport["command"] = serde_json::json!(program);
+            transport["args"] = serde_json::Value::Array(
+                rest.iter()
+                    .map(|a| serde_json::json!(a))
+                    .chain([command])
+                    .chain(args)
+                    .collect(),
+            );
+            let argv = std::iter::once(transport["command"].clone())
+                .chain(transport["args"].as_array().cloned().unwrap_or_default())
+                .filter_map(|a| a.as_str().map(str::to_string))
+                .collect();
+            stdio.push(StdioServer {
+                name: name.clone(),
+                argv,
+                cwd: None,
+            });
+        }
+    }
+    let config = serde_json::from_value(merged).map_err(|e| refuse(&e))?;
+    Ok((config, stdio))
+}
+
+/// Lays `own` over `base`: objects key by key; any other value of `own`
+/// replaces `base`'s unless it is `default`'s (the run left it unset).
+fn lay_over(base: &mut serde_json::Value, own: &serde_json::Value, default: &serde_json::Value) {
+    match (base, own) {
+        (serde_json::Value::Object(base), serde_json::Value::Object(own)) => {
+            for (key, value) in own {
+                match base.get_mut(key) {
+                    Some(slot) => lay_over(
+                        slot,
+                        value,
+                        default.get(key).unwrap_or(&serde_json::Value::Null),
+                    ),
+                    None => {
+                        base.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+        }
+        (slot, own) => {
+            if own != default {
+                *slot = own.clone();
+            }
+        }
+    }
 }
 
 /// The role of a continuation by a model other than the student's.
@@ -262,6 +372,13 @@ fn fork_engine(
 ) -> Result<Engine, CorrectionError> {
     let mut config = options.engine_config();
     config.tools.disabled = WITHHELD_TOOLS.iter().map(|t| (*t).to_string()).collect();
+    let mut servers = Vec::new();
+    if let Some(environment) = request.environment {
+        (config, servers) = under_environment(&config, environment)?;
+        for server in &mut servers {
+            server.cwd = Some(request.tree.to_path_buf());
+        }
+    }
     if request.profile == Profile::Compact {
         config.agent.profile = RunProfile::Compact;
     }
@@ -284,7 +401,14 @@ fn fork_engine(
         Some(briefing) => format!("{}\n\n{}", request.system.trim_end(), briefing.trim()),
         None => request.system.to_string(),
     };
-    let engine = Engine::builder()
+    let mut builder = Engine::builder();
+    // The environment's MCP servers' tools, under the names Sven gives them.
+    for server in &servers {
+        for tool in server.tools().map_err(CorrectionError::Trajectory)? {
+            builder = builder.tool(tool);
+        }
+    }
+    let engine = builder
         .config(config)
         .model_provider(crate::system_prompt::UnderSystemPrompt::wrap(
             options.provider(provider),
@@ -323,6 +447,70 @@ mod tests {
         t.steps
             .push(TraceStep::new(4, StepOrigin::Agent, "the answer is 4"));
         t
+    }
+
+    #[test]
+    fn the_fork_runs_under_the_environments_configuration_with_its_servers_launched_there() {
+        let environment = "tools:\n  only: [\"files-write\"]\nmcp_servers:\n  files:\n    transport:\n      type: stdio\n      command: python3\n      args: [\"files.py\"]\n";
+        let launcher = [
+            "bench".to_string(),
+            "session-exec".into(),
+            "--stdin".into(),
+            "SOCK".into(),
+            "--".into(),
+        ];
+        let mut run = Config::default();
+        run.tools.max_timeout_secs = 77;
+        let (config, servers) = under_environment(
+            &run,
+            &EnvironmentConfig {
+                config: environment,
+                stdio_launcher: &launcher,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            config.tools.only.as_deref(),
+            Some(&["files-write".to_string()][..])
+        );
+        assert_eq!(
+            config.tools.max_timeout_secs, 77,
+            "the run's own setting wins"
+        );
+        let server = serde_json::to_value(&config.mcp_servers["files"]).unwrap();
+        assert_eq!(server["transport"]["command"], json!("bench"));
+        assert_eq!(
+            server["transport"]["args"],
+            json!([
+                "session-exec",
+                "--stdin",
+                "SOCK",
+                "--",
+                "python3",
+                "files.py"
+            ])
+        );
+        assert_eq!(servers.len(), 1);
+        assert_eq!(
+            servers[0].argv,
+            [
+                "bench",
+                "session-exec",
+                "--stdin",
+                "SOCK",
+                "--",
+                "python3",
+                "files.py"
+            ]
+        );
+        assert!(under_environment(
+            &run,
+            &EnvironmentConfig {
+                config: "tools: [",
+                stdio_launcher: &launcher
+            }
+        )
+        .is_err());
     }
 
     #[test]

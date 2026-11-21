@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use splinter_agent::fork_at::{continue_in_turns, ForkAt, Profile, TEACHER};
+use splinter_agent::fork_at::{continue_in_turns, EnvironmentConfig, ForkAt, Profile, TEACHER};
 use splinter_agent::solve::{Model, SolveOptions};
 use splinter_agent::CancelToken;
 use splinter_core::experience::{Experience, Provenance};
@@ -39,9 +39,14 @@ pub struct ForkCorrection<'a> {
     pub cancel: CancelToken,
 }
 
+/// The bench-compiled dataset's record: a run whose report names such a
+/// dataset as its provenance attempted that dataset's tasks.
+const COMPILE_FILE: &str = "bench-compile.json";
+
 /// The practice material a practice run attempted: the directory its
 /// report's provenance names (the material it was staged from, digest for
-/// digest), else the one under its `staged/` that holds `practice.json`.
+/// digest, or a bench-compiled dataset), else the one under its `staged/`
+/// that holds `practice.json`.
 fn practice_dir(run: &Path) -> Result<PathBuf, String> {
     let report = run.join("report.json");
     let named = std::fs::read(&report)
@@ -52,7 +57,7 @@ fn practice_dir(run: &Path) -> Result<PathBuf, String> {
                 .and_then(|d| d.as_str())
                 .map(PathBuf::from)
         })
-        .filter(|dir| dir.join(PRACTICE_FILE).is_file());
+        .filter(|dir| dir.join(PRACTICE_FILE).is_file() || dir.join(COMPILE_FILE).is_file());
     if let Some(dir) = named {
         return Ok(dir);
     }
@@ -256,6 +261,14 @@ pub(super) fn fork_and_grade(
                 .map_err(|e| format!("the session's directory: {e}"))?,
         )?;
         without_inherited_setgid(&work)?;
+        let stdio_launcher = session.stdio_launcher(checkout);
+        let environment = session
+            .agent_config
+            .as_deref()
+            .map(|config| EnvironmentConfig {
+                config,
+                stdio_launcher: &stdio_launcher,
+            });
         let fork = ForkAt {
             tree: &tree,
             scratch: &scratch,
@@ -264,12 +277,20 @@ pub(super) fn fork_and_grade(
             system,
             keep_through,
             workspace: None,
-            profile: Profile::Compact,
+            // A task whose environment configures its agent ran under Sven's
+            // default profile with that configuration; a practice task, under
+            // the compact profile the examiner's adapter gives a small model.
+            profile: if environment.is_some() {
+                Profile::Default
+            } else {
+                Profile::Compact
+            },
             shown,
             read_exec: toolchain_dirs(ctx.config().command_env.get("PATH")),
             launcher: Some(session.launcher(checkout)),
             briefing,
             role,
+            environment: environment.as_ref(),
         };
         let correction = ctx
             .handle()

@@ -91,6 +91,10 @@ pub struct IndexRow {
 pub struct ManifestTask {
     /// The task's id.
     pub id: String,
+    /// Where the task is in the run's material (`train/001-...` for a
+    /// compiled dataset's task), when the export states it.
+    #[serde(default)]
+    pub path: Option<String>,
     /// The task's version.
     pub version: String,
     /// The digest of the task's content.

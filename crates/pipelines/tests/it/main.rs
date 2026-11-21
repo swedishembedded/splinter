@@ -35,6 +35,7 @@ mod canary_sets;
 mod capability_curriculum;
 mod clusters;
 mod compare_sets;
+mod compiled_repair;
 mod converse_learn;
 mod coverage;
 mod curriculum;
