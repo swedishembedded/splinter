@@ -31,6 +31,7 @@ mod source_views;
 mod split;
 mod split_bands;
 mod strip;
+mod supervision_mask;
 mod timeline_projection;
 mod timeline_store;
 mod trajectory_views;

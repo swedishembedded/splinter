@@ -536,3 +536,67 @@ impl GroupKind {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn credit(c: f64) -> PartialCredit {
+        PartialCredit {
+            metric: "functional_correctness".into(),
+            credit: c,
+            floors: BTreeMap::new(),
+            sources: Vec::new(),
+            groups_without_floor: 0,
+        }
+    }
+
+    /// `c * max(0, (f - f_naive) / (1 - f_naive))` by hand at its edges: no
+    /// floor is a floor of zero, a share at or under the floor earns nothing,
+    /// a naive answer that earns every check leaves nothing to earn, and a
+    /// failure that passed every weighted check still earns only `c`.
+    #[test]
+    fn partial_credit_is_the_share_above_the_naive_floor_scaled_to_the_credit() {
+        let half = credit(0.5);
+        for (f, floor, expected) in [
+            (0.6, None, 0.3),
+            (0.75, Some(0.5), 0.25),
+            (0.2, Some(0.2), 0.0),
+            (0.1, Some(0.2), 0.0),
+            (1.0, Some(0.2), 0.5),
+            (1.0, Some(1.0), 0.0),
+            (0.0, None, 0.0),
+        ] {
+            let earned = half.earned(f, floor);
+            assert!(
+                (earned - expected).abs() < 1e-12,
+                "f {f} floor {floor:?}: {earned}, by hand {expected}"
+            );
+        }
+        assert_eq!(credit(0.0).earned(0.9, Some(0.1)), 0.0);
+    }
+
+    /// A pass earns one whatever its metrics say; a group is a signal only
+    /// with two rewards that differ.
+    #[test]
+    fn a_pass_earns_one_and_only_a_spread_of_two_or_more_rewards_signals() {
+        let shape = RewardShape::partial(0.5, "m", BTreeMap::new(), Vec::new()).unwrap();
+        let reward = |passed, m: f64| {
+            shape
+                .reward(
+                    passed,
+                    Some(&serde_json::json!({ "m": m })),
+                    None,
+                    None,
+                    "t",
+                )
+                .unwrap()
+        };
+        assert_eq!(reward(true, 0.0), 1.0);
+        assert!((reward(false, 0.8) - 0.4).abs() < 1e-12);
+        assert!(!signals(&[1.0]));
+        assert!(!signals(&[0.3, 0.3, 0.3]));
+        assert!(signals(&[0.3, 0.3, 0.0]));
+        assert!(!signals(&[]));
+    }
+}
